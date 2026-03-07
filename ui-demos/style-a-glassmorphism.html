@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Style A — Glassmorphism Blue</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap"
+          rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #060c18;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            font-family: 'Noto Sans SC', -apple-system, sans-serif;
+            padding: 20px;
+        }
+
+        /* ── Demo chrome ── */
+        .demo-label {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 11px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        .demo-nav {
+            display: flex;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 5px;
+            border-radius: 24px;
+        }
+
+        .demo-nav button {
+            padding: 5px 14px;
+            border: none;
+            border-radius: 18px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.45);
+            transition: all 0.15s;
+        }
+
+        .demo-nav button.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+
+        /* ── Phone frame ── */
+        .phone {
+            width: 375px;
+            height: 667px;
+            position: relative;
+            overflow: hidden;
+            border-radius: 44px;
+            box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+            background: linear-gradient(160deg, #1a4a7a 0%, #0d2845 55%, #071222 100%);
+        }
+
+        /* Ambient glows */
+        .phone::before {
+            content: '';
+            position: absolute;
+            top: -80px;
+            left: -80px;
+            width: 320px;
+            height: 320px;
+            background: radial-gradient(circle, rgba(56, 139, 253, 0.18) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .phone::after {
+            content: '';
+            position: absolute;
+            bottom: -80px;
+            right: -60px;
+            width: 280px;
+            height: 280px;
+            background: radial-gradient(circle, rgba(100, 181, 246, 0.12) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Screens ── */
+        .screen {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            padding: 52px 22px 28px;
+            z-index: 1;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        /* ── Glass card ── */
+        .glass {
+            background: rgba(255, 255, 255, 0.10);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 18px;
+        }
+
+        /* ── Inputs ── */
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 14px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 15px;
+            outline: none;
+        }
+
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        input:focus {
+            border-color: rgba(144, 202, 249, 0.55);
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 14px;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+
+        .btn:active {
+            opacity: 0.7;
+        }
+
+        .btn-primary {
+            background: rgba(144, 202, 249, 0.22);
+            border: 1px solid rgba(144, 202, 249, 0.38);
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: rgba(255, 255, 255, 0.75);
+        }
+
+        .btn-success {
+            background: rgba(102, 187, 106, 0.22);
+            border: 1px solid rgba(102, 187, 106, 0.38);
+            color: #a5d6a7;
+        }
+
+        .btn-danger {
+            background: rgba(239, 83, 80, 0.25);
+            border: 1px solid rgba(239, 83, 80, 0.4);
+            color: #ef9a9a;
+        }
+
+        .btn-amber {
+            background: rgba(255, 213, 79, 0.2);
+            border: 1px solid rgba(255, 213, 79, 0.35);
+            color: #ffd54f;
+        }
+
+        /* ── Lang toggle ── */
+        .lang-toggle {
+            display: flex;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 3px;
+        }
+
+        .lang-toggle button {
+            padding: 4px 12px;
+            border: none;
+            border-radius: 16px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.5);
+            transition: all 0.15s;
+        }
+
+        .lang-toggle button.active {
+            background: rgba(255, 255, 255, 0.18);
+            color: #fff;
+        }
+
+        /* ────────────────────────────
+           SCREEN 1 — LOBBY
+        ──────────────────────────── */
+        #s-lobby .topbar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 44px;
+        }
+
+        #s-lobby .title {
+            text-align: center;
+            margin-bottom: 44px;
+        }
+
+        #s-lobby .title h1 {
+            font-size: 38px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 4px;
+        }
+
+        #s-lobby .title .sub {
+            font-size: 12px;
+            letter-spacing: 5px;
+            color: rgba(255, 255, 255, 0.35);
+            text-transform: uppercase;
+            margin-top: 6px;
+        }
+
+        #s-lobby .form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #s-lobby .or-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 2px 0;
+        }
+
+        #s-lobby .or-row::before,
+        #s-lobby .or-row::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        #s-lobby .or-row span {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.25);
+        }
+
+        #s-lobby .join-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        #s-lobby .join-row input {
+            text-align: center;
+            letter-spacing: 4px;
+            font-size: 18px;
+        }
+
+        #s-lobby .join-row .btn {
+            width: auto;
+            padding: 14px 18px;
+        }
+
+        /* ────────────────────────────
+           SCREEN 2 — ROOM
+        ──────────────────────────── */
+        #s-room .room-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        #s-room .room-head h2 {
+            font-size: 18px;
+            color: #fff;
+            font-weight: 500;
+        }
+
+        #s-room .code-block {
+            text-align: center;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        #s-room .code-block .lbl {
+            font-size: 10px;
+            letter-spacing: 3px;
+            color: rgba(255, 255, 255, 0.35);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        #s-room .code-block .code {
+            font-size: 38px;
+            font-weight: 700;
+            letter-spacing: 10px;
+            color: #90caf9;
+        }
+
+        #s-room .count-lbl {
+            text-align: center;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.35);
+            margin-bottom: 10px;
+        }
+
+        #s-room .pgrid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 7px;
+            flex: 1;
+            align-content: start;
+        }
+
+        .pslot {
+            aspect-ratio: 1;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            font-size: 10px;
+        }
+
+        .pslot .av {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }
+
+        .pslot.filled {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .pslot.ready {
+            background: rgba(102, 187, 106, 0.12);
+            border: 1px solid rgba(102, 187, 106, 0.28);
+            color: #a5d6a7;
+        }
+
+        .pslot.me {
+            border: 1.5px solid rgba(255, 213, 79, 0.45);
+        }
+
+        .pslot.empty {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.18);
+            font-size: 16px;
+        }
+
+        #s-room .bot {
+            margin-top: 12px;
+        }
+
+        /* ────────────────────────────
+           SCREEN 3 — ROLE REVEAL
+        ──────────────────────────── */
+        #s-role {
+            align-items: center;
+            justify-content: center;
+        }
+
+        #s-role .phase-lbl {
+            font-size: 11px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.35);
+            margin-bottom: 6px;
+        }
+
+        #s-role .prompt {
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.65);
+            margin-bottom: 36px;
+        }
+
+        #s-role .role-card {
+            width: 230px;
+            height: 310px;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.11);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 36px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #s-role .role-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 45%;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.07), transparent);
+            pointer-events: none;
+        }
+
+        #s-role .role-icon {
+            font-size: 58px;
+        }
+
+        #s-role .role-name {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        #s-role .role-en {
+            font-size: 11px;
+            letter-spacing: 4px;
+            color: #90caf9;
+            text-transform: uppercase;
+        }
+
+        #s-role .role-sep {
+            width: 60px;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #s-role .role-desc {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            text-align: center;
+            padding: 0 20px;
+            line-height: 1.65;
+        }
+
+        /* ────────────────────────────
+           SCREEN 4 — DAY PHASE
+        ──────────────────────────── */
+        #s-day .phase-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        #s-day .phase-badge {
+            background: rgba(255, 213, 79, 0.18);
+            border: 1px solid rgba(255, 213, 79, 0.35);
+            border-radius: 20px;
+            padding: 5px 14px;
+            font-size: 12px;
+            color: #ffd54f;
+        }
+
+        #s-day .timer {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #s-day .event {
+            padding: 10px 14px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.22);
+            border-left: 3px solid rgba(239, 83, 80, 0.55);
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.65);
+            line-height: 1.5;
+        }
+
+        #s-day .pgrid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 7px;
+            flex: 1;
+            align-content: start;
+        }
+
+        #s-day .pslot {
+            aspect-ratio: 1;
+            border-radius: 11px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.12s;
+        }
+
+        #s-day .pslot .av {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        #s-day .pslot.alive {
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.13);
+            color: rgba(255, 255, 255, 0.75);
+        }
+
+        #s-day .pslot.selected {
+            background: rgba(144, 202, 249, 0.18);
+            border: 1.5px solid rgba(144, 202, 249, 0.55);
+            color: #fff;
+        }
+
+        #s-day .pslot.dead {
+            background: rgba(0, 0, 0, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        #s-day .pslot.me {
+            border-color: rgba(255, 213, 79, 0.4);
+        }
+
+        #s-day .vote-row {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        #s-day .vote-row .btn-danger {
+            flex: 1;
+        }
+
+        #s-day .vote-row .btn-secondary {
+            width: 76px;
+        }
+
+        /* ────────────────────────────
+           SCREEN 5 — NIGHT PHASE
+        ──────────────────────────── */
+        #s-night {
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        #s-night .night-head {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        #s-night .moon {
+            font-size: 44px;
+            margin-bottom: 8px;
+        }
+
+        #s-night .night-title {
+            font-size: 22px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            letter-spacing: 3px;
+        }
+
+        #s-night .night-sub {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.35);
+            margin-top: 4px;
+            letter-spacing: 1px;
+        }
+
+        #s-night .act-card {
+            padding: 18px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.13);
+            margin-bottom: 12px;
+        }
+
+        #s-night .act-lbl {
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.35);
+            margin-bottom: 8px;
+        }
+
+        #s-night .act-desc {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.6;
+            margin-bottom: 14px;
+        }
+
+        #s-night .act-desc strong {
+            color: #ef9a9a;
+        }
+
+        #s-night .act-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        #s-night .act-btns .btn {
+            flex: 1;
+            padding: 12px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+<div class="demo-label">Style A — Glassmorphism Blue</div>
+
+<div class="demo-nav">
+    <button class="active" onclick="show('s-lobby',this)">Lobby</button>
+    <button onclick="show('s-room',this)">Room</button>
+    <button onclick="show('s-role',this)">Role</button>
+    <button onclick="show('s-day',this)">Day</button>
+    <button onclick="show('s-night',this)">Night</button>
+</div>
+
+<div class="phone">
+
+    <!-- LOBBY -->
+    <div class="screen active" id="s-lobby">
+        <div class="topbar">
+            <div class="lang-toggle">
+                <button class="active">中文</button>
+                <button>EN</button>
+            </div>
+        </div>
+        <div class="title">
+            <h1>狼人杀</h1>
+            <div class="sub">Werewolf</div>
+        </div>
+        <div class="form">
+            <input placeholder="输入昵称 / Enter nickname" type="text">
+            <button class="btn btn-primary">创建房间 / Create Room</button>
+            <div class="or-row"><span>或 / OR</span></div>
+            <div class="join-row">
+                <input maxlength="4" placeholder="8847" type="text">
+                <button class="btn btn-secondary">加入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ROOM -->
+    <div class="screen" id="s-room">
+        <div class="room-head">
+            <h2>等待中 / Waiting</h2>
+            <div class="lang-toggle">
+                <button class="active">中文</button>
+                <button>EN</button>
+            </div>
+        </div>
+        <div class="glass code-block">
+            <div class="lbl">Room Code</div>
+            <div class="code">8847</div>
+        </div>
+        <div class="count-lbl">8 / 12 玩家 · Players</div>
+        <div class="pgrid">
+            <div class="pslot ready">
+                <div class="av">😊</div>
+                <span>小明</span></div>
+            <div class="pslot ready">
+                <div class="av">🎭</div>
+                <span>Alice</span></div>
+            <div class="pslot filled">
+                <div class="av">🌙</div>
+                <span>大壮</span></div>
+            <div class="pslot filled me">
+                <div class="av">⭐</div>
+                <span>我</span></div>
+            <div class="pslot filled">
+                <div class="av">🌸</div>
+                <span>小红</span></div>
+            <div class="pslot ready">
+                <div class="av">🐯</div>
+                <span>Tom</span></div>
+            <div class="pslot filled">
+                <div class="av">🎸</div>
+                <span>阿强</span></div>
+            <div class="pslot filled">
+                <div class="av">🌊</div>
+                <span>波波</span></div>
+            <div class="pslot empty">+</div>
+            <div class="pslot empty">+</div>
+            <div class="pslot empty">+</div>
+            <div class="pslot empty">+</div>
+        </div>
+        <div class="bot">
+            <button class="btn btn-success">准备 / Ready</button>
+        </div>
+    </div>
+
+    <!-- ROLE -->
+    <div class="screen" id="s-role">
+        <div class="phase-lbl">游戏开始 · Game Start</div>
+        <div class="prompt">你的身份 / Your Role</div>
+        <div class="role-card">
+            <div class="role-icon">🔮</div>
+            <div class="role-name">女巫</div>
+            <div class="role-en">Witch</div>
+            <div class="role-sep"></div>
+            <div class="role-desc">拥有一瓶解药和一瓶毒药<br>各可使用一次</div>
+        </div>
+        <button class="btn btn-primary">知道了 / Got it</button>
+    </div>
+
+    <!-- DAY -->
+    <div class="screen" id="s-day">
+        <div class="phase-bar">
+            <div class="phase-badge">第 2 天 · Day 2</div>
+            <div class="timer">1:45</div>
+        </div>
+        <div class="event">昨晚 3号·大壮 被杀 · Player 3 was killed last night</div>
+        <div class="pgrid">
+            <div class="pslot alive">
+                <div class="av">😊</div>
+                <span>1·小明</span></div>
+            <div class="pslot alive">
+                <div class="av">🎭</div>
+                <span>2·Alice</span></div>
+            <div class="pslot dead">
+                <div class="av">✕</div>
+                <span>3·大壮</span></div>
+            <div class="pslot alive me">
+                <div class="av">⭐</div>
+                <span>4·我</span></div>
+            <div class="pslot alive">
+                <div class="av">🌸</div>
+                <span>5·小红</span></div>
+            <div class="pslot selected">
+                <div class="av">🐯</div>
+                <span>6·Tom</span></div>
+            <div class="pslot alive">
+                <div class="av">🎸</div>
+                <span>7·阿强</span></div>
+            <div class="pslot alive">
+                <div class="av">🌊</div>
+                <span>8·波波</span></div>
+            <div class="pslot alive">
+                <div class="av">🌟</div>
+                <span>9·星星</span></div>
+            <div class="pslot alive">
+                <div class="av">🎯</div>
+                <span>10·阿飞</span></div>
+            <div class="pslot dead">
+                <div class="av">✕</div>
+                <span>11·小龙</span></div>
+            <div class="pslot alive">
+                <div class="av">🎪</div>
+                <span>12·乐乐</span></div>
+        </div>
+        <div class="vote-row">
+            <button class="btn btn-danger">投票 · Vote</button>
+            <button class="btn btn-secondary">跳过</button>
+        </div>
+    </div>
+
+    <!-- NIGHT -->
+    <div class="screen" id="s-night">
+        <div class="night-head">
+            <div class="moon">🌙</div>
+            <div class="night-title">夜晚降临</div>
+            <div class="night-sub">Night Falls · Round 2</div>
+        </div>
+        <div class="act-card">
+            <div class="act-lbl">女巫 · Witch — 解药 Antidote</div>
+            <div class="act-desc">今晚 <strong>6号·Tom</strong> 被狼人袭击<br>使用解药救他？</div>
+            <div class="act-btns">
+                <button class="btn btn-success">使用解药</button>
+                <button class="btn btn-secondary">放弃</button>
+            </div>
+        </div>
+        <div class="act-card">
+            <div class="act-lbl">毒药 Poison</div>
+            <div class="act-desc">是否对某位玩家使用毒药？</div>
+            <div class="act-btns">
+                <button class="btn btn-danger">使用毒药</button>
+                <button class="btn btn-secondary">不用</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function show(id, btn) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        document.querySelectorAll('.demo-nav button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+</script>
+</body>
+</html>
