@@ -1,0 +1,1625 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>Werewolf — Game Flow · Style C</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;700&display=swap"
+          rel="stylesheet">
+    <script async src="https://mcp.figma.com/mcp/html-to-design/capture.js"></script>
+    <style>
+        :root {
+          --bg:      #ede8df; --paper:  #f5f0e8; --card:   #ffffff;
+          --border:  #ccc2b0; --bord-l: #ddd6c6; --text:   #1a140c;
+          --muted:   #8a7a65; --red:    #b5251a; --red-bg: rgba(181,37,26,0.08);
+          --gold:    #a07830; --green:  #2d6a3f; --ink:    #2a1f14;
+          --dead-bg: #d8d2c8; --dead-t: #b0a898;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+          background: #b8b2a8;
+          font-family: 'Noto Sans SC', sans-serif;
+          padding: 48px 40px;
+        }
+
+        /* ── Canvas header ── */
+        .doc-title { font-family:'Noto Serif SC',serif; font-size:22px; font-weight:700; color:#1a140c; letter-spacing:2px; margin-bottom:4px; }
+        .doc-sub { font-size:11px; color:#6b6058; letter-spacing:2px; margin-bottom:48px; }
+
+        /* ── Phase groups ── */
+        .phase-group { margin-bottom: 56px; }
+        .phase-label {
+          font-size:10px; font-weight:500; letter-spacing:4px; text-transform:uppercase;
+          color:#6b6058; border-bottom:1px solid #a09888; padding-bottom:8px; margin-bottom:20px;
+        }
+        .screens-row { display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start; }
+
+        /* ── Screen frame ── */
+        .screen-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
+        .screen-label {
+          font-size:10px; font-weight:500; letter-spacing:2px; text-transform:uppercase;
+          color:#5a5048; text-align:center;
+        }
+        .screen-note { font-size:9px; color:#8a7a6a; text-align:center; max-width:180px; line-height:1.5; }
+
+        .sf {
+          width: 375px; height: 667px;
+          border-radius: 6px;
+          background: var(--bg);
+          border: 1px solid var(--border);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+          overflow: hidden;
+          position: relative;
+          display: flex; flex-direction: column;
+          padding: 52px 20px 24px;
+          flex-shrink: 0;
+        }
+        .sf.night { background: var(--ink); }
+        .sf.card-bg { background: var(--paper); }
+
+        /* ── Shared Style C atoms ── */
+        .btn { display:block; width:100%; padding:14px; border:none; border-radius:6px; font-family:inherit; font-size:14px; font-weight:500; cursor:default; letter-spacing:.5px; text-align:center; }
+        .btn-p { background:var(--red);   color:#fff; }
+        .btn-s { background:var(--paper); border:1px solid var(--border); color:var(--muted); }
+        .btn-g { background:var(--green); color:#fff; }
+        .btn-d { background:var(--red);   color:#fff; }
+        .btn-gold { background:var(--gold); color:#fff; }
+        .btn-out { background:transparent; border:1px solid var(--border); color:var(--muted); }
+        .btn-dim { background:rgba(240,232,216,0.08); border:1px solid rgba(240,232,216,0.15); color:rgba(240,232,216,0.45); }
+        .btn-ns  { background:rgba(240,232,216,0.08); border:1px solid rgba(240,232,216,0.15); color:rgba(240,232,216,0.45); }
+
+        inp { display:block; width:100%; padding:13px 16px; background:var(--paper); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:inherit; font-size:14px; }
+
+        .lang-t { display:inline-flex; background:var(--paper); border:1px solid var(--border); border-radius:4px; padding:2px; }
+        .lang-t span { padding:4px 11px; font-size:11px; border-radius:3px; color:var(--muted); }
+        .lang-t span.a { background:var(--red); color:#fff; }
+
+        .or-row { display:flex; align-items:center; gap:10px; }
+        .or-row::before, .or-row::after { content:''; flex:1; height:1px; background:var(--bord-l); }
+        .or-row span { font-size:11px; color:var(--muted); }
+
+        .room-code-block { background:var(--card); border:1px solid var(--bord-l); border-radius:6px; padding:14px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+        .room-code-block .lbl { font-size:10px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; margin-bottom:4px; }
+        .room-code-block .code { font-family:'Noto Serif SC',serif; font-size:36px; font-weight:700; letter-spacing:10px; color:var(--red); }
+
+        .pgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+        .pslot { aspect-ratio:1; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:10px; }
+        .pslot .av { width:26px; height:26px; border-radius:50%; background:var(--bg); display:flex; align-items:center; justify-content:center; font-size:12px; }
+        .ps-f { background:var(--card); border:1px solid var(--bord-l); color:var(--muted); box-shadow:0 1px 3px rgba(0,0,0,.04); }
+        .ps-r { background:rgba(45,106,63,.08); border:1px solid rgba(45,106,63,.25); color:var(--green); }
+        .ps-m { background:var(--card); border:2px solid var(--red); color:var(--red); }
+        .ps-e { background:rgba(0,0,0,.02); border:1px dashed var(--bord-l); color:var(--border); font-size:16px; }
+        .ps-al { background:var(--card); border:1px solid var(--bord-l); color:var(--muted); }
+        .ps-sl { background:var(--red-bg); border:2px solid var(--red); color:var(--red); }
+        .ps-de { background:var(--dead-bg); border:1px solid var(--bord-l); color:var(--dead-t); }
+        .ps-me { background:var(--card); border:1.5px solid var(--gold); color:var(--gold); }
+
+        .phase-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+        .phase-badge { background:var(--card); border:1px solid var(--border); border-radius:4px; padding:5px 12px; font-size:12px; color:var(--gold); box-shadow:0 1px 4px rgba(0,0,0,.06); }
+        .timer { font-family:'Noto Serif SC',serif; font-size:28px; font-weight:700; color:var(--text); }
+
+        .event-bar { padding:9px 12px; border-radius:4px; background:var(--red-bg); border-left:3px solid var(--red); font-size:12px; color:var(--muted); margin-bottom:10px; line-height:1.5; }
+        .event-bar strong { color:var(--red); }
+
+        .vote-row { display:flex; gap:8px; margin-top:10px; }
+        .vote-row .btn-d { flex:1; }
+        .vote-row .btn-out { width:72px; }
+
+        /* Role card */
+        .role-card-full {
+          width:220px; height:300px; border-radius:8px; background:var(--card);
+          border:1px solid var(--border); box-shadow:0 8px 24px rgba(0,0,0,.1);
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          gap:11px; position:relative; overflow:hidden; margin:0 auto;
+        }
+        .role-card-full::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; background:var(--red); }
+        .r-icon { font-size:52px; }
+        .r-name { font-family:'Noto Serif SC',serif; font-size:24px; font-weight:700; color:var(--ink); letter-spacing:3px; }
+        .r-en { font-size:9px; letter-spacing:4px; color:var(--red); text-transform:uppercase; }
+        .r-sep { width:36px; height:1px; background:var(--bord-l); }
+        .r-desc { font-size:11px; color:var(--muted); text-align:center; padding:0 18px; line-height:1.7; }
+
+        /* Night atoms */
+        .night-head { text-align:center; margin-bottom:22px; }
+        .night-moon { font-size:40px; }
+        .night-title { font-family:'Noto Serif SC',serif; font-size:20px; font-weight:700; color:#f0e8d8; letter-spacing:3px; margin-top:4px; }
+        .night-sub { font-size:11px; color:rgba(240,232,216,.35); margin-top:3px; }
+
+        .role-banner { display:flex; align-items:center; gap:10px; padding:11px 14px; background:rgba(240,232,216,.06); border:1px solid rgba(240,232,216,.12); border-radius:8px; margin-bottom:14px; }
+        .role-banner .icon { font-size:26px; }
+        .role-banner .name { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:2px; }
+        .role-banner .hint { font-size:11px; color:rgba(240,232,216,.4); margin-top:2px; }
+
+        .act-block { padding:15px; border-radius:8px; background:rgba(240,232,216,.05); border:1px solid rgba(240,232,216,.1); margin-bottom:10px; }
+        .act-block::before { display:block; content:''; width:28px; height:2px; background:var(--red); margin-bottom:9px; }
+        .act-lbl { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:rgba(240,232,216,.35); margin-bottom:6px; }
+        .act-desc { font-size:13px; color:rgba(240,232,216,.8); line-height:1.6; margin-bottom:11px; }
+        .act-desc strong { color:#e88; }
+        .act-btns { display:flex; gap:8px; }
+        .act-btns .btn { flex:1; padding:11px; font-size:13px; }
+
+        .night-waiting { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:12px; }
+        .night-waiting .icon { font-size:48px; }
+        .night-waiting .msg { font-size:15px; color:rgba(240,232,216,.5); text-align:center; line-height:1.7; letter-spacing:1px; }
+        .night-waiting .sub { font-size:11px; color:rgba(240,232,216,.25); text-align:center; }
+
+        /* Player pick grid (night) */
+        .pick-prompt { font-size:12px; color:rgba(240,232,216,.5); margin-bottom:10px; letter-spacing:1px; }
+        .pgrid-night { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:12px; }
+        .pn { aspect-ratio:1; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:10px; background:rgba(240,232,216,.05); border:1px solid rgba(240,232,216,.1); color:rgba(240,232,216,.5); }
+        .pn .av { width:24px; height:24px; border-radius:50%; background:rgba(240,232,216,.08); display:flex; align-items:center; justify-content:center; font-size:11px; }
+        .pn.sl { background:var(--red-bg); border:2px solid var(--red); color:var(--red); }
+        .pn.de { opacity:.3; }
+        .pn.tea { background:rgba(192,57,43,.15); border:1px solid rgba(220,80,60,.4); color:#e05a45; }
+
+        /* Seer result */
+        .seer-result { padding:14px 16px; border-radius:8px; margin-bottom:12px; text-align:center; }
+        .seer-result.wolf { background:rgba(181,37,26,.15); border:1px solid rgba(181,37,26,.4); }
+        .seer-result.human { background:rgba(45,106,63,.12); border:1px solid rgba(45,106,63,.3); }
+        .seer-result .verdict { font-size:18px; font-weight:700; margin-top:6px; }
+        .seer-result.wolf .verdict { color:#e05a45; }
+        .seer-result.human .verdict { color:#4dcb87; }
+        .seer-result .player { font-size:13px; color:rgba(240,232,216,.6); margin-bottom:4px; }
+
+        /* Vote results */
+        .vote-result-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:20px; text-align:center; margin-bottom:14px; box-shadow:0 4px 16px rgba(0,0,0,.08); }
+        .vote-result-card .elim-label { font-size:10px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; margin-bottom:8px; }
+        .vote-result-card .player-icon { font-size:44px; margin-bottom:6px; }
+        .vote-result-card .player-name { font-family:'Noto Serif SC',serif; font-size:20px; font-weight:700; color:var(--ink); }
+        .vote-result-card .player-num { font-size:12px; color:var(--muted); margin-top:2px; }
+        .vote-result-card .role-reveal { font-size:11px; color:var(--red); letter-spacing:2px; margin-top:8px; text-transform:uppercase; }
+        .vote-tally { display:flex; gap:8px; margin-bottom:14px; }
+        .tally-item { flex:1; padding:10px 8px; background:var(--paper); border:1px solid var(--bord-l); border-radius:6px; text-align:center; }
+        .tally-item .count { font-family:'Noto Serif SC',serif; font-size:22px; font-weight:700; color:var(--red); }
+        .tally-item .name { font-size:10px; color:var(--muted); margin-top:2px; }
+
+        /* Game over */
+        .gameover-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; text-align:center; gap:12px; }
+        .gameover-icon { font-size:72px; }
+        .gameover-title { font-family:'Noto Serif SC',serif; font-size:28px; font-weight:700; letter-spacing:3px; }
+        .gameover-sub { font-size:13px; color:var(--muted); line-height:1.7; }
+        .gameover-roles { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:8px; }
+        .role-reveal-chip { padding:4px 12px; border-radius:20px; font-size:11px; }
+        .chip-wolf { background:var(--red-bg); border:1px solid rgba(181,37,26,.3); color:var(--red); }
+        .chip-good { background:rgba(45,106,63,.08); border:1px solid rgba(45,106,63,.25); color:var(--green); }
+
+        /* Spectator banner */
+        .spectator-banner { background:var(--dead-bg); border:1px solid var(--bord-l); border-radius:6px; padding:8px 12px; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+        .spectator-banner .icon { font-size:16px; }
+        .spectator-banner .msg { font-size:11px; color:var(--dead-t); }
+
+        /* Section headers inside screens */
+        .screen-section-lbl { font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+        .screen-h1 { font-family:'Noto Serif SC',serif; font-size:36px; font-weight:700; color:var(--ink); letter-spacing:4px; }
+        .screen-h2 { font-size:17px; font-weight:500; color:var(--text); }
+        .screen-prompt { font-size:13px; color:var(--muted); }
+
+        .topbar { display:flex; justify-content:flex-end; margin-bottom:36px; }
+        .gap4 { gap:4px; display:flex; flex-direction:column; }
+        .gap8 { gap:8px; display:flex; flex-direction:column; }
+        .gap10 { gap:10px; display:flex; flex-direction:column; }
+        .gap12 { gap:12px; display:flex; flex-direction:column; }
+        .mb4 { margin-bottom:4px; }
+        .mb6 { margin-bottom:6px; }
+        .mb8 { margin-bottom:8px; }
+        .mb10 { margin-bottom:10px; }
+        .mb12 { margin-bottom:12px; }
+        .mb14 { margin-bottom:14px; }
+        .mb16 { margin-bottom:16px; }
+        .mb20 { margin-bottom:20px; }
+        .mb24 { margin-bottom:24px; }
+        .flex1 { flex:1; }
+        .row { display:flex; gap:8px; }
+        .center { text-align:center; }
+    </style>
+</head>
+<body>
+
+<div class="doc-title">狼人杀 · Game Flow</div>
+<div class="doc-sub">Style C — Ink &amp; Paper · All screens · 375×667</div>
+
+<!-- ════════════════════════════
+     PHASE 0 — ENTRY
+════════════════════════════ -->
+<div class="phase-group">
+    <div class="phase-label">Phase 0 — Entry</div>
+    <div class="screens-row">
+
+        <!-- Lobby -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="topbar">
+                    <div class="lang-t"><span class="a">中文</span><span>EN</span></div>
+                </div>
+                <div class="mb4">
+                    <div class="screen-section-lbl">Werewolf</div>
+                </div>
+                <div class="screen-h1 mb24">狼人杀</div>
+                <div class="gap10">
+                    <div style="display:block;width:100%;padding:13px 16px;background:var(--paper);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;">
+                        输入昵称 / Enter nickname
+                    </div>
+                    <div class="btn btn-p">创建房间 / Create Room</div>
+                    <div class="or-row"><span>或 / OR</span></div>
+                    <div class="row">
+                        <div style="flex:1;display:block;padding:13px;background:var(--paper);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:18px;font-weight:700;letter-spacing:8px;text-align:center;">
+                            8847
+                        </div>
+                        <div class="btn btn-s" style="width:auto;padding:13px 18px">加入</div>
+                    </div>
+                </div>
+            </div>
+            <div class="screen-label">Lobby</div>
+            <div class="screen-note">Entry point. Nickname → create or join by code.</div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ════════════════════════════
+     PHASE 1 — WAITING ROOM
+════════════════════════════ -->
+<div class="phase-group">
+    <div class="phase-label">Phase 1 — Waiting Room</div>
+    <div class="screens-row">
+
+        <!-- Create Room — Config -->
+        <div class="screen-wrap">
+            <div class="sf" style="padding-top:36px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+                    <div>
+                        <div class="screen-section-lbl mb2">Host</div>
+                        <div class="screen-h2">创建房间 / Create Room</div>
+                    </div>
+                    <div class="lang-t"><span class="a">中文</span><span>EN</span></div>
+                </div>
+
+                <!-- Player count -->
+                <div style="background:var(--card);border:1px solid var(--bord-l);border-radius:8px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);">
+                    <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">
+                        玩家人数 / Number of Players
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="width:38px;height:38px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--muted);">
+                            −
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-family:'Noto Serif SC',serif;font-size:36px;font-weight:700;color:var(--ink);line-height:1;">
+                                9
+                            </div>
+                            <div style="font-size:10px;color:var(--muted);margin-top:2px;">6 – 12</div>
+                        </div>
+                        <div style="width:38px;height:38px;border-radius:6px;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;">
+                            +
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Role toggles -->
+                <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">
+                    角色配置 / Role Configuration
+                </div>
+                <div style="font-size:10px;color:var(--muted);margin-bottom:8px;padding:6px 9px;background:rgba(45,106,63,.05);border:1px solid rgba(45,106,63,.18);border-radius:5px;">
+                    Backend auto-balances role counts based on total players.
+                </div>
+
+                <!-- role rows -->
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+
+                    <!-- Werewolf — locked on -->
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(181,37,26,.06);border:1px solid rgba(181,37,26,.2);border-radius:7px;">
+                        <div style="font-size:18px;">🐺</div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px;font-weight:500;color:var(--text);">狼人 Werewolf</div>
+                        </div>
+                        <div style="font-size:10px;color:var(--red);letter-spacing:1px;">REQUIRED</div>
+                    </div>
+
+                    <!-- Villager — locked on -->
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(45,106,63,.05);border:1px solid rgba(45,106,63,.18);border-radius:7px;">
+                        <div style="font-size:18px;">🧑‍🌾</div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px;font-weight:500;color:var(--text);">村民 Villager</div>
+                        </div>
+                        <div style="font-size:10px;color:var(--green);letter-spacing:1px;">REQUIRED</div>
+                    </div>
+
+                    <!-- Seer — ON -->
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--card);border:1px solid var(--bord-l);border-radius:7px;">
+                        <div style="font-size:18px;">🔮</div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px;font-weight:500;color:var(--text);">预言家 Seer</div>
+                        </div>
+                        <div style="width:36px;height:20px;border-radius:10px;background:var(--green);position:relative;">
+                            <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;right:2px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Witch — ON -->
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--card);border:1px solid var(--bord-l);border-radius:7px;">
+                        <div style="font-size:18px;">🧙‍♀️</div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px;font-weight:500;color:var(--text);">女巫 Witch</div>
+                        </div>
+                        <div style="width:36px;height:20px;border-radius:10px;background:var(--green);position:relative;">
+                            <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;right:2px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Hunter — ON -->
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--card);border:1px solid var(--bord-l);border-radius:7px;">
+                        <div style="font-size:18px;">🏹</div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px;font-weight:500;color:var(--text);">猎人 Hunter</div>
+                        </div>
+                        <div style="width:36px;height:20px;border-radius:10px;background:var(--green);position:relative;">
+                            <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;right:2px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Guard — OFF -->
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--paper);border:1px solid var(--bord-l);border-radius:7px;opacity:.7;">
+                        <div style="font-size:18px;">🛡️</div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px;font-weight:500;color:var(--muted);">守卫 Guard</div>
+                        </div>
+                        <div style="width:36px;height:20px;border-radius:10px;background:var(--border);position:relative;">
+                            <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Idiot — OFF -->
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--paper);border:1px solid var(--bord-l);border-radius:7px;opacity:.7;">
+                        <div style="font-size:18px;">🃏</div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px;font-weight:500;color:var(--muted);">白痴 Idiot</div>
+                        </div>
+                        <div style="width:36px;height:20px;border-radius:10px;background:var(--border);position:relative;">
+                            <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;"></div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="btn btn-p">创建房间 / Create Room</div>
+            </div>
+            <div class="screen-label">Create Room — Config</div>
+            <div class="screen-note">Host sets player count (6–12) and toggles optional roles. Backend assigns exact
+                counts per role.
+            </div>
+        </div>
+
+        <!-- Waiting — Host -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                    <div class="screen-h2">等待中 / Waiting</div>
+                    <div class="lang-t"><span class="a">中文</span><span>EN</span></div>
+                </div>
+                <div class="room-code-block mb12">
+                    <div class="lbl">Room Code</div>
+                    <div class="code">8847</div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">8 / 12 玩家 · Players</div>
+                <div class="pgrid mb12">
+                    <div class="pslot ps-r">
+                        <div class="av">😊</div>
+                        <span>小明</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🎭</div>
+                        <span>Alice</span></div>
+                    <div class="pslot ps-f">
+                        <div class="av">🌙</div>
+                        <span>大壮</span></div>
+                    <div class="pslot ps-m">
+                        <div class="av">⭐</div>
+                        <span>我(房主)</span></div>
+                    <div class="pslot ps-f">
+                        <div class="av">🌸</div>
+                        <span>小红</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🐯</div>
+                        <span>Tom</span></div>
+                    <div class="pslot ps-f">
+                        <div class="av">🎸</div>
+                        <span>阿强</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🌊</div>
+                        <span>波波</span></div>
+                    <div class="pslot ps-e">+</div>
+                    <div class="pslot ps-e">+</div>
+                    <div class="pslot ps-e">+</div>
+                    <div class="pslot ps-e">+</div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:8px 10px;background:rgba(45,106,63,.06);border:1px solid rgba(45,106,63,.2);border-radius:6px;">
+                    ✓ 3 players ready · Need 4 more to start
+                </div>
+                <div class="btn btn-p" style="opacity:.45;cursor:default">开始游戏 / Start Game</div>
+            </div>
+            <div class="screen-label">Waiting Room — Host</div>
+            <div class="screen-note">Host sees Start Game button (disabled until all ready).</div>
+        </div>
+
+        <!-- Waiting — Guest (Not Ready) -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                    <div class="screen-h2">等待中 / Waiting</div>
+                    <div class="lang-t"><span class="a">中文</span><span>EN</span></div>
+                </div>
+                <div class="room-code-block mb12">
+                    <div class="lbl">Room Code</div>
+                    <div class="code">8847</div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">8 / 12 玩家 · Players</div>
+                <div class="pgrid mb12">
+                    <div class="pslot ps-r">
+                        <div class="av">😊</div>
+                        <span>小明</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🎭</div>
+                        <span>Alice</span></div>
+                    <div class="pslot ps-f">
+                        <div class="av">🌙</div>
+                        <span>大壮</span></div>
+                    <div class="pslot ps-f">
+                        <div class="av">⭐</div>
+                        <span>房主</span></div>
+                    <div class="pslot ps-f">
+                        <div class="av">🌸</div>
+                        <span>小红</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🐯</div>
+                        <span>Tom</span></div>
+                    <div class="pslot ps-m">
+                        <div class="av">🎸</div>
+                        <span>我</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🌊</div>
+                        <span>波波</span></div>
+                    <div class="pslot ps-e">+</div>
+                    <div class="pslot ps-e">+</div>
+                    <div class="pslot ps-e">+</div>
+                    <div class="pslot ps-e">+</div>
+                </div>
+                <div style="flex:1;"></div>
+                <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:10px;">3 / 8 players
+                    ready
+                </div>
+                <div class="btn btn-g">准备 / Ready</div>
+            </div>
+            <div class="screen-label">Waiting Room — Guest (Not Ready)</div>
+            <div class="screen-note">My slot (🎸) shows unready. Tap Ready to confirm.</div>
+        </div>
+
+        <!-- Waiting — Guest (Ready) -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                    <div class="screen-h2">等待中 / Waiting</div>
+                    <div class="lang-t"><span class="a">中文</span><span>EN</span></div>
+                </div>
+                <div class="room-code-block mb12">
+                    <div class="lbl">Room Code</div>
+                    <div class="code">8847</div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">8 / 12 玩家 · Players</div>
+                <div class="pgrid mb12">
+                    <div class="pslot ps-r">
+                        <div class="av">😊</div>
+                        <span>小明</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🎭</div>
+                        <span>Alice</span></div>
+                    <div class="pslot ps-f">
+                        <div class="av">🌙</div>
+                        <span>大壮</span></div>
+                    <div class="pslot ps-f">
+                        <div class="av">⭐</div>
+                        <span>房主</span></div>
+                    <div class="pslot ps-f">
+                        <div class="av">🌸</div>
+                        <span>小红</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🐯</div>
+                        <span>Tom</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🎸</div>
+                        <span>我 ✓</span></div>
+                    <div class="pslot ps-r">
+                        <div class="av">🌊</div>
+                        <span>波波</span></div>
+                    <div class="pslot ps-e">+</div>
+                    <div class="pslot ps-e">+</div>
+                    <div class="pslot ps-e">+</div>
+                    <div class="pslot ps-e">+</div>
+                </div>
+                <div style="flex:1;"></div>
+                <div style="font-size:11px;color:var(--green);text-align:center;margin-bottom:10px;">✓ 你已准备 · You
+                    are ready — 4 / 8 ready
+                </div>
+                <div class="btn btn-out" style="border-color:var(--border);color:var(--muted);">取消准备 / Undo Ready
+                </div>
+            </div>
+            <div class="screen-label">Waiting Room — Guest (Ready)</div>
+            <div class="screen-note">My slot turns green ✓. Button flips to "Undo Ready" (outlined, muted). Tap to
+                cancel.
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ════════════════════════════
+     PHASE 2 — ROLE REVEAL
+════════════════════════════ -->
+<div class="phase-group">
+    <div class="phase-label">Phase 2 — Role Reveal (one screen per player, role differs)</div>
+    <div class="screens-row">
+
+        <!-- Role: Werewolf -->
+        <div class="screen-wrap">
+            <div class="sf card-bg" style="align-items:center;justify-content:center;">
+                <div class="screen-section-lbl mb4">游戏开始 · Game Start</div>
+                <div class="screen-prompt mb24">你的身份 / Your Role</div>
+                <div class="role-card-full mb24">
+                    <div class="r-icon">🐺</div>
+                    <div class="r-name">狼人</div>
+                    <div class="r-en">Werewolf</div>
+                    <div class="r-sep"></div>
+                    <div class="r-desc">每晚与狼队商议，袭击一名村民。你的队友是：<strong style="color:var(--red)">Alice ·
+                        Tom</strong></div>
+                </div>
+                <div class="btn btn-p" style="max-width:200px">知道了 / Got it</div>
+            </div>
+            <div class="screen-label">Role — Werewolf 狼人</div>
+            <div class="screen-note">Werewolf sees teammates listed on card.</div>
+        </div>
+
+        <!-- Role: Villager -->
+        <div class="screen-wrap">
+            <div class="sf card-bg" style="align-items:center;justify-content:center;">
+                <div class="screen-section-lbl mb4">游戏开始 · Game Start</div>
+                <div class="screen-prompt mb24">你的身份 / Your Role</div>
+                <div class="role-card-full mb24">
+                    <div class="r-icon">🌾</div>
+                    <div class="r-name">村民</div>
+                    <div class="r-en">Villager</div>
+                    <div class="r-sep"></div>
+                    <div class="r-desc">通过讨论和投票找出狼人，保护村庄。你没有特殊技能。</div>
+                </div>
+                <div class="btn btn-p" style="max-width:200px">知道了 / Got it</div>
+            </div>
+            <div class="screen-label">Role — Villager 村民</div>
+        </div>
+
+        <!-- Role: Seer -->
+        <div class="screen-wrap">
+            <div class="sf card-bg" style="align-items:center;justify-content:center;">
+                <div class="screen-section-lbl mb4">游戏开始 · Game Start</div>
+                <div class="screen-prompt mb24">你的身份 / Your Role</div>
+                <div class="role-card-full mb24">
+                    <div class="r-icon">🔭</div>
+                    <div class="r-name">预言家</div>
+                    <div class="r-en">Seer</div>
+                    <div class="r-sep"></div>
+                    <div class="r-desc">每晚可查验一名玩家，得知其是否为狼人。</div>
+                </div>
+                <div class="btn btn-p" style="max-width:200px">知道了 / Got it</div>
+            </div>
+            <div class="screen-label">Role — Seer 预言家</div>
+        </div>
+
+        <!-- Role: Witch -->
+        <div class="screen-wrap">
+            <div class="sf card-bg" style="align-items:center;justify-content:center;">
+                <div class="screen-section-lbl mb4">游戏开始 · Game Start</div>
+                <div class="screen-prompt mb24">你的身份 / Your Role</div>
+                <div class="role-card-full mb24">
+                    <div class="r-icon">🔮</div>
+                    <div class="r-name">女巫</div>
+                    <div class="r-en">Witch</div>
+                    <div class="r-sep"></div>
+                    <div class="r-desc">拥有一瓶解药和一瓶毒药，各可使用一次。</div>
+                </div>
+                <div class="btn btn-p" style="max-width:200px">知道了 / Got it</div>
+            </div>
+            <div class="screen-label">Role — Witch 女巫</div>
+        </div>
+
+        <!-- Role: Hunter -->
+        <div class="screen-wrap">
+            <div class="sf card-bg" style="align-items:center;justify-content:center;">
+                <div class="screen-section-lbl mb4">游戏开始 · Game Start</div>
+                <div class="screen-prompt mb24">你的身份 / Your Role</div>
+                <div class="role-card-full mb24">
+                    <div class="r-icon">🏹</div>
+                    <div class="r-name">猎人</div>
+                    <div class="r-en">Hunter</div>
+                    <div class="r-sep"></div>
+                    <div class="r-desc">死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。</div>
+                </div>
+                <div class="btn btn-p" style="max-width:200px">知道了 / Got it</div>
+            </div>
+            <div class="screen-label">Role — Hunter 猎人</div>
+        </div>
+
+        <!-- Role: Guard -->
+        <div class="screen-wrap">
+            <div class="sf card-bg" style="align-items:center;justify-content:center;">
+                <div class="screen-section-lbl mb4">游戏开始 · Game Start</div>
+                <div class="screen-prompt mb24">你的身份 / Your Role</div>
+                <div class="role-card-full mb24">
+                    <div class="r-icon">🛡</div>
+                    <div class="r-name">守卫</div>
+                    <div class="r-en">Guard</div>
+                    <div class="r-sep"></div>
+                    <div class="r-desc">每晚保护一名玩家免受狼人袭击，不可连续守护同一人。</div>
+                </div>
+                <div class="btn btn-p" style="max-width:200px">知道了 / Got it</div>
+            </div>
+            <div class="screen-label">Role — Guard 守卫</div>
+        </div>
+
+        <!-- Role: Idiot -->
+        <div class="screen-wrap">
+            <div class="sf card-bg" style="align-items:center;justify-content:center;">
+                <div class="screen-section-lbl mb4">游戏开始 · Game Start</div>
+                <div class="screen-prompt mb24">你的身份 / Your Role</div>
+                <div class="role-card-full mb24">
+                    <div class="r-icon">🤡</div>
+                    <div class="r-name">白痴</div>
+                    <div class="r-en">Idiot</div>
+                    <div class="r-sep"></div>
+                    <div class="r-desc">被投票出局时亮出白痴身份，可免于出局（但失去投票权）。</div>
+                </div>
+                <div class="btn btn-p" style="max-width:200px">知道了 / Got it</div>
+            </div>
+            <div class="screen-label">Role — Idiot 白痴</div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ════════════════════════════
+     PHASE 3 — SHERIFF ELECTION
+════════════════════════════ -->
+<div class="phase-group">
+    <div class="phase-label">Phase 3 — Sheriff Election (first morning, before night result reveal)</div>
+    <div class="screens-row">
+
+        <!-- Campaign Sign-up -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge" style="color:var(--gold);">⭐ 竞选警长</div>
+                    <div class="timer" style="color:var(--gold);">48</div>
+                </div>
+                <div class="event-bar mb12" style="background:rgba(160,120,48,.08);border-left-color:var(--gold);">
+                    <strong style="color:var(--gold);">警长竞选开始 · Sheriff Election</strong><br>
+                    Candidates sign up now. Sheriff gets <strong style="color:var(--gold);">1.5×</strong> voting power
+                    at elimination.
+                </div>
+                <div class="screen-section-lbl mb6">Candidates so far (2)</div>
+                <div class="gap6 mb16">
+                    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(160,120,48,.06);border:1px solid rgba(160,120,48,.25);border-radius:6px;">
+                        <div style="font-size:18px;">😊</div>
+                        <div style="font-size:13px;color:var(--text);font-weight:500;">小明</div>
+                        <div style="margin-left:auto;font-size:10px;letter-spacing:1px;color:var(--gold);">RUNNING</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(160,120,48,.06);border:1px solid rgba(160,120,48,.25);border-radius:6px;">
+                        <div style="font-size:18px;">🐯</div>
+                        <div style="font-size:13px;color:var(--text);font-weight:500;">Tom</div>
+                        <div style="margin-left:auto;font-size:10px;letter-spacing:1px;color:var(--gold);">RUNNING</div>
+                    </div>
+                </div>
+                <div style="flex:1;"></div>
+                <div class="gap8">
+                    <div class="btn btn-gold">参选 / Run for Sheriff</div>
+                    <div class="btn btn-out">放弃 / Pass</div>
+                </div>
+            </div>
+            <div class="screen-label">Campaign Sign-up</div>
+            <div class="screen-note">All players decide: join campaign or pass before timer ends.</div>
+        </div>
+
+        <!-- My Speech Turn (candidate) -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge" style="color:var(--gold);">⭐ 竞选演讲</div>
+                    <div class="timer" style="color:var(--gold);">38</div>
+                </div>
+                <div style="background:rgba(160,120,48,.08);border:1px solid rgba(160,120,48,.25);border-radius:8px;padding:14px;margin-bottom:14px;">
+                    <div style="font-size:10px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:4px;">
+                        Your Turn
+                    </div>
+                    <div style="font-size:15px;font-weight:600;color:var(--text);">发表你的竞选宣言</div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:3px;">Make your case to the village</div>
+                </div>
+                <div class="screen-section-lbl mb6">Speaking order</div>
+                <div class="gap6 mb12">
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(160,120,48,.12);border:2px solid rgba(160,120,48,.5);border-radius:6px;">
+                        <div style="font-size:15px;">🎤</div>
+                        <div style="font-size:13px;font-weight:600;color:var(--gold);">我 · speaking now</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--paper);border:1px solid var(--bord-l);border-radius:6px;opacity:.6;">
+                        <div style="font-size:15px;">😊</div>
+                        <div style="font-size:13px;color:var(--muted);">小明 · next</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--paper);border:1px solid var(--bord-l);border-radius:6px;opacity:.4;">
+                        <div style="font-size:15px;">🐯</div>
+                        <div style="font-size:13px;color:var(--muted);">Tom</div>
+                    </div>
+                </div>
+                <div style="flex:1;"></div>
+                <div style="font-size:11px;color:var(--muted);padding:8px 10px;background:rgba(181,37,26,.05);border:1px solid rgba(181,37,26,.12);border-radius:5px;margin-bottom:8px;">
+                    ⚠ Quitting forfeits your right to vote for sheriff.
+                </div>
+                <div class="btn" style="background:transparent;border:1px solid rgba(181,37,26,.35);color:var(--red);">
+                    退出竞选 / Quit Campaign
+                </div>
+            </div>
+            <div class="screen-label">Speech — My Turn (Candidate)</div>
+            <div class="screen-note">Candidate speaks within timer. Quitting removes vote right but can still be voted
+                for until they quit.
+            </div>
+        </div>
+
+        <!-- Watching Speech (audience) -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge" style="color:var(--gold);">⭐ 竞选演讲</div>
+                    <div class="timer" style="color:var(--gold);">22</div>
+                </div>
+                <div style="text-align:center;padding:24px 0 16px;">
+                    <div style="font-size:48px;margin-bottom:10px;">🐯</div>
+                    <div style="font-family:'Noto Serif SC',serif;font-size:18px;font-weight:700;color:var(--ink);">
+                        Tom
+                    </div>
+                    <div style="font-size:11px;color:var(--gold);letter-spacing:2px;margin-top:4px;">SPEAKING NOW</div>
+                </div>
+                <div class="screen-section-lbl mb6">Speaking order</div>
+                <div class="gap6 mb12">
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(181,37,26,.05);border:1px solid rgba(181,37,26,.18);border-radius:6px;">
+                        <div style="font-size:14px;">❌</div>
+                        <div style="font-size:12px;color:var(--muted);">小明 · <span
+                                style="color:var(--red);">Quit</span></div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(160,120,48,.1);border:2px solid rgba(160,120,48,.4);border-radius:6px;">
+                        <div style="font-size:14px;">🎤</div>
+                        <div style="font-size:13px;font-weight:600;color:var(--gold);">Tom · speaking</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--paper);border:1px solid var(--bord-l);border-radius:6px;opacity:.5;">
+                        <div style="font-size:14px;">⏳</div>
+                        <div style="font-size:12px;color:var(--muted);">Alice · next</div>
+                    </div>
+                </div>
+                <div style="flex:1;"></div>
+                <div class="btn"
+                     style="background:var(--paper);border:1px solid var(--bord-l);color:var(--muted);cursor:default;">
+                    等待投票 / Waiting for vote…
+                </div>
+            </div>
+            <div class="screen-label">Speech — Audience View</div>
+            <div class="screen-note">Non-candidates watch passively. Quit candidates marked with ❌. No action
+                available.
+            </div>
+        </div>
+
+        <!-- Sheriff Voting -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge" style="color:var(--gold);">⭐ 投票选警长</div>
+                    <div class="timer" style="color:var(--gold);">45</div>
+                </div>
+                <div class="event-bar mb12" style="background:rgba(160,120,48,.06);border-left-color:var(--gold);">
+                    演讲结束，选出你心中的警长。<br>
+                    <strong style="color:var(--gold);">Speeches done — vote for sheriff</strong>
+                </div>
+                <div class="screen-section-lbl mb8">候选人 / Candidates (2)</div>
+                <div class="gap8 mb12">
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(160,120,48,.1);border:2px solid var(--gold);border-radius:8px;">
+                        <div style="font-size:24px;">🐯</div>
+                        <div>
+                            <div style="font-size:14px;font-weight:600;color:var(--text);">Tom</div>
+                            <div style="font-size:10px;color:var(--gold);letter-spacing:1px;">SELECTED ✓</div>
+                        </div>
+                        <div style="margin-left:auto;width:22px;height:22px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;">
+                            ✓
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--paper);border:1px solid var(--bord-l);border-radius:8px;">
+                        <div style="font-size:24px;">🌸</div>
+                        <div>
+                            <div style="font-size:14px;font-weight:500;color:var(--text);">Alice</div>
+                            <div style="font-size:10px;color:var(--muted);letter-spacing:1px;">候选人</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);padding:7px 10px;background:rgba(181,37,26,.04);border:1px solid rgba(181,37,26,.1);border-radius:5px;margin-bottom:12px;">
+                    小明 quit campaign — cannot vote.
+                </div>
+                <div style="flex:1;"></div>
+                <div class="gap8">
+                    <div class="btn btn-gold">确认投票 / Confirm Vote</div>
+                    <div class="btn btn-out">放弃投票 / Give Up Vote</div>
+                </div>
+            </div>
+            <div class="screen-label">Sheriff Voting</div>
+            <div class="screen-note">Non-quitters vote for one candidate or abstain. Quit candidates cannot vote.</div>
+        </div>
+
+        <!-- Sheriff Elected -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge" style="color:var(--gold);">⭐ 警长产生</div>
+                    <div style="font-size:11px;color:var(--muted);">Result</div>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;">
+                    <div style="font-size:56px;">🏅</div>
+                    <div style="font-family:'Noto Serif SC',serif;font-size:22px;font-weight:700;color:var(--gold);letter-spacing:3px;">
+                        警长当选
+                    </div>
+                    <div style="font-size:13px;color:var(--muted);">Sheriff Elected</div>
+                    <div style="display:flex;align-items:center;gap:14px;padding:16px 24px;background:rgba(160,120,48,.08);border:1px solid rgba(160,120,48,.25);border-radius:10px;margin-top:4px;">
+                        <div style="font-size:36px;">🐯</div>
+                        <div style="text-align:left;">
+                            <div style="font-size:18px;font-weight:700;color:var(--text);">Tom</div>
+                            <div style="font-size:11px;color:var(--gold);letter-spacing:2px;margin-top:2px;">⭐ SHERIFF
+                            </div>
+                        </div>
+                    </div>
+                    <div style="padding:10px 16px;background:var(--paper);border:1px solid var(--bord-l);border-radius:6px;font-size:12px;color:var(--muted);">
+                        Sheriff's vote counts as <strong style="color:var(--gold);">1.5×</strong> during eliminations
+                    </div>
+                    <div class="vote-tally" style="width:100%;margin-top:4px;">
+                        <div class="tally-item">
+                            <div class="count" style="color:var(--gold);">5</div>
+                            <div class="name">Tom</div>
+                        </div>
+                        <div class="tally-item">
+                            <div class="count">3</div>
+                            <div class="name">Alice</div>
+                        </div>
+                        <div class="tally-item">
+                            <div class="count" style="color:var(--muted);">2</div>
+                            <div class="name">Abstained</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="screen-label">Sheriff Elected</div>
+            <div class="screen-note">Result + tally shown. Sheriff badge persists through the game. Continues to first
+                night result reveal.
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ════════════════════════════
+     PHASE 3.1 — DAY PHASE (FIRST NIGHT RESULT)
+════════════════════════════ -->
+<div class="phase-group">
+    <div class="phase-label">Phase 3.1 — Day Phase (First Night Result Revealed)</div>
+    <div class="screens-row">
+
+        <!-- Day — Alive -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge">第 1 天 · Day 1</div>
+                    <div class="timer">2:00</div>
+                </div>
+                <div class="event-bar mb10">昨晚 <strong>3号·大壮</strong> 被狼人杀害</div>
+                <div class="pgrid mb10">
+                    <div class="pslot ps-al">
+                        <div class="av">😊</div>
+                        <span>1·小明</span>
+                        <div style="font-size:8px;color:var(--gold);">⭐</div>
+                    </div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎭</div>
+                        <span>2·Alice</span></div>
+                    <div class="pslot ps-de">
+                        <div class="av">✕</div>
+                        <span>3·大壮</span></div>
+                    <div class="pslot ps-me">
+                        <div class="av">⭐</div>
+                        <span>4·我</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌸</div>
+                        <span>5·小红</span></div>
+                    <div class="pslot ps-sl">
+                        <div class="av">🐯</div>
+                        <span>6·Tom</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎸</div>
+                        <span>7·阿强</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌊</div>
+                        <span>8·波波</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌟</div>
+                        <span>9·星星</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎯</div>
+                        <span>10·阿飞</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎸</div>
+                        <span>11·阿强</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎪</div>
+                        <span>12·乐乐</span></div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">点击玩家选择投票目标 · Tap to select
+                </div>
+                <div class="vote-row">
+                    <div class="btn btn-d">投票 · Vote</div>
+                    <div class="btn btn-out">跳过</div>
+                </div>
+            </div>
+            <div class="screen-label">Day Phase — Alive</div>
+            <div class="screen-note">Night result announced first. Sheriff badge (⭐) visible on grid. Tap player →
+                Vote.
+            </div>
+        </div>
+
+        <!-- Day — Dead Spectator -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge">第 1 天 · Day 1</div>
+                    <div class="timer" style="color:var(--muted)">2:00</div>
+                </div>
+                <div class="spectator-banner">
+                    <div class="icon">👻</div>
+                    <div class="msg">你已出局，旁观模式 · You are eliminated — spectating</div>
+                </div>
+                <div class="event-bar mb10">昨晚 <strong>3号·大壮</strong> 被狼人杀害</div>
+                <div class="pgrid mb10" style="opacity:.6">
+                    <div class="pslot ps-al">
+                        <div class="av">😊</div>
+                        <span>1·小明</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎭</div>
+                        <span>2·Alice</span></div>
+                    <div class="pslot ps-de">
+                        <div class="av">✕</div>
+                        <span>3·大壮</span></div>
+                    <div class="pslot ps-de">
+                        <div class="av">✕</div>
+                        <span>4·我</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌸</div>
+                        <span>5·小红</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🐯</div>
+                        <span>6·Tom</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎸</div>
+                        <span>7·阿强</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌊</div>
+                        <span>8·波波</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌟</div>
+                        <span>9·星星</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎯</div>
+                        <span>10·阿飞</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎸</div>
+                        <span>11·阿强</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎪</div>
+                        <span>12·乐乐</span></div>
+                </div>
+                <div class="btn btn-s" style="opacity:.4;cursor:default">投票已禁用 · Voting disabled</div>
+            </div>
+            <div class="screen-label">Day Phase — Dead / Spectator</div>
+            <div class="screen-note">Dead players spectate. Grid dims. Vote button disabled.</div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ════════════════════════════
+     PHASE 4 — NIGHT PHASE
+════════════════════════════ -->
+<div class="phase-group">
+    <div class="phase-label">Phase 4 — Night Phase (role-specific actions)</div>
+    <div class="screens-row">
+
+        <!-- Night — Werewolf -->
+        <div class="screen-wrap">
+            <div class="sf night">
+                <div class="night-head">
+                    <div class="night-moon">🌙</div>
+                    <div class="night-title">夜晚降临</div>
+                    <div class="night-sub">Night Falls · Round 2</div>
+                </div>
+                <div class="role-banner mb12">
+                    <div class="icon">🐺</div>
+                    <div>
+                        <div class="name" style="color:#e05a45">狼人 · Werewolf</div>
+                        <div class="hint">与队友商议袭击目标</div>
+                    </div>
+                </div>
+                <div class="pick-prompt" style="font-size:11px;margin-bottom:8px;">队友: <span style="color:#e05a45">2·Alice &nbsp; 6·Tom</span>
+                </div>
+                <div class="pick-prompt">选择今晚的袭击目标：</div>
+                <div class="pgrid-night mb10">
+                    <div class="pn tea">
+                        <div class="av">🎭</div>
+                        <span>2·Alice</span></div>
+                    <div class="pn de">
+                        <div class="av">✕</div>
+                        <span>3·大壮</span></div>
+                    <div class="pn">
+                        <div class="av">⭐</div>
+                        <span>4·我</span></div>
+                    <div class="pn">
+                        <div class="av">🌸</div>
+                        <span>5·小红</span></div>
+                    <div class="pn tea">
+                        <div class="av">🐯</div>
+                        <span>6·Tom</span></div>
+                    <div class="pn">
+                        <div class="av">🎸</div>
+                        <span>7·阿强</span></div>
+                    <div class="pn">
+                        <div class="av">🌊</div>
+                        <span>8·波波</span></div>
+                    <div class="pn sl">
+                        <div class="av">🌟</div>
+                        <span>9·星星</span></div>
+                    <div class="pn">
+                        <div class="av">🎯</div>
+                        <span>10·阿飞</span></div>
+                    <div class="pn de">
+                        <div class="av">✕</div>
+                        <span>11·小龙</span></div>
+                    <div class="pn">
+                        <div class="av">🎪</div>
+                        <span>12·乐乐</span></div>
+                    <div class="pn">
+                        <div class="av">😊</div>
+                        <span>1·小明</span></div>
+                </div>
+                <div class="act-btns">
+                    <div class="btn btn-d" style="flex:1;padding:13px">确认袭击 Confirm</div>
+                </div>
+            </div>
+            <div class="screen-label">Night — Werewolf 狼人</div>
+            <div class="screen-note">Wolf team picks one target. Teammates shown in red.</div>
+        </div>
+
+        <!-- Night — Seer (checking) -->
+        <div class="screen-wrap">
+            <div class="sf night">
+                <div class="night-head">
+                    <div class="night-moon">🌙</div>
+                    <div class="night-title">夜晚降临</div>
+                    <div class="night-sub">Night Falls · Round 2</div>
+                </div>
+                <div class="role-banner mb10">
+                    <div class="icon">🔭</div>
+                    <div>
+                        <div class="name" style="color:#a07bd4">预言家 · Seer</div>
+                        <div class="hint">查验一名玩家的身份</div>
+                    </div>
+                </div>
+                <div class="pick-prompt mb8">选择查验目标 · Select a player to check:</div>
+                <div class="pgrid-night mb10">
+                    <div class="pn">
+                        <div class="av">😊</div>
+                        <span>1·小明</span></div>
+                    <div class="pn">
+                        <div class="av">🎭</div>
+                        <span>2·Alice</span></div>
+                    <div class="pn de">
+                        <div class="av">✕</div>
+                        <span>3·大壮</span></div>
+                    <div class="pn">
+                        <div class="av">🌸</div>
+                        <span>5·小红</span></div>
+                    <div class="pn sl">
+                        <div class="av">🐯</div>
+                        <span>6·Tom</span></div>
+                    <div class="pn">
+                        <div class="av">🎸</div>
+                        <span>7·阿强</span></div>
+                    <div class="pn">
+                        <div class="av">🌊</div>
+                        <span>8·波波</span></div>
+                    <div class="pn">
+                        <div class="av">🌟</div>
+                        <span>9·星星</span></div>
+                    <div class="pn">
+                        <div class="av">🎯</div>
+                        <span>10·阿飞</span></div>
+                    <div class="pn de">
+                        <div class="av">✕</div>
+                        <span>11·小龙</span></div>
+                    <div class="pn">
+                        <div class="av">🎪</div>
+                        <span>12·乐乐</span></div>
+                </div>
+                <div class="act-btns">
+                    <div class="btn btn-p" style="flex:1;padding:13px">查验 · Check</div>
+                </div>
+            </div>
+            <div class="screen-label">Night — Seer 预言家 (pick)</div>
+            <div class="screen-note">Seer picks one player to check identity.</div>
+        </div>
+
+        <!-- Night — Seer (result shown) -->
+        <div class="screen-wrap">
+            <div class="sf night">
+                <div class="night-head">
+                    <div class="night-moon">🌙</div>
+                    <div class="night-title">查验结果</div>
+                    <div class="night-sub">Seer Result · Round 2</div>
+                </div>
+                <div class="role-banner mb14">
+                    <div class="icon">🔭</div>
+                    <div>
+                        <div class="name" style="color:#a07bd4">预言家 · Seer</div>
+                        <div class="hint">查验完毕</div>
+                    </div>
+                </div>
+                <div class="seer-result wolf mb14">
+                    <div class="player">6号 · Tom</div>
+                    <div class="verdict">🐺 是狼人！· Werewolf</div>
+                </div>
+                <div class="act-block">
+                    <div class="act-lbl">历史查验记录</div>
+                    <div style="font-size:12px;color:rgba(240,232,216,.6);line-height:2">Round 1 · 1号·小明 → <span
+                            style="color:#4dcb87">村民 ✓</span><br>Round 2 · 6号·Tom → <span style="color:#e05a45">狼人 ✗</span>
+                    </div>
+                </div>
+                <div class="btn btn-ns"
+                     style="margin-top:10px;padding:12px;font-size:13px;display:block;text-align:center;border-radius:6px">
+                    等待其他玩家 · Waiting…
+                </div>
+            </div>
+            <div class="screen-label">Night — Seer 预言家 (result)</div>
+            <div class="screen-note">Result shown only to seer. History log below.</div>
+        </div>
+
+        <!-- Night — Witch -->
+        <div class="screen-wrap">
+            <div class="sf night">
+                <div class="night-head">
+                    <div class="night-moon">🌙</div>
+                    <div class="night-title">夜晚降临</div>
+                    <div class="night-sub">Night Falls · Round 2</div>
+                </div>
+                <div class="role-banner mb14">
+                    <div class="icon">🔮</div>
+                    <div>
+                        <div class="name" style="color:#36c9ad">女巫 · Witch</div>
+                        <div class="hint">你的行动时间 / Your turn</div>
+                    </div>
+                </div>
+                <div class="act-block mb10">
+                    <div class="act-lbl">解药 · Antidote ×1</div>
+                    <div class="act-desc">今晚 <strong>6号·Tom</strong> 被狼人袭击，是否使用解药？</div>
+                    <div class="act-btns">
+                        <div class="btn btn-g">使用解药</div>
+                        <div class="btn btn-ns">放弃</div>
+                    </div>
+                </div>
+                <div class="act-block">
+                    <div class="act-lbl">毒药 · Poison ×1</div>
+                    <div class="act-desc">是否对某位玩家使用毒药？</div>
+                    <div class="act-btns">
+                        <div class="btn btn-d">使用毒药</div>
+                        <div class="btn btn-ns">不用</div>
+                    </div>
+                </div>
+            </div>
+            <div class="screen-label">Night — Witch 女巫</div>
+            <div class="screen-note">Witch sees who was killed. Can save and/or poison (once each).</div>
+        </div>
+
+        <!-- Night — Guard -->
+        <div class="screen-wrap">
+            <div class="sf night">
+                <div class="night-head">
+                    <div class="night-moon">🌙</div>
+                    <div class="night-title">夜晚降临</div>
+                    <div class="night-sub">Night Falls · Round 2</div>
+                </div>
+                <div class="role-banner mb10">
+                    <div class="icon">🛡</div>
+                    <div>
+                        <div class="name" style="color:#5fa8e0">守卫 · Guard</div>
+                        <div class="hint">选择今晚保护的玩家</div>
+                    </div>
+                </div>
+                <div class="pick-prompt mb8">选择保护目标 · Protect a player:<br><span
+                        style="font-size:10px;color:rgba(240,232,216,.3)">上轮已保护: 5号·小红（不可连续）</span></div>
+                <div class="pgrid-night mb12">
+                    <div class="pn">
+                        <div class="av">😊</div>
+                        <span>1·小明</span></div>
+                    <div class="pn">
+                        <div class="av">🎭</div>
+                        <span>2·Alice</span></div>
+                    <div class="pn de">
+                        <div class="av">✕</div>
+                        <span>3·大壮</span></div>
+                    <div class="pn sl">
+                        <div class="av">⭐</div>
+                        <span>4·我</span></div>
+                    <div class="pn" style="opacity:.3;border-style:dashed">
+                        <div class="av">🌸</div>
+                        <span>5·小红</span></div>
+                    <div class="pn">
+                        <div class="av">🐯</div>
+                        <span>6·Tom</span></div>
+                    <div class="pn">
+                        <div class="av">🎸</div>
+                        <span>7·阿强</span></div>
+                    <div class="pn">
+                        <div class="av">🌊</div>
+                        <span>8·波波</span></div>
+                    <div class="pn">
+                        <div class="av">🌟</div>
+                        <span>9·星星</span></div>
+                    <div class="pn">
+                        <div class="av">🎯</div>
+                        <span>10·阿飞</span></div>
+                    <div class="pn de">
+                        <div class="av">✕</div>
+                        <span>11·小龙</span></div>
+                    <div class="pn">
+                        <div class="av">🎪</div>
+                        <span>12·乐乐</span></div>
+                </div>
+                <div class="act-btns">
+                    <div class="btn btn-p" style="flex:1;padding:13px">确认保护 Confirm</div>
+                </div>
+            </div>
+            <div class="screen-label">Night — Guard 守卫</div>
+            <div class="screen-note">Guard picks one player. Previous target dimmed (can't repeat).</div>
+        </div>
+
+        <!-- Night — Waiting (Villager / Hunter / Idiot / Dead) -->
+        <div class="screen-wrap">
+            <div class="sf night">
+                <div class="night-head">
+                    <div class="night-moon">🌙</div>
+                    <div class="night-title">夜晚降临</div>
+                    <div class="night-sub">Night Falls · Round 2</div>
+                </div>
+                <div class="night-waiting">
+                    <div class="icon">😴</div>
+                    <div class="msg">请闭眼<br>Please close your eyes</div>
+                    <div class="sub">其他玩家正在行动<br>Other players are taking actions…</div>
+                </div>
+            </div>
+            <div class="screen-label">Night — Waiting 等待</div>
+            <div class="screen-note">Villager, Hunter, Idiot, and dead players see this.</div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ════════════════════════════
+     PHASE 5 — VOTING
+════════════════════════════ -->
+<div class="phase-group">
+    <div class="phase-label">Phase 5 — Voting & Results</div>
+    <div class="screens-row">
+
+        <!-- Voting in progress -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge" style="color:var(--red)">投票中 · Voting</div>
+                    <div class="timer" style="color:var(--red)">0:28</div>
+                </div>
+                <div class="event-bar mb10" style="border-left-color:var(--gold);background:rgba(160,120,48,.08)">
+                    <strong style="color:var(--gold)">投票结果实时更新</strong><br>
+                    Tom: 4票 · 小明: 2票 · 阿强: 1票
+                </div>
+                <div class="pgrid mb10">
+                    <div class="pslot ps-al">
+                        <div class="av">😊</div>
+                        <span>1·小明</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎭</div>
+                        <span>2·Alice</span></div>
+                    <div class="pslot ps-de">
+                        <div class="av">✕</div>
+                        <span>3·大壮</span></div>
+                    <div class="pslot ps-me">
+                        <div class="av">⭐</div>
+                        <span>4·我</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌸</div>
+                        <span>5·小红</span></div>
+                    <div class="pslot ps-sl">
+                        <div class="av">🐯</div>
+                        <span>6·Tom</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎸</div>
+                        <span>7·阿强</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌊</div>
+                        <span>8·波波</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌟</div>
+                        <span>9·星星</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎯</div>
+                        <span>10·阿飞</span></div>
+                    <div class="pslot ps-de">
+                        <div class="av">✕</div>
+                        <span>11·小龙</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎪</div>
+                        <span>12·乐乐</span></div>
+                </div>
+                <div style="font-size:11px;color:var(--green);margin-bottom:8px;">✓ 你已投票给 6号·Tom</div>
+                <div class="btn btn-s" style="opacity:.5;cursor:default">已投票 · Vote submitted</div>
+            </div>
+            <div class="screen-label">Voting — In Progress</div>
+            <div class="screen-note">After vote submitted: button disabled, live tally shown.</div>
+        </div>
+
+        <!-- Vote result: eliminated -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar mb14">
+                    <div class="phase-badge">第 2 天 · Day 2</div>
+                    <div style="font-size:12px;color:var(--muted)">投票结果</div>
+                </div>
+                <div class="vote-tally mb14">
+                    <div class="tally-item">
+                        <div class="count">5</div>
+                        <div class="name">6·Tom</div>
+                    </div>
+                    <div class="tally-item">
+                        <div class="count">2</div>
+                        <div class="name">1·小明</div>
+                    </div>
+                    <div class="tally-item">
+                        <div class="count">1</div>
+                        <div class="name">7·阿强</div>
+                    </div>
+                </div>
+                <div class="vote-result-card mb12">
+                    <div class="elim-label">出局 · Eliminated</div>
+                    <div class="player-icon">🐯</div>
+                    <div class="player-name">Tom</div>
+                    <div class="player-num">6号玩家</div>
+                    <div class="role-reveal"
+                         style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bord-l)">🐺 身份揭露：狼人
+                        Werewolf
+                    </div>
+                </div>
+                <div class="btn btn-p">继续 / Continue</div>
+            </div>
+            <div class="screen-label">Vote Result — Eliminated</div>
+            <div class="screen-note">Vote tally + eliminated player + role revealed.</div>
+        </div>
+
+        <!-- Hunter shoots on death -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div style="text-align:center;margin-bottom:20px;">
+                    <div style="font-size:40px;margin-bottom:8px;">🏹</div>
+                    <div style="font-family:'Noto Serif SC',serif;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:2px;margin-bottom:4px;">
+                        猎人出局
+                    </div>
+                    <div style="font-size:12px;color:var(--muted)">Hunter eliminated — may fire</div>
+                </div>
+                <div style="padding:14px;background:var(--red-bg);border:1px solid rgba(181,37,26,.25);border-radius:8px;margin-bottom:16px;">
+                    <div style="font-size:12px;color:var(--red);font-weight:500;margin-bottom:4px;">⚡ 猎人技能触发</div>
+                    <div style="font-size:12px;color:var(--muted);line-height:1.6">你可以选择开枪带走一名存活玩家</div>
+                </div>
+                <div class="pgrid mb12">
+                    <div class="pslot ps-al">
+                        <div class="av">😊</div>
+                        <span>1·小明</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎭</div>
+                        <span>2·Alice</span></div>
+                    <div class="pslot ps-de">
+                        <div class="av">✕</div>
+                        <span>3·大壮</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌸</div>
+                        <span>5·小红</span></div>
+                    <div class="pslot ps-sl">
+                        <div class="av">🐯</div>
+                        <span>6·Tom</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌊</div>
+                        <span>8·波波</span></div>
+                </div>
+                <div class="vote-row">
+                    <div class="btn btn-d" style="flex:1">开枪 · Shoot</div>
+                    <div class="btn btn-out" style="width:80px">放弃</div>
+                </div>
+            </div>
+            <div class="screen-label">Hunter Skill — Shoot</div>
+            <div class="screen-note">Triggered when Hunter is eliminated (not by poison).</div>
+        </div>
+
+        <!-- Sheriff Badge Handover — Pick successor -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge" style="color:var(--gold);">⭐ 警长移交</div>
+                    <div class="timer" style="color:var(--gold);">30</div>
+                </div>
+                <div style="background:rgba(160,120,48,.08);border:1px solid rgba(160,120,48,.28);border-radius:8px;padding:14px;margin-bottom:14px;">
+                    <div style="font-size:10px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:4px;">
+                        Sheriff Badge Handover
+                    </div>
+                    <div style="font-size:14px;font-weight:600;color:var(--text);">你已出局，选择警徽继承人</div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:3px;">You are eliminated — choose who
+                        inherits the badge
+                    </div>
+                </div>
+                <div class="screen-section-lbl mb8">存活玩家 / Alive Players</div>
+                <div class="pgrid mb12">
+                    <div class="pslot ps-al">
+                        <div class="av">😊</div>
+                        <span>1·小明</span></div>
+                    <div class="pslot"
+                         style="background:rgba(160,120,48,.12);border:2px solid var(--gold);color:var(--gold);aspect-ratio:1;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;">
+                        <div class="av" style="background:rgba(160,120,48,.15);">🎭</div>
+                        <span>2·Alice</span>
+                    </div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌸</div>
+                        <span>5·小红</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🐯</div>
+                        <span>6·Tom</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎸</div>
+                        <span>7·阿强</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌊</div>
+                        <span>8·波波</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🌟</div>
+                        <span>9·星星</span></div>
+                    <div class="pslot ps-al">
+                        <div class="av">🎯</div>
+                        <span>10·阿飞</span></div>
+                </div>
+                <div style="font-size:11px;color:var(--gold);margin-bottom:12px;padding:7px 10px;background:rgba(160,120,48,.06);border:1px solid rgba(160,120,48,.2);border-radius:5px;">
+                    ⭐ Selected: 2 · Alice
+                </div>
+                <div style="flex:1;"></div>
+                <div class="gap8">
+                    <div class="btn btn-gold">移交警徽 / Pass Badge</div>
+                    <div class="btn"
+                         style="background:transparent;border:1px solid rgba(181,37,26,.3);color:var(--red);">销毁警徽 /
+                        Destroy Badge
+                    </div>
+                </div>
+            </div>
+            <div class="screen-label">Sheriff Badge Handover</div>
+            <div class="screen-note">Only when sheriff is voted out (not killed at night). Sheriff taps a player to pass
+                badge, or destroys it. Timer enforced.
+            </div>
+        </div>
+
+        <!-- Sheriff Badge — Received -->
+        <div class="screen-wrap">
+            <div class="sf">
+                <div class="phase-bar">
+                    <div class="phase-badge" style="color:var(--gold);">⭐ 警长移交</div>
+                    <div style="font-size:11px;color:var(--muted);">Result</div>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;">
+                    <div style="font-size:52px;">⭐</div>
+                    <div style="font-family:'Noto Serif SC',serif;font-size:20px;font-weight:700;color:var(--gold);letter-spacing:3px;">
+                        警徽已移交
+                    </div>
+                    <div style="font-size:13px;color:var(--muted);">Badge Passed</div>
+                    <div style="display:flex;align-items:center;gap:14px;padding:14px 22px;background:rgba(160,120,48,.08);border:1px solid rgba(160,120,48,.25);border-radius:10px;">
+                        <div style="font-size:32px;">🎭</div>
+                        <div style="text-align:left;">
+                            <div style="font-size:17px;font-weight:700;color:var(--text);">Alice</div>
+                            <div style="font-size:11px;color:var(--gold);letter-spacing:2px;margin-top:2px;">⭐ NEW
+                                SHERIFF
+                            </div>
+                        </div>
+                    </div>
+                    <div style="padding:9px 14px;background:var(--paper);border:1px solid var(--bord-l);border-radius:6px;font-size:12px;color:var(--muted);">
+                        Alice's vote counts as <strong style="color:var(--gold);">1.5×</strong> during eliminations
+                    </div>
+                </div>
+            </div>
+            <div class="screen-label">Badge Received — New Sheriff</div>
+            <div class="screen-note">All players see the new sheriff. Badge carries the same 1.5× power. Game
+                continues.
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ════════════════════════════
+     PHASE 6 — GAME OVER
+════════════════════════════ -->
+<div class="phase-group">
+    <div class="phase-label">Phase 6 — Game Over</div>
+    <div class="screens-row">
+
+        <!-- Village wins -->
+        <div class="screen-wrap">
+            <div class="sf card-bg">
+                <div class="gameover-screen">
+                    <div class="gameover-icon">🌅</div>
+                    <div class="gameover-title" style="color:var(--green)">村民胜利</div>
+                    <div style="font-size:13px;color:var(--green);letter-spacing:2px;margin-top:-4px">Village Wins</div>
+                    <div class="gameover-sub">所有狼人已被消灭<br>All werewolves eliminated</div>
+                    <div style="width:100%;padding-top:16px;border-top:1px solid var(--bord-l);margin-top:4px;">
+                        <div style="font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;text-align:center">
+                            身份揭露 · Roles Revealed
+                        </div>
+                        <div class="gameover-roles">
+                            <div class="role-reveal-chip chip-wolf">🐺 Alice — 狼人</div>
+                            <div class="role-reveal-chip chip-wolf">🐺 Tom — 狼人</div>
+                            <div class="role-reveal-chip chip-good">🔭 小明 — 预言家</div>
+                            <div class="role-reveal-chip chip-good">🔮 我 — 女巫</div>
+                            <div class="role-reveal-chip chip-good">🌾 大壮 — 村民</div>
+                            <div class="role-reveal-chip chip-good">🛡 小红 — 守卫</div>
+                        </div>
+                    </div>
+                    <div class="btn btn-g" style="margin-top:12px">再来一局 / Play Again</div>
+                </div>
+            </div>
+            <div class="screen-label">Game Over — Village Wins</div>
+        </div>
+
+        <!-- Wolves win -->
+        <div class="screen-wrap">
+            <div class="sf" style="background:var(--ink);">
+                <div class="gameover-screen">
+                    <div class="gameover-icon">🌑</div>
+                    <div class="gameover-title" style="color:#e05a45">狼人胜利</div>
+                    <div style="font-size:13px;color:#e05a45;letter-spacing:2px;margin-top:-4px">Wolves Win</div>
+                    <div class="gameover-sub" style="color:rgba(240,232,216,.5)">狼人数量超过村民<br>Wolves outnumber
+                        the village
+                    </div>
+                    <div style="width:100%;padding-top:16px;border-top:1px solid rgba(240,232,216,.1);margin-top:4px;">
+                        <div style="font-size:10px;letter-spacing:2px;color:rgba(240,232,216,.35);text-transform:uppercase;margin-bottom:10px;text-align:center">
+                            身份揭露 · Roles Revealed
+                        </div>
+                        <div class="gameover-roles">
+                            <div class="role-reveal-chip chip-wolf">🐺 Alice — 狼人</div>
+                            <div class="role-reveal-chip chip-wolf">🐺 Tom — 狼人</div>
+                            <div class="role-reveal-chip chip-good"
+                                 style="background:rgba(45,106,63,.12);border-color:rgba(45,106,63,.25);">🔭 小明 — 预言家
+                            </div>
+                            <div class="role-reveal-chip chip-good"
+                                 style="background:rgba(45,106,63,.12);border-color:rgba(45,106,63,.25);">🌾 大壮 — 村民
+                            </div>
+                        </div>
+                    </div>
+                    <div class="btn btn-d" style="margin-top:12px">再来一局 / Play Again</div>
+                </div>
+            </div>
+            <div class="screen-label">Game Over — Wolves Win</div>
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>

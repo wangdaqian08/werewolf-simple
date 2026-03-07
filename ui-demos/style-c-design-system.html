@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Style C Design System — Ink & Paper</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;700&display=swap"
+          rel="stylesheet">
+    <script async src="https://mcp.figma.com/mcp/html-to-design/capture.js"></script>
+    <style>
+        :root {
+          --bg:       #ede8df;
+          --paper:    #f5f0e8;
+          --card:     #ffffff;
+          --border:   #ccc2b0;
+          --border-l: #ddd6c6;
+          --text:     #1a140c;
+          --muted:    #8a7a65;
+          --red:      #b5251a;
+          --red-bg:   rgba(181,37,26,0.08);
+          --gold:     #a07830;
+          --green:    #2d6a3f;
+          --ink:      #2a1f14;
+          --dead-bg:  #d8d2c8;
+          --dead-txt: #b0a898;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+          background: #c8c2b8;
+          font-family: 'Noto Sans SC', -apple-system, sans-serif;
+          padding: 48px 40px;
+          min-width: 1100px;
+        }
+
+        /* ── Section layout ── */
+        .page-title {
+          font-family: 'Noto Serif SC', serif;
+          font-size: 28px;
+          font-weight: 700;
+          color: var(--ink);
+          letter-spacing: 2px;
+          margin-bottom: 4px;
+        }
+        .page-sub {
+          font-size: 13px;
+          color: var(--muted);
+          margin-bottom: 48px;
+          letter-spacing: 1px;
+        }
+
+        .section {
+          margin-bottom: 52px;
+        }
+        .section-title {
+          font-size: 11px;
+          font-weight: 500;
+          letter-spacing: 4px;
+          text-transform: uppercase;
+          color: var(--muted);
+          margin-bottom: 20px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 16px;
+          align-items: flex-start;
+        }
+
+        .label {
+          font-size: 11px;
+          color: var(--muted);
+          margin-top: 8px;
+          text-align: center;
+        }
+        .mono {
+          font-family: 'SF Mono', 'Fira Code', monospace;
+          font-size: 10px;
+          color: var(--muted);
+          text-align: center;
+        }
+
+        /* ── Color swatches ── */
+        .swatch-group {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0;
+        }
+        .swatch {
+          width: 80px;
+          height: 80px;
+          border-radius: 8px 8px 0 0;
+          border: 1px solid rgba(0,0,0,0.08);
+        }
+        .swatch-info {
+          background: white;
+          border: 1px solid var(--border-l);
+          border-top: none;
+          border-radius: 0 0 8px 8px;
+          padding: 6px 8px;
+          width: 80px;
+        }
+        .swatch-name {
+          font-size: 10px;
+          font-weight: 500;
+          color: var(--text);
+          display: block;
+        }
+        .swatch-hex {
+          font-family: monospace;
+          font-size: 9px;
+          color: var(--muted);
+          display: block;
+          margin-top: 1px;
+        }
+        .swatch-var {
+          font-family: monospace;
+          font-size: 8px;
+          color: var(--muted);
+          display: block;
+        }
+
+        /* ── Typography specimens ── */
+        .type-row {
+          background: var(--card);
+          border: 1px solid var(--border-l);
+          border-radius: 8px;
+          padding: 20px 24px;
+          margin-bottom: 10px;
+          display: flex;
+          align-items: baseline;
+          gap: 24px;
+        }
+        .type-spec {
+          min-width: 160px;
+          font-size: 10px;
+          color: var(--muted);
+          font-family: monospace;
+          flex-shrink: 0;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 13px 24px;
+          border: none;
+          border-radius: 6px;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          letter-spacing: 0.5px;
+          white-space: nowrap;
+        }
+        .btn-primary  { background: var(--red);   color: #fff; }
+        .btn-secondary{ background: var(--paper); border: 1px solid var(--border); color: var(--muted); }
+        .btn-success  { background: var(--green);  color: #fff; }
+        .btn-danger   { background: var(--red);    color: #fff; }
+        .btn-gold     { background: var(--gold);   color: #fff; }
+        .btn-outline  { background: transparent;   border: 1px solid var(--border); color: var(--muted); }
+
+        .btn-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+
+        /* ── Inputs ── */
+        .input-demo {
+          width: 260px;
+          padding: 13px 16px;
+          background: var(--paper);
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          color: var(--text);
+          font-family: inherit;
+          font-size: 15px;
+          outline: none;
+        }
+        .input-demo.focused { border-color: var(--red); }
+
+        /* ── Lang toggle ── */
+        .lang-toggle {
+          display: inline-flex;
+          background: var(--paper);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          padding: 2px;
+        }
+        .lang-toggle button {
+          padding: 5px 14px;
+          border: none;
+          border-radius: 3px;
+          font-family: inherit;
+          font-size: 12px;
+          cursor: default;
+          background: transparent;
+          color: var(--muted);
+        }
+        .lang-toggle button.active { background: var(--red); color: #fff; }
+
+        /* ── Player slots ── */
+        .pslot {
+          width: 72px;
+          height: 72px;
+          border-radius: 6px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          font-size: 10px;
+        }
+        .pslot .av {
+          width: 28px; height: 28px;
+          border-radius: 50%;
+          background: var(--bg);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 14px;
+        }
+        .pslot.filled  { background: var(--card);    border: 1px solid var(--border-l); color: var(--muted); box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+        .pslot.ready   { background: rgba(45,106,63,0.08); border: 1px solid rgba(45,106,63,0.25); color: var(--green); }
+        .pslot.me      { background: var(--card);    border: 2px solid var(--red);   color: var(--red); box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+        .pslot.selected{ background: var(--red-bg);  border: 1.5px solid var(--red);  color: var(--red); }
+        .pslot.dead    { background: var(--dead-bg); border: 1px solid var(--border-l); color: var(--dead-txt); }
+        .pslot.empty   { background: rgba(0,0,0,0.02); border: 1px dashed var(--border-l); color: var(--border); font-size: 18px; }
+
+        /* ── Role card ── */
+        .role-card {
+          width: 180px;
+          height: 240px;
+          border-radius: 8px;
+          background: var(--card);
+          border: 1px solid var(--border);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          position: relative;
+          overflow: hidden;
+        }
+        .role-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 4px;
+          background: var(--red);
+        }
+        .role-icon { font-size: 44px; }
+        .role-name {
+          font-family: 'Noto Serif SC', serif;
+          font-size: 22px;
+          font-weight: 700;
+          color: var(--ink);
+          letter-spacing: 3px;
+        }
+        .role-en { font-size: 9px; letter-spacing: 4px; color: var(--red); text-transform: uppercase; }
+        .role-sep { width: 32px; height: 1px; background: var(--border-l); }
+        .role-desc { font-size: 10px; color: var(--muted); text-align: center; padding: 0 16px; line-height: 1.7; }
+
+        /* ── Phase badge & timer ── */
+        .phase-badge {
+          background: var(--card);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          padding: 6px 14px;
+          font-size: 13px;
+          color: var(--gold);
+          box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .timer {
+          font-family: 'Noto Serif SC', serif;
+          font-size: 36px;
+          font-weight: 700;
+          color: var(--ink);
+        }
+
+        /* ── Event log ── */
+        .event-log {
+          width: 320px;
+          padding: 10px 14px;
+          border-radius: 4px;
+          background: var(--red-bg);
+          border-left: 3px solid var(--red);
+          font-size: 13px;
+          color: var(--muted);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          line-height: 1.5;
+        }
+        .event-log strong { color: var(--red); }
+
+        /* ── Night action card ── */
+        .night-card {
+          width: 320px;
+          padding: 18px;
+          border-radius: 6px;
+          background: rgba(240,232,216,0.06);
+          border: 1px solid rgba(240,232,216,0.14);
+        }
+        .night-bg {
+          background: var(--ink);
+          padding: 24px;
+          border-radius: 8px;
+          display: inline-block;
+        }
+        .night-card::before {
+          display: block;
+          content: '';
+          width: 32px; height: 2px;
+          background: var(--red);
+          margin-bottom: 10px;
+        }
+        .night-card .lbl { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: rgba(240,232,216,0.4); margin-bottom: 6px; }
+        .night-card .desc { font-size: 13px; color: rgba(240,232,216,0.8); line-height: 1.6; margin-bottom: 12px; }
+        .night-card .desc strong { color: #e88; }
+        .night-btns { display: flex; gap: 8px; }
+        .night-btns .btn { flex: 1; padding: 10px; font-size: 12px; }
+        .btn-night-sec { background: rgba(240,232,216,0.08); border: 1px solid rgba(240,232,216,0.15); color: rgba(240,232,216,0.5); }
+
+        /* ── Room code ── */
+        .code-block {
+          background: var(--card);
+          border: 1px solid var(--border-l);
+          border-radius: 6px;
+          padding: 16px 28px;
+          text-align: center;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .code-block .lbl { font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+        .code-block .code {
+          font-family: 'Noto Serif SC', serif;
+          font-size: 40px; font-weight: 700;
+          letter-spacing: 12px; color: var(--red);
+        }
+
+        /* ── Screen thumbnails ── */
+        .screen-thumb {
+          width: 200px;
+          height: 355px;
+          border-radius: 6px;
+          background: var(--bg);
+          border: 1px solid var(--border);
+          overflow: hidden;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          padding: 20px 12px 14px;
+        }
+        .screen-thumb.night-screen { background: var(--ink); }
+
+        .thumb-title {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          color: var(--muted);
+          text-align: center;
+          margin-top: 8px;
+        }
+
+        /* Thumb lobby */
+        .t-h1 { font-family: 'Noto Serif SC',serif; font-size: 22px; font-weight:700; color: var(--ink); letter-spacing:4px; margin-bottom:3px; }
+        .t-sub { font-size:8px; letter-spacing:3px; color: var(--red); text-transform:uppercase; margin-bottom:14px; }
+        .t-input { width:100%; padding:7px 10px; background:var(--paper); border:1px solid var(--border); border-radius:4px; font-size:9px; color:var(--muted); margin-bottom:6px; }
+        .t-btn { width:100%; padding:8px; border:none; border-radius:4px; font-size:9px; font-weight:600; cursor:default; margin-bottom:5px; }
+        .t-btn.p { background:var(--red); color:#fff; }
+        .t-btn.s { background:var(--paper); border:1px solid var(--border); color:var(--muted); }
+        .t-or { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+        .t-or::before, .t-or::after { content:''; flex:1; height:1px; background:var(--border-l); }
+        .t-or span { font-size:8px; color:var(--muted); }
+        .t-join { display:flex; gap:4px; }
+        .t-join .t-input { margin-bottom:0; text-align:center; letter-spacing:4px; font-size:12px; font-weight:700; }
+        .t-join .t-btn { width:auto; padding:7px 10px; }
+
+        /* Thumb room */
+        .t-room-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .t-room-head span { font-size:10px; font-weight:600; color:var(--text); }
+        .t-code-mini { background:var(--card); border:1px solid var(--border-l); border-radius:4px; padding:8px; text-align:center; margin-bottom:8px; }
+        .t-code-mini .lbl { font-size:7px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; }
+        .t-code-mini .code { font-family:'Noto Serif SC',serif; font-size:20px; font-weight:700; letter-spacing:6px; color:var(--red); }
+        .t-pgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:8px; }
+        .t-pslot { aspect-ratio:1; border-radius:4px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:7px; gap:2px; }
+        .t-pslot .ta { font-size:10px; }
+        .t-pslot.f { background:var(--card); border:1px solid var(--border-l); color:var(--muted); }
+        .t-pslot.r { background:rgba(45,106,63,0.08); border:1px solid rgba(45,106,63,0.25); color:var(--green); }
+        .t-pslot.m { background:var(--card); border:1.5px solid var(--red); color:var(--red); }
+        .t-pslot.e { background:rgba(0,0,0,0.02); border:1px dashed var(--border-l); color:var(--border); font-size:10px; }
+
+        /* Thumb role */
+        .t-role-card { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:12px 8px; text-align:center; margin-bottom:10px; position:relative; overflow:hidden; }
+        .t-role-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--red); }
+        .t-role-icon { font-size:28px; margin-bottom:4px; }
+        .t-role-name { font-family:'Noto Serif SC',serif; font-size:14px; font-weight:700; color:var(--ink); letter-spacing:2px; }
+        .t-role-en { font-size:7px; letter-spacing:3px; color:var(--red); text-transform:uppercase; margin:2px 0; }
+        .t-role-sep { width:24px; height:1px; background:var(--border-l); margin:4px auto; }
+        .t-role-desc { font-size:8px; color:var(--muted); line-height:1.5; }
+
+        /* Thumb day */
+        .t-phase-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+        .t-badge { background:var(--card); border:1px solid var(--border); border-radius:3px; padding:3px 8px; font-size:8px; color:var(--gold); }
+        .t-timer { font-family:'Noto Serif SC',serif; font-size:18px; font-weight:700; color:var(--ink); }
+        .t-event { padding:5px 8px; border-radius:3px; background:var(--red-bg); border-left:2px solid var(--red); font-size:7px; color:var(--muted); margin-bottom:6px; }
+        .t-pgrid2 { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin-bottom:6px; }
+        .t-pslot2 { aspect-ratio:1; border-radius:3px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:7px; gap:1px; }
+        .t-pslot2 .ta { font-size:9px; }
+        .t-pslot2.al { background:var(--card); border:1px solid var(--border-l); color:var(--muted); }
+        .t-pslot2.sl { background:var(--red-bg); border:1.5px solid var(--red); color:var(--red); }
+        .t-pslot2.de { background:var(--dead-bg); border:1px solid var(--border-l); color:var(--dead-txt); }
+        .t-pslot2.me { background:var(--card); border:1.5px solid var(--gold); color:var(--gold); }
+        .t-vote { display:flex; gap:4px; }
+        .t-vote .t-btn { margin-bottom:0; }
+        .t-vote .t-btn.d { background:var(--red); color:#fff; flex:1; }
+        .t-vote .t-btn.sk { width:40px; background:transparent; border:1px solid var(--border); color:var(--muted); }
+
+        /* Thumb night */
+        .t-night-head { text-align:center; margin-bottom:10px; }
+        .t-night-moon { font-size:24px; }
+        .t-night-title { font-family:'Noto Serif SC',serif; font-size:13px; font-weight:700; color:#f0e8d8; letter-spacing:2px; margin-top:2px; }
+        .t-night-sub { font-size:7px; color:rgba(240,232,216,0.4); }
+        .t-role-banner { display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(240,232,216,0.06); border:1px solid rgba(240,232,216,0.12); border-radius:6px; margin-bottom:8px; }
+        .t-role-banner .icon { font-size:16px; }
+        .t-role-banner .name { font-size:8px; font-weight:700; color:rgba(54,201,173,0.9); letter-spacing:1px; text-transform:uppercase; }
+        .t-role-banner .hint { font-size:7px; color:rgba(240,232,216,0.4); }
+        .t-act { padding:10px; border-radius:6px; background:rgba(240,232,216,0.05); border:1px solid rgba(240,232,216,0.1); margin-bottom:6px; }
+        .t-act::before { display:block; content:''; width:20px; height:1px; background:var(--red); margin-bottom:6px; }
+        .t-act .lbl { font-size:7px; letter-spacing:2px; text-transform:uppercase; color:rgba(240,232,216,0.4); margin-bottom:4px; }
+        .t-act .desc { font-size:8px; color:rgba(240,232,216,0.7); margin-bottom:6px; line-height:1.4; }
+        .t-act .desc strong { color:#e88; }
+        .t-act-btns { display:flex; gap:4px; }
+        .t-act-btns .t-btn { flex:1; padding:5px; font-size:7px; margin-bottom:0; }
+        .t-act-btns .t-btn.g { background:var(--green); color:#fff; }
+        .t-act-btns .t-btn.ns { background:rgba(240,232,216,0.08); border:1px solid rgba(240,232,216,0.15); color:rgba(240,232,216,0.45); }
+        .t-act-btns .t-btn.dr { background:var(--red); color:#fff; }
+    </style>
+</head>
+<body>
+
+<div class="page-title">Style C — Ink & Paper</div>
+<div class="page-sub">Design System · Werewolf (狼人杀) · Mobile Web</div>
+
+<!-- ── COLOUR PALETTE ── -->
+<div class="section">
+    <div class="section-title">Colour Palette</div>
+    <div class="row">
+        <div class="swatch-group">
+            <div class="swatch" style="background:#ede8df"></div>
+            <div class="swatch-info"><span class="swatch-name">Background</span><span
+                    class="swatch-hex">#EDE8DF</span><span class="swatch-var">--bg</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#f5f0e8"></div>
+            <div class="swatch-info"><span class="swatch-name">Paper</span><span class="swatch-hex">#F5F0E8</span><span
+                    class="swatch-var">--paper</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#ffffff; border:1px solid #ccc2b0;"></div>
+            <div class="swatch-info"><span class="swatch-name">Card</span><span class="swatch-hex">#FFFFFF</span><span
+                    class="swatch-var">--card</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#ccc2b0"></div>
+            <div class="swatch-info"><span class="swatch-name">Border</span><span class="swatch-hex">#CCC2B0</span><span
+                    class="swatch-var">--border</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#ddd6c6"></div>
+            <div class="swatch-info"><span class="swatch-name">Border Light</span><span
+                    class="swatch-hex">#DDD6C6</span><span class="swatch-var">--border-l</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#1a140c"></div>
+            <div class="swatch-info"><span class="swatch-name">Text</span><span class="swatch-hex">#1A140C</span><span
+                    class="swatch-var">--text</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#8a7a65"></div>
+            <div class="swatch-info"><span class="swatch-name">Muted</span><span class="swatch-hex">#8A7A65</span><span
+                    class="swatch-var">--muted</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#b5251a"></div>
+            <div class="swatch-info"><span class="swatch-name">Vermillion</span><span
+                    class="swatch-hex">#B5251A</span><span class="swatch-var">--red</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#a07830"></div>
+            <div class="swatch-info"><span class="swatch-name">Gold</span><span class="swatch-hex">#A07830</span><span
+                    class="swatch-var">--gold</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#2d6a3f"></div>
+            <div class="swatch-info"><span class="swatch-name">Green</span><span class="swatch-hex">#2D6A3F</span><span
+                    class="swatch-var">--green</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#2a1f14"></div>
+            <div class="swatch-info"><span class="swatch-name">Ink (Night)</span><span class="swatch-hex">#2A1F14</span><span
+                    class="swatch-var">--ink</span></div>
+        </div>
+        <div class="swatch-group">
+            <div class="swatch" style="background:#d8d2c8"></div>
+            <div class="swatch-info"><span class="swatch-name">Dead BG</span><span
+                    class="swatch-hex">#D8D2C8</span><span class="swatch-var">--dead-bg</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- ── TYPOGRAPHY ── -->
+<div class="section">
+    <div class="section-title">Typography</div>
+    <div class="type-row">
+        <div class="type-spec">Noto Serif SC<br>700 · 40px · LS 6px<br>Headings / Role Names</div>
+        <div style="font-family:'Noto Serif SC',serif; font-size:40px; font-weight:700; color:#1a140c; letter-spacing:6px">
+            狼人杀
+        </div>
+    </div>
+    <div class="type-row">
+        <div class="type-spec">Noto Serif SC<br>700 · 28px · LS 2px<br>Phase Title / Timer</div>
+        <div style="font-family:'Noto Serif SC',serif; font-size:28px; font-weight:700; color:#1a140c; letter-spacing:2px">
+            白天 Day 2 &nbsp;&nbsp; 1:45
+        </div>
+    </div>
+    <div class="type-row">
+        <div class="type-spec">Noto Serif SC<br>700 · 22px · LS 3px<br>Role Card Name</div>
+        <div style="font-family:'Noto Serif SC',serif; font-size:22px; font-weight:700; color:#1a140c; letter-spacing:3px">
+            女巫 &nbsp; 狼人 &nbsp; 预言家
+        </div>
+    </div>
+    <div class="type-row">
+        <div class="type-spec">Noto Sans SC<br>500 · 16px<br>Section Header</div>
+        <div style="font-size:16px; font-weight:500; color:#1a140c">等待中 / Waiting</div>
+    </div>
+    <div class="type-row">
+        <div class="type-spec">Noto Sans SC<br>400 · 14px<br>Body / Prompt</div>
+        <div style="font-size:14px; color:#8a7a65">你的身份 / Your Role</div>
+    </div>
+    <div class="type-row">
+        <div class="type-spec">Noto Sans SC<br>400 · 12px<br>Event / Description</div>
+        <div style="font-size:12px; color:#8a7a65; line-height:1.6">昨晚 3号·大壮 被杀 · Player 3 was killed last
+            night
+        </div>
+    </div>
+    <div class="type-row">
+        <div class="type-spec">Noto Sans SC<br>400 · 10–11px LS 3px<br>Labels / Caps</div>
+        <div style="font-size:10px; letter-spacing:3px; color:#8a7a65; text-transform:uppercase">ROOM CODE &nbsp;·&nbsp;
+            WITCH &nbsp;·&nbsp; ANTIDOTE
+        </div>
+    </div>
+</div>
+
+<!-- ── BUTTONS ── -->
+<div class="section">
+    <div class="section-title">Buttons</div>
+    <div class="row">
+        <div class="btn-wrap">
+            <button class="btn btn-primary">创建房间 / Create Room</button>
+            <div class="label">Primary</div>
+            <div class="mono">bg: #B5251A · text: #FFF</div>
+        </div>
+        <div class="btn-wrap">
+            <button class="btn btn-secondary">加入 / Join</button>
+            <div class="label">Secondary</div>
+            <div class="mono">bg: --paper · border: --border</div>
+        </div>
+        <div class="btn-wrap">
+            <button class="btn btn-gold">准备 / Ready</button>
+            <div class="label">Gold (Ready)</div>
+            <div class="mono">bg: #A07830 · text: #FFF</div>
+        </div>
+        <div class="btn-wrap">
+            <button class="btn btn-success">使用解药 Save</button>
+            <div class="label">Success</div>
+            <div class="mono">bg: #2D6A3F · text: #FFF</div>
+        </div>
+        <div class="btn-wrap">
+            <button class="btn btn-danger">投票 / Vote</button>
+            <div class="label">Danger</div>
+            <div class="mono">bg: #B5251A · text: #FFF</div>
+        </div>
+        <div class="btn-wrap">
+            <button class="btn btn-outline">跳过 Skip</button>
+            <div class="label">Outline</div>
+            <div class="mono">bg: transparent · border: --border</div>
+        </div>
+    </div>
+</div>
+
+<!-- ── FORM ELEMENTS ── -->
+<div class="section">
+    <div class="section-title">Form Elements</div>
+    <div class="row" style="align-items:center; gap:24px">
+        <div>
+            <input class="input-demo" placeholder="输入昵称 / Enter nickname" readonly>
+            <div class="label" style="text-align:left; margin-top:6px">Default input · bg: --paper · border: --border
+            </div>
+        </div>
+        <div>
+            <input class="input-demo focused" readonly value="小明">
+            <div class="label" style="text-align:left; margin-top:6px">Focused · border: --red</div>
+        </div>
+        <div>
+            <div class="lang-toggle">
+                <button class="active">中文</button>
+                <button>EN</button>
+            </div>
+            <div class="label" style="text-align:left; margin-top:6px">Language toggle</div>
+        </div>
+    </div>
+</div>
+
+<!-- ── PLAYER SLOTS ── -->
+<div class="section">
+    <div class="section-title">Player Slots · 72×72px grid cells</div>
+    <div class="row">
+        <div>
+            <div class="pslot filled">
+                <div class="av">🌙</div>
+                <span>大壮</span></div>
+            <div class="label">Filled</div>
+            <div class="mono">bg: --card</div>
+        </div>
+        <div>
+            <div class="pslot ready">
+                <div class="av">😊</div>
+                <span>小明</span></div>
+            <div class="label">Ready</div>
+            <div class="mono">bg: green 8%</div>
+        </div>
+        <div>
+            <div class="pslot me">
+                <div class="av">⭐</div>
+                <span>我 / Me</span></div>
+            <div class="label">Me (self)</div>
+            <div class="mono">border: --red 2px</div>
+        </div>
+        <div>
+            <div class="pslot selected">
+                <div class="av">🐯</div>
+                <span>Tom</span></div>
+            <div class="label">Selected</div>
+            <div class="mono">bg: red 8%</div>
+        </div>
+        <div>
+            <div class="pslot dead">
+                <div class="av">✕</div>
+                <span>大壮</span></div>
+            <div class="label">Dead</div>
+            <div class="mono">bg: --dead-bg</div>
+        </div>
+        <div>
+            <div class="pslot empty">+</div>
+            <div class="label">Empty slot</div>
+            <div class="mono">border: dashed</div>
+        </div>
+    </div>
+</div>
+
+<!-- ── ROLE CARD ── -->
+<div class="section">
+    <div class="section-title">Role Card · 180×240px (230×320px full size)</div>
+    <div class="row">
+        <div>
+            <div class="role-card">
+                <div class="role-icon">🔮</div>
+                <div class="role-name">女巫</div>
+                <div class="role-en">Witch</div>
+                <div class="role-sep"></div>
+                <div class="role-desc">拥有一瓶解药和一瓶毒药<br>各可使用一次</div>
+            </div>
+            <div class="label">Role Card</div>
+        </div>
+        <div>
+            <div class="role-card">
+                <div class="role-icon">🐺</div>
+                <div class="role-name">狼人</div>
+                <div class="role-en">Werewolf</div>
+                <div class="role-sep"></div>
+                <div class="role-desc">每晚与狼队商议<br>袭击一名村民</div>
+            </div>
+            <div class="label">Role Card</div>
+        </div>
+        <div>
+            <div class="role-card">
+                <div class="role-icon">🔭</div>
+                <div class="role-name">预言家</div>
+                <div class="role-en">Seer</div>
+                <div class="role-sep"></div>
+                <div class="role-desc">每晚可查验一名玩家<br>得知其是否为狼人</div>
+            </div>
+            <div class="label">Role Card</div>
+        </div>
+        <div>
+            <div class="role-card">
+                <div class="role-icon">🏹</div>
+                <div class="role-name">猎人</div>
+                <div class="role-en">Hunter</div>
+                <div class="role-sep"></div>
+                <div class="role-desc">死亡时可带走<br>一名玩家</div>
+            </div>
+            <div class="label">Role Card</div>
+        </div>
+        <div>
+            <div class="role-card">
+                <div class="role-icon">🛡</div>
+                <div class="role-name">守卫</div>
+                <div class="role-en">Guard</div>
+                <div class="role-sep"></div>
+                <div class="role-desc">每晚保护一名玩家<br>免受狼人袭击</div>
+            </div>
+            <div class="label">Role Card</div>
+        </div>
+        <div>
+            <div class="role-card">
+                <div class="role-icon">🌾</div>
+                <div class="role-name">村民</div>
+                <div class="role-en">Villager</div>
+                <div class="role-sep"></div>
+                <div class="role-desc">通过讨论和投票<br>找出狼人</div>
+            </div>
+            <div class="label">Role Card</div>
+        </div>
+        <div>
+            <div class="role-card">
+                <div class="role-icon">🤡</div>
+                <div class="role-name">白痴</div>
+                <div class="role-en">Idiot</div>
+                <div class="role-sep"></div>
+                <div class="role-desc">被投票出局时<br>亮出身份可免死</div>
+            </div>
+            <div class="label">Role Card</div>
+        </div>
+    </div>
+</div>
+
+<!-- ── OTHER COMPONENTS ── -->
+<div class="section">
+    <div class="section-title">Other Components</div>
+    <div class="row" style="align-items:flex-start; gap:32px">
+
+        <!-- Room code -->
+        <div>
+            <div class="code-block">
+                <div class="lbl">Room Code</div>
+                <div class="code">8847</div>
+            </div>
+            <div class="label" style="text-align:center; margin-top:8px">Room Code Block</div>
+        </div>
+
+        <!-- Phase badge + timer -->
+        <div style="display:flex; flex-direction:column; gap:12px">
+            <div style="display:flex; align-items:center; gap:16px">
+                <div class="phase-badge">第 2 天 · Day 2</div>
+                <div class="timer">1:45</div>
+            </div>
+            <div class="label">Phase Badge (gold) + Timer (Noto Serif SC)</div>
+        </div>
+
+        <!-- Event log -->
+        <div>
+            <div class="event-log">昨晚 <strong>3号·大壮</strong> 被狼人杀害<br>Player 3 was killed last night</div>
+            <div class="label" style="margin-top:8px">Event Log · red-left-border</div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ── NIGHT PHASE COMPONENT ── -->
+<div class="section">
+    <div class="section-title">Night Phase Component · bg: --ink (#2A1F14)</div>
+    <div class="night-bg">
+        <div class="night-card">
+            <div class="lbl">女巫 · Witch — 解药 Antidote</div>
+            <div class="desc">今晚 <strong>6号·Tom</strong> 被狼人袭击<br>是否使用解药救他？</div>
+            <div class="night-btns">
+                <button class="btn btn-success" style="padding:10px; font-size:12px">使用解药</button>
+                <button class="btn btn-night-sec" style="padding:10px; font-size:12px">放弃</button>
+            </div>
+        </div>
+    </div>
+    <div class="label" style="margin-top:8px">Action card on ink background · red line accent</div>
+</div>
+
+<!-- ── SCREEN THUMBNAILS ── -->
+<div class="section">
+    <div class="section-title">Screen Thumbnails — All 5 Game States</div>
+    <div class="row" style="gap:20px; align-items:flex-start">
+
+        <!-- Lobby -->
+        <div>
+            <div class="screen-thumb">
+                <div style="display:flex; justify-content:flex-end; margin-bottom:10px">
+                    <div class="lang-toggle" style="transform:scale(0.75); transform-origin:right">
+                        <button class="active" style="font-size:9px;padding:3px 8px">中文</button>
+                        <button style="font-size:9px;padding:3px 8px">EN</button>
+                    </div>
+                </div>
+                <div class="t-sub">Werewolf</div>
+                <div class="t-h1">狼人杀</div>
+                <div style="height:16px"></div>
+                <div class="t-input">输入昵称 / Enter nickname</div>
+                <div class="t-btn p">创建房间 / Create Room</div>
+                <div class="t-or"><span>或 / OR</span></div>
+                <div class="t-join">
+                    <div class="t-input" style="flex:1">8847</div>
+                    <div class="t-btn s">加入</div>
+                </div>
+            </div>
+            <div class="thumb-title">Lobby</div>
+        </div>
+
+        <!-- Room -->
+        <div>
+            <div class="screen-thumb">
+                <div class="t-room-head"><span>等待中 / Waiting</span></div>
+                <div class="t-code-mini">
+                    <div class="lbl">Room Code</div>
+                    <div class="code">8847</div>
+                </div>
+                <div style="font-size:8px; color:var(--muted); margin-bottom:6px">8 / 12 玩家 · Players</div>
+                <div class="t-pgrid">
+                    <div class="t-pslot r">
+                        <div class="ta">😊</div>
+                        <span>小明</span></div>
+                    <div class="t-pslot r">
+                        <div class="ta">🎭</div>
+                        <span>Alice</span></div>
+                    <div class="t-pslot f">
+                        <div class="ta">🌙</div>
+                        <span>大壮</span></div>
+                    <div class="t-pslot m">
+                        <div class="ta">⭐</div>
+                        <span>我</span></div>
+                    <div class="t-pslot f">
+                        <div class="ta">🌸</div>
+                        <span>小红</span></div>
+                    <div class="t-pslot r">
+                        <div class="ta">🐯</div>
+                        <span>Tom</span></div>
+                    <div class="t-pslot f">
+                        <div class="ta">🎸</div>
+                        <span>阿强</span></div>
+                    <div class="t-pslot f">
+                        <div class="ta">🌊</div>
+                        <span>波波</span></div>
+                    <div class="t-pslot e">+</div>
+                    <div class="t-pslot e">+</div>
+                    <div class="t-pslot e">+</div>
+                    <div class="t-pslot e">+</div>
+                </div>
+                <div class="t-btn p" style="font-size:9px;padding:8px;margin-bottom:0">准备 / Ready</div>
+            </div>
+            <div class="thumb-title">Room</div>
+        </div>
+
+        <!-- Role -->
+        <div>
+            <div class="screen-thumb" style="align-items:center; justify-content:center">
+                <div style="font-size:8px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:4px">
+                    游戏开始 · Game Start
+                </div>
+                <div style="font-size:11px; color:var(--muted); margin-bottom:12px">你的身份 / Your Role</div>
+                <div class="t-role-card" style="width:130px">
+                    <div class="t-role-icon">🔮</div>
+                    <div class="t-role-name">女巫</div>
+                    <div class="t-role-en">Witch</div>
+                    <div class="t-role-sep"></div>
+                    <div class="t-role-desc">拥有一瓶解药和一瓶毒药各可使用一次</div>
+                </div>
+                <div class="t-btn p" style="width:130px; margin-bottom:0">知道了 / Got it</div>
+            </div>
+            <div class="thumb-title">Role Reveal</div>
+        </div>
+
+        <!-- Day -->
+        <div>
+            <div class="screen-thumb">
+                <div class="t-phase-bar">
+                    <div class="t-badge">第 2 天 · Day 2</div>
+                    <div class="t-timer">1:45</div>
+                </div>
+                <div class="t-event">昨晚 3号·大壮 被杀</div>
+                <div class="t-pgrid2">
+                    <div class="t-pslot2 al">
+                        <div class="ta">😊</div>
+                        <span>1·小明</span></div>
+                    <div class="t-pslot2 al">
+                        <div class="ta">🎭</div>
+                        <span>2·Alice</span></div>
+                    <div class="t-pslot2 de">
+                        <div class="ta">✕</div>
+                        <span>3·大壮</span></div>
+                    <div class="t-pslot2 me">
+                        <div class="ta">⭐</div>
+                        <span>4·我</span></div>
+                    <div class="t-pslot2 al">
+                        <div class="ta">🌸</div>
+                        <span>5·小红</span></div>
+                    <div class="t-pslot2 sl">
+                        <div class="ta">🐯</div>
+                        <span>6·Tom</span></div>
+                    <div class="t-pslot2 al">
+                        <div class="ta">🎸</div>
+                        <span>7·阿强</span></div>
+                    <div class="t-pslot2 al">
+                        <div class="ta">🌊</div>
+                        <span>8·波波</span></div>
+                    <div class="t-pslot2 al">
+                        <div class="ta">🌟</div>
+                        <span>9·星星</span></div>
+                    <div class="t-pslot2 al">
+                        <div class="ta">🎯</div>
+                        <span>10·阿飞</span></div>
+                    <div class="t-pslot2 de">
+                        <div class="ta">✕</div>
+                        <span>11·小龙</span></div>
+                    <div class="t-pslot2 al">
+                        <div class="ta">🎪</div>
+                        <span>12·乐乐</span></div>
+                </div>
+                <div class="t-vote">
+                    <div class="t-btn d">投票 Vote</div>
+                    <div class="t-btn sk">跳过</div>
+                </div>
+            </div>
+            <div class="thumb-title">Day Phase</div>
+        </div>
+
+        <!-- Night -->
+        <div>
+            <div class="screen-thumb night-screen">
+                <div class="t-night-head">
+                    <div class="t-night-moon">🌙</div>
+                    <div class="t-night-title">夜晚降临</div>
+                    <div class="t-night-sub">Night Falls · Round 2</div>
+                </div>
+                <div class="t-role-banner">
+                    <div class="icon">🔮</div>
+                    <div>
+                        <div class="name">女巫 · Witch</div>
+                        <div class="hint">你的行动时间</div>
+                    </div>
+                </div>
+                <div class="t-act">
+                    <div class="lbl">解药 · Antidote</div>
+                    <div class="desc">今晚 <strong>6号·Tom</strong> 被袭击，使用解药？</div>
+                    <div class="t-act-btns">
+                        <div class="t-btn g">使用解药</div>
+                        <div class="t-btn ns">放弃</div>
+                    </div>
+                </div>
+                <div class="t-act">
+                    <div class="lbl">毒药 · Poison</div>
+                    <div class="desc">对某玩家使用毒药？</div>
+                    <div class="t-act-btns">
+                        <div class="t-btn dr">使用毒药</div>
+                        <div class="t-btn ns">不用</div>
+                    </div>
+                </div>
+            </div>
+            <div class="thumb-title">Night Phase</div>
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>
