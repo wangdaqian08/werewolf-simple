@@ -56,7 +56,7 @@ describe('gameStore', () => {
     store.setState(freshState())
     store.addEvent(MOCK_EVENT)
     expect(store.state?.events).toHaveLength(1)
-      expect(store.state?.events[0]?.message).toBe('Alice voted for Bob.')
+    expect(store.state?.events[0]?.message).toBe('Alice voted for Bob.')
   })
 
   it('addEvent() does not replace previous events', () => {

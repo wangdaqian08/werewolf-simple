@@ -21,16 +21,16 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/gameStore'
+import {computed} from 'vue'
+import {useRouter} from 'vue-router'
+import {useGameStore} from '@/stores/gameStore'
 
 const router = useRouter()
 const gameStore = useGameStore()
 
 // Derive win/loss from backend game state
 const myRole = computed(() => gameStore.state?.myRole)
-const winner = computed(() => (gameStore.state as any)?.winner as string | undefined)
+const winner = computed(() => gameStore.state?.winner)
 
 const outcomeIcon = computed(() => {
   if (!winner.value) return '🎲'
