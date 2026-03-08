@@ -216,6 +216,41 @@ async onVotePlayer(targetPlayer: string) {
 - **Font sizes**: Minimum 24px for readability
 - **Layouts**: Use Tailwind responsive utilities for adaptation
 
+### Current Style: Style C — Ink & Paper
+
+Reference demo: `ui-demos/style-c-ink-paper.html`
+
+| Token        | Value     | Usage                            |
+|--------------|-----------|----------------------------------|
+| `--bg`       | `#ede8df` | Page background (warm parchment) |
+| `--paper`    | `#f5f0e8` | Surface / input background       |
+| `--card`     | `#ffffff` | Card / elevated surface          |
+| `--border`   | `#ccc2b0` | Borders                          |
+| `--border-l` | `#ddd6c6` | Light borders                    |
+| `--text`     | `#1a140c` | Primary text                     |
+| `--muted`    | `#8a7a65` | Secondary text                   |
+| `--red`      | `#b5251a` | Primary accent (vermillion)      |
+| `--gold`     | `#a07830` | Secondary accent                 |
+| `--green`    | `#2d6a3f` | Success / ready state            |
+| `--ink`      | `#2a1f14` | Night phase background           |
+
+**Typography**: `Noto Sans SC` (body) + `Noto Serif SC` (headings, role names, timer)
+
+**Button conventions**:
+
+- `btn-primary` — red fill, white text (main actions)
+- `btn-secondary` — parchment fill, muted border (cancel/skip)
+- `btn-gold` — gold fill (ready/confirm)
+- `btn-success` — green fill (save/heal)
+- `btn-danger` — red fill (vote/poison)
+- `btn-outline` — transparent, muted border (passive)
+
+**Night phase** inverts to `--ink` (`#2a1f14`) background with paper-white text — no separate component needed, just
+swap the screen background.
+
+**To switch styles**: swap the CSS variable values and font imports. Reference demos are in `ui-demos/`. Style A (
+glassmorphism blue) is `ui-demos/style-a-glassmorphism.html`.
+
 ## Development Roadmap
 
 ### Phase 1 — Infrastructure (complete first)
