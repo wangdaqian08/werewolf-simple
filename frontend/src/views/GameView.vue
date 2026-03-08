@@ -8,18 +8,21 @@
 
     <!-- Player grid -->
     <section v-if="gameStore.state" class="player-grid">
-      <div
+      <PlayerSlot
         v-for="player in gameStore.state.players"
         :key="player.userId"
-        :class="playerSlotClass(player)"
-        class="player-slot"
+        :seat="player.seatIndex"
+        :nickname="player.nickname"
+        :variant="playerSlotVariant(player)"
         @click="onPlayerTap(player)"
       >
-        <div v-if="player.isSheriff" class="sheriff-badge">⭐</div>
-        <div class="seat-num">{{ player.seatIndex }}</div>
-        <div class="seat-name">{{ player.nickname }}</div>
-        <div v-if="!player.isAlive" class="dead-overlay">✕</div>
-      </div>
+        <template v-if="player.isSheriff" #top>
+          <div class="sheriff-badge">⭐</div>
+        </template>
+        <template v-if="!player.isAlive" #overlay>
+          <div class="dead-overlay">✕</div>
+        </template>
+      </PlayerSlot>
     </section>
 
     <!-- Event log -->
@@ -44,6 +47,7 @@ import { useUserStore } from '@/stores/userStore'
 import { useGameStore } from '@/stores/gameStore'
 import { gameService } from '@/services/gameService'
 import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import PlayerSlot from '@/components/PlayerSlot.vue'
 import type { GamePlayer } from '@/types'
 
 const route = useRoute()
@@ -87,10 +91,10 @@ const actionHint = computed(() => {
 
 const visibleEvents = computed(() => (gameStore.state?.events ?? []).slice(-5).reverse())
 
-function playerSlotClass(player: GamePlayer) {
-  if (!player.isAlive) return 'slot-dead'
-  if (player.userId === userStore.userId) return 'slot-me'
-  return 'slot-alive'
+function playerSlotVariant(player: GamePlayer) {
+  if (!player.isAlive) return 'dead' as const
+  if (player.userId === userStore.userId) return 'me' as const
+  return 'alive' as const
 }
 
 function onPlayerTap(player: GamePlayer) {
@@ -183,52 +187,11 @@ onUnmounted(() => {
   flex: 1;
 }
 
-.player-slot {
-  border-radius: 0.625rem;
-  padding: 0.75rem 0.5rem;
-  text-align: center;
-  min-height: 88px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.2rem;
-  position: relative;
-  cursor: pointer;
-}
-
-.slot-alive {
-  background: var(--card);
-  border: 1px solid var(--border-l);
-}
-
-.slot-me {
-  background: var(--card);
-  border: 2px solid var(--red);
-}
-
-.slot-dead {
-  background: var(--paper);
-  border: 1px solid var(--border-l);
-  opacity: 0.45;
-  cursor: default;
-}
-
 .sheriff-badge {
   position: absolute;
   top: 4px;
   right: 6px;
   font-size: 0.75rem;
-}
-
-.seat-num {
-  font-size: 0.7rem;
-  color: var(--muted);
-}
-
-.seat-name {
-  font-size: 0.875rem;
-  font-weight: 500;
 }
 
 .dead-overlay {
