@@ -9,6 +9,8 @@ async function goToLobby(page: import('@playwright/test').Page) {
 async function createRoom(page: import('@playwright/test').Page) {
     await goToLobby(page)
     await page.getByPlaceholder('Enter your nickname').fill('TestHost')
+    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    await expect(page).toHaveURL(/\/create-room/)
     await page.getByRole('button', {name: /Create Room/i}).click()
     await expect(page).toHaveURL(/\/room\//)
 }
@@ -30,7 +32,7 @@ test('room content is still visible after back attempt', async ({page}) => {
 
     await page.goBack().catch(() => {})
 
-    await expect(page.getByText('HOST')).toBeVisible()
+    await expect(page.getByRole('button', {name: /Start Game/i})).toBeVisible()
 })
 
 // ── Refresh confirmation dialog ───────────────────────────────────────────────
@@ -59,7 +61,7 @@ test('dismissing refresh dialog keeps user on room page', async ({page}) => {
     await dialog.dismiss()
 
     await expect(page).toHaveURL(roomUrl)
-    await expect(page.getByText('HOST')).toBeVisible()
+    await expect(page.getByRole('button', {name: /Start Game/i})).toBeVisible()
 })
 
 // ── Lobby is unguarded ────────────────────────────────────────────────────────

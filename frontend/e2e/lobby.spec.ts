@@ -42,10 +42,10 @@ test('Join button enables when both nickname and room code are entered', async (
     await expect(btn).toBeEnabled()
 })
 
-test('Create Room navigates to room view', async ({page}) => {
+test('Create Room navigates to config screen', async ({page}) => {
     await page.getByPlaceholder('Enter your nickname').fill('TestHost')
     await page.getByRole('button', {name: /Create Room/i}).click()
-    await expect(page).toHaveURL(/\/room\//)
+    await expect(page).toHaveURL(/\/create-room/)
 })
 
 test('Join Room navigates to room view', async ({page}) => {

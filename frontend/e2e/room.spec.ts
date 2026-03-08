@@ -6,9 +6,12 @@ async function goToLobby(page: import('@playwright/test').Page) {
     await page.goto('/')
 }
 
+// Lobby → fill nickname → "Create Room" → config screen → "Create Room" → waiting room
 async function createRoom(page: import('@playwright/test').Page) {
     await goToLobby(page)
     await page.getByPlaceholder('Enter your nickname').fill('TestHost')
+    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    await expect(page).toHaveURL(/\/create-room/)
     await page.getByRole('button', {name: /Create Room/i}).click()
     await expect(page).toHaveURL(/\/room\//)
 }
@@ -21,52 +24,106 @@ async function joinRoom(page: import('@playwright/test').Page) {
     await expect(page).toHaveURL(/\/room\//)
 }
 
-// ── Host view ─────────────────────────────────────────────────────────────────
+// ── Config screen ─────────────────────────────────────────────────────────────
 
-test('create room shows HOST badge on own seat', async ({page}) => {
-    await createRoom(page)
-    await expect(page.getByText('HOST')).toBeVisible()
+test('Create Room navigates to config screen', async ({page}) => {
+    await goToLobby(page)
+    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
+    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    await expect(page).toHaveURL(/\/create-room/)
 })
 
-test('create room shows role configuration panel', async ({page}) => {
-    await createRoom(page)
-    await expect(page.getByText(/Role configuration panel/i)).toBeVisible()
+test('config screen shows player count stepper defaulting to 9', async ({page}) => {
+    await goToLobby(page)
+    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
+    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    await expect(page.getByText('9')).toBeVisible()
 })
 
-test('create room shows Start Game button', async ({page}) => {
+test('increment button increases player count', async ({page}) => {
+    await goToLobby(page)
+    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
+    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    await page.getByRole('button', {name: '+'}).click()
+    await expect(page.getByText('10')).toBeVisible()
+})
+
+test('decrement button decreases player count', async ({page}) => {
+    await goToLobby(page)
+    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
+    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    await page.getByRole('button', {name: '−'}).click()
+    await expect(page.getByText('8')).toBeVisible()
+})
+
+test('decrement is disabled at minimum (6)', async ({page}) => {
+    await goToLobby(page)
+    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
+    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    // Click down to 6
+    for (let i = 0; i < 3; i++) await page.getByRole('button', {name: '−'}).click()
+    await expect(page.getByRole('button', {name: '−'})).toBeDisabled()
+})
+
+test('increment is disabled at maximum (12)', async ({page}) => {
+    await goToLobby(page)
+    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
+    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    for (let i = 0; i < 3; i++) await page.getByRole('button', {name: '+'}).click()
+    await expect(page.getByRole('button', {name: '+'})).toBeDisabled()
+})
+
+test('config screen shows Werewolf and Villager as REQUIRED', async ({page}) => {
+    await goToLobby(page)
+    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
+    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    await expect(page.getByText('REQUIRED').first()).toBeVisible()
+})
+
+// ── Host waiting room ─────────────────────────────────────────────────────────
+
+test('waiting room shows room code', async ({page}) => {
+    await createRoom(page)
+    await expect(page.getByText('ABC123')).toBeVisible()
+})
+
+test('waiting room shows player count', async ({page}) => {
+    await createRoom(page)
+    // Config screen defaults to 9; mock fills all 9 seats
+    await expect(page.getByText(/9\s*\/\s*9/)).toBeVisible()
+})
+
+test('host view shows Start Game button', async ({page}) => {
     await createRoom(page)
     await expect(page.getByRole('button', {name: /Start Game/i})).toBeVisible()
 })
 
-test('Start Game is disabled when a guest is NOT_READY', async ({page}) => {
+test('Start Game is disabled when guests are NOT_READY', async ({page}) => {
     await createRoom(page)
-    // Carol (seat 4) starts as NOT_READY in mock data
     await expect(page.getByRole('button', {name: /Start Game/i})).toBeDisabled()
 })
 
 test('Start Game enables after all guests become ready via STOMP', async ({page}) => {
     await createRoom(page)
-    // STOMP mock pushes Carol as READY after 3s
     await expect(page.getByRole('button', {name: /Start Game/i}))
-        .toBeEnabled({timeout: 5000})
+        .toBeEnabled({timeout: 6000})
 })
 
-// ── Guest view ────────────────────────────────────────────────────────────────
+// ── Guest waiting room ────────────────────────────────────────────────────────
 
-test('join room does NOT show host controls', async ({page}) => {
+test('join room does NOT show Start Game button', async ({page}) => {
     await joinRoom(page)
-    await expect(page.getByText('Role configuration panel')).not.toBeVisible()
     await expect(page.getByRole('button', {name: /Start Game/i})).not.toBeVisible()
+})
+
+test('join room shows room code', async ({page}) => {
+    await joinRoom(page)
+    await expect(page.getByText('XYZ789')).toBeVisible()
 })
 
 test('join room shows Ready button', async ({page}) => {
     await joinRoom(page)
     await expect(page.getByRole('button', {name: /^准备 \/ Ready$/})).toBeVisible()
-})
-
-test('join room shows the host seat with HOST badge', async ({page}) => {
-    await joinRoom(page)
-    await expect(page.getByText('HOST')).toBeVisible()
 })
 
 // ── Ready toggle ──────────────────────────────────────────────────────────────
@@ -75,14 +132,6 @@ test('clicking Ready shows Undo Ready button', async ({page}) => {
     await joinRoom(page)
     await page.getByRole('button', {name: /^准备 \/ Ready$/}).click()
     await expect(page.getByRole('button', {name: /Undo Ready/i})).toBeVisible()
-})
-
-test('clicking Ready marks own seat with ✓', async ({page}) => {
-    await joinRoom(page)
-    await page.getByRole('button', {name: /^准备 \/ Ready$/}).click()
-    // Seat 2 is "You" in the guest room — find the ✓ badge on it
-    const seat2 = page.locator('.player-slot').nth(1)
-    await expect(seat2.getByText('✓')).toBeVisible()
 })
 
 test('clicking Undo Ready switches back to Ready button', async ({page}) => {
@@ -99,5 +148,5 @@ test('after create room, refresh still shows host view', async ({page}) => {
     const url = page.url()
     await page.reload()
     await expect(page).toHaveURL(url)
-    await expect(page.getByText('HOST')).toBeVisible()
+    await expect(page.getByRole('button', {name: /Start Game/i})).toBeVisible()
 })

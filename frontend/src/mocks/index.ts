@@ -22,7 +22,33 @@ export function setupMocks() {
   mock.onPost('/user/logout').reply(200)
 
   // ── Room ──────────────────────────────────────────────────────────────────────
-  mock.onPost('/room/create').reply(200, MOCK_ROOM_AS_HOST)
+  mock.onPost('/room/create').reply((config) => {
+    const body = JSON.parse(config.data ?? '{}')
+    const roomConfig = body.config ?? MOCK_ROOM_AS_HOST.config
+    const players = MOCK_ROOM_AS_HOST.players.filter((p) => p.seatIndex <= roomConfig.totalPlayers)
+    const room = { ...MOCK_ROOM_AS_HOST, config: roomConfig, players }
+
+    // Reschedule room STOMP events using the actual player list for this room
+    const { carolReady, allReady } = MOCK_STOMP_EVENTS
+    mockStompClient.resetSchedule()
+    mockStompClient.scheduleEvent(
+      carolReady.delayMs,
+      carolReady.topic(room.roomId),
+      carolReady.buildPayload(players),
+    )
+    mockStompClient.scheduleEvent(
+      allReady.delayMs,
+      allReady.topic(room.roomId),
+      allReady.buildPayload(players),
+    )
+    mockStompClient.scheduleEvent(
+      gameVoteEvent.delayMs,
+      gameVoteEvent.topic(MOCK_GAME_STATE.gameId),
+      gameVoteEvent.payload,
+    )
+
+    return [200, room]
+  })
   mock.onPost('/room/join').reply(200, MOCK_ROOM_AS_GUEST)
   mock.onPost('/room/leave').reply(200)
   mock.onPost('/room/ready').reply(200)
@@ -36,15 +62,10 @@ export function setupMocks() {
   mock.onPost('/game/action').reply(200, { success: true })
 
   // ── STOMP fake events ─────────────────────────────────────────────────────────
-  // Events are registered here (data stays in data.ts) but fired relative to
-  // when activate() is called — so they always arrive after the view subscribes.
-  const { roomPlayerReady, gameVoteEvent } = MOCK_STOMP_EVENTS
-
-  mockStompClient.scheduleEvent(
-    roomPlayerReady.delayMs,
-    roomPlayerReady.topic(MOCK_ROOM_AS_HOST.roomId),
-    roomPlayerReady.payload,
-  )
+  // Room events (carolReady, allReady) are scheduled dynamically inside the
+  // createRoom mock above, using the actual filtered player list for the room.
+  // Only the game vote event is static (game phase, not room phase).
+  const { gameVoteEvent } = MOCK_STOMP_EVENTS
 
   mockStompClient.scheduleEvent(
     gameVoteEvent.delayMs,

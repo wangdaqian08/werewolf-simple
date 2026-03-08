@@ -58,12 +58,6 @@ import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 
-// Default config for a new room — user can change this in the Room view later
-const DEFAULT_ROOM_CONFIG = {
-  totalPlayers: 9,
-  roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER'],
-}
-
 const router = useRouter()
 const userStore = useUserStore()
 const roomStore = useRoomStore()
@@ -85,9 +79,7 @@ async function handleCreateRoom() {
   loading.value = true
   try {
     await ensureLoggedIn()
-    const room = await roomService.createRoom({ config: DEFAULT_ROOM_CONFIG })
-    roomStore.setRoom(room)
-    router.push({ name: 'room', params: { roomId: room.roomId } })
+    router.push({ name: 'create-room' })
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to connect. Try again.'
   } finally {

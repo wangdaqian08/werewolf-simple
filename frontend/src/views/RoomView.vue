@@ -1,47 +1,63 @@
 <template>
   <div class="room-wrap">
-    <!-- Header -->
-    <header class="room-header">
-      <button class="back-btn" @click="handleLeave">← 离开</button>
-      <div v-if="roomStore.room" class="room-code">
-        {{ roomStore.room.roomCode }}
-      </div>
-      <div v-if="roomStore.room" class="player-count">
-        {{ roomStore.room.players.length }} / {{ roomStore.room.config.totalPlayers }}
-      </div>
-    </header>
+    <!-- Back -->
+    <button class="back-btn" @click="handleLeave">← 离开</button>
 
-    <!-- Loading state -->
+    <!-- Loading -->
     <div v-if="loading" class="loading">Loading room...</div>
 
-    <!-- Room content -->
     <template v-else-if="roomStore.room">
-      <!-- Player grid -->
+      <!-- Title -->
+      <div :class="canStart ? 'room-title-ready' : ''" class="room-title">
+        {{ canStart ? '准备就绪 / Ready to Start' : '等待中 / Waiting' }}
+      </div>
+
+      <!-- Room code -->
+      <div class="code-card">
+        <div class="code-lbl">Room Code</div>
+        <div class="code-num">{{ roomStore.room.roomCode }}</div>
+      </div>
+
+      <!-- Player count + ready breakdown -->
+      <div class="player-count">
+        <span class="count-ready">{{ displayReadyCount }}</span>
+        <span>/ {{ roomStore.room.config.totalPlayers }} 玩家</span>
+        <template v-if="notReadyGuestCount > 0">
+          <span class="count-sep">·</span>
+          <span class="count-wait">{{ notReadyGuestCount }} waiting</span>
+        </template>
+      </div>
+
+      <!-- Player grid (4 columns, square slots) -->
       <section class="player-grid">
         <PlayerSlot
           v-for="seat in totalSeats"
           :key="seat"
           :seat="seat"
           :nickname="playerAtSeat(seat)?.nickname"
+          :avatar="playerAtSeat(seat)?.avatar"
           :variant="slotVariant(seat)"
+          mode="room"
+        />
+      </section>
+
+      <!-- Status bar -->
+      <div v-if="isHost" :class="canStart ? 'status-ok' : 'status-wait'" class="status-bar">
+        <template v-if="canStart">✓ All ready! 开始游戏</template>
+        <template v-else
+          >✓ {{ readyGuestCount }} players ready · Need {{ notReadyGuestCount }} more to
+          start</template
         >
-          <template v-if="playerAtSeat(seat)" #badge>
-            <div v-if="playerAtSeat(seat)!.isHost" class="seat-badge host">HOST</div>
-            <div v-else-if="playerAtSeat(seat)!.status === 'READY'" class="seat-badge ready">✓</div>
-          </template>
-        </PlayerSlot>
-      </section>
+      </div>
+      <div v-else class="status-bar" :class="iAmReady ? 'status-ok' : 'status-neutral'">
+        <template v-if="iAmReady"
+          >✓ 你已准备 · You are ready — {{ readyGuestCount }} / {{ guestCount }} ready</template
+        >
+        <template v-else>{{ readyGuestCount }} / {{ guestCount }} players ready</template>
+      </div>
 
-      <!-- Role config (host only) -->
-      <section v-if="isHost" class="role-config">
-        <h3>角色配置 / Roles</h3>
-        <p class="config-note">Backend auto-balances role counts based on total players.</p>
-        <!-- Role toggles would go here in Phase 2 -->
-        <div class="roles-placeholder">Role configuration panel</div>
-      </section>
-
-      <!-- Actions -->
-      <footer class="room-footer">
+      <!-- Action button -->
+      <div class="room-footer">
         <!-- Host: start game -->
         <button
           v-if="isHost"
@@ -53,32 +69,29 @@
         </button>
         <!-- Guest: ready toggle -->
         <template v-else>
-          <button
-            v-if="myPlayer?.status !== 'READY'"
-            class="btn btn-gold"
-            @click="handleReady(true)"
-          >
+          <button v-if="!iAmReady" class="btn btn-gold" @click="handleReady(true)">
             准备 / Ready
           </button>
           <button v-else class="btn btn-outline" @click="handleReady(false)">
             取消准备 / Undo Ready
           </button>
         </template>
-      </footer>
+      </div>
     </template>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
-import type { RoomPlayer } from '@/types'
+import { useRoomStatus } from '@/composables/useRoomStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -89,38 +102,24 @@ useNavigationGuard()
 
 const loading = ref(true)
 
-const isHost = computed(() => roomStore.room?.hostId === userStore.userId)
+const { room } = storeToRefs(roomStore)
+const { userId } = storeToRefs(userStore)
 
-const myPlayer = computed(() =>
-  roomStore.room?.players.find((p: RoomPlayer) => p.userId === userStore.userId),
-)
-
-const totalSeats = computed(() =>
-  roomStore.room ? Array.from({ length: roomStore.room.config.totalPlayers }, (_, i) => i + 1) : [],
-)
-
-const canStart = computed(() => {
-  const room = roomStore.room
-  if (!room) return false
-  const guests = room.players.filter((p: RoomPlayer) => !p.isHost)
-  return guests.every((p: RoomPlayer) => p.status === 'READY') && room.players.length >= 4
-})
-
-function playerAtSeat(seat: number): RoomPlayer | undefined {
-  return roomStore.room?.players.find((p) => p.seatIndex === seat)
-}
-
-function slotVariant(seat: number) {
-  const p = playerAtSeat(seat)
-  if (!p) return 'empty' as const
-  if (p.userId === userStore.userId) return 'me' as const
-  if (p.status === 'READY') return 'ready' as const
-  return 'waiting' as const
-}
+const {
+  isHost,
+  iAmReady,
+  totalSeats,
+  displayReadyCount,
+  notReadyGuestCount,
+  readyGuestCount,
+  guestCount,
+  canStart,
+  playerAtSeat,
+  slotVariant,
+} = useRoomStatus(room, userId)
 
 async function handleReady(ready: boolean) {
   await roomService.setReady(ready)
-  // Optimistic update — backend will confirm via STOMP ROOM_UPDATE
   if (userStore.userId) {
     roomStore.updateMyStatus(userStore.userId, ready ? 'READY' : 'NOT_READY')
   }
@@ -134,12 +133,11 @@ async function handleLeave() {
 }
 
 async function handleStartGame() {
-  // Host triggers game start via backend — backend pushes game started event via STOMP
+  // Host triggers game start via backend — backend pushes GAME_STARTED via STOMP
 }
 
 onMounted(async () => {
   const roomId = route.params.roomId as string
-  // Only fetch if we don't already have room data (e.g. direct URL load / page refresh)
   if (!roomStore.room) {
     try {
       const room = await roomService.getRoom(roomId)
@@ -151,7 +149,6 @@ onMounted(async () => {
   }
   loading.value = false
 
-  // Connect STOMP
   if (userStore.token && roomStore.room) {
     const client = createStompClient(userStore.token)
     client.onConnect = () => {
@@ -180,38 +177,19 @@ onUnmounted(() => {
   flex-direction: column;
   min-height: 100dvh;
   background: var(--bg);
-}
-
-.room-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-l);
-  background: var(--paper);
+  padding: 1rem 1rem 1.5rem;
 }
 
 .back-btn {
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   cursor: pointer;
   font-family: inherit;
   padding: 0;
-}
-
-.room-code {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  color: var(--text);
-}
-
-.player-count {
-  font-size: 0.875rem;
-  color: var(--muted);
+  align-self: flex-start;
+  margin-bottom: 0.75rem;
 }
 
 .loading {
@@ -222,61 +200,104 @@ onUnmounted(() => {
   color: var(--muted);
 }
 
+.room-title {
+  font-size: 1.0625rem;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+  transition: color 0.3s;
+}
+
+.room-title-ready {
+  color: var(--green);
+}
+
+/* Room code block */
+.code-card {
+  background: var(--card);
+  border: 1px solid var(--border-l);
+  border-radius: 0.375rem;
+  padding: 0.875rem;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 0.75rem;
+}
+
+.code-lbl {
+  font-size: 0.625rem;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.code-num {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--red);
+}
+
+/* Player count */
+.player-count {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.count-sep {
+  color: var(--border);
+}
+.count-ready {
+  color: var(--green);
+  font-weight: 500;
+}
+.count-wait {
+  color: var(--muted);
+}
+
+/* 4-column grid */
 .player-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.625rem;
-  padding: 1rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
   flex: 1;
 }
 
-.seat-badge {
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  letter-spacing: 0.05em;
+/* Status bar */
+.status-bar {
+  font-size: 0.6875rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem;
+  margin-bottom: 0.75rem;
 }
 
-.seat-badge.host {
-  background: var(--red);
-  color: #fff;
+.status-ok {
+  background: rgba(45, 106, 63, 0.06);
+  border: 1px solid rgba(45, 106, 63, 0.2);
+  color: var(--green);
 }
 
-.seat-badge.ready {
-  background: var(--green);
-  color: #fff;
-}
-
-.role-config {
-  padding: 0 1rem 1rem;
-}
-
-.role-config h3 {
-  font-size: 0.875rem;
+.status-wait {
+  background: rgba(45, 106, 63, 0.06);
+  border: 1px solid rgba(45, 106, 63, 0.2);
   color: var(--muted);
-  margin: 0 0 0.5rem;
 }
 
-.config-note {
-  font-size: 0.75rem;
-  color: var(--muted);
-  margin: 0 0 0.75rem;
-}
-
-.roles-placeholder {
+.status-neutral {
   background: var(--paper);
-  border: 1px dashed var(--border);
-  border-radius: 0.5rem;
-  padding: 1rem;
+  border: 1px solid var(--border-l);
+  color: var(--muted);
   text-align: center;
-  color: var(--muted);
-  font-size: 0.875rem;
 }
 
+/* Footer */
 .room-footer {
-  padding: 1rem;
-  border-top: 1px solid var(--border-l);
-  background: var(--paper);
+  margin-top: auto;
 }
 </style>

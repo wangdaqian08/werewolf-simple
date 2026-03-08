@@ -39,6 +39,10 @@ export class MockStompClient {
     }, 50)
   }
 
+  resetSchedule() {
+    this.scheduled = []
+  }
+
   deactivate() {
     this.subs.clear()
     this.scheduled = []
