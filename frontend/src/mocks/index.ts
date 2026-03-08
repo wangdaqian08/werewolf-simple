@@ -52,7 +52,7 @@ export function setupMocks() {
     gameVoteEvent.payload,
   )
 
-  console.info('[mock] active — set VITE_MOCK=false in .env.development to use real backend')
+  console.warn('[mock] active — set VITE_MOCK=false in .env.development to use real backend')
 }
 
 export { mockStompClient }

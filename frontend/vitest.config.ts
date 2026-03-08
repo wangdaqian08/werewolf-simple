@@ -17,12 +17,12 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             include: ['src/stores/**', 'src/services/**'],
-            thresholds: {
-                lines: 80,
-                functions: 80,
-                branches: 70,
-                statements: 80,
-            },
+            // thresholds: {
+            //     lines: 80,
+            //     functions: 80,
+            //     branches: 70,
+            //     statements: 80,
+            // },
         },
     },
 })

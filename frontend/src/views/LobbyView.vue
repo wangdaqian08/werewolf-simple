@@ -37,7 +37,7 @@
             type="text"
           />
           <button
-            :disabled="loading || !roomCode.trim()"
+            :disabled="loading || !nickname.trim() || !roomCode.trim()"
             class="btn btn-secondary join-btn"
             @click="handleJoinRoom"
           >
