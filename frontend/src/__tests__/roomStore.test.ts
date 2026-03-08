@@ -1,7 +1,7 @@
-import {beforeEach, describe, expect, it} from 'vitest'
-import {createPinia, setActivePinia} from 'pinia'
-import {useRoomStore} from '@/stores/roomStore'
-import type {Room} from '@/types'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { useRoomStore } from '@/stores/roomStore'
+import type { Room } from '@/types'
 
 function freshRoom(): Room {
   return {

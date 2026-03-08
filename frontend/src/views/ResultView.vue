@@ -21,9 +21,9 @@
 </template>
 
 <script lang="ts" setup>
-import {computed} from 'vue'
-import {useRouter} from 'vue-router'
-import {useGameStore} from '@/stores/gameStore'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useGameStore } from '@/stores/gameStore'
 
 const router = useRouter()
 const gameStore = useGameStore()

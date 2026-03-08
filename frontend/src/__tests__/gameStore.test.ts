@@ -1,7 +1,7 @@
-import {beforeEach, describe, expect, it} from 'vitest'
-import {createPinia, setActivePinia} from 'pinia'
-import {useGameStore} from '@/stores/gameStore'
-import type {GameEvent, GameState} from '@/types'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { useGameStore } from '@/stores/gameStore'
+import type { GameEvent, GameState } from '@/types'
 
 // Factory so each test gets a fresh copy — prevents shared array mutation across tests
 function freshState(): GameState {

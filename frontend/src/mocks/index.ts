@@ -8,7 +8,7 @@ import {
   MOCK_ROOM_AS_HOST,
   MOCK_STOMP_EVENTS,
 } from './data'
-import {mockStompClient} from './mockStompClient'
+import { mockStompClient } from './mockStompClient'
 
 export function setupMocks() {
   // Expose singleton so stompClient.ts can pick it up synchronously
