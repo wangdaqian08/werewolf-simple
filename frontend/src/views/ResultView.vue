@@ -9,9 +9,7 @@
       <section v-if="gameStore.state" class="role-grid">
         <div v-for="player in gameStore.state.players" :key="player.userId" class="role-slot">
           <div class="role-name">{{ player.nickname }}</div>
-          <div :class="`role-${player.role?.toLowerCase()}`" class="role-badge">
-            {{ player.role ?? '?' }}
-          </div>
+          <RoleBadge :role="player.role" />
         </div>
       </section>
 
@@ -24,6 +22,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/gameStore'
+import RoleBadge from '@/components/RoleBadge.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
@@ -115,49 +114,6 @@ function goLobby() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.role-badge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  display: inline-block;
-}
-
-.role-werewolf {
-  background: var(--red);
-  color: #fff;
-}
-
-.role-villager {
-  background: var(--muted);
-  color: #fff;
-}
-
-.role-seer {
-  background: var(--gold);
-  color: #fff;
-}
-
-.role-witch {
-  background: var(--green);
-  color: #fff;
-}
-
-.role-hunter {
-  background: #6b4c2a;
-  color: #fff;
-}
-
-.role-guard {
-  background: #3a5f8a;
-  color: #fff;
-}
-
-.role-idiot {
-  background: #888;
-  color: #fff;
 }
 
 .back-btn {

@@ -18,18 +18,18 @@
     <template v-else-if="roomStore.room">
       <!-- Player grid -->
       <section class="player-grid">
-        <div v-for="seat in totalSeats" :key="seat" :class="slotClass(seat)" class="player-slot">
-          <template v-if="playerAtSeat(seat)">
-            <div class="seat-num">{{ seat }}</div>
-            <div class="seat-name">{{ playerAtSeat(seat)!.nickname }}</div>
+        <PlayerSlot
+          v-for="seat in totalSeats"
+          :key="seat"
+          :seat="seat"
+          :nickname="playerAtSeat(seat)?.nickname"
+          :variant="slotVariant(seat)"
+        >
+          <template v-if="playerAtSeat(seat)" #badge>
             <div v-if="playerAtSeat(seat)!.isHost" class="seat-badge host">HOST</div>
             <div v-else-if="playerAtSeat(seat)!.status === 'READY'" class="seat-badge ready">✓</div>
           </template>
-          <template v-else>
-            <div class="seat-num muted">{{ seat }}</div>
-            <div class="seat-name muted">—</div>
-          </template>
-        </div>
+        </PlayerSlot>
       </section>
 
       <!-- Role config (host only) -->
@@ -76,6 +76,7 @@ import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import PlayerSlot from '@/components/PlayerSlot.vue'
 import type { RoomPlayer } from '@/types'
 
 const route = useRoute()
@@ -106,12 +107,12 @@ function playerAtSeat(seat: number): RoomPlayer | undefined {
   return roomStore.room?.players.find((p) => p.seatIndex === seat)
 }
 
-function slotClass(seat: number): string {
+function slotVariant(seat: number) {
   const p = playerAtSeat(seat)
-  if (!p) return 'slot-empty'
-  if (p.userId === userStore.userId) return 'slot-me'
-  if (p.status === 'READY') return 'slot-ready'
-  return 'slot-waiting'
+  if (!p) return 'empty' as const
+  if (p.userId === userStore.userId) return 'me' as const
+  if (p.status === 'READY') return 'ready' as const
+  return 'waiting' as const
 }
 
 async function handleReady(ready: boolean) {
@@ -224,55 +225,6 @@ onUnmounted(() => {
   gap: 0.625rem;
   padding: 1rem;
   flex: 1;
-}
-
-.player-slot {
-  border-radius: 0.625rem;
-  padding: 0.75rem 0.5rem;
-  text-align: center;
-  min-height: 88px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  position: relative;
-}
-
-.slot-empty {
-  background: var(--paper);
-  border: 1px dashed var(--border-l);
-}
-
-.slot-me {
-  background: var(--card);
-  border: 2px solid var(--red);
-}
-
-.slot-ready {
-  background: rgba(45, 106, 63, 0.08);
-  border: 1px solid rgba(45, 106, 63, 0.25);
-}
-
-.slot-waiting {
-  background: var(--card);
-  border: 1px solid var(--border-l);
-}
-
-.seat-num {
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.seat-name {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text);
-  word-break: break-all;
-}
-
-.muted {
-  color: var(--border);
 }
 
 .seat-badge {
