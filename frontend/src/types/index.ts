@@ -67,7 +67,7 @@ export interface GameState {
   players: GamePlayer[]
   myRole?: PlayerRole
   sheriff?: string // userId of current sheriff
-    winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
+  winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
   events: GameEvent[]
 }
 
