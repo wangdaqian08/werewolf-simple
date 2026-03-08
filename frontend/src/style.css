@@ -1,0 +1,106 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700&display=swap');
+@import 'tailwindcss';
+
+/* Style C — Ink & Paper */
+:root {
+    --bg: #ede8df;
+    --paper: #f5f0e8;
+    --card: #ffffff;
+    --border: #ccc2b0;
+    --border-l: #ddd6c6;
+    --text: #1a140c;
+    --muted: #8a7a65;
+    --red: #b5251a;
+    --gold: #a07830;
+    --green: #2d6a3f;
+    --ink: #2a1f14;
+}
+
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    margin: 0;
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .serif {
+    font-family: 'Noto Serif SC', serif;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+}
+
+/* Button conventions */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s;
+    min-height: 48px;
+    touch-action: manipulation;
+    width: 100%;
+}
+
+.btn:active {
+    opacity: 0.8;
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--red);
+    color: #fff;
+}
+
+.btn-secondary {
+    background: var(--paper);
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
+
+.btn-gold {
+    background: var(--gold);
+    color: #fff;
+}
+
+.btn-success {
+    background: var(--green);
+    color: #fff;
+}
+
+.btn-danger {
+    background: var(--red);
+    color: #fff;
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
+
+/* Night phase */
+.night-mode {
+    background: var(--ink);
+    color: #f5f0e8;
+}
