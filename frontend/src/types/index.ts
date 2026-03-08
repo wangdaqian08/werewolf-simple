@@ -21,6 +21,7 @@ export interface RoomPlayer {
   seatIndex: number
   status: PlayerStatus
   isHost: boolean
+  avatar?: string // emoji shown in the waiting room grid
 }
 
 export interface RoomConfig {

@@ -7,7 +7,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { GameState, LoginResponse, Room } from '@/types'
+import type { GameState, LoginResponse, Room, RoomPlayer } from '@/types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -17,6 +17,9 @@ export const MOCK_LOGIN: LoginResponse = {
 }
 
 // ── Room (as host) ────────────────────────────────────────────────────────────
+// u1 is the logged-in user (host). 8 of 12 seats filled.
+// Guests Carol (u4) and 阿强 (u7) are NOT_READY — Start Game stays disabled
+// until the STOMP event makes all guests ready 3s after room loads.
 
 export const MOCK_ROOM_AS_HOST: Room = {
   roomId: 'room-001',
@@ -24,33 +27,116 @@ export const MOCK_ROOM_AS_HOST: Room = {
   hostId: 'u1',
   status: 'WAITING',
   config: {
-    totalPlayers: 9,
+    totalPlayers: 12,
     roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER'],
   },
   players: [
-    { userId: 'u1', nickname: 'You', seatIndex: 1, status: 'NOT_READY', isHost: true },
-    { userId: 'u2', nickname: 'Alice', seatIndex: 2, status: 'READY', isHost: false },
-    { userId: 'u3', nickname: 'Bob', seatIndex: 3, status: 'READY', isHost: false },
-    { userId: 'u4', nickname: 'Carol', seatIndex: 4, status: 'NOT_READY', isHost: false },
-    { userId: 'u5', nickname: 'Dave', seatIndex: 5, status: 'READY', isHost: false },
+    {
+      userId: 'u1',
+      nickname: 'You',
+      seatIndex: 1,
+      status: 'NOT_READY',
+      isHost: true,
+      avatar: '⭐',
+    },
+    { userId: 'u2', nickname: 'Alice', seatIndex: 2, status: 'READY', isHost: false, avatar: '😊' },
+    { userId: 'u3', nickname: 'Bob', seatIndex: 3, status: 'READY', isHost: false, avatar: '🎭' },
+    {
+      userId: 'u4',
+      nickname: 'Carol',
+      seatIndex: 4,
+      status: 'NOT_READY',
+      isHost: false,
+      avatar: '🌙',
+    },
+    { userId: 'u5', nickname: 'Dave', seatIndex: 5, status: 'READY', isHost: false, avatar: '🌸' },
+    { userId: 'u6', nickname: 'Tom', seatIndex: 6, status: 'READY', isHost: false, avatar: '🐯' },
+    {
+      userId: 'u7',
+      nickname: '阿强',
+      seatIndex: 7,
+      status: 'NOT_READY',
+      isHost: false,
+      avatar: '🎸',
+    },
+    { userId: 'u8', nickname: '波波', seatIndex: 8, status: 'READY', isHost: false, avatar: '🌊' },
+    {
+      userId: 'u9',
+      nickname: '小花',
+      seatIndex: 9,
+      status: 'NOT_READY',
+      isHost: false,
+      avatar: '🌺',
+    },
+    {
+      userId: 'u10',
+      nickname: '大牛',
+      seatIndex: 10,
+      status: 'READY',
+      isHost: false,
+      avatar: '🐮',
+    },
+    {
+      userId: 'u11',
+      nickname: '阿明',
+      seatIndex: 11,
+      status: 'NOT_READY',
+      isHost: false,
+      avatar: '🌟',
+    },
+    {
+      userId: 'u12',
+      nickname: '小鱼',
+      seatIndex: 12,
+      status: 'READY',
+      isHost: false,
+      avatar: '🐟',
+    },
   ],
 }
 
 // ── Room (as guest) ───────────────────────────────────────────────────────────
+// u2 is host, u1 (You) is a guest. 8 of 12 seats filled.
 
 export const MOCK_ROOM_AS_GUEST: Room = {
   roomId: 'room-002',
   roomCode: 'XYZ789',
-  hostId: 'u2', // someone else is host
+  hostId: 'u2',
   status: 'WAITING',
   config: {
-    totalPlayers: 9,
+    totalPlayers: 12,
     roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER'],
   },
   players: [
-    { userId: 'u2', nickname: 'Alice', seatIndex: 1, status: 'NOT_READY', isHost: true },
-    { userId: 'u1', nickname: 'You', seatIndex: 2, status: 'NOT_READY', isHost: false },
-    { userId: 'u3', nickname: 'Bob', seatIndex: 3, status: 'READY', isHost: false },
+    {
+      userId: 'u2',
+      nickname: 'Alice',
+      seatIndex: 1,
+      status: 'NOT_READY',
+      isHost: true,
+      avatar: '⭐',
+    },
+    {
+      userId: 'u1',
+      nickname: 'You',
+      seatIndex: 2,
+      status: 'NOT_READY',
+      isHost: false,
+      avatar: '🎸',
+    },
+    { userId: 'u3', nickname: 'Bob', seatIndex: 3, status: 'READY', isHost: false, avatar: '🎭' },
+    {
+      userId: 'u4',
+      nickname: 'Carol',
+      seatIndex: 4,
+      status: 'NOT_READY',
+      isHost: false,
+      avatar: '🌙',
+    },
+    { userId: 'u5', nickname: 'Dave', seatIndex: 5, status: 'READY', isHost: false, avatar: '🌸' },
+    { userId: 'u6', nickname: 'Tom', seatIndex: 6, status: 'READY', isHost: false, avatar: '🐯' },
+    { userId: 'u7', nickname: '小明', seatIndex: 7, status: 'READY', isHost: false, avatar: '😊' },
+    { userId: 'u8', nickname: '波波', seatIndex: 8, status: 'READY', isHost: false, avatar: '🌊' },
   ],
 }
 
@@ -100,19 +186,27 @@ export const MOCK_GAME_RESULT = {
 // These are the payloads that would normally come from the backend via WebSocket.
 
 export const MOCK_STOMP_EVENTS = {
-  // Simulate another player readying up 3s after room loads
-  roomPlayerReady: {
-    delayMs: 3000,
+  // t=2s — first NOT_READY guest becomes ready (whoever that is in the configured player list).
+  carolReady: {
+    delayMs: 2000,
     topic: (roomId: string) => `/topic/room/${roomId}`,
-    payload: {
-      type: 'ROOM_UPDATE',
-      payload: {
-        // Carol (u4) becomes ready — map updates her status in place, no duplicates
-        players: MOCK_ROOM_AS_HOST.players.map((p) =>
-          p.userId === 'u4' ? { ...p, status: 'READY' } : p,
-        ),
-      },
+    buildPayload: (players: RoomPlayer[]) => {
+      const first = players.find((p) => !p.isHost && p.status === 'NOT_READY')
+      return {
+        type: 'ROOM_UPDATE',
+        payload: { players: players.map((p) => (p === first ? { ...p, status: 'READY' } : p)) },
+      }
     },
+  },
+
+  // t=4s — all guests READY → canStart = true → button enables.
+  allReady: {
+    delayMs: 4000,
+    topic: (roomId: string) => `/topic/room/${roomId}`,
+    buildPayload: (players: RoomPlayer[]) => ({
+      type: 'ROOM_UPDATE',
+      payload: { players: players.map((p) => (p.isHost ? p : { ...p, status: 'READY' })) },
+    }),
   },
 
   // Simulate a vote event 5s into the game

@@ -10,6 +10,12 @@ const router = createRouter({
       component: () => import('@/views/LobbyView.vue'),
     },
     {
+      path: '/create-room',
+      name: 'create-room',
+      component: () => import('@/views/CreateRoomView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/room/:roomId',
       name: 'room',
       component: () => import('@/views/RoomView.vue'),
