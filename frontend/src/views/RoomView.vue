@@ -77,12 +77,15 @@ import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
 import PlayerSlot from '@/components/PlayerSlot.vue'
+import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import type { RoomPlayer } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const roomStore = useRoomStore()
+
+useNavigationGuard()
 
 const loading = ref(true)
 
