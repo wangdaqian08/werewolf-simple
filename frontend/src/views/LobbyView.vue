@@ -9,30 +9,38 @@
       <div class="field">
         <label>昵称 / Nickname</label>
         <input
-            v-model="nickname"
-            class="input"
-            maxlength="16"
-            placeholder="Enter your nickname"
-            type="text"
-            @keyup.enter="handleLogin"
+          v-model="nickname"
+          class="input"
+          maxlength="16"
+          placeholder="Enter your nickname"
+          type="text"
+          @keyup.enter="handleLogin"
         />
       </div>
 
       <!-- Actions -->
       <div class="actions">
-        <button :disabled="loading || !nickname.trim()" class="btn btn-primary" @click="handleCreateRoom">
+        <button
+          :disabled="loading || !nickname.trim()"
+          class="btn btn-primary"
+          @click="handleCreateRoom"
+        >
           创建房间 / Create Room
         </button>
         <div class="divider">or</div>
         <div class="join-row">
           <input
-              v-model="roomCode"
-              class="input input-code"
-              maxlength="6"
-              placeholder="Room code"
-              type="text"
+            v-model="roomCode"
+            class="input input-code"
+            maxlength="6"
+            placeholder="Room code"
+            type="text"
           />
-          <button :disabled="loading || !roomCode.trim()" class="btn btn-secondary join-btn" @click="handleJoinRoom">
+          <button
+            :disabled="loading || !roomCode.trim()"
+            class="btn btn-secondary join-btn"
+            @click="handleJoinRoom"
+          >
             加入 / Join
           </button>
         </div>
@@ -44,11 +52,11 @@
 </template>
 
 <script lang="ts" setup>
-import {ref} from 'vue'
-import {useRouter} from 'vue-router'
-import {useUserStore} from '@/stores/userStore'
-import {useRoomStore} from '@/stores/roomStore'
-import {roomService} from '@/services/roomService'
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/userStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { roomService } from '@/services/roomService'
 
 // Default config for a new room — user can change this in the Room view later
 const DEFAULT_ROOM_CONFIG = {
@@ -77,9 +85,9 @@ async function handleCreateRoom() {
   loading.value = true
   try {
     await ensureLoggedIn()
-    const room = await roomService.createRoom({config: DEFAULT_ROOM_CONFIG})
+    const room = await roomService.createRoom({ config: DEFAULT_ROOM_CONFIG })
     roomStore.setRoom(room)
-    router.push({name: 'room', params: {roomId: room.roomId}})
+    router.push({ name: 'room', params: { roomId: room.roomId } })
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to connect. Try again.'
   } finally {
@@ -93,9 +101,9 @@ async function handleJoinRoom() {
   loading.value = true
   try {
     await ensureLoggedIn()
-    const room = await roomService.joinRoom({roomCode: roomCode.value.trim().toUpperCase()})
+    const room = await roomService.joinRoom({ roomCode: roomCode.value.trim().toUpperCase() })
     roomStore.setRoom(room)
-    router.push({name: 'room', params: {roomId: room.roomId}})
+    router.push({ name: 'room', params: { roomId: room.roomId } })
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Room not found. Check the code.'
   } finally {

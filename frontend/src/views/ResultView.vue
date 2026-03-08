@@ -7,11 +7,7 @@
 
       <!-- Role reveal grid -->
       <section v-if="gameStore.state" class="role-grid">
-        <div
-            v-for="player in gameStore.state.players"
-            :key="player.userId"
-            class="role-slot"
-        >
+        <div v-for="player in gameStore.state.players" :key="player.userId" class="role-slot">
           <div class="role-name">{{ player.nickname }}</div>
           <div :class="`role-${player.role?.toLowerCase()}`" class="role-badge">
             {{ player.role ?? '?' }}
@@ -19,17 +15,15 @@
         </div>
       </section>
 
-      <button class="btn btn-primary back-btn" @click="goLobby">
-        返回大厅 / Back to Lobby
-      </button>
+      <button class="btn btn-primary back-btn" @click="goLobby">返回大厅 / Back to Lobby</button>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import {computed} from 'vue'
-import {useRouter} from 'vue-router'
-import {useGameStore} from '@/stores/gameStore'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useGameStore } from '@/stores/gameStore'
 
 const router = useRouter()
 const gameStore = useGameStore()
@@ -52,14 +46,14 @@ const outcomeTitle = computed(() => {
 const outcomeSub = computed(() => {
   if (!winner.value) return ''
   const isWinner =
-      (winner.value === 'WEREWOLF' && myRole.value === 'WEREWOLF') ||
-      (winner.value === 'VILLAGER' && myRole.value !== 'WEREWOLF')
+    (winner.value === 'WEREWOLF' && myRole.value === 'WEREWOLF') ||
+    (winner.value === 'VILLAGER' && myRole.value !== 'WEREWOLF')
   return isWinner ? 'You won!' : 'You lost.'
 })
 
 function goLobby() {
   gameStore.clearGame()
-  router.push({name: 'lobby'})
+  router.push({ name: 'lobby' })
 }
 </script>
 

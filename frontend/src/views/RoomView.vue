@@ -18,12 +18,7 @@
     <template v-else-if="roomStore.room">
       <!-- Player grid -->
       <section class="player-grid">
-        <div
-            v-for="seat in totalSeats"
-            :key="seat"
-            :class="slotClass(seat)"
-            class="player-slot"
-        >
+        <div v-for="seat in totalSeats" :key="seat" :class="slotClass(seat)" class="player-slot">
           <template v-if="playerAtSeat(seat)">
             <div class="seat-num">{{ seat }}</div>
             <div class="seat-name">{{ playerAtSeat(seat)!.nickname }}</div>
@@ -49,27 +44,23 @@
       <footer class="room-footer">
         <!-- Host: start game -->
         <button
-            v-if="isHost"
-            :disabled="!canStart"
-            class="btn btn-primary"
-            @click="handleStartGame"
+          v-if="isHost"
+          :disabled="!canStart"
+          class="btn btn-primary"
+          @click="handleStartGame"
         >
           开始游戏 / Start Game
         </button>
         <!-- Guest: ready toggle -->
         <template v-else>
           <button
-              v-if="myPlayer?.status !== 'READY'"
-              class="btn btn-gold"
-              @click="handleReady(true)"
+            v-if="myPlayer?.status !== 'READY'"
+            class="btn btn-gold"
+            @click="handleReady(true)"
           >
             准备 / Ready
           </button>
-          <button
-              v-else
-              class="btn btn-outline"
-              @click="handleReady(false)"
-          >
+          <button v-else class="btn btn-outline" @click="handleReady(false)">
             取消准备 / Undo Ready
           </button>
         </template>
@@ -79,13 +70,13 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, onMounted, onUnmounted, ref} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
-import {useUserStore} from '@/stores/userStore'
-import {useRoomStore} from '@/stores/roomStore'
-import {roomService} from '@/services/roomService'
-import {createStompClient, disconnectStomp, subscribeToTopic} from '@/services/stompClient'
-import type {RoomPlayer} from '@/types'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/userStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { roomService } from '@/services/roomService'
+import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import type { RoomPlayer } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -94,16 +85,14 @@ const roomStore = useRoomStore()
 
 const loading = ref(true)
 
-const isHost = computed(() =>
-    roomStore.room?.hostId === userStore.userId
-)
+const isHost = computed(() => roomStore.room?.hostId === userStore.userId)
 
 const myPlayer = computed(() =>
-    roomStore.room?.players.find((p: RoomPlayer) => p.userId === userStore.userId)
+  roomStore.room?.players.find((p: RoomPlayer) => p.userId === userStore.userId),
 )
 
 const totalSeats = computed(() =>
-    roomStore.room ? Array.from({length: roomStore.room.config.totalPlayers}, (_, i) => i + 1) : []
+  roomStore.room ? Array.from({ length: roomStore.room.config.totalPlayers }, (_, i) => i + 1) : [],
 )
 
 const canStart = computed(() => {
@@ -114,7 +103,7 @@ const canStart = computed(() => {
 })
 
 function playerAtSeat(seat: number): RoomPlayer | undefined {
-  return roomStore.room?.players.find(p => p.seatIndex === seat)
+  return roomStore.room?.players.find((p) => p.seatIndex === seat)
 }
 
 function slotClass(seat: number): string {
@@ -137,7 +126,7 @@ async function handleLeave() {
   await roomService.leaveRoom()
   roomStore.clearRoom()
   disconnectStomp()
-  router.push({name: 'lobby'})
+  router.push({ name: 'lobby' })
 }
 
 async function handleStartGame() {
@@ -152,7 +141,7 @@ onMounted(async () => {
       const room = await roomService.getRoom(roomId)
       roomStore.setRoom(room)
     } catch {
-      router.push({name: 'lobby'})
+      router.push({ name: 'lobby' })
       return
     }
   }
@@ -168,7 +157,7 @@ onMounted(async () => {
           roomStore.updatePlayers(data.payload.players)
         }
         if (data.type === 'GAME_STARTED') {
-          router.push({name: 'game', params: {gameId: data.payload.gameId}})
+          router.push({ name: 'game', params: { gameId: data.payload.gameId } })
         }
       })
     }
@@ -261,8 +250,8 @@ onUnmounted(() => {
 }
 
 .slot-ready {
-  background: rgba(45, 106, 63, .08);
-  border: 1px solid rgba(45, 106, 63, .25);
+  background: rgba(45, 106, 63, 0.08);
+  border: 1px solid rgba(45, 106, 63, 0.25);
 }
 
 .slot-waiting {
