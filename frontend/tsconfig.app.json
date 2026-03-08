@@ -23,8 +23,5 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.vue"
-  ],
-  "exclude": [
-    "src/__tests__/**"
   ]
 }

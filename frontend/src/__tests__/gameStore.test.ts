@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
-import { useGameStore } from '@/stores/gameStore'
-import type { GameEvent, GameState } from '@/types'
+import {beforeEach, describe, expect, it} from 'vitest'
+import {createPinia, setActivePinia} from 'pinia'
+import {useGameStore} from '@/stores/gameStore'
+import type {GameEvent, GameState} from '@/types'
 
 // Factory so each test gets a fresh copy — prevents shared array mutation across tests
 function freshState(): GameState {
@@ -56,7 +56,7 @@ describe('gameStore', () => {
     store.setState(freshState())
     store.addEvent(MOCK_EVENT)
     expect(store.state?.events).toHaveLength(1)
-    expect(store.state?.events[0].message).toBe('Alice voted for Bob.')
+      expect(store.state?.events[0]?.message).toBe('Alice voted for Bob.')
   })
 
   it('addEvent() does not replace previous events', () => {
