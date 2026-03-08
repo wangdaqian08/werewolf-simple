@@ -1,5 +1,5 @@
-import {createApp} from 'vue'
-import {createPinia} from 'pinia'
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import './style.css'
@@ -10,8 +10,8 @@ import router from './router'
 // Controlled by VITE_MOCK in .env.development.
 // Remove this block (and src/mocks/) when the real backend is ready.
 if (import.meta.env.VITE_MOCK === 'true') {
-    const {setupMocks} = await import('./mocks')
-    setupMocks()
+  const { setupMocks } = await import('./mocks')
+  setupMocks()
 }
 
 const app = createApp(App)

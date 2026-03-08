@@ -9,11 +9,11 @@
     <!-- Player grid -->
     <section v-if="gameStore.state" class="player-grid">
       <div
-          v-for="player in gameStore.state.players"
-          :key="player.userId"
-          :class="playerSlotClass(player)"
-          class="player-slot"
-          @click="onPlayerTap(player)"
+        v-for="player in gameStore.state.players"
+        :key="player.userId"
+        :class="playerSlotClass(player)"
+        class="player-slot"
+        @click="onPlayerTap(player)"
       >
         <div v-if="player.isSheriff" class="sheriff-badge">⭐</div>
         <div class="seat-num">{{ player.seatIndex }}</div>
@@ -24,11 +24,7 @@
 
     <!-- Event log -->
     <section v-if="gameStore.state?.events.length" class="event-log">
-      <div
-          v-for="(event, i) in visibleEvents"
-          :key="i"
-          class="event-item"
-      >
+      <div v-for="(event, i) in visibleEvents" :key="i" class="event-item">
         {{ event.message }}
       </div>
     </section>
@@ -42,13 +38,13 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, onMounted, onUnmounted} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
-import {useUserStore} from '@/stores/userStore'
-import {useGameStore} from '@/stores/gameStore'
-import {gameService} from '@/services/gameService'
-import {createStompClient, disconnectStomp, subscribeToTopic} from '@/services/stompClient'
-import type {GamePlayer} from '@/types'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/userStore'
+import { useGameStore } from '@/stores/gameStore'
+import { gameService } from '@/services/gameService'
+import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import type { GamePlayer } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -89,9 +85,7 @@ const actionHint = computed(() => {
   }
 })
 
-const visibleEvents = computed(() =>
-    (gameStore.state?.events ?? []).slice(-5).reverse()
-)
+const visibleEvents = computed(() => (gameStore.state?.events ?? []).slice(-5).reverse())
 
 function playerSlotClass(player: GamePlayer) {
   if (!player.isAlive) return 'slot-dead'
@@ -102,7 +96,7 @@ function playerSlotClass(player: GamePlayer) {
 function onPlayerTap(player: GamePlayer) {
   if (!player.isAlive) return
   // Send action to backend — backend validates whether this tap is a valid game action
-  gameService.submitAction({actionType: 'SELECT_PLAYER', targetId: player.userId})
+  gameService.submitAction({ actionType: 'SELECT_PLAYER', targetId: player.userId })
 }
 
 onMounted(async () => {
@@ -111,7 +105,7 @@ onMounted(async () => {
     const state = await gameService.getState(gameId)
     gameStore.setState(state)
   } catch {
-    router.push({name: 'lobby'})
+    router.push({ name: 'lobby' })
     return
   }
 
@@ -127,7 +121,7 @@ onMounted(async () => {
           gameStore.addEvent(data.payload)
         }
         if (data.type === 'GAME_OVER') {
-          router.push({name: 'result', params: {gameId}})
+          router.push({ name: 'result', params: { gameId } })
         }
       })
       // Private channel for role-specific info (night actions, etc.)
