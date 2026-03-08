@@ -1,0 +1,14 @@
+import http from './http'
+import type {GameActionRequest, GameActionResponse, GameState} from '@/types'
+
+export const gameService = {
+    async getState(gameId: string): Promise<GameState> {
+        const {data} = await http.get<GameState>(`/game/state?gameId=${gameId}`)
+        return data
+    },
+
+    async submitAction(req: GameActionRequest): Promise<GameActionResponse> {
+        const {data} = await http.post<GameActionResponse>('/game/action', req)
+        return data
+    },
+}
