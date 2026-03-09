@@ -68,6 +68,14 @@ describe('roomStore', () => {
     expect(store.room?.players[2]?.status).toBe('READY') // bob stays READY
   })
 
+  it('updateSeatIndex() assigns a seat number to the matching player', () => {
+    const store = useRoomStore()
+    store.setRoom(freshRoom())
+    store.updateSeatIndex('u2', 5)
+    expect(store.room?.players[1]?.seatIndex).toBe(5)
+    expect(store.room?.players[0]?.seatIndex).toBe(1) // host unchanged
+  })
+
   it('updateMyStatus() does nothing when userId not found', () => {
     const store = useRoomStore()
     store.setRoom(freshRoom())

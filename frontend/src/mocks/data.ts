@@ -17,9 +17,12 @@ export const MOCK_LOGIN: LoginResponse = {
 }
 
 // ── Room (as host) ────────────────────────────────────────────────────────────
-// u1 is the logged-in user (host). 8 of 12 seats filled.
-// Guests Carol (u4) and 阿强 (u7) are NOT_READY — Start Game stays disabled
-// until the STOMP event makes all guests ready 3s after room loads.
+// u1 is the logged-in user (host), seatIndex null — must pick like everyone else.
+// 8 guests occupy seats 1–8; host + guests exactly fill a 9-player room.
+//
+// Behaviour by configured totalPlayers:
+//   ≤ 9  → all seats filled, allReady STOMP fires → Start Game enables
+//   12   → seats 9–12 remain empty, allReady suppressed → host can change seats freely
 
 export const MOCK_ROOM_AS_HOST: Room = {
   roomId: 'room-001',
@@ -31,67 +34,15 @@ export const MOCK_ROOM_AS_HOST: Room = {
     roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER'],
   },
   players: [
-    {
-      userId: 'u1',
-      nickname: 'You',
-      seatIndex: 1,
-      status: 'NOT_READY',
-      isHost: true,
-      avatar: '⭐',
-    },
-    { userId: 'u2', nickname: 'Alice', seatIndex: 2, status: 'READY', isHost: false, avatar: '😊' },
-    { userId: 'u3', nickname: 'Bob', seatIndex: 3, status: 'READY', isHost: false, avatar: '🎭' },
-    {
-      userId: 'u4',
-      nickname: 'Carol',
-      seatIndex: 4,
-      status: 'NOT_READY',
-      isHost: false,
-      avatar: '🌙',
-    },
-    { userId: 'u5', nickname: 'Dave', seatIndex: 5, status: 'READY', isHost: false, avatar: '🌸' },
-    { userId: 'u6', nickname: 'Tom', seatIndex: 6, status: 'READY', isHost: false, avatar: '🐯' },
-    {
-      userId: 'u7',
-      nickname: '阿强',
-      seatIndex: 7,
-      status: 'NOT_READY',
-      isHost: false,
-      avatar: '🎸',
-    },
-    { userId: 'u8', nickname: '波波', seatIndex: 8, status: 'READY', isHost: false, avatar: '🌊' },
-    {
-      userId: 'u9',
-      nickname: '小花',
-      seatIndex: 9,
-      status: 'NOT_READY',
-      isHost: false,
-      avatar: '🌺',
-    },
-    {
-      userId: 'u10',
-      nickname: '大牛',
-      seatIndex: 10,
-      status: 'READY',
-      isHost: false,
-      avatar: '🐮',
-    },
-    {
-      userId: 'u11',
-      nickname: '阿明',
-      seatIndex: 11,
-      status: 'NOT_READY',
-      isHost: false,
-      avatar: '🌟',
-    },
-    {
-      userId: 'u12',
-      nickname: '小鱼',
-      seatIndex: 12,
-      status: 'READY',
-      isHost: false,
-      avatar: '🐟',
-    },
+    { userId: 'u1', nickname: 'You',  seatIndex: null, status: 'NOT_READY', isHost: true,  avatar: '⭐' },
+    { userId: 'u2', nickname: 'Alice', seatIndex: 1,   status: 'READY',     isHost: false, avatar: '😊' },
+    { userId: 'u3', nickname: 'Bob',   seatIndex: 2,   status: 'NOT_READY', isHost: false, avatar: '🎭' },
+    { userId: 'u4', nickname: 'Carol', seatIndex: 3,   status: 'READY',     isHost: false, avatar: '🌙' },
+    { userId: 'u5', nickname: 'Dave',  seatIndex: 4,   status: 'READY',     isHost: false, avatar: '🌸' },
+    { userId: 'u6', nickname: 'Tom',   seatIndex: 5,   status: 'READY',     isHost: false, avatar: '🐯' },
+    { userId: 'u7', nickname: '阿强',  seatIndex: 6,   status: 'READY',     isHost: false, avatar: '🎸' },
+    { userId: 'u8', nickname: '波波',  seatIndex: 7,   status: 'READY',     isHost: false, avatar: '🌊' },
+    { userId: 'u9', nickname: '小花',  seatIndex: 8,   status: 'READY',     isHost: false, avatar: '🌺' },
   ],
 }
 
@@ -119,7 +70,7 @@ export const MOCK_ROOM_AS_GUEST: Room = {
     {
       userId: 'u1',
       nickname: 'You',
-      seatIndex: 2,
+      seatIndex: null, // guest must pick a number before readying up
       status: 'NOT_READY',
       isHost: false,
       avatar: '🎸',

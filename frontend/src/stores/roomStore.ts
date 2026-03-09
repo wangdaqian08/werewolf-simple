@@ -24,9 +24,17 @@ export const useRoomStore = defineStore('room', () => {
     })
   }
 
+  function updateSeatIndex(userId: string, seatIndex: number) {
+    if (!room.value) return
+    room.value.players = toRaw(room.value.players).map((p) => {
+      const raw = toRaw(p)
+      return raw.userId === userId ? { ...raw, seatIndex } : { ...raw }
+    })
+  }
+
   function clearRoom() {
     room.value = null
   }
 
-  return { room, setRoom, updatePlayers, updateMyStatus, clearRoom }
+  return { room, setRoom, updatePlayers, updateMyStatus, updateSeatIndex, clearRoom }
 })

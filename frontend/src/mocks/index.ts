@@ -9,6 +9,7 @@ import {
   MOCK_STOMP_EVENTS,
 } from './data'
 import { mockStompClient } from './mockStompClient'
+import type { RoomPlayer } from '@/types'
 
 export function setupMocks() {
   // Expose singleton so stompClient.ts can pick it up synchronously
@@ -22,10 +23,18 @@ export function setupMocks() {
   mock.onPost('/user/logout').reply(200)
 
   // ── Room ──────────────────────────────────────────────────────────────────────
+  // Mutable reference to the current player list for the active host room.
+  // Updated by POST /room/seat so that lazy STOMP events see the current state.
+  let activePlayers: RoomPlayer[] = []
+
   mock.onPost('/room/create').reply((config) => {
     const body = JSON.parse(config.data ?? '{}')
     const roomConfig = body.config ?? MOCK_ROOM_AS_HOST.config
-    const players = MOCK_ROOM_AS_HOST.players.filter((p) => p.seatIndex <= roomConfig.totalPlayers)
+    // Host occupies 1 seat, so guests fill at most totalPlayers - 1 seats.
+    const players = MOCK_ROOM_AS_HOST.players.filter(
+      (p) => p.isHost || (p.seatIndex !== null && p.seatIndex <= roomConfig.totalPlayers - 1),
+    )
+    activePlayers = [...players]
     const room = { ...MOCK_ROOM_AS_HOST, config: roomConfig, players }
 
     // Reschedule room STOMP events using the actual player list for this room
@@ -36,11 +45,14 @@ export function setupMocks() {
       carolReady.topic(room.roomId),
       carolReady.buildPayload(players),
     )
-    mockStompClient.scheduleEvent(
-      allReady.delayMs,
-      allReady.topic(room.roomId),
-      allReady.buildPayload(players),
-    )
+    // For 12-player rooms, suppress allReady so seats stay empty for host seat-change testing.
+    // Use a lazy function so the payload is built at fire time — capturing seat updates
+    // (e.g. host claiming a seat) that happened after schedule time.
+    if (roomConfig.totalPlayers < 12) {
+      mockStompClient.scheduleEvent(allReady.delayMs, allReady.topic(room.roomId), () =>
+        allReady.buildPayload(activePlayers),
+      )
+    }
     mockStompClient.scheduleEvent(
       gameVoteEvent.delayMs,
       gameVoteEvent.topic(MOCK_GAME_STATE.gameId),
@@ -52,6 +64,14 @@ export function setupMocks() {
   mock.onPost('/room/join').reply(200, MOCK_ROOM_AS_GUEST)
   mock.onPost('/room/leave').reply(200)
   mock.onPost('/room/ready').reply(200)
+  // Seat claim: update activePlayers so lazy STOMP events see current state
+  mock.onPost('/room/seat').reply((config) => {
+    const body = JSON.parse(config.data ?? '{}')
+    activePlayers = activePlayers.map((p) =>
+      p.userId === MOCK_LOGIN.user.userId ? { ...p, seatIndex: body.seatIndex } : p,
+    )
+    return [200]
+  })
   mock.onGet(`/room/${MOCK_ROOM_AS_HOST.roomId}`).reply(200, MOCK_ROOM_AS_HOST)
   mock.onGet(`/room/${MOCK_ROOM_AS_GUEST.roomId}`).reply(200, MOCK_ROOM_AS_GUEST)
   mock.onGet('/room/list').reply(200, [MOCK_ROOM_AS_HOST])

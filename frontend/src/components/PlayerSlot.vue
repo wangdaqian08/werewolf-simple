@@ -6,12 +6,15 @@
     <!-- ── Room mode: square card with avatar circle ── -->
     <template v-if="mode === 'room'">
       <template v-if="nickname">
+        <!-- Seat number always visible so players can identify themselves -->
+        <span class="slot-index">{{ seat }}</span>
         <div class="av">{{ avatar }}</div>
         <span class="av-name">{{ nickname }}</span>
         <slot name="badge" />
       </template>
       <template v-else>
-        <span class="empty-plus">+</span>
+        <!-- Show the seat number so players can identify which slot to pick -->
+        <span class="empty-num">{{ seat }}</span>
       </template>
     </template>
 
@@ -29,7 +32,7 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
 
-type SlotVariant = 'empty' | 'me' | 'me-ready' | 'ready' | 'waiting' | 'alive' | 'dead'
+type SlotVariant = 'empty' | 'selectable' | 'me' | 'me-ready' | 'ready' | 'waiting' | 'alive' | 'dead'
 
 const props = defineProps<{
   seat: number
@@ -43,20 +46,14 @@ defineEmits<{ click: [] }>()
 
 const variantClass = computed(() => {
   switch (props.variant ?? 'empty') {
-    case 'me':
-      return 'slot-me'
-    case 'me-ready':
-      return 'slot-me-ready'
-    case 'ready':
-      return 'slot-ready'
-    case 'waiting':
-      return 'slot-waiting'
-    case 'alive':
-      return 'slot-alive'
-    case 'dead':
-      return 'slot-dead'
-    default:
-      return 'slot-empty'
+    case 'selectable': return 'slot-selectable'
+    case 'me':         return 'slot-me'
+    case 'me-ready':   return 'slot-me-ready'
+    case 'ready':      return 'slot-ready'
+    case 'waiting':    return 'slot-waiting'
+    case 'alive':      return 'slot-alive'
+    case 'dead':       return 'slot-dead'
+    default:           return 'slot-empty'
   }
 })
 </script>
@@ -90,6 +87,12 @@ const variantClass = computed(() => {
   background: var(--paper);
   border: 1px dashed var(--border-l);
   color: var(--border);
+}
+.slot-selectable {
+  background: var(--paper);
+  border: 1px dashed var(--gold);
+  color: var(--gold);
+  cursor: pointer;
 }
 .slot-me {
   background: var(--card);
@@ -139,6 +142,14 @@ const variantClass = computed(() => {
 }
 
 /* ── Room mode text ── */
+.slot-index {
+  font-size: 9px;
+  font-weight: 600;
+  color: inherit;
+  opacity: 0.6;
+  line-height: 1;
+}
+
 .av {
   width: 26px;
   height: 26px;
@@ -161,8 +172,9 @@ const variantClass = computed(() => {
   padding: 0 2px;
 }
 
-.empty-plus {
-  font-size: 1rem;
-  color: var(--border);
+.empty-num {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: inherit;
 }
 </style>

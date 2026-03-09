@@ -2,16 +2,22 @@ import type { IMessage } from '@stomp/stompjs'
 
 type MsgCallback = (msg: IMessage) => void
 
+// Payload can be a static value or a lazy function evaluated at fire time.
+type PayloadFn = () => unknown
+
 interface ScheduledEvent {
   delayMs: number
   topic: string
-  payload: unknown
+  payload: unknown | PayloadFn
 }
 
 /**
  * Minimal fake STOMP client that mimics @stomp/stompjs Client.
  * Events registered via scheduleEvent() fire relative to activate(),
  * so they always arrive AFTER the view has subscribed.
+ *
+ * Pass a function as payload to evaluate it lazily at fire time (useful
+ * when the payload depends on state that changes between schedule and fire).
  */
 export class MockStompClient {
   onConnect: (() => void) | undefined
@@ -20,11 +26,7 @@ export class MockStompClient {
   private subs: Map<string, MsgCallback[]> = new Map()
   private scheduled: ScheduledEvent[] = []
 
-  /**
-   * Register a fake STOMP message to push after activate().
-   * Call this from mocks/index.ts — all event data stays in data.ts.
-   */
-  scheduleEvent(delayMs: number, topic: string, payload: unknown) {
+  scheduleEvent(delayMs: number, topic: string, payload: unknown | PayloadFn) {
     this.scheduled.push({ delayMs, topic, payload })
   }
 
@@ -34,7 +36,11 @@ export class MockStompClient {
     setTimeout(() => {
       this.onConnect?.()
       for (const event of this.scheduled) {
-        setTimeout(() => this.push(event.topic, event.payload), event.delayMs)
+        setTimeout(() => {
+          const resolved =
+            typeof event.payload === 'function' ? (event.payload as PayloadFn)() : event.payload
+          this.push(event.topic, resolved)
+        }, event.delayMs)
       }
     }, 50)
   }

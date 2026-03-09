@@ -1,13 +1,12 @@
 <template>
   <div class="create-wrap">
     <div class="create-card">
+      <!-- Back button -->
+      <button class="back-btn" @click="router.push({ name: 'lobby' })">← 返回</button>
       <!-- Header -->
       <div class="create-header">
-        <div>
-          <div class="section-lbl">Host</div>
-          <h2 class="create-title">创建房间 / Create Room</h2>
-        </div>
-        <button class="back-btn" @click="router.push({ name: 'lobby' })">← 返回</button>
+        <div class="section-lbl">Host</div>
+        <h2 class="create-title">创建房间 / Create Room</h2>
       </div>
 
       <!-- Player count stepper -->
@@ -181,9 +180,6 @@ async function handleCreate() {
 }
 
 .create-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
   margin-bottom: 0.25rem;
 }
 
@@ -210,6 +206,8 @@ async function handleCreate() {
   cursor: pointer;
   font-family: inherit;
   padding: 0;
+  align-self: flex-start;
+  white-space: nowrap;
 }
 
 /* Player count stepper */

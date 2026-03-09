@@ -29,4 +29,8 @@ export const roomService = {
   async setReady(ready: boolean): Promise<void> {
     await http.post('/room/ready', { ready })
   },
+
+  async claimSeat(seatIndex: number): Promise<void> {
+    await http.post('/room/seat', { seatIndex })
+  },
 }
