@@ -52,9 +52,13 @@
       </div>
       <div v-else class="status-bar" :class="iAmReady ? 'status-ok' : 'status-neutral'">
         <template v-if="iAmReady"
-          >✓ 你已准备 · You are ready — {{ displayReadyCount }} / {{ roomStore.room.config.totalPlayers }} ready</template
+          >✓ 你已准备 · You are ready — {{ displayReadyCount }} /
+          {{ roomStore.room.config.totalPlayers }} ready</template
         >
-        <template v-else>{{ displayReadyCount }} / {{ roomStore.room.config.totalPlayers }} players ready</template>
+        <template v-else
+          >{{ displayReadyCount }} / {{ roomStore.room.config.totalPlayers }} players
+          ready</template
+        >
       </div>
 
       <!-- Action button -->

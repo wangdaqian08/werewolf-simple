@@ -32,7 +32,15 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
 
-type SlotVariant = 'empty' | 'selectable' | 'me' | 'me-ready' | 'ready' | 'waiting' | 'alive' | 'dead'
+type SlotVariant =
+  | 'empty'
+  | 'selectable'
+  | 'me'
+  | 'me-ready'
+  | 'ready'
+  | 'waiting'
+  | 'alive'
+  | 'dead'
 
 const props = defineProps<{
   seat: number
@@ -46,14 +54,22 @@ defineEmits<{ click: [] }>()
 
 const variantClass = computed(() => {
   switch (props.variant ?? 'empty') {
-    case 'selectable': return 'slot-selectable'
-    case 'me':         return 'slot-me'
-    case 'me-ready':   return 'slot-me-ready'
-    case 'ready':      return 'slot-ready'
-    case 'waiting':    return 'slot-waiting'
-    case 'alive':      return 'slot-alive'
-    case 'dead':       return 'slot-dead'
-    default:           return 'slot-empty'
+    case 'selectable':
+      return 'slot-selectable'
+    case 'me':
+      return 'slot-me'
+    case 'me-ready':
+      return 'slot-me-ready'
+    case 'ready':
+      return 'slot-ready'
+    case 'waiting':
+      return 'slot-waiting'
+    case 'alive':
+      return 'slot-alive'
+    case 'dead':
+      return 'slot-dead'
+    default:
+      return 'slot-empty'
   }
 })
 </script>
