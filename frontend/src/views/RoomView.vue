@@ -60,7 +60,7 @@
           </div>
         </div>
         <div class="debug-divider" />
-        <button class="debug-btn debug-start-btn" @click="handleStartGame">▶ Start Game</button>
+        <button class="debug-btn debug-start-btn" @click="handleStartGame">▶ Debug Start Game</button>
       </div>
 
       <!-- Status bar -->
