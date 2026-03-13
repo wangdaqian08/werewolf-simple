@@ -45,9 +45,6 @@ export class MockStompClient {
     }, 50)
   }
 
-  resetSchedule() {
-    this.scheduled = []
-  }
 
   deactivate() {
     this.subs.clear()
@@ -67,6 +64,11 @@ export class MockStompClient {
   push(topic: string, payload: unknown) {
     const fakeMsg = { body: JSON.stringify(payload) } as IMessage
     this.subs.get(topic)?.forEach((cb) => cb(fakeMsg))
+  }
+
+  /** Immediately deliver a message (alias for push; useful for debug endpoints). */
+  fireNow(topic: string, payload: unknown) {
+    this.push(topic, payload)
   }
 }
 

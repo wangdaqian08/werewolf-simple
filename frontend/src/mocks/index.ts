@@ -11,6 +11,17 @@ import {
 import { mockStompClient } from './mockStompClient'
 import type { RoomPlayer } from '@/types'
 
+// Mutable room state shared across mock endpoints so debug actions see current players.
+let mockRoomId = MOCK_ROOM_AS_HOST.roomId
+let mockPlayers: RoomPlayer[] = [...MOCK_ROOM_AS_HOST.players]
+
+function pushRoomUpdate() {
+  mockStompClient.fireNow(`/topic/room/${mockRoomId}`, {
+    type: 'ROOM_UPDATE',
+    payload: { players: mockPlayers },
+  })
+}
+
 export function setupMocks() {
   // Expose singleton so stompClient.ts can pick it up synchronously
   ;(globalThis as Record<string, unknown>).__mockStompClient = mockStompClient
@@ -23,10 +34,6 @@ export function setupMocks() {
   mock.onPost('/user/logout').reply(200)
 
   // ── Room ──────────────────────────────────────────────────────────────────────
-  // Mutable reference to the current player list for the active host room.
-  // Updated by POST /room/seat so that lazy STOMP events see the current state.
-  let activePlayers: RoomPlayer[] = []
-
   mock.onPost('/room/create').reply((config) => {
     const body = JSON.parse(config.data ?? '{}')
     const roomConfig = body.config ?? MOCK_ROOM_AS_HOST.config
@@ -34,40 +41,21 @@ export function setupMocks() {
     const players = MOCK_ROOM_AS_HOST.players.filter(
       (p) => p.isHost || (p.seatIndex !== null && p.seatIndex <= roomConfig.totalPlayers - 1),
     )
-    activePlayers = [...players]
     const room = { ...MOCK_ROOM_AS_HOST, config: roomConfig, players }
-
-    // Reschedule room STOMP events using the actual player list for this room
-    const { carolReady, allReady } = MOCK_STOMP_EVENTS
-    mockStompClient.resetSchedule()
-    mockStompClient.scheduleEvent(
-      carolReady.delayMs,
-      carolReady.topic(room.roomId),
-      carolReady.buildPayload(players),
-    )
-    // For 12-player rooms, suppress allReady so seats stay empty for host seat-change testing.
-    // Use a lazy function so the payload is built at fire time — capturing seat updates
-    // (e.g. host claiming a seat) that happened after schedule time.
-    if (roomConfig.totalPlayers < 12) {
-      mockStompClient.scheduleEvent(allReady.delayMs, allReady.topic(room.roomId), () =>
-        allReady.buildPayload(activePlayers),
-      )
-    }
-    mockStompClient.scheduleEvent(
-      gameVoteEvent.delayMs,
-      gameVoteEvent.topic(MOCK_GAME_STATE.gameId),
-      gameVoteEvent.payload,
-    )
-
+    mockRoomId = room.roomId
+    mockPlayers = [...players]
     return [200, room]
   })
-  mock.onPost('/room/join').reply(200, MOCK_ROOM_AS_GUEST)
+  mock.onPost('/room/join').reply(() => {
+    mockRoomId = MOCK_ROOM_AS_GUEST.roomId
+    mockPlayers = [...MOCK_ROOM_AS_GUEST.players]
+    return [200, MOCK_ROOM_AS_GUEST]
+  })
   mock.onPost('/room/leave').reply(200)
   mock.onPost('/room/ready').reply(200)
-  // Seat claim: update activePlayers so lazy STOMP events see current state
   mock.onPost('/room/seat').reply((config) => {
     const body = JSON.parse(config.data ?? '{}')
-    activePlayers = activePlayers.map((p) =>
+    mockPlayers = mockPlayers.map((p) =>
       p.userId === MOCK_LOGIN.user.userId ? { ...p, seatIndex: body.seatIndex } : p,
     )
     return [200]
@@ -76,15 +64,24 @@ export function setupMocks() {
   mock.onGet(`/room/${MOCK_ROOM_AS_GUEST.roomId}`).reply(200, MOCK_ROOM_AS_GUEST)
   mock.onGet('/room/list').reply(200, [MOCK_ROOM_AS_HOST])
 
+  // ── Debug: manually set a player's ready status ───────────────────────────────
+  // POST /debug/ready  { userId: string, ready: boolean }
+  // Fires a STOMP ROOM_UPDATE immediately so the UI reacts.
+  mock.onPost('/debug/ready').reply((config) => {
+    const { userId, ready } = JSON.parse(config.data ?? '{}')
+    mockPlayers = mockPlayers.map((p) =>
+      p.userId === userId ? { ...p, status: ready ? 'READY' : 'NOT_READY' } : p,
+    )
+    pushRoomUpdate()
+    return [200, { players: mockPlayers }]
+  })
+
   // ── Game ──────────────────────────────────────────────────────────────────────
   mock.onGet(/\/game\/state/).reply((_config) => [200, MOCK_GAME_STATE])
   mock.onGet(/\/game\/result/).reply((_config) => [200, MOCK_GAME_RESULT])
   mock.onPost('/game/action').reply(200, { success: true })
 
   // ── STOMP fake events ─────────────────────────────────────────────────────────
-  // Room events (carolReady, allReady) are scheduled dynamically inside the
-  // createRoom mock above, using the actual filtered player list for the room.
-  // Only the game vote event is static (game phase, not room phase).
   const { gameVoteEvent } = MOCK_STOMP_EVENTS
 
   mockStompClient.scheduleEvent(
@@ -94,6 +91,11 @@ export function setupMocks() {
   )
 
   console.warn('[mock] active — set VITE_MOCK=false in .env.development to use real backend')
+  console.info(
+    '[mock] debug: POST /debug/ready { userId, ready } to toggle player ready status\n' +
+      '  players:',
+    MOCK_ROOM_AS_HOST.players.map((p) => `${p.userId} (${p.nickname})`).join(', '),
+  )
 }
 
 export { mockStompClient }

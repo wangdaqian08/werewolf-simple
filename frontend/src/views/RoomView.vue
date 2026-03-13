@@ -42,6 +42,22 @@
         />
       </section>
 
+      <!-- Debug panel (mock mode only) -->
+      <div v-if="isMock" class="debug-panel">
+        <div class="debug-title">🛠 Debug — Toggle Ready</div>
+        <div class="debug-list">
+          <div v-for="p in roomStore.room.players" :key="p.userId" class="debug-row">
+            <span class="debug-name">{{ p.nickname }}</span>
+            <span :class="p.status === 'READY' ? 'debug-ready' : 'debug-not-ready'" class="debug-status">
+              {{ p.status === 'READY' ? 'Ready' : 'Not Ready' }}
+            </span>
+            <button class="debug-btn" @click="debugToggleReady(p.userId, p.status !== 'READY')">
+              {{ p.status === 'READY' ? 'Undo' : 'Ready' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Status bar -->
       <div v-if="isHost" :class="canStart ? 'status-ok' : 'status-wait'" class="status-bar">
         <template v-if="canStart">✓ All ready! 开始游戏</template>
@@ -93,6 +109,7 @@
 
 <script lang="ts" setup>
 import { onMounted, onUnmounted, ref } from 'vue'
+import http from '@/services/http'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/userStore'
@@ -107,6 +124,8 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const roomStore = useRoomStore()
+
+const isMock = import.meta.env.VITE_MOCK === 'true'
 
 useNavigationGuard()
 
@@ -149,6 +168,10 @@ async function handleLeave() {
   roomStore.clearRoom()
   disconnectStomp()
   router.push({ name: 'lobby' })
+}
+
+async function debugToggleReady(userId: string, ready: boolean) {
+  await http.post('/debug/ready', { userId, ready })
 }
 
 async function handleStartGame() {
@@ -332,5 +355,69 @@ onUnmounted(() => {
 /* Footer */
 .room-footer {
   margin-top: auto;
+}
+
+/* Debug panel */
+.debug-panel {
+  border: 1px dashed var(--border);
+  border-radius: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  background: rgba(160, 120, 48, 0.04);
+}
+
+.debug-title {
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.debug-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.debug-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.debug-name {
+  flex: 1;
+  color: var(--text);
+}
+
+.debug-status {
+  font-size: 0.625rem;
+  min-width: 4rem;
+  text-align: right;
+}
+
+.debug-ready {
+  color: var(--green);
+}
+
+.debug-not-ready {
+  color: var(--muted);
+}
+
+.debug-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.debug-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
 }
 </style>

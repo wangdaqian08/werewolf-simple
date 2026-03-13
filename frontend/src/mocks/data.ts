@@ -7,7 +7,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { GameState, LoginResponse, Room, RoomPlayer } from '@/types'
+import type { GameState, LoginResponse, Room } from '@/types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -19,10 +19,6 @@ export const MOCK_LOGIN: LoginResponse = {
 // ── Room (as host) ────────────────────────────────────────────────────────────
 // u1 is the logged-in user (host), seatIndex null — must pick like everyone else.
 // 8 guests occupy seats 1–8; host + guests exactly fill a 9-player room.
-//
-// Behaviour by configured totalPlayers:
-//   ≤ 9  → all seats filled, allReady STOMP fires → Start Game enables
-//   12   → seats 9–12 remain empty, allReady suppressed → host can change seats freely
 
 export const MOCK_ROOM_AS_HOST: Room = {
   roomId: 'room-001',
@@ -151,29 +147,6 @@ export const MOCK_GAME_RESULT = {
 // These are the payloads that would normally come from the backend via WebSocket.
 
 export const MOCK_STOMP_EVENTS = {
-  // t=2s — first NOT_READY guest becomes ready (whoever that is in the configured player list).
-  carolReady: {
-    delayMs: 2000,
-    topic: (roomId: string) => `/topic/room/${roomId}`,
-    buildPayload: (players: RoomPlayer[]) => {
-      const first = players.find((p) => !p.isHost && p.status === 'NOT_READY')
-      return {
-        type: 'ROOM_UPDATE',
-        payload: { players: players.map((p) => (p === first ? { ...p, status: 'READY' } : p)) },
-      }
-    },
-  },
-
-  // t=4s — all guests READY → canStart = true → button enables.
-  allReady: {
-    delayMs: 4000,
-    topic: (roomId: string) => `/topic/room/${roomId}`,
-    buildPayload: (players: RoomPlayer[]) => ({
-      type: 'ROOM_UPDATE',
-      payload: { players: players.map((p) => (p.isHost ? p : { ...p, status: 'READY' })) },
-    }),
-  },
-
   // Simulate a vote event 5s into the game
   gameVoteEvent: {
     delayMs: 5000,
