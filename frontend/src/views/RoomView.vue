@@ -48,7 +48,10 @@
         <div class="debug-list">
           <div v-for="p in roomStore.room.players" :key="p.userId" class="debug-row">
             <span class="debug-name">{{ p.nickname }}</span>
-            <span :class="p.status === 'READY' ? 'debug-ready' : 'debug-not-ready'" class="debug-status">
+            <span
+              :class="p.status === 'READY' ? 'debug-ready' : 'debug-not-ready'"
+              class="debug-status"
+            >
               {{ p.status === 'READY' ? 'Ready' : 'Not Ready' }}
             </span>
             <button class="debug-btn" @click="debugToggleReady(p.userId, p.status !== 'READY')">
