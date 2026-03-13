@@ -21,7 +21,7 @@ let mockRoomId = MOCK_ROOM_AS_HOST.roomId
 let mockPlayers: RoomPlayer[] = [...MOCK_ROOM_AS_HOST.players]
 let mockTotalPlayers = MOCK_ROOM_AS_HOST.config.totalPlayers
 
-const EXTRA_PLAYERS = [
+const EXTRA_PLAYERS: { userId: string; nickname: string; avatar: string }[] = [
   { userId: 'x1', nickname: '小龙', avatar: '🐉' },
   { userId: 'x2', nickname: 'Nina', avatar: '🦋' },
   { userId: 'x3', nickname: 'Zara', avatar: '🌷' },
@@ -180,10 +180,17 @@ export function setupMocks() {
     if (nextSeat === undefined) return [400, { error: 'Room is full' }]
 
     const extraIdx = mockPlayers.filter((p) => p.userId.startsWith('x')).length
-    const extra = EXTRA_PLAYERS[extraIdx % EXTRA_PLAYERS.length]
+    const extra = EXTRA_PLAYERS[extraIdx % EXTRA_PLAYERS.length]!
     mockPlayers = [
       ...mockPlayers,
-      { ...extra, seatIndex: nextSeat, status: 'NOT_READY', isHost: false },
+      {
+        userId: extra.userId,
+        nickname: extra.nickname,
+        avatar: extra.avatar,
+        seatIndex: nextSeat,
+        status: 'NOT_READY' as const,
+        isHost: false,
+      },
     ]
     pushRoomUpdate()
     return [200, { players: mockPlayers }]
