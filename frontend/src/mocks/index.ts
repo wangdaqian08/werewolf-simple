@@ -19,6 +19,14 @@ import type { GameState, RoomPlayer, SheriffElectionState } from '@/types'
 // Mutable room state shared across mock endpoints so debug actions see current players.
 let mockRoomId = MOCK_ROOM_AS_HOST.roomId
 let mockPlayers: RoomPlayer[] = [...MOCK_ROOM_AS_HOST.players]
+let mockTotalPlayers = MOCK_ROOM_AS_HOST.config.totalPlayers
+
+const EXTRA_PLAYERS = [
+  { userId: 'x1', nickname: '小龙', avatar: '🐉' },
+  { userId: 'x2', nickname: 'Nina', avatar: '🦋' },
+  { userId: 'x3', nickname: 'Zara', avatar: '🌷' },
+  { userId: 'x4', nickname: 'Rex', avatar: '🦁' },
+]
 
 // Mutable game state for debug endpoints
 let mockGameState: GameState = { ...MOCK_GAME_STATE }
@@ -67,11 +75,13 @@ export function setupMocks() {
     const room = { ...MOCK_ROOM_AS_HOST, config: roomConfig, players }
     mockRoomId = room.roomId
     mockPlayers = [...players]
+    mockTotalPlayers = roomConfig.totalPlayers
     return [200, room]
   })
   mock.onPost('/room/join').reply(() => {
     mockRoomId = MOCK_ROOM_AS_GUEST.roomId
     mockPlayers = [...MOCK_ROOM_AS_GUEST.players]
+    mockTotalPlayers = MOCK_ROOM_AS_GUEST.config.totalPlayers
     return [200, MOCK_ROOM_AS_GUEST]
   })
   mock.onPost('/room/leave').reply(200)
@@ -157,6 +167,24 @@ export function setupMocks() {
     mockPlayers = mockPlayers.map((p) =>
       p.userId === userId ? { ...p, status: ready ? 'READY' : 'NOT_READY' } : p,
     )
+    pushRoomUpdate()
+    return [200, { players: mockPlayers }]
+  })
+
+  // ── Debug: add a fake player to the room ──────────────────────────────────────
+  mock.onPost('/debug/room/add-player').reply(() => {
+    const takenSeats = new Set(mockPlayers.map((p) => p.seatIndex).filter((s) => s !== null))
+    const nextSeat = Array.from({ length: mockTotalPlayers }, (_, i) => i + 1).find(
+      (s) => !takenSeats.has(s),
+    )
+    if (nextSeat === undefined) return [400, { error: 'Room is full' }]
+
+    const extraIdx = mockPlayers.filter((p) => p.userId.startsWith('x')).length
+    const extra = EXTRA_PLAYERS[extraIdx % EXTRA_PLAYERS.length]
+    mockPlayers = [
+      ...mockPlayers,
+      { ...extra, seatIndex: nextSeat, status: 'NOT_READY', isHost: false },
+    ]
     pushRoomUpdate()
     return [200, { players: mockPlayers }]
   })

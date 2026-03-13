@@ -65,7 +65,7 @@ export const MOCK_ROOM_AS_GUEST: Room = {
   hostId: 'u2',
   status: 'WAITING',
   config: {
-    totalPlayers: 8,
+    totalPlayers: 9,
     roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER'],
   },
   players: [
