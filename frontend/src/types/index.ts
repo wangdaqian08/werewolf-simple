@@ -70,6 +70,7 @@ export interface GameState {
   sheriff?: string // userId of current sheriff
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
   events: GameEvent[]
+  sheriffElection?: SheriffElectionState
 }
 
 export interface GameEvent {
@@ -89,6 +90,52 @@ export interface GameActionResponse {
   success: boolean
   message?: string
   state?: Partial<GameState>
+}
+
+// ── Sheriff Election ──────────────────────────────────────────────────────────
+
+export type SheriffSubPhase = 'SIGNUP' | 'SPEECH' | 'VOTING' | 'RESULT'
+
+export interface SheriffCandidate {
+  userId: string
+  nickname: string
+  avatar?: string
+  status: 'RUNNING' | 'QUIT'
+}
+
+export interface SheriffVoter {
+  userId: string
+  nickname: string
+  avatar?: string
+  seatIndex: number
+}
+
+export interface SheriffVoteTally {
+  candidateId: string
+  nickname: string
+  seatIndex?: number
+  votes: number
+  voters: SheriffVoter[]
+}
+
+export interface SheriffElectionState {
+  subPhase: SheriffSubPhase
+  timeRemaining: number
+  candidates: SheriffCandidate[]
+  speakingOrder: string[] // userIds in order
+  currentSpeakerId?: string
+  hasPassed?: boolean // true if I chose to pass on signup
+  myVote?: string // userId I voted for
+  abstained?: boolean
+  canVote?: boolean // false if I quit campaign
+  result?: {
+    sheriffId: string
+    sheriffNickname: string
+    sheriffAvatar?: string
+    tally: SheriffVoteTally[]
+    abstainCount: number
+    abstainVoters: SheriffVoter[]
+  }
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

@@ -1,42 +1,92 @@
 <template>
   <div :class="{ 'night-mode': isNight }" class="game-wrap">
-    <!-- Phase header -->
-    <header class="game-header">
-      <div class="phase-label">{{ phaseLabel }}</div>
-      <div class="day-badge">Day {{ gameStore.state?.dayNumber ?? 1 }}</div>
-    </header>
+    <!-- Sheriff Election phase -->
+    <template
+      v-if="gameStore.state?.phase === 'SHERIFF_ELECTION' && gameStore.state?.sheriffElection"
+    >
+      <SheriffElection
+        :election="gameStore.state.sheriffElection"
+        :my-user-id="userStore.userId ?? ''"
+        :is-host="isHost"
+        @run="handleSheriffRun"
+        @pass="handleSheriffPass"
+        @withdraw="handleSheriffWithdraw"
+        @start-campaign="handleSheriffStartCampaign"
+        @quit="handleSheriffQuit"
+        @vote="handleSheriffVote"
+        @confirm-vote="handleSheriffConfirmVote"
+        @abstain="handleSheriffAbstain"
+      />
+    </template>
 
-    <!-- Player grid -->
-    <section v-if="gameStore.state" class="player-grid">
-      <PlayerSlot
-        v-for="player in gameStore.state.players"
-        :key="player.userId"
-        :seat="player.seatIndex"
-        :nickname="player.nickname"
-        :variant="playerSlotVariant(player)"
-        @click="onPlayerTap(player)"
-      >
-        <template v-if="player.isSheriff" #top>
-          <div class="sheriff-badge">⭐</div>
-        </template>
-        <template v-if="!player.isAlive" #overlay>
-          <div class="dead-overlay">✕</div>
-        </template>
-      </PlayerSlot>
-    </section>
+    <!-- Normal game phases -->
+    <template v-else>
+      <!-- Phase header -->
+      <header class="game-header">
+        <div class="phase-label">{{ phaseLabel }}</div>
+        <div class="day-badge">Day {{ gameStore.state?.dayNumber ?? 1 }}</div>
+      </header>
 
-    <!-- Event log -->
-    <section v-if="gameStore.state?.events.length" class="event-log">
-      <div v-for="(event, i) in visibleEvents" :key="i" class="event-item">
-        {{ event.message }}
+      <!-- Player grid -->
+      <section v-if="gameStore.state" class="player-grid">
+        <PlayerSlot
+          v-for="player in gameStore.state.players"
+          :key="player.userId"
+          :seat="player.seatIndex"
+          :nickname="player.nickname"
+          :variant="playerSlotVariant(player)"
+          @click="onPlayerTap(player)"
+        >
+          <template v-if="player.isSheriff" #top>
+            <div class="sheriff-badge">⭐</div>
+          </template>
+          <template v-if="!player.isAlive" #overlay>
+            <div class="dead-overlay">✕</div>
+          </template>
+        </PlayerSlot>
+      </section>
+
+      <!-- Event log -->
+      <section v-if="gameStore.state?.events.length" class="event-log">
+        <div v-for="(event, i) in visibleEvents" :key="i" class="event-item">
+          {{ event.message }}
+        </div>
+      </section>
+
+      <!-- Action panel — rendered by backend phase -->
+      <footer class="action-panel">
+        <p class="action-hint">{{ actionHint }}</p>
+      </footer>
+    </template>
+
+    <!-- Debug panel (mock mode only) -->
+    <div v-if="isMock" class="debug-panel">
+      <div class="debug-title">🛠 Debug — Sheriff Screens</div>
+      <div class="debug-btns">
+        <button class="debug-btn" @click="debugSheriff('SIGNUP')">Sign-up</button>
+        <button class="debug-btn" @click="debugSheriff('SPEECH_CANDIDATE')">Speech: Me</button>
+        <button class="debug-btn" @click="debugSheriff('SPEECH_AUDIENCE')">Speech: Watch</button>
+        <button class="debug-btn" @click="debugSheriff('VOTING')">Voting</button>
+        <button class="debug-btn" @click="debugSheriff('RESULT')">Result</button>
+        <button class="debug-btn debug-btn-exit" @click="debugExitSheriff">← Day</button>
       </div>
-    </section>
-
-    <!-- Action panel — rendered by backend phase -->
-    <footer class="action-panel">
-      <p class="action-hint">{{ actionHint }}</p>
-      <!-- Actions are driven by backend phase; placeholder for now -->
-    </footer>
+      <template
+        v-if="
+          gameStore.state?.phase === 'SHERIFF_ELECTION' &&
+          gameStore.state?.sheriffElection?.subPhase === 'SIGNUP'
+        "
+      >
+        <div class="debug-title" style="margin-top: 0.5rem">Candidates</div>
+        <div class="debug-btns">
+          <button class="debug-btn" @click="debugCandidateRun('u2', 'Alice', '😊')">+ Alice</button>
+          <button class="debug-btn" @click="debugCandidateRemove('u2')">− Alice</button>
+          <button class="debug-btn" @click="debugCandidateRun('u3', 'Bob', '🎭')">+ Bob</button>
+          <button class="debug-btn" @click="debugCandidateRemove('u3')">− Bob</button>
+          <button class="debug-btn" @click="debugCandidateRun('u6', 'Tom', '🐯')">+ Tom</button>
+          <button class="debug-btn" @click="debugCandidateRemove('u6')">− Tom</button>
+        </div>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -45,9 +95,12 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { useGameStore } from '@/stores/gameStore'
+import { useRoomStore } from '@/stores/roomStore'
 import { gameService } from '@/services/gameService'
 import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
+import SheriffElection from '@/components/SheriffElection.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import type { GamePlayer } from '@/types'
 
@@ -55,6 +108,10 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const gameStore = useGameStore()
+const roomStore = useRoomStore()
+
+const isMock = import.meta.env.VITE_MOCK === 'true'
+const isHost = computed(() => roomStore.room?.hostId === userStore.userId)
 
 useNavigationGuard()
 
@@ -98,6 +155,44 @@ function playerSlotVariant(player: GamePlayer) {
   if (!player.isAlive) return 'dead' as const
   if (player.userId === userStore.userId) return 'me' as const
   return 'alive' as const
+}
+
+async function handleSheriffRun() {
+  await gameService.submitAction({ actionType: 'SHERIFF_RUN' })
+}
+async function handleSheriffPass() {
+  await gameService.submitAction({ actionType: 'SHERIFF_PASS' })
+}
+async function handleSheriffWithdraw() {
+  await gameService.submitAction({ actionType: 'SHERIFF_WITHDRAW' })
+}
+async function handleSheriffStartCampaign() {
+  await gameService.submitAction({ actionType: 'SHERIFF_START_CAMPAIGN' })
+}
+async function handleSheriffQuit() {
+  await gameService.submitAction({ actionType: 'SHERIFF_QUIT_CAMPAIGN' })
+}
+async function handleSheriffVote(userId: string) {
+  await gameService.submitAction({ actionType: 'SHERIFF_VOTE', targetId: userId })
+}
+async function handleSheriffConfirmVote() {
+  await gameService.submitAction({ actionType: 'SHERIFF_CONFIRM_VOTE' })
+}
+async function handleSheriffAbstain() {
+  await gameService.submitAction({ actionType: 'SHERIFF_ABSTAIN' })
+}
+
+async function debugSheriff(preset: string) {
+  await http.post('/debug/sheriff/phase', { preset })
+}
+async function debugExitSheriff() {
+  await http.post('/debug/sheriff/exit')
+}
+async function debugCandidateRun(userId: string, nickname: string, avatar: string) {
+  await http.post('/debug/sheriff/candidate', { userId, nickname, avatar, action: 'RUN' })
+}
+async function debugCandidateRemove(userId: string) {
+  await http.post('/debug/sheriff/candidate', { userId, action: 'REMOVE' })
 }
 
 function onPlayerTap(player: GamePlayer) {
@@ -240,5 +335,48 @@ onUnmounted(() => {
   color: var(--muted);
   font-size: 0.875rem;
   margin: 0;
+}
+
+/* Debug panel */
+.debug-panel {
+  border: 1px dashed var(--border);
+  border-radius: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  background: rgba(160, 120, 48, 0.04);
+  margin: 0.5rem 1rem 0.75rem;
+}
+
+.debug-title {
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.debug-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.debug-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.625rem;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.debug-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.debug-btn-exit {
+  margin-left: auto;
 }
 </style>
