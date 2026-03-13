@@ -59,6 +59,12 @@
             </button>
           </div>
         </div>
+        <div class="debug-divider" />
+        <button class="debug-btn" @click="debugAddPlayer">+ Add Player</button>
+        <div class="debug-divider" />
+        <button class="debug-btn debug-start-btn" @click="handleStartGame">
+          ▶ Debug: Launch Game
+        </button>
       </div>
 
       <!-- Status bar -->
@@ -177,7 +183,15 @@ async function debugToggleReady(userId: string, ready: boolean) {
   await http.post('/debug/ready', { userId, ready })
 }
 
+async function debugAddPlayer() {
+  await http.post('/debug/room/add-player')
+}
+
 async function handleStartGame() {
+  if (isMock) {
+    await http.post('/debug/game/start')
+    return
+  }
   // Host triggers game start via backend — backend pushes GAME_STARTED via STOMP
 }
 
@@ -422,5 +436,23 @@ onUnmounted(() => {
 .debug-btn:hover {
   border-color: var(--gold);
   color: var(--gold);
+}
+
+.debug-divider {
+  height: 1px;
+  background: var(--border-l);
+  margin: 0.375rem 0;
+}
+
+.debug-start-btn {
+  width: 100%;
+  text-align: center;
+  color: var(--red);
+  border-color: rgba(181, 37, 26, 0.3);
+}
+
+.debug-start-btn:hover {
+  border-color: var(--red);
+  color: var(--red);
 }
 </style>

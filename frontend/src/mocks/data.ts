@@ -7,7 +7,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { GameState, LoginResponse, Room } from '@/types'
+import type { GameState, LoginResponse, Room, SheriffElectionState } from '@/types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -65,7 +65,7 @@ export const MOCK_ROOM_AS_GUEST: Room = {
   hostId: 'u2',
   status: 'WAITING',
   config: {
-    totalPlayers: 12,
+    totalPlayers: 9,
     roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER'],
   },
   players: [
@@ -141,6 +141,113 @@ export const MOCK_GAME_RESULT = {
     // roles revealed at game end
     role: (['u3', 'u6'] as string[]).includes(p.userId) ? 'WEREWOLF' : 'VILLAGER',
   })),
+}
+
+// ── Sheriff Election mock states ──────────────────────────────────────────────
+// u1 = You (logged-in user), u2 = Alice, u6 = Tom
+
+export const MOCK_SHERIFF_SIGNUP: SheriffElectionState = {
+  subPhase: 'SIGNUP',
+  timeRemaining: 48,
+  candidates: [
+    { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' },
+    { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
+  ],
+  speakingOrder: ['u2', 'u6'],
+  canVote: true,
+}
+
+export const MOCK_SHERIFF_SPEECH_CANDIDATE: SheriffElectionState = {
+  subPhase: 'SPEECH',
+  timeRemaining: 38,
+  candidates: [
+    { userId: 'u1', nickname: '我', avatar: '⭐', status: 'RUNNING' },
+    { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' },
+    { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
+  ],
+  speakingOrder: ['u1', 'u2', 'u6'],
+  currentSpeakerId: 'u1',
+  canVote: true,
+}
+
+export const MOCK_SHERIFF_SPEECH_AUDIENCE: SheriffElectionState = {
+  subPhase: 'SPEECH',
+  timeRemaining: 22,
+  candidates: [
+    { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'QUIT' },
+    { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
+  ],
+  speakingOrder: ['u2', 'u6'],
+  currentSpeakerId: 'u6',
+  canVote: true,
+}
+
+export const MOCK_SHERIFF_VOTING: SheriffElectionState = {
+  subPhase: 'VOTING',
+  timeRemaining: 45,
+  candidates: [
+    { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'QUIT' },
+    { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
+  ],
+  speakingOrder: ['u2', 'u6'],
+  canVote: true,
+}
+
+export const MOCK_SHERIFF_RESULT: SheriffElectionState = {
+  subPhase: 'RESULT',
+  timeRemaining: 0,
+  candidates: [
+    { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' },
+    { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
+    { userId: 'u3', nickname: 'Bob', avatar: '🎭', status: 'RUNNING' },
+  ],
+  speakingOrder: ['u2', 'u6', 'u3'],
+  result: {
+    sheriffId: 'u6',
+    sheriffNickname: 'Tom',
+    sheriffAvatar: '🐯',
+    tally: [
+      {
+        candidateId: 'u6',
+        nickname: 'Tom',
+        seatIndex: 5,
+        votes: 5,
+        voters: [
+          { userId: 'u1', nickname: 'You', avatar: '⭐', seatIndex: 1 },
+          { userId: 'u3', nickname: 'Bob', avatar: '🎭', seatIndex: 2 },
+          { userId: 'u4', nickname: 'Carol', avatar: '🌙', seatIndex: 3 },
+          { userId: 'u5', nickname: 'Dave', avatar: '🌸', seatIndex: 4 },
+          { userId: 'u7', nickname: '阿强', avatar: '🎸', seatIndex: 6 },
+        ],
+      },
+      {
+        candidateId: 'u2',
+        nickname: 'Alice',
+        seatIndex: 1,
+        votes: 3,
+        voters: [
+          { userId: 'u8', nickname: '波波', avatar: '🌊', seatIndex: 7 },
+          { userId: 'u9', nickname: '小花', avatar: '🌺', seatIndex: 8 },
+          { userId: 'u10', nickname: 'Iris', avatar: '🌷', seatIndex: 9 },
+        ],
+      },
+      {
+        candidateId: 'u3',
+        nickname: 'Bob',
+        seatIndex: 2,
+        votes: 2,
+        voters: [
+          { userId: 'u13', nickname: 'Zara', avatar: '🦋', seatIndex: 12 },
+          { userId: 'u14', nickname: '小龙', avatar: '🐉', seatIndex: 3 },
+        ],
+      },
+    ],
+    abstainCount: 2,
+    abstainVoters: [
+      { userId: 'u11', nickname: 'Jack', avatar: '🦊', seatIndex: 10 },
+      { userId: 'u12', nickname: 'Lily', avatar: '🌻', seatIndex: 11 },
+    ],
+  },
 }
 
 // ── Simulated STOMP events (pushed after a delay in mock mode) ────────────────
