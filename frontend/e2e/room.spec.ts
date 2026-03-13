@@ -119,12 +119,14 @@ test('Start Game is disabled when guests are NOT_READY', async ({page}) => {
     await expect(page.getByRole('button', {name: /Start Game/i})).toBeDisabled()
 })
 
-test('Start Game enables after host picks a seat and all guests become ready via STOMP', async ({page}) => {
-    // Default 9-player room: host picks seat 9, allReady STOMP fires at 4s → canStart
+test('Start Game enables after host picks a seat and all guests become ready via debug panel', async ({page}) => {
+    // Default 9-player room: host picks a seat, then use debug panel to ready up Bob (only NOT_READY guest)
     await createRoom(page)
     await page.locator('.player-grid .slot-selectable').first().click() // host picks seat
-    await expect(page.getByRole('button', {name: /Start Game/i}))
-        .toBeEnabled({timeout: 6000})
+    // Bob is the only NOT_READY guest — click his Ready button in the debug panel
+    const bobRow = page.locator('.debug-row', {hasText: 'Bob'})
+    await bobRow.getByRole('button', {name: 'Ready'}).click()
+    await expect(page.getByRole('button', {name: /Start Game/i})).toBeEnabled()
 })
 
 // ── Guest waiting room ────────────────────────────────────────────────────────
@@ -227,7 +229,7 @@ test('clicking Undo Ready switches back to Ready button', async ({page}) => {
 })
 
 // ── Host seat selection ───────────────────────────────────────────────────────
-// Uses 12-player room: 8 guests at seats 1–8, seats 9–12 empty, allReady suppressed.
+// Uses 12-player room: 8 guests at seats 1–8, seats 9–12 empty.
 // Host (seatIndex null) has 4 empty seats to freely pick and change between.
 
 test('host sees selectable seats in the grid before picking a number', async ({page}) => {
