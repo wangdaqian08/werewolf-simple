@@ -58,7 +58,16 @@ describe('iAmReady', () => {
 // ── displayReadyCount ─────────────────────────────────────────────────────────
 
 describe('displayReadyCount', () => {
-  it('starts at 1 in host view (host counts as ready, no guests yet)', () => {
+  it('0 when host has no seat and no guests yet', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [p('host', null as unknown as number, { isHost: true })],
+    })
+    const { displayReadyCount } = setup(room, 'host')
+    expect(displayReadyCount.value).toBe(0)
+  })
+
+  it('1 when host has picked a seat and no guests yet', () => {
     const room = makeRoom({
       hostId: 'host',
       players: [p('host', 1, { isHost: true })],
@@ -67,19 +76,31 @@ describe('displayReadyCount', () => {
     expect(displayReadyCount.value).toBe(1)
   })
 
-  // Regression: host was not counted as +1 when viewing as a guest
-  it('counts host as +1 even in guest view', () => {
+  it('counts host only when seated, even in guest view', () => {
     const room = makeRoom({
       hostId: 'host',
       players: [
-        p('host', 1, { isHost: true }),
+        p('host', 1, { isHost: true }), // host has seat
         p('u1', 2), // me (not ready)
         p('u2', 3, { status: 'READY' }), // other guest ready
       ],
     })
     const { displayReadyCount } = setup(room, 'u1')
-    // host(+1) + 1 ready guest = 2
+    // host(seated, +1) + 1 ready guest = 2
     expect(displayReadyCount.value).toBe(2)
+  })
+
+  it('does not count host before they pick a seat', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [
+        p('host', null as unknown as number, { isHost: true }), // host has no seat
+        p('u1', 1, { status: 'READY' }),
+      ],
+    })
+    const { displayReadyCount } = setup(room, 'u1')
+    // host unsated (0) + 1 ready guest = 1
+    expect(displayReadyCount.value).toBe(1)
   })
 
   it('increments when a guest readies up', () => {
@@ -92,7 +113,7 @@ describe('displayReadyCount', () => {
       ],
     })
     const { displayReadyCount } = setup(room, 'u1')
-    // host(+1) + 2 ready guests = 3
+    // host(seated, +1) + 2 ready guests = 3
     expect(displayReadyCount.value).toBe(3)
   })
 })
@@ -107,14 +128,30 @@ describe('notReadyGuestCount', () => {
       hostId: 'host',
       config: { totalPlayers: 6, roles: [] },
       players: [
-        p('host', 1, { isHost: true }),
+        p('host', 1, { isHost: true }), // host has seat
         // seats 2-6 empty
       ],
     })
-    // displayReadyCount = 0 ready guests + 1 host = 1
+    // displayReadyCount = 0 ready guests + 1 (host seated) = 1
     // notReady = 6 - 1 = 5
     const { notReadyGuestCount } = setup(room, 'host')
     expect(notReadyGuestCount.value).toBe(5)
+  })
+
+  it('counts unseated host as waiting (not yet ready)', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      config: { totalPlayers: 3, roles: [] },
+      players: [
+        p('host', null as unknown as number, { isHost: true }), // host has no seat
+        p('u1', 1, { status: 'READY' }),
+        p('u2', 2, { status: 'READY' }),
+      ],
+    })
+    // displayReadyCount = 2 ready guests + 0 (host unseated) = 2
+    // notReady = 3 - 2 = 1 (seat 3 for host)
+    const { notReadyGuestCount } = setup(room, 'host')
+    expect(notReadyGuestCount.value).toBe(1)
   })
 
   it('decreases as guests ready up', () => {
@@ -192,15 +229,113 @@ describe('canStart', () => {
     const { canStart } = setup(room, 'host')
     expect(canStart.value).toBe(true)
   })
+
+  it('false when host has not picked a seat yet (even if all guests are ready)', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      config: { totalPlayers: 3, roles: [] },
+      players: [
+        p('host', null as unknown as number, { isHost: true }), // host no seat
+        p('u1', 1, { status: 'READY' }),
+        p('u2', 2, { status: 'READY' }),
+      ],
+    })
+    const { canStart } = setup(room, 'host')
+    expect(canStart.value).toBe(false)
+  })
+})
+
+// ── seat selection ────────────────────────────────────────────────────────────
+
+describe('hasPickedSeat', () => {
+  it('false when guest has no seatIndex', () => {
+    const room = makeRoom({ players: [p('u1', null as unknown as number)] })
+    const { hasPickedSeat } = setup(room, 'u1')
+    expect(hasPickedSeat.value).toBe(false)
+  })
+
+  it('true when guest has claimed a seat', () => {
+    const room = makeRoom({ players: [p('u1', 3)] })
+    const { hasPickedSeat } = setup(room, 'u1')
+    expect(hasPickedSeat.value).toBe(true)
+  })
+})
+
+describe('canSelectSeat', () => {
+  it('true for an empty seat when not yet ready', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [p('host', 1, { isHost: true })],
+    })
+    const { canSelectSeat } = setup(room, 'u1')
+    expect(canSelectSeat(2)).toBe(true)
+  })
+
+  it('true even when player already has a seat (allows changing number)', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [p('host', 1, { isHost: true }), p('u1', 3)],
+    })
+    const { canSelectSeat } = setup(room, 'u1')
+    expect(canSelectSeat(2)).toBe(true) // can move from seat 3 to seat 2
+  })
+
+  it('true for the host (host can also pick a number)', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [p('host', 1, { isHost: true, status: 'NOT_READY' })],
+    })
+    const { canSelectSeat } = setup(room, 'host')
+    expect(canSelectSeat(2)).toBe(true)
+  })
+
+  it('false when the seat is already taken by someone else', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [p('host', 1, { isHost: true }), p('u2', 2)],
+    })
+    const { canSelectSeat } = setup(room, 'u1')
+    expect(canSelectSeat(2)).toBe(false)
+  })
+
+  it('false when player is ready (seat locked)', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [p('host', 1, { isHost: true }), p('u1', 3, { status: 'READY' })],
+    })
+    const { canSelectSeat } = setup(room, 'u1')
+    expect(canSelectSeat(2)).toBe(false)
+  })
 })
 
 // ── slotVariant ───────────────────────────────────────────────────────────────
 
 describe('slotVariant', () => {
-  it('empty for an unoccupied seat', () => {
-    const room = makeRoom({ players: [] })
+  it('selectable for an empty seat when guest has not picked yet', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [p('host', 1, { isHost: true })],
+    })
+    const { slotVariant } = setup(room, 'u1') // u1 is a guest with no seat
+    expect(slotVariant(2)).toBe('selectable')
+  })
+
+  it('selectable for an empty seat even when player already picked one (can change)', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [p('host', 1, { isHost: true }), p('u1', 3)],
+    })
     const { slotVariant } = setup(room, 'u1')
-    expect(slotVariant(1)).toBe('empty')
+    expect(slotVariant(2)).toBe('selectable') // can move from 3 to 2
+  })
+
+  it('empty (not selectable) when player is ready (seat locked)', () => {
+    const room = makeRoom({
+      hostId: 'host',
+      players: [p('host', 1, { isHost: true }), p('u1', 3, { status: 'READY' })],
+    })
+    const { slotVariant } = setup(room, 'u1')
+    expect(slotVariant(2)).toBe('empty') // locked after ready
   })
 
   it("me-ready for the host's own slot (host never needs to ready-up)", () => {

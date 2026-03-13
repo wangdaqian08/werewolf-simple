@@ -18,7 +18,7 @@ export type RoomStatus = 'WAITING' | 'STARTING' | 'IN_GAME'
 export interface RoomPlayer {
   userId: string
   nickname: string
-  seatIndex: number
+  seatIndex: number | null // null = player joined but hasn't picked a number yet
   status: PlayerStatus
   isHost: boolean
   avatar?: string // emoji shown in the waiting room grid

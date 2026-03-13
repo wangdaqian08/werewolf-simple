@@ -6,7 +6,7 @@
     <!-- Loading -->
     <div v-if="loading" class="loading">Loading room...</div>
 
-    <template v-else-if="roomStore.room">
+    <div v-else-if="roomStore.room" class="room-card">
       <!-- Title -->
       <div :class="canStart ? 'room-title-ready' : ''" class="room-title">
         {{ canStart ? '准备就绪 / Ready to Start' : '等待中 / Waiting' }}
@@ -38,6 +38,7 @@
           :avatar="playerAtSeat(seat)?.avatar"
           :variant="slotVariant(seat)"
           mode="room"
+          @click="handleSeatClick(seat)"
         />
       </section>
 
@@ -45,15 +46,19 @@
       <div v-if="isHost" :class="canStart ? 'status-ok' : 'status-wait'" class="status-bar">
         <template v-if="canStart">✓ All ready! 开始游戏</template>
         <template v-else
-          >✓ {{ readyGuestCount }} players ready · Need {{ notReadyGuestCount }} more to
-          start</template
+          >✓ {{ displayReadyCount }} / {{ roomStore.room.config.totalPlayers }} ready · Need
+          {{ notReadyGuestCount }} more to start</template
         >
       </div>
       <div v-else class="status-bar" :class="iAmReady ? 'status-ok' : 'status-neutral'">
         <template v-if="iAmReady"
-          >✓ 你已准备 · You are ready — {{ readyGuestCount }} / {{ guestCount }} ready</template
+          >✓ 你已准备 · You are ready — {{ displayReadyCount }} /
+          {{ roomStore.room.config.totalPlayers }} ready</template
         >
-        <template v-else>{{ readyGuestCount }} / {{ guestCount }} players ready</template>
+        <template v-else
+          >{{ displayReadyCount }} / {{ roomStore.room.config.totalPlayers }} players
+          ready</template
+        >
       </div>
 
       <!-- Action button -->
@@ -67,9 +72,14 @@
         >
           开始游戏 / Start Game
         </button>
-        <!-- Guest: ready toggle -->
+        <!-- Guest: ready toggle (disabled until a seat number is picked) -->
         <template v-else>
-          <button v-if="!iAmReady" class="btn btn-gold" @click="handleReady(true)">
+          <button
+            v-if="!iAmReady"
+            class="btn btn-gold"
+            :disabled="!hasPickedSeat"
+            @click="handleReady(true)"
+          >
             准备 / Ready
           </button>
           <button v-else class="btn btn-outline" @click="handleReady(false)">
@@ -77,7 +87,7 @@
           </button>
         </template>
       </div>
-    </template>
+    </div>
   </div>
 </template>
 
@@ -111,12 +121,21 @@ const {
   totalSeats,
   displayReadyCount,
   notReadyGuestCount,
-  readyGuestCount,
-  guestCount,
   canStart,
+  hasPickedSeat,
+  canSelectSeat,
   playerAtSeat,
   slotVariant,
 } = useRoomStatus(room, userId)
+
+async function handleSeatClick(seat: number) {
+  if (!canSelectSeat(seat)) return
+  await roomService.claimSeat(seat)
+  // Optimistic update: real backend would push ROOM_UPDATE via STOMP
+  if (userStore.userId) {
+    roomStore.updateSeatIndex(userStore.userId, seat)
+  }
+}
 
 async function handleReady(ready: boolean) {
   await roomService.setReady(ready)
@@ -175,9 +194,10 @@ onUnmounted(() => {
 .room-wrap {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   min-height: 100dvh;
   background: var(--bg);
-  padding: 1rem 1rem 1.5rem;
+  padding: 2rem 1rem 1.5rem;
 }
 
 .back-btn {
@@ -190,6 +210,19 @@ onUnmounted(() => {
   padding: 0;
   align-self: flex-start;
   margin-bottom: 0.75rem;
+  white-space: nowrap;
+}
+
+.room-card {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
 }
 
 .loading {
