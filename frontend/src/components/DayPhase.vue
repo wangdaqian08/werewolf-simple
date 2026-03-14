@@ -26,7 +26,10 @@
           <span class="banner-avatar">{{ dayPhase.nightResult.killedAvatar ?? '💀' }}</span>
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
-            <span class="banner-kill-red">{{ dayPhase.nightResult.killedSeatIndex }}号 · {{ dayPhase.nightResult.killedNickname }}</span>
+            <span class="banner-kill-red"
+              >{{ dayPhase.nightResult.killedSeatIndex }}号 ·
+              {{ dayPhase.nightResult.killedNickname }}</span
+            >
             <span class="banner-kill-muted">被狼人杀害</span>
           </div>
         </div>
@@ -43,7 +46,10 @@
           <span class="banner-avatar">{{ dayPhase.nightResult.killedAvatar ?? '💀' }}</span>
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
-            <span class="banner-kill-red">{{ dayPhase.nightResult.killedSeatIndex }}号 · {{ dayPhase.nightResult.killedNickname }}</span>
+            <span class="banner-kill-red"
+              >{{ dayPhase.nightResult.killedSeatIndex }}号 ·
+              {{ dayPhase.nightResult.killedNickname }}</span
+            >
             <span class="banner-kill-muted">被狼人杀害</span>
           </div>
         </div>
