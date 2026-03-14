@@ -16,6 +16,7 @@
         <!-- Show the seat number so players can identify which slot to pick -->
         <span class="empty-num">{{ seat }}</span>
       </template>
+      <slot name="overlay" />
     </template>
 
     <!-- ── Game mode: seat number + name + badge/overlay slots ── -->
@@ -41,6 +42,8 @@ type SlotVariant =
   | 'waiting'
   | 'alive'
   | 'dead'
+  | 'killed'
+  | 'selected'
 
 const props = defineProps<{
   seat: number
@@ -68,6 +71,10 @@ const variantClass = computed(() => {
       return 'slot-alive'
     case 'dead':
       return 'slot-dead'
+    case 'killed':
+      return 'slot-killed'
+    case 'selected':
+      return 'slot-selected'
     default:
       return 'slot-empty'
   }
@@ -140,6 +147,17 @@ const variantClass = computed(() => {
   border: 1px solid var(--border-l);
   opacity: 0.45;
   cursor: default;
+}
+.slot-killed {
+  background: rgba(181, 37, 26, 0.06);
+  border: 2px solid var(--red);
+  opacity: 0.75;
+  cursor: default;
+}
+.slot-selected {
+  background: rgba(160, 120, 48, 0.1);
+  border: 2px solid var(--gold);
+  cursor: pointer;
 }
 
 /* ── Game mode text ── */

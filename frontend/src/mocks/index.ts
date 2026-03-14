@@ -12,9 +12,17 @@ import {
   MOCK_SHERIFF_SPEECH_AUDIENCE,
   MOCK_SHERIFF_VOTING,
   MOCK_SHERIFF_RESULT,
+  MOCK_DAY_HIDDEN,
+  MOCK_DAY_REVEALED,
+  MOCK_DAY_SCENARIO_HOST_HIDDEN,
+  MOCK_DAY_SCENARIO_HOST_REVEALED,
+  MOCK_DAY_SCENARIO_DEAD,
+  MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
+  MOCK_DAY_SCENARIO_ALIVE_REVEALED,
+  MOCK_DAY_SCENARIO_GUEST,
 } from './data'
 import { mockStompClient } from './mockStompClient'
-import type { GameState, RoomPlayer, SheriffElectionState } from '@/types'
+import type { DayPhaseState, GameState, RoomPlayer, SheriffElectionState } from '@/types'
 
 // Mutable room state shared across mock endpoints so debug actions see current players.
 let mockRoomId = MOCK_ROOM_AS_HOST.roomId
@@ -154,7 +162,52 @@ export function setupMocks() {
   })
 
   mock.onPost('/debug/sheriff/exit').reply(() => {
-    mockGameState = { ...MOCK_GAME_STATE }
+    mockGameState = { ...MOCK_GAME_STATE, dayPhase: { ...MOCK_DAY_HIDDEN } }
+    pushGameStateUpdate()
+    return [200]
+  })
+
+  // ── Debug: Day Phase scenario (switches mock user role for testing) ───────────
+  // POST /debug/day/scenario { scenario: string }
+  const DAY_SCENARIOS: Record<string, GameState> = {
+    HOST_HIDDEN: MOCK_DAY_SCENARIO_HOST_HIDDEN,
+    HOST_REVEALED: MOCK_DAY_SCENARIO_HOST_REVEALED,
+    DEAD: MOCK_DAY_SCENARIO_DEAD,
+    ALIVE_HIDDEN: MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
+    ALIVE_REVEALED: MOCK_DAY_SCENARIO_ALIVE_REVEALED,
+    GUEST: MOCK_DAY_SCENARIO_GUEST,
+  }
+  mock.onPost('/debug/day/scenario').reply((config) => {
+    const { scenario } = JSON.parse(config.data ?? '{}')
+    const state = DAY_SCENARIOS[scenario]
+    if (!state) return [400, { error: 'Unknown scenario' }]
+    mockGameState = { ...state }
+    pushGameStateUpdate()
+    return [200]
+  })
+
+  // ── Debug: Day Phase screens ──────────────────────────────────────────────────
+  // POST /debug/day/phase { preset: 'HIDDEN' | 'REVEALED' }
+  const DAY_PRESETS: Record<string, DayPhaseState> = {
+    HIDDEN: MOCK_DAY_HIDDEN,
+    REVEALED: MOCK_DAY_REVEALED,
+  }
+  mock.onPost('/debug/day/phase').reply((config) => {
+    const { preset } = JSON.parse(config.data ?? '{}')
+    const dayPhase = DAY_PRESETS[preset]
+    if (!dayPhase) return [400, { error: 'Unknown preset' }]
+    mockGameState = { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase }
+    pushGameStateUpdate()
+    return [200]
+  })
+
+  // POST /debug/day/reveal — host reveals result to all players
+  mock.onPost('/debug/day/reveal').reply(() => {
+    mockGameState = {
+      ...mockGameState,
+      phase: 'DAY',
+      dayPhase: { ...MOCK_DAY_REVEALED },
+    }
     pushGameStateUpdate()
     return [200]
   })
@@ -268,6 +321,22 @@ export function setupMocks() {
         mockGameState = {
           ...mockGameState,
           sheriffElection: { ...e, myVote: undefined, abstained: true },
+        }
+        pushGameStateUpdate()
+      }
+    } else if (mockGameState.phase === 'DAY') {
+      if (actionType === 'REVEAL_NIGHT_RESULT') {
+        mockGameState = {
+          ...mockGameState,
+          dayPhase: { ...MOCK_DAY_REVEALED },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'SELECT_PLAYER') {
+        mockGameState = {
+          ...mockGameState,
+          dayPhase: mockGameState.dayPhase
+            ? { ...mockGameState.dayPhase, selectedPlayerId: targetId }
+            : undefined,
         }
         pushGameStateUpdate()
       }

@@ -7,7 +7,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { GameState, LoginResponse, Room, SheriffElectionState } from '@/types'
+import type { DayPhaseState, GameState, LoginResponse, Room, SheriffElectionState } from '@/types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -109,16 +109,38 @@ export const MOCK_GAME_STATE: GameState = {
   dayNumber: 1,
   myRole: 'SEER',
   sheriff: 'u2',
+  hostId: 'u1',
   players: [
-    { userId: 'u1', nickname: 'You', seatIndex: 1, isAlive: true, isSheriff: false },
-    { userId: 'u2', nickname: 'Alice', seatIndex: 2, isAlive: true, isSheriff: true },
-    { userId: 'u3', nickname: 'Bob', seatIndex: 3, isAlive: true, isSheriff: false },
-    { userId: 'u4', nickname: 'Carol', seatIndex: 4, isAlive: false, isSheriff: false },
-    { userId: 'u5', nickname: 'Dave', seatIndex: 5, isAlive: true, isSheriff: false },
-    { userId: 'u6', nickname: 'Eve', seatIndex: 6, isAlive: true, isSheriff: false },
-    { userId: 'u7', nickname: 'Frank', seatIndex: 7, isAlive: true, isSheriff: false },
-    { userId: 'u8', nickname: 'Grace', seatIndex: 8, isAlive: true, isSheriff: false },
-    { userId: 'u9', nickname: 'Hank', seatIndex: 9, isAlive: true, isSheriff: false },
+    { userId: 'u1', nickname: 'You', seatIndex: 1, isAlive: true, isSheriff: false, avatar: '⭐' },
+    { userId: 'u2', nickname: 'Alice', seatIndex: 2, isAlive: true, isSheriff: true, avatar: '😊' },
+    { userId: 'u3', nickname: 'Bob', seatIndex: 3, isAlive: true, isSheriff: false, avatar: '🎭' },
+    {
+      userId: 'u4',
+      nickname: 'Carol',
+      seatIndex: 4,
+      isAlive: false,
+      isSheriff: false,
+      avatar: '🌙',
+    },
+    { userId: 'u5', nickname: 'Dave', seatIndex: 5, isAlive: true, isSheriff: false, avatar: '🌸' },
+    { userId: 'u6', nickname: 'Eve', seatIndex: 6, isAlive: true, isSheriff: false, avatar: '🦊' },
+    {
+      userId: 'u7',
+      nickname: 'Frank',
+      seatIndex: 7,
+      isAlive: true,
+      isSheriff: false,
+      avatar: '🎸',
+    },
+    {
+      userId: 'u8',
+      nickname: 'Grace',
+      seatIndex: 8,
+      isAlive: true,
+      isSheriff: false,
+      avatar: '🌺',
+    },
+    { userId: 'u9', nickname: 'Hank', seatIndex: 9, isAlive: true, isSheriff: false, avatar: '🐯' },
   ],
   events: [
     {
@@ -141,6 +163,91 @@ export const MOCK_GAME_RESULT = {
     // roles revealed at game end
     role: (['u3', 'u6'] as string[]).includes(p.userId) ? 'WEREWOLF' : 'VILLAGER',
   })),
+}
+
+// ── Day Phase mock states ─────────────────────────────────────────────────────
+// Carol (u4, seat 4) was killed last night.
+
+const NIGHT_RESULT = {
+  killedPlayerId: 'u4',
+  killedNickname: 'Carol',
+  killedSeatIndex: 4,
+  killedAvatar: '🌙',
+}
+
+export const MOCK_DAY_HIDDEN: DayPhaseState = {
+  subPhase: 'RESULT_HIDDEN',
+  dayNumber: 1,
+  timeRemaining: 90,
+  totalTime: 120,
+  nightResult: NIGHT_RESULT,
+  canVote: false,
+}
+
+export const MOCK_DAY_REVEALED: DayPhaseState = {
+  subPhase: 'RESULT_REVEALED',
+  dayNumber: 1,
+  timeRemaining: 60,
+  totalTime: 120,
+  nightResult: NIGHT_RESULT,
+  canVote: true,
+}
+
+// ── Day Phase scenarios (u1 = logged-in user in different roles) ──────────────
+
+const BASE_PLAYERS = MOCK_GAME_STATE.players
+
+// u1 is dead; u2 is host
+const PLAYERS_AS_DEAD = BASE_PLAYERS.map((p) => (p.userId === 'u1' ? { ...p, isAlive: false } : p))
+
+// u1 is alive but u2 is host (just remove host flag from u1)
+const PLAYERS_AS_ALIVE = BASE_PLAYERS.map((p) => (p.userId === 'u1' ? { ...p, isAlive: true } : p))
+
+// u1 is not in the game (guest/spectator)
+const PLAYERS_AS_GUEST = BASE_PLAYERS.filter((p) => p.userId !== 'u1')
+
+export const MOCK_DAY_SCENARIO_HOST_HIDDEN: GameState = {
+  ...MOCK_GAME_STATE,
+  phase: 'DAY',
+  dayPhase: MOCK_DAY_HIDDEN,
+}
+
+export const MOCK_DAY_SCENARIO_HOST_REVEALED: GameState = {
+  ...MOCK_GAME_STATE,
+  phase: 'DAY',
+  dayPhase: MOCK_DAY_REVEALED,
+}
+
+export const MOCK_DAY_SCENARIO_DEAD: GameState = {
+  ...MOCK_GAME_STATE,
+  hostId: 'u2',
+  phase: 'DAY',
+  players: PLAYERS_AS_DEAD,
+  dayPhase: MOCK_DAY_REVEALED,
+}
+
+export const MOCK_DAY_SCENARIO_ALIVE_HIDDEN: GameState = {
+  ...MOCK_GAME_STATE,
+  hostId: 'u2',
+  phase: 'DAY',
+  players: PLAYERS_AS_ALIVE,
+  dayPhase: MOCK_DAY_HIDDEN,
+}
+
+export const MOCK_DAY_SCENARIO_ALIVE_REVEALED: GameState = {
+  ...MOCK_GAME_STATE,
+  hostId: 'u2',
+  phase: 'DAY',
+  players: PLAYERS_AS_ALIVE,
+  dayPhase: MOCK_DAY_REVEALED,
+}
+
+export const MOCK_DAY_SCENARIO_GUEST: GameState = {
+  ...MOCK_GAME_STATE,
+  hostId: 'u2',
+  phase: 'DAY',
+  players: PLAYERS_AS_GUEST,
+  dayPhase: MOCK_DAY_HIDDEN,
 }
 
 // ── Sheriff Election mock states ──────────────────────────────────────────────
