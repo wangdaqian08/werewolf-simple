@@ -175,22 +175,29 @@ const NIGHT_RESULT = {
   killedAvatar: '🌙',
 }
 
-export const MOCK_DAY_HIDDEN: DayPhaseState = {
-  subPhase: 'RESULT_HIDDEN',
-  dayNumber: 1,
-  timeRemaining: 90,
-  totalTime: 120,
-  nightResult: NIGHT_RESULT,
-  canVote: false,
+// Factory functions so each debug trigger gets a fresh deadline relative to now.
+export function makeDayHidden(): DayPhaseState {
+  const totalMs = 10_000 // 10s for local testing
+  return {
+    subPhase: 'RESULT_HIDDEN',
+    dayNumber: 1,
+    phaseStarted: Date.now(),
+    phaseDeadline: Date.now() + totalMs,
+    nightResult: NIGHT_RESULT,
+    canVote: false,
+  }
 }
 
-export const MOCK_DAY_REVEALED: DayPhaseState = {
-  subPhase: 'RESULT_REVEALED',
-  dayNumber: 1,
-  timeRemaining: 60,
-  totalTime: 120,
-  nightResult: NIGHT_RESULT,
-  canVote: true,
+export function makeDayRevealed(): DayPhaseState {
+  const totalMs = 10_000 // 10s for local testing
+  return {
+    subPhase: 'RESULT_REVEALED',
+    dayNumber: 1,
+    phaseStarted: Date.now(),
+    phaseDeadline: Date.now() + totalMs,
+    nightResult: NIGHT_RESULT,
+    canVote: true,
+  }
 }
 
 // ── Day Phase scenarios (u1 = logged-in user in different roles) ──────────────
@@ -206,49 +213,56 @@ const PLAYERS_AS_ALIVE = BASE_PLAYERS.map((p) => (p.userId === 'u1' ? { ...p, is
 // u1 is not in the game (guest/spectator)
 const PLAYERS_AS_GUEST = BASE_PLAYERS.filter((p) => p.userId !== 'u1')
 
-export const MOCK_DAY_SCENARIO_HOST_HIDDEN: GameState = {
-  ...MOCK_GAME_STATE,
-  phase: 'DAY',
-  dayPhase: MOCK_DAY_HIDDEN,
+export function makeDayScenario(
+  variant: 'HOST_HIDDEN' | 'HOST_REVEALED' | 'DEAD' | 'ALIVE_HIDDEN' | 'ALIVE_REVEALED' | 'GUEST',
+): GameState {
+  switch (variant) {
+    case 'HOST_HIDDEN':
+      return { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase: makeDayHidden() }
+    case 'HOST_REVEALED':
+      return { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase: makeDayRevealed() }
+    case 'DEAD':
+      return {
+        ...MOCK_GAME_STATE,
+        hostId: 'u2',
+        phase: 'DAY',
+        players: PLAYERS_AS_DEAD,
+        dayPhase: makeDayRevealed(),
+      }
+    case 'ALIVE_HIDDEN':
+      return {
+        ...MOCK_GAME_STATE,
+        hostId: 'u2',
+        phase: 'DAY',
+        players: PLAYERS_AS_ALIVE,
+        dayPhase: makeDayHidden(),
+      }
+    case 'ALIVE_REVEALED':
+      return {
+        ...MOCK_GAME_STATE,
+        hostId: 'u2',
+        phase: 'DAY',
+        players: PLAYERS_AS_ALIVE,
+        dayPhase: makeDayRevealed(),
+      }
+    case 'GUEST':
+      return {
+        ...MOCK_GAME_STATE,
+        hostId: 'u2',
+        phase: 'DAY',
+        players: PLAYERS_AS_GUEST,
+        dayPhase: makeDayHidden(),
+      }
+  }
 }
 
-export const MOCK_DAY_SCENARIO_HOST_REVEALED: GameState = {
-  ...MOCK_GAME_STATE,
-  phase: 'DAY',
-  dayPhase: MOCK_DAY_REVEALED,
-}
-
-export const MOCK_DAY_SCENARIO_DEAD: GameState = {
-  ...MOCK_GAME_STATE,
-  hostId: 'u2',
-  phase: 'DAY',
-  players: PLAYERS_AS_DEAD,
-  dayPhase: MOCK_DAY_REVEALED,
-}
-
-export const MOCK_DAY_SCENARIO_ALIVE_HIDDEN: GameState = {
-  ...MOCK_GAME_STATE,
-  hostId: 'u2',
-  phase: 'DAY',
-  players: PLAYERS_AS_ALIVE,
-  dayPhase: MOCK_DAY_HIDDEN,
-}
-
-export const MOCK_DAY_SCENARIO_ALIVE_REVEALED: GameState = {
-  ...MOCK_GAME_STATE,
-  hostId: 'u2',
-  phase: 'DAY',
-  players: PLAYERS_AS_ALIVE,
-  dayPhase: MOCK_DAY_REVEALED,
-}
-
-export const MOCK_DAY_SCENARIO_GUEST: GameState = {
-  ...MOCK_GAME_STATE,
-  hostId: 'u2',
-  phase: 'DAY',
-  players: PLAYERS_AS_GUEST,
-  dayPhase: MOCK_DAY_HIDDEN,
-}
+// Static exports retained for E2E tests (deadlines are set at import time, fine for short-lived tests)
+export const MOCK_DAY_SCENARIO_HOST_HIDDEN: GameState = makeDayScenario('HOST_HIDDEN')
+export const MOCK_DAY_SCENARIO_HOST_REVEALED: GameState = makeDayScenario('HOST_REVEALED')
+export const MOCK_DAY_SCENARIO_DEAD: GameState = makeDayScenario('DEAD')
+export const MOCK_DAY_SCENARIO_ALIVE_HIDDEN: GameState = makeDayScenario('ALIVE_HIDDEN')
+export const MOCK_DAY_SCENARIO_ALIVE_REVEALED: GameState = makeDayScenario('ALIVE_REVEALED')
+export const MOCK_DAY_SCENARIO_GUEST: GameState = makeDayScenario('GUEST')
 
 // ── Sheriff Election mock states ──────────────────────────────────────────────
 // u1 = You (logged-in user), u2 = Alice, u6 = Tom

@@ -109,6 +109,40 @@ test('alive player Vote button is disabled until a player is selected', async ({
   await expect(page.getByRole('button', { name: /投票/ })).toBeDisabled()
 })
 
+// ── REGRESSION: guest joining via room join should not see host UI ─────────────
+
+async function joinAsGuestAndStartGame(page: import('@playwright/test').Page) {
+  await page.goto('/')
+  await page.evaluate(() => localStorage.clear())
+  await page.goto('/')
+  await page.getByPlaceholder('Enter your nickname').fill('GuestUser')
+  await page.getByRole('textbox', { name: 'Room code' }).fill('XYZ789')
+  await page.getByRole('button', { name: /Join/i }).click()
+
+  await page.waitForURL(/\/room\//, { timeout: 5000 })
+  await page.waitForTimeout(200)
+
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
+  await page.waitForURL(/\/game\//, { timeout: 5000 })
+  await page.waitForTimeout(500)
+}
+
+test('guest joined via room join does not see 显示结果 on day hidden', async ({ page }) => {
+  await joinAsGuestAndStartGame(page)
+  await page.getByRole('button', { name: /^Hidden$/ }).click()
+  await page.waitForTimeout(400)
+  await expect(page.getByRole('button', { name: /显示结果/ })).not.toBeVisible()
+  await expect(page.getByText(/等待房主公布结果/)).toBeVisible()
+})
+
+test('guest joined via room join does not see 显示结果 on day revealed', async ({ page }) => {
+  await joinAsGuestAndStartGame(page)
+  await page.getByRole('button', { name: /^Revealed$/ }).click()
+  await page.waitForTimeout(400)
+  await expect(page.getByRole('button', { name: /显示结果/ })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /投票/ })).toBeVisible()
+})
+
 // ── GUEST view ────────────────────────────────────────────────────────────────
 
 test('guest sees waiting hint', async ({ page }) => {

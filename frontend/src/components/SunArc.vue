@@ -20,24 +20,38 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-const props = withDefaults(
-  defineProps<{
-    timeRemaining: number
-    totalTime?: number
-  }>(),
-  { totalTime: 120 },
-)
+const props = defineProps<{
+  phaseDeadline: number
+  phaseStarted: number
+}>()
 
 const W = 417
 const H = 56
 
+const now = ref(Date.now())
+let rafId = 0
+
+function tick() {
+  now.value = Date.now()
+  rafId = requestAnimationFrame(tick)
+}
+
+onMounted(() => {
+  rafId = requestAnimationFrame(tick)
+})
+
+onUnmounted(() => {
+  cancelAnimationFrame(rafId)
+})
+
 // Quadratic bezier: M 0,H Q W/2,0 W,H
-// At parameter t: x = t*W, y = H*(1 - 2t + 2t²)
+// Progress 0 = sunrise (left), 1 = sunset (right)
 const progress = computed(() => {
-  const t = 1 - props.timeRemaining / props.totalTime
-  return Math.min(1, Math.max(0, t))
+  const total = props.phaseDeadline - props.phaseStarted
+  const elapsed = now.value - props.phaseStarted
+  return Math.min(1, Math.max(0, elapsed / total))
 })
 
 const sunX = computed(() => progress.value * W)

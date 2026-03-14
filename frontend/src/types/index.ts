@@ -155,8 +155,8 @@ export interface NightResult {
 export interface DayPhaseState {
   subPhase: DaySubPhase
   dayNumber: number
-  timeRemaining: number
-  totalTime: number
+  phaseDeadline: number // epoch ms when phase ends
+  phaseStarted: number // epoch ms when phase started
   nightResult?: NightResult // always present for host; present for others only after RESULT_REVEALED
   canVote: boolean
   myVote?: string

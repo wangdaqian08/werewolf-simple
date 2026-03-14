@@ -7,7 +7,7 @@
     </header>
 
     <!-- Sun arc -->
-    <SunArc :time-remaining="dayPhase.timeRemaining" :total-time="dayPhase.totalTime" />
+    <SunArc :phase-deadline="dayPhase.phaseDeadline" :phase-started="dayPhase.phaseStarted" />
 
     <!-- Fixed-height banner area — always rendered so grid position stays consistent -->
     <div class="banner-area">
@@ -124,7 +124,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { DayPhaseState, GamePlayer } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
@@ -153,10 +153,23 @@ const viewRole = computed<ViewRole>(() => {
   return 'ALIVE'
 })
 
+const now = ref(Date.now())
+let intervalId = 0
+
+onMounted(() => {
+  intervalId = window.setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+})
+
+onUnmounted(() => {
+  clearInterval(intervalId)
+})
+
 const formattedTime = computed(() => {
-  const t = props.dayPhase.timeRemaining
-  const m = Math.floor(t / 60)
-  const s = t % 60
+  const remaining = Math.max(0, props.dayPhase.phaseDeadline - now.value) / 1000
+  const m = Math.floor(remaining / 60)
+  const s = Math.floor(remaining % 60)
   return `${m}:${String(s).padStart(2, '0')}`
 })
 

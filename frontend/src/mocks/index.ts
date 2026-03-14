@@ -12,8 +12,9 @@ import {
   MOCK_SHERIFF_SPEECH_AUDIENCE,
   MOCK_SHERIFF_VOTING,
   MOCK_SHERIFF_RESULT,
-  MOCK_DAY_HIDDEN,
-  MOCK_DAY_REVEALED,
+  makeDayHidden,
+  makeDayRevealed,
+  makeDayScenario,
   MOCK_DAY_SCENARIO_HOST_HIDDEN,
   MOCK_DAY_SCENARIO_HOST_REVEALED,
   MOCK_DAY_SCENARIO_DEAD,
@@ -170,7 +171,7 @@ export function setupMocks() {
       ...mockGameState,
       phase: 'DAY',
       sheriffElection: undefined,
-      dayPhase: { ...MOCK_DAY_HIDDEN },
+      dayPhase: makeDayHidden(),
     }
     pushGameStateUpdate()
     return [200]
@@ -188,24 +189,24 @@ export function setupMocks() {
   }
   mock.onPost('/debug/day/scenario').reply((config) => {
     const { scenario } = JSON.parse(config.data ?? '{}')
-    const state = DAY_SCENARIOS[scenario]
-    if (!state) return [400, { error: 'Unknown scenario' }]
-    mockGameState = { ...state }
+    if (!DAY_SCENARIOS[scenario]) return [400, { error: 'Unknown scenario' }]
+    // Use factory for fresh deadlines on each debug call
+    mockGameState = makeDayScenario(scenario as Parameters<typeof makeDayScenario>[0])
     pushGameStateUpdate()
     return [200]
   })
 
   // ── Debug: Day Phase screens ──────────────────────────────────────────────────
   // POST /debug/day/phase { preset: 'HIDDEN' | 'REVEALED' }
-  const DAY_PRESETS: Record<string, DayPhaseState> = {
-    HIDDEN: MOCK_DAY_HIDDEN,
-    REVEALED: MOCK_DAY_REVEALED,
+  const DAY_PRESET_FACTORIES: Record<string, () => DayPhaseState> = {
+    HIDDEN: makeDayHidden,
+    REVEALED: makeDayRevealed,
   }
   mock.onPost('/debug/day/phase').reply((config) => {
     const { preset } = JSON.parse(config.data ?? '{}')
-    const dayPhase = DAY_PRESETS[preset]
-    if (!dayPhase) return [400, { error: 'Unknown preset' }]
-    mockGameState = { ...mockGameState, phase: 'DAY', dayPhase }
+    const factory = DAY_PRESET_FACTORIES[preset]
+    if (!factory) return [400, { error: 'Unknown preset' }]
+    mockGameState = { ...mockGameState, phase: 'DAY', dayPhase: factory() }
     pushGameStateUpdate()
     return [200]
   })
@@ -215,7 +216,7 @@ export function setupMocks() {
     mockGameState = {
       ...mockGameState,
       phase: 'DAY',
-      dayPhase: { ...MOCK_DAY_REVEALED },
+      dayPhase: makeDayRevealed(),
     }
     pushGameStateUpdate()
     return [200]
@@ -337,7 +338,7 @@ export function setupMocks() {
       if (actionType === 'REVEAL_NIGHT_RESULT') {
         mockGameState = {
           ...mockGameState,
-          dayPhase: { ...MOCK_DAY_REVEALED },
+          dayPhase: makeDayRevealed(),
         }
         pushGameStateUpdate()
       } else if (actionType === 'SELECT_PLAYER') {
