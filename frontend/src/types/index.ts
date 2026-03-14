@@ -58,6 +58,7 @@ export interface GamePlayer {
   seatIndex: number
   isAlive: boolean
   isSheriff: boolean
+  avatar?: string
   role?: PlayerRole // only revealed to self, or at game end
 }
 
@@ -68,9 +69,11 @@ export interface GameState {
   players: GamePlayer[]
   myRole?: PlayerRole
   sheriff?: string // userId of current sheriff
+  hostId?: string // userId of the room host
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
   events: GameEvent[]
   sheriffElection?: SheriffElectionState
+  dayPhase?: DayPhaseState
 }
 
 export interface GameEvent {
@@ -136,6 +139,28 @@ export interface SheriffElectionState {
     abstainCount: number
     abstainVoters: SheriffVoter[]
   }
+}
+
+// ── Day Phase ─────────────────────────────────────────────────────────────────
+
+export type DaySubPhase = 'RESULT_HIDDEN' | 'RESULT_REVEALED'
+
+export interface NightResult {
+  killedPlayerId: string
+  killedNickname: string
+  killedSeatIndex: number
+  killedAvatar?: string
+}
+
+export interface DayPhaseState {
+  subPhase: DaySubPhase
+  dayNumber: number
+  phaseDeadline: number // epoch ms when phase ends
+  phaseStarted: number // epoch ms when phase started
+  nightResult?: NightResult // always present for host; present for others only after RESULT_REVEALED
+  canVote: boolean
+  myVote?: string
+  selectedPlayerId?: string
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { GameState, LoginResponse, Room, SheriffElectionState } from '@/types'
+import type { DayPhaseState, GameState, LoginResponse, Room, SheriffElectionState } from '@/types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -109,16 +109,38 @@ export const MOCK_GAME_STATE: GameState = {
   dayNumber: 1,
   myRole: 'SEER',
   sheriff: 'u2',
+  hostId: 'u1',
   players: [
-    { userId: 'u1', nickname: 'You', seatIndex: 1, isAlive: true, isSheriff: false },
-    { userId: 'u2', nickname: 'Alice', seatIndex: 2, isAlive: true, isSheriff: true },
-    { userId: 'u3', nickname: 'Bob', seatIndex: 3, isAlive: true, isSheriff: false },
-    { userId: 'u4', nickname: 'Carol', seatIndex: 4, isAlive: false, isSheriff: false },
-    { userId: 'u5', nickname: 'Dave', seatIndex: 5, isAlive: true, isSheriff: false },
-    { userId: 'u6', nickname: 'Eve', seatIndex: 6, isAlive: true, isSheriff: false },
-    { userId: 'u7', nickname: 'Frank', seatIndex: 7, isAlive: true, isSheriff: false },
-    { userId: 'u8', nickname: 'Grace', seatIndex: 8, isAlive: true, isSheriff: false },
-    { userId: 'u9', nickname: 'Hank', seatIndex: 9, isAlive: true, isSheriff: false },
+    { userId: 'u1', nickname: 'You', seatIndex: 1, isAlive: true, isSheriff: false, avatar: '⭐' },
+    { userId: 'u2', nickname: 'Alice', seatIndex: 2, isAlive: true, isSheriff: true, avatar: '😊' },
+    { userId: 'u3', nickname: 'Bob', seatIndex: 3, isAlive: true, isSheriff: false, avatar: '🎭' },
+    {
+      userId: 'u4',
+      nickname: 'Carol',
+      seatIndex: 4,
+      isAlive: false,
+      isSheriff: false,
+      avatar: '🌙',
+    },
+    { userId: 'u5', nickname: 'Dave', seatIndex: 5, isAlive: true, isSheriff: false, avatar: '🌸' },
+    { userId: 'u6', nickname: 'Eve', seatIndex: 6, isAlive: true, isSheriff: false, avatar: '🦊' },
+    {
+      userId: 'u7',
+      nickname: 'Frank',
+      seatIndex: 7,
+      isAlive: true,
+      isSheriff: false,
+      avatar: '🎸',
+    },
+    {
+      userId: 'u8',
+      nickname: 'Grace',
+      seatIndex: 8,
+      isAlive: true,
+      isSheriff: false,
+      avatar: '🌺',
+    },
+    { userId: 'u9', nickname: 'Hank', seatIndex: 9, isAlive: true, isSheriff: false, avatar: '🐯' },
   ],
   events: [
     {
@@ -142,6 +164,105 @@ export const MOCK_GAME_RESULT = {
     role: (['u3', 'u6'] as string[]).includes(p.userId) ? 'WEREWOLF' : 'VILLAGER',
   })),
 }
+
+// ── Day Phase mock states ─────────────────────────────────────────────────────
+// Carol (u4, seat 4) was killed last night.
+
+const NIGHT_RESULT = {
+  killedPlayerId: 'u4',
+  killedNickname: 'Carol',
+  killedSeatIndex: 4,
+  killedAvatar: '🌙',
+}
+
+// Factory functions so each debug trigger gets a fresh deadline relative to now.
+export function makeDayHidden(): DayPhaseState {
+  const totalMs = 10_000 // 10s for local testing
+  return {
+    subPhase: 'RESULT_HIDDEN',
+    dayNumber: 1,
+    phaseStarted: Date.now(),
+    phaseDeadline: Date.now() + totalMs,
+    nightResult: NIGHT_RESULT,
+    canVote: false,
+  }
+}
+
+export function makeDayRevealed(): DayPhaseState {
+  const totalMs = 10_000 // 10s for local testing
+  return {
+    subPhase: 'RESULT_REVEALED',
+    dayNumber: 1,
+    phaseStarted: Date.now(),
+    phaseDeadline: Date.now() + totalMs,
+    nightResult: NIGHT_RESULT,
+    canVote: true,
+  }
+}
+
+// ── Day Phase scenarios (u1 = logged-in user in different roles) ──────────────
+
+const BASE_PLAYERS = MOCK_GAME_STATE.players
+
+// u1 is dead; u2 is host
+const PLAYERS_AS_DEAD = BASE_PLAYERS.map((p) => (p.userId === 'u1' ? { ...p, isAlive: false } : p))
+
+// u1 is alive but u2 is host (just remove host flag from u1)
+const PLAYERS_AS_ALIVE = BASE_PLAYERS.map((p) => (p.userId === 'u1' ? { ...p, isAlive: true } : p))
+
+// u1 is not in the game (guest/spectator)
+const PLAYERS_AS_GUEST = BASE_PLAYERS.filter((p) => p.userId !== 'u1')
+
+export function makeDayScenario(
+  variant: 'HOST_HIDDEN' | 'HOST_REVEALED' | 'DEAD' | 'ALIVE_HIDDEN' | 'ALIVE_REVEALED' | 'GUEST',
+): GameState {
+  switch (variant) {
+    case 'HOST_HIDDEN':
+      return { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase: makeDayHidden() }
+    case 'HOST_REVEALED':
+      return { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase: makeDayRevealed() }
+    case 'DEAD':
+      return {
+        ...MOCK_GAME_STATE,
+        hostId: 'u2',
+        phase: 'DAY',
+        players: PLAYERS_AS_DEAD,
+        dayPhase: makeDayRevealed(),
+      }
+    case 'ALIVE_HIDDEN':
+      return {
+        ...MOCK_GAME_STATE,
+        hostId: 'u2',
+        phase: 'DAY',
+        players: PLAYERS_AS_ALIVE,
+        dayPhase: makeDayHidden(),
+      }
+    case 'ALIVE_REVEALED':
+      return {
+        ...MOCK_GAME_STATE,
+        hostId: 'u2',
+        phase: 'DAY',
+        players: PLAYERS_AS_ALIVE,
+        dayPhase: makeDayRevealed(),
+      }
+    case 'GUEST':
+      return {
+        ...MOCK_GAME_STATE,
+        hostId: 'u2',
+        phase: 'DAY',
+        players: PLAYERS_AS_GUEST,
+        dayPhase: makeDayHidden(),
+      }
+  }
+}
+
+// Static exports retained for E2E tests (deadlines are set at import time, fine for short-lived tests)
+export const MOCK_DAY_SCENARIO_HOST_HIDDEN: GameState = makeDayScenario('HOST_HIDDEN')
+export const MOCK_DAY_SCENARIO_HOST_REVEALED: GameState = makeDayScenario('HOST_REVEALED')
+export const MOCK_DAY_SCENARIO_DEAD: GameState = makeDayScenario('DEAD')
+export const MOCK_DAY_SCENARIO_ALIVE_HIDDEN: GameState = makeDayScenario('ALIVE_HIDDEN')
+export const MOCK_DAY_SCENARIO_ALIVE_REVEALED: GameState = makeDayScenario('ALIVE_REVEALED')
+export const MOCK_DAY_SCENARIO_GUEST: GameState = makeDayScenario('GUEST')
 
 // ── Sheriff Election mock states ──────────────────────────────────────────────
 // u1 = You (logged-in user), u2 = Alice, u6 = Tom

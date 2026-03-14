@@ -12,12 +12,22 @@ import {
   MOCK_SHERIFF_SPEECH_AUDIENCE,
   MOCK_SHERIFF_VOTING,
   MOCK_SHERIFF_RESULT,
+  makeDayHidden,
+  makeDayRevealed,
+  makeDayScenario,
+  MOCK_DAY_SCENARIO_HOST_HIDDEN,
+  MOCK_DAY_SCENARIO_HOST_REVEALED,
+  MOCK_DAY_SCENARIO_DEAD,
+  MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
+  MOCK_DAY_SCENARIO_ALIVE_REVEALED,
+  MOCK_DAY_SCENARIO_GUEST,
 } from './data'
 import { mockStompClient } from './mockStompClient'
-import type { GameState, RoomPlayer, SheriffElectionState } from '@/types'
+import type { DayPhaseState, GameState, RoomPlayer, SheriffElectionState } from '@/types'
 
 // Mutable room state shared across mock endpoints so debug actions see current players.
 let mockRoomId = MOCK_ROOM_AS_HOST.roomId
+let mockHostId = MOCK_ROOM_AS_HOST.hostId
 let mockPlayers: RoomPlayer[] = [...MOCK_ROOM_AS_HOST.players]
 let mockTotalPlayers = MOCK_ROOM_AS_HOST.config.totalPlayers
 
@@ -74,12 +84,14 @@ export function setupMocks() {
     )
     const room = { ...MOCK_ROOM_AS_HOST, config: roomConfig, players }
     mockRoomId = room.roomId
+    mockHostId = room.hostId
     mockPlayers = [...players]
     mockTotalPlayers = roomConfig.totalPlayers
     return [200, room]
   })
   mock.onPost('/room/join').reply(() => {
     mockRoomId = MOCK_ROOM_AS_GUEST.roomId
+    mockHostId = MOCK_ROOM_AS_GUEST.hostId
     mockPlayers = [...MOCK_ROOM_AS_GUEST.players]
     mockTotalPlayers = MOCK_ROOM_AS_GUEST.config.totalPlayers
     return [200, MOCK_ROOM_AS_GUEST]
@@ -101,6 +113,7 @@ export function setupMocks() {
   mock.onPost('/debug/game/start').reply(() => {
     mockGameState = {
       ...MOCK_GAME_STATE,
+      hostId: mockHostId,
       phase: 'SHERIFF_ELECTION',
       sheriffElection: { ...MOCK_SHERIFF_SIGNUP },
     }
@@ -154,7 +167,57 @@ export function setupMocks() {
   })
 
   mock.onPost('/debug/sheriff/exit').reply(() => {
-    mockGameState = { ...MOCK_GAME_STATE }
+    mockGameState = {
+      ...mockGameState,
+      phase: 'DAY',
+      sheriffElection: undefined,
+      dayPhase: makeDayHidden(),
+    }
+    pushGameStateUpdate()
+    return [200]
+  })
+
+  // ── Debug: Day Phase scenario (switches mock user role for testing) ───────────
+  // POST /debug/day/scenario { scenario: string }
+  const DAY_SCENARIOS: Record<string, GameState> = {
+    HOST_HIDDEN: MOCK_DAY_SCENARIO_HOST_HIDDEN,
+    HOST_REVEALED: MOCK_DAY_SCENARIO_HOST_REVEALED,
+    DEAD: MOCK_DAY_SCENARIO_DEAD,
+    ALIVE_HIDDEN: MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
+    ALIVE_REVEALED: MOCK_DAY_SCENARIO_ALIVE_REVEALED,
+    GUEST: MOCK_DAY_SCENARIO_GUEST,
+  }
+  mock.onPost('/debug/day/scenario').reply((config) => {
+    const { scenario } = JSON.parse(config.data ?? '{}')
+    if (!DAY_SCENARIOS[scenario]) return [400, { error: 'Unknown scenario' }]
+    // Use factory for fresh deadlines on each debug call
+    mockGameState = makeDayScenario(scenario as Parameters<typeof makeDayScenario>[0])
+    pushGameStateUpdate()
+    return [200]
+  })
+
+  // ── Debug: Day Phase screens ──────────────────────────────────────────────────
+  // POST /debug/day/phase { preset: 'HIDDEN' | 'REVEALED' }
+  const DAY_PRESET_FACTORIES: Record<string, () => DayPhaseState> = {
+    HIDDEN: makeDayHidden,
+    REVEALED: makeDayRevealed,
+  }
+  mock.onPost('/debug/day/phase').reply((config) => {
+    const { preset } = JSON.parse(config.data ?? '{}')
+    const factory = DAY_PRESET_FACTORIES[preset]
+    if (!factory) return [400, { error: 'Unknown preset' }]
+    mockGameState = { ...mockGameState, phase: 'DAY', dayPhase: factory() }
+    pushGameStateUpdate()
+    return [200]
+  })
+
+  // POST /debug/day/reveal — host reveals result to all players
+  mock.onPost('/debug/day/reveal').reply(() => {
+    mockGameState = {
+      ...mockGameState,
+      phase: 'DAY',
+      dayPhase: makeDayRevealed(),
+    }
     pushGameStateUpdate()
     return [200]
   })
@@ -268,6 +331,22 @@ export function setupMocks() {
         mockGameState = {
           ...mockGameState,
           sheriffElection: { ...e, myVote: undefined, abstained: true },
+        }
+        pushGameStateUpdate()
+      }
+    } else if (mockGameState.phase === 'DAY') {
+      if (actionType === 'REVEAL_NIGHT_RESULT') {
+        mockGameState = {
+          ...mockGameState,
+          dayPhase: makeDayRevealed(),
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'SELECT_PLAYER') {
+        mockGameState = {
+          ...mockGameState,
+          dayPhase: mockGameState.dayPhase
+            ? { ...mockGameState.dayPhase, selectedPlayerId: targetId }
+            : undefined,
         }
         pushGameStateUpdate()
       }

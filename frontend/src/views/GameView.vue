@@ -19,7 +19,21 @@
       />
     </template>
 
-    <!-- Normal game phases -->
+    <!-- Day phase -->
+    <template v-else-if="gameStore.state?.phase === 'DAY' && gameStore.state?.dayPhase">
+      <DayPhase
+        :day-phase="gameStore.state.dayPhase"
+        :players="gameStore.state.players"
+        :my-user-id="userStore.userId ?? ''"
+        :is-host="isHost"
+        @reveal-result="handleRevealResult"
+        @vote="handleDayVote"
+        @skip="handleDaySkip"
+        @select-player="handleDaySelectPlayer"
+      />
+    </template>
+
+    <!-- Other game phases -->
     <template v-else>
       <!-- Phase header -->
       <header class="game-header">
@@ -61,7 +75,21 @@
 
     <!-- Debug panel (mock mode only) -->
     <div v-if="isMock" class="debug-panel">
-      <div class="debug-title">🛠 Debug — Sheriff Screens</div>
+      <div class="debug-title">🛠 Debug — Day Scenarios</div>
+      <div class="debug-btns">
+        <button class="debug-btn" @click="debugScenario('HOST_HIDDEN')">Host·Hidden</button>
+        <button class="debug-btn" @click="debugScenario('HOST_REVEALED')">Host·Revealed</button>
+        <button class="debug-btn" @click="debugScenario('DEAD')">Dead</button>
+        <button class="debug-btn" @click="debugScenario('ALIVE_HIDDEN')">Alive·Hidden</button>
+        <button class="debug-btn" @click="debugScenario('ALIVE_REVEALED')">Alive·Revealed</button>
+        <button class="debug-btn" @click="debugScenario('GUEST')">Guest</button>
+      </div>
+      <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Day Phase</div>
+      <div class="debug-btns">
+        <button class="debug-btn" @click="debugDay('HIDDEN')">Hidden</button>
+        <button class="debug-btn" @click="debugDay('REVEALED')">Revealed</button>
+      </div>
+      <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Sheriff Screens</div>
       <div class="debug-btns">
         <button class="debug-btn" @click="debugSheriff('SIGNUP')">Sign-up</button>
         <button class="debug-btn" @click="debugSheriff('SPEECH_CANDIDATE')">Speech: Me</button>
@@ -101,6 +129,7 @@ import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services
 import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SheriffElection from '@/components/SheriffElection.vue'
+import DayPhase from '@/components/DayPhase.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import type { GamePlayer } from '@/types'
 
@@ -111,7 +140,10 @@ const gameStore = useGameStore()
 const roomStore = useRoomStore()
 
 const isMock = import.meta.env.VITE_MOCK === 'true'
-const isHost = computed(() => roomStore.room?.hostId === userStore.userId)
+const isHost = computed(() => {
+  const hostId = gameStore.state?.hostId ?? roomStore.room?.hostId
+  return hostId === userStore.userId
+})
 
 useNavigationGuard()
 
@@ -180,6 +212,28 @@ async function handleSheriffConfirmVote() {
 }
 async function handleSheriffAbstain() {
   await gameService.submitAction({ actionType: 'SHERIFF_ABSTAIN' })
+}
+
+async function handleRevealResult() {
+  await gameService.submitAction({ actionType: 'REVEAL_NIGHT_RESULT' })
+}
+async function handleDayVote() {
+  const targetId = gameStore.state?.dayPhase?.selectedPlayerId
+  if (targetId) await gameService.submitAction({ actionType: 'DAY_VOTE', targetId })
+}
+async function handleDaySkip() {
+  await gameService.submitAction({ actionType: 'DAY_SKIP' })
+}
+async function handleDaySelectPlayer(userId: string) {
+  await gameService.submitAction({ actionType: 'SELECT_PLAYER', targetId: userId })
+}
+
+async function debugScenario(scenario: string) {
+  await http.post('/debug/day/scenario', { scenario })
+}
+
+async function debugDay(preset: string) {
+  await http.post('/debug/day/phase', { preset })
 }
 
 async function debugSheriff(preset: string) {
