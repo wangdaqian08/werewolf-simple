@@ -24,9 +24,10 @@
           class="banner banner-kill"
         >
           <span class="banner-avatar">{{ dayPhase.nightResult.killedAvatar ?? '💀' }}</span>
-          <div class="banner-title-red">
-            昨晚 {{ dayPhase.nightResult.killedSeatIndex }}号 ·
-            {{ dayPhase.nightResult.killedNickname }} 被狼人杀害
+          <div class="banner-kill-text">
+            <span class="banner-kill-muted">昨晚</span>
+            <span class="banner-kill-red">{{ dayPhase.nightResult.killedSeatIndex }}号 · {{ dayPhase.nightResult.killedNickname }}</span>
+            <span class="banner-kill-muted">被狼人杀害</span>
           </div>
         </div>
       </template>
@@ -40,9 +41,10 @@
       >
         <div class="banner banner-kill">
           <span class="banner-avatar">{{ dayPhase.nightResult.killedAvatar ?? '💀' }}</span>
-          <div class="banner-title-red">
-            昨晚 {{ dayPhase.nightResult.killedSeatIndex }}号 ·
-            {{ dayPhase.nightResult.killedNickname }} 被狼人杀害
+          <div class="banner-kill-text">
+            <span class="banner-kill-muted">昨晚</span>
+            <span class="banner-kill-red">{{ dayPhase.nightResult.killedSeatIndex }}号 · {{ dayPhase.nightResult.killedNickname }}</span>
+            <span class="banner-kill-muted">被狼人杀害</span>
           </div>
         </div>
       </template>
@@ -280,10 +282,22 @@ function onTap(player: GamePlayer) {
   color: var(--text);
 }
 
-.banner-title-red {
+.banner-kill-text {
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 500;
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.banner-kill-muted {
+  color: var(--muted);
+}
+
+.banner-kill-red {
   color: var(--red);
+  font-weight: 600;
 }
 
 .banner-sub {
