@@ -26,6 +26,7 @@ import type { DayPhaseState, GameState, RoomPlayer, SheriffElectionState } from 
 
 // Mutable room state shared across mock endpoints so debug actions see current players.
 let mockRoomId = MOCK_ROOM_AS_HOST.roomId
+let mockHostId = MOCK_ROOM_AS_HOST.hostId
 let mockPlayers: RoomPlayer[] = [...MOCK_ROOM_AS_HOST.players]
 let mockTotalPlayers = MOCK_ROOM_AS_HOST.config.totalPlayers
 
@@ -82,12 +83,14 @@ export function setupMocks() {
     )
     const room = { ...MOCK_ROOM_AS_HOST, config: roomConfig, players }
     mockRoomId = room.roomId
+    mockHostId = room.hostId
     mockPlayers = [...players]
     mockTotalPlayers = roomConfig.totalPlayers
     return [200, room]
   })
   mock.onPost('/room/join').reply(() => {
     mockRoomId = MOCK_ROOM_AS_GUEST.roomId
+    mockHostId = MOCK_ROOM_AS_GUEST.hostId
     mockPlayers = [...MOCK_ROOM_AS_GUEST.players]
     mockTotalPlayers = MOCK_ROOM_AS_GUEST.config.totalPlayers
     return [200, MOCK_ROOM_AS_GUEST]
@@ -109,6 +112,7 @@ export function setupMocks() {
   mock.onPost('/debug/game/start').reply(() => {
     mockGameState = {
       ...MOCK_GAME_STATE,
+      hostId: mockHostId,
       phase: 'SHERIFF_ELECTION',
       sheriffElection: { ...MOCK_SHERIFF_SIGNUP },
     }
@@ -162,7 +166,7 @@ export function setupMocks() {
   })
 
   mock.onPost('/debug/sheriff/exit').reply(() => {
-    mockGameState = { ...MOCK_GAME_STATE, dayPhase: { ...MOCK_DAY_HIDDEN } }
+    mockGameState = { ...mockGameState, phase: 'DAY', sheriffElection: undefined, dayPhase: { ...MOCK_DAY_HIDDEN } }
     pushGameStateUpdate()
     return [200]
   })
@@ -196,7 +200,7 @@ export function setupMocks() {
     const { preset } = JSON.parse(config.data ?? '{}')
     const dayPhase = DAY_PRESETS[preset]
     if (!dayPhase) return [400, { error: 'Unknown preset' }]
-    mockGameState = { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase }
+    mockGameState = { ...mockGameState, phase: 'DAY', dayPhase }
     pushGameStateUpdate()
     return [200]
   })

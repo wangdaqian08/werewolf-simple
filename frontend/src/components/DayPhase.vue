@@ -304,7 +304,7 @@ function onTap(player: GamePlayer) {
 
 /* Footer */
 .day-footer {
-  padding: 0.75rem 1rem 1.5rem;
+  padding: 0.75rem 1rem 2.5rem;
   border-top: 1px solid var(--border-l);
   background: var(--paper);
   display: flex;
