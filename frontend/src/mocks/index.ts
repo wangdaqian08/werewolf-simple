@@ -166,7 +166,12 @@ export function setupMocks() {
   })
 
   mock.onPost('/debug/sheriff/exit').reply(() => {
-    mockGameState = { ...mockGameState, phase: 'DAY', sheriffElection: undefined, dayPhase: { ...MOCK_DAY_HIDDEN } }
+    mockGameState = {
+      ...mockGameState,
+      phase: 'DAY',
+      sheriffElection: undefined,
+      dayPhase: { ...MOCK_DAY_HIDDEN },
+    }
     pushGameStateUpdate()
     return [200]
   })
