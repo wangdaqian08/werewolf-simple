@@ -55,6 +55,26 @@
       />
     </template>
 
+    <!-- Voting phase -->
+    <template v-else-if="gameStore.state?.phase === 'VOTING' && gameStore.state?.votingPhase">
+      <VotingPhase
+        :voting-phase="gameStore.state.votingPhase"
+        :players="gameStore.state.players"
+        :my-user-id="userStore.userId ?? ''"
+        :is-host="isHost"
+        @select-player="handleVotingSelect"
+        @vote="handleVotingVote"
+        @skip-vote="handleVotingSkip"
+        @unvote="handleVotingUnvote"
+        @reveal-voting="handleVotingReveal"
+        @continue-voting="handleVotingContinue"
+        @hunter-shoot="handleHunterShoot"
+        @hunter-pass="handleHunterPass"
+        @pass-badge="handlePassBadge"
+        @destroy-badge="handleDestroyBadge"
+      />
+    </template>
+
     <!-- Day phase -->
     <template v-else-if="gameStore.state?.phase === 'DAY' && gameStore.state?.dayPhase">
       <DayPhase
@@ -117,7 +137,7 @@
         <button class="debug-btn" @click="debugSkipRole">Skip → Sheriff</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Day Scenarios</div>
-      <div class="debug-btns">
+      <div class="debug-btns" data-testid="debug-day-scenario-btns">
         <button class="debug-btn" @click="debugScenario('HOST_HIDDEN')">Host·Hidden</button>
         <button class="debug-btn" @click="debugScenario('HOST_REVEALED')">Host·Revealed</button>
         <button class="debug-btn" @click="debugScenario('DEAD')">Dead</button>
@@ -139,6 +159,17 @@
         <button class="debug-btn" @click="debugNight('GUARD')">Guard</button>
         <button class="debug-btn" @click="debugNight('WAITING')">Waiting</button>
         <button class="debug-btn debug-btn-exit" @click="debugNightAdvance">→ Day</button>
+      </div>
+      <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Voting Screens</div>
+      <div class="debug-btns" data-testid="debug-voting-btns">
+        <button class="debug-btn" @click="debugVoting('VOTING')">Voting</button>
+        <button class="debug-btn" @click="debugVoting('VOTING_VOTED')">Voted</button>
+        <button class="debug-btn" @click="debugVoting('VOTING_REVEALED')">Revealed</button>
+        <button class="debug-btn" @click="debugVoting('HUNTER_SHOOT')">Hunter</button>
+        <button class="debug-btn" @click="debugVoting('BADGE_HANDOVER')">Badge: Pick</button>
+        <button class="debug-btn" @click="debugVoting('BADGE_SHERIFF')">Badge: Sheriff</button>
+        <button class="debug-btn" @click="debugVoting('BADGE_BURNED')">Badge: Burned</button>
+        <button class="debug-btn debug-btn-exit" @click="debugVotingAdvance">→ Night</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Sheriff Screens</div>
       <div class="debug-btns">
@@ -183,6 +214,7 @@ import RoleRevealCard from '@/components/RoleRevealCard.vue'
 import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
+import VotingPhase from '@/components/VotingPhase.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import type { GamePlayer } from '@/types'
 
@@ -313,6 +345,45 @@ async function handleWitchPoison(targetId: string) {
 }
 async function handleWitchPassPoison() {
   await gameService.submitAction({ actionType: 'NIGHT_WITCH_PASS_POISON' })
+}
+
+async function handleVotingSelect(userId: string) {
+  await gameService.submitAction({ actionType: 'VOTING_SELECT', targetId: userId })
+}
+async function handleVotingVote() {
+  const targetId = gameStore.state?.votingPhase?.selectedPlayerId
+  if (targetId) await gameService.submitAction({ actionType: 'VOTING_VOTE', targetId })
+}
+async function handleVotingSkip() {
+  await gameService.submitAction({ actionType: 'VOTING_SKIP' })
+}
+async function handleVotingUnvote() {
+  await gameService.submitAction({ actionType: 'VOTING_UNVOTE' })
+}
+async function handleVotingReveal() {
+  await gameService.submitAction({ actionType: 'VOTING_REVEAL_TALLY' })
+}
+async function handleVotingContinue() {
+  await gameService.submitAction({ actionType: 'VOTING_CONTINUE' })
+}
+async function handleHunterShoot(userId: string) {
+  await gameService.submitAction({ actionType: 'HUNTER_SHOOT', targetId: userId })
+}
+async function handleHunterPass() {
+  await gameService.submitAction({ actionType: 'HUNTER_PASS' })
+}
+async function handlePassBadge(userId: string) {
+  await gameService.submitAction({ actionType: 'BADGE_PASS', targetId: userId })
+}
+async function handleDestroyBadge() {
+  await gameService.submitAction({ actionType: 'BADGE_DESTROY' })
+}
+
+async function debugVoting(scenario: string) {
+  await http.post('/debug/voting/scenario', { scenario })
+}
+async function debugVotingAdvance() {
+  await http.post('/debug/voting/advance')
 }
 
 async function debugNight(scenario: string) {

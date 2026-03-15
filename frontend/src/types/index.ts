@@ -87,6 +87,7 @@ export interface GameState {
   roleReveal?: RoleRevealState
   sheriffElection?: SheriffElectionState
   dayPhase?: DayPhaseState
+  votingPhase?: VotingState
   nightPhase?: NightPhaseState
 }
 
@@ -175,6 +176,62 @@ export interface DayPhaseState {
   canVote: boolean
   myVote?: string
   selectedPlayerId?: string
+}
+
+// ── Voting Phase ──────────────────────────────────────────────────────────────
+
+export type VotingSubPhase =
+  | 'VOTING'
+  | 'VOTE_RESULT'
+  | 'HUNTER_SHOOT'
+  | 'BADGE_HANDOVER'
+  | 'BADGE_RECEIVED'
+
+export interface VoteVoter {
+  userId: string
+  nickname: string
+  avatar?: string
+  seatIndex: number
+}
+
+export interface VoteTally {
+  playerId: string
+  nickname: string
+  seatIndex: number
+  avatar?: string
+  votes: number
+  voters?: VoteVoter[]
+}
+
+export interface VotingState {
+  subPhase: VotingSubPhase
+  dayNumber: number
+  phaseDeadline: number // epoch ms — for timer + SunArc
+  phaseStarted: number // epoch ms — for SunArc
+  canVote?: boolean // false if dead/spectator/already voted
+  myVote?: string // userId I voted for
+  myVoteSkipped?: boolean
+  selectedPlayerId?: string
+  votedPlayerIds?: string[] // userIds of players who have cast a vote (public, no target revealed)
+  votesSubmitted?: number // how many players have cast a vote (shown before reveal)
+  totalVoters?: number // total players eligible to vote
+  tally?: VoteTally[] // per-player vote counts — hidden until tallyRevealed
+  tallyRevealed?: boolean // host has publicly revealed the tally
+  revealDeadline?: number // epoch ms — 30s countdown after tally revealed
+  // VOTE_RESULT / HUNTER_SHOOT / BADGE_HANDOVER
+  eliminatedPlayerId?: string
+  eliminatedNickname?: string
+  eliminatedSeatIndex?: number
+  eliminatedAvatar?: string
+  eliminatedRole?: PlayerRole
+  // HUNTER_SHOOT — hunter's selected target
+  hunterSelectedId?: string
+  // BADGE_HANDOVER + BADGE_RECEIVED
+  badgeTargetId?: string
+  badgeDestroyed?: boolean // badge was destroyed instead of passed
+  newSheriffId?: string
+  newSheriffNickname?: string
+  newSheriffAvatar?: string
 }
 
 // ── Night Phase ───────────────────────────────────────────────────────────────
