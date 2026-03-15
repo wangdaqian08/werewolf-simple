@@ -18,6 +18,7 @@ import {
   makeDayScenario,
   makeRoleRevealState,
   makeNightScenario,
+  makeVotingScenario,
   MOCK_DAY_SCENARIO_HOST_HIDDEN,
   MOCK_DAY_SCENARIO_HOST_REVEALED,
   MOCK_DAY_SCENARIO_DEAD,
@@ -270,6 +271,38 @@ export function setupMocks() {
     return [200]
   })
 
+  // ── Debug: Voting Phase scenario ─────────────────────────────────────────────
+  mock.onPost('/debug/voting/scenario').reply((config) => {
+    const { scenario } = JSON.parse(config.data ?? '{}')
+    const prevHostId = mockGameState.hostId
+    const prevPlayers = mockGameState.players
+    try {
+      // Preserve hostId and player alive/dead states from the prior day scenario
+      mockGameState = {
+        ...makeVotingScenario(scenario as Parameters<typeof makeVotingScenario>[0]),
+        hostId: prevHostId,
+        players: prevPlayers,
+      }
+    } catch {
+      return [400, { error: 'Unknown scenario' }]
+    }
+    pushGameStateUpdate()
+    return [200]
+  })
+
+  mock.onPost('/debug/voting/advance').reply(() => {
+    const nextDay = (mockGameState.dayNumber ?? 1) + 1
+    mockGameState = {
+      ...mockGameState,
+      phase: 'NIGHT',
+      dayNumber: nextDay,
+      votingPhase: undefined,
+      nightPhase: { subPhase: 'WAITING', dayNumber: nextDay },
+    }
+    pushGameStateUpdate()
+    return [200]
+  })
+
   // ── Debug: manually set a player's ready status ───────────────────────────────
   // POST /debug/ready  { userId: string, ready: boolean }
   // Fires a STOMP ROOM_UPDATE immediately so the UI reacts.
@@ -505,6 +538,147 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       }
+    } else if (mockGameState.phase === 'VOTING' && mockGameState.votingPhase) {
+      const vp = mockGameState.votingPhase
+      if (actionType === 'VOTING_SELECT') {
+        mockGameState = {
+          ...mockGameState,
+          votingPhase: { ...vp, selectedPlayerId: targetId },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'VOTING_VOTE') {
+        const myId = MOCK_LOGIN.user.userId
+        const alreadyIn = vp.votedPlayerIds?.includes(myId)
+        mockGameState = {
+          ...mockGameState,
+          votingPhase: {
+            ...vp,
+            myVote: targetId,
+            canVote: false,
+            votedPlayerIds: alreadyIn ? vp.votedPlayerIds : [...(vp.votedPlayerIds ?? []), myId],
+            votesSubmitted: alreadyIn ? vp.votesSubmitted : (vp.votesSubmitted ?? 0) + 1,
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'VOTING_SKIP') {
+        const myId = MOCK_LOGIN.user.userId
+        const alreadyIn = vp.votedPlayerIds?.includes(myId)
+        mockGameState = {
+          ...mockGameState,
+          votingPhase: {
+            ...vp,
+            myVoteSkipped: true,
+            canVote: false,
+            votedPlayerIds: alreadyIn ? vp.votedPlayerIds : [...(vp.votedPlayerIds ?? []), myId],
+            votesSubmitted: alreadyIn ? vp.votesSubmitted : (vp.votesSubmitted ?? 0) + 1,
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'VOTING_REVEAL_TALLY') {
+        mockGameState = {
+          ...mockGameState,
+          votingPhase: {
+            ...vp,
+            tallyRevealed: true,
+            revealDeadline: Date.now() + 30_000,
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'VOTING_UNVOTE') {
+        const myId = MOCK_LOGIN.user.userId
+        mockGameState = {
+          ...mockGameState,
+          votingPhase: {
+            ...vp,
+            myVote: undefined,
+            myVoteSkipped: undefined,
+            canVote: true,
+            votedPlayerIds: vp.votedPlayerIds?.filter((id) => id !== myId),
+            votesSubmitted: Math.max(0, (vp.votesSubmitted ?? 1) - 1),
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'VOTING_CONTINUE') {
+        if (vp.subPhase === 'BADGE_HANDOVER' && (vp.newSheriffId || vp.badgeDestroyed)) {
+          // Badge done — advance to NIGHT
+          const nextDay = (mockGameState.dayNumber ?? 1) + 1
+          mockGameState = {
+            ...mockGameState,
+            phase: 'NIGHT',
+            dayNumber: nextDay,
+            votingPhase: undefined,
+            nightPhase: { subPhase: 'WAITING', dayNumber: nextDay },
+          }
+        } else {
+          // VOTING (tallyRevealed) → HUNTER_SHOOT or BADGE_HANDOVER or NIGHT (skip VOTE_RESULT)
+          if (vp.eliminatedRole === 'HUNTER') {
+            mockGameState = {
+              ...mockGameState,
+              votingPhase: { ...vp, subPhase: 'HUNTER_SHOOT', selectedPlayerId: undefined },
+            }
+          } else if (vp.eliminatedPlayerId && vp.eliminatedPlayerId === mockGameState.sheriff) {
+            mockGameState = {
+              ...mockGameState,
+              votingPhase: { ...vp, subPhase: 'BADGE_HANDOVER', selectedPlayerId: undefined },
+            }
+          } else {
+            const nextDay = (mockGameState.dayNumber ?? 1) + 1
+            mockGameState = {
+              ...mockGameState,
+              phase: 'NIGHT',
+              dayNumber: nextDay,
+              votingPhase: undefined,
+              nightPhase: { subPhase: 'WAITING', dayNumber: nextDay },
+            }
+          }
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'HUNTER_SHOOT' || actionType === 'HUNTER_PASS') {
+        // After hunter acts, check if eliminated was also sheriff
+        if (vp.eliminatedPlayerId && vp.eliminatedPlayerId === mockGameState.sheriff) {
+          mockGameState = {
+            ...mockGameState,
+            votingPhase: { ...vp, subPhase: 'BADGE_HANDOVER', selectedPlayerId: undefined },
+          }
+        } else {
+          const nextDay = (mockGameState.dayNumber ?? 1) + 1
+          mockGameState = {
+            ...mockGameState,
+            phase: 'NIGHT',
+            dayNumber: nextDay,
+            votingPhase: undefined,
+            nightPhase: { subPhase: 'WAITING', dayNumber: nextDay },
+          }
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'BADGE_PASS') {
+        const target = mockGameState.players.find((p) => p.userId === targetId)
+        mockGameState = {
+          ...mockGameState,
+          sheriff: targetId,
+          votingPhase: {
+            ...vp,
+            // Stay on BADGE_HANDOVER; newSheriffId triggers the "passed" UI
+            newSheriffId: targetId,
+            newSheriffNickname: target?.nickname ?? '',
+            newSheriffAvatar: target?.avatar,
+            selectedPlayerId: undefined,
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'BADGE_DESTROY') {
+        mockGameState = {
+          ...mockGameState,
+          sheriff: undefined,
+          votingPhase: {
+            ...vp,
+            // Stay on BADGE_HANDOVER; badgeDestroyed triggers the "destroyed" UI
+            badgeDestroyed: true,
+            selectedPlayerId: undefined,
+          },
+        }
+        pushGameStateUpdate()
+      }
     }
     return [200, { success: true }]
   })
@@ -546,6 +720,11 @@ export function setupMocks() {
     // Night Phase
     nightScenario: (scenario: string) => http.post('/debug/night/scenario', { scenario }),
     nightAdvance: () => http.post('/debug/night/advance'),
+
+    // Voting Phase
+    votingScenario: (scenario: string) => http.post('/debug/voting/scenario', { scenario }),
+    votingAdvance: () => http.post('/debug/voting/advance'),
+    votingUnvote: () => http.post('/game/action', { actionType: 'VOTING_UNVOTE' }),
   }
 
   console.warn('[mock] active — set VITE_MOCK=false in .env.development to use real backend')
