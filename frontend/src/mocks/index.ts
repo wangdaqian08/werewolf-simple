@@ -12,10 +12,12 @@ import {
   MOCK_SHERIFF_SPEECH_AUDIENCE,
   MOCK_SHERIFF_VOTING,
   MOCK_SHERIFF_RESULT,
+  MOCK_ROLE_ASSIGNMENTS,
   makeDayHidden,
   makeDayRevealed,
   makeDayScenario,
   makeRoleRevealState,
+  makeNightScenario,
   MOCK_DAY_SCENARIO_HOST_HIDDEN,
   MOCK_DAY_SCENARIO_HOST_REVEALED,
   MOCK_DAY_SCENARIO_DEAD,
@@ -241,6 +243,33 @@ export function setupMocks() {
     return [200]
   })
 
+  // ── Debug: Night Phase scenario ──────────────────────────────────────────────
+  // POST /debug/night/scenario { scenario: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING' }
+  mock.onPost('/debug/night/scenario').reply((config) => {
+    const { scenario } = JSON.parse(config.data ?? '{}')
+    try {
+      mockGameState = makeNightScenario(scenario as Parameters<typeof makeNightScenario>[0])
+    } catch {
+      return [400, { error: 'Unknown scenario' }]
+    }
+    pushGameStateUpdate()
+    return [200]
+  })
+
+  // POST /debug/night/advance — end night, transition to next Day phase
+  mock.onPost('/debug/night/advance').reply(() => {
+    const nextDay = (mockGameState.dayNumber ?? 1) + 1
+    mockGameState = {
+      ...mockGameState,
+      phase: 'DAY',
+      dayNumber: nextDay,
+      nightPhase: undefined,
+      dayPhase: makeDayHidden(),
+    }
+    pushGameStateUpdate()
+    return [200]
+  })
+
   // ── Debug: manually set a player's ready status ───────────────────────────────
   // POST /debug/ready  { userId: string, ready: boolean }
   // Fires a STOMP ROOM_UPDATE immediately so the UI reacts.
@@ -376,6 +405,90 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       }
+    } else if (mockGameState.phase === 'NIGHT' && mockGameState.nightPhase) {
+      const np = mockGameState.nightPhase
+      if (actionType === 'NIGHT_SELECT') {
+        mockGameState = {
+          ...mockGameState,
+          nightPhase: { ...np, selectedTargetId: targetId },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'NIGHT_CONFIRM') {
+        if (np.subPhase === 'SEER_PICK' && targetId) {
+          // Seer checks a player → show result (include current check in history)
+          const target = mockGameState.players.find((p) => p.userId === targetId)
+          const isWerewolf = MOCK_ROLE_ASSIGNMENTS[targetId] === 'WEREWOLF'
+          const prevHistory = np.seerResult?.history ?? []
+          const currentEntry = {
+            round: np.dayNumber,
+            nickname: target?.nickname ?? '',
+            isWerewolf,
+          }
+          mockGameState = {
+            ...mockGameState,
+            nightPhase: {
+              ...np,
+              subPhase: 'SEER_RESULT',
+              selectedTargetId: undefined,
+              seerResult: {
+                checkedPlayerId: targetId,
+                checkedNickname: target?.nickname ?? '',
+                checkedSeatIndex: target?.seatIndex ?? 0,
+                isWerewolf,
+                history: [...prevHistory, currentEntry],
+              },
+            },
+          }
+        } else {
+          // Werewolf attack or guard protect confirmed — switch to WAITING
+          mockGameState = {
+            ...mockGameState,
+            nightPhase: { ...np, subPhase: 'WAITING', selectedTargetId: undefined },
+          }
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'NIGHT_WITCH_USE_ANTIDOTE') {
+        // Using antidote ends witch's turn — auto-pass poison
+        mockGameState = {
+          ...mockGameState,
+          nightPhase: {
+            ...np,
+            antidoteDecided: true,
+            antidoteUsed: true,
+            poisonDecided: true,
+            subPhase: 'WAITING',
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'NIGHT_WITCH_PASS_ANTIDOTE') {
+        const updated = { ...np, antidoteDecided: true, antidoteUsed: false }
+        mockGameState = {
+          ...mockGameState,
+          nightPhase: updated.poisonDecided ? { ...updated, subPhase: 'WAITING' } : updated,
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'NIGHT_WITCH_USE_POISON') {
+        // Using poison ends witch's turn — auto-pass antidote
+        mockGameState = {
+          ...mockGameState,
+          nightPhase: {
+            ...np,
+            poisonDecided: true,
+            poisonUsed: true,
+            antidoteDecided: true,
+            selectedTargetId: undefined,
+            subPhase: 'WAITING',
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'NIGHT_WITCH_PASS_POISON') {
+        const updated = { ...np, poisonDecided: true, poisonUsed: false }
+        mockGameState = {
+          ...mockGameState,
+          nightPhase: updated.antidoteDecided ? { ...updated, subPhase: 'WAITING' } : updated,
+        }
+        pushGameStateUpdate()
+      }
     } else if (mockGameState.phase === 'DAY') {
       if (actionType === 'REVEAL_NIGHT_RESULT') {
         mockGameState = {
@@ -429,6 +542,10 @@ export function setupMocks() {
     dayScenario: (scenario: string) => http.post('/debug/day/scenario', { scenario }),
     dayPhase: (preset: string) => http.post('/debug/day/phase', { preset }),
     dayReveal: () => http.post('/debug/day/reveal'),
+
+    // Night Phase
+    nightScenario: (scenario: string) => http.post('/debug/night/scenario', { scenario }),
+    nightAdvance: () => http.post('/debug/night/advance'),
   }
 
   console.warn('[mock] active — set VITE_MOCK=false in .env.development to use real backend')

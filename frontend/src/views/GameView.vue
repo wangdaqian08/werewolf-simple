@@ -39,6 +39,22 @@
       />
     </template>
 
+    <!-- Night phase -->
+    <template v-else-if="gameStore.state?.phase === 'NIGHT' && gameStore.state?.nightPhase">
+      <NightPhase
+        :night-phase="gameStore.state.nightPhase"
+        :players="gameStore.state.players"
+        :my-user-id="userStore.userId ?? ''"
+        :my-role="gameStore.state.myRole"
+        @select-player="handleNightSelect"
+        @confirm="handleNightConfirm"
+        @witch-antidote="handleWitchAntidote"
+        @witch-pass-antidote="handleWitchPassAntidote"
+        @witch-poison="handleWitchPoison"
+        @witch-pass-poison="handleWitchPassPoison"
+      />
+    </template>
+
     <!-- Day phase -->
     <template v-else-if="gameStore.state?.phase === 'DAY' && gameStore.state?.dayPhase">
       <DayPhase
@@ -75,7 +91,7 @@
             <div class="sheriff-badge">⭐</div>
           </template>
           <template v-if="!player.isAlive" #overlay>
-            <div class="dead-overlay">✕</div>
+            <div class="slot-overlay dead-overlay">✕</div>
           </template>
         </PlayerSlot>
       </section>
@@ -113,6 +129,16 @@
       <div class="debug-btns">
         <button class="debug-btn" @click="debugDay('HIDDEN')">Hidden</button>
         <button class="debug-btn" @click="debugDay('REVEALED')">Revealed</button>
+      </div>
+      <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Night Screens</div>
+      <div class="debug-btns">
+        <button class="debug-btn" @click="debugNight('WEREWOLF')">Werewolf</button>
+        <button class="debug-btn" @click="debugNight('SEER_PICK')">Seer: Pick</button>
+        <button class="debug-btn" @click="debugNight('SEER_RESULT')">Seer: Result</button>
+        <button class="debug-btn" @click="debugNight('WITCH')">Witch</button>
+        <button class="debug-btn" @click="debugNight('GUARD')">Guard</button>
+        <button class="debug-btn" @click="debugNight('WAITING')">Waiting</button>
+        <button class="debug-btn debug-btn-exit" @click="debugNightAdvance">→ Day</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Sheriff Screens</div>
       <div class="debug-btns">
@@ -156,6 +182,7 @@ import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
 import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
+import NightPhase from '@/components/NightPhase.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import type { GamePlayer } from '@/types'
 
@@ -266,6 +293,33 @@ async function handleDaySkip() {
 }
 async function handleDaySelectPlayer(userId: string) {
   await gameService.submitAction({ actionType: 'SELECT_PLAYER', targetId: userId })
+}
+
+async function handleNightSelect(userId: string) {
+  await gameService.submitAction({ actionType: 'NIGHT_SELECT', targetId: userId })
+}
+async function handleNightConfirm() {
+  const targetId = gameStore.state?.nightPhase?.selectedTargetId
+  await gameService.submitAction({ actionType: 'NIGHT_CONFIRM', targetId })
+}
+async function handleWitchAntidote() {
+  await gameService.submitAction({ actionType: 'NIGHT_WITCH_USE_ANTIDOTE' })
+}
+async function handleWitchPassAntidote() {
+  await gameService.submitAction({ actionType: 'NIGHT_WITCH_PASS_ANTIDOTE' })
+}
+async function handleWitchPoison(targetId: string) {
+  await gameService.submitAction({ actionType: 'NIGHT_WITCH_USE_POISON', targetId })
+}
+async function handleWitchPassPoison() {
+  await gameService.submitAction({ actionType: 'NIGHT_WITCH_PASS_POISON' })
+}
+
+async function debugNight(scenario: string) {
+  await http.post('/debug/night/scenario', { scenario })
+}
+async function debugNightAdvance() {
+  await http.post('/debug/night/advance')
 }
 
 async function debugStartGame() {
@@ -394,11 +448,6 @@ onUnmounted(() => {
 }
 
 .dead-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: 1.5rem;
   color: var(--muted);
 }

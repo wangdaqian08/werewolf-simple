@@ -87,6 +87,7 @@ export interface GameState {
   roleReveal?: RoleRevealState
   sheriffElection?: SheriffElectionState
   dayPhase?: DayPhaseState
+  nightPhase?: NightPhaseState
 }
 
 export interface GameEvent {
@@ -174,6 +175,50 @@ export interface DayPhaseState {
   canVote: boolean
   myVote?: string
   selectedPlayerId?: string
+}
+
+// ── Night Phase ───────────────────────────────────────────────────────────────
+
+export type NightSubPhase =
+  | 'WEREWOLF_PICK' // werewolves choosing attack target
+  | 'SEER_PICK' // seer choosing a player to check
+  | 'SEER_RESULT' // seer sees the check result
+  | 'WITCH_ACT' // witch decides antidote / poison
+  | 'GUARD_PICK' // guard chooses a player to protect
+  | 'WAITING' // villagers / hunters / dead — eyes closed
+
+export interface SeerHistoryEntry {
+  round: number
+  nickname: string
+  isWerewolf: boolean
+}
+
+export interface NightPhaseState {
+  subPhase: NightSubPhase
+  dayNumber: number
+  // Werewolf
+  teammates?: string[] // teammate nicknames (only sent to werewolves)
+  selectedTargetId?: string // player I've tapped as my target
+  // Seer result
+  seerResult?: {
+    checkedPlayerId: string
+    checkedNickname: string
+    checkedSeatIndex: number
+    isWerewolf: boolean
+    history: SeerHistoryEntry[]
+  }
+  // Witch
+  attackedPlayerId?: string // who the wolves attacked (shown to witch)
+  attackedNickname?: string
+  attackedSeatIndex?: number
+  hasAntidote?: boolean
+  hasPoison?: boolean
+  antidoteDecided?: boolean // true once witch made any antidote decision
+  antidoteUsed?: boolean // true if she actually used it
+  poisonDecided?: boolean // true once witch made any poison decision
+  poisonUsed?: boolean // true if she actually used it
+  // Guard
+  previousGuardTargetId?: string // cannot protect the same player two nights in a row
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

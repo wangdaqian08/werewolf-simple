@@ -44,6 +44,7 @@ type SlotVariant =
   | 'dead'
   | 'killed'
   | 'selected'
+  | 'teammate' // night-mode: werewolf teammate (styled blue by consumer)
 
 const props = defineProps<{
   seat: number
@@ -75,6 +76,8 @@ const variantClass = computed(() => {
       return 'slot-killed'
     case 'selected':
       return 'slot-selected'
+    case 'teammate':
+      return 'slot-teammate'
     default:
       return 'slot-empty'
   }
@@ -159,6 +162,11 @@ const variantClass = computed(() => {
   border: 2px solid var(--gold);
   cursor: pointer;
 }
+.slot-teammate {
+  background: var(--card);
+  border: 1px solid var(--border-l);
+  cursor: pointer;
+}
 
 /* ── Game mode text ── */
 .seat-num {
@@ -210,5 +218,15 @@ const variantClass = computed(() => {
   font-size: 0.875rem;
   font-weight: 600;
   color: inherit;
+}
+
+/* ── Overlay slot structural base ── */
+:slotted(.slot-overlay) {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
 }
 </style>
