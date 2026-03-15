@@ -214,78 +214,15 @@ function onTap(player: GamePlayer) {
   background: var(--bg);
 }
 
-/* Header */
-.day-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.25rem 0.25rem;
-}
-
-.day-pill {
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  padding: 0.3125rem 0.75rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--muted);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-}
-
-.day-timer {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1;
-}
-
-/* Banner area — fixed height so grid doesn't shift */
-.banner-area {
-  min-height: 2.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0 1rem;
-  justify-content: center;
-}
-
-/* Banners */
-.banner {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
-}
-
 .banner-info {
   background: rgba(138, 122, 101, 0.08);
   border: 1px solid var(--border-l);
-}
-
-.banner-kill {
-  background: rgba(181, 37, 26, 0.06);
-  border-left: 3px solid var(--red);
-  border-radius: 0 0.375rem 0.375rem 0;
 }
 
 .banner-icon {
   font-size: 1rem;
   color: var(--muted);
   flex-shrink: 0;
-}
-
-.banner-avatar {
-  font-size: 1.25rem;
-  flex-shrink: 0;
-}
-
-.banner-title {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text);
 }
 
 .banner-kill-text {
@@ -306,64 +243,10 @@ function onTap(player: GamePlayer) {
   font-weight: 600;
 }
 
-.banner-sub {
-  font-size: 0.625rem;
-  color: var(--muted);
-  margin-top: 0.125rem;
-}
-
-/* Player grid: 4 columns, room-mode cards */
-.player-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  column-gap: 0.5rem;
-  row-gap: 0.375rem;
-  align-content: start;
-  padding: 0.375rem 0.875rem;
-  flex: 1;
-}
-
-.dead-overlay {
-  font-size: 1.25rem;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.5);
-}
-
-/* Footer */
-.day-footer {
-  padding: 0.75rem 1rem 2.5rem;
-  border-top: 1px solid var(--border-l);
-  background: var(--paper);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.footer-hint {
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.75rem;
-  margin: 0;
-  padding: 0.375rem 0;
-}
-
 .footer-hint-sm {
   text-align: center;
   color: var(--muted);
   font-size: 0.6875rem;
   margin: 0;
-}
-
-.vote-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.vote-btn {
-  flex: 1;
-}
-
-.skip-btn {
-  flex: 0 0 4.5rem;
 }
 </style>

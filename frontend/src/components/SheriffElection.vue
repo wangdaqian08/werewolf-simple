@@ -747,114 +747,13 @@ function speakerLabel(uid: string, idx: number) {
   box-sizing: border-box;
 }
 
-.tally-winner {
-  color: var(--red);
-}
-
-.tally-muted {
-  color: var(--muted);
-}
-
 .tally-abstain {
   color: var(--muted);
 }
 
-/* Vote columns */
-.vote-columns {
-  display: flex;
-  gap: 0.5rem;
-  width: 100%;
-  align-items: flex-start;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-  flex: 1;
-}
-
-.vote-col {
-  flex: 0 0 6.5rem;
-  border: 1px solid var(--border-l);
-  border-radius: 0.5rem;
-  overflow: hidden;
-  background: var(--paper);
-  align-self: stretch;
-}
-
-.vote-col-winner {
-  border-color: rgba(181, 37, 26, 0.3);
-}
-
+/* Vote columns — shared styles in game.css; only abstain variant is local */
 .vote-col-abstain {
   opacity: 0.7;
-}
-
-.vote-col-head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0.75rem 0.25rem 0.5rem;
-  gap: 0.125rem;
-  border-bottom: 1px solid var(--border-l);
-  background: rgba(0, 0, 0, 0.02);
-}
-
-.vote-col-avatar {
-  font-size: 1.25rem;
-  line-height: 1;
-}
-
-.vote-col-cname {
-  font-size: 0.6rem;
-  color: var(--muted);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.vote-col-count {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.vote-col-body {
-  display: flex;
-  flex-direction: column;
-}
-
-.vcol-row {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.5rem 0.375rem;
-  border-bottom: 1px solid var(--border-l);
-}
-
-.vcol-row:last-child {
-  border-bottom: none;
-}
-
-.vcol-avatar {
-  font-size: 0.875rem;
-  width: 1.25rem;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.vcol-seat {
-  font-size: 0.5625rem;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
-.vcol-name {
-  font-size: 0.625rem;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Utilities */

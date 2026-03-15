@@ -516,40 +516,6 @@ function onBadgeTap(player: GamePlayer) {
   background: var(--bg);
 }
 
-/* Header — same as DayPhase */
-.day-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.25rem 0.5rem;
-}
-
-.day-pill {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  padding: 0.3125rem 0.75rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--muted);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-}
-
-.day-pill-sep {
-  color: var(--border);
-}
-
-.day-timer {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1;
-}
-
 /* SunArc placeholder — keeps layout stable on screens without SunArc */
 .sun-arc-placeholder {
   width: 100%;
@@ -645,132 +611,6 @@ function onBadgeTap(player: GamePlayer) {
   color: var(--muted);
 }
 
-/* Vote columns */
-.vote-columns {
-  display: flex;
-  gap: 0.5rem;
-  width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.vote-columns::-webkit-scrollbar {
-  display: none;
-}
-
-.vote-col {
-  flex: 0 0 6rem;
-  border: 1px solid var(--border-l);
-  border-radius: 0.5rem;
-  overflow: hidden;
-  background: var(--paper);
-  align-self: stretch;
-}
-
-.vote-col-winner {
-  border-color: rgba(181, 37, 26, 0.3);
-}
-
-.vote-col-head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.125rem;
-  padding: 0.375rem 0.25rem;
-  background: rgba(0, 0, 0, 0.02);
-}
-
-.vote-col-avatar {
-  font-size: 1.25rem;
-  line-height: 1;
-}
-
-.vote-col-cname {
-  font-size: 0.6rem;
-  color: var(--muted);
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.vote-col-count {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.tally-winner {
-  color: var(--red);
-}
-
-.tally-muted {
-  color: var(--muted);
-}
-
-.vote-col-body {
-  display: flex;
-  flex-direction: column;
-}
-
-.vcol-row {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.375rem;
-  border-bottom: 1px solid var(--border-l);
-}
-
-.vcol-row:last-child {
-  border-bottom: none;
-}
-
-.vcol-avatar {
-  font-size: 0.875rem;
-  flex-shrink: 0;
-}
-
-.vcol-seat {
-  font-size: 0.625rem;
-  color: var(--muted);
-  flex-shrink: 0;
-  min-width: 0.875rem;
-}
-
-.vcol-name {
-  font-size: 0.6875rem;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Banner area — same as DayPhase, fixed height so grid doesn't shift */
-.banner-area {
-  min-height: 2.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0 1rem 0.5rem;
-  justify-content: center;
-}
-
-.banner {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
-}
-
-.banner-kill {
-  background: rgba(181, 37, 26, 0.06);
-  border-left: 3px solid var(--red);
-  border-radius: 0 0.375rem 0.375rem 0;
-}
-
 .banner-gold {
   background: rgba(160, 120, 48, 0.06);
   border-left: 3px solid var(--gold);
@@ -789,40 +629,6 @@ function onBadgeTap(player: GamePlayer) {
   border-left: 3px solid var(--green);
   border-radius: 0 0.375rem 0.375rem 0;
   color: var(--green);
-}
-
-.banner-avatar {
-  font-size: 1.25rem;
-  flex-shrink: 0;
-}
-
-.banner-title {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text);
-}
-
-.banner-sub {
-  font-size: 0.625rem;
-  color: var(--muted);
-  margin-top: 0.125rem;
-}
-
-/* Player grid */
-.player-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  column-gap: 0.5rem;
-  row-gap: 0.375rem;
-  align-content: start;
-  padding: 0 0.875rem 0.5rem;
-  flex: 1;
-}
-
-.dead-overlay {
-  font-size: 1.25rem;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.5);
 }
 
 /* Sheriff pin — absolutely positioned in top-right of card */
@@ -844,29 +650,8 @@ function onBadgeTap(player: GamePlayer) {
   gap: 0.5rem;
 }
 
-.vote-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.vote-btn {
-  flex: 1;
-}
-
-.skip-btn {
-  flex: 0 0 4.5rem;
-}
-
 .reveal-btn {
   width: 100%;
-}
-
-.footer-hint {
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.75rem;
-  margin: 0;
-  padding: 0.375rem 0;
 }
 
 /* Reveal countdown */
