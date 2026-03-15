@@ -187,12 +187,20 @@ export type VotingSubPhase =
   | 'BADGE_HANDOVER'
   | 'BADGE_RECEIVED'
 
+export interface VoteVoter {
+  userId: string
+  nickname: string
+  avatar?: string
+  seatIndex: number
+}
+
 export interface VoteTally {
   playerId: string
   nickname: string
   seatIndex: number
   avatar?: string
   votes: number
+  voters?: VoteVoter[]
 }
 
 export interface VotingState {

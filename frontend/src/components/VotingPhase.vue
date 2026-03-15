@@ -3,50 +3,67 @@
     <!-- ── VOTING screen (includes VOTE_RESULT — merged) ── -->
     <template v-if="isVotingScreen">
       <header class="day-header">
-        <div class="day-pill">第 {{ votingPhase.dayNumber }} 天 · Day {{ votingPhase.dayNumber }}</div>
+        <div class="day-pill">
+          第 {{ votingPhase.dayNumber }} 天
+          <span class="day-pill-sep">·</span>
+          投票阶段
+        </div>
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
       <SunArc :phase-deadline="votingPhase.phaseDeadline" :phase-started="votingPhase.phaseStarted" />
 
-      <!-- Tally / vote-count row -->
-      <div class="tally-row">
-        <template v-if="!isRevealed">
-          <div class="tally-chip tally-chip-count">
-            <span class="tally-votes">{{ votingPhase.votesSubmitted ?? 0 }}</span>
-            <span class="tally-sep">/</span>
-            <span class="tally-total">{{ votingPhase.totalVoters ?? '?' }}</span>
-            <span class="tally-label">已投票 · voted</span>
+      <!-- Before reveal: simple vote count -->
+      <div v-if="!isRevealed" class="vote-count-bar">
+        <div class="tally-chip tally-chip-count">
+          <span class="tally-votes">{{ votingPhase.votesSubmitted ?? 0 }}</span>
+          <span class="tally-sep">/</span>
+          <span class="tally-total">{{ votingPhase.totalVoters ?? '?' }}</span>
+          <span class="tally-label">已投票 · voted</span>
+        </div>
+      </div>
+
+      <!-- After reveal: vote columns showing who voted for whom -->
+      <div v-else class="vote-columns-wrap">
+        <!-- Eliminated player banner -->
+        <div v-if="votingPhase.eliminatedPlayerId" class="elim-banner">
+          <span class="elim-banner-avatar">{{ votingPhase.eliminatedAvatar ?? '💀' }}</span>
+          <div class="elim-banner-body">
+            <span class="elim-banner-tag">出局 · ELIMINATED</span>
+            <span class="elim-banner-name">
+              {{ votingPhase.eliminatedNickname }} · 座位 {{ votingPhase.eliminatedSeatIndex }}
+            </span>
+            <span v-if="votingPhase.eliminatedRole" class="elim-banner-role">
+              {{ roleDisplay(votingPhase.eliminatedRole) }}
+            </span>
           </div>
-        </template>
-        <template v-else>
+        </div>
+
+        <div class="vote-columns">
           <div
             v-for="(entry, i) in sortedTally"
             :key="entry.playerId"
-            class="tally-chip"
-            :class="{ 'tally-chip-top': i === 0 }"
+            class="vote-col"
+            :class="{ 'vote-col-winner': i === 0 }"
           >
-            <span class="tally-votes">{{ entry.votes }}票</span>
-            <span class="tally-dot">·</span>
-            <span class="tally-name">{{ entry.nickname }}</span>
+            <div class="vote-col-head" :class="{ 'tally-chip-top': i === 0 }">
+              <div class="vote-col-avatar">{{ entry.avatar ?? '😊' }}</div>
+              <div class="vote-col-cname">{{ entry.nickname }}</div>
+              <div
+                class="vote-col-count"
+                :class="i === 0 ? 'tally-winner' : 'tally-muted'"
+              >
+                {{ entry.votes }}
+              </div>
+            </div>
+            <div class="vote-col-body">
+              <div v-for="v in entry.voters" :key="v.userId" class="vcol-row">
+                <span class="vcol-avatar">{{ v.avatar ?? '😊' }}</span>
+                <span class="vcol-seat">{{ v.seatIndex }}</span>
+                <span class="vcol-name">{{ v.nickname }}</span>
+              </div>
+            </div>
           </div>
-        </template>
-      </div>
-
-      <!-- Eliminated player card — shown after tally revealed -->
-      <div
-        v-if="isRevealed && votingPhase.eliminatedPlayerId"
-        class="elim-banner"
-      >
-        <span class="elim-banner-avatar">{{ votingPhase.eliminatedAvatar ?? '💀' }}</span>
-        <div class="elim-banner-body">
-          <span class="elim-banner-tag">出局 · ELIMINATED</span>
-          <span class="elim-banner-name">
-            {{ votingPhase.eliminatedNickname }} · 座位 {{ votingPhase.eliminatedSeatIndex }}
-          </span>
-          <span v-if="votingPhase.eliminatedRole" class="elim-banner-role">
-            {{ roleDisplay(votingPhase.eliminatedRole) }}
-          </span>
         </div>
       </div>
 
@@ -153,9 +170,15 @@
     <!-- ── HUNTER_SHOOT screen ── -->
     <template v-else-if="votingPhase.subPhase === 'HUNTER_SHOOT'">
       <header class="day-header">
-        <div class="day-pill">第 {{ votingPhase.dayNumber }} 天 · Day {{ votingPhase.dayNumber }}</div>
+        <div class="day-pill">
+          第 {{ votingPhase.dayNumber }} 天
+          <span class="day-pill-sep">·</span>
+          猎人 · Hunter
+        </div>
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
+
+      <div class="sun-arc-placeholder" />
 
       <div class="banner-area">
         <div class="banner banner-kill">
@@ -204,23 +227,33 @@
     <!-- ── BADGE_HANDOVER screen (includes BADGE_RECEIVED — merged) ── -->
     <template v-else-if="isBadgeScreen">
       <header class="day-header">
-        <div class="day-pill">第 {{ votingPhase.dayNumber }} 天 · Day {{ votingPhase.dayNumber }}</div>
+        <div class="day-pill">
+          第 {{ votingPhase.dayNumber }} 天
+          <span class="day-pill-sep">·</span>
+          警徽 · Badge
+        </div>
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
+      <div class="sun-arc-placeholder" />
+
       <!-- Destroyed message replaces banner when badge is burned -->
-      <div v-if="votingPhase.badgeDestroyed" class="badge-status-msg badge-status-burned">
-        <span class="badge-status-icon">⚔️</span>
-        <span>警徽已销毁 · Badge Destroyed</span>
-      </div>
-      <!-- Passed message when badge is given -->
-      <div v-else-if="votingPhase.newSheriffId" class="badge-status-msg badge-status-passed">
-        <span class="badge-status-icon">⭐</span>
-        <span>警徽已移交给 {{ votingPhase.newSheriffNickname }} · Badge Passed</span>
-      </div>
-      <!-- Default banner when choosing -->
-      <div v-else class="banner-area">
-        <div class="banner banner-gold">
+      <div class="banner-area">
+        <div v-if="votingPhase.badgeDestroyed" class="banner badge-status-burned">
+          <span class="banner-avatar">⚔️</span>
+          <div>
+            <div class="banner-title">警徽已销毁 · Badge Destroyed</div>
+          </div>
+        </div>
+        <div v-else-if="votingPhase.newSheriffId" class="banner badge-status-passed">
+          <span class="banner-avatar">⭐</span>
+          <div>
+            <div class="banner-title">
+              警徽已移交给 {{ votingPhase.newSheriffNickname }} · Badge Passed
+            </div>
+          </div>
+        </div>
+        <div v-else class="banner banner-gold">
           <span class="banner-avatar">⭐</span>
           <div>
             <div class="banner-title">你已出局 · Eliminated</div>
@@ -490,10 +523,13 @@ function onBadgeTap(player: GamePlayer) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1.25rem 0.25rem;
+  padding: 0.75rem 1.25rem 0.5rem;
 }
 
 .day-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 0.375rem;
@@ -504,6 +540,10 @@ function onBadgeTap(player: GamePlayer) {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
+.day-pill-sep {
+  color: var(--border);
+}
+
 .day-timer {
   font-family: 'Noto Serif SC', serif;
   font-size: 2rem;
@@ -512,47 +552,39 @@ function onBadgeTap(player: GamePlayer) {
   line-height: 1;
 }
 
-/* Tally row */
-.tally-row {
-  display: flex;
-  gap: 0.375rem;
-  padding: 0.375rem 1rem;
-  overflow-x: auto;
-  min-height: 2rem;
-  scrollbar-width: none;
+/* SunArc placeholder — keeps layout stable on screens without SunArc */
+.sun-arc-placeholder {
+  width: 100%;
+  height: 3.5rem;
+  flex-shrink: 0;
 }
 
-.tally-row::-webkit-scrollbar {
-  display: none;
+/* Before-reveal: simple vote count bar */
+.vote-count-bar {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem 1rem 0.5rem;
+  min-height: 2.5rem;
 }
 
 .tally-chip {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  background: #fff;
+  background: var(--paper);
   border: 1px solid var(--border-l);
   border-radius: 1rem;
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
   color: var(--muted);
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .tally-chip-count {
   gap: 0.375rem;
 }
 
-.tally-chip-top {
-  background: rgba(181, 37, 26, 0.06);
-  border-color: var(--red);
-  color: var(--red);
-  font-weight: 600;
-}
-
-.tally-sep,
-.tally-dot {
+.tally-sep {
   color: var(--border);
 }
 
@@ -565,12 +597,19 @@ function onBadgeTap(player: GamePlayer) {
   color: var(--muted);
 }
 
-/* Eliminated banner (inline, between tally and grid) */
+/* After-reveal: vote columns (who voted for whom) */
+.vote-columns-wrap {
+  padding: 0 1rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Eliminated player banner (shown above vote columns after reveal) */
 .elim-banner {
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  margin: 0 1rem 0.25rem;
   padding: 0.5rem 0.75rem;
   background: rgba(181, 37, 26, 0.06);
   border-left: 3px solid var(--red);
@@ -608,44 +647,115 @@ function onBadgeTap(player: GamePlayer) {
   color: var(--muted);
 }
 
-/* Badge status messages (replaces banner after action) */
-.badge-status-msg {
+/* Vote columns */
+.vote-columns {
   display: flex;
-  align-items: center;
   gap: 0.5rem;
-  margin: 0 1rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.badge-status-burned {
-  background: rgba(138, 122, 101, 0.1);
-  border-left: 3px solid var(--muted);
-  border-radius: 0 0.375rem 0.375rem 0;
+.vote-columns::-webkit-scrollbar {
+  display: none;
+}
+
+.vote-col {
+  flex: 0 0 6rem;
+  border: 1px solid var(--border-l);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--paper);
+  align-self: stretch;
+}
+
+.vote-col-winner {
+  border-color: rgba(181, 37, 26, 0.3);
+}
+
+.vote-col-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.375rem 0.25rem;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.vote-col-avatar {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.vote-col-cname {
+  font-size: 0.6rem;
+  color: var(--muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.vote-col-count {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tally-winner {
+  color: var(--red);
+}
+
+.tally-muted {
   color: var(--muted);
 }
 
-.badge-status-passed {
-  background: rgba(45, 106, 63, 0.08);
-  border-left: 3px solid var(--green);
-  border-radius: 0 0.375rem 0.375rem 0;
-  color: var(--green);
+.vote-col-body {
+  display: flex;
+  flex-direction: column;
 }
 
-.badge-status-icon {
-  font-size: 1rem;
+.vcol-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.375rem;
+  border-bottom: 1px solid var(--border-l);
+}
+
+.vcol-row:last-child {
+  border-bottom: none;
+}
+
+.vcol-avatar {
+  font-size: 0.875rem;
   flex-shrink: 0;
 }
 
-/* Banner area — same as DayPhase */
+.vcol-seat {
+  font-size: 0.625rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  min-width: 0.875rem;
+}
+
+.vcol-name {
+  font-size: 0.6875rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Banner area — same as DayPhase, fixed height so grid doesn't shift */
 .banner-area {
   min-height: 2.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  padding: 0 1rem;
+  padding: 0 1rem 0.5rem;
   justify-content: center;
 }
 
@@ -667,6 +777,20 @@ function onBadgeTap(player: GamePlayer) {
   background: rgba(160, 120, 48, 0.06);
   border-left: 3px solid var(--gold);
   border-radius: 0 0.375rem 0.375rem 0;
+}
+
+.badge-status-burned {
+  background: rgba(138, 122, 101, 0.1);
+  border-left: 3px solid var(--muted);
+  border-radius: 0 0.375rem 0.375rem 0;
+  color: var(--muted);
+}
+
+.badge-status-passed {
+  background: rgba(45, 106, 63, 0.08);
+  border-left: 3px solid var(--green);
+  border-radius: 0 0.375rem 0.375rem 0;
+  color: var(--green);
 }
 
 .banner-avatar {
@@ -693,7 +817,7 @@ function onBadgeTap(player: GamePlayer) {
   column-gap: 0.5rem;
   row-gap: 0.375rem;
   align-content: start;
-  padding: 0.375rem 0.875rem;
+  padding: 0 0.875rem 0.5rem;
   flex: 1;
 }
 

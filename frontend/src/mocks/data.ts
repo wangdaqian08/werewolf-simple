@@ -17,6 +17,7 @@ import type {
   RoleRevealState,
   SheriffElectionState,
   VoteTally,
+  VoteVoter,
   VotingState,
 } from '@/types'
 
@@ -479,9 +480,43 @@ export function makeNightScenario(
 // Tom (u6, seat 6) is eliminated in all voting scenarios.
 
 const MOCK_VOTE_TALLY: VoteTally[] = [
-  { playerId: 'u6', nickname: 'Tom', seatIndex: 6, avatar: '🐯', votes: 5 },
-  { playerId: 'u2', nickname: 'Alice', seatIndex: 2, avatar: '😊', votes: 3 },
-  { playerId: 'u3', nickname: 'Bob', seatIndex: 3, avatar: '🎭', votes: 2 },
+  {
+    playerId: 'u6',
+    nickname: 'Tom',
+    seatIndex: 6,
+    avatar: '🐯',
+    votes: 5,
+    voters: [
+      { userId: 'u1', nickname: 'You', avatar: '⭐', seatIndex: 1 } satisfies VoteVoter,
+      { userId: 'u5', nickname: 'Dave', avatar: '🌸', seatIndex: 5 } satisfies VoteVoter,
+      { userId: 'u7', nickname: 'Frank', avatar: '🎸', seatIndex: 7 } satisfies VoteVoter,
+      { userId: 'u8', nickname: 'Grace', avatar: '🌺', seatIndex: 8 } satisfies VoteVoter,
+      { userId: 'u9', nickname: 'Hank', avatar: '🐯', seatIndex: 9 } satisfies VoteVoter,
+    ],
+  },
+  {
+    playerId: 'u2',
+    nickname: 'Alice',
+    seatIndex: 2,
+    avatar: '😊',
+    votes: 3,
+    voters: [
+      { userId: 'u3', nickname: 'Bob', avatar: '🎭', seatIndex: 3 } satisfies VoteVoter,
+      { userId: 'u4', nickname: 'Carol', avatar: '🌙', seatIndex: 4 } satisfies VoteVoter,
+      { userId: 'u6', nickname: 'Eve', avatar: '🦊', seatIndex: 6 } satisfies VoteVoter,
+    ],
+  },
+  {
+    playerId: 'u3',
+    nickname: 'Bob',
+    seatIndex: 3,
+    avatar: '🎭',
+    votes: 2,
+    voters: [
+      { userId: 'u2', nickname: 'Alice', avatar: '😊', seatIndex: 2 } satisfies VoteVoter,
+      { userId: 'u9', nickname: 'Hank', avatar: '🐯', seatIndex: 9 } satisfies VoteVoter,
+    ],
+  },
 ]
 
 export function makeVotingScenario(
