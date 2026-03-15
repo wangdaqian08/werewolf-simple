@@ -48,7 +48,13 @@ export interface JoinRoomRequest {
 
 // ── Game ──────────────────────────────────────────────────────────────────────
 
-export type GamePhase = 'SHERIFF_ELECTION' | 'DAY' | 'VOTING' | 'NIGHT' | 'GAME_OVER'
+export type GamePhase =
+  | 'ROLE_REVEAL'
+  | 'SHERIFF_ELECTION'
+  | 'DAY'
+  | 'VOTING'
+  | 'NIGHT'
+  | 'GAME_OVER'
 
 export type PlayerRole = 'WEREWOLF' | 'VILLAGER' | 'SEER' | 'WITCH' | 'HUNTER' | 'GUARD' | 'IDIOT'
 
@@ -62,6 +68,12 @@ export interface GamePlayer {
   role?: PlayerRole // only revealed to self, or at game end
 }
 
+export interface RoleRevealState {
+  confirmedCount: number
+  totalCount: number
+  teammates?: string[] // werewolf only: teammate nicknames
+}
+
 export interface GameState {
   gameId: string
   phase: GamePhase
@@ -72,6 +84,7 @@ export interface GameState {
   hostId?: string // userId of the room host
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
   events: GameEvent[]
+  roleReveal?: RoleRevealState
   sheriffElection?: SheriffElectionState
   dayPhase?: DayPhaseState
 }

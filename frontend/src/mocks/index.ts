@@ -15,6 +15,7 @@ import {
   makeDayHidden,
   makeDayRevealed,
   makeDayScenario,
+  makeRoleRevealState,
   MOCK_DAY_SCENARIO_HOST_HIDDEN,
   MOCK_DAY_SCENARIO_HOST_REVEALED,
   MOCK_DAY_SCENARIO_DEAD,
@@ -40,6 +41,7 @@ const EXTRA_PLAYERS: { userId: string; nickname: string; avatar: string }[] = [
 
 // Mutable game state for debug endpoints
 let mockGameState: GameState = { ...MOCK_GAME_STATE }
+let confirmedUserIds = new Set<string>()
 
 const SHERIFF_PRESETS: Record<string, SheriffElectionState> = {
   SIGNUP: MOCK_SHERIFF_SIGNUP,
@@ -109,18 +111,35 @@ export function setupMocks() {
   mock.onGet(`/room/${MOCK_ROOM_AS_GUEST.roomId}`).reply(200, MOCK_ROOM_AS_GUEST)
   mock.onGet('/room/list').reply(200, [MOCK_ROOM_AS_HOST])
 
-  // ── Debug: start game (fires GAME_STARTED on room topic) ─────────────────────
+  // ── Debug: start game (fires GAME_STARTED on room topic, then ROLE_REVEAL) ───
   mock.onPost('/debug/game/start').reply(() => {
+    confirmedUserIds = new Set()
     mockGameState = {
       ...MOCK_GAME_STATE,
       hostId: mockHostId,
-      phase: 'SHERIFF_ELECTION',
-      sheriffElection: { ...MOCK_SHERIFF_SIGNUP },
+      phase: 'ROLE_REVEAL',
+      myRole: 'SEER',
+      roleReveal: makeRoleRevealState(mockPlayers.length),
     }
     mockStompClient.fireNow(`/topic/room/${mockRoomId}`, {
       type: 'GAME_STARTED',
       payload: { gameId: mockGameState.gameId },
     })
+    // Small delay then push initial game state so GameView receives ROLE_REVEAL
+    setTimeout(() => pushGameStateUpdate(), 100)
+    return [200]
+  })
+
+  // ── Debug: skip role reveal → Sheriff Election ────────────────────────────────
+  mock.onPost('/debug/role/skip').reply(() => {
+    confirmedUserIds = new Set()
+    mockGameState = {
+      ...mockGameState,
+      phase: 'SHERIFF_ELECTION',
+      roleReveal: undefined,
+      sheriffElection: { ...MOCK_SHERIFF_SIGNUP },
+    }
+    pushGameStateUpdate()
     return [200]
   })
 
@@ -264,7 +283,30 @@ export function setupMocks() {
   mock.onGet(/\/game\/result/).reply((_config) => [200, MOCK_GAME_RESULT])
   mock.onPost('/game/action').reply((config) => {
     const { actionType, targetId } = JSON.parse(config.data ?? '{}')
-    if (mockGameState.phase === 'SHERIFF_ELECTION' && mockGameState.sheriffElection) {
+    if (mockGameState.phase === 'ROLE_REVEAL') {
+      if (actionType === 'ROLE_CONFIRM') {
+        const userId = MOCK_LOGIN.user.userId
+        if (!confirmedUserIds.has(userId)) {
+          confirmedUserIds.add(userId)
+          const total = mockGameState.roleReveal?.totalCount ?? 1
+          const confirmed = confirmedUserIds.size
+          mockGameState = {
+            ...mockGameState,
+            roleReveal: { ...mockGameState.roleReveal!, confirmedCount: confirmed },
+          }
+          if (confirmed >= total) {
+            // All confirmed → advance to Sheriff Election
+            mockGameState = {
+              ...mockGameState,
+              phase: 'SHERIFF_ELECTION',
+              roleReveal: undefined,
+              sheriffElection: { ...MOCK_SHERIFF_SIGNUP },
+            }
+          }
+          pushGameStateUpdate()
+        }
+      }
+    } else if (mockGameState.phase === 'SHERIFF_ELECTION' && mockGameState.sheriffElection) {
       const e = mockGameState.sheriffElection
       if (actionType === 'SHERIFF_RUN') {
         if (!e.candidates.some((c) => c.userId === MOCK_LOGIN.user.userId)) {
@@ -363,12 +405,34 @@ export function setupMocks() {
     gameVoteEvent.payload,
   )
 
+  // ── window.__debug console helper ────────────────────────────────────────────
+  ;(globalThis as Record<string, unknown>).__debug = {
+    // Room
+    ready: (userId: string, ready = true) => http.post('/debug/ready', { userId, ready }),
+    addPlayer: () => http.post('/debug/room/add-player'),
+
+    // Game start
+    gameStart: () => http.post('/debug/game/start'),
+
+    // Role Reveal
+    roleSkip: () => http.post('/debug/role/skip'),
+
+    // Sheriff Election
+    sheriffPhase: (preset: string) => http.post('/debug/sheriff/phase', { preset }),
+    sheriffCandidate: (userId: string, nickname: string, avatar: string) =>
+      http.post('/debug/sheriff/candidate', { userId, nickname, avatar, action: 'RUN' }),
+    sheriffRemove: (userId: string) =>
+      http.post('/debug/sheriff/candidate', { userId, action: 'REMOVE' }),
+    sheriffExit: () => http.post('/debug/sheriff/exit'),
+
+    // Day Phase
+    dayScenario: (scenario: string) => http.post('/debug/day/scenario', { scenario }),
+    dayPhase: (preset: string) => http.post('/debug/day/phase', { preset }),
+    dayReveal: () => http.post('/debug/day/reveal'),
+  }
+
   console.warn('[mock] active — set VITE_MOCK=false in .env.development to use real backend')
-  console.warn(
-    '[mock] debug: POST /debug/ready { userId, ready } to toggle player ready status\n' +
-      '  players: ' +
-      MOCK_ROOM_AS_HOST.players.map((p) => `${p.userId} (${p.nickname})`).join(', '),
-  )
+  console.warn('[mock] __debug helper available — type __debug in the console to see all commands')
 }
 
 export { mockStompClient }

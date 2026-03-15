@@ -1,8 +1,28 @@
 <template>
   <div :class="{ 'night-mode': isNight }" class="game-wrap">
+    <!-- Role Reveal phase -->
+    <template v-if="gameStore.state?.phase === 'ROLE_REVEAL' && gameStore.state?.myRole">
+      <RoleRevealCard
+        v-if="!hasConfirmedRole"
+        :role="gameStore.state.myRole"
+        :teammates="gameStore.state.roleReveal?.teammates"
+        @confirm="handleRoleConfirm"
+      />
+      <div v-else class="waiting-screen">
+        <div class="waiting-icon">⏳</div>
+        <div class="waiting-title">等待其他玩家确认</div>
+        <div class="waiting-subtitle">Waiting for others…</div>
+        <div class="waiting-count">
+          {{ gameStore.state.roleReveal?.confirmedCount ?? 1 }} /
+          {{ gameStore.state.roleReveal?.totalCount ?? '?' }}
+          confirmed
+        </div>
+      </div>
+    </template>
+
     <!-- Sheriff Election phase -->
     <template
-      v-if="gameStore.state?.phase === 'SHERIFF_ELECTION' && gameStore.state?.sheriffElection"
+      v-else-if="gameStore.state?.phase === 'SHERIFF_ELECTION' && gameStore.state?.sheriffElection"
     >
       <SheriffElection
         :election="gameStore.state.sheriffElection"
@@ -75,7 +95,12 @@
 
     <!-- Debug panel (mock mode only) -->
     <div v-if="isMock" class="debug-panel">
-      <div class="debug-title">🛠 Debug — Day Scenarios</div>
+      <div class="debug-title">🛠 Debug — Role Reveal</div>
+      <div class="debug-btns">
+        <button class="debug-btn" @click="debugStartGame">Role Reveal</button>
+        <button class="debug-btn" @click="debugSkipRole">Skip → Sheriff</button>
+      </div>
+      <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Day Scenarios</div>
       <div class="debug-btns">
         <button class="debug-btn" @click="debugScenario('HOST_HIDDEN')">Host·Hidden</button>
         <button class="debug-btn" @click="debugScenario('HOST_REVEALED')">Host·Revealed</button>
@@ -119,7 +144,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { useGameStore } from '@/stores/gameStore'
@@ -128,6 +153,7 @@ import { gameService } from '@/services/gameService'
 import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
 import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
+import RoleRevealCard from '@/components/RoleRevealCard.vue'
 import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
@@ -140,6 +166,8 @@ const gameStore = useGameStore()
 const roomStore = useRoomStore()
 
 const isMock = import.meta.env.VITE_MOCK === 'true'
+const hasConfirmedRole = ref(false)
+
 const isHost = computed(() => {
   const hostId = gameStore.state?.hostId ?? roomStore.room?.hostId
   return hostId === userStore.userId
@@ -189,6 +217,18 @@ function playerSlotVariant(player: GamePlayer) {
   return 'alive' as const
 }
 
+async function handleRoleConfirm() {
+  hasConfirmedRole.value = true
+  await gameService.submitAction({ actionType: 'ROLE_CONFIRM' })
+}
+
+watch(
+  () => gameStore.state?.phase,
+  (phase) => {
+    if (phase !== 'ROLE_REVEAL') hasConfirmedRole.value = false
+  },
+)
+
 async function handleSheriffRun() {
   await gameService.submitAction({ actionType: 'SHERIFF_RUN' })
 }
@@ -226,6 +266,13 @@ async function handleDaySkip() {
 }
 async function handleDaySelectPlayer(userId: string) {
   await gameService.submitAction({ actionType: 'SELECT_PLAYER', targetId: userId })
+}
+
+async function debugStartGame() {
+  await http.post('/debug/game/start')
+}
+async function debugSkipRole() {
+  await http.post('/debug/role/skip')
 }
 
 async function debugScenario(scenario: string) {
@@ -389,6 +436,43 @@ onUnmounted(() => {
   color: var(--muted);
   font-size: 0.875rem;
   margin: 0;
+}
+
+/* Waiting screen (after role confirmed) */
+.waiting-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  gap: 0.75rem;
+  background: var(--bg);
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.waiting-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.waiting-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.waiting-subtitle {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.waiting-count {
+  font-size: 1rem;
+  color: var(--gold);
+  font-weight: 500;
+  margin-top: 0.5rem;
 }
 
 /* Debug panel */
