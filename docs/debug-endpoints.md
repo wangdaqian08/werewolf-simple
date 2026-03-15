@@ -180,6 +180,44 @@ Transitions `dayPhase.subPhase` from `RESULT_HIDDEN` → `RESULT_REVEALED`. Kill
 
 ---
 
+## Night Phase
+
+### Load a scenario
+
+**UI buttons:** `Werewolf` · `Seer: Pick` · `Seer: Result` · `Witch` · `Guard` · `Waiting`
+
+```js
+__debug.nightScenario("WEREWOLF")     // you are a werewolf — pick an attack target
+__debug.nightScenario("SEER_PICK")    // you are the seer — pick a player to check
+__debug.nightScenario("SEER_RESULT")  // seer result: 6号·Tom is a werewolf
+__debug.nightScenario("WITCH")        // witch turn: antidote + poison sections
+__debug.nightScenario("GUARD")        // guard turn: pick a player to protect
+__debug.nightScenario("WAITING")      // villagers/hunters/dead: please close your eyes
+```
+
+| Scenario | Your role | What you see |
+|---|---|---|
+| `WEREWOLF` | Werewolf | Player grid; Alice + Tom highlighted as teammates |
+| `SEER_PICK` | Seer | Player grid; tap a player then "查验 · Check" |
+| `SEER_RESULT` | Seer | Result card (Tom = werewolf); history log |
+| `WITCH` | Witch | Antidote section first; poison section revealed after antidote decision |
+| `GUARD` | Guard | Player grid; Dave (seat 5) shown as previous target (not selectable) |
+| `WAITING` | Villager | 😴 "请闭眼 / Please close your eyes" |
+
+---
+
+### End night → advance to Day
+
+**UI button:** `→ Day`
+
+```js
+__debug.nightAdvance()
+```
+
+Transitions to `DAY` with `RESULT_HIDDEN` sub-phase. Day number increments by 1.
+
+---
+
 ## Typical Flows
 
 ### Full game flow from lobby
@@ -202,6 +240,21 @@ __debug.sheriffExit()    // skip sheriff election → Day HIDDEN
 // now load any scenario:
 __debug.dayScenario("HOST_REVEALED")
 ```
+
+### Jump straight to a night scenario
+
+```js
+__debug.gameStart()
+__debug.nightScenario("WITCH")    // skip everything — load witch screen directly
+
+// Or step through:
+__debug.gameStart()
+__debug.roleSkip()
+__debug.sheriffExit()             // → Day HIDDEN
+__debug.nightScenario("SEER_PICK")  // jump into night
+```
+
+---
 
 ### Test candidate controls
 

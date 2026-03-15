@@ -44,6 +44,7 @@ type SlotVariant =
   | 'dead'
   | 'killed'
   | 'selected'
+  | 'teammate' // night-mode: werewolf teammate (styled blue by consumer)
 
 const props = defineProps<{
   seat: number
@@ -75,6 +76,8 @@ const variantClass = computed(() => {
       return 'slot-killed'
     case 'selected':
       return 'slot-selected'
+    case 'teammate':
+      return 'slot-teammate'
     default:
       return 'slot-empty'
   }
@@ -157,6 +160,11 @@ const variantClass = computed(() => {
 .slot-selected {
   background: rgba(160, 120, 48, 0.1);
   border: 2px solid var(--gold);
+  cursor: pointer;
+}
+.slot-teammate {
+  background: var(--card);
+  border: 1px solid var(--border-l);
   cursor: pointer;
 }
 

@@ -11,6 +11,7 @@ import type {
   DayPhaseState,
   GameState,
   LoginResponse,
+  NightPhaseState,
   PlayerRole,
   Room,
   RoleRevealState,
@@ -394,6 +395,82 @@ export const MOCK_SHERIFF_RESULT: SheriffElectionState = {
       { userId: 'u12', nickname: 'Lily', avatar: '🌻', seatIndex: 11 },
     ],
   },
+}
+
+// ── Night Phase mock states ───────────────────────────────────────────────────
+// All night scenarios use MOCK_GAME_STATE players; u4 (Carol, seat 4) is dead.
+
+export function makeNightScenario(
+  variant: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING',
+): GameState {
+  const base: GameState = { ...MOCK_GAME_STATE, phase: 'NIGHT' }
+  switch (variant) {
+    case 'WEREWOLF':
+      return {
+        ...base,
+        myRole: 'WEREWOLF',
+        nightPhase: {
+          subPhase: 'WEREWOLF_PICK',
+          dayNumber: 2,
+          teammates: ['Alice', 'Eve'], // u2=Alice, u6=Eve per MOCK_GAME_STATE players
+        } satisfies NightPhaseState,
+      }
+    case 'SEER_PICK':
+      return {
+        ...base,
+        myRole: 'SEER',
+        nightPhase: { subPhase: 'SEER_PICK', dayNumber: 2 } satisfies NightPhaseState,
+      }
+    case 'SEER_RESULT':
+      return {
+        ...base,
+        myRole: 'SEER',
+        nightPhase: {
+          subPhase: 'SEER_RESULT',
+          dayNumber: 2,
+          seerResult: {
+            checkedPlayerId: 'u6',
+            checkedNickname: 'Tom',
+            checkedSeatIndex: 6,
+            isWerewolf: true,
+            history: [
+              { round: 1, nickname: '小明', isWerewolf: false },
+              { round: 2, nickname: 'Tom', isWerewolf: true },
+            ],
+          },
+        } satisfies NightPhaseState,
+      }
+    case 'WITCH':
+      return {
+        ...base,
+        myRole: 'WITCH',
+        nightPhase: {
+          subPhase: 'WITCH_ACT',
+          dayNumber: 2,
+          attackedPlayerId: 'u6',
+          attackedNickname: 'Tom',
+          attackedSeatIndex: 6,
+          hasAntidote: true,
+          hasPoison: true,
+        } satisfies NightPhaseState,
+      }
+    case 'GUARD':
+      return {
+        ...base,
+        myRole: 'GUARD',
+        nightPhase: {
+          subPhase: 'GUARD_PICK',
+          dayNumber: 2,
+          previousGuardTargetId: 'u5', // Dave (seat 5) — cannot protect again
+        } satisfies NightPhaseState,
+      }
+    case 'WAITING':
+      return {
+        ...base,
+        myRole: 'VILLAGER',
+        nightPhase: { subPhase: 'WAITING', dayNumber: 2 } satisfies NightPhaseState,
+      }
+  }
 }
 
 // ── Simulated STOMP events (pushed after a delay in mock mode) ────────────────
