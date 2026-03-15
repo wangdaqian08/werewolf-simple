@@ -91,7 +91,7 @@
             <div class="sheriff-badge">⭐</div>
           </template>
           <template v-if="!player.isAlive" #overlay>
-            <div class="dead-overlay">✕</div>
+            <div class="slot-overlay dead-overlay">✕</div>
           </template>
         </PlayerSlot>
       </section>
@@ -448,11 +448,6 @@ onUnmounted(() => {
 }
 
 .dead-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: 1.5rem;
   color: var(--muted);
 }

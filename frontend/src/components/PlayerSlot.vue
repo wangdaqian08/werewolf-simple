@@ -219,4 +219,14 @@ const variantClass = computed(() => {
   font-weight: 600;
   color: inherit;
 }
+
+/* ── Overlay slot structural base ── */
+:slotted(.slot-overlay) {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+}
 </style>

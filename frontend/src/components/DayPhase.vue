@@ -69,7 +69,7 @@
         @click="onTap(player)"
       >
         <template v-if="!player.isAlive || isKilledAndVisible(player)" #overlay>
-          <div class="dead-overlay">✕</div>
+          <div class="slot-overlay dead-overlay">✕</div>
         </template>
       </PlayerSlot>
     </section>
@@ -324,15 +324,9 @@ function onTap(player: GamePlayer) {
 }
 
 .dead-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: 1.25rem;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.5);
-  border-radius: inherit;
 }
 
 /* Footer */

@@ -46,7 +46,7 @@
           @click="isWolfTargetFn(p) && selectPlayer(p.userId)"
         >
           <template v-if="!p.isAlive" #overlay>
-            <div class="np-dead-x">✕</div>
+            <div class="slot-overlay np-dead-x">✕</div>
           </template>
         </PlayerSlot>
       </section>
@@ -77,7 +77,7 @@
           @click="isSeerTargetFn(p) && selectPlayer(p.userId)"
         >
           <template v-if="!p.isAlive" #overlay>
-            <div class="np-dead-x">✕</div>
+            <div class="slot-overlay np-dead-x">✕</div>
           </template>
         </PlayerSlot>
       </section>
@@ -187,7 +187,7 @@
               @click="isPoisonTargetFn(p) && selectPlayer(p.userId)"
             >
               <template v-if="!p.isAlive" #overlay>
-                <div class="np-dead-x">✕</div>
+                <div class="slot-overlay np-dead-x">✕</div>
               </template>
             </PlayerSlot>
           </section>
@@ -244,7 +244,7 @@
           @click="isGuardTargetFn(p) && selectPlayer(p.userId)"
         >
           <template v-if="!p.isAlive" #overlay>
-            <div class="np-dead-x">✕</div>
+            <div class="slot-overlay np-dead-x">✕</div>
           </template>
         </PlayerSlot>
       </section>
@@ -645,15 +645,9 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 
 /* Dead overlay (slot #overlay) */
 .np-dead-x {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: 1rem;
   color: rgba(245, 240, 232, 0.35);
   background: rgba(42, 31, 20, 0.45);
-  border-radius: inherit;
 }
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
