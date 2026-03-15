@@ -7,7 +7,15 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { DayPhaseState, GameState, LoginResponse, Room, SheriffElectionState } from '@/types'
+import type {
+  DayPhaseState,
+  GameState,
+  LoginResponse,
+  PlayerRole,
+  Room,
+  RoleRevealState,
+  SheriffElectionState,
+} from '@/types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -163,6 +171,23 @@ export const MOCK_GAME_RESULT = {
     // roles revealed at game end
     role: (['u3', 'u6'] as string[]).includes(p.userId) ? 'WEREWOLF' : 'VILLAGER',
   })),
+}
+
+// ── Role assignments (userId → PlayerRole) ────────────────────────────────────
+export const MOCK_ROLE_ASSIGNMENTS: Record<string, PlayerRole> = {
+  u1: 'SEER',
+  u2: 'WEREWOLF',
+  u3: 'VILLAGER',
+  u4: 'VILLAGER',
+  u5: 'WITCH',
+  u6: 'WEREWOLF',
+  u7: 'HUNTER',
+  u8: 'VILLAGER',
+  u9: 'GUARD',
+}
+
+export function makeRoleRevealState(totalCount: number, teammates?: string[]): RoleRevealState {
+  return { confirmedCount: 0, totalCount, teammates }
 }
 
 // ── Day Phase mock states ─────────────────────────────────────────────────────
