@@ -11,7 +11,10 @@
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
-      <SunArc :phase-deadline="votingPhase.phaseDeadline" :phase-started="votingPhase.phaseStarted" />
+      <SunArc
+        :phase-deadline="votingPhase.phaseDeadline"
+        :phase-started="votingPhase.phaseStarted"
+      />
 
       <!-- Before reveal: simple vote count -->
       <div v-if="!isRevealed" class="vote-count-bar">
@@ -49,10 +52,7 @@
             <div class="vote-col-head" :class="{ 'tally-chip-top': i === 0 }">
               <div class="vote-col-avatar">{{ entry.avatar ?? '😊' }}</div>
               <div class="vote-col-cname">{{ entry.nickname }}</div>
-              <div
-                class="vote-col-count"
-                :class="i === 0 ? 'tally-winner' : 'tally-muted'"
-              >
+              <div class="vote-col-count" :class="i === 0 ? 'tally-winner' : 'tally-muted'">
                 {{ entry.votes }}
               </div>
             </div>
@@ -107,9 +107,7 @@
           <template v-if="viewRole === 'HOST'">
             <template v-if="hostIsAlive">
               <template v-if="votingPhase.myVote || votingPhase.myVoteSkipped">
-                <button class="btn btn-secondary" @click="emit('unvote')">
-                  取消投票 · Unvote
-                </button>
+                <button class="btn btn-secondary" @click="emit('unvote')">取消投票 · Unvote</button>
               </template>
               <template v-else>
                 <div class="vote-actions">
@@ -141,9 +139,7 @@
           <!-- ALIVE: vote/skip or unvote -->
           <template v-else-if="viewRole === 'ALIVE'">
             <template v-if="votingPhase.myVote || votingPhase.myVoteSkipped">
-              <button class="btn btn-secondary" @click="emit('unvote')">
-                取消投票 · Unvote
-              </button>
+              <button class="btn btn-secondary" @click="emit('unvote')">取消投票 · Unvote</button>
             </template>
             <template v-else>
               <div class="vote-actions">
@@ -219,7 +215,9 @@
           >
             开枪 · Shoot
           </button>
-          <button class="btn btn-secondary skip-btn" @click="emit('hunterPass')">放弃 · Pass</button>
+          <button class="btn btn-secondary skip-btn" @click="emit('hunterPass')">
+            放弃 · Pass
+          </button>
         </div>
       </footer>
     </template>

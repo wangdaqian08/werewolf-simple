@@ -56,9 +56,7 @@
     </template>
 
     <!-- Voting phase -->
-    <template
-      v-else-if="gameStore.state?.phase === 'VOTING' && gameStore.state?.votingPhase"
-    >
+    <template v-else-if="gameStore.state?.phase === 'VOTING' && gameStore.state?.votingPhase">
       <VotingPhase
         :voting-phase="gameStore.state.votingPhase"
         :players="gameStore.state.players"
