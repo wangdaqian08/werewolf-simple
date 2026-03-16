@@ -13,6 +13,7 @@ async function goToRoomAsHost(page: Page) {
   await page.goto('/')
   await page.getByPlaceholder('Enter your nickname').fill('TestHost')
   await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })

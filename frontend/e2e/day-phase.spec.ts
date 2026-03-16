@@ -10,6 +10,7 @@ async function loadScenario(
   await page.goto('/')
   await page.getByPlaceholder('Enter your nickname').fill('TestHost')
   await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
 
   // Wait for room view and STOMP subscription to be ready
