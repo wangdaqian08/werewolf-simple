@@ -16,6 +16,9 @@ import type {
   Room,
   RoleRevealState,
   SheriffElectionState,
+  VoteTally,
+  VoteVoter,
+  VotingState,
 } from '@/types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -469,6 +472,171 @@ export function makeNightScenario(
         ...base,
         myRole: 'VILLAGER',
         nightPhase: { subPhase: 'WAITING', dayNumber: 2 } satisfies NightPhaseState,
+      }
+  }
+}
+
+// ── Voting Phase mock states ──────────────────────────────────────────────────
+// Tom (u6, seat 6) is eliminated in all voting scenarios.
+
+const MOCK_VOTE_TALLY: VoteTally[] = [
+  {
+    playerId: 'u6',
+    nickname: 'Tom',
+    seatIndex: 6,
+    avatar: '🐯',
+    votes: 5,
+    voters: [
+      { userId: 'u1', nickname: 'You', avatar: '⭐', seatIndex: 1 } satisfies VoteVoter,
+      { userId: 'u5', nickname: 'Dave', avatar: '🌸', seatIndex: 5 } satisfies VoteVoter,
+      { userId: 'u7', nickname: 'Frank', avatar: '🎸', seatIndex: 7 } satisfies VoteVoter,
+      { userId: 'u8', nickname: 'Grace', avatar: '🌺', seatIndex: 8 } satisfies VoteVoter,
+      { userId: 'u9', nickname: 'Hank', avatar: '🐯', seatIndex: 9 } satisfies VoteVoter,
+    ],
+  },
+  {
+    playerId: 'u2',
+    nickname: 'Alice',
+    seatIndex: 2,
+    avatar: '😊',
+    votes: 3,
+    voters: [
+      { userId: 'u3', nickname: 'Bob', avatar: '🎭', seatIndex: 3 } satisfies VoteVoter,
+      { userId: 'u4', nickname: 'Carol', avatar: '🌙', seatIndex: 4 } satisfies VoteVoter,
+      { userId: 'u6', nickname: 'Eve', avatar: '🦊', seatIndex: 6 } satisfies VoteVoter,
+    ],
+  },
+  {
+    playerId: 'u3',
+    nickname: 'Bob',
+    seatIndex: 3,
+    avatar: '🎭',
+    votes: 2,
+    voters: [
+      { userId: 'u2', nickname: 'Alice', avatar: '😊', seatIndex: 2 } satisfies VoteVoter,
+      { userId: 'u9', nickname: 'Hank', avatar: '🐯', seatIndex: 9 } satisfies VoteVoter,
+    ],
+  },
+]
+
+export function makeVotingScenario(
+  scenario:
+    | 'VOTING'
+    | 'VOTING_VOTED'
+    | 'VOTING_REVEALED'
+    | 'HUNTER_SHOOT'
+    | 'BADGE_HANDOVER'
+    | 'BADGE_SHERIFF'
+    | 'BADGE_BURNED',
+): GameState {
+  const now = Date.now()
+  const base: GameState = {
+    ...MOCK_GAME_STATE,
+    phase: 'VOTING',
+    dayNumber: 2,
+    dayPhase: undefined,
+  }
+  const eliminated = {
+    eliminatedPlayerId: 'u6',
+    eliminatedNickname: 'Tom',
+    eliminatedSeatIndex: 6,
+    eliminatedAvatar: '🐯',
+    eliminatedRole: 'HUNTER' as const,
+  }
+  const commonTiming = {
+    dayNumber: 2,
+    phaseDeadline: now + 60_000,
+    phaseStarted: now,
+  }
+  switch (scenario) {
+    case 'VOTING':
+      return {
+        ...base,
+        votingPhase: {
+          subPhase: 'VOTING',
+          ...commonTiming,
+          canVote: true,
+          votedPlayerIds: ['u3', 'u5', 'u7'],
+          votesSubmitted: 3,
+          totalVoters: 8,
+          tally: MOCK_VOTE_TALLY,
+        } satisfies VotingState,
+      }
+    case 'VOTING_VOTED':
+      return {
+        ...base,
+        votingPhase: {
+          subPhase: 'VOTING',
+          ...commonTiming,
+          canVote: false,
+          myVote: 'u6',
+          votedPlayerIds: ['u1', 'u3', 'u5', 'u6', 'u7'],
+          votesSubmitted: 5,
+          totalVoters: 8,
+          tally: MOCK_VOTE_TALLY,
+        } satisfies VotingState,
+      }
+    case 'VOTING_REVEALED':
+      return {
+        ...base,
+        votingPhase: {
+          subPhase: 'VOTING',
+          ...commonTiming,
+          canVote: false,
+          myVote: 'u6',
+          votedPlayerIds: ['u1', 'u2', 'u3', 'u5', 'u6', 'u7', 'u8', 'u9'],
+          votesSubmitted: 8,
+          totalVoters: 8,
+          tally: MOCK_VOTE_TALLY,
+          tallyRevealed: true,
+          revealDeadline: now + 30_000,
+          ...eliminated,
+        } satisfies VotingState,
+      }
+    case 'HUNTER_SHOOT':
+      return {
+        ...base,
+        votingPhase: {
+          subPhase: 'HUNTER_SHOOT',
+          ...commonTiming,
+          ...eliminated,
+        } satisfies VotingState,
+      }
+    case 'BADGE_HANDOVER':
+      return {
+        ...base,
+        sheriff: 'u6',
+        votingPhase: {
+          subPhase: 'BADGE_HANDOVER',
+          ...commonTiming,
+          ...eliminated,
+        } satisfies VotingState,
+      }
+    case 'BADGE_SHERIFF':
+      // Badge passed — new sheriff (Alice u2) shown with star; waiting for host to continue
+      return {
+        ...base,
+        sheriff: 'u2',
+        votingPhase: {
+          subPhase: 'BADGE_HANDOVER',
+          ...commonTiming,
+          ...eliminated,
+          newSheriffId: 'u2',
+          newSheriffNickname: 'Alice',
+          newSheriffAvatar: '😊',
+        } satisfies VotingState,
+      }
+    case 'BADGE_BURNED':
+      // Badge destroyed — message shown; waiting for host to continue
+      return {
+        ...base,
+        sheriff: 'u6',
+        votingPhase: {
+          subPhase: 'BADGE_HANDOVER',
+          ...commonTiming,
+          ...eliminated,
+          badgeDestroyed: true,
+        } satisfies VotingState,
       }
   }
 }
