@@ -172,7 +172,7 @@
         <button class="debug-btn debug-btn-exit" @click="debugVotingAdvance">→ Night</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Sheriff Screens</div>
-      <div class="debug-btns">
+      <div class="debug-btns" data-testid="debug-sheriff-btns">
         <button class="debug-btn" @click="debugSheriff('SIGNUP')">Sign-up</button>
         <button class="debug-btn" @click="debugSheriff('SPEECH_CANDIDATE')">Speech: Me</button>
         <button class="debug-btn" @click="debugSheriff('SPEECH_AUDIENCE')">Speech: Watch</button>
