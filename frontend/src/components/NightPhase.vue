@@ -95,39 +95,39 @@
     <!-- ── SEER_RESULT ────────────────────────────────────────────────── -->
     <template v-else-if="subPhase === 'SEER_RESULT' && nightPhase.seerResult">
       <div class="sr-wrap">
-      <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
-        <div class="sr-player">
-          {{ nightPhase.seerResult.checkedSeatIndex }}号 ·
-          {{ nightPhase.seerResult.checkedNickname }}
-        </div>
-        <div class="sr-verdict">
-          {{ nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '🌾 村民 · Villager' }}
-        </div>
-      </div>
-      <div class="sr-hist">
-        <div class="srh-title">历史查验记录</div>
-        <template v-if="nightPhase.seerResult.history.length">
-          <div
-            v-for="h in nightPhase.seerResult.history"
-            :key="`${h.round}-${h.nickname}`"
-            class="srh-row"
-          >
-            <span class="srh-round">Round {{ h.round }}</span>
-            <span class="srh-sep">·</span>
-            <span class="srh-name">{{ h.nickname }}</span>
-            <span class="srh-arrow">→</span>
-            <span :class="h.isWerewolf ? 'srh-wolf' : 'srh-ok'">
-              {{ h.isWerewolf ? '狼人 ✗' : '村民 ✓' }}
-            </span>
+        <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
+          <div class="sr-player">
+            {{ nightPhase.seerResult.checkedSeatIndex }}号 ·
+            {{ nightPhase.seerResult.checkedNickname }}
           </div>
-        </template>
-        <div v-else class="srh-empty">暂无历史记录</div>
-      </div>
-      <footer class="nf" style="margin-top: auto">
-        <button class="btn btn-secondary nf-btn" @click="emit('confirm')">
-          查验完毕 Checking Complete in ({{ seerCountdown }}s)
-        </button>
-      </footer>
+          <div class="sr-verdict">
+            {{ nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '🌾 村民 · Villager' }}
+          </div>
+        </div>
+        <div class="sr-hist">
+          <div class="srh-title">历史查验记录</div>
+          <template v-if="nightPhase.seerResult.history.length">
+            <div
+              v-for="h in nightPhase.seerResult.history"
+              :key="`${h.round}-${h.nickname}`"
+              class="srh-row"
+            >
+              <span class="srh-round">Round {{ h.round }}</span>
+              <span class="srh-sep">·</span>
+              <span class="srh-name">{{ h.nickname }}</span>
+              <span class="srh-arrow">→</span>
+              <span :class="h.isWerewolf ? 'srh-wolf' : 'srh-ok'">
+                {{ h.isWerewolf ? '狼人 ✗' : '村民 ✓' }}
+              </span>
+            </div>
+          </template>
+          <div v-else class="srh-empty">暂无历史记录</div>
+        </div>
+        <footer class="nf" style="margin-top: auto">
+          <button class="btn btn-secondary nf-btn" @click="emit('confirm')">
+            查验完毕 Checking Complete in ({{ seerCountdown }}s)
+          </button>
+        </footer>
       </div>
     </template>
 

@@ -95,7 +95,9 @@
               <span class="reveal-countdown-time">{{ formattedRevealTime }}</span>
             </div>
             <div class="vote-actions">
-              <button class="btn btn-primary vote-btn" @click="emit('continueVoting')">继续 / Continue</button>
+              <button class="btn btn-primary vote-btn" @click="emit('continueVoting')">
+                继续 / Continue
+              </button>
             </div>
           </template>
           <template v-else>
