@@ -146,7 +146,7 @@
         <button class="debug-btn" @click="debugScenario('GUEST')">Guest</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Day Phase</div>
-      <div class="debug-btns">
+      <div class="debug-btns" data-testid="debug-day-btns">
         <button class="debug-btn" @click="debugDay('HIDDEN')">Hidden</button>
         <button class="debug-btn" @click="debugDay('REVEALED')">Revealed</button>
       </div>

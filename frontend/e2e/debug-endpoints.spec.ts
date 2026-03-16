@@ -200,7 +200,7 @@ test('POST /debug/day/phase HIDDEN — switches to hidden result', async ({ page
 
 test('POST /debug/day/phase REVEALED — switches to revealed result', async ({ page }) => {
   await goToDayView(page)
-  await page.getByRole('button', { name: 'Revealed', exact: true }).click()
+  await page.locator('[data-testid="debug-day-btns"]').getByRole('button', { name: 'Revealed' }).click()
   await page.waitForTimeout(400)
   await expect(page.getByText(/Carol/i).first()).toBeVisible()
 })

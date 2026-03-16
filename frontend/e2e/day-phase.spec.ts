@@ -137,7 +137,7 @@ test('guest joined via room join does not see 显示结果 on day hidden', async
 
 test('guest joined via room join does not see 显示结果 on day revealed', async ({ page }) => {
   await joinAsGuestAndStartGame(page)
-  await page.getByRole('button', { name: /^Revealed$/ }).click()
+  await page.locator('[data-testid="debug-day-btns"]').getByRole('button', { name: 'Revealed' }).click()
   await page.waitForTimeout(400)
   await expect(page.getByRole('button', { name: /显示结果/ })).not.toBeVisible()
   await expect(page.getByRole('button', { name: /投票/ })).toBeVisible()
