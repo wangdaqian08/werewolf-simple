@@ -77,13 +77,11 @@
     <!-- Footer -->
     <footer class="day-footer">
       <template v-if="viewRole === 'HOST'">
-        <button
-          v-if="dayPhase.subPhase === 'RESULT_HIDDEN'"
-          class="btn btn-primary"
-          @click="emit('revealResult')"
-        >
-          显示结果 · Result
-        </button>
+        <div v-if="dayPhase.subPhase === 'RESULT_HIDDEN'" class="vote-actions">
+          <button class="btn btn-primary vote-btn" @click="emit('revealResult')">
+            显示结果 · Result
+          </button>
+        </div>
         <template v-else>
           <div class="vote-actions">
             <button

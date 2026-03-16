@@ -94,6 +94,7 @@
 
     <!-- ── SEER_RESULT ────────────────────────────────────────────────── -->
     <template v-else-if="subPhase === 'SEER_RESULT' && nightPhase.seerResult">
+      <div class="sr-wrap">
       <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
         <div class="sr-player">
           {{ nightPhase.seerResult.checkedSeatIndex }}号 ·
@@ -122,11 +123,12 @@
         </template>
         <div v-else class="srh-empty">暂无历史记录</div>
       </div>
-      <footer class="nf">
+      <footer class="nf" style="margin-top: auto">
         <button class="btn btn-secondary nf-btn" @click="emit('confirm')">
           查验完毕 Checking Complete in ({{ seerCountdown }}s)
         </button>
       </footer>
+      </div>
     </template>
 
     <!-- ── WITCH_ACT ───────────────────────────────────────────────────── -->
@@ -428,7 +430,7 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.75rem 1.25rem 0.625rem;
+  padding: 3rem 1.25rem 0.625rem;
   gap: 0.2rem;
 }
 
@@ -662,6 +664,12 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 }
 
 /* ── Seer result ─────────────────────────────────────────────────────────── */
+.sr-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .sr-card {
   margin: 0.625rem 0.875rem 0;
   border-radius: 0.625rem;
@@ -833,7 +841,7 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   justify-content: center;
   flex: 1;
   gap: 0.625rem;
-  padding: 3rem 1.5rem;
+  padding: 0 1.5rem 9rem;
   text-align: center;
 }
 
@@ -862,17 +870,7 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 }
 
 /* ── Button overrides for night mode ─────────────────────────────────────── */
-.btn {
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  font-family: inherit;
-  border: none;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
+/* Size/shape use global .btn; only color overrides needed here */
 .btn:disabled {
   opacity: 0.4;
   cursor: default;

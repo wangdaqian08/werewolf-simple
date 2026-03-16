@@ -94,7 +94,9 @@
               <span class="reveal-countdown-label">自动继续 · Auto in</span>
               <span class="reveal-countdown-time">{{ formattedRevealTime }}</span>
             </div>
-            <button class="btn btn-primary" @click="emit('continueVoting')">继续 / Continue</button>
+            <div class="vote-actions">
+              <button class="btn btn-primary vote-btn" @click="emit('continueVoting')">继续 / Continue</button>
+            </div>
           </template>
           <template v-else>
             <p class="footer-hint">等待房主继续 · Waiting for host…</p>
@@ -288,9 +290,11 @@
         <!-- After badge action (passed or destroyed): host can continue to night -->
         <template v-if="badgeDone">
           <template v-if="isHost">
-            <button class="btn btn-primary" @click="emit('continueVoting')">
-              → 进入夜晚 / Night
-            </button>
+            <div class="vote-actions">
+              <button class="btn btn-primary vote-btn" @click="emit('continueVoting')">
+                → 进入夜晚 / Night
+              </button>
+            </div>
           </template>
           <template v-else>
             <p class="footer-hint">等待继续 · Waiting…</p>
@@ -664,7 +668,7 @@ function onBadgeTap(player: GamePlayer) {
 }
 
 .reveal-countdown-label {
-  font-size: 0.75rem;
+  font-size: 1rem;
   color: var(--muted);
 }
 
