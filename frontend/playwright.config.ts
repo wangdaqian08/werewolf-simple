@@ -2,18 +2,20 @@ import {defineConfig} from '@playwright/test'
 
 export default defineConfig({
     testDir: './e2e',
-    // Mock state is shared in-browser — parallel workers corrupt each other's game state
-    workers: 1,
-    // Retry once to handle transient Vite dev-server stalls during long suite runs
-    retries: 1,
+    workers: process.env.CI ? 2 : undefined,
+    fullyParallel: true,
+    retries: process.env.CI ? 1 : 0,
     use: {
         baseURL: 'http://localhost:5173',
         headless: true,
     },
-    // Dev server must already be running — start with `npm run dev`
+    reporter: process.env.CI
+        ? [['blob'], ['github']]
+        : [['html', {open: 'never'}]],
     webServer: {
         command: 'npm run dev',
         url: 'http://localhost:5173',
-        reuseExistingServer: true,
+        reuseExistingServer: !process.env.CI,
+        env: {VITE_MOCK_FAST: 'true'},
     },
 })

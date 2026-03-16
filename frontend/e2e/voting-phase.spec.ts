@@ -9,22 +9,22 @@ async function goToGame(page: Page) {
   await page.getByRole('button', { name: /Create Room/i }).first().click()
   await page.getByRole('button', { name: /Create Room/i }).click()
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(200)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.waitForTimeout(500)
+  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
 }
 
 // Scoped to the Day Scenarios debug section to avoid label collisions
 async function loadDayScenario(page: Page, label: string) {
   await page.locator('[data-testid="debug-day-scenario-btns"]').getByRole('button', { name: label }).click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(70)
 }
 
 // Scoped to the Voting Screens debug section to avoid label collisions
 async function loadVotingScenario(page: Page, label: string) {
   await page.locator('[data-testid="debug-voting-btns"]').getByRole('button', { name: label }).click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(70)
 }
 
 // ── Host perspective ──────────────────────────────────────────────────────────
