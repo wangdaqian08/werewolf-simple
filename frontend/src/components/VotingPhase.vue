@@ -29,7 +29,7 @@
       <!-- After reveal: vote columns showing who voted for whom -->
       <div v-else class="vote-columns-wrap">
         <!-- Eliminated player banner -->
-        <div v-if="votingPhase.eliminatedPlayerId" class="elim-banner">
+        <div v-if="votingPhase.eliminatedPlayerId" class="banner banner-kill">
           <span class="elim-banner-avatar">{{ votingPhase.eliminatedAvatar ?? '💀' }}</span>
           <div class="elim-banner-body">
             <span class="elim-banner-tag">出局 · ELIMINATED</span>
@@ -126,11 +126,7 @@
                 </div>
               </template>
             </template>
-            <button
-              class="btn btn-gold reveal-btn"
-              :disabled="!allVotesIn"
-              @click="emit('revealVoting')"
-            >
+            <button class="btn btn-gold" :disabled="!allVotesIn" @click="emit('revealVoting')">
               公布结果 · Reveal
             </button>
           </template>
@@ -576,16 +572,6 @@ function onBadgeTap(player: GamePlayer) {
 }
 
 /* Eliminated player banner (shown above vote columns after reveal) */
-.elim-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.5rem 0.75rem;
-  background: rgba(181, 37, 26, 0.06);
-  border-left: 3px solid var(--red);
-  border-radius: 0 0.375rem 0.375rem 0;
-}
-
 .elim-banner-avatar {
   font-size: 1.5rem;
   flex-shrink: 0;
@@ -647,10 +633,6 @@ function onBadgeTap(player: GamePlayer) {
 }
 
 /* Footer — shared styles in game.css */
-.reveal-btn {
-  width: 100%;
-}
-
 /* Reveal countdown */
 .reveal-countdown {
   display: flex;

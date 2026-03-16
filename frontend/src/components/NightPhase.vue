@@ -659,10 +659,6 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   background: rgba(255, 255, 255, 0.025);
 }
 
-.nf-btn {
-  width: 100%;
-}
-
 /* ── Seer result ─────────────────────────────────────────────────────────── */
 .sr-wrap {
   flex: 1;
