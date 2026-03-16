@@ -118,7 +118,7 @@
                   <button
                     class="btn btn-primary vote-btn"
                     :disabled="!effectiveSelected"
-                    @click="emit('vote')"
+                    @click="effectiveSelected && emit('vote', effectiveSelected)"
                   >
                     投票 · Vote
                   </button>
@@ -146,7 +146,7 @@
                 <button
                   class="btn btn-primary vote-btn"
                   :disabled="!effectiveSelected"
-                  @click="emit('vote')"
+                  @click="effectiveSelected && emit('vote', effectiveSelected)"
                 >
                   投票 · Vote
                 </button>
@@ -331,7 +331,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   selectPlayer: [userId: string]
-  vote: []
+  vote: [targetId: string]
   skipVote: []
   unvote: []
   revealVoting: []
@@ -387,22 +387,16 @@ const allVotesIn = computed(
     props.votingPhase.votesSubmitted >= props.votingPhase.totalVoters,
 )
 
-// ── Optimistic selection ──────────────────────────────────────────────────────
-const optimisticSelected = ref<string | undefined>(undefined)
+// ── Selection — local UI state (server notified but not authoritative for display) ──
+const localSelected = ref<string | undefined>(props.votingPhase.selectedPlayerId)
 
-watch(
-  () => props.votingPhase.selectedPlayerId,
-  () => {
-    optimisticSelected.value = undefined
-  },
-)
+// Reset when a new sub-phase begins
+watch(() => props.votingPhase.subPhase, () => { localSelected.value = undefined })
 
-const effectiveSelected = computed(
-  () => optimisticSelected.value ?? props.votingPhase.selectedPlayerId,
-)
+const effectiveSelected = computed(() => localSelected.value)
 
 function selectPlayer(userId: string) {
-  optimisticSelected.value = userId
+  localSelected.value = userId
   emit('selectPlayer', userId)
 }
 

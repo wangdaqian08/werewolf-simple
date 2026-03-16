@@ -308,22 +308,19 @@ const emit = defineEmits<{
 const subPhase = computed(() => props.nightPhase.subPhase)
 const poisonMode = ref(false)
 
-// ── Optimistic selection — update highlight instantly without waiting for server ──
-const optimisticSelected = ref<string | undefined>(undefined)
+// Selection is local UI state — server is notified but not authoritative for display
+const localSelected = ref<string | undefined>(props.nightPhase.selectedTargetId)
 
-// Clear optimistic state once the server confirms (or when phase changes)
-watch([() => props.nightPhase.selectedTargetId, subPhase], () => {
-  optimisticSelected.value = undefined
-})
+// Reset when a new action phase begins
+watch(subPhase, () => { localSelected.value = undefined })
 
-// Merged view: optimistic overrides server until server catches up
 const effectivePhase = computed(() => ({
   ...props.nightPhase,
-  selectedTargetId: optimisticSelected.value ?? props.nightPhase.selectedTargetId,
+  selectedTargetId: localSelected.value,
 }))
 
 function selectPlayer(userId: string) {
-  optimisticSelected.value = userId
+  localSelected.value = userId
   emit('selectPlayer', userId)
 }
 
@@ -837,8 +834,9 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   justify-content: center;
   flex: 1;
   gap: 0.625rem;
-  padding: 0 1.5rem 9rem;
+  padding: 0 1.5rem;
   text-align: center;
+  transform: translateY(-4.5rem);
 }
 
 .ss-emoji {
