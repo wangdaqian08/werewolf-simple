@@ -391,7 +391,12 @@ const allVotesIn = computed(
 const localSelected = ref<string | undefined>(props.votingPhase.selectedPlayerId)
 
 // Reset when a new sub-phase begins
-watch(() => props.votingPhase.subPhase, () => { localSelected.value = undefined })
+watch(
+  () => props.votingPhase.subPhase,
+  () => {
+    localSelected.value = undefined
+  },
+)
 
 const effectiveSelected = computed(() => localSelected.value)
 

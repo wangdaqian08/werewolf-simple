@@ -312,7 +312,9 @@ const poisonMode = ref(false)
 const localSelected = ref<string | undefined>(props.nightPhase.selectedTargetId)
 
 // Reset when a new action phase begins
-watch(subPhase, () => { localSelected.value = undefined })
+watch(subPhase, () => {
+  localSelected.value = undefined
+})
 
 const effectivePhase = computed(() => ({
   ...props.nightPhase,

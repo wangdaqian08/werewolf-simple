@@ -183,7 +183,12 @@ const formattedTime = computed(() => {
 const localSelected = ref<string | undefined>(props.dayPhase.selectedPlayerId)
 
 // Reset when a new action phase begins
-watch(() => props.dayPhase.subPhase, () => { localSelected.value = undefined })
+watch(
+  () => props.dayPhase.subPhase,
+  () => {
+    localSelected.value = undefined
+  },
+)
 
 const killedId = computed(() => props.dayPhase.nightResult?.killedPlayerId)
 
