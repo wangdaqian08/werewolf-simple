@@ -646,16 +646,7 @@ function onBadgeTap(player: GamePlayer) {
   line-height: 1;
 }
 
-/* Footer */
-.voting-footer {
-  padding: 0.75rem 1rem 2.5rem;
-  border-top: 1px solid var(--border-l);
-  background: var(--paper);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
+/* Footer — shared styles in game.css */
 .reveal-btn {
   width: 100%;
 }
