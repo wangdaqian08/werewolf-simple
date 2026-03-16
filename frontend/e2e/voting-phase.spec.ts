@@ -156,6 +156,6 @@ test('eliminated player banner shown after reveal', async ({ page }) => {
   await loadDayScenario(page, 'Host·Hidden')
   await loadVotingScenario(page, 'Revealed')
 
-  await expect(page.locator('.elim-banner')).toBeVisible()
+  await expect(page.locator('.elim-banner-body')).toBeVisible()
   await expect(page.getByText(/ELIMINATED/i)).toBeVisible()
 })
