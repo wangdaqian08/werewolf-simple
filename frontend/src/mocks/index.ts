@@ -2,6 +2,7 @@ import AxiosMockAdapter from 'axios-mock-adapter'
 import http from '@/services/http'
 import {
   MOCK_GAME_RESULT,
+  MOCK_GAME_RESULT_WOLVES,
   MOCK_GAME_STATE,
   MOCK_LOGIN,
   MOCK_ROOM_AS_GUEST,
@@ -288,6 +289,15 @@ export function setupMocks() {
       return [400, { error: 'Unknown scenario' }]
     }
     pushGameStateUpdate()
+    return [200]
+  })
+
+  // ── Debug: Game Over ─────────────────────────────────────────────────────────
+  mock.onPost('/debug/game/over').reply((config) => {
+    const { winner } = JSON.parse(config.data ?? '{}')
+    mockGameState = winner === 'WEREWOLF' ? { ...MOCK_GAME_RESULT_WOLVES } : { ...MOCK_GAME_RESULT }
+    pushGameStateUpdate()
+    mockStompClient.fireNow(`/topic/game/${mockGameState.gameId}`, { type: 'GAME_OVER' })
     return [200]
   })
 
@@ -726,6 +736,9 @@ export function setupMocks() {
     votingScenario: (scenario: string) => http.post('/debug/voting/scenario', { scenario }),
     votingAdvance: () => http.post('/debug/voting/advance'),
     votingUnvote: () => http.post('/game/action', { actionType: 'VOTING_UNVOTE' }),
+
+    // Game Over
+    gameOver: (winner: string) => http.post('/debug/game/over', { winner }),
   }
 
   console.warn('[mock] active — set VITE_MOCK=false in .env.development to use real backend')

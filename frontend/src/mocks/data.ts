@@ -164,19 +164,6 @@ export const MOCK_GAME_STATE: GameState = {
   ],
 }
 
-// ── Result (game over) ────────────────────────────────────────────────────────
-
-export const MOCK_GAME_RESULT = {
-  ...MOCK_GAME_STATE,
-  phase: 'GAME_OVER' as const,
-  winner: 'VILLAGER',
-  players: MOCK_GAME_STATE.players.map((p) => ({
-    ...p,
-    // roles revealed at game end
-    role: (['u3', 'u6'] as string[]).includes(p.userId) ? 'WEREWOLF' : 'VILLAGER',
-  })),
-}
-
 // ── Role assignments (userId → PlayerRole) ────────────────────────────────────
 export const MOCK_ROLE_ASSIGNMENTS: Record<string, PlayerRole> = {
   u1: 'SEER',
@@ -188,6 +175,28 @@ export const MOCK_ROLE_ASSIGNMENTS: Record<string, PlayerRole> = {
   u7: 'HUNTER',
   u8: 'VILLAGER',
   u9: 'GUARD',
+}
+
+// ── Result (game over) ────────────────────────────────────────────────────────
+
+export const MOCK_GAME_RESULT = {
+  ...MOCK_GAME_STATE,
+  phase: 'GAME_OVER' as const,
+  winner: 'VILLAGER' as const,
+  players: MOCK_GAME_STATE.players.map((p) => ({
+    ...p,
+    role: MOCK_ROLE_ASSIGNMENTS[p.userId] ?? 'VILLAGER',
+  })),
+}
+
+export const MOCK_GAME_RESULT_WOLVES = {
+  ...MOCK_GAME_STATE,
+  phase: 'GAME_OVER' as const,
+  winner: 'WEREWOLF' as const,
+  players: MOCK_GAME_STATE.players.map((p) => ({
+    ...p,
+    role: MOCK_ROLE_ASSIGNMENTS[p.userId] ?? 'VILLAGER',
+  })),
 }
 
 export function makeRoleRevealState(totalCount: number, teammates?: string[]): RoleRevealState {
