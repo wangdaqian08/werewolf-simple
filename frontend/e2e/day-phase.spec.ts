@@ -10,22 +10,23 @@ async function loadScenario(
   await page.goto('/')
   await page.getByPlaceholder('Enter your nickname').fill('TestHost')
   await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
 
   // Wait for room view and STOMP subscription to be ready
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(200)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
 
   // Start game via debug button (uses mocked axios, not raw fetch)
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
 
-  // Wait for game view to fully initialize: getState (300ms mock delay) + STOMP connect (50ms)
-  await page.waitForTimeout(500)
+  // Wait for role reveal card to appear (mock delay 50ms + STOMP 100ms internal delay)
+  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
 
   // Load the scenario via debug panel button — STOMP subscription is now ready
   await page.getByRole('button', { name: new RegExp(scenarioLabel(scenario)) }).click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(70)
 }
 
 function scenarioLabel(scenario: string): string {
@@ -120,17 +121,17 @@ async function joinAsGuestAndStartGame(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: /Join/i }).click()
 
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(200)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
 
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.waitForTimeout(500)
+  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
 }
 
 test('guest joined via room join does not see 显示结果 on day hidden', async ({ page }) => {
   await joinAsGuestAndStartGame(page)
   await page.getByRole('button', { name: /^Hidden$/ }).click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(70)
   await expect(page.getByRole('button', { name: /显示结果/ })).not.toBeVisible()
   await expect(page.getByText(/等待房主公布结果/)).toBeVisible()
 })
@@ -138,7 +139,7 @@ test('guest joined via room join does not see 显示结果 on day hidden', async
 test('guest joined via room join does not see 显示结果 on day revealed', async ({ page }) => {
   await joinAsGuestAndStartGame(page)
   await page.locator('[data-testid="debug-day-btns"]').getByRole('button', { name: 'Revealed' }).click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(70)
   await expect(page.getByRole('button', { name: /显示结果/ })).not.toBeVisible()
   await expect(page.getByRole('button', { name: /投票/ })).toBeVisible()
 })

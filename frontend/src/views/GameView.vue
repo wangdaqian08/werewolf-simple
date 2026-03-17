@@ -316,9 +316,8 @@ async function handleSheriffAbstain() {
 async function handleRevealResult() {
   await gameService.submitAction({ actionType: 'REVEAL_NIGHT_RESULT' })
 }
-async function handleDayVote() {
-  const targetId = gameStore.state?.dayPhase?.selectedPlayerId
-  if (targetId) await gameService.submitAction({ actionType: 'DAY_VOTE', targetId })
+async function handleDayVote(targetId: string) {
+  await gameService.submitAction({ actionType: 'DAY_VOTE', targetId })
 }
 async function handleDaySkip() {
   await gameService.submitAction({ actionType: 'DAY_SKIP' })
@@ -330,8 +329,7 @@ async function handleDaySelectPlayer(userId: string) {
 async function handleNightSelect(userId: string) {
   await gameService.submitAction({ actionType: 'NIGHT_SELECT', targetId: userId })
 }
-async function handleNightConfirm() {
-  const targetId = gameStore.state?.nightPhase?.selectedTargetId
+async function handleNightConfirm(targetId?: string) {
   await gameService.submitAction({ actionType: 'NIGHT_CONFIRM', targetId })
 }
 async function handleWitchAntidote() {
@@ -350,9 +348,8 @@ async function handleWitchPassPoison() {
 async function handleVotingSelect(userId: string) {
   await gameService.submitAction({ actionType: 'VOTING_SELECT', targetId: userId })
 }
-async function handleVotingVote() {
-  const targetId = gameStore.state?.votingPhase?.selectedPlayerId
-  if (targetId) await gameService.submitAction({ actionType: 'VOTING_VOTE', targetId })
+async function handleVotingVote(targetId: string) {
+  await gameService.submitAction({ actionType: 'VOTING_VOTE', targetId })
 }
 async function handleVotingSkip() {
   await gameService.submitAction({ actionType: 'VOTING_SKIP' })

@@ -29,7 +29,7 @@
       <!-- After reveal: vote columns showing who voted for whom -->
       <div v-else class="vote-columns-wrap">
         <!-- Eliminated player banner -->
-        <div v-if="votingPhase.eliminatedPlayerId" class="elim-banner">
+        <div v-if="votingPhase.eliminatedPlayerId" class="banner banner-kill">
           <span class="elim-banner-avatar">{{ votingPhase.eliminatedAvatar ?? '💀' }}</span>
           <div class="elim-banner-body">
             <span class="elim-banner-tag">出局 · ELIMINATED</span>
@@ -94,7 +94,11 @@
               <span class="reveal-countdown-label">自动继续 · Auto in</span>
               <span class="reveal-countdown-time">{{ formattedRevealTime }}</span>
             </div>
-            <button class="btn btn-primary" @click="emit('continueVoting')">继续 / Continue</button>
+            <div class="vote-actions">
+              <button class="btn btn-primary vote-btn" @click="emit('continueVoting')">
+                继续 / Continue
+              </button>
+            </div>
           </template>
           <template v-else>
             <p class="footer-hint">等待房主继续 · Waiting for host…</p>
@@ -114,7 +118,7 @@
                   <button
                     class="btn btn-primary vote-btn"
                     :disabled="!effectiveSelected"
-                    @click="emit('vote')"
+                    @click="effectiveSelected && emit('vote', effectiveSelected)"
                   >
                     投票 · Vote
                   </button>
@@ -122,11 +126,7 @@
                 </div>
               </template>
             </template>
-            <button
-              class="btn btn-gold reveal-btn"
-              :disabled="!allVotesIn"
-              @click="emit('revealVoting')"
-            >
+            <button class="btn btn-gold" :disabled="!allVotesIn" @click="emit('revealVoting')">
               公布结果 · Reveal
             </button>
           </template>
@@ -146,7 +146,7 @@
                 <button
                   class="btn btn-primary vote-btn"
                   :disabled="!effectiveSelected"
-                  @click="emit('vote')"
+                  @click="effectiveSelected && emit('vote', effectiveSelected)"
                 >
                   投票 · Vote
                 </button>
@@ -288,9 +288,11 @@
         <!-- After badge action (passed or destroyed): host can continue to night -->
         <template v-if="badgeDone">
           <template v-if="isHost">
-            <button class="btn btn-primary" @click="emit('continueVoting')">
-              → 进入夜晚 / Night
-            </button>
+            <div class="vote-actions">
+              <button class="btn btn-primary vote-btn" @click="emit('continueVoting')">
+                → 进入夜晚 / Night
+              </button>
+            </div>
           </template>
           <template v-else>
             <p class="footer-hint">等待继续 · Waiting…</p>
@@ -329,7 +331,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   selectPlayer: [userId: string]
-  vote: []
+  vote: [targetId: string]
   skipVote: []
   unvote: []
   revealVoting: []
@@ -385,22 +387,21 @@ const allVotesIn = computed(
     props.votingPhase.votesSubmitted >= props.votingPhase.totalVoters,
 )
 
-// ── Optimistic selection ──────────────────────────────────────────────────────
-const optimisticSelected = ref<string | undefined>(undefined)
+// ── Selection — local UI state (server notified but not authoritative for display) ──
+const localSelected = ref<string | undefined>(props.votingPhase.selectedPlayerId)
 
+// Reset when a new sub-phase begins
 watch(
-  () => props.votingPhase.selectedPlayerId,
+  () => props.votingPhase.subPhase,
   () => {
-    optimisticSelected.value = undefined
+    localSelected.value = undefined
   },
 )
 
-const effectiveSelected = computed(
-  () => optimisticSelected.value ?? props.votingPhase.selectedPlayerId,
-)
+const effectiveSelected = computed(() => localSelected.value)
 
 function selectPlayer(userId: string) {
-  optimisticSelected.value = userId
+  localSelected.value = userId
   emit('selectPlayer', userId)
 }
 
@@ -570,16 +571,6 @@ function onBadgeTap(player: GamePlayer) {
 }
 
 /* Eliminated player banner (shown above vote columns after reveal) */
-.elim-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.5rem 0.75rem;
-  background: rgba(181, 37, 26, 0.06);
-  border-left: 3px solid var(--red);
-  border-radius: 0 0.375rem 0.375rem 0;
-}
-
 .elim-banner-avatar {
   font-size: 1.5rem;
   flex-shrink: 0;
@@ -640,20 +631,7 @@ function onBadgeTap(player: GamePlayer) {
   line-height: 1;
 }
 
-/* Footer */
-.voting-footer {
-  padding: 0.75rem 1rem 2.5rem;
-  border-top: 1px solid var(--border-l);
-  background: var(--paper);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.reveal-btn {
-  width: 100%;
-}
-
+/* Footer — shared styles in game.css */
 /* Reveal countdown */
 .reveal-countdown {
   display: flex;
@@ -664,7 +642,7 @@ function onBadgeTap(player: GamePlayer) {
 }
 
 .reveal-countdown-label {
-  font-size: 0.75rem;
+  font-size: 1rem;
   color: var(--muted);
 }
 

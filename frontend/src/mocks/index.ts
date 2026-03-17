@@ -72,7 +72,8 @@ export function setupMocks() {
   // Expose singleton so stompClient.ts can pick it up synchronously
   ;(globalThis as Record<string, unknown>).__mockStompClient = mockStompClient
 
-  const mock = new AxiosMockAdapter(http, { delayResponse: 300 })
+  const mockDelay = import.meta.env.VITE_MOCK_FAST === 'true' ? 50 : 300
+  const mock = new AxiosMockAdapter(http, { delayResponse: mockDelay })
 
   // ── User ──────────────────────────────────────────────────────────────────────
   mock.onPost('/user/login').reply(200, MOCK_LOGIN)

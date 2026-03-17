@@ -77,19 +77,17 @@
     <!-- Footer -->
     <footer class="day-footer">
       <template v-if="viewRole === 'HOST'">
-        <button
-          v-if="dayPhase.subPhase === 'RESULT_HIDDEN'"
-          class="btn btn-primary"
-          @click="emit('revealResult')"
-        >
-          显示结果 · Result
-        </button>
+        <div v-if="dayPhase.subPhase === 'RESULT_HIDDEN'" class="vote-actions">
+          <button class="btn btn-primary vote-btn" @click="emit('revealResult')">
+            显示结果 · Result
+          </button>
+        </div>
         <template v-else>
           <div class="vote-actions">
             <button
               class="btn btn-primary vote-btn"
-              :disabled="!dayPhase.selectedPlayerId"
-              @click="emit('vote')"
+              :disabled="!localSelected"
+              @click="localSelected && emit('vote', localSelected)"
             >
               投票 · Vote
             </button>
@@ -114,8 +112,8 @@
           <div class="vote-actions">
             <button
               class="btn btn-primary vote-btn"
-              :disabled="!dayPhase.selectedPlayerId"
-              @click="emit('vote')"
+              :disabled="!localSelected"
+              @click="localSelected && emit('vote', localSelected)"
             >
               投票 · Vote
             </button>
@@ -132,7 +130,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { DayPhaseState, GamePlayer } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
@@ -146,7 +144,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   revealResult: []
-  vote: []
+  vote: [targetId: string]
   skip: []
   selectPlayer: [userId: string]
 }>()
@@ -181,6 +179,17 @@ const formattedTime = computed(() => {
   return `${m}:${String(s).padStart(2, '0')}`
 })
 
+// Selection is local UI state — server is notified but not authoritative for display
+const localSelected = ref<string | undefined>(props.dayPhase.selectedPlayerId)
+
+// Reset when a new action phase begins
+watch(
+  () => props.dayPhase.subPhase,
+  () => {
+    localSelected.value = undefined
+  },
+)
+
 const killedId = computed(() => props.dayPhase.nightResult?.killedPlayerId)
 
 function isKilledAndVisible(player: GamePlayer) {
@@ -193,7 +202,7 @@ function isKilledAndVisible(player: GamePlayer) {
 function slotVariant(player: GamePlayer) {
   if (isKilledAndVisible(player)) return 'killed' as const
   if (!player.isAlive) return 'dead' as const
-  if (player.userId === props.dayPhase.selectedPlayerId) return 'selected' as const
+  if (player.userId === localSelected.value) return 'selected' as const
   if (player.userId === props.myUserId) return 'me' as const
   return 'alive' as const
 }
@@ -202,6 +211,7 @@ function onTap(player: GamePlayer) {
   if (viewRole.value !== 'ALIVE' && viewRole.value !== 'HOST') return
   if (props.dayPhase.subPhase !== 'RESULT_REVEALED') return
   if (!player.isAlive) return
+  localSelected.value = player.userId
   emit('selectPlayer', player.userId)
 }
 </script>

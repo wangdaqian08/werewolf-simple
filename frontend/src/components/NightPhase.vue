@@ -54,7 +54,7 @@
         <button
           class="btn btn-danger nf-btn"
           :disabled="!effectivePhase.selectedTargetId"
-          @click="emit('confirm')"
+          @click="emit('confirm', localSelected)"
         >
           确认袭击 Confirm
         </button>
@@ -85,7 +85,7 @@
         <button
           class="btn btn-danger nf-btn"
           :disabled="!effectivePhase.selectedTargetId"
-          @click="emit('confirm')"
+          @click="emit('confirm', localSelected)"
         >
           查验 · Check
         </button>
@@ -94,39 +94,41 @@
 
     <!-- ── SEER_RESULT ────────────────────────────────────────────────── -->
     <template v-else-if="subPhase === 'SEER_RESULT' && nightPhase.seerResult">
-      <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
-        <div class="sr-player">
-          {{ nightPhase.seerResult.checkedSeatIndex }}号 ·
-          {{ nightPhase.seerResult.checkedNickname }}
-        </div>
-        <div class="sr-verdict">
-          {{ nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '🌾 村民 · Villager' }}
-        </div>
-      </div>
-      <div class="sr-hist">
-        <div class="srh-title">历史查验记录</div>
-        <template v-if="nightPhase.seerResult.history.length">
-          <div
-            v-for="h in nightPhase.seerResult.history"
-            :key="`${h.round}-${h.nickname}`"
-            class="srh-row"
-          >
-            <span class="srh-round">Round {{ h.round }}</span>
-            <span class="srh-sep">·</span>
-            <span class="srh-name">{{ h.nickname }}</span>
-            <span class="srh-arrow">→</span>
-            <span :class="h.isWerewolf ? 'srh-wolf' : 'srh-ok'">
-              {{ h.isWerewolf ? '狼人 ✗' : '村民 ✓' }}
-            </span>
+      <div class="sr-wrap">
+        <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
+          <div class="sr-player">
+            {{ nightPhase.seerResult.checkedSeatIndex }}号 ·
+            {{ nightPhase.seerResult.checkedNickname }}
           </div>
-        </template>
-        <div v-else class="srh-empty">暂无历史记录</div>
+          <div class="sr-verdict">
+            {{ nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '🌾 村民 · Villager' }}
+          </div>
+        </div>
+        <div class="sr-hist">
+          <div class="srh-title">历史查验记录</div>
+          <template v-if="nightPhase.seerResult.history.length">
+            <div
+              v-for="h in nightPhase.seerResult.history"
+              :key="`${h.round}-${h.nickname}`"
+              class="srh-row"
+            >
+              <span class="srh-round">Round {{ h.round }}</span>
+              <span class="srh-sep">·</span>
+              <span class="srh-name">{{ h.nickname }}</span>
+              <span class="srh-arrow">→</span>
+              <span :class="h.isWerewolf ? 'srh-wolf' : 'srh-ok'">
+                {{ h.isWerewolf ? '狼人 ✗' : '村民 ✓' }}
+              </span>
+            </div>
+          </template>
+          <div v-else class="srh-empty">暂无历史记录</div>
+        </div>
+        <footer class="nf" style="margin-top: auto">
+          <button class="btn btn-secondary nf-btn" @click="emit('confirm')">
+            查验完毕 Checking Complete in ({{ seerCountdown }}s)
+          </button>
+        </footer>
       </div>
-      <footer class="nf">
-        <button class="btn btn-secondary nf-btn" @click="emit('confirm')">
-          查验完毕 Checking Complete in ({{ seerCountdown }}s)
-        </button>
-      </footer>
     </template>
 
     <!-- ── WITCH_ACT ───────────────────────────────────────────────────── -->
@@ -253,7 +255,7 @@
         <button
           class="btn btn-danger nf-btn"
           :disabled="!effectivePhase.selectedTargetId"
-          @click="emit('confirm')"
+          @click="emit('confirm', localSelected)"
         >
           确认保护 Confirm
         </button>
@@ -296,7 +298,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   selectPlayer: [userId: string]
-  confirm: []
+  confirm: [targetId?: string]
   witchAntidote: []
   witchPassAntidote: []
   witchPoison: [targetId: string]
@@ -306,22 +308,21 @@ const emit = defineEmits<{
 const subPhase = computed(() => props.nightPhase.subPhase)
 const poisonMode = ref(false)
 
-// ── Optimistic selection — update highlight instantly without waiting for server ──
-const optimisticSelected = ref<string | undefined>(undefined)
+// Selection is local UI state — server is notified but not authoritative for display
+const localSelected = ref<string | undefined>(props.nightPhase.selectedTargetId)
 
-// Clear optimistic state once the server confirms (or when phase changes)
-watch([() => props.nightPhase.selectedTargetId, subPhase], () => {
-  optimisticSelected.value = undefined
+// Reset when a new action phase begins
+watch(subPhase, () => {
+  localSelected.value = undefined
 })
 
-// Merged view: optimistic overrides server until server catches up
 const effectivePhase = computed(() => ({
   ...props.nightPhase,
-  selectedTargetId: optimisticSelected.value ?? props.nightPhase.selectedTargetId,
+  selectedTargetId: localSelected.value,
 }))
 
 function selectPlayer(userId: string) {
-  optimisticSelected.value = userId
+  localSelected.value = userId
   emit('selectPlayer', userId)
 }
 
@@ -428,7 +429,7 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.75rem 1.25rem 0.625rem;
+  padding: 3rem 1.25rem 0.625rem;
   gap: 0.2rem;
 }
 
@@ -657,11 +658,13 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   background: rgba(255, 255, 255, 0.025);
 }
 
-.nf-btn {
-  width: 100%;
+/* ── Seer result ─────────────────────────────────────────────────────────── */
+.sr-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-/* ── Seer result ─────────────────────────────────────────────────────────── */
 .sr-card {
   margin: 0.625rem 0.875rem 0;
   border-radius: 0.625rem;
@@ -833,8 +836,9 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   justify-content: center;
   flex: 1;
   gap: 0.625rem;
-  padding: 3rem 1.5rem;
+  padding: 0 1.5rem;
   text-align: center;
+  transform: translateY(-4.5rem);
 }
 
 .ss-emoji {
@@ -862,17 +866,7 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 }
 
 /* ── Button overrides for night mode ─────────────────────────────────────── */
-.btn {
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  font-family: inherit;
-  border: none;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
+/* Size/shape use global .btn; only color overrides needed here */
 .btn:disabled {
   opacity: 0.4;
   cursor: default;
