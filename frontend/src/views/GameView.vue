@@ -171,6 +171,15 @@
         <button class="debug-btn" @click="debugVoting('BADGE_BURNED')">Badge: Burned</button>
         <button class="debug-btn debug-btn-exit" @click="debugVotingAdvance">→ Night</button>
       </div>
+      <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Game Over</div>
+      <div class="debug-btns">
+        <button class="debug-btn debug-btn-exit" @click="debugGameOver('VILLAGER')">
+          → Village Wins
+        </button>
+        <button class="debug-btn debug-btn-exit" @click="debugGameOver('WEREWOLF')">
+          → Wolf Wins
+        </button>
+      </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Sheriff Screens</div>
       <div class="debug-btns" data-testid="debug-sheriff-btns">
         <button class="debug-btn" @click="debugSheriff('SIGNUP')">Sign-up</button>
@@ -381,6 +390,10 @@ async function debugVoting(scenario: string) {
 }
 async function debugVotingAdvance() {
   await http.post('/debug/voting/advance')
+}
+
+async function debugGameOver(winner: string) {
+  await http.post('/debug/game/over', { winner })
 }
 
 async function debugNight(scenario: string) {
