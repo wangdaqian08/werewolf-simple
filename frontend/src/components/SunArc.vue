@@ -78,7 +78,7 @@ const rays = Array.from({ length: 8 }, (_, i) => {
 <style scoped>
 .sun-arc-wrap {
   width: 100%;
-  padding: 0 1.25rem;
+  padding: 0 1.25rem 1.5rem;
   box-sizing: border-box;
 }
 

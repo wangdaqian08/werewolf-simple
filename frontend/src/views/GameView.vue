@@ -62,6 +62,8 @@
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :my-role="gameStore.state?.myRole"
+        :vote-history="gameStore.state?.voteHistory"
         @select-player="handleVotingSelect"
         @vote="handleVotingVote"
         @skip-vote="handleVotingSkip"
@@ -169,6 +171,8 @@
         <button class="debug-btn" @click="debugVoting('BADGE_HANDOVER')">Badge: Pick</button>
         <button class="debug-btn" @click="debugVoting('BADGE_SHERIFF')">Badge: Sheriff</button>
         <button class="debug-btn" @click="debugVoting('BADGE_BURNED')">Badge: Burned</button>
+        <button class="debug-btn" @click="debugVoting('VOTING_NO_HISTORY')">No History</button>
+        <button class="debug-btn" @click="debugVoting('VOTING_NO_DATA')">No Data</button>
         <button class="debug-btn debug-btn-exit" @click="debugVotingAdvance">→ Night</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Game Over</div>
