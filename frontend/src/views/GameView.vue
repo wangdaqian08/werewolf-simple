@@ -329,8 +329,7 @@ async function handleDaySelectPlayer(userId: string) {
 async function handleNightSelect(userId: string) {
   await gameService.submitAction({ actionType: 'NIGHT_SELECT', targetId: userId })
 }
-async function handleNightConfirm() {
-  const targetId = gameStore.state?.nightPhase?.selectedTargetId
+async function handleNightConfirm(targetId?: string) {
   await gameService.submitAction({ actionType: 'NIGHT_CONFIRM', targetId })
 }
 async function handleWitchAntidote() {

@@ -139,11 +139,11 @@ test('night: SEER_RESULT — history shown even when empty (srh-empty message)',
   // Select a player
   const pickCells = page.locator('.player-grid .slot-alive')
   await pickCells.first().click()
-  await page.waitForTimeout(70)
+  await page.waitForTimeout(200)
 
   // Click Check button
   await page.getByRole('button', { name: /查验 · Check/i }).click()
-  await page.waitForTimeout(70)
+  await page.waitForTimeout(200)
 
   // Should be on SEER_RESULT — history section always visible
   await expect(page.getByText('历史查验记录')).toBeVisible()

@@ -54,7 +54,7 @@
         <button
           class="btn btn-danger nf-btn"
           :disabled="!effectivePhase.selectedTargetId"
-          @click="emit('confirm')"
+          @click="emit('confirm', localSelected)"
         >
           确认袭击 Confirm
         </button>
@@ -85,7 +85,7 @@
         <button
           class="btn btn-danger nf-btn"
           :disabled="!effectivePhase.selectedTargetId"
-          @click="emit('confirm')"
+          @click="emit('confirm', localSelected)"
         >
           查验 · Check
         </button>
@@ -255,7 +255,7 @@
         <button
           class="btn btn-danger nf-btn"
           :disabled="!effectivePhase.selectedTargetId"
-          @click="emit('confirm')"
+          @click="emit('confirm', localSelected)"
         >
           确认保护 Confirm
         </button>
@@ -298,7 +298,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   selectPlayer: [userId: string]
-  confirm: []
+  confirm: [targetId?: string]
   witchAntidote: []
   witchPassAntidote: []
   witchPoison: [targetId: string]
