@@ -74,6 +74,21 @@ export interface RoleRevealState {
   teammates?: string[] // werewolf only: teammate nicknames
 }
 
+export interface VoteRoundHistory {
+  dayNumber: number
+  tally: VoteTally[]
+  eliminatedPlayerId?: string
+  eliminatedNickname?: string
+  eliminatedSeatIndex?: number
+  eliminatedAvatar?: string
+  eliminatedRole?: PlayerRole
+  hunterShotPlayerId?: string
+  hunterShotNickname?: string
+  hunterShotSeatIndex?: number
+  hunterShotAvatar?: string
+  hunterShotRole?: PlayerRole
+}
+
 export interface GameState {
   gameId: string
   phase: GamePhase
@@ -89,6 +104,7 @@ export interface GameState {
   dayPhase?: DayPhaseState
   votingPhase?: VotingState
   nightPhase?: NightPhaseState
+  voteHistory?: VoteRoundHistory[]
 }
 
 export interface GameEvent {

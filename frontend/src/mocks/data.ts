@@ -16,6 +16,7 @@ import type {
   Room,
   RoleRevealState,
   SheriffElectionState,
+  VoteRoundHistory,
   VoteTally,
   VoteVoter,
   VotingState,
@@ -485,6 +486,229 @@ export function makeNightScenario(
   }
 }
 
+// ── Vote History mock data ────────────────────────────────────────────────────
+// Simulates a completed Day 1 vote to show in Day 2 voting history panel.
+
+export const MOCK_VOTE_HISTORY: VoteRoundHistory[] = [
+  {
+    // Day 1 — 6 candidates: forces horizontal scroll in history panel
+    dayNumber: 1,
+    eliminatedPlayerId: 'u5',
+    eliminatedNickname: 'Dave',
+    eliminatedSeatIndex: 5,
+    eliminatedAvatar: '🌸',
+    eliminatedRole: 'VILLAGER',
+    hunterShotPlayerId: 'u2',
+    hunterShotNickname: 'Alice',
+    hunterShotSeatIndex: 2,
+    hunterShotAvatar: '😊',
+    hunterShotRole: 'WEREWOLF',
+    tally: [
+      {
+        playerId: 'u5',
+        nickname: 'Dave',
+        seatIndex: 5,
+        avatar: '🌸',
+        votes: 4,
+        voters: [
+          { userId: 'u2', nickname: 'Alice', avatar: '😊', seatIndex: 2 } satisfies VoteVoter,
+          { userId: 'u3', nickname: 'Bob', avatar: '🎭', seatIndex: 3 } satisfies VoteVoter,
+          { userId: 'u6', nickname: 'Eve', avatar: '🦊', seatIndex: 6 } satisfies VoteVoter,
+          { userId: 'u7', nickname: 'Frank', avatar: '🎸', seatIndex: 7 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u2',
+        nickname: 'Alice',
+        seatIndex: 2,
+        avatar: '😊',
+        votes: 3,
+        voters: [
+          { userId: 'u1', nickname: 'You', avatar: '⭐', seatIndex: 1 } satisfies VoteVoter,
+          { userId: 'u5', nickname: 'Dave', avatar: '🌸', seatIndex: 5 } satisfies VoteVoter,
+          { userId: 'u9', nickname: 'Hank', avatar: '🐯', seatIndex: 9 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u9',
+        nickname: 'Hank',
+        seatIndex: 9,
+        avatar: '🐯',
+        votes: 2,
+        voters: [
+          { userId: 'u8', nickname: 'Grace', avatar: '🌺', seatIndex: 8 } satisfies VoteVoter,
+          { userId: 'u4', nickname: 'Carol', avatar: '🌙', seatIndex: 4 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u3',
+        nickname: 'Bob',
+        seatIndex: 3,
+        avatar: '🎭',
+        votes: 2,
+        voters: [
+          { userId: 'u6', nickname: 'Eve', avatar: '🦊', seatIndex: 6 } satisfies VoteVoter,
+          { userId: 'u7', nickname: 'Frank', avatar: '🎸', seatIndex: 7 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u8',
+        nickname: 'Grace',
+        seatIndex: 8,
+        avatar: '🌺',
+        votes: 1,
+        voters: [
+          { userId: 'u9', nickname: 'Hank', avatar: '🐯', seatIndex: 9 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u4',
+        nickname: 'Carol',
+        seatIndex: 4,
+        avatar: '🌙',
+        votes: 1,
+        voters: [
+          { userId: 'u2', nickname: 'Alice', avatar: '😊', seatIndex: 2 } satisfies VoteVoter,
+        ],
+      },
+    ],
+  },
+  {
+    // Day 2 — 5 candidates
+    dayNumber: 2,
+    eliminatedPlayerId: 'u7',
+    eliminatedNickname: 'Frank',
+    eliminatedSeatIndex: 7,
+    eliminatedAvatar: '🎸',
+    eliminatedRole: 'HUNTER',
+    hunterShotPlayerId: 'u8',
+    hunterShotNickname: 'Grace',
+    hunterShotSeatIndex: 8,
+    hunterShotAvatar: '🌺',
+    hunterShotRole: 'VILLAGER',
+    tally: [
+      {
+        playerId: 'u7',
+        nickname: 'Frank',
+        seatIndex: 7,
+        avatar: '🎸',
+        votes: 5,
+        voters: [
+          { userId: 'u1', nickname: 'You', avatar: '⭐', seatIndex: 1 } satisfies VoteVoter,
+          { userId: 'u3', nickname: 'Bob', avatar: '🎭', seatIndex: 3 } satisfies VoteVoter,
+          { userId: 'u6', nickname: 'Eve', avatar: '🦊', seatIndex: 6 } satisfies VoteVoter,
+          { userId: 'u8', nickname: 'Grace', avatar: '🌺', seatIndex: 8 } satisfies VoteVoter,
+          { userId: 'u9', nickname: 'Hank', avatar: '🐯', seatIndex: 9 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u3',
+        nickname: 'Bob',
+        seatIndex: 3,
+        avatar: '🎭',
+        votes: 2,
+        voters: [
+          { userId: 'u7', nickname: 'Frank', avatar: '🎸', seatIndex: 7 } satisfies VoteVoter,
+          { userId: 'u4', nickname: 'Carol', avatar: '🌙', seatIndex: 4 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u1',
+        nickname: 'You',
+        seatIndex: 1,
+        avatar: '⭐',
+        votes: 1,
+        voters: [
+          { userId: 'u5', nickname: 'Dave', avatar: '🌸', seatIndex: 5 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u9',
+        nickname: 'Hank',
+        seatIndex: 9,
+        avatar: '🐯',
+        votes: 1,
+        voters: [
+          { userId: 'u2', nickname: 'Alice', avatar: '😊', seatIndex: 2 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u4',
+        nickname: 'Carol',
+        seatIndex: 4,
+        avatar: '🌙',
+        votes: 1,
+        voters: [{ userId: 'u3', nickname: 'Bob', avatar: '🎭', seatIndex: 3 } satisfies VoteVoter],
+      },
+    ],
+  },
+  {
+    // Day 3 — 5 candidates
+    dayNumber: 3,
+    eliminatedPlayerId: 'u6',
+    eliminatedNickname: 'Eve',
+    eliminatedSeatIndex: 6,
+    eliminatedAvatar: '🦊',
+    eliminatedRole: 'WEREWOLF',
+    tally: [
+      {
+        playerId: 'u6',
+        nickname: 'Eve',
+        seatIndex: 6,
+        avatar: '🦊',
+        votes: 4,
+        voters: [
+          { userId: 'u1', nickname: 'You', avatar: '⭐', seatIndex: 1 } satisfies VoteVoter,
+          { userId: 'u3', nickname: 'Bob', avatar: '🎭', seatIndex: 3 } satisfies VoteVoter,
+          { userId: 'u4', nickname: 'Carol', avatar: '🌙', seatIndex: 4 } satisfies VoteVoter,
+          { userId: 'u9', nickname: 'Hank', avatar: '🐯', seatIndex: 9 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u1',
+        nickname: 'You',
+        seatIndex: 1,
+        avatar: '⭐',
+        votes: 2,
+        voters: [
+          { userId: 'u6', nickname: 'Eve', avatar: '🦊', seatIndex: 6 } satisfies VoteVoter,
+          { userId: 'u3', nickname: 'Bob', avatar: '🎭', seatIndex: 3 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u9',
+        nickname: 'Hank',
+        seatIndex: 9,
+        avatar: '🐯',
+        votes: 1,
+        voters: [
+          { userId: 'u7', nickname: 'Frank', avatar: '🎸', seatIndex: 7 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u3',
+        nickname: 'Bob',
+        seatIndex: 3,
+        avatar: '🎭',
+        votes: 1,
+        voters: [
+          { userId: 'u8', nickname: 'Grace', avatar: '🌺', seatIndex: 8 } satisfies VoteVoter,
+        ],
+      },
+      {
+        playerId: 'u4',
+        nickname: 'Carol',
+        seatIndex: 4,
+        avatar: '🌙',
+        votes: 1,
+        voters: [
+          { userId: 'u2', nickname: 'Alice', avatar: '😊', seatIndex: 2 } satisfies VoteVoter,
+        ],
+      },
+    ],
+  },
+]
+
 // ── Voting Phase mock states ──────────────────────────────────────────────────
 // Tom (u6, seat 6) is eliminated in all voting scenarios.
 
@@ -536,7 +760,9 @@ export function makeVotingScenario(
     | 'HUNTER_SHOOT'
     | 'BADGE_HANDOVER'
     | 'BADGE_SHERIFF'
-    | 'BADGE_BURNED',
+    | 'BADGE_BURNED'
+    | 'VOTING_NO_HISTORY'
+    | 'VOTING_NO_DATA',
 ): GameState {
   const now = Date.now()
   const base: GameState = {
@@ -544,6 +770,7 @@ export function makeVotingScenario(
     phase: 'VOTING',
     dayNumber: 2,
     dayPhase: undefined,
+    voteHistory: MOCK_VOTE_HISTORY,
   }
   const eliminated = {
     eliminatedPlayerId: 'u6',
@@ -645,6 +872,36 @@ export function makeVotingScenario(
           ...commonTiming,
           ...eliminated,
           badgeDestroyed: true,
+        } satisfies VotingState,
+      }
+    case 'VOTING_NO_HISTORY':
+      // myRole set (chip visible) but no vote history (history button hidden)
+      return {
+        ...base,
+        myRole: 'SEER',
+        voteHistory: [],
+        votingPhase: {
+          subPhase: 'VOTING',
+          ...commonTiming,
+          canVote: true,
+          votedPlayerIds: [],
+          votesSubmitted: 0,
+          totalVoters: 8,
+        } satisfies VotingState,
+      }
+    case 'VOTING_NO_DATA':
+      // Neither myRole nor voteHistory — role-history row must be absent
+      return {
+        ...base,
+        myRole: undefined,
+        voteHistory: undefined,
+        votingPhase: {
+          subPhase: 'VOTING',
+          ...commonTiming,
+          canVote: true,
+          votedPlayerIds: [],
+          votesSubmitted: 0,
+          totalVoters: 8,
         } satisfies VotingState,
       }
   }

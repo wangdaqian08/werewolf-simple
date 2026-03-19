@@ -16,6 +16,16 @@
         :phase-started="votingPhase.phaseStarted"
       />
 
+      <!-- Role + history row -->
+      <div v-if="myRole || voteHistory?.length" class="role-history-row">
+        <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
+          🔒 身份 · Tap to reveal
+        </button>
+        <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
+          📋 历史
+        </button>
+      </div>
+
       <!-- Before reveal: simple vote count -->
       <div v-if="!isRevealed" class="vote-count-bar">
         <div class="tally-chip tally-chip-count">
@@ -161,6 +171,97 @@
           </template>
         </template>
       </footer>
+
+      <!-- Role card bottom sheet -->
+      <Teleport to="body">
+        <div v-if="showRoleCard" class="role-card-overlay" @click.self="showRoleCard = false">
+          <div class="role-card-sheet">
+            <div class="role-card-header">
+              <span>你的身份 · My Role</span>
+              <button class="history-close" @click="showRoleCard = false">✕</button>
+            </div>
+            <div v-if="myRole && ROLE_META[myRole]" class="role-card-body">
+              <div class="rc-emoji">{{ ROLE_META[myRole]?.emoji }}</div>
+              <div class="rc-name-zh">{{ ROLE_META[myRole]?.nameZh }}</div>
+              <div class="rc-label" :class="`rc-label-${ROLE_META[myRole]?.team}`">
+                {{ ROLE_META[myRole]?.nameEn }}
+              </div>
+              <p class="rc-desc">{{ ROLE_META[myRole]?.description }}</p>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
+      <!-- History bottom sheet — Teleport here so it stays inside isVotingScreen block -->
+      <Teleport to="body">
+        <div v-if="showHistory" class="history-overlay" @click.self="showHistory = false">
+          <div class="history-sheet">
+            <div class="history-header">
+              <span>投票记录 · Vote History</span>
+              <button class="history-close" @click="showHistory = false">✕</button>
+            </div>
+            <div class="history-body">
+              <div v-if="!voteHistory?.length" class="history-empty">暂无历史 · No history yet</div>
+              <div
+                v-for="round in [...(voteHistory ?? [])].reverse()"
+                :key="round.dayNumber"
+                class="history-round"
+              >
+                <div class="history-round-title">
+                  第 {{ round.dayNumber }} 天 · Day {{ round.dayNumber }}
+                </div>
+                <!-- Vote-out banner -->
+                <div v-if="round.eliminatedPlayerId" class="banner banner-kill history-banner">
+                  <span class="banner-avatar">{{ round.eliminatedAvatar ?? '💀' }}</span>
+                  <div>
+                    <div class="banner-title">
+                      出局 · 座位{{ round.eliminatedSeatIndex }} {{ round.eliminatedNickname }}
+                    </div>
+                    <div v-if="round.eliminatedRole" class="banner-sub">
+                      {{ ROLE_ZH[round.eliminatedRole] }}
+                    </div>
+                  </div>
+                </div>
+                <!-- Hunter-shot banner -->
+                <div v-if="round.hunterShotPlayerId" class="banner banner-kill history-banner">
+                  <span class="banner-avatar">🏹</span>
+                  <div>
+                    <div class="banner-title">
+                      猎人开枪 · 座位{{ round.hunterShotSeatIndex }} {{ round.hunterShotNickname }}
+                    </div>
+                    <div v-if="round.hunterShotRole" class="banner-sub">
+                      {{ ROLE_ZH[round.hunterShotRole] }}
+                    </div>
+                  </div>
+                </div>
+                <div class="vote-columns history-columns">
+                  <div
+                    v-for="(entry, i) in round.tally"
+                    :key="entry.playerId"
+                    class="vote-col"
+                    :class="{ 'vote-col-winner': i === 0 }"
+                  >
+                    <div class="vote-col-head" :class="{ 'tally-chip-top': i === 0 }">
+                      <div class="vote-col-avatar">{{ entry.avatar ?? '😊' }}</div>
+                      <div class="vote-col-cname">{{ entry.nickname }}</div>
+                      <div class="vote-col-count" :class="i === 0 ? 'tally-winner' : 'tally-muted'">
+                        {{ entry.votes }}
+                      </div>
+                    </div>
+                    <div class="vote-col-body">
+                      <div v-for="v in entry.voters" :key="v.userId" class="vcol-row">
+                        <span class="vcol-avatar">{{ v.avatar }}</span>
+                        <span class="vcol-seat">#{{ v.seatIndex }}</span>
+                        <span class="vcol-name">{{ v.nickname }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Teleport>
     </template>
 
     <!-- ── HUNTER_SHOOT screen ── -->
@@ -318,7 +419,7 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { GamePlayer, PlayerRole, VotingState } from '@/types'
+import type { GamePlayer, PlayerRole, VoteRoundHistory, VotingState } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 
@@ -327,6 +428,8 @@ const props = defineProps<{
   players: GamePlayer[]
   myUserId: string
   isHost: boolean
+  myRole?: PlayerRole
+  voteHistory?: VoteRoundHistory[]
 }>()
 
 const emit = defineEmits<{
@@ -417,6 +520,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(intervalId)
+  document.body.style.overflow = ''
 })
 
 const formattedTime = computed(() => {
@@ -452,6 +556,85 @@ const ROLE_DISPLAY: Record<PlayerRole, string> = {
 
 function roleDisplay(role: PlayerRole) {
   return ROLE_DISPLAY[role] ?? role
+}
+
+// ── My Role badge ─────────────────────────────────────────────────────────────
+const ROLE_ZH: Record<string, string> = {
+  WEREWOLF: '狼人',
+  VILLAGER: '村民',
+  SEER: '预言家',
+  WITCH: '女巫',
+  HUNTER: '猎人',
+  GUARD: '守卫',
+  IDIOT: '白痴',
+}
+
+// ── Vote History panel ────────────────────────────────────────────────────────
+const showHistory = ref(false)
+const showRoleCard = ref(false)
+
+watch([showHistory, showRoleCard], ([h, r]) => {
+  document.body.style.overflow = h || r ? 'hidden' : ''
+})
+
+// ── Role card metadata ─────────────────────────────────────────────────────────
+interface RoleMeta {
+  nameZh: string
+  nameEn: string
+  emoji: string
+  team: string
+  description: string
+}
+const ROLE_META: Record<string, RoleMeta> = {
+  WEREWOLF: {
+    nameZh: '狼人',
+    nameEn: 'WEREWOLF',
+    emoji: '🐺',
+    team: 'wolf',
+    description: '每晚与狼队商议，袭击一名村民。',
+  },
+  VILLAGER: {
+    nameZh: '村民',
+    nameEn: 'VILLAGER',
+    emoji: '🌾',
+    team: 'village',
+    description: '通过讨论和投票找出狼人，保护村庄。',
+  },
+  SEER: {
+    nameZh: '预言家',
+    nameEn: 'SEER',
+    emoji: '🔭',
+    team: 'special',
+    description: '每晚可查验一名玩家，得知其是否为狼人。',
+  },
+  WITCH: {
+    nameZh: '女巫',
+    nameEn: 'WITCH',
+    emoji: '🔮',
+    team: 'special',
+    description: '拥有一瓶解药和一瓶毒药，各可使用一次。',
+  },
+  HUNTER: {
+    nameZh: '猎人',
+    nameEn: 'HUNTER',
+    emoji: '🏹',
+    team: 'special',
+    description: '死亡时可开枪带走一名玩家。',
+  },
+  GUARD: {
+    nameZh: '守卫',
+    nameEn: 'GUARD',
+    emoji: '🛡️',
+    team: 'special',
+    description: '每晚保护一名玩家免受狼人袭击。',
+  },
+  IDIOT: {
+    nameZh: '白痴',
+    nameEn: 'IDIOT',
+    emoji: '🃏',
+    team: 'special',
+    description: '被投票驱逐时揭示身份，免于出局但失去投票权。',
+  },
 }
 
 // ── Slot variants ─────────────────────────────────────────────────────────────
@@ -651,5 +834,239 @@ function onBadgeTap(player: GamePlayer) {
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--gold);
+}
+
+/* Role + history row */
+.role-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 1rem 0.375rem;
+  min-height: 2.25rem;
+}
+
+.my-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid currentColor;
+}
+
+.my-role-wolf {
+  color: var(--red);
+  background: rgba(181, 37, 26, 0.08);
+}
+
+.my-role-special {
+  color: var(--gold);
+  background: rgba(160, 120, 48, 0.08);
+}
+
+.my-role-guard {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.my-role-hunter {
+  color: #7c5c3a;
+  background: rgba(124, 92, 58, 0.08);
+}
+
+.my-role-default {
+  color: var(--muted);
+  background: var(--paper);
+  border-color: var(--border-l);
+}
+
+.my-role-locked {
+  color: var(--muted);
+  background: var(--paper);
+  border-color: var(--border-l);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.history-btn {
+  background: var(--paper);
+  border: 1px solid var(--border-l);
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.history-btn:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* History bottom sheet overlay */
+.history-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 20, 12, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  touch-action: none;
+}
+
+.history-sheet {
+  width: 100%;
+  max-height: 75dvh;
+  background: var(--paper);
+  border-radius: 1rem 1rem 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--border-l);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.history-close {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+}
+
+.history-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overscroll-behavior: contain;
+}
+
+.history-empty {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.875rem;
+  padding: 2rem 0;
+}
+
+.history-round {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.history-round-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.history-elim {
+  font-size: 0.75rem;
+  color: var(--red);
+  padding: 0.25rem 0;
+}
+
+.history-columns {
+  margin-top: 0.25rem;
+}
+
+.history-banner {
+  margin-bottom: 0.375rem;
+}
+
+/* Role card centered modal */
+.role-card-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 20, 12, 0.55);
+  z-index: 201;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  touch-action: none;
+}
+
+.role-card-sheet {
+  width: 100%;
+  max-width: 320px;
+  background: var(--paper);
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(26, 20, 12, 0.3);
+}
+
+.role-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--border-l);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.role-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.75rem 1.5rem 2rem;
+}
+
+.rc-emoji {
+  font-size: 3.5rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.rc-name-zh {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.rc-label {
+  font-size: 0.625rem;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.rc-label-wolf {
+  color: var(--red);
+}
+.rc-label-village {
+  color: var(--green);
+}
+.rc-label-special {
+  color: var(--gold);
+}
+.rc-desc {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.6;
+  text-align: center;
+  margin: 0;
 }
 </style>
