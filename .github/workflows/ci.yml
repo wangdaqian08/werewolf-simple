@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run DB init script (mirrors docker/init.sql)
-        run: psql -h localhost -U werewolf -d werewolf_test -f backend/docker/init.sql
+        run: psql -h localhost -U werewolf -d werewolf_test -f docker/init.sql
         env:
           PGPASSWORD: werewolf
 
