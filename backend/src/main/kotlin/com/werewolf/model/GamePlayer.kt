@@ -1,0 +1,39 @@
+package com.werewolf.model
+
+import jakarta.persistence.*
+
+@Entity
+@Table(
+    name = "game_players",
+    uniqueConstraints = [
+        UniqueConstraint(name = "uq_game_user", columnNames = ["game_id", "user_id"]),
+        UniqueConstraint(name = "uq_game_seat", columnNames = ["game_id", "seat_index"]),
+    ],
+)
+class GamePlayer(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Int? = null,
+
+    @Column(name = "game_id", nullable = false)
+    var gameId: Int = 0,
+
+    @Column(name = "user_id", nullable = false, length = 128)
+    var userId: String = "",
+
+    @Column(name = "seat_index", nullable = false)
+    var seatIndex: Int = 0,
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    var role: PlayerRole = PlayerRole.VILLAGER,
+
+    @Column(name = "is_alive", nullable = false)
+    var alive: Boolean = true,
+
+    @Column(name = "is_sheriff", nullable = false)
+    var sheriff: Boolean = false,
+
+    @Column(name = "confirmed_role", nullable = false)
+    var confirmedRole: Boolean = false,
+)

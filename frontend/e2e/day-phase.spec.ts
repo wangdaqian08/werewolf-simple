@@ -58,15 +58,25 @@ test('host sees kill banner after revealing result', async ({ page }) => {
   await expect(page.locator('.banner-kill')).toBeVisible()
 })
 
-test('host sees Vote and 弃权 buttons after revealing result', async ({ page }) => {
+test('host sees 开始投票 button after revealing result', async ({ page }) => {
   await loadScenario(page, 'HOST_REVEALED')
-  await expect(page.getByRole('button', { name: /投票/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /弃权/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /开始投票.*Start Vote/i })).toBeVisible()
 })
 
-test('host Vote button is disabled until a player is selected', async ({ page }) => {
+test('host does not see vote or 弃权 buttons in day phase', async ({ page }) => {
   await loadScenario(page, 'HOST_REVEALED')
-  await expect(page.getByRole('button', { name: /投票/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^投票 · Vote$/ })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /^弃权$/ })).not.toBeVisible()
+})
+
+test('clicking 开始投票 transitions all players to voting screen with 投票 and 弃权 buttons', async ({
+  page,
+}) => {
+  await loadScenario(page, 'HOST_REVEALED')
+  await page.getByRole('button', { name: /开始投票.*Start Vote/i }).click()
+
+  await expect(page.getByRole('button', { name: /投票.*Vote/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /弃权/i })).toBeVisible()
 })
 
 // ── DEAD view ─────────────────────────────────────────────────────────────────

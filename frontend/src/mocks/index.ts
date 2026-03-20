@@ -548,6 +548,14 @@ export function setupMocks() {
             : undefined,
         }
         pushGameStateUpdate()
+      } else if (actionType === 'DAY_ADVANCE') {
+        const voting = makeVotingScenario('VOTING')
+        mockGameState = {
+          ...voting,
+          hostId: mockGameState.hostId,
+          players: mockGameState.players,
+        }
+        pushGameStateUpdate()
       }
     } else if (mockGameState.phase === 'VOTING' && mockGameState.votingPhase) {
       const vp = mockGameState.votingPhase

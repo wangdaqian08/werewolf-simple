@@ -82,18 +82,11 @@
             显示结果 · Result
           </button>
         </div>
-        <template v-else>
-          <div class="vote-actions">
-            <button
-              class="btn btn-primary vote-btn"
-              :disabled="!localSelected"
-              @click="localSelected && emit('vote', localSelected)"
-            >
-              投票 · Vote
-            </button>
-            <button class="btn btn-secondary skip-btn" @click="emit('skip')">弃权</button>
-          </div>
-        </template>
+        <div v-else-if="dayPhase.subPhase === 'RESULT_REVEALED'" class="vote-actions">
+          <button class="btn btn-gold vote-btn" @click="emit('startVote')">
+            开始投票 · Start Vote
+          </button>
+        </div>
       </template>
 
       <template v-else-if="viewRole === 'DEAD'">
@@ -144,6 +137,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   revealResult: []
+  startVote: []
   vote: [targetId: string]
   skip: []
   selectPlayer: [userId: string]
@@ -208,7 +202,7 @@ function slotVariant(player: GamePlayer) {
 }
 
 function onTap(player: GamePlayer) {
-  if (viewRole.value !== 'ALIVE' && viewRole.value !== 'HOST') return
+  if (viewRole.value !== 'ALIVE') return
   if (props.dayPhase.subPhase !== 'RESULT_REVEALED') return
   if (!player.isAlive) return
   localSelected.value = player.userId
