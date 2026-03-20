@@ -85,6 +85,7 @@
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
         @reveal-result="handleRevealResult"
+        @start-vote="handleStartVote"
         @vote="handleDayVote"
         @skip="handleDaySkip"
         @select-player="handleDaySelectPlayer"
@@ -328,6 +329,9 @@ async function handleSheriffAbstain() {
 
 async function handleRevealResult() {
   await gameService.submitAction({ actionType: 'REVEAL_NIGHT_RESULT' })
+}
+async function handleStartVote() {
+  await gameService.submitAction({ actionType: 'DAY_ADVANCE' })
 }
 async function handleDayVote(targetId: string) {
   await gameService.submitAction({ actionType: 'DAY_VOTE', targetId })
