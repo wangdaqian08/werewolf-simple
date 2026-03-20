@@ -7,6 +7,59 @@ on:
     branches: [main]
 
 jobs:
+  # ── Backend ───────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: werewolf_test
+          POSTGRES_USER: werewolf
+          POSTGRES_PASSWORD: werewolf
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run DB init script (mirrors docker/init.sql)
+        run: psql -h localhost -U werewolf -d werewolf_test -f backend/docker/init.sql
+        env:
+          PGPASSWORD: werewolf
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('backend/**/*.gradle.kts', 'backend/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Build & test
+        run: ./gradlew build
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/werewolf_test
+          SPRING_DATASOURCE_USERNAME: werewolf
+          SPRING_DATASOURCE_PASSWORD: werewolf
+
+  # ── Frontend ──────────────────────────────────────────────────────────────────
   checks:
     name: Lint & Test
     runs-on: ubuntu-latest
