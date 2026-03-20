@@ -1,17 +1,36 @@
-build/
+# ─── Backend (Gradle / Spring Boot) ───────────────────────────────────────────
+backend/build/
+backend/.gradle/
+backend/out/
+*.class
+*.jar
+*.war
+*.ear
 
-#//////////////////////////
-# NPM
-#//////////////////////////
-node_modules/
+# ─── Frontend (Node / Vue / Vite) ─────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/playwright-report/
+frontend/test-results/
+frontend/*.iml
 
-#//////////////////////////
-# VSCode
-#//////////////////////////
-.vscode/
-
-#//////////////////////////
-# WebStorm
-#//////////////////////////
+# ─── IDE ───────────────────────────────────────────────────────────────────────
 .idea/
-*.DS_Store
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# ─── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Environment & Secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ─── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/

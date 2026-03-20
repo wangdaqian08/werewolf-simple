@@ -1,0 +1,20 @@
+spring:
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+  # Stub OAuth2 client IDs so Spring Boot auto-config doesn't fail.
+  # Real credentials are not needed locally — use POST /api/auth/dev instead.
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: dev-placeholder
+            client-secret: dev-placeholder
+
+logging:
+  level:
+    com.werewolf: DEBUG

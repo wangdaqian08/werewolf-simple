@@ -1,0 +1,6 @@
+-- PLACEHOLDER: Payment tables — not implemented
+-- wallet_accounts  (user_id FK, room_cards INT)
+-- products         (product_key, room_cards, bonus_cards, price_fen)
+-- payment_orders   (order_no, user_id, product_id, status, payment_channel, external_order_id)
+-- payment_callbacks (order_id, raw_payload, signature_valid)
+-- card_transactions (user_id, type PURCHASE/SPEND/REFUND, amount, balance_after, game_id)
