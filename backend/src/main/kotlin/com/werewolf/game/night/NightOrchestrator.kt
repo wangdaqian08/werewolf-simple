@@ -33,6 +33,7 @@ class NightOrchestrator(
         if (context.room.hasSeer) activeRoles.add(PlayerRole.SEER)
         if (context.room.hasWitch) activeRoles.add(PlayerRole.WITCH)
         if (context.room.hasGuard) activeRoles.add(PlayerRole.GUARD)
+        if (context.room.hasIdiot) activeRoles.add(PlayerRole.IDIOT)
 
         return handlers
             .filter { it.role in activeRoles }

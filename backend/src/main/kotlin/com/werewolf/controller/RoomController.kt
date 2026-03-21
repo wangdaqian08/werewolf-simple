@@ -105,6 +105,7 @@ class RoomController(
             if (room.hasWitch) add(PlayerRole.WITCH)
             if (room.hasHunter) add(PlayerRole.HUNTER)
             if (room.hasGuard) add(PlayerRole.GUARD)
+            if (room.hasIdiot) add(PlayerRole.IDIOT)
         }
 
         return RoomDto(

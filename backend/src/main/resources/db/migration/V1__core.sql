@@ -22,6 +22,7 @@ CREATE TABLE rooms
     has_witch     BOOLEAN      NOT NULL DEFAULT FALSE,
     has_hunter    BOOLEAN      NOT NULL DEFAULT FALSE,
     has_guard     BOOLEAN      NOT NULL DEFAULT FALSE,
+    has_idiot     BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     closed_at     TIMESTAMP,
     CONSTRAINT fk_room_host FOREIGN KEY (host_user_id) REFERENCES users (user_id)

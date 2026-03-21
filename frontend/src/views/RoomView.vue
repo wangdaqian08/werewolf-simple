@@ -71,8 +71,8 @@
       <div v-if="isHost" :class="canStart ? 'status-ok' : 'status-wait'" class="status-bar">
         <template v-if="canStart">✓ All ready! 开始游戏</template>
         <template v-else
-          >✓ {{ displayReadyCount }} / {{ roomStore.room.config.totalPlayers }} ready · Need
-          {{ notReadyGuestCount }} more to start</template
+          >✓ {{ displayReadyCount }} / {{ roomStore.room.config.totalPlayers }} ready · Waiting for
+          players to be ready</template
         >
       </div>
       <div v-else class="status-bar" :class="iAmReady ? 'status-ok' : 'status-neutral'">
