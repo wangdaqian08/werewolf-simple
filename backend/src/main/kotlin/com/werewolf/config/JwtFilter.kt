@@ -1,7 +1,7 @@
 package com.werewolf.config
 
+import com.werewolf.auth.UserClaims
 import com.werewolf.util.JwtUtil
-import io.jsonwebtoken.JwtException
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -22,8 +22,11 @@ class JwtFilter(private val jwtUtil: JwtUtil) : OncePerRequestFilter() {
                 val claims = jwtUtil.parseToken(token)
                 val userId = claims.subject
                 if (!userId.isNullOrBlank() && SecurityContextHolder.getContext().authentication == null) {
-                    SecurityContextHolder.getContext().authentication =
-                        UsernamePasswordAuthenticationToken(userId, null, emptyList())
+                    val nickname = claims.get("nickname", String::class.java) ?: userId
+                    val avatarUrl = claims.get("avatarUrl", String::class.java)
+                    val auth = UsernamePasswordAuthenticationToken(userId, null, emptyList())
+                    auth.details = UserClaims(userId, nickname, avatarUrl)
+                    SecurityContextHolder.getContext().authentication = auth
                 }
             } catch (e: Exception) {
                 handleTokenException(e, response)

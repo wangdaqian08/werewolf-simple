@@ -4,6 +4,7 @@ import com.werewolf.model.PlayerRole
 import com.werewolf.model.RoomStatus
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
+import com.werewolf.repository.UserRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -23,6 +24,7 @@ class RoomControllerTest {
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var roomRepository: RoomRepository
     @Autowired lateinit var roomPlayerRepository: RoomPlayerRepository
+    @Autowired lateinit var userRepository: UserRepository
 
     companion object {
         const val LOGIN_URL = "/api/user/login"
@@ -121,6 +123,40 @@ class RoomControllerTest {
 
         assertThat(players).hasSize(1)
         assertThat(players.first().host).isTrue()
+    }
+
+    @Test
+    fun `host is persisted in users table when room is created`() {
+        val token = login("Grace")
+        val room = createRoom(token)
+
+        val players = roomPlayerRepository.findByRoomId(roomIdFrom(room))
+        val hostUserId = players.first { it.host }.userId
+
+        val user = userRepository.findById(hostUserId)
+        assertThat(user).isPresent
+        assertThat(user.get().nickname).isEqualTo("Grace")
+    }
+
+    @Test
+    fun `guest is persisted in users table after joining`() {
+        val hostToken = login("Host4")
+        val room = createRoom(hostToken)
+        val roomCode = room[FIELD_ROOM_CODE] as String
+
+        val guestToken = login("Guest4")
+        restTemplate.postForEntity(
+            JOIN_ROOM_URL,
+            HttpEntity(mapOf(FIELD_ROOM_CODE to roomCode), authHeaders(guestToken)),
+            Map::class.java,
+        )
+
+        val players = roomPlayerRepository.findByRoomId(roomIdFrom(room))
+        val guestUserId = players.first { !it.host }.userId
+
+        val user = userRepository.findById(guestUserId)
+        assertThat(user).isPresent
+        assertThat(user.get().nickname).isEqualTo("Guest4")
     }
 
     @Test
