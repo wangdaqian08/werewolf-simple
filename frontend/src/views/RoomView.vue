@@ -15,7 +15,7 @@
       <!-- Room code -->
       <div class="code-card">
         <div class="code-lbl">Room Code</div>
-        <div class="code-num">{{ roomStore.room.roomCode }}</div>
+        <div class="code-num" data-testid="room-code">{{ roomStore.room.roomCode }}</div>
       </div>
 
       <!-- Player count + ready breakdown -->

@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "dev:real": "VITE_MOCK=false vite --host",
+    "test:e2e:real": "playwright test --config=playwright.real.config.ts",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",

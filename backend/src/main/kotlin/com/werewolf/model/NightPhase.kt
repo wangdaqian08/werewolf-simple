@@ -10,13 +10,13 @@ import jakarta.persistence.*
 class NightPhase(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Int? = null,
+    val id: Int? = null,
 
     @Column(name = "game_id", nullable = false)
-    var gameId: Int = 0,
+    val gameId: Int = 0,
 
     @Column(name = "day_number", nullable = false)
-    var dayNumber: Int = 0,
+    val dayNumber: Int = 0,
 
     @Enumerated(EnumType.STRING)
     @Column(name = "sub_phase", nullable = false, length = 20)

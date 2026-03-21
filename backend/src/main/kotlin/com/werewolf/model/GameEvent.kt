@@ -12,21 +12,21 @@ import java.time.LocalDateTime
 class GameEvent(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Int? = null,
+    val id: Int? = null,
 
     @Column(name = "game_id", nullable = false)
-    var gameId: Int = 0,
+    val gameId: Int = 0,
 
     @Column(name = "event_type", nullable = false, length = 50)
-    var eventType: String = "",
+    val eventType: String = "",
 
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
-    var message: String = "",
+    val message: String = "",
 
     @Column(name = "target_user_id", length = 128)
-    var targetUserId: String? = null,
+    val targetUserId: String? = null,
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreationTimestamp
-    var createdAt: LocalDateTime? = null,
+    val createdAt: LocalDateTime? = null,
 )

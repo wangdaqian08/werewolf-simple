@@ -25,17 +25,23 @@ class JwtFilter(private val jwtUtil: JwtUtil) : OncePerRequestFilter() {
                     SecurityContextHolder.getContext().authentication =
                         UsernamePasswordAuthenticationToken(userId, null, emptyList())
                 }
-            } catch (e: JwtException) {
-                logger.debug("Invalid JWT token: ${e.message}")
-            } catch (e: IllegalArgumentException) {
-                logger.debug("Invalid JWT token: ${e.message}")
+            } catch (e: Exception) {
+                handleTokenException(e, response)
+                return
             }
         }
         chain.doFilter(request, response)
     }
 
+    private fun handleTokenException(e: Exception, response: HttpServletResponse) {
+        logger.debug("Invalid JWT token: ${e.message}")
+        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token")
+    }
+
     override fun shouldNotFilter(request: HttpServletRequest): Boolean =
-        request.servletPath.startsWith("/api/auth/")
+        request.servletPath.startsWith("/api/auth/") ||
+        request.servletPath == "/api/user/login" ||
+        request.servletPath == "/api/health"
 
     private fun extractToken(request: HttpServletRequest): String? {
         val header = request.getHeader("Authorization") ?: return null

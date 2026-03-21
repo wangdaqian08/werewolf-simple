@@ -52,6 +52,7 @@
 </template>
 
 <script lang="ts" setup>
+import axios from 'axios'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
@@ -62,23 +63,17 @@ const router = useRouter()
 const userStore = useUserStore()
 const roomStore = useRoomStore()
 
-const nickname = ref('')
+const nickname = ref(userStore.nickname ?? '')
 const roomCode = ref('')
 const loading = ref(false)
 const error = ref('')
-
-async function ensureLoggedIn() {
-  if (!userStore.isLoggedIn) {
-    await userStore.login(nickname.value.trim())
-  }
-}
 
 async function handleCreateRoom() {
   if (!nickname.value.trim()) return
   error.value = ''
   loading.value = true
   try {
-    await ensureLoggedIn()
+    await userStore.login(nickname.value.trim())
     router.push({ name: 'create-room' })
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to connect. Try again.'
@@ -92,12 +87,16 @@ async function handleJoinRoom() {
   error.value = ''
   loading.value = true
   try {
-    await ensureLoggedIn()
+    await userStore.login(nickname.value.trim())
     const room = await roomService.joinRoom({ roomCode: roomCode.value.trim().toUpperCase() })
     roomStore.setRoom(room)
     router.push({ name: 'room', params: { roomId: room.roomId } })
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Room not found. Check the code.'
+    if (axios.isAxiosError(e) && (e.response?.status === 404 || e.response?.status === 400)) {
+      error.value = 'Room not found. Check the code.'
+    } else {
+      error.value = e instanceof Error ? e.message : 'Failed to join. Try again.'
+    }
   } finally {
     loading.value = false
   }

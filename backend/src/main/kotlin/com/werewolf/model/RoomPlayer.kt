@@ -13,13 +13,13 @@ import jakarta.persistence.*
 class RoomPlayer(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Int? = null,
+    val id: Int? = null,
 
     @Column(name = "room_id", nullable = false)
-    var roomId: Int = 0,
+    val roomId: Int = 0,
 
     @Column(name = "user_id", nullable = false, length = 128)
-    var userId: String = "",
+    val userId: String = "",
 
     @Column(name = "seat_index")
     var seatIndex: Int? = null,

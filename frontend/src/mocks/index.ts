@@ -96,7 +96,12 @@ export function setupMocks() {
     mockTotalPlayers = roomConfig.totalPlayers
     return [200, room]
   })
-  mock.onPost('/room/join').reply(() => {
+  mock.onPost('/room/join').reply((config) => {
+    const body = JSON.parse(config.data ?? '{}')
+    const code = (body.roomCode ?? '').toUpperCase()
+    if (code !== MOCK_ROOM_AS_GUEST.roomCode && code !== MOCK_ROOM_AS_HOST.roomCode) {
+      return [404, { message: 'Room not found' }]
+    }
     mockRoomId = MOCK_ROOM_AS_GUEST.roomId
     mockHostId = MOCK_ROOM_AS_GUEST.hostId
     mockPlayers = [...MOCK_ROOM_AS_GUEST.players]

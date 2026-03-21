@@ -115,7 +115,8 @@ class GamePhasePipeline(
             ?: return GameActionResult.Rejected("Player not found")
         if (!player.alive) return GameActionResult.Rejected("Dead players cannot run for sheriff")
 
-        val existing = sheriffCandidateRepository.findByElectionId(election.id!!)
+        val electionId = election.id ?: error("Election has no ID")
+        val existing = sheriffCandidateRepository.findByElectionId(electionId)
             .firstOrNull { it.userId == request.actorUserId }
         if (existing != null) {
             existing.status = CandidateStatus.RUNNING
@@ -123,7 +124,7 @@ class GamePhasePipeline(
         } else {
             sheriffCandidateRepository.save(
                 SheriffCandidate(
-                    electionId = election.id!!,
+                    electionId = electionId,
                     userId = request.actorUserId,
                 )
             )
@@ -139,7 +140,7 @@ class GamePhasePipeline(
         if (election.subPhase != ElectionSubPhase.SIGNUP)
             return GameActionResult.Rejected("Sign-up period is over")
 
-        val candidate = sheriffCandidateRepository.findByElectionId(election.id!!)
+        val candidate = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
             .firstOrNull { it.userId == request.actorUserId }
             ?: return GameActionResult.Rejected("Not a candidate")
 
@@ -156,7 +157,7 @@ class GamePhasePipeline(
         if (election.subPhase != ElectionSubPhase.SIGNUP)
             return GameActionResult.Rejected("Not in SIGNUP sub-phase")
 
-        val candidates = sheriffCandidateRepository.findByElectionId(election.id!!)
+        val candidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
             .filter { it.status == CandidateStatus.RUNNING }
 
         if (candidates.isEmpty()) {
@@ -214,8 +215,7 @@ class GamePhasePipeline(
         val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
             context.gameId, VoteContext.SHERIFF_ELECTION, context.game.dayNumber
         )
-        val tally = votes.filter { it.targetUserId != null }
-            .groupingBy { it.targetUserId!! }.eachCount()
+        val tally = votes.mapNotNull { it.targetUserId }.groupingBy { it }.eachCount()
         val maxVotes = tally.values.maxOrNull() ?: 0
         val topCandidates = tally.filterValues { it == maxVotes }.keys.toList()
         val winnerUserId = if (topCandidates.size == 1) topCandidates.first() else null

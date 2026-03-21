@@ -75,8 +75,8 @@ class VotingPipeline(
             context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
         )
         val tally: Map<String, Int> = votes
-            .filter { it.targetUserId != null }
-            .groupingBy { it.targetUserId!! }
+            .mapNotNull { it.targetUserId }
+            .groupingBy { it }
             .eachCount()
 
         val maxVotes = tally.values.maxOrNull() ?: 0

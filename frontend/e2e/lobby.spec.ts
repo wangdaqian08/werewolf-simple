@@ -54,3 +54,31 @@ test('Join Room navigates to room view', async ({page}) => {
     await page.getByRole('button', {name: /Join/i}).click()
     await expect(page).toHaveURL(/\/room\//)
 })
+
+test('successful join stores JWT in localStorage', async ({page}) => {
+    await page.getByPlaceholder('Enter your nickname').fill('Alice')
+    await page.getByPlaceholder('Room code').fill('XYZ789')
+    await page.getByRole('button', {name: /Join/i}).click()
+    await expect(page).toHaveURL(/\/room\//)
+    const jwt = await page.evaluate(() => localStorage.getItem('jwt'))
+    expect(jwt).not.toBeNull()
+    const userId = await page.evaluate(() => localStorage.getItem('userId'))
+    expect(userId).not.toBeNull()
+    const nickname = await page.evaluate(() => localStorage.getItem('nickname'))
+    expect(nickname).not.toBeNull()
+})
+
+test('invalid room code shows error message', async ({page}) => {
+    await page.getByPlaceholder('Enter your nickname').fill('Alice')
+    await page.getByPlaceholder('Room code').fill('BADCD')
+    await page.getByRole('button', {name: /Join/i}).click()
+    await expect(page.getByText('Room not found. Check the code.')).toBeVisible()
+    await expect(page).toHaveURL('/')
+})
+
+test('invalid room code does not navigate away', async ({page}) => {
+    await page.getByPlaceholder('Enter your nickname').fill('Bob')
+    await page.getByPlaceholder('Room code').fill('WRONG')
+    await page.getByRole('button', {name: /Join/i}).click()
+    await expect(page).not.toHaveURL(/\/room\//)
+})

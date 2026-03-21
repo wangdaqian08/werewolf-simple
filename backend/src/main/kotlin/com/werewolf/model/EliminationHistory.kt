@@ -12,20 +12,20 @@ import java.time.LocalDateTime
 class EliminationHistory(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Int? = null,
+    val id: Int? = null,
 
     @Column(name = "game_id", nullable = false)
-    var gameId: Int = 0,
+    val gameId: Int = 0,
 
     @Column(name = "day_number", nullable = false)
-    var dayNumber: Int = 0,
+    val dayNumber: Int = 0,
 
     @Column(name = "eliminated_user_id", length = 128)
-    var eliminatedUserId: String? = null,
+    val eliminatedUserId: String? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(name = "eliminated_role", length = 10)
-    var eliminatedRole: PlayerRole? = null,
+    val eliminatedRole: PlayerRole? = null,
 
     @Column(name = "hunter_shot_user_id", length = 128)
     var hunterShotUserId: String? = null,
@@ -36,5 +36,5 @@ class EliminationHistory(
 
     @Column(name = "recorded_at", nullable = false, updatable = false)
     @CreationTimestamp
-    var recordedAt: LocalDateTime? = null,
+    val recordedAt: LocalDateTime? = null,
 )
