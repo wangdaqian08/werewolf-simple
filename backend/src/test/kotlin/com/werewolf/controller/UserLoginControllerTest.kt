@@ -103,6 +103,26 @@ class UserLoginControllerTest {
     }
 
     @Test
+    fun `login returns a valid JWT containing the userId as subject`() {
+        val response = restTemplate.postForEntity(
+            "/api/user/login",
+            mapOf("nickname" to "Eve"),
+            Map::class.java,
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        val token = response.body!!["token"] as String
+
+        // JWT is three base64 segments separated by dots
+        val parts = token.split(".")
+        assertThat(parts).hasSize(3)
+
+        // Decode payload (second segment) — no library needed
+        val payload = String(java.util.Base64.getUrlDecoder().decode(parts[1] + "=="))
+        assertThat(payload).contains("\"sub\":\"guest:")
+    }
+
+    @Test
     fun `each login call creates a distinct guest user`() {
         val r1 = restTemplate.postForEntity("/api/user/login", mapOf("nickname" to "Dave"), Map::class.java)
         val r2 = restTemplate.postForEntity("/api/user/login", mapOf("nickname" to "Dave"), Map::class.java)
