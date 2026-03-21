@@ -15,7 +15,7 @@ class SheriffElection(
     val id: Int? = null,
 
     @Column(name = "game_id", nullable = false)
-    val gameId: Int = 0,
+    val gameId: Int,
 
     @Enumerated(EnumType.STRING)
     @Column(name = "sub_phase", nullable = false, length = 10)
@@ -37,4 +37,8 @@ class SheriffElection(
 
     @Column(name = "completed_at")
     var completedAt: LocalDateTime? = null,
-)
+) {
+    init {
+        require(gameId > 0) { "gameId must be a valid ID, got $gameId" }
+    }
+}

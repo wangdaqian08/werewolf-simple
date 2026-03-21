@@ -15,13 +15,13 @@ class GameEvent(
     val id: Int? = null,
 
     @Column(name = "game_id", nullable = false)
-    val gameId: Int = 0,
+    val gameId: Int,
 
     @Column(name = "event_type", nullable = false, length = 50)
-    val eventType: String = "",
+    val eventType: String,
 
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
-    val message: String = "",
+    val message: String,
 
     @Column(name = "target_user_id", length = 128)
     val targetUserId: String? = null,
@@ -29,4 +29,10 @@ class GameEvent(
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreationTimestamp
     val createdAt: LocalDateTime? = null,
-)
+) {
+    init {
+        require(gameId > 0) { "gameId must be a valid ID, got $gameId" }
+        require(eventType.isNotBlank()) { "eventType must not be blank" }
+        require(message.isNotBlank()) { "message must not be blank" }
+    }
+}

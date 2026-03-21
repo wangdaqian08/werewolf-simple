@@ -13,17 +13,17 @@ class Room(
     val roomId: Int? = null,
 
     @Column(name = "room_code", nullable = false, length = 4, unique = true)
-    val roomCode: String = "",
+    val roomCode: String,
 
     @Column(name = "host_user_id", nullable = false, length = 128)
-    val hostUserId: String = "",
+    val hostUserId: String,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     var status: RoomStatus = RoomStatus.WAITING,
 
     @Column(name = "total_players", nullable = false)
-    val totalPlayers: Int = 0,
+    val totalPlayers: Int,
 
     @Column(name = "has_seer", nullable = false)
     val hasSeer: Boolean = false,
@@ -46,4 +46,10 @@ class Room(
 
     @Column(name = "closed_at")
     var closedAt: LocalDateTime? = null,
-)
+) {
+    init {
+        require(roomCode.isNotBlank()) { "roomCode must not be blank" }
+        require(hostUserId.isNotBlank()) { "hostUserId must not be blank" }
+        require(totalPlayers > 0) { "totalPlayers must be > 0, got $totalPlayers" }
+    }
+}

@@ -20,17 +20,17 @@ class Vote(
     val id: Int? = null,
 
     @Column(name = "game_id", nullable = false)
-    val gameId: Int = 0,
+    val gameId: Int,
 
     @Enumerated(EnumType.STRING)
     @Column(name = "vote_context", nullable = false, length = 20)
-    val voteContext: VoteContext = VoteContext.ELIMINATION,
+    val voteContext: VoteContext,
 
     @Column(name = "day_number", nullable = false)
-    val dayNumber: Int = 0,
+    val dayNumber: Int,
 
     @Column(name = "voter_user_id", nullable = false, length = 128)
-    val voterUserId: String = "",
+    val voterUserId: String,
 
     // NULL = abstain or skip
     @Column(name = "target_user_id", length = 128)
@@ -39,4 +39,10 @@ class Vote(
     @Column(name = "voted_at", nullable = false, updatable = false)
     @CreationTimestamp
     val votedAt: LocalDateTime? = null,
-)
+) {
+    init {
+        require(gameId > 0) { "gameId must be a valid ID, got $gameId" }
+        require(dayNumber > 0) { "dayNumber must be > 0, got $dayNumber" }
+        require(voterUserId.isNotBlank()) { "voterUserId must not be blank" }
+    }
+}

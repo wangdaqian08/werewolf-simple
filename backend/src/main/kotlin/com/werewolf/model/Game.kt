@@ -13,10 +13,10 @@ class Game(
     val gameId: Int? = null,
 
     @Column(name = "room_id", nullable = false)
-    val roomId: Int = 0,
+    val roomId: Int,
 
     @Column(name = "host_user_id", nullable = false, length = 128)
-    val hostUserId: String = "",
+    val hostUserId: String,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -43,4 +43,9 @@ class Game(
 
     @Column(name = "ended_at")
     var endedAt: LocalDateTime? = null,
-)
+) {
+    init {
+        require(roomId > 0) { "roomId must be a valid ID, got $roomId" }
+        require(hostUserId.isNotBlank()) { "hostUserId must not be blank" }
+    }
+}

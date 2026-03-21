@@ -16,10 +16,10 @@ class RoomPlayer(
     val id: Int? = null,
 
     @Column(name = "room_id", nullable = false)
-    val roomId: Int = 0,
+    val roomId: Int,
 
     @Column(name = "user_id", nullable = false, length = 128)
-    val userId: String = "",
+    val userId: String,
 
     @Column(name = "seat_index")
     var seatIndex: Int? = null,
@@ -30,4 +30,9 @@ class RoomPlayer(
 
     @Column(name = "is_host", nullable = false)
     var host: Boolean = false,
-)
+) {
+    init {
+        require(roomId > 0) { "roomId must be a valid ID, got $roomId" }
+        require(userId.isNotBlank()) { "userId must not be blank" }
+    }
+}

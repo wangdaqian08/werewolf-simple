@@ -15,10 +15,10 @@ class EliminationHistory(
     val id: Int? = null,
 
     @Column(name = "game_id", nullable = false)
-    val gameId: Int = 0,
+    val gameId: Int,
 
     @Column(name = "day_number", nullable = false)
-    val dayNumber: Int = 0,
+    val dayNumber: Int,
 
     @Column(name = "eliminated_user_id", length = 128)
     val eliminatedUserId: String? = null,
@@ -37,4 +37,9 @@ class EliminationHistory(
     @Column(name = "recorded_at", nullable = false, updatable = false)
     @CreationTimestamp
     val recordedAt: LocalDateTime? = null,
-)
+) {
+    init {
+        require(gameId > 0) { "gameId must be a valid ID, got $gameId" }
+        require(dayNumber > 0) { "dayNumber must be > 0, got $dayNumber" }
+    }
+}
