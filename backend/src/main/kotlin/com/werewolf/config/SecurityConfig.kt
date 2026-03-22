@@ -24,6 +24,8 @@ class SecurityConfig(private val jwtUtil: JwtUtil) {
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers("/api/auth/**").permitAll()
+                    .requestMatchers("/api/user/login").permitAll()
+                    .requestMatchers("/api/health").permitAll()
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/ws/**").permitAll()
                     .requestMatchers("/api/**").authenticated()

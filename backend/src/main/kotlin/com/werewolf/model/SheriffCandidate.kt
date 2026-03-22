@@ -10,15 +10,20 @@ import jakarta.persistence.*
 class SheriffCandidate(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Int? = null,
+    val id: Int? = null,
 
     @Column(name = "election_id", nullable = false)
-    var electionId: Int = 0,
+    val electionId: Int,
 
     @Column(name = "user_id", nullable = false, length = 128)
-    var userId: String = "",
+    val userId: String,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     var status: CandidateStatus = CandidateStatus.RUNNING,
-)
+) {
+    init {
+        require(electionId > 0) { "electionId must be a valid ID, got $electionId" }
+        require(userId.isNotBlank()) { "userId must not be blank" }
+    }
+}

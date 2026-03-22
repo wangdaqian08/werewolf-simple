@@ -2,6 +2,17 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { userService } from '@/services/userService'
 
+function isTokenExpired(token: string): boolean {
+  try {
+    const [, part] = token.split('.')
+    if (!part) return true
+    const payload = JSON.parse(atob(part))
+    return payload.exp * 1000 < Date.now()
+  } catch {
+    return true
+  }
+}
+
 export const useUserStore = defineStore('user', () => {
   // All three values are persisted so they survive page refresh
   const token = ref<string | null>(localStorage.getItem('jwt'))
@@ -10,7 +21,12 @@ export const useUserStore = defineStore('user', () => {
 
   const isLoggedIn = computed(() => !!token.value && !!userId.value)
 
+  function hasValidSession(nick: string): boolean {
+    return !!token.value && nickname.value === nick && !isTokenExpired(token.value)
+  }
+
   async function login(nick: string) {
+    if (hasValidSession(nick)) return
     const res = await userService.login(nick)
     token.value = res.token
     userId.value = res.user.userId

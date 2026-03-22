@@ -38,7 +38,7 @@ class GameService(
 
         val game = Game(roomId = roomId, hostUserId = hostUserId)
         gameRepository.save(game)
-        val gameId = game.gameId!!
+        val gameId = game.gameId ?: error("Failed to persist game")
 
         val shuffledPlayers = roomPlayers.shuffled()
         val gamePlayers = shuffledPlayers.mapIndexed { idx, rp ->
@@ -103,6 +103,7 @@ class GameService(
         if (room.hasWitch) roles.add(PlayerRole.WITCH)
         if (room.hasHunter) roles.add(PlayerRole.HUNTER)
         if (room.hasGuard) roles.add(PlayerRole.GUARD)
+        if (room.hasIdiot) roles.add(PlayerRole.IDIOT)
         while (roles.size < playerCount) roles.add(PlayerRole.VILLAGER)
         return roles
     }

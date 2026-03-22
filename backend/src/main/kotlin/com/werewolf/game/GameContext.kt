@@ -11,7 +11,7 @@ data class GameContext(
     /** All night phases for this game — used to check historical state (e.g., witch antidote). */
     val allNightPhases: List<NightPhase> = emptyList(),
 ) {
-    val gameId: Int get() = game.gameId!!
+    val gameId: Int get() = game.gameId ?: error("Game has no ID — was it persisted?")
     val alivePlayers: List<GamePlayer> get() = players.filter { it.alive }
     val alivePlayerIds: Set<String> get() = alivePlayers.map { it.userId }.toSet()
 

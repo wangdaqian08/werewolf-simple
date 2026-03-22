@@ -91,7 +91,8 @@ class GameActionDispatcher(
                 )
                 result
             }
-
+            // ── Night: idiot ──────────────────────────────────────────────────
+            // TODO implement idiot action
             // ── Sheriff election ──────────────────────────────────────────────
             ActionType.SHERIFF_CAMPAIGN, ActionType.SHERIFF_QUIT,
             ActionType.SHERIFF_START_SPEECH, ActionType.SHERIFF_ADVANCE_SPEECH,

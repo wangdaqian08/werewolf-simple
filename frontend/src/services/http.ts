@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const http = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -21,7 +21,8 @@ http.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('jwt')
-      window.location.href = '/'
+      localStorage.removeItem('userId')
+      localStorage.removeItem('nickname')
     }
     return Promise.reject(err)
   },

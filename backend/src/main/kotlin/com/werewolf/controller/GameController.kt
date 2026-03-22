@@ -1,22 +1,14 @@
 package com.werewolf.controller
 
+import com.werewolf.dto.GameActionRequestDto
+import com.werewolf.dto.StartGameRequest
 import com.werewolf.game.action.GameActionDispatcher
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
-import com.werewolf.model.ActionType
 import com.werewolf.service.GameService
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-
-data class StartGameRequest(val roomId: Int)
-
-data class GameActionRequestDto(
-    val gameId: Int,
-    val actionType: ActionType,
-    val targetUserId: String? = null,
-    val payload: Map<String, Any?>? = null,
-)
 
 @RestController
 @RequestMapping("/api/game")

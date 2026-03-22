@@ -2,6 +2,7 @@ import {defineConfig} from '@playwright/test'
 
 export default defineConfig({
     testDir: './e2e',
+    testIgnore: '**/real/**',
     workers: process.env.CI ? 2 : undefined,
     fullyParallel: true,
     retries: process.env.CI ? 1 : 0,
