@@ -1,5 +1,5 @@
 import http from './http'
-import type {GameActionRequest, GameActionResponse, GameState} from '@/types'
+import type { GameActionRequest, GameActionResponse, GameState } from '@/types'
 
 export const gameService = {
   async getState(gameId: string): Promise<GameState> {

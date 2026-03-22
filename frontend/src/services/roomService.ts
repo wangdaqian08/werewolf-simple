@@ -1,5 +1,5 @@
 import http from './http'
-import type {CreateRoomRequest, JoinRoomRequest, Room} from '@/types'
+import type { CreateRoomRequest, JoinRoomRequest, Room } from '@/types'
 
 export const roomService = {
   async createRoom(req: CreateRoomRequest): Promise<Room> {

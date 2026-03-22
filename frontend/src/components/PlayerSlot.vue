@@ -31,7 +31,7 @@
 </template>
 
 <script lang="ts" setup>
-import {computed} from 'vue'
+import { computed } from 'vue'
 
 type SlotVariant =
   | 'empty'

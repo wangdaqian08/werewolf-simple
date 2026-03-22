@@ -120,18 +120,18 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, onMounted, onUnmounted, ref} from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import http from '@/services/http'
-import {useRoute, useRouter} from 'vue-router'
-import {storeToRefs} from 'pinia'
-import {useUserStore} from '@/stores/userStore'
-import {useRoomStore} from '@/stores/roomStore'
-import {roomService} from '@/services/roomService'
-import {gameService} from '@/services/gameService'
-import {createStompClient, disconnectStomp, subscribeToTopic} from '@/services/stompClient'
+import { useRoute, useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useUserStore } from '@/stores/userStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { roomService } from '@/services/roomService'
+import { gameService } from '@/services/gameService'
+import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
 import PlayerSlot from '@/components/PlayerSlot.vue'
-import {useNavigationGuard} from '@/composables/useNavigationGuard'
-import {useRoomStatus} from '@/composables/useRoomStatus'
+import { useNavigationGuard } from '@/composables/useNavigationGuard'
+import { useRoomStatus } from '@/composables/useRoomStatus'
 
 const route = useRoute()
 const router = useRouter()
