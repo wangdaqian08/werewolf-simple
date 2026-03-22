@@ -11,6 +11,11 @@ class StompPublisher(private val template: SimpMessagingTemplate) {
         template.convertAndSend("/topic/game/$gameId", event)
     }
 
+    /** Broadcast a room event to all subscribers of this room. */
+    fun broadcastRoom(roomId: Int, event: Any) {
+        template.convertAndSend("/topic/room/$roomId", event)
+    }
+
     /** Send a private message to a specific user (role assignment, seer result, etc.). */
     fun sendPrivate(userId: String, event: Any) {
         template.convertAndSendToUser(userId, "/queue/private", event)

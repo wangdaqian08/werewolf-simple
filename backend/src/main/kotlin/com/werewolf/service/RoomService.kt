@@ -5,10 +5,7 @@ import com.werewolf.dto.RoomConfigDto
 import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.dto.RoomDto
 import com.werewolf.dto.RoomPlayerDto
-import com.werewolf.model.PlayerRole
-import com.werewolf.model.Room
-import com.werewolf.model.RoomPlayer
-import com.werewolf.model.RoomStatus
+import com.werewolf.model.*
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
@@ -21,6 +18,7 @@ class RoomService(
     private val roomPlayerRepository: RoomPlayerRepository,
     private val userRepository: UserRepository,
     private val authService: AuthService,
+    private val stompPublisher: StompPublisher,
 ) {
     @Transactional
     fun createRoom(userId: String, nickname: String, avatarUrl: String?, cfg: RoomConfigRequest): RoomDto {
@@ -61,6 +59,34 @@ class RoomService(
         }
 
         return buildRoomDto(room)
+    }
+
+    @Transactional
+    fun setReady(userId: String, roomId: Int, ready: Boolean) {
+        val room = roomRepository.findById(roomId).orElse(null) ?: throw RoomNotFoundException("Room not found")
+        if (room.status != RoomStatus.WAITING) throw RoomNotOpenException("Room is not open")
+
+        val affected = if (ready) {
+            roomPlayerRepository.setReadyIfSeated(roomId, userId)
+        } else {
+            roomPlayerRepository.updateStatus(roomId, userId, ReadyStatus.NOT_READY)
+        }
+        if (affected == 0) throw PlayerNotInRoomException("Player not in room or seat not yet claimed")
+
+        stompPublisher.broadcastRoom(roomId, mapOf("type" to "ROOM_UPDATE",
+            "payload" to mapOf("players" to buildRoomDto(room).players)))
+    }
+
+    @Transactional
+    fun claimSeat(userId: String, roomId: Int, seatIndex: Int) {
+        val room = roomRepository.findById(roomId).orElse(null) ?: throw RoomNotFoundException("Room not found")
+        if (room.status != RoomStatus.WAITING) throw RoomNotOpenException("Room is not open")
+
+        val affected = roomPlayerRepository.updateSeatIndex(roomId, userId, seatIndex)
+        if (affected == 0) throw PlayerNotInRoomException("Player not in room")
+
+        stompPublisher.broadcastRoom(roomId, mapOf("type" to "ROOM_UPDATE",
+            "payload" to mapOf("players" to buildRoomDto(room).players)))
     }
 
     @Transactional(readOnly = true)
@@ -117,3 +143,4 @@ class RoomService(
 class RoomNotFoundException(message: String) : RuntimeException(message)
 class RoomNotOpenException(message: String) : RuntimeException(message)
 class RoomFullException(message: String) : RuntimeException(message)
+class PlayerNotInRoomException(message: String) : RuntimeException(message)

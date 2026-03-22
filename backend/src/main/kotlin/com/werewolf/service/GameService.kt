@@ -33,6 +33,10 @@ class GameService(
         if (roomPlayers.size < 4)
             return GameActionResult.Rejected("Need at least 4 players to start")
 
+        val notReady = roomPlayers.filter { !it.host && it.status != ReadyStatus.READY }
+        if (notReady.isNotEmpty())
+            return GameActionResult.Rejected("Not all players are ready")
+
         val roles = buildRoleList(room, roomPlayers.size)
         roles.shuffle()
 
@@ -53,6 +57,8 @@ class GameService(
 
         room.status = RoomStatus.IN_GAME
         roomRepository.save(room)
+
+        stompPublisher.broadcastRoom(roomId, mapOf("type" to "GAME_STARTED", "payload" to mapOf("gameId" to gameId)))
 
         // Notify each player of their private role
         gamePlayers.forEach { gp ->

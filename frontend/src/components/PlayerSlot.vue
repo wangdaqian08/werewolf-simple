@@ -31,7 +31,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import {computed} from 'vue'
 
 type SlotVariant =
   | 'empty'
@@ -103,6 +103,8 @@ const variantClass = computed(() => {
 .slot-room {
   aspect-ratio: 1;
   min-height: unset;
+  min-width: 0;       /* prevent grid cell blowout from long text */
+  overflow: hidden;   /* clip children that exceed the card boundary */
   padding: 0.375rem 0.25rem;
   gap: 3px;
   border-radius: 0.375rem;
@@ -207,11 +209,13 @@ const variantClass = computed(() => {
   font-size: 10px;
   color: inherit;
   line-height: 1.2;
-  max-width: 100%;
+  width: 100%;        /* fill card width so ellipsis has a boundary to clip at */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
   padding: 0 2px;
+  box-sizing: border-box;
 }
 
 .empty-num {

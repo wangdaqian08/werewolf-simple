@@ -117,17 +117,18 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import {onMounted, onUnmounted, ref} from 'vue'
 import http from '@/services/http'
-import { useRoute, useRouter } from 'vue-router'
-import { storeToRefs } from 'pinia'
-import { useUserStore } from '@/stores/userStore'
-import { useRoomStore } from '@/stores/roomStore'
-import { roomService } from '@/services/roomService'
-import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import {useRoute, useRouter} from 'vue-router'
+import {storeToRefs} from 'pinia'
+import {useUserStore} from '@/stores/userStore'
+import {useRoomStore} from '@/stores/roomStore'
+import {roomService} from '@/services/roomService'
+import {gameService} from '@/services/gameService'
+import {createStompClient, disconnectStomp, subscribeToTopic} from '@/services/stompClient'
 import PlayerSlot from '@/components/PlayerSlot.vue'
-import { useNavigationGuard } from '@/composables/useNavigationGuard'
-import { useRoomStatus } from '@/composables/useRoomStatus'
+import {useNavigationGuard} from '@/composables/useNavigationGuard'
+import {useRoomStatus} from '@/composables/useRoomStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -158,7 +159,7 @@ const {
 
 async function handleSeatClick(seat: number) {
   if (!canSelectSeat(seat)) return
-  await roomService.claimSeat(seat)
+  await roomService.claimSeat(seat, roomStore.room!.roomId)
   // Optimistic update: real backend would push ROOM_UPDATE via STOMP
   if (userStore.userId) {
     roomStore.updateSeatIndex(userStore.userId, seat)
@@ -166,7 +167,7 @@ async function handleSeatClick(seat: number) {
 }
 
 async function handleReady(ready: boolean) {
-  await roomService.setReady(ready)
+  await roomService.setReady(ready, roomStore.room!.roomId)
   if (userStore.userId) {
     roomStore.updateMyStatus(userStore.userId, ready ? 'READY' : 'NOT_READY')
   }
@@ -192,7 +193,8 @@ async function handleStartGame() {
     await http.post('/debug/game/start')
     return
   }
-  // Host triggers game start via backend — backend pushes GAME_STARTED via STOMP
+  if (!roomStore.room) return
+  await gameService.startGame(Number(roomStore.room.roomId))
 }
 
 onMounted(async () => {
