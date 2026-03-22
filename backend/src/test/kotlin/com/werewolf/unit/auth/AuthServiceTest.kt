@@ -1,5 +1,6 @@
-package com.werewolf.auth
+package com.werewolf.unit.auth
 
+import com.werewolf.auth.AuthService
 import com.werewolf.model.User
 import com.werewolf.repository.UserRepository
 import com.werewolf.util.JwtUtil
@@ -9,12 +10,8 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
-import org.mockito.kotlin.any
-import org.mockito.kotlin.anyOrNull
-import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
-import java.util.Optional
+import org.mockito.kotlin.*
+import java.util.*
 
 @ExtendWith(MockitoExtension::class)
 class AuthServiceTest {

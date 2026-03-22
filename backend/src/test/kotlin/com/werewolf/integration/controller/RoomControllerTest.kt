@@ -1,5 +1,21 @@
-package com.werewolf.controller
+package com.werewolf.integration.controller
 
+import com.werewolf.integration.TestConstants.CREATE_ROOM_URL
+import com.werewolf.integration.TestConstants.DEFAULT_TOTAL_PLAYERS
+import com.werewolf.integration.TestConstants.FIELD_CONFIG
+import com.werewolf.integration.TestConstants.FIELD_ERROR
+import com.werewolf.integration.TestConstants.FIELD_NICKNAME
+import com.werewolf.integration.TestConstants.FIELD_PLAYERS
+import com.werewolf.integration.TestConstants.FIELD_ROLES
+import com.werewolf.integration.TestConstants.FIELD_ROOM_CODE
+import com.werewolf.integration.TestConstants.FIELD_ROOM_ID
+import com.werewolf.integration.TestConstants.FIELD_STATUS
+import com.werewolf.integration.TestConstants.FIELD_TOKEN
+import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
+import com.werewolf.integration.TestConstants.INVALID_ROOM_CODE
+import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
+import com.werewolf.integration.TestConstants.LOGIN_URL
+import com.werewolf.integration.TestConstants.ROOM_CODE_LENGTH
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.RoomStatus
 import com.werewolf.repository.RoomPlayerRepository
@@ -16,6 +32,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
+import java.util.*
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -27,26 +44,7 @@ class RoomControllerTest {
     @Autowired lateinit var userRepository: UserRepository
 
     companion object {
-        const val LOGIN_URL = "/api/user/login"
-        const val CREATE_ROOM_URL = "/api/room/create"
-        const val JOIN_ROOM_URL = "/api/room/join"
-
-        const val FIELD_NICKNAME = "nickname"
-        const val FIELD_TOKEN = "token"
-        const val FIELD_CONFIG = "config"
-        const val FIELD_TOTAL_PLAYERS = "totalPlayers"
-        const val FIELD_ROLES = "roles"
-        const val FIELD_ROOM_ID = "roomId"
-        const val FIELD_ROOM_CODE = "roomCode"
-        const val FIELD_STATUS = "status"
-        const val FIELD_PLAYERS = "players"
-        const val FIELD_ERROR = "error"
-
-        const val ROOM_CODE_LENGTH = 4
-        const val DEFAULT_TOTAL_PLAYERS = 6
-
         val DEFAULT_ROLES = listOf(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER)
-        const val INVALID_ROOM_CODE = "ZZZZ"
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -64,6 +62,14 @@ class RoomControllerTest {
     private fun authHeaders(token: String) = HttpHeaders().also {
         it.setBearerAuth(token)
         it.contentType = MediaType.APPLICATION_JSON
+    }
+
+    /** Decodes the JWT payload locally to extract the `sub` (userId) claim. */
+    private fun extractUserId(token: String): String {
+        val raw = token.split(".")[1]
+        val padded = raw + "=".repeat((4 - raw.length % 4) % 4)
+        val payload = String(Base64.getUrlDecoder().decode(padded))
+        return payload.substringAfter("\"sub\":\"").substringBefore("\"")
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -103,15 +109,20 @@ class RoomControllerTest {
     }
 
     @Test
-    fun `created room is persisted in the database`() {
+    fun `created room is persisted in the database with correct total players and role flags`() {
         val token = login("Bob")
         val room = createRoom(token)
 
-        val persisted = roomRepository.findById(roomIdFrom(room))
+        val persisted = roomRepository.findById(roomIdFrom(room)).get()
 
-        assertThat(persisted).isPresent
-        assertThat(persisted.get().totalPlayers).isEqualTo(DEFAULT_TOTAL_PLAYERS)
-        assertThat(persisted.get().status).isEqualTo(RoomStatus.WAITING)
+        assertThat(persisted.totalPlayers).isEqualTo(DEFAULT_TOTAL_PLAYERS)
+        assertThat(persisted.status).isEqualTo(RoomStatus.WAITING)
+        // DEFAULT_ROLES = [SEER, WITCH, HUNTER] — verify each flag stored correctly
+        assertThat(persisted.hasSeer).isTrue()
+        assertThat(persisted.hasWitch).isTrue()
+        assertThat(persisted.hasHunter).isTrue()
+        assertThat(persisted.hasGuard).isFalse()
+        assertThat(persisted.hasIdiot).isFalse()
     }
 
     @Test
@@ -126,12 +137,17 @@ class RoomControllerTest {
     }
 
     @Test
-    fun `host is persisted in users table when room is created`() {
+    fun `host is persisted in users table even when login was skipped`() {
+        // Simulate hasValidSession=true on the frontend: the client reuses a JWT
+        // without calling POST /api/user/login, so the users table has no row yet.
         val token = login("Grace")
-        val room = createRoom(token)
+        val userId = extractUserId(token)
+        userRepository.deleteById(userId) // simulate skipped login — row gone
 
-        val players = roomPlayerRepository.findByRoomId(roomIdFrom(room))
-        val hostUserId = players.first { it.host }.userId
+        val room = createRoom(token) // createRoom must upsert the user itself
+
+        val hostUserId = roomPlayerRepository.findByRoomId(roomIdFrom(room))
+            .first { it.host }.userId
 
         val user = userRepository.findById(hostUserId)
         assertThat(user).isPresent
@@ -139,20 +155,23 @@ class RoomControllerTest {
     }
 
     @Test
-    fun `guest is persisted in users table after joining`() {
+    fun `guest is persisted in users table even when login was skipped`() {
         val hostToken = login("Host4")
         val room = createRoom(hostToken)
         val roomCode = room[FIELD_ROOM_CODE] as String
 
         val guestToken = login("Guest4")
+        val guestId = extractUserId(guestToken)
+        userRepository.deleteById(guestId) // simulate skipped login — row gone
+
         restTemplate.postForEntity(
             JOIN_ROOM_URL,
             HttpEntity(mapOf(FIELD_ROOM_CODE to roomCode), authHeaders(guestToken)),
             Map::class.java,
         )
 
-        val players = roomPlayerRepository.findByRoomId(roomIdFrom(room))
-        val guestUserId = players.first { !it.host }.userId
+        val guestUserId = roomPlayerRepository.findByRoomId(roomIdFrom(room))
+            .first { !it.host }.userId
 
         val user = userRepository.findById(guestUserId)
         assertThat(user).isPresent
@@ -171,6 +190,33 @@ class RoomControllerTest {
         @Suppress("UNCHECKED_CAST")
         val roles = config[FIELD_ROLES] as List<String>
         assertThat(roles).contains(*DEFAULT_ROLES.map { it.name }.toTypedArray())
+    }
+
+    @Test
+    fun `room config includes IDIOT when requested`() {
+        val token = login("Henry")
+        val rolesWithIdiot = DEFAULT_ROLES + PlayerRole.IDIOT
+        val body = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to DEFAULT_TOTAL_PLAYERS, FIELD_ROLES to rolesWithIdiot))
+        val response = restTemplate.postForEntity(
+            CREATE_ROOM_URL,
+            HttpEntity(body, authHeaders(token)),
+            Map::class.java,
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        @Suppress("UNCHECKED_CAST")
+        val roles = (response.body!![FIELD_CONFIG] as Map<String, Any?>)[FIELD_ROLES] as List<String>
+        assertThat(roles).contains(PlayerRole.IDIOT.name)
+    }
+
+    @Test
+    fun `room config excludes IDIOT when not requested`() {
+        val token = login("Ivan")
+        val room = createRoom(token)
+
+        @Suppress("UNCHECKED_CAST")
+        val roles = (room[FIELD_CONFIG] as Map<String, Any?>)[FIELD_ROLES] as List<String>
+        assertThat(roles).doesNotContain(PlayerRole.IDIOT.name)
     }
 
     @Test
