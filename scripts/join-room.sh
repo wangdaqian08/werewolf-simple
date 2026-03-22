@@ -169,7 +169,7 @@ else
   TOTAL=99
 
   for i in $(seq 1 "$PLAYER_NUM"); do
-    NICK="${PREFIX}${i}-this-is-extrat-long-name"
+    NICK="${PREFIX}${i}"
     NICKS[$i]=$NICK
 
     if [ "$i" -eq 1 ] && [ -n "$TOKEN1" ]; then TOKEN=$TOKEN1
