@@ -168,8 +168,12 @@ else
   ROOM_ID=""
   TOTAL=99
 
+  # Per-run suffix keeps nicknames unique across runs so repeated joins
+  # don't create duplicate names that visually shadow previously-readied players.
+  RUN_ID=$(printf '%04d' $(( RANDOM % 10000 )))
+
   for i in $(seq 1 "$PLAYER_NUM"); do
-    NICK="${PREFIX}${i}"
+    NICK="${PREFIX}${i}-${RUN_ID}"
     NICKS[$i]=$NICK
 
     if [ "$i" -eq 1 ] && [ -n "$TOKEN1" ]; then TOKEN=$TOKEN1
