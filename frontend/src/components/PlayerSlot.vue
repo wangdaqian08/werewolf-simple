@@ -102,8 +102,8 @@ const variantClass = computed(() => {
 /* ── Room mode overrides ── */
 .slot-room {
   min-height: 72px;
-  min-width: 0;       /* prevent grid cell blowout from long text */
-  overflow: hidden;   /* clip children that exceed the card boundary */
+  min-width: 0; /* prevent grid cell blowout from long text */
+  overflow: hidden; /* clip children that exceed the card boundary */
   padding: 0.375rem 0.25rem;
   gap: 3px;
   border-radius: 0.375rem;
