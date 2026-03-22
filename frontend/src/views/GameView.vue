@@ -6,6 +6,9 @@
         v-if="!hasConfirmedRole"
         :role="gameStore.state.myRole"
         :teammates="gameStore.state.roleReveal?.teammates"
+        :revealed="isRoleRevealed"
+        @reveal="isRoleRevealed = true"
+        @hide="isRoleRevealed = false"
         @confirm="handleRoleConfirm"
       />
       <div v-else class="waiting-screen">
@@ -36,6 +39,8 @@
         @vote="handleSheriffVote"
         @confirm-vote="handleSheriffConfirmVote"
         @abstain="handleSheriffAbstain"
+        @advance-speech="handleSheriffAdvanceSpeech"
+        @reveal-result="handleSheriffRevealResult"
       />
     </template>
 
@@ -120,7 +125,7 @@
       </section>
 
       <!-- Event log -->
-      <section v-if="gameStore.state?.events.length" class="event-log">
+      <section v-if="gameStore.state?.events?.length" class="event-log">
         <div v-for="(event, i) in visibleEvents" :key="i" class="event-item">
           {{ event.message }}
         </div>
@@ -240,6 +245,12 @@ const roomStore = useRoomStore()
 
 const isMock = import.meta.env.VITE_MOCK === 'true'
 const hasConfirmedRole = ref(false)
+const isRoleRevealed = ref(false)
+
+// Wraps gameService.submitAction to always include the gameId from the route
+async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) {
+  return gameService.submitAction({ ...req, gameId: parseInt(route.params.gameId as string) })
+}
 
 const isHost = computed(() => {
   const hostId = gameStore.state?.hostId ?? roomStore.room?.hostId
@@ -292,105 +303,114 @@ function playerSlotVariant(player: GamePlayer) {
 
 async function handleRoleConfirm() {
   hasConfirmedRole.value = true
-  await gameService.submitAction({ actionType: 'ROLE_CONFIRM' })
+  await action({ actionType: 'CONFIRM_ROLE' })
 }
 
 watch(
   () => gameStore.state?.phase,
   (phase) => {
-    if (phase !== 'ROLE_REVEAL') hasConfirmedRole.value = false
+    if (phase !== 'ROLE_REVEAL') {
+      hasConfirmedRole.value = false
+      isRoleRevealed.value = false
+    }
   },
 )
 
 async function handleSheriffRun() {
-  await gameService.submitAction({ actionType: 'SHERIFF_RUN' })
+  await action({ actionType: 'SHERIFF_CAMPAIGN' })
 }
 async function handleSheriffPass() {
-  await gameService.submitAction({ actionType: 'SHERIFF_PASS' })
+  await action({ actionType: 'SHERIFF_PASS' })
 }
 async function handleSheriffWithdraw() {
-  await gameService.submitAction({ actionType: 'SHERIFF_WITHDRAW' })
+  await action({ actionType: 'SHERIFF_QUIT' })
 }
 async function handleSheriffStartCampaign() {
-  await gameService.submitAction({ actionType: 'SHERIFF_START_CAMPAIGN' })
+  await action({ actionType: 'SHERIFF_START_SPEECH' })
 }
 async function handleSheriffQuit() {
-  await gameService.submitAction({ actionType: 'SHERIFF_QUIT_CAMPAIGN' })
+  await action({ actionType: 'SHERIFF_QUIT_CAMPAIGN' })
 }
 async function handleSheriffVote(userId: string) {
-  await gameService.submitAction({ actionType: 'SHERIFF_VOTE', targetId: userId })
+  await action({ actionType: 'SHERIFF_VOTE', targetId: userId })
 }
 async function handleSheriffConfirmVote() {
-  await gameService.submitAction({ actionType: 'SHERIFF_CONFIRM_VOTE' })
+  await action({ actionType: 'SHERIFF_CONFIRM_VOTE' })
 }
 async function handleSheriffAbstain() {
-  await gameService.submitAction({ actionType: 'SHERIFF_ABSTAIN' })
+  await action({ actionType: 'SHERIFF_ABSTAIN' })
+}
+async function handleSheriffAdvanceSpeech() {
+  await action({ actionType: 'SHERIFF_ADVANCE_SPEECH' })
+}
+async function handleSheriffRevealResult() {
+  await action({ actionType: 'SHERIFF_REVEAL_RESULT' })
 }
 
 async function handleRevealResult() {
-  await gameService.submitAction({ actionType: 'REVEAL_NIGHT_RESULT' })
+  await action({ actionType: 'REVEAL_NIGHT_RESULT' })
 }
 async function handleStartVote() {
-  await gameService.submitAction({ actionType: 'DAY_ADVANCE' })
+  await action({ actionType: 'DAY_ADVANCE' })
 }
 async function handleDayVote(targetId: string) {
-  await gameService.submitAction({ actionType: 'DAY_VOTE', targetId })
+  await action({ actionType: 'DAY_VOTE', targetId })
 }
 async function handleDaySkip() {
-  await gameService.submitAction({ actionType: 'DAY_SKIP' })
+  await action({ actionType: 'DAY_SKIP' })
 }
 async function handleDaySelectPlayer(userId: string) {
-  await gameService.submitAction({ actionType: 'SELECT_PLAYER', targetId: userId })
+  await action({ actionType: 'SELECT_PLAYER', targetId: userId })
 }
 
 async function handleNightSelect(userId: string) {
-  await gameService.submitAction({ actionType: 'NIGHT_SELECT', targetId: userId })
+  await action({ actionType: 'NIGHT_SELECT', targetId: userId })
 }
 async function handleNightConfirm(targetId?: string) {
-  await gameService.submitAction({ actionType: 'NIGHT_CONFIRM', targetId })
+  await action({ actionType: 'NIGHT_CONFIRM', targetId })
 }
 async function handleWitchAntidote() {
-  await gameService.submitAction({ actionType: 'NIGHT_WITCH_USE_ANTIDOTE' })
+  await action({ actionType: 'NIGHT_WITCH_USE_ANTIDOTE' })
 }
 async function handleWitchPassAntidote() {
-  await gameService.submitAction({ actionType: 'NIGHT_WITCH_PASS_ANTIDOTE' })
+  await action({ actionType: 'NIGHT_WITCH_PASS_ANTIDOTE' })
 }
 async function handleWitchPoison(targetId: string) {
-  await gameService.submitAction({ actionType: 'NIGHT_WITCH_USE_POISON', targetId })
+  await action({ actionType: 'NIGHT_WITCH_USE_POISON', targetId })
 }
 async function handleWitchPassPoison() {
-  await gameService.submitAction({ actionType: 'NIGHT_WITCH_PASS_POISON' })
+  await action({ actionType: 'NIGHT_WITCH_PASS_POISON' })
 }
 
 async function handleVotingSelect(userId: string) {
-  await gameService.submitAction({ actionType: 'VOTING_SELECT', targetId: userId })
+  await action({ actionType: 'VOTING_SELECT', targetId: userId })
 }
 async function handleVotingVote(targetId: string) {
-  await gameService.submitAction({ actionType: 'VOTING_VOTE', targetId })
+  await action({ actionType: 'VOTING_VOTE', targetId })
 }
 async function handleVotingSkip() {
-  await gameService.submitAction({ actionType: 'VOTING_SKIP' })
+  await action({ actionType: 'VOTING_SKIP' })
 }
 async function handleVotingUnvote() {
-  await gameService.submitAction({ actionType: 'VOTING_UNVOTE' })
+  await action({ actionType: 'VOTING_UNVOTE' })
 }
 async function handleVotingReveal() {
-  await gameService.submitAction({ actionType: 'VOTING_REVEAL_TALLY' })
+  await action({ actionType: 'VOTING_REVEAL_TALLY' })
 }
 async function handleVotingContinue() {
-  await gameService.submitAction({ actionType: 'VOTING_CONTINUE' })
+  await action({ actionType: 'VOTING_CONTINUE' })
 }
 async function handleHunterShoot(userId: string) {
-  await gameService.submitAction({ actionType: 'HUNTER_SHOOT', targetId: userId })
+  await action({ actionType: 'HUNTER_SHOOT', targetId: userId })
 }
 async function handleHunterPass() {
-  await gameService.submitAction({ actionType: 'HUNTER_PASS' })
+  await action({ actionType: 'HUNTER_PASS' })
 }
 async function handlePassBadge(userId: string) {
-  await gameService.submitAction({ actionType: 'BADGE_PASS', targetId: userId })
+  await action({ actionType: 'BADGE_PASS', targetId: userId })
 }
 async function handleDestroyBadge() {
-  await gameService.submitAction({ actionType: 'BADGE_DESTROY' })
+  await action({ actionType: 'BADGE_DESTROY' })
 }
 
 async function debugVoting(scenario: string) {
@@ -442,7 +462,7 @@ async function debugCandidateRemove(userId: string) {
 function onPlayerTap(player: GamePlayer) {
   if (!player.isAlive) return
   // Send action to backend — backend validates whether this tap is a valid game action
-  gameService.submitAction({ actionType: 'SELECT_PLAYER', targetId: player.userId })
+  action({ actionType: 'SELECT_PLAYER', targetId: player.userId })
 }
 
 onMounted(async () => {
@@ -458,15 +478,26 @@ onMounted(async () => {
   if (userStore.token) {
     const client = createStompClient(userStore.token)
     client.onConnect = () => {
-      subscribeToTopic(`/topic/game/${gameId}`, (msg: { body: string }) => {
+      subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
+        // Mock sends full state snapshots; real backend sends typed domain events
         if (data.type === 'GAME_STATE_UPDATE') {
           gameStore.setState(data.payload)
         }
         if (data.type === 'GAME_EVENT') {
           gameStore.addEvent(data.payload)
         }
-        if (data.type === 'GAME_OVER') {
+        // Real backend: a player confirmed their role → increment counter
+        if (data.type === 'RoleConfirmed') {
+          gameStore.incrementConfirmedCount()
+        }
+        // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
+        if (data.type === 'PhaseChanged') {
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+        }
+        // Both mock (GAME_OVER) and real backend (GameOver) navigate to result
+        if (data.type === 'GAME_OVER' || data.type === 'GameOver') {
           router.push({ name: 'result', params: { gameId } })
         }
       })

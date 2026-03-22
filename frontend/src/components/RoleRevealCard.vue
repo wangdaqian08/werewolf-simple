@@ -3,11 +3,20 @@
     <!-- Header -->
     <div class="reveal-header">
       <div class="reveal-phase">游戏开始 · GAME START</div>
-      <div class="reveal-subtitle">你的身份 / Your Role</div>
+      <div class="reveal-subtitle">
+        {{ revealed ? '你的身份 / Your Role' : '身份已分配 / Role Assigned' }}
+      </div>
     </div>
 
-    <!-- Card -->
-    <div class="role-card">
+    <!-- Unrevealed card -->
+    <div v-if="!revealed" class="role-card mystery-card">
+      <div class="mystery-glyph">?</div>
+      <div class="mystery-title">你的身份已分配</div>
+      <div class="mystery-hint">独自查看，注意保密 / Check privately</div>
+    </div>
+
+    <!-- Revealed card -->
+    <div v-else class="role-card">
       <div class="role-emoji">{{ meta.emoji }}</div>
       <div class="role-name-zh">{{ meta.nameZh }}</div>
       <div :class="`role-label-${meta.team}`" class="role-label">{{ meta.nameEn }}</div>
@@ -21,11 +30,19 @@
       </div>
     </div>
 
-    <!-- Confirm button -->
-    <button class="btn btn-primary" @click="$emit('confirm')">知道了 / Got it</button>
+    <!-- Buttons -->
+    <template v-if="!revealed">
+      <button class="btn btn-gold" @click="$emit('reveal')">揭示我的身份 / Reveal Role</button>
+    </template>
+    <template v-else>
+      <button class="btn btn-primary" @click="$emit('confirm')">知道了 / Got it</button>
+      <button class="btn btn-secondary hide-btn" @click="$emit('hide')">隐藏 / Hide</button>
+    </template>
 
     <!-- Footer label -->
-    <div class="reveal-footer-label">ROLE — {{ meta.nameEn }} {{ meta.nameZh }}</div>
+    <div class="reveal-footer-label">
+      {{ revealed ? `ROLE — ${meta.nameEn} ${meta.nameZh}` : 'ROLE — ?' }}
+    </div>
   </div>
 </template>
 
@@ -37,11 +54,12 @@ const props = withDefaults(
   defineProps<{
     role: PlayerRole
     teammates?: string[]
+    revealed?: boolean
   }>(),
-  { teammates: () => [] },
+  { teammates: () => [], revealed: false },
 )
 
-defineEmits<{ confirm: [] }>()
+defineEmits<{ confirm: []; reveal: []; hide: [] }>()
 
 const teammates = computed(() => props.teammates)
 
@@ -202,10 +220,41 @@ const meta = computed(() => ROLE_META[props.role])
   font-weight: 500;
 }
 
+/* Mystery card */
+.mystery-card {
+  justify-content: center;
+}
+
+.mystery-glyph {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 6rem;
+  font-weight: 700;
+  color: var(--muted);
+  line-height: 1;
+  margin-bottom: 1.5rem;
+}
+
+.mystery-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mystery-hint {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
 /* Button — full width */
 .btn {
   width: 100%;
   max-width: 320px;
+}
+
+.hide-btn {
+  margin-top: -0.25rem;
 }
 
 /* Footer label */

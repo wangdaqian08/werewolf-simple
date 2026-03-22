@@ -4,10 +4,10 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
-import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.GameContextLoader
+import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -17,11 +17,9 @@ class GamePhasePipeline(
     private val gameRepository: GameRepository,
     private val gamePlayerRepository: GamePlayerRepository,
     private val sheriffElectionRepository: SheriffElectionRepository,
-    private val sheriffCandidateRepository: SheriffCandidateRepository,
-    private val voteRepository: VoteRepository,
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
-    private val nightOrchestrator: NightOrchestrator,
+    private val sheriffService: SheriffService,
 ) {
     // ── Phase transition actions ───────────────────────────────────────────────
 
@@ -80,162 +78,23 @@ class GamePhasePipeline(
 
         stompPublisher.broadcastGame(context.gameId, DomainEvent.RoleConfirmed(context.gameId, request.actorUserId))
 
-        // Advance to NIGHT once everyone has confirmed
+        // Advance to SHERIFF_ELECTION once everyone has confirmed
         val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
         if (allPlayers.all { it.confirmedRole }) {
-            nightOrchestrator.initNight(context.gameId, context.game.dayNumber)
-        }
-        return GameActionResult.Success()
-    }
-
-    // ── Sheriff election actions ───────────────────────────────────────────────
-
-    /** Route all sheriff election actions. */
-    @Transactional
-    fun handleSheriffElection(request: GameActionRequest, context: GameContext): GameActionResult {
-        return when (request.actionType) {
-            ActionType.SHERIFF_CAMPAIGN -> sheriffSignUp(request, context)
-            ActionType.SHERIFF_QUIT -> sheriffQuit(request, context)
-            ActionType.SHERIFF_START_SPEECH -> sheriffStartSpeech(request, context)
-            ActionType.SHERIFF_ADVANCE_SPEECH -> sheriffAdvanceSpeech(request, context)
-            ActionType.SHERIFF_REVEAL_RESULT -> sheriffRevealResult(request, context)
-            else -> GameActionResult.Rejected("Unknown sheriff action: ${request.actionType}")
-        }
-    }
-
-    private fun sheriffSignUp(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.SHERIFF_ELECTION)
-            return GameActionResult.Rejected("Not in SHERIFF_ELECTION phase")
-        val election = context.election
-            ?: return GameActionResult.Rejected("No election in progress")
-        if (election.subPhase != ElectionSubPhase.SIGNUP)
-            return GameActionResult.Rejected("Sign-up period is over")
-
-        val player = context.playerById(request.actorUserId)
-            ?: return GameActionResult.Rejected("Player not found")
-        if (!player.alive) return GameActionResult.Rejected("Dead players cannot run for sheriff")
-
-        val electionId = election.id ?: error("Election has no ID")
-        val existing = sheriffCandidateRepository.findByElectionId(electionId)
-            .firstOrNull { it.userId == request.actorUserId }
-        if (existing != null) {
-            existing.status = CandidateStatus.RUNNING
-            sheriffCandidateRepository.save(existing)
-        } else {
-            sheriffCandidateRepository.save(
-                SheriffCandidate(
-                    electionId = electionId,
-                    userId = request.actorUserId,
-                )
-            )
-        }
-        return GameActionResult.Success()
-    }
-
-    private fun sheriffQuit(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.SHERIFF_ELECTION)
-            return GameActionResult.Rejected("Not in SHERIFF_ELECTION phase")
-        val election = context.election
-            ?: return GameActionResult.Rejected("No election in progress")
-        if (election.subPhase != ElectionSubPhase.SIGNUP)
-            return GameActionResult.Rejected("Sign-up period is over")
-
-        val candidate = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
-            .firstOrNull { it.userId == request.actorUserId }
-            ?: return GameActionResult.Rejected("Not a candidate")
-
-        candidate.status = CandidateStatus.QUIT
-        sheriffCandidateRepository.save(candidate)
-        return GameActionResult.Success()
-    }
-
-    private fun sheriffStartSpeech(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (request.actorUserId != context.game.hostUserId)
-            return GameActionResult.Rejected("Only host can start speeches")
-        val election = context.election
-            ?: return GameActionResult.Rejected("No election in progress")
-        if (election.subPhase != ElectionSubPhase.SIGNUP)
-            return GameActionResult.Rejected("Not in SIGNUP sub-phase")
-
-        val candidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
-            .filter { it.status == CandidateStatus.RUNNING }
-
-        if (candidates.isEmpty()) {
-            // No candidates — skip election, proceed to NIGHT
-            nightOrchestrator.initNight(context.gameId, context.game.dayNumber)
-            return GameActionResult.Success()
-        }
-
-        election.subPhase = ElectionSubPhase.SPEECH
-        election.speakingOrder = candidates.map { it.userId }.shuffled().joinToString(",")
-        election.currentSpeakerIdx = 0
-        sheriffElectionRepository.save(election)
-
-        stompPublisher.broadcastGame(
-            context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name)
-        )
-        return GameActionResult.Success()
-    }
-
-    private fun sheriffAdvanceSpeech(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (request.actorUserId != context.game.hostUserId)
-            return GameActionResult.Rejected("Only host can advance speeches")
-        val election = context.election
-            ?: return GameActionResult.Rejected("No election in progress")
-        if (election.subPhase != ElectionSubPhase.SPEECH)
-            return GameActionResult.Rejected("Not in SPEECH sub-phase")
-
-        val order = election.speakingOrder?.split(",") ?: emptyList()
-        val nextIdx = election.currentSpeakerIdx + 1
-
-        if (nextIdx >= order.size) {
-            // All speeches done — move to voting
-            election.subPhase = ElectionSubPhase.VOTING
-            sheriffElectionRepository.save(election)
+            context.game.phase = GamePhase.SHERIFF_ELECTION
+            gameRepository.save(context.game)
+            sheriffElectionRepository.save(SheriffElection(gameId = context.gameId))
             stompPublisher.broadcastGame(
                 context.gameId,
-                DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.VOTING.name)
+                DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
             )
-        } else {
-            election.currentSpeakerIdx = nextIdx
-            sheriffElectionRepository.save(election)
         }
         return GameActionResult.Success()
     }
 
-    private fun sheriffRevealResult(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (request.actorUserId != context.game.hostUserId)
-            return GameActionResult.Rejected("Only host can reveal result")
-        val election = context.election
-            ?: return GameActionResult.Rejected("No election in progress")
-        if (election.subPhase != ElectionSubPhase.VOTING)
-            return GameActionResult.Rejected("Not in VOTING sub-phase")
+    // ── Sheriff election ───────────────────────────────────────────────────────
 
-        val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
-            context.gameId, VoteContext.SHERIFF_ELECTION, context.game.dayNumber
-        )
-        val tally = votes.mapNotNull { it.targetUserId }.groupingBy { it }.eachCount()
-        val maxVotes = tally.values.maxOrNull() ?: 0
-        val topCandidates = tally.filterValues { it == maxVotes }.keys.toList()
-        val winnerUserId = if (topCandidates.size == 1) topCandidates.first() else null
-
-        election.subPhase = ElectionSubPhase.RESULT
-        election.electedSheriffUserId = winnerUserId
-        sheriffElectionRepository.save(election)
-
-        if (winnerUserId != null) {
-            context.game.sheriffUserId = winnerUserId
-            gameRepository.save(context.game)
-            gamePlayerRepository.findByGameIdAndUserId(context.gameId, winnerUserId).ifPresent {
-                it.sheriff = true; gamePlayerRepository.save(it)
-            }
-        }
-
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.SheriffElected(context.gameId, winnerUserId))
-
-        // Election done — proceed to night
-        nightOrchestrator.initNight(context.gameId, context.game.dayNumber)
-        return GameActionResult.Success()
-    }
+    @Transactional
+    fun handleSheriffElection(request: GameActionRequest, context: GameContext): GameActionResult =
+        sheriffService.handle(request, context)
 }

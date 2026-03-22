@@ -3,7 +3,7 @@ import type { GameActionRequest, GameActionResponse, GameState } from '@/types'
 
 export const gameService = {
   async getState(gameId: string): Promise<GameState> {
-    const { data } = await http.get<GameState>(`/game/state?gameId=${gameId}`)
+    const { data } = await http.get<GameState>(`/game/${gameId}/state`)
     return data
   },
 

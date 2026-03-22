@@ -115,6 +115,7 @@ export interface GameEvent {
 }
 
 export interface GameActionRequest {
+  gameId?: number
   actionType: string
   targetId?: string
   data?: Record<string, unknown>

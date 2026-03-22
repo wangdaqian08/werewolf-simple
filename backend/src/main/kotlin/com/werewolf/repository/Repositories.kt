@@ -15,6 +15,7 @@ interface RoomRepository : JpaRepository<Room, Int> {
 interface RoomPlayerRepository : JpaRepository<RoomPlayer, Int> {
     fun findByRoomId(roomId: Int): List<RoomPlayer>
     fun findByRoomIdAndUserId(roomId: Int, userId: String): Optional<RoomPlayer>
+    fun existsByRoomIdAndSeatIndex(roomId: Int, seatIndex: Int): Boolean
 
     @Modifying
     @Query("UPDATE RoomPlayer rp SET rp.status = :status WHERE rp.roomId = :roomId AND rp.userId = :userId")
@@ -57,6 +58,13 @@ interface VoteRepository : JpaRepository<Vote, Int> {
         voteContext: VoteContext,
         dayNumber: Int,
     ): List<Vote>
+
+    fun findByGameIdAndVoteContextAndDayNumberAndVoterUserId(
+        gameId: Int,
+        voteContext: VoteContext,
+        dayNumber: Int,
+        voterUserId: String,
+    ): Optional<Vote>
 }
 
 interface EliminationHistoryRepository : JpaRepository<EliminationHistory, Int> {

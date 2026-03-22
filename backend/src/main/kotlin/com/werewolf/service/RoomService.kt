@@ -82,6 +82,9 @@ class RoomService(
         val room = roomRepository.findById(roomId).orElse(null) ?: throw RoomNotFoundException("Room not found")
         if (room.status != RoomStatus.WAITING) throw RoomNotOpenException("Room is not open")
 
+        if (roomPlayerRepository.existsByRoomIdAndSeatIndex(roomId, seatIndex))
+            throw SeatTakenException("Seat $seatIndex is already taken")
+
         val affected = roomPlayerRepository.updateSeatIndex(roomId, userId, seatIndex)
         if (affected == 0) throw PlayerNotInRoomException("Player not in room")
 
@@ -144,3 +147,4 @@ class RoomNotFoundException(message: String) : RuntimeException(message)
 class RoomNotOpenException(message: String) : RuntimeException(message)
 class RoomFullException(message: String) : RuntimeException(message)
 class PlayerNotInRoomException(message: String) : RuntimeException(message)
+class SeatTakenException(message: String) : RuntimeException(message)
