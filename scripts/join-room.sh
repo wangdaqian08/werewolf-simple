@@ -215,12 +215,19 @@ else
     SAVED_SEATS="${SAVED_SEATS}${SEATS[$i]}|"
   done
   python3 -c "
-import json
+import json, os
 nicks  = '${SAVED_NICKS}'.rstrip('|').split('|')
 tokens = '${SAVED_TOKENS}'.rstrip('|').split('|')
 seats  = '${SAVED_SEATS}'.rstrip('|').split('|')
-bots = [{'nick': n, 'token': t, 'seat': int(s)} for n,t,s in zip(nicks,tokens,seats)]
-json.dump({'roomCode': '$ROOM_CODE', 'roomId': $ROOM_ID, 'bots': bots}, open('$STATE_FILE', 'w'))
+new_bots = [{'nick': n, 'token': t, 'seat': int(s)} for n,t,s in zip(nicks,tokens,seats)]
+
+# Merge: keep existing bots whose seat is not claimed by a new bot
+existing = json.load(open('$STATE_FILE'))['bots'] if os.path.exists('$STATE_FILE') else []
+new_seats = {b['seat'] for b in new_bots}
+merged = [b for b in existing if b['seat'] not in new_seats] + new_bots
+merged.sort(key=lambda b: b['seat'])
+
+json.dump({'roomCode': '$ROOM_CODE', 'roomId': $ROOM_ID, 'bots': merged}, open('$STATE_FILE', 'w'))
 " 2>/dev/null || true  # best-effort; non-fatal if /tmp is not writable
 
   VIEW_TOKEN=${TOKENS[1]}

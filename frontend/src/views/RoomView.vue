@@ -272,11 +272,11 @@ onUnmounted(() => {
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: 1rem;
-  padding: 1.5rem;
+  padding: 1rem;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex: 1;
 }
 
@@ -292,7 +292,6 @@ onUnmounted(() => {
   font-size: 1.0625rem;
   font-weight: 500;
   color: var(--text);
-  margin-bottom: 0.75rem;
   transition: color 0.3s;
 }
 
@@ -305,25 +304,27 @@ onUnmounted(() => {
   background: var(--card);
   border: 1px solid var(--border-l);
   border-radius: 0.375rem;
-  padding: 0.875rem;
+  padding: 0.375rem 0.75rem;
   text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .code-lbl {
   font-size: 0.625rem;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.1em;
   color: var(--muted);
   text-transform: uppercase;
-  margin-bottom: 0.25rem;
 }
 
 .code-num {
   font-family: 'Noto Serif SC', serif;
-  font-size: 2.25rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.25em;
   color: var(--red);
 }
 
@@ -331,7 +332,6 @@ onUnmounted(() => {
 .player-count {
   font-size: 0.6875rem;
   color: var(--muted);
-  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.375rem;
