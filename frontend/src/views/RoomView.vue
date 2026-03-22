@@ -24,7 +24,10 @@
         <span>/ {{ roomStore.room.config.totalPlayers }} 玩家</span>
         <template v-if="notReadyGuestCount > 0">
           <span class="count-sep">·</span>
-          <span class="count-wait">{{ notReadyGuestCount }} {{ notReadyGuestCount === 1 ? 'player not ready' : 'players not ready' }}</span>
+          <span class="count-wait"
+            >{{ notReadyGuestCount }}
+            {{ notReadyGuestCount === 1 ? 'player not ready' : 'players not ready' }}</span
+          >
         </template>
       </div>
 
@@ -145,11 +148,11 @@ const { room } = storeToRefs(roomStore)
 
 // Adapt grid columns to the longest nickname present
 const gridClass = computed(() => {
-  const names = roomStore.room?.players.map(p => p.nickname ?? '') ?? []
-  const veryLong = names.filter(n => n.length > 10).length
-  const long     = names.filter(n => n.length > 6).length
+  const names = roomStore.room?.players.map((p) => p.nickname ?? '') ?? []
+  const veryLong = names.filter((n) => n.length > 10).length
+  const long = names.filter((n) => n.length > 6).length
   if (veryLong >= 3) return 'player-grid player-grid-2'
-  if (long     >= 3) return 'player-grid player-grid-3'
+  if (long >= 3) return 'player-grid player-grid-3'
   return 'player-grid'
 })
 const { userId } = storeToRefs(userStore)
