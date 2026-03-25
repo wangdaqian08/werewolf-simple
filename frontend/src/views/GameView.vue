@@ -304,6 +304,10 @@ function playerSlotVariant(player: GamePlayer) {
 async function handleRoleConfirm() {
   hasConfirmedRole.value = true
   await action({ actionType: 'CONFIRM_ROLE' })
+  // Re-fetch state so confirmedCount is accurate even if the RoleConfirmed
+  // STOMP event arrived before the subscription was established.
+  const updated = await gameService.getState(route.params.gameId as string)
+  gameStore.setState(updated)
 }
 
 watch(

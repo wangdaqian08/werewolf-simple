@@ -8,7 +8,7 @@
 # Usage:
 #   ./scripts/as-bot.sh                  # list all bots (auto-detect room)
 #   ./scripts/as-bot.sh AB3C             # list all bots in room AB3C
-#   ./scripts/as-bot.sh AB3C 1           # command for bot at index 1 (1-based)
+#   ./scripts/as-bot.sh AB3C 1           # command for bot index 1 (first bot, second bot)
 #   ./scripts/as-bot.sh AB3C Bot2        # command for bot named Bot2
 # =============================================================================
 
@@ -102,10 +102,23 @@ fi
 
 # ── resolve bot by index or nickname ─────────────────────────────────────────
 if [[ "$BOT_SEL" =~ ^[0-9]+$ ]]; then
-  # 1-based index
+  # Try 1-based array index first, then fall back to seat number
   IDX=$(( BOT_SEL - 1 ))
-  if [ "$IDX" -lt 0 ] || [ "$IDX" -ge "$BOT_COUNT" ]; then
-    fail "Index $BOT_SEL out of range (1–$BOT_COUNT)"
+  if [ "$IDX" -ge 0 ] && [ "$IDX" -lt "$BOT_COUNT" ]; then
+    : # valid index, use it
+  else
+    # Try matching by seat number
+    IDX=$(echo "$BOTS_JSON" | python3 -c "
+import json, sys
+bots = json.load(sys.stdin)
+for i, b in enumerate(bots):
+    if b['seat'] == $BOT_SEL:
+        print(i)
+        break
+else:
+    print(-1)
+")
+    [ "$IDX" = "-1" ] && fail "No bot at index or seat $BOT_SEL in room $ROOM_CODE"
   fi
   NICK=$(echo "$BOTS_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)[$IDX]['nick'])")
   SEAT=$(echo "$BOTS_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)[$IDX]['seat'])")
