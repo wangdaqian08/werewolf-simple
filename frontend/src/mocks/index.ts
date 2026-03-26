@@ -357,7 +357,7 @@ export function setupMocks() {
   })
 
   // ── Game ──────────────────────────────────────────────────────────────────────
-  mock.onGet(/\/game\/\d+\/state/).reply(() => [200, mockGameState])
+  mock.onGet(/\/game\/[^/]+\/state/).reply(() => [200, mockGameState])
   mock.onGet(/\/game\/result/).reply((_config) => [200, MOCK_GAME_RESULT])
   mock.onPost('/game/action').reply((config) => {
     const { actionType, targetId } = JSON.parse(config.data ?? '{}')
