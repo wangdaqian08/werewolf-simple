@@ -357,12 +357,12 @@ export function setupMocks() {
   })
 
   // ── Game ──────────────────────────────────────────────────────────────────────
-  mock.onGet(/\/game\/state/).reply(() => [200, mockGameState])
+  mock.onGet(/\/game\/[^/]+\/state/).reply(() => [200, mockGameState])
   mock.onGet(/\/game\/result/).reply((_config) => [200, MOCK_GAME_RESULT])
   mock.onPost('/game/action').reply((config) => {
     const { actionType, targetId } = JSON.parse(config.data ?? '{}')
     if (mockGameState.phase === 'ROLE_REVEAL') {
-      if (actionType === 'ROLE_CONFIRM') {
+      if (actionType === 'CONFIRM_ROLE') {
         const userId = MOCK_LOGIN.user.userId
         if (!confirmedUserIds.has(userId)) {
           confirmedUserIds.add(userId)

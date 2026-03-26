@@ -4,10 +4,7 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
-import com.werewolf.repository.GamePlayerRepository
-import com.werewolf.repository.GameRepository
-import com.werewolf.repository.RoomPlayerRepository
-import com.werewolf.repository.RoomRepository
+import com.werewolf.repository.*
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -19,6 +16,8 @@ class GameService(
     private val gamePlayerRepository: GamePlayerRepository,
     private val stompPublisher: StompPublisher,
     private val nightOrchestrator: NightOrchestrator,
+    private val userRepository: UserRepository,
+    private val sheriffService: SheriffService,
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
@@ -33,6 +32,10 @@ class GameService(
         if (roomPlayers.size < 4)
             return GameActionResult.Rejected("Need at least 4 players to start")
 
+        val notReady = roomPlayers.filter { !it.host && it.status != ReadyStatus.READY }
+        if (notReady.isNotEmpty())
+            return GameActionResult.Rejected("Not all players are ready")
+
         val roles = buildRoleList(room, roomPlayers.size)
         roles.shuffle()
 
@@ -40,12 +43,11 @@ class GameService(
         gameRepository.save(game)
         val gameId = game.gameId ?: error("Failed to persist game")
 
-        val shuffledPlayers = roomPlayers.shuffled()
-        val gamePlayers = shuffledPlayers.mapIndexed { idx, rp ->
+        val gamePlayers = roomPlayers.mapIndexed { idx, rp ->
             GamePlayer(
                 gameId = gameId,
                 userId = rp.userId,
-                seatIndex = idx + 1,
+                seatIndex = rp.seatIndex ?: error("Player ${rp.userId} has no seat"),
                 role = roles[idx],
             )
         }
@@ -54,7 +56,8 @@ class GameService(
         room.status = RoomStatus.IN_GAME
         roomRepository.save(room)
 
-        // Notify each player of their private role
+        stompPublisher.broadcastRoom(roomId, mapOf("type" to "GAME_STARTED", "payload" to mapOf("gameId" to gameId)))
+
         gamePlayers.forEach { gp ->
             stompPublisher.sendPrivate(gp.userId, DomainEvent.RoleAssigned(gameId, gp.userId, gp.role))
         }
@@ -69,6 +72,25 @@ class GameService(
         val players = gamePlayerRepository.findByGameId(gameId)
         val myPlayer = players.firstOrNull { it.userId == requestingUserId }
 
+        val roleReveal = if (game.phase == GamePhase.ROLE_REVEAL) {
+            val confirmedCount = players.count { it.confirmedRole }
+            val teammates = if (myPlayer?.role == PlayerRole.WEREWOLF) {
+                val wolfIds = players
+                    .filter { it.role == PlayerRole.WEREWOLF && it.userId != requestingUserId }
+                    .map { it.userId }
+                userRepository.findAllById(wolfIds).map { it.nickname }
+            } else emptyList()
+            mapOf(
+                "confirmedCount" to confirmedCount,
+                "totalCount" to players.size,
+                "teammates" to teammates,
+            )
+        } else null
+
+        val sheriffElection = if (game.phase == GamePhase.SHERIFF_ELECTION) {
+            sheriffService.buildState(gameId, game, myPlayer, players)
+        } else null
+
         return mapOf(
             "gameId" to gameId,
             "phase" to game.phase.name,
@@ -77,6 +99,8 @@ class GameService(
             "sheriffUserId" to game.sheriffUserId,
             "winner" to game.winner?.name,
             "myRole" to myPlayer?.role?.name,
+            "roleReveal" to roleReveal,
+            "sheriffElection" to sheriffElection,
             "players" to players.map { p ->
                 mapOf(
                     "userId" to p.userId,
@@ -84,7 +108,6 @@ class GameService(
                     "isAlive" to p.alive,
                     "isSheriff" to p.sheriff,
                     "confirmedRole" to p.confirmedRole,
-                    // Only reveal role to the player themselves or after game over
                     "role" to if (p.userId == requestingUserId || game.phase == GamePhase.GAME_OVER) p.role.name else null,
                 )
             },

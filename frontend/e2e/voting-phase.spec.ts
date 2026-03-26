@@ -13,7 +13,9 @@ async function goToGame(page: Page) {
   await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 }
 
 // Scoped to the Day Scenarios debug section to avoid label collisions

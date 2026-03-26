@@ -40,6 +40,6 @@ class GamePlayer(
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }
         require(userId.isNotBlank()) { "userId must not be blank" }
-        require(seatIndex > 0) { "seatIndex must be > 0, got $seatIndex" }
+        require(seatIndex >= 0) { "seatIndex must be >= 0, got $seatIndex" }
     }
 }

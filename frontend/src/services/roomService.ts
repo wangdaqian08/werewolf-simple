@@ -26,11 +26,11 @@ export const roomService = {
     return data
   },
 
-  async setReady(ready: boolean): Promise<void> {
-    await http.post('/room/ready', { ready })
+  async setReady(ready: boolean, roomId: string): Promise<void> {
+    await http.post('/room/ready', { ready, roomId: Number(roomId) })
   },
 
-  async claimSeat(seatIndex: number): Promise<void> {
-    await http.post('/room/seat', { seatIndex })
+  async claimSeat(seatIndex: number, roomId: string): Promise<void> {
+    await http.post('/room/seat', { seatIndex, roomId: Number(roomId) })
   },
 }

@@ -7,16 +7,16 @@ export default defineConfig({
     fullyParallel: true,
     retries: process.env.CI ? 1 : 0,
     use: {
-        baseURL: 'http://localhost:5173',
+        baseURL: 'http://localhost:5174',
         headless: true,
     },
     reporter: process.env.CI
         ? [['blob'], ['github']]
         : [['html', {open: 'never'}]],
     webServer: {
-        command: 'npm run dev',
-        url: 'http://localhost:5173',
+        command: 'npx vite --port 5174',
+        url: 'http://localhost:5174',
         reuseExistingServer: !process.env.CI,
-        env: {VITE_MOCK_FAST: 'true'},
+        env: {VITE_MOCK: 'true', VITE_MOCK_FAST: 'true'},
     },
 })

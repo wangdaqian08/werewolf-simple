@@ -1,12 +1,11 @@
 package com.werewolf.controller
 
 import com.werewolf.auth.UserClaims
+import com.werewolf.dto.ClaimSeatRequest
 import com.werewolf.dto.CreateRoomRequest
 import com.werewolf.dto.JoinRoomRequest
-import com.werewolf.service.RoomFullException
-import com.werewolf.service.RoomNotFoundException
-import com.werewolf.service.RoomNotOpenException
-import com.werewolf.service.RoomService
+import com.werewolf.dto.SetReadyRequest
+import com.werewolf.service.*
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -40,6 +39,44 @@ class RoomController(private val roomService: RoomService) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         } catch (e: RoomFullException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        }
+    }
+
+    @PostMapping("/ready")
+    fun setReady(
+        @RequestBody body: SetReadyRequest,
+        authentication: Authentication,
+    ): ResponseEntity<Any> {
+        val (userId, _, _) = authentication.userClaims()
+        return try {
+            roomService.setReady(userId, body.roomId, body.ready)
+            ResponseEntity.ok(mapOf("success" to true))
+        } catch (e: RoomNotFoundException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: RoomNotOpenException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: PlayerNotInRoomException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        }
+    }
+
+    @PostMapping("/seat")
+    fun claimSeat(
+        @RequestBody body: ClaimSeatRequest,
+        authentication: Authentication,
+    ): ResponseEntity<Any> {
+        val (userId, _, _) = authentication.userClaims()
+        return try {
+            roomService.claimSeat(userId, body.roomId, body.seatIndex)
+            ResponseEntity.ok(mapOf("success" to true))
+        } catch (e: RoomNotFoundException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: RoomNotOpenException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: PlayerNotInRoomException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: SeatTakenException) {
+            ResponseEntity.badRequest().body(mapOf("success" to false, "error" to e.message))
         }
     }
 

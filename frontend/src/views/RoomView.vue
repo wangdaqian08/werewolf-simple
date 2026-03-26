@@ -24,12 +24,15 @@
         <span>/ {{ roomStore.room.config.totalPlayers }} 玩家</span>
         <template v-if="notReadyGuestCount > 0">
           <span class="count-sep">·</span>
-          <span class="count-wait">{{ notReadyGuestCount }} waiting</span>
+          <span class="count-wait"
+            >{{ notReadyGuestCount }}
+            {{ notReadyGuestCount === 1 ? 'player not ready' : 'players not ready' }}</span
+          >
         </template>
       </div>
 
-      <!-- Player grid (4 columns, square slots) -->
-      <section class="player-grid">
+      <!-- Player grid (4/3/2 columns based on nickname length) -->
+      <section :class="gridClass">
         <PlayerSlot
           v-for="seat in totalSeats"
           :key="seat"
@@ -117,13 +120,14 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import http from '@/services/http'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
+import { gameService } from '@/services/gameService'
 import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
@@ -141,6 +145,16 @@ useNavigationGuard()
 const loading = ref(true)
 
 const { room } = storeToRefs(roomStore)
+
+// Adapt grid columns to the longest nickname present
+const gridClass = computed(() => {
+  const names = roomStore.room?.players.map((p) => p.nickname ?? '') ?? []
+  const veryLong = names.filter((n) => n.length > 10).length
+  const long = names.filter((n) => n.length > 6).length
+  if (veryLong >= 3) return 'player-grid player-grid-2'
+  if (long >= 3) return 'player-grid player-grid-3'
+  return 'player-grid'
+})
 const { userId } = storeToRefs(userStore)
 
 const {
@@ -158,7 +172,7 @@ const {
 
 async function handleSeatClick(seat: number) {
   if (!canSelectSeat(seat)) return
-  await roomService.claimSeat(seat)
+  await roomService.claimSeat(seat, roomStore.room!.roomId)
   // Optimistic update: real backend would push ROOM_UPDATE via STOMP
   if (userStore.userId) {
     roomStore.updateSeatIndex(userStore.userId, seat)
@@ -166,7 +180,7 @@ async function handleSeatClick(seat: number) {
 }
 
 async function handleReady(ready: boolean) {
-  await roomService.setReady(ready)
+  await roomService.setReady(ready, roomStore.room!.roomId)
   if (userStore.userId) {
     roomStore.updateMyStatus(userStore.userId, ready ? 'READY' : 'NOT_READY')
   }
@@ -192,7 +206,8 @@ async function handleStartGame() {
     await http.post('/debug/game/start')
     return
   }
-  // Host triggers game start via backend — backend pushes GAME_STARTED via STOMP
+  if (!roomStore.room) return
+  await gameService.startGame(Number(roomStore.room.roomId))
 }
 
 onMounted(async () => {
@@ -257,11 +272,11 @@ onUnmounted(() => {
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: 1rem;
-  padding: 1.5rem;
+  padding: 1rem;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex: 1;
 }
 
@@ -277,7 +292,6 @@ onUnmounted(() => {
   font-size: 1.0625rem;
   font-weight: 500;
   color: var(--text);
-  margin-bottom: 0.75rem;
   transition: color 0.3s;
 }
 
@@ -290,25 +304,27 @@ onUnmounted(() => {
   background: var(--card);
   border: 1px solid var(--border-l);
   border-radius: 0.375rem;
-  padding: 0.875rem;
+  padding: 0.375rem 0.75rem;
   text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .code-lbl {
   font-size: 0.625rem;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.1em;
   color: var(--muted);
   text-transform: uppercase;
-  margin-bottom: 0.25rem;
 }
 
 .code-num {
   font-family: 'Noto Serif SC', serif;
-  font-size: 2.25rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.25em;
   color: var(--red);
 }
 
@@ -316,7 +332,6 @@ onUnmounted(() => {
 .player-count {
   font-size: 0.6875rem;
   color: var(--muted);
-  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -333,13 +348,19 @@ onUnmounted(() => {
   color: var(--muted);
 }
 
-/* 4-column grid */
+/* Grid: 4 columns (default) / 3 / 2 based on nickname length */
 .player-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0.375rem;
   margin-bottom: 0.75rem;
   flex: 1;
+}
+.player-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.player-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
 }
 
 /* Status bar */

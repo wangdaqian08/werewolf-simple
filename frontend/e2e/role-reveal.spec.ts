@@ -14,7 +14,8 @@ async function goToGameView(page: import('@playwright/test').Page) {
 
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 }
 
 test('game start shows RoleRevealCard with SEER role', async ({ page }) => {

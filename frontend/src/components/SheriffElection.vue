@@ -114,6 +114,12 @@
       <div class="spacer" />
       <div class="action-footer">
         <button class="btn btn-secondary" disabled>等待投票 / Waiting for vote…</button>
+        <template v-if="isHost">
+          <div class="host-divider" />
+          <button class="btn btn-primary" @click="emit('advanceSpeech')">
+            下一位 / Next Speaker
+          </button>
+        </template>
       </div>
     </template>
 
@@ -161,6 +167,12 @@
           <button class="btn btn-outline" @click="emit('abstain')">放弃投票 / Give Up Vote</button>
         </template>
         <button v-else class="btn btn-secondary" disabled>已放弃投票 / Vote forfeited</button>
+        <template v-if="isHost">
+          <div class="host-divider" />
+          <button class="btn btn-primary" @click="emit('revealResult')">
+            揭晓结果 / Reveal Result
+          </button>
+        </template>
       </div>
     </template>
 
@@ -248,6 +260,8 @@ const emit = defineEmits<{
   vote: [userId: string]
   confirmVote: []
   abstain: []
+  advanceSpeech: []
+  revealResult: []
 }>()
 
 const iAmCandidate = computed(() =>

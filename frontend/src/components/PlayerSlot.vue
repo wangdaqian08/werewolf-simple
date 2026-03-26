@@ -101,8 +101,9 @@ const variantClass = computed(() => {
 
 /* ── Room mode overrides ── */
 .slot-room {
-  aspect-ratio: 1;
-  min-height: unset;
+  min-height: 72px;
+  min-width: 0; /* prevent grid cell blowout from long text */
+  overflow: hidden; /* clip children that exceed the card boundary */
   padding: 0.375rem 0.25rem;
   gap: 3px;
   border-radius: 0.375rem;
@@ -193,25 +194,28 @@ const variantClass = computed(() => {
 }
 
 .av {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .av-name {
   font-size: 10px;
   color: inherit;
   line-height: 1.2;
-  max-width: 100%;
+  width: 100%; /* fill card width so ellipsis has a boundary to clip at */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
   padding: 0 2px;
+  box-sizing: border-box;
 }
 
 .empty-num {
