@@ -23,7 +23,9 @@ async function goToGameView(page: Page) {
   await goToRoomAsHost(page)
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 }
 
 async function goToSheriffView(page: Page) {
@@ -64,7 +66,9 @@ test('POST /debug/game/start — navigates to game view and shows ROLE_REVEAL', 
   await goToRoomAsHost(page)
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  // Should be on game view showing role reveal card
+  // Should be on game view showing role reveal card (mystery state first)
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
   await expect(page.getByText('知道了 / Got it')).toBeVisible({ timeout: 3000 })
 })
 

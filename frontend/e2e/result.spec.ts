@@ -13,7 +13,8 @@ async function setup(page: Page) {
   await page.waitForTimeout(70)
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 }
 
 async function goToResult(page: Page, winner: 'VILLAGER' | 'WEREWOLF') {

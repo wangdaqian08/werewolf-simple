@@ -22,7 +22,9 @@ async function loadScenario(
   await page.waitForURL(/\/game\//, { timeout: 5000 })
 
   // Wait for role reveal card to appear (mock delay 50ms + STOMP 100ms internal delay)
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   // Load the scenario via debug panel button — STOMP subscription is now ready
   await page.getByRole('button', { name: new RegExp(scenarioLabel(scenario)) }).click()
@@ -135,7 +137,9 @@ async function joinAsGuestAndStartGame(page: import('@playwright/test').Page) {
 
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 }
 
 test('guest joined via room join does not see 显示结果 on day hidden', async ({ page }) => {

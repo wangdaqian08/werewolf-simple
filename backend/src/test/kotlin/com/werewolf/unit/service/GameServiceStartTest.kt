@@ -7,7 +7,9 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
+import com.werewolf.repository.UserRepository
 import com.werewolf.service.GameService
+import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -27,6 +29,8 @@ class GameServiceStartTest {
     @Mock lateinit var gamePlayerRepository: GamePlayerRepository
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var nightOrchestrator: NightOrchestrator
+    @Mock lateinit var userRepository: UserRepository
+    @Mock lateinit var sheriffService: SheriffService
     @InjectMocks lateinit var gameService: GameService
 
     private val hostId = "host:001"
@@ -40,16 +44,19 @@ class GameServiceStartTest {
     ).also { it.status = RoomStatus.WAITING }
 
     private fun hostPlayer() = RoomPlayer(roomId = roomId, userId = hostId, host = true, status = ReadyStatus.NOT_READY)
+        .also { it.seatIndex = 0 }
 
-    private fun readyGuest(id: String) = RoomPlayer(roomId = roomId, userId = id, host = false, status = ReadyStatus.READY)
+    private fun readyGuest(id: String, seat: Int) = RoomPlayer(roomId = roomId, userId = id, host = false, status = ReadyStatus.READY)
+        .also { it.seatIndex = seat }
 
-    private fun notReadyGuest(id: String) = RoomPlayer(roomId = roomId, userId = id, host = false, status = ReadyStatus.NOT_READY)
+    private fun notReadyGuest(id: String, seat: Int) = RoomPlayer(roomId = roomId, userId = id, host = false, status = ReadyStatus.NOT_READY)
+        .also { it.seatIndex = seat }
 
     private fun fourReadyGuests() = listOf(
         hostPlayer(),
-        readyGuest("guest:1"),
-        readyGuest("guest:2"),
-        readyGuest("guest:3"),
+        readyGuest("guest:1", 1),
+        readyGuest("guest:2", 2),
+        readyGuest("guest:3", 3),
     )
 
     // ── startGame ─────────────────────────────────────────────────────────────
@@ -59,7 +66,7 @@ class GameServiceStartTest {
         val room = waitingRoom()
         whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(
-            listOf(hostPlayer(), readyGuest("guest:1"), notReadyGuest("guest:2"), readyGuest("guest:3"))
+            listOf(hostPlayer(), readyGuest("guest:1", 1), notReadyGuest("guest:2", 2), readyGuest("guest:3", 3))
         )
 
         val result = gameService.startGame(hostId, roomId)

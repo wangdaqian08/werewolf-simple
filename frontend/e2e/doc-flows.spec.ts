@@ -23,7 +23,9 @@ test('flow: gameStart → roleSkip → Sheriff SIGNUP', async ({ page }) => {
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   // Should see Role Reveal card
   await expect(page.getByText('知道了 / Got it')).toBeVisible()
@@ -42,7 +44,9 @@ test('flow: gameStart → roleSkip → sheriffExit → dayScenario HOST_REVEALED
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
   await page.waitForTimeout(70)
@@ -69,7 +73,9 @@ test('flow: roleSkip already seeds Alice+Tom as candidates', async ({ page }) =>
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
   await page.waitForTimeout(70)
@@ -84,7 +90,9 @@ test('flow: sheriffCandidate is a no-op when candidate already exists', async ({
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
   await page.waitForTimeout(70)
@@ -108,7 +116,9 @@ test('flow: correct candidate controls sequence — remove then re-add', async (
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
   await page.waitForTimeout(70)
@@ -128,7 +138,9 @@ test('flow: sheriffPhase SPEECH_CANDIDATE after roleSkip works', async ({ page }
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /知道了 \/ Got it/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+
+  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
   await page.waitForTimeout(70)
