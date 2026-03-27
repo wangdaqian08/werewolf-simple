@@ -20,6 +20,18 @@
           {{ gameStore.state.roleReveal?.totalCount ?? '?' }}
           confirmed
         </div>
+        <button
+          v-if="
+            isHost &&
+            gameStore.state.hasSheriff === false &&
+            gameStore.state.roleReveal?.confirmedCount === gameStore.state.roleReveal?.totalCount
+          "
+          class="btn btn-primary"
+          style="margin-top: 1.5rem"
+          @click="handleStartNight"
+        >
+          开始夜晚 / Start Night
+        </button>
       </div>
     </template>
 
@@ -143,6 +155,8 @@
       <div class="debug-btns">
         <button class="debug-btn" @click="debugStartGame">Role Reveal</button>
         <button class="debug-btn" @click="debugSkipRole">Skip → Sheriff</button>
+        <button class="debug-btn" @click="debugSkipToNight">Skip → Night</button>
+        <button class="debug-btn" @click="debugConfirmAll">All Confirmed</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Day Scenarios</div>
       <div class="debug-btns" data-testid="debug-day-scenario-btns">
@@ -310,6 +324,10 @@ async function handleRoleConfirm() {
   gameStore.setState(updated)
 }
 
+async function handleStartNight() {
+  await action({ actionType: 'START_NIGHT' })
+}
+
 watch(
   () => gameStore.state?.phase,
   (phase) => {
@@ -441,6 +459,12 @@ async function debugStartGame() {
 async function debugSkipRole() {
   await http.post('/debug/role/skip')
 }
+async function debugSkipToNight() {
+  await http.post('/debug/role/skip-night')
+}
+async function debugConfirmAll() {
+  await http.post('/debug/role/confirm-all')
+}
 
 async function debugScenario(scenario: string) {
   await http.post('/debug/day/scenario', { scenario })
@@ -497,6 +521,11 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+        }
+        // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
+        if (data.type === 'NightSubPhaseChanged') {
           const state = await gameService.getState(gameId)
           gameStore.setState(state)
         }

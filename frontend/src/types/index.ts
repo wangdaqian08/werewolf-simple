@@ -27,6 +27,7 @@ export interface RoomPlayer {
 export interface RoomConfig {
   totalPlayers: number
   roles: string[] // backend decides counts based on totalPlayers
+  hasSheriff?: boolean
 }
 
 export interface Room {
@@ -97,6 +98,7 @@ export interface GameState {
   myRole?: PlayerRole
   sheriff?: string // userId of current sheriff
   hostId?: string // userId of the room host
+  hasSheriff?: boolean // whether sheriff election is enabled for this game
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
   events: GameEvent[]
   roleReveal?: RoleRevealState

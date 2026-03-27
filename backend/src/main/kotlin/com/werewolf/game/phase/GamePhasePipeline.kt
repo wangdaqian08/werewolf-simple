@@ -4,6 +4,7 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
+import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.GameContextLoader
@@ -20,6 +21,7 @@ class GamePhasePipeline(
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
     private val sheriffService: SheriffService,
+    private val nightOrchestrator: NightOrchestrator,
 ) {
     // ── Phase transition actions ───────────────────────────────────────────────
 
@@ -78,17 +80,36 @@ class GamePhasePipeline(
 
         stompPublisher.broadcastGame(context.gameId, DomainEvent.RoleConfirmed(context.gameId, request.actorUserId))
 
-        // Advance to SHERIFF_ELECTION once everyone has confirmed
+        // Advance once everyone has confirmed
         val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
         if (allPlayers.all { it.confirmedRole }) {
-            context.game.phase = GamePhase.SHERIFF_ELECTION
-            gameRepository.save(context.game)
-            sheriffElectionRepository.save(SheriffElection(gameId = context.gameId))
-            stompPublisher.broadcastGame(
-                context.gameId,
-                DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
-            )
+            if (context.room.hasSheriff) {
+                context.game.phase = GamePhase.SHERIFF_ELECTION
+                gameRepository.save(context.game)
+                sheriffElectionRepository.save(SheriffElection(gameId = context.gameId))
+                stompPublisher.broadcastGame(
+                    context.gameId,
+                    DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
+                )
+            }
+            // When hasSheriff=false, stay in ROLE_REVEAL — host will explicitly call START_NIGHT
         }
+        return GameActionResult.Success()
+    }
+
+    /** Host: start night directly after role reveal when sheriff election is disabled. */
+    @Transactional
+    fun startNight(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (request.actorUserId != context.game.hostUserId)
+            return GameActionResult.Rejected("Only the host can start the night")
+        if (context.game.phase != GamePhase.ROLE_REVEAL)
+            return GameActionResult.Rejected("Not in ROLE_REVEAL phase")
+        if (context.room.hasSheriff)
+            return GameActionResult.Rejected("Sheriff election is enabled for this game")
+        val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
+        if (!allPlayers.all { it.confirmedRole })
+            return GameActionResult.Rejected("Not all players have confirmed their role")
+        nightOrchestrator.initNight(context.gameId, context.game.dayNumber, withWaiting = true)
         return GameActionResult.Success()
     }
 

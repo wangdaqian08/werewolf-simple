@@ -314,9 +314,9 @@ test('night: WAITING — sleep emoji and messages visible', async ({ page }) => 
   await setup(page)
   await loadNight(page, 'WAITING')
 
-  await expect(page.getByText('请闭眼')).toBeVisible()
-  await expect(page.getByText(/Please close your eyes/i)).toBeVisible()
-  await expect(page.getByText(/Other players are taking actions/i)).toBeVisible()
+  await expect(page.getByText('夜晚即将开始')).toBeVisible()
+  await expect(page.getByText(/Night is beginning/i)).toBeVisible()
+  await expect(page.getByText(/所有人请闭眼/i)).toBeVisible()
   // No role badge for WAITING
   await expect(page.locator('.rb')).not.toBeVisible()
 })

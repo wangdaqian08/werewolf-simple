@@ -123,6 +123,7 @@ export const MOCK_GAME_STATE: GameState = {
   myRole: 'SEER',
   sheriff: 'u2',
   hostId: 'u1',
+  hasSheriff: true,
   players: [
     { userId: 'u1', nickname: 'You', seatIndex: 1, isAlive: true, isSheriff: false, avatar: '⭐' },
     { userId: 'u2', nickname: 'Alice', seatIndex: 2, isAlive: true, isSheriff: true, avatar: '😊' },

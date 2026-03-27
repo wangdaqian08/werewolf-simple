@@ -18,6 +18,7 @@ class GameService(
     private val nightOrchestrator: NightOrchestrator,
     private val userRepository: UserRepository,
     private val sheriffService: SheriffService,
+    private val nightPhaseRepository: NightPhaseRepository,
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
@@ -69,6 +70,7 @@ class GameService(
     fun getGameState(gameId: Int, requestingUserId: String): Map<String, Any?> {
         val game = gameRepository.findById(gameId).orElse(null)
             ?: return mapOf("error" to "Game not found")
+        val room = roomRepository.findById(game.roomId).orElse(null)
         val players = gamePlayerRepository.findByGameId(gameId)
         val myPlayer = players.firstOrNull { it.userId == requestingUserId }
 
@@ -91,16 +93,24 @@ class GameService(
             sheriffService.buildState(gameId, game, myPlayer, players)
         } else null
 
+        val nightPhase = if (game.phase == GamePhase.NIGHT) {
+            nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)?.let { np ->
+                mapOf("subPhase" to np.subPhase.name, "dayNumber" to np.dayNumber)
+            }
+        } else null
+
         return mapOf(
             "gameId" to gameId,
             "phase" to game.phase.name,
             "subPhase" to game.subPhase,
             "dayNumber" to game.dayNumber,
             "sheriffUserId" to game.sheriffUserId,
+            "hasSheriff" to (room?.hasSheriff ?: true),
             "winner" to game.winner?.name,
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,
             "sheriffElection" to sheriffElection,
+            "nightPhase" to nightPhase,
             "players" to players.map { p ->
                 mapOf(
                     "userId" to p.userId,

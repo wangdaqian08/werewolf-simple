@@ -23,6 +23,7 @@ class NightOrchestrator(
     private val winConditionChecker: WinConditionChecker,
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
+    @org.springframework.context.annotation.Lazy private val nightWaitingScheduler: NightWaitingScheduler,
 ) {
     /**
      * Ordered night sub-phases for this game based on which roles are active.
@@ -46,16 +47,19 @@ class NightOrchestrator(
     /**
      * Initialise a new night phase and transition the game to NIGHT.
      * Called from GamePhasePipeline (first night) and VotingPipeline (subsequent nights).
+     *
+     * @param withWaiting When true (no-sheriff first night), starts in WAITING sub-phase
+     *   and schedules an automatic 5-second transition to WEREWOLF_PICK.
      */
     @Transactional
-    fun initNight(gameId: Int, newDayNumber: Int, previousGuardTarget: String? = null) {
+    fun initNight(gameId: Int, newDayNumber: Int, previousGuardTarget: String? = null, withWaiting: Boolean = false) {
         val context = contextLoader.load(gameId)
-        val firstSubPhase = firstSubPhase(context)
+        val initialSubPhase = if (withWaiting) NightSubPhase.WAITING else firstSubPhase(context)
 
         val nightPhase = NightPhase(
             gameId = gameId,
             dayNumber = newDayNumber,
-            subPhase = firstSubPhase,
+            subPhase = initialSubPhase,
             prevGuardTargetUserId = previousGuardTarget,
         )
         nightPhaseRepository.save(nightPhase)
@@ -66,7 +70,26 @@ class NightOrchestrator(
         game.dayNumber = newDayNumber
         gameRepository.save(game)
 
-        stompPublisher.broadcastGame(gameId, DomainEvent.PhaseChanged(gameId, GamePhase.NIGHT, firstSubPhase.name))
+        stompPublisher.broadcastGame(gameId, DomainEvent.PhaseChanged(gameId, GamePhase.NIGHT, initialSubPhase.name))
+
+        if (withWaiting) {
+            nightWaitingScheduler.scheduleAdvance(gameId)
+        }
+    }
+
+    /**
+     * Advances the night from WAITING to the first real sub-phase (WEREWOLF_PICK).
+     * Called automatically by [NightWaitingScheduler] after the 5-second countdown.
+     */
+    @Transactional
+    fun advanceFromWaiting(gameId: Int) {
+        val context = contextLoader.load(gameId)
+        val nightPhase = context.nightPhase ?: return
+        if (nightPhase.subPhase != NightSubPhase.WAITING) return // idempotent guard
+        val firstRealSubPhase = firstSubPhase(context)
+        nightPhase.subPhase = firstRealSubPhase
+        nightPhaseRepository.save(nightPhase)
+        stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstRealSubPhase))
     }
 
     /**

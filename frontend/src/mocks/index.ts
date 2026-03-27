@@ -122,11 +122,14 @@ export function setupMocks() {
   mock.onGet('/room/list').reply(200, [MOCK_ROOM_AS_HOST])
 
   // ── Debug: start game (fires GAME_STARTED on room topic, then ROLE_REVEAL) ───
-  mock.onPost('/debug/game/start').reply(() => {
+  mock.onPost('/debug/game/start').reply((config) => {
+    const body = JSON.parse(config.data ?? '{}')
+    const hasSheriff = body.hasSheriff !== false // default true
     confirmedUserIds = new Set()
     mockGameState = {
       ...MOCK_GAME_STATE,
       hostId: mockHostId,
+      hasSheriff,
       phase: 'ROLE_REVEAL',
       myRole: 'SEER',
       roleReveal: makeRoleRevealState(mockPlayers.length),
@@ -150,6 +153,43 @@ export function setupMocks() {
       sheriffElection: { ...MOCK_SHERIFF_SIGNUP },
     }
     pushGameStateUpdate()
+    return [200]
+  })
+
+  // ── Debug: mark all roles as confirmed (used to test no-sheriff Start Night button) ─
+  mock.onPost('/debug/role/confirm-all').reply(() => {
+    if (!mockGameState.roleReveal) return [400, { error: 'Not in ROLE_REVEAL phase' }]
+    mockGameState = {
+      ...mockGameState,
+      roleReveal: {
+        ...mockGameState.roleReveal,
+        confirmedCount: mockGameState.roleReveal.totalCount,
+      },
+    }
+    pushGameStateUpdate()
+    return [200]
+  })
+
+  // ── Debug: skip role reveal → Night WAITING (no-sheriff flow) ───────────────
+  mock.onPost('/debug/role/skip-night').reply(() => {
+    confirmedUserIds = new Set()
+    mockGameState = {
+      ...mockGameState,
+      phase: 'NIGHT',
+      roleReveal: undefined,
+      nightPhase: { subPhase: 'WAITING', dayNumber: 1 },
+    }
+    pushGameStateUpdate()
+    // Simulate 5-second server timer → WEREWOLF_PICK
+    setTimeout(() => {
+      if (mockGameState.phase === 'NIGHT' && mockGameState.nightPhase?.subPhase === 'WAITING') {
+        mockGameState = {
+          ...mockGameState,
+          nightPhase: { ...mockGameState.nightPhase!, subPhase: 'WEREWOLF_PICK' },
+        }
+        pushGameStateUpdate()
+      }
+    }, 5_000)
     return [200]
   })
 
@@ -362,7 +402,25 @@ export function setupMocks() {
   mock.onPost('/game/action').reply((config) => {
     const { actionType, targetId } = JSON.parse(config.data ?? '{}')
     if (mockGameState.phase === 'ROLE_REVEAL') {
-      if (actionType === 'CONFIRM_ROLE') {
+      if (actionType === 'START_NIGHT') {
+        mockGameState = {
+          ...mockGameState,
+          phase: 'NIGHT',
+          roleReveal: undefined,
+          nightPhase: { subPhase: 'WAITING', dayNumber: 1 },
+        }
+        pushGameStateUpdate()
+        // Simulate the 5-second server-side timer → advance to WEREWOLF_PICK
+        setTimeout(() => {
+          if (mockGameState.phase === 'NIGHT' && mockGameState.nightPhase?.subPhase === 'WAITING') {
+            mockGameState = {
+              ...mockGameState,
+              nightPhase: { ...mockGameState.nightPhase!, subPhase: 'WEREWOLF_PICK' },
+            }
+            pushGameStateUpdate()
+          }
+        }, 5_000)
+      } else if (actionType === 'CONFIRM_ROLE') {
         const userId = MOCK_LOGIN.user.userId
         if (!confirmedUserIds.has(userId)) {
           confirmedUserIds.add(userId)
@@ -372,8 +430,8 @@ export function setupMocks() {
             ...mockGameState,
             roleReveal: { ...mockGameState.roleReveal!, confirmedCount: confirmed },
           }
-          if (confirmed >= total) {
-            // All confirmed → advance to Sheriff Election
+          if (confirmed >= total && mockGameState.hasSheriff !== false) {
+            // All confirmed and sheriff enabled → advance to Sheriff Election
             mockGameState = {
               ...mockGameState,
               phase: 'SHERIFF_ELECTION',
@@ -381,6 +439,7 @@ export function setupMocks() {
               sheriffElection: { ...MOCK_SHERIFF_SIGNUP },
             }
           }
+          // When hasSheriff=false: stay in ROLE_REVEAL — host will click "Start Night"
           pushGameStateUpdate()
         }
       }
@@ -723,10 +782,11 @@ export function setupMocks() {
     addPlayer: () => http.post('/debug/room/add-player'),
 
     // Game start
-    gameStart: () => http.post('/debug/game/start'),
+    gameStart: (opts?: { hasSheriff?: boolean }) => http.post('/debug/game/start', opts ?? {}),
 
     // Role Reveal
     roleSkip: () => http.post('/debug/role/skip'),
+    roleSkipNight: () => http.post('/debug/role/skip-night'),
 
     // Sheriff Election
     sheriffPhase: (preset: string) => http.post('/debug/sheriff/phase', { preset }),

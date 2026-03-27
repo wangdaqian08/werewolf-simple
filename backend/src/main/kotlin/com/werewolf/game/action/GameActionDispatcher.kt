@@ -28,6 +28,7 @@ class GameActionDispatcher(
         return when (request.actionType) {
             // ── Role confirmation ──────────────────────────────────────────────
             ActionType.CONFIRM_ROLE -> gamePhasePipeline.confirmRole(request, context)
+            ActionType.START_NIGHT -> gamePhasePipeline.startNight(request, context)
 
             // ── Host phase control (DAY) ───────────────────────────────────────
             ActionType.REVEAL_NIGHT_RESULT -> gamePhasePipeline.revealNightResult(request, context)

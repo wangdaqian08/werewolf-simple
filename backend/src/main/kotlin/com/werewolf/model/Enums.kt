@@ -8,7 +8,7 @@ enum class GamePhase { ROLE_REVEAL, SHERIFF_ELECTION, DAY, VOTING, NIGHT, GAME_O
 
 enum class PlayerRole { WEREWOLF, VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT }
 
-enum class NightSubPhase { WEREWOLF_PICK, SEER_PICK, SEER_RESULT, WITCH_ACT, GUARD_PICK, COMPLETE }
+enum class NightSubPhase { WAITING, WEREWOLF_PICK, SEER_PICK, SEER_RESULT, WITCH_ACT, GUARD_PICK, COMPLETE }
 
 enum class ElectionSubPhase { SIGNUP, SPEECH, VOTING, RESULT }
 
@@ -24,7 +24,7 @@ enum class VotingSubPhase { VOTING, VOTE_RESULT, HUNTER_SHOOT, BADGE_HANDOVER }
 
 enum class ActionType {
     // Role reveal
-    CONFIRM_ROLE,
+    CONFIRM_ROLE, START_NIGHT,
 
     // Day phase
     REVEAL_NIGHT_RESULT, DAY_ADVANCE,
