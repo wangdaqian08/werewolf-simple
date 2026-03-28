@@ -215,11 +215,17 @@ else
     SAVED_SEATS="${SAVED_SEATS}${SEATS[$i]}|"
   done
   python3 -c "
-import json, os
+import json, os, base64
+
+def decode_user_id(token):
+    p = token.split('.')[1]
+    p += '=' * (4 - len(p) % 4)
+    return json.loads(base64.b64decode(p))['sub']
+
 nicks  = '${SAVED_NICKS}'.rstrip('|').split('|')
 tokens = '${SAVED_TOKENS}'.rstrip('|').split('|')
 seats  = '${SAVED_SEATS}'.rstrip('|').split('|')
-new_bots = [{'nick': n, 'token': t, 'seat': int(s)} for n,t,s in zip(nicks,tokens,seats)]
+new_bots = [{'nick': n, 'token': t, 'seat': int(s), 'userId': decode_user_id(t)} for n,t,s in zip(nicks,tokens,seats)]
 
 # Merge: keep existing bots whose seat is not claimed by a new bot
 existing = json.load(open('$STATE_FILE'))['bots'] if os.path.exists('$STATE_FILE') else []

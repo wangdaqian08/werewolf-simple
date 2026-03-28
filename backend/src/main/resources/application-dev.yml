@@ -2,9 +2,10 @@ spring:
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
   flyway:
-    enabled: false
+    enabled: true
+    clean-disabled: false  # required for DevFlywayConfig to call flyway.clean()
   # Stub OAuth2 client IDs so Spring Boot auto-config doesn't fail.
   # Real credentials are not needed locally — use POST /api/auth/dev instead.
   security:

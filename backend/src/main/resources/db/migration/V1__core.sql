@@ -13,7 +13,7 @@ CREATE TABLE users
 CREATE TABLE rooms
 (
     room_id       SERIAL PRIMARY KEY,
-    room_code     CHAR(4)      NOT NULL UNIQUE,
+    room_code     VARCHAR(4)   NOT NULL UNIQUE,
     host_user_id  VARCHAR(128) NOT NULL,
     status        VARCHAR(10)  NOT NULL DEFAULT 'WAITING'
         CHECK (status IN ('WAITING', 'IN_GAME', 'CLOSED')),
@@ -67,7 +67,7 @@ CREATE TABLE game_players
     user_id        VARCHAR(128) NOT NULL,
     seat_index     INT          NOT NULL,
     role           VARCHAR(10)  NOT NULL
-        CHECK (role IN ('WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER', 'GUARD')),
+        CHECK (role IN ('WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT')),
     is_alive       BOOLEAN      NOT NULL DEFAULT TRUE,
     is_sheriff     BOOLEAN      NOT NULL DEFAULT FALSE,
     confirmed_role BOOLEAN      NOT NULL DEFAULT FALSE,
@@ -82,8 +82,8 @@ CREATE TABLE night_phases
     id                          SERIAL PRIMARY KEY,
     game_id                     INT         NOT NULL,
     day_number                  INT         NOT NULL,
-    sub_phase                   VARCHAR(20) NOT NULL DEFAULT 'WEREWOLF_PICK'
-        CHECK (sub_phase IN ('WEREWOLF_PICK', 'SEER_PICK', 'SEER_RESULT', 'WITCH_ACT', 'GUARD_PICK', 'COMPLETE')),
+    sub_phase                   VARCHAR(20) NOT NULL DEFAULT 'WAITING'
+        CHECK (sub_phase IN ('WAITING', 'WEREWOLF_PICK', 'SEER_PICK', 'SEER_RESULT', 'WITCH_ACT', 'GUARD_PICK', 'COMPLETE')),
     wolf_target_user_id         VARCHAR(128),
     seer_checked_user_id        VARCHAR(128),
     seer_result_is_werewolf     BOOLEAN,
@@ -100,7 +100,7 @@ CREATE TABLE sheriff_elections
     id                      SERIAL PRIMARY KEY,
     game_id                 INT         NOT NULL,
     sub_phase               VARCHAR(10) NOT NULL DEFAULT 'SIGNUP'
-        CHECK (sub_phase IN ('SIGNUP', 'SPEECH', 'VOTING', 'RESULT')),
+        CHECK (sub_phase IN ('SIGNUP', 'SPEECH', 'VOTING', 'RESULT', 'TIED')),
     speaking_order          TEXT,
     current_speaker_idx     INT         NOT NULL DEFAULT 0,
     elected_sheriff_user_id VARCHAR(128),
@@ -142,10 +142,10 @@ CREATE TABLE elimination_history
     day_number          INT       NOT NULL,
     eliminated_user_id  VARCHAR(128),
     eliminated_role     VARCHAR(10) CHECK (eliminated_role IN
-                                           ('WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER', 'GUARD')),
+                                           ('WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT')),
     hunter_shot_user_id VARCHAR(128),
     hunter_shot_role    VARCHAR(10) CHECK (hunter_shot_role IN
-                                           ('WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER', 'GUARD')),
+                                           ('WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT')),
     recorded_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_eh_game FOREIGN KEY (game_id) REFERENCES games (game_id),
     CONSTRAINT uq_game_day UNIQUE (game_id, day_number)

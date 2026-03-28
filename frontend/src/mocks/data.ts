@@ -352,6 +352,38 @@ export const MOCK_SHERIFF_VOTING: SheriffElectionState = {
   ],
   speakingOrder: ['u2', 'u6'],
   canVote: true,
+  allVoted: false,
+  voteProgress: { voted: 0, total: 8 },
+}
+
+// Host (u1) quit campaign during SPEECH — canVote=false, allVoted=false
+// Tests that Reveal Result stays visible (disabled) even when host can't vote
+export const MOCK_SHERIFF_VOTING_HOST_QUIT: SheriffElectionState = {
+  subPhase: 'VOTING',
+  timeRemaining: 45,
+  candidates: [
+    { userId: 'u1', nickname: '我', avatar: '⭐', status: 'QUIT' },
+    { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' },
+    { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
+  ],
+  speakingOrder: ['u1', 'u2', 'u6'],
+  canVote: false,
+  allVoted: false,
+  voteProgress: { voted: 1, total: 8 },
+}
+
+// u1 (host) is a running candidate in VOTING — tests self-vote prevention
+export const MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE: SheriffElectionState = {
+  subPhase: 'VOTING',
+  timeRemaining: 45,
+  candidates: [
+    { userId: 'u1', nickname: '我', avatar: '⭐', status: 'RUNNING' },
+    { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
+  ],
+  speakingOrder: ['u1', 'u6'],
+  canVote: true,
+  allVoted: false,
+  voteProgress: { voted: 0, total: 8 },
 }
 
 export const MOCK_SHERIFF_RESULT: SheriffElectionState = {
@@ -361,8 +393,10 @@ export const MOCK_SHERIFF_RESULT: SheriffElectionState = {
     { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' },
     { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
     { userId: 'u3', nickname: 'Bob', avatar: '🎭', status: 'RUNNING' },
+    // Eve quit during SPEECH — she is in candidates but must NOT appear in result tally
+    { userId: 'u5', nickname: 'Eve', avatar: '🌸', status: 'QUIT' },
   ],
-  speakingOrder: ['u2', 'u6', 'u3'],
+  speakingOrder: ['u2', 'u6', 'u3', 'u5'],
   result: {
     sheriffId: 'u6',
     sheriffNickname: 'Tom',

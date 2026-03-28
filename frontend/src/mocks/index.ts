@@ -12,6 +12,8 @@ import {
   MOCK_SHERIFF_SPEECH_CANDIDATE,
   MOCK_SHERIFF_SPEECH_AUDIENCE,
   MOCK_SHERIFF_VOTING,
+  MOCK_SHERIFF_VOTING_HOST_QUIT,
+  MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
   MOCK_SHERIFF_RESULT,
   MOCK_ROLE_ASSIGNMENTS,
   makeDayHidden,
@@ -52,6 +54,8 @@ const SHERIFF_PRESETS: Record<string, SheriffElectionState> = {
   SPEECH_CANDIDATE: MOCK_SHERIFF_SPEECH_CANDIDATE,
   SPEECH_AUDIENCE: MOCK_SHERIFF_SPEECH_AUDIENCE,
   VOTING: MOCK_SHERIFF_VOTING,
+  VOTING_HOST_QUIT: MOCK_SHERIFF_VOTING_HOST_QUIT,
+  VOTING_WITH_HOST_CANDIDATE: MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
   RESULT: MOCK_SHERIFF_RESULT,
 }
 
@@ -445,8 +449,9 @@ export function setupMocks() {
       }
     } else if (mockGameState.phase === 'SHERIFF_ELECTION' && mockGameState.sheriffElection) {
       const e = mockGameState.sheriffElection
-      if (actionType === 'SHERIFF_RUN') {
-        if (!e.candidates.some((c) => c.userId === MOCK_LOGIN.user.userId)) {
+      if (actionType === 'SHERIFF_CAMPAIGN') {
+        const existing = e.candidates.find((c) => c.userId === MOCK_LOGIN.user.userId)
+        if (!existing) {
           mockGameState = {
             ...mockGameState,
             sheriffElection: {
@@ -455,6 +460,20 @@ export function setupMocks() {
                 ...e.candidates,
                 { userId: 'u1', nickname: '我', avatar: '⭐', status: 'RUNNING' as const },
               ],
+              hasPassed: false,
+            },
+          }
+          pushGameStateUpdate()
+        } else if (existing.status === 'QUIT') {
+          // Player passed earlier but changed their mind — allow re-running
+          mockGameState = {
+            ...mockGameState,
+            sheriffElection: {
+              ...e,
+              candidates: e.candidates.map((c) =>
+                c.userId === 'u1' ? { ...c, status: 'RUNNING' as const } : c,
+              ),
+              hasPassed: false,
             },
           }
           pushGameStateUpdate()
@@ -465,7 +484,7 @@ export function setupMocks() {
           sheriffElection: { ...e, hasPassed: true },
         }
         pushGameStateUpdate()
-      } else if (actionType === 'SHERIFF_WITHDRAW') {
+      } else if (actionType === 'SHERIFF_QUIT') {
         mockGameState = {
           ...mockGameState,
           sheriffElection: {
@@ -475,6 +494,7 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'SHERIFF_QUIT_CAMPAIGN') {
+        const t = e.voteProgress?.total ?? 8
         mockGameState = {
           ...mockGameState,
           sheriffElection: {
@@ -483,10 +503,12 @@ export function setupMocks() {
               c.userId === 'u1' ? { ...c, status: 'QUIT' as const } : c,
             ),
             canVote: false,
+            allVoted: true,
+            voteProgress: { voted: t, total: t },
           },
         }
         pushGameStateUpdate()
-      } else if (actionType === 'SHERIFF_START_CAMPAIGN') {
+      } else if (actionType === 'SHERIFF_START_SPEECH') {
         const runningIds = e.candidates.filter((c) => c.status === 'RUNNING').map((c) => c.userId)
         mockGameState = {
           ...mockGameState,
@@ -500,16 +522,76 @@ export function setupMocks() {
           },
         }
         pushGameStateUpdate()
+      } else if (actionType === 'SHERIFF_ADVANCE_SPEECH') {
+        const order = e.speakingOrder ?? []
+        const currentIdx = order.indexOf(e.currentSpeakerId ?? '')
+        const nextIdx = currentIdx + 1
+        if (nextIdx >= order.length) {
+          mockGameState = {
+            ...mockGameState,
+            sheriffElection: { ...e, subPhase: 'VOTING', currentSpeakerId: undefined },
+          }
+        } else {
+          mockGameState = {
+            ...mockGameState,
+            sheriffElection: { ...e, currentSpeakerId: order[nextIdx] },
+          }
+        }
+        pushGameStateUpdate()
       } else if (actionType === 'SHERIFF_VOTE') {
+        const t = e.voteProgress?.total ?? 8
         mockGameState = {
           ...mockGameState,
-          sheriffElection: { ...e, myVote: targetId, abstained: false },
+          sheriffElection: {
+            ...e,
+            myVote: targetId,
+            abstained: false,
+            allVoted: true,
+            voteProgress: { voted: t, total: t },
+          },
         }
         pushGameStateUpdate()
       } else if (actionType === 'SHERIFF_ABSTAIN') {
+        const t = e.voteProgress?.total ?? 8
         mockGameState = {
           ...mockGameState,
-          sheriffElection: { ...e, myVote: undefined, abstained: true },
+          sheriffElection: {
+            ...e,
+            myVote: undefined,
+            abstained: true,
+            allVoted: true,
+            voteProgress: { voted: t, total: t },
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'SHERIFF_REVEAL_RESULT') {
+        mockGameState = {
+          ...mockGameState,
+          sheriffElection: { ...e, subPhase: 'RESULT', result: MOCK_SHERIFF_RESULT.result },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'SHERIFF_APPOINT') {
+        const appointed = e.candidates.find((c) => c.userId === targetId)
+        mockGameState = {
+          ...mockGameState,
+          sheriffElection: {
+            ...e,
+            subPhase: 'RESULT',
+            result: {
+              ...MOCK_SHERIFF_RESULT.result!,
+              sheriffId: targetId ?? '',
+              sheriffNickname: appointed?.nickname ?? '',
+              sheriffAvatar: appointed?.avatar,
+            },
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'START_NIGHT') {
+        mockGameState = {
+          ...mockGameState,
+          phase: 'NIGHT',
+          sheriffElection: undefined,
+          nightPhase: { subPhase: 'WAITING', dayNumber: 1 },
         }
         pushGameStateUpdate()
       }

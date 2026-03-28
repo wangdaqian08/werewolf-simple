@@ -30,7 +30,8 @@ class SheriffService(
         ActionType.SHERIFF_START_SPEECH -> startSpeech(request, context)
         ActionType.SHERIFF_ADVANCE_SPEECH -> advanceSpeech(request, context)
         ActionType.SHERIFF_REVEAL_RESULT -> revealResult(request, context)
-        ActionType.SHERIFF_PASS -> GameActionResult.Success() // no-op; frontend tracks locally
+        ActionType.SHERIFF_APPOINT -> appoint(request, context)
+        ActionType.SHERIFF_PASS -> pass(request, context)
         ActionType.SHERIFF_CONFIRM_VOTE -> GameActionResult.Success() // vote already saved on SHERIFF_VOTE
         ActionType.SHERIFF_QUIT_CAMPAIGN -> quitCampaign(request, context)
         ActionType.SHERIFF_VOTE -> vote(request, context)
@@ -57,9 +58,23 @@ class SheriffService(
         }
         val myCandidate = candidates.firstOrNull { it.userId == myPlayer?.userId }
 
-        val result = if (election.subPhase == ElectionSubPhase.RESULT) {
+        val result = if (election.subPhase == ElectionSubPhase.RESULT || election.subPhase == ElectionSubPhase.TIED) {
             buildResult(gameId, game, candidates, userMap, playerMap)
         } else null
+
+        // allVoted: every eligible player (alive, not a SPEECH-quitter) has cast a vote
+        // Speech-quitters forfeited their vote and are excluded from eligibleVoterCount.
+        val speechQuitterIds = candidates
+            .filter { it.status == CandidateStatus.QUIT && speakingOrderIds.contains(it.userId) }
+            .map { it.userId }.toSet()
+        val totalAlivePlayers = players.count { it.alive }
+        val eligibleVoterCount = totalAlivePlayers - speechQuitterIds.size
+        val submittedVoteCount = voteRepository.findByGameIdAndVoteContextAndDayNumber(
+            gameId, VoteContext.SHERIFF_ELECTION, game.dayNumber
+        ).size
+        // allVoted is true when all eligible voters have submitted a vote (including voluntary abstains).
+        // If eligibleVoterCount == 0 (all players are speech-quitters), voting is trivially complete.
+        val allVoted = eligibleVoterCount == 0 || submittedVoteCount >= eligibleVoterCount
 
         return mapOf(
             "subPhase" to election.subPhase.name,
@@ -75,10 +90,15 @@ class SheriffService(
             },
             "speakingOrder" to speakingOrderIds,
             "currentSpeakerId" to currentSpeakerId,
-            "hasPassed" to false,
+            // hasPassed: player explicitly chose not to run (QUIT but was never in the speaking order)
+            "hasPassed" to (myCandidate?.status == CandidateStatus.QUIT && !speakingOrderIds.contains(myPlayer?.userId)),
             "myVote" to myVoteRecord?.targetUserId,
             "abstained" to (myVoteRecord != null && myVoteRecord.targetUserId == null),
-            "canVote" to (myCandidate?.status != CandidateStatus.QUIT),
+            // canVote: only players who QUIT during speech (were in speaking order) lose their vote
+            "canVote" to !(myCandidate?.status == CandidateStatus.QUIT && speakingOrderIds.contains(myPlayer?.userId)),
+            "allVoted" to allVoted,
+            // voteProgress: speech-quitters count as auto-voted (they can't vote); total = all alive
+            "voteProgress" to mapOf("voted" to submittedVoteCount + speechQuitterIds.size, "total" to totalAlivePlayers),
             "result" to result,
         )
     }
@@ -104,6 +124,29 @@ class SheriffService(
             sheriffCandidateRepository.save(existing)
         } else {
             sheriffCandidateRepository.save(SheriffCandidate(electionId = electionId, userId = request.actorUserId))
+        }
+        broadcastSignupUpdate(context.gameId)
+        return GameActionResult.Success()
+    }
+
+    private fun pass(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (context.game.phase != GamePhase.SHERIFF_ELECTION)
+            return GameActionResult.Rejected("Not in SHERIFF_ELECTION phase")
+        val election = context.election ?: return GameActionResult.Rejected("No election in progress")
+        if (election.subPhase != ElectionSubPhase.SIGNUP)
+            return GameActionResult.Rejected("Sign-up period is over")
+
+        val electionId = election.id ?: error("Election has no ID")
+        val existing = sheriffCandidateRepository.findByElectionId(electionId)
+            .firstOrNull { it.userId == request.actorUserId }
+        if (existing == null) {
+            // Record the pass so hasPassed can be returned correctly
+            sheriffCandidateRepository.save(
+                SheriffCandidate(electionId = electionId, userId = request.actorUserId, status = CandidateStatus.QUIT)
+            )
+        } else if (existing.status == CandidateStatus.RUNNING) {
+            existing.status = CandidateStatus.QUIT
+            sheriffCandidateRepository.save(existing)
         }
         broadcastSignupUpdate(context.gameId)
         return GameActionResult.Success()
@@ -193,23 +236,59 @@ class SheriffService(
         val tally = votes.mapNotNull { it.targetUserId }.groupingBy { it }.eachCount()
         val maxVotes = tally.values.maxOrNull() ?: 0
         val topCandidates = tally.filterValues { it == maxVotes }.keys.toList()
-        val winnerUserId = if (topCandidates.size == 1) topCandidates.first() else null
+        if (topCandidates.isEmpty()) {
+            // No votes cast (e.g. all candidates quit) — skip election, proceed to night
+            nightOrchestrator.initNight(context.gameId, context.game.dayNumber)
+            return GameActionResult.Success()
+        }
+        if (topCandidates.size == 1) {
+            val winnerUserId = topCandidates.first()
+            election.subPhase = ElectionSubPhase.RESULT
+            election.electedSheriffUserId = winnerUserId
+            sheriffElectionRepository.save(election)
+            electSheriff(winnerUserId, context)
+            stompPublisher.broadcastGame(context.gameId, DomainEvent.SheriffElected(context.gameId, winnerUserId))
+            stompPublisher.broadcastGame(context.gameId,
+                DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
+        } else {
+            election.subPhase = ElectionSubPhase.TIED
+            sheriffElectionRepository.save(election)
+            stompPublisher.broadcastGame(context.gameId,
+                DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.TIED.name))
+        }
+        return GameActionResult.Success()
+    }
+
+    private fun appoint(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (request.actorUserId != context.game.hostUserId)
+            return GameActionResult.Rejected("Only host can appoint sheriff")
+        val election = context.election ?: return GameActionResult.Rejected("No election in progress")
+        if (election.subPhase != ElectionSubPhase.TIED)
+            return GameActionResult.Rejected("Not in TIED sub-phase")
+
+        val targetUserId = request.targetUserId
+            ?: return GameActionResult.Rejected("targetUserId required")
+        val candidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
+        if (candidates.none { it.userId == targetUserId && it.status == CandidateStatus.RUNNING })
+            return GameActionResult.Rejected("Target is not a running candidate")
 
         election.subPhase = ElectionSubPhase.RESULT
-        election.electedSheriffUserId = winnerUserId
+        election.electedSheriffUserId = targetUserId
         sheriffElectionRepository.save(election)
+        electSheriff(targetUserId, context)
 
-        if (winnerUserId != null) {
-            context.game.sheriffUserId = winnerUserId
-            gameRepository.save(context.game)
-            gamePlayerRepository.findByGameIdAndUserId(context.gameId, winnerUserId).ifPresent {
-                it.sheriff = true; gamePlayerRepository.save(it)
-            }
-        }
-
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.SheriffElected(context.gameId, winnerUserId))
-        nightOrchestrator.initNight(context.gameId, context.game.dayNumber)
+        stompPublisher.broadcastGame(context.gameId, DomainEvent.SheriffElected(context.gameId, targetUserId))
+        stompPublisher.broadcastGame(context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
         return GameActionResult.Success()
+    }
+
+    private fun electSheriff(winnerUserId: String, context: GameContext) {
+        context.game.sheriffUserId = winnerUserId
+        gameRepository.save(context.game)
+        gamePlayerRepository.findByGameIdAndUserId(context.gameId, winnerUserId).ifPresent {
+            it.sheriff = true; gamePlayerRepository.save(it)
+        }
     }
 
     private fun quitCampaign(request: GameActionRequest, context: GameContext): GameActionResult {
@@ -225,6 +304,16 @@ class SheriffService(
 
         candidate.status = CandidateStatus.QUIT
         sheriffCandidateRepository.save(candidate)
+
+        // If no running candidates remain in the speaking order, skip to night
+        val speakingOrderIds = election.speakingOrder?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        val allCandidates = sheriffCandidateRepository.findByElectionId(election.id)
+        val anyRunningLeft = allCandidates.any { it.status == CandidateStatus.RUNNING && speakingOrderIds.contains(it.userId) }
+        if (!anyRunningLeft) {
+            nightOrchestrator.initNight(context.gameId, context.game.dayNumber)
+            return GameActionResult.Success()
+        }
+
         stompPublisher.broadcastGame(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name)
@@ -240,15 +329,21 @@ class SheriffService(
             return GameActionResult.Rejected("Not in VOTING sub-phase")
 
         val candidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
-        if (candidates.firstOrNull { it.userId == request.actorUserId }?.status == CandidateStatus.QUIT)
+        val speakingOrderIds = election.speakingOrder?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        val myCandidate = candidates.firstOrNull { it.userId == request.actorUserId }
+        // Only candidates who QUIT during SPEECH (were in speaking order) forfeit their vote
+        if (myCandidate?.status == CandidateStatus.QUIT && speakingOrderIds.contains(request.actorUserId))
             return GameActionResult.Rejected("You quit the campaign and cannot vote")
 
         val targetUserId = request.targetUserId
             ?: return GameActionResult.Rejected("targetUserId required for SHERIFF_VOTE")
+        if (targetUserId == request.actorUserId)
+            return GameActionResult.Rejected("Cannot vote for yourself")
         if (candidates.none { it.userId == targetUserId && it.status == CandidateStatus.RUNNING })
             return GameActionResult.Rejected("Target is not a running candidate")
 
         upsertVote(context.gameId, context.game.dayNumber, request.actorUserId, targetUserId)
+        broadcastVotingUpdate(context.gameId)
         return GameActionResult.Success()
     }
 
@@ -260,10 +355,13 @@ class SheriffService(
             return GameActionResult.Rejected("Not in VOTING sub-phase")
 
         val candidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
-        if (candidates.firstOrNull { it.userId == request.actorUserId }?.status == CandidateStatus.QUIT)
+        val speakingOrderIds = election.speakingOrder?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        val myCandidate = candidates.firstOrNull { it.userId == request.actorUserId }
+        if (myCandidate?.status == CandidateStatus.QUIT && speakingOrderIds.contains(request.actorUserId))
             return GameActionResult.Rejected("You quit the campaign and cannot vote")
 
         upsertVote(context.gameId, context.game.dayNumber, request.actorUserId, null)
+        broadcastVotingUpdate(context.gameId)
         return GameActionResult.Success()
     }
 
@@ -273,22 +371,33 @@ class SheriffService(
         val existing = voteRepository.findByGameIdAndVoteContextAndDayNumberAndVoterUserId(
             gameId, VoteContext.SHERIFF_ELECTION, dayNumber, voterUserId
         ).orElse(null)
-        if (existing != null) voteRepository.delete(existing)
-        voteRepository.save(
-            Vote(
-                gameId = gameId,
-                voteContext = VoteContext.SHERIFF_ELECTION,
-                dayNumber = dayNumber,
-                voterUserId = voterUserId,
-                targetUserId = targetUserId,
+        if (existing != null) {
+            existing.targetUserId = targetUserId
+            voteRepository.save(existing)
+        } else {
+            voteRepository.save(
+                Vote(
+                    gameId = gameId,
+                    voteContext = VoteContext.SHERIFF_ELECTION,
+                    dayNumber = dayNumber,
+                    voterUserId = voterUserId,
+                    targetUserId = targetUserId,
+                )
             )
-        )
+        }
     }
 
     private fun broadcastSignupUpdate(gameId: Int) {
         stompPublisher.broadcastGame(
             gameId,
             DomainEvent.PhaseChanged(gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
+        )
+    }
+
+    private fun broadcastVotingUpdate(gameId: Int) {
+        stompPublisher.broadcastGame(
+            gameId,
+            DomainEvent.PhaseChanged(gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.VOTING.name)
         )
     }
 
@@ -305,7 +414,7 @@ class SheriffService(
         val voterUserMap = userRepository.findAllById(votes.map { it.voterUserId }).associateBy { it.userId }
         val sheriffUser = game.sheriffUserId?.let { userMap[it] ?: voterUserMap[it] }
 
-        val tally = candidates.map { c ->
+        val tally = candidates.filter { it.status == CandidateStatus.RUNNING }.map { c ->
             val votersForC = votes.filter { it.targetUserId == c.userId }
             mapOf(
                 "candidateId" to c.userId,

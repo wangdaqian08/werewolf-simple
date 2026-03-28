@@ -16,9 +16,9 @@
         </p>
       </div>
 
-      <div class="section-label">Candidates so far ({{ election.candidates.length }})</div>
+      <div class="section-label">Candidates so far ({{ runningCandidates.length }})</div>
       <div class="candidate-list">
-        <div v-for="c in election.candidates" :key="c.userId" class="cand-row-running">
+        <div v-for="c in runningCandidates" :key="c.userId" class="cand-row-running">
           <span class="cand-avatar">{{ c.avatar ?? '😊' }}</span>
           <span class="cand-name">{{ c.nickname }}</span>
           <span class="running-badge">RUNNING</span>
@@ -30,18 +30,17 @@
         <template v-if="iAmCandidate">
           <button class="btn btn-danger-outline" @click="emit('withdraw')">撤回 / Withdraw</button>
         </template>
-        <template v-else-if="election.hasPassed">
-          <button class="btn btn-secondary" disabled>已放弃 / Passed</button>
-        </template>
         <template v-else>
           <button class="btn btn-gold" @click="emit('run')">参选 / Run for Sheriff</button>
-          <button class="btn btn-outline" @click="emit('pass')">放弃 / Pass</button>
+          <button v-if="!election.hasPassed" class="btn btn-outline" @click="emit('pass')">
+            放弃 / Pass
+          </button>
         </template>
         <template v-if="isHost">
           <div class="host-divider" />
           <button
             class="btn btn-primary"
-            :disabled="election.candidates.length === 0"
+            :disabled="runningCandidates.length === 0"
             @click="emit('startCampaign')"
           >
             开始演讲 / Start Campaign
@@ -82,6 +81,12 @@
         <button class="btn btn-danger-outline" @click="emit('quit')">
           退出竞选 / Quit Campaign
         </button>
+        <template v-if="isHost">
+          <div class="host-divider" />
+          <button class="btn btn-primary" @click="emit('advanceSpeech')">
+            下一位 / Next Speaker
+          </button>
+        </template>
       </div>
     </template>
 
@@ -113,7 +118,13 @@
 
       <div class="spacer" />
       <div class="action-footer">
-        <button class="btn btn-secondary" disabled>等待投票 / Waiting for vote…</button>
+        <template v-if="iAmCandidate">
+          <div class="quit-warning">⚠ Quitting forfeits your right to vote for sheriff.</div>
+          <button class="btn btn-danger-outline" @click="emit('quit')">
+            退出竞选 / Quit Campaign
+          </button>
+        </template>
+        <button v-else class="btn btn-secondary" disabled>等待投票 / Waiting for vote…</button>
         <template v-if="isHost">
           <div class="host-divider" />
           <button class="btn btn-primary" @click="emit('advanceSpeech')">
@@ -135,44 +146,175 @@
         <div
           v-for="c in runningCandidates"
           :key="c.userId"
-          :class="{ 'vote-row-selected': election.myVote === c.userId }"
+          :class="{
+            'vote-row-selected':
+              !election.abstained && (election.myVote ?? selectedId) === c.userId,
+            'vote-row-self': c.userId === myUserId,
+          }"
           class="vote-row"
-          @click="election.canVote !== false && emit('vote', c.userId)"
+          @click="canSelectVote(c.userId) && (selectedId = c.userId)"
         >
           <span class="cand-avatar">{{ c.avatar ?? '😊' }}</span>
           <div class="cand-info-col">
             <span class="cand-name">{{ c.nickname }}</span>
             <span class="cand-sub-status">{{
-              election.myVote === c.userId ? 'SELECTED ✓' : '候选人'
+              election.myVote === c.userId
+                ? 'VOTED ✓'
+                : !election.abstained && selectedId === c.userId
+                  ? 'SELECTED ✓'
+                  : c.userId === myUserId
+                    ? '（自己）'
+                    : '候选人'
             }}</span>
           </div>
-          <div v-if="election.myVote === c.userId" class="check-circle">✓</div>
+          <div
+            v-if="!election.abstained && (election.myVote === c.userId || selectedId === c.userId)"
+            class="check-circle"
+          >
+            ✓
+          </div>
         </div>
       </div>
 
       <div v-if="quitCandidates.length" class="quit-note">
-        {{ quitCandidates.map((c) => c.nickname).join(', ') }} quit campaign — cannot vote.
+        {{ quitCandidates.map((c) => c.nickname).join(', ') }} quit campaign.
       </div>
 
       <div class="spacer" />
       <div class="action-footer">
-        <template v-if="election.canVote !== false">
+        <!-- Already voted / abstained — locked state -->
+        <template v-if="election.myVote || election.abstained">
+          <div class="voted-badge">
+            <span v-if="election.myVote">
+              ✓ 已投票 — {{ runningCandidates.find((c) => c.userId === election.myVote)?.nickname }}
+            </span>
+            <span v-else>✓ 已弃票 / Abstained</span>
+          </div>
+        </template>
+        <!-- Can still vote -->
+        <template v-else-if="election.canVote !== false">
           <button
             class="btn btn-gold"
-            :disabled="!election.myVote && !election.abstained"
-            @click="emit('confirmVote')"
+            :disabled="!selectedId"
+            @click="selectedId && emit('vote', selectedId)"
           >
             确认投票 / Confirm Vote
           </button>
           <button class="btn btn-outline" @click="emit('abstain')">放弃投票 / Give Up Vote</button>
         </template>
+        <!-- Forfeited (quit during speech) -->
         <button v-else class="btn btn-secondary" disabled>已放弃投票 / Vote forfeited</button>
+
         <template v-if="isHost">
           <div class="host-divider" />
-          <button class="btn btn-primary" @click="emit('revealResult')">
+          <div v-if="election.voteProgress" class="vote-progress-label">
+            {{ election.voteProgress.voted }}/{{ election.voteProgress.total }} voted
+          </div>
+          <button
+            class="btn btn-primary"
+            :disabled="!election.allVoted"
+            @click="emit('revealResult')"
+          >
             揭晓结果 / Reveal Result
           </button>
         </template>
+      </div>
+    </template>
+
+    <!-- ── TIED ── -->
+    <template v-else-if="election.subPhase === 'TIED' && election.result">
+      <div class="info-banner-sm">
+        <div class="gold bold sm">平票 — 主持人指定警长</div>
+        <div class="muted sm">Tie vote — host appoints sheriff</div>
+      </div>
+
+      <!-- Vote tally, sorted high→low -->
+      <div class="vote-columns">
+        <div
+          v-for="t in sortedTally"
+          :key="t.candidateId"
+          class="vote-col"
+          :class="t.votes === maxVotes ? 'vote-col-winner' : ''"
+        >
+          <div class="vote-col-head">
+            <div class="vote-col-avatar">
+              {{ election.candidates.find((c) => c.userId === t.candidateId)?.avatar ?? '😊' }}
+            </div>
+            <div class="vote-col-cname">{{ t.nickname }}</div>
+            <div
+              class="vote-col-count"
+              :class="t.votes === maxVotes ? 'tally-winner' : 'tally-muted'"
+            >
+              {{ t.votes }}
+            </div>
+          </div>
+          <div class="vote-col-body">
+            <div v-for="v in t.voters" :key="v.userId" class="vcol-row">
+              <span class="vcol-avatar">{{ v.avatar ?? '😊' }}</span>
+              <span class="vcol-seat">{{ v.seatIndex }}</span>
+              <span class="vcol-name">{{ v.nickname }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="election.result.abstainCount > 0" class="vote-col vote-col-abstain">
+          <div class="vote-col-head">
+            <div class="vote-col-avatar">—</div>
+            <div class="vote-col-cname">弃票</div>
+            <div class="vote-col-count tally-abstain">{{ election.result.abstainCount }}</div>
+          </div>
+          <div class="vote-col-body">
+            <div v-for="v in election.result.abstainVoters" :key="v.userId" class="vcol-row">
+              <span class="vcol-avatar">{{ v.avatar ?? '😊' }}</span>
+              <span class="vcol-seat">{{ v.seatIndex }}</span>
+              <span class="vcol-name">{{ v.nickname }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="quitCandidates.length" class="vote-col vote-col-quit">
+          <div class="vote-col-head">
+            <div class="vote-col-avatar">❌</div>
+            <div class="vote-col-cname">退出竞选</div>
+            <div class="vote-col-count tally-muted">—</div>
+          </div>
+          <div class="vote-col-body">
+            <div v-for="c in quitCandidates" :key="c.userId" class="vcol-row">
+              <span class="vcol-avatar">{{ c.avatar ?? '😊' }}</span>
+              <span class="vcol-name">{{ c.nickname }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="spacer" />
+      <template v-if="isHost">
+        <div class="section-label">指定警长 / Appoint Sheriff</div>
+        <div class="vote-list">
+          <div
+            v-for="c in tiedCandidates"
+            :key="c.userId"
+            :class="{ 'vote-row-selected': appointTarget === c.userId }"
+            class="vote-row"
+            @click="appointTarget = c.userId"
+          >
+            <span class="cand-avatar">{{ c.avatar ?? '😊' }}</span>
+            <div class="cand-info-col">
+              <span class="cand-name">{{ c.nickname }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="action-footer">
+          <button
+            class="btn btn-primary"
+            :disabled="!appointTarget"
+            @click="emit('appoint', appointTarget!)"
+          >
+            确认任命 / Appoint Sheriff
+          </button>
+        </div>
+      </template>
+      <div v-else class="action-footer">
+        <button class="btn btn-secondary" disabled>等待主持人指定 / Waiting for host…</button>
       </div>
     </template>
 
@@ -192,10 +334,10 @@
         <div class="power-note">
           Sheriff's vote counts as <b class="gold">1.5×</b> during eliminations
         </div>
-        <!-- Vote columns: one per candidate + abstain -->
+        <!-- Vote columns: one per candidate + abstain, sorted high→low -->
         <div class="vote-columns">
           <div
-            v-for="t in election.result.tally"
+            v-for="t in sortedTally"
             :key="t.candidateId"
             class="vote-col"
             :class="t.votes === maxVotes ? 'vote-col-winner' : ''"
@@ -235,14 +377,36 @@
               </div>
             </div>
           </div>
+
+          <div v-if="quitCandidates.length" class="vote-col vote-col-quit">
+            <div class="vote-col-head">
+              <div class="vote-col-avatar">❌</div>
+              <div class="vote-col-cname">退出竞选</div>
+              <div class="vote-col-count tally-muted">—</div>
+            </div>
+            <div class="vote-col-body">
+              <div v-for="c in quitCandidates" :key="c.userId" class="vcol-row">
+                <span class="vcol-avatar">{{ c.avatar ?? '😊' }}</span>
+                <span class="vcol-name">{{ c.nickname }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+      <template v-if="isHost">
+        <div class="spacer" />
+        <div class="action-footer">
+          <button class="btn btn-primary" @click="emit('startNight')">
+            开始夜晚 / Start Night
+          </button>
+        </div>
+      </template>
     </template>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { SheriffCandidate, SheriffElectionState } from '@/types'
 
 const props = defineProps<{
@@ -258,14 +422,15 @@ const emit = defineEmits<{
   startCampaign: []
   quit: []
   vote: [userId: string]
-  confirmVote: []
   abstain: []
   advanceSpeech: []
   revealResult: []
+  appoint: [userId: string]
+  startNight: []
 }>()
 
 const iAmCandidate = computed(() =>
-  props.election.candidates.some((c) => c.userId === props.myUserId),
+  props.election.candidates.some((c) => c.userId === props.myUserId && c.status === 'RUNNING'),
 )
 
 const runningCandidates = computed(() =>
@@ -284,6 +449,30 @@ const maxVotes = computed(() =>
   props.election.result ? Math.max(...props.election.result.tally.map((t) => t.votes)) : 0,
 )
 
+const appointTarget = ref<string | undefined>(undefined)
+const selectedId = ref<string | undefined>(undefined)
+
+function canSelectVote(userId: string): boolean {
+  return (
+    props.election.canVote !== false &&
+    !props.election.myVote &&
+    !props.election.abstained &&
+    userId !== props.myUserId
+  )
+}
+
+const sortedTally = computed(() =>
+  [...(props.election.result?.tally ?? [])].sort((a, b) => b.votes - a.votes),
+)
+
+const tiedCandidates = computed(() => {
+  const tally = props.election.result?.tally ?? []
+  return tally
+    .filter((t) => t.votes === maxVotes.value)
+    .map((t) => runningCandidates.value.find((c) => c.userId === t.candidateId))
+    .filter((c): c is SheriffCandidate => c !== undefined)
+})
+
 const currentSpeaker = computed(() =>
   props.election.currentSpeakerId
     ? candidateMap.value.get(props.election.currentSpeakerId)
@@ -300,6 +489,8 @@ const phaseChipLabel = computed(() => {
       return '👮‍ 投票选警长'
     case 'RESULT':
       return '👮‍ 警长产生'
+    case 'TIED':
+      return '👮‍ 平票 — 主持人指定'
     default:
       return '👮‍ 警长竞选'
   }
@@ -765,9 +956,40 @@ function speakerLabel(uid: string, idx: number) {
   color: var(--muted);
 }
 
-/* Vote columns — shared styles in game.css; only abstain variant is local */
+/* Vote columns — shared styles in game.css; only abstain/quit variants are local */
 .vote-col-abstain {
   opacity: 0.7;
+}
+
+.vote-col-quit {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+/* Voted badge (locked state) */
+.voted-badge {
+  background: rgba(45, 106, 63, 0.08);
+  border: 1px solid rgba(45, 106, 63, 0.25);
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--green);
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Vote progress label */
+.vote-progress-label {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+
+/* Self-row (cannot select self) */
+.vote-row-self {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 /* Utilities */

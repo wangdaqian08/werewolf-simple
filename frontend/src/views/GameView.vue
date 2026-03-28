@@ -49,10 +49,11 @@
         @start-campaign="handleSheriffStartCampaign"
         @quit="handleSheriffQuit"
         @vote="handleSheriffVote"
-        @confirm-vote="handleSheriffConfirmVote"
         @abstain="handleSheriffAbstain"
         @advance-speech="handleSheriffAdvanceSpeech"
         @reveal-result="handleSheriffRevealResult"
+        @appoint="handleSheriffAppoint"
+        @start-night="handleSheriffStartNight"
       />
     </template>
 
@@ -356,9 +357,6 @@ async function handleSheriffQuit() {
 async function handleSheriffVote(userId: string) {
   await action({ actionType: 'SHERIFF_VOTE', targetId: userId })
 }
-async function handleSheriffConfirmVote() {
-  await action({ actionType: 'SHERIFF_CONFIRM_VOTE' })
-}
 async function handleSheriffAbstain() {
   await action({ actionType: 'SHERIFF_ABSTAIN' })
 }
@@ -367,6 +365,12 @@ async function handleSheriffAdvanceSpeech() {
 }
 async function handleSheriffRevealResult() {
   await action({ actionType: 'SHERIFF_REVEAL_RESULT' })
+}
+async function handleSheriffAppoint(userId: string) {
+  await action({ actionType: 'SHERIFF_APPOINT', targetId: userId })
+}
+async function handleSheriffStartNight() {
+  await action({ actionType: 'START_NIGHT' })
 }
 
 async function handleRevealResult() {
@@ -526,6 +530,11 @@ onMounted(async () => {
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+        }
+        // Sheriff elected (winner or host appointment) → re-fetch to get updated sheriff state
+        if (data.type === 'SheriffElected') {
           const state = await gameService.getState(gameId)
           gameStore.setState(state)
         }
