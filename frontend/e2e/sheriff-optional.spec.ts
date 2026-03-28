@@ -88,7 +88,7 @@ test('no-sheriff: Start Night button appears after all players confirm', async (
   await expect(page.getByRole('button', { name: /开始夜晚 \/ Start Night/i })).toBeVisible()
 })
 
-test('no-sheriff: host clicks Start Night shows WAITING countdown then werewolf phase', async ({ page }) => {
+test('no-sheriff: host clicks Start Night shows WAITING screen then advances to active night phase', async ({ page }) => {
   await goToGameViewNoSheriff(page)
 
   await page.getByRole('button', { name: '知道了 / Got it' }).click()

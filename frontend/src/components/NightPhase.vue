@@ -13,7 +13,7 @@
     </header>
 
     <!-- ── Role badge (hidden for WAITING) ────────────────────────────── -->
-    <div v-if="subPhase !== 'WAITING' && meta" class="rb">
+    <div v-if="isMyTurn && meta" class="rb">
       <span class="rb-emoji">{{ meta.emoji }}</span>
       <div class="rb-body">
         <div class="rb-names">
@@ -124,9 +124,7 @@
           <div v-else class="srh-empty">暂无历史记录</div>
         </div>
         <footer class="nf" style="margin-top: auto">
-          <button class="btn btn-secondary nf-btn" @click="emit('confirm')">
-            查验完毕 Checking Complete in ({{ seerCountdown }}s)
-          </button>
+          <button class="btn btn-secondary nf-btn" @click="emit('confirm')">查验完毕 · Done</button>
         </footer>
       </div>
     </template>
@@ -276,10 +274,8 @@
     <template v-else-if="subPhase === 'WAITING'">
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
-        <div v-if="waitingCountdown > 0" class="ss-title">夜晚即将开始</div>
-        <div v-else class="ss-title">请闭眼</div>
+        <div class="ss-title">夜晚即将开始</div>
         <div class="ss-en">Night is beginning...</div>
-        <div v-if="waitingCountdown > 0" class="ss-countdown">{{ waitingCountdown }}</div>
         <div class="ss-sub">所有人请闭眼 / Everyone please close your eyes</div>
       </div>
     </template>
@@ -321,33 +317,17 @@ const emit = defineEmits<{
 const subPhase = computed(() => props.nightPhase.subPhase)
 const poisonMode = ref(false)
 
-// Countdown for the WAITING sub-phase (night is beginning)
-const waitingCountdown = ref(0)
-let waitingTimerId: ReturnType<typeof setInterval> | null = null
-
-watch(
-  subPhase,
-  (newVal) => {
-    if (newVal === 'WAITING') {
-      waitingCountdown.value = 5
-      waitingTimerId = setInterval(() => {
-        if (waitingCountdown.value > 0) {
-          waitingCountdown.value--
-        } else {
-          clearInterval(waitingTimerId!)
-          waitingTimerId = null
-        }
-      }, 1000)
-    } else {
-      if (waitingTimerId) {
-        clearInterval(waitingTimerId)
-        waitingTimerId = null
-      }
-      waitingCountdown.value = 0
-    }
-  },
-  { immediate: true },
-)
+// True only when the current sub-phase is this player's active turn
+const isMyTurn = computed(() => {
+  const sp = subPhase.value
+  const role = props.myRole
+  if (!role) return false
+  if (sp === 'WEREWOLF_PICK') return role === 'WEREWOLF'
+  if (sp === 'SEER_PICK' || sp === 'SEER_RESULT') return role === 'SEER'
+  if (sp === 'WITCH_ACT') return role === 'WITCH'
+  if (sp === 'GUARD_PICK') return role === 'GUARD'
+  return false
+})
 
 // Selection is local UI state — server is notified but not authoritative for display
 const localSelected = ref<string | undefined>(props.nightPhase.selectedTargetId)
@@ -397,7 +377,6 @@ watch(
 
 onUnmounted(() => {
   if (seerTimerId) clearInterval(seerTimerId)
-  if (waitingTimerId) clearInterval(waitingTimerId)
 })
 
 // ── Role metadata ─────────────────────────────────────────────────────────────

@@ -292,7 +292,7 @@ export function setupMocks() {
   })
 
   // ── Debug: Night Phase scenario ──────────────────────────────────────────────
-  // POST /debug/night/scenario { scenario: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING' }
+  // POST /debug/night/scenario { scenario: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING' | 'SEER_IDLE' }
   mock.onPost('/debug/night/scenario').reply((config) => {
     const { scenario } = JSON.parse(config.data ?? '{}')
     try {
