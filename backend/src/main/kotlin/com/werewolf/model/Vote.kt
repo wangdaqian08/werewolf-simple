@@ -34,7 +34,7 @@ class Vote(
 
     // NULL = abstain or skip
     @Column(name = "target_user_id", length = 128)
-    val targetUserId: String? = null,
+    var targetUserId: String? = null,
 
     @Column(name = "voted_at", nullable = false, updatable = false)
     @CreationTimestamp

@@ -10,6 +10,7 @@ import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -23,7 +24,7 @@ class NightOrchestrator(
     private val winConditionChecker: WinConditionChecker,
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
-    @org.springframework.context.annotation.Lazy private val nightWaitingScheduler: NightWaitingScheduler,
+    @Lazy private val nightWaitingScheduler: NightWaitingScheduler,
 ) {
     /**
      * Ordered night sub-phases for this game based on which roles are active.

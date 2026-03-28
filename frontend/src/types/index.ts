@@ -131,7 +131,7 @@ export interface GameActionResponse {
 
 // ── Sheriff Election ──────────────────────────────────────────────────────────
 
-export type SheriffSubPhase = 'SIGNUP' | 'SPEECH' | 'VOTING' | 'RESULT'
+export type SheriffSubPhase = 'SIGNUP' | 'SPEECH' | 'VOTING' | 'RESULT' | 'TIED'
 
 export interface SheriffCandidate {
   userId: string
@@ -165,6 +165,8 @@ export interface SheriffElectionState {
   myVote?: string // userId I voted for
   abstained?: boolean
   canVote?: boolean // false if I quit campaign
+  allVoted?: boolean // true when every eligible player has voted (host uses this to show Reveal button)
+  voteProgress?: { voted: number; total: number } // how many eligible players have voted so far
   result?: {
     sheriffId: string
     sheriffNickname: string

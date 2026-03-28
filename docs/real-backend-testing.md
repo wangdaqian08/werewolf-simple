@@ -1,6 +1,6 @@
 # Real Backend E2E Testing
 
-Manual testing against the real Spring Boot backend + MySQL database using Playwright browsers and bot helper scripts.
+Manual testing against the real Spring Boot backend + PostgreSQL database using Playwright browsers and bot helper scripts.
 
 ---
 
@@ -10,10 +10,14 @@ Manual testing against the real Spring Boot backend + MySQL database using Playw
 
 ```bash
 # from project root
-cd backend
-./gradlew bootRun
+./scripts/start-backend.sh
 # listening on :8080
 ```
+
+This script:
+- Loads credentials from `backend/.env` (`POSTGRES_PASSWORD=werewolf`)
+- Starts with `dev` profile: Flyway **drops and recreates all tables** on every start, OAuth2 stubbed
+- Requires `werewolf-db` Docker container to be running
 
 Verify it's up:
 
@@ -96,7 +100,7 @@ Navigate both to `http://localhost:5173/`.
 ./scripts/join-room.sh AB3C 5 --ready
 ```
 
-Bot tokens are saved to `/tmp/werewolf-<ROOM_CODE>.json` for later use.
+Bot tokens are saved to `/tmp/werewolf-<ROOM_CODE>.json` for later use. Each bot entry includes `{ nick, token, seat, userId }` — `userId` is decoded from the JWT so it's immediately available for vote/action targeting without a state API call.
 
 ### 6. Host starts the game
 
@@ -128,6 +132,40 @@ To switch a human browser to a specific bot's session:
 ```
 
 Paste the printed token into the browser's localStorage under `token`.
+
+---
+
+## curl testing with dev-login.sh
+
+`dev-login.sh` gets and caches a dev JWT, eliminating repeated re-authentication in every command:
+
+```bash
+# First call: hits /api/auth/dev, caches to /tmp/werewolf-token-host.txt
+HOST=$(./scripts/dev-login.sh Host)
+
+# Subsequent calls: reads from cache (no network request)
+HOST=$(./scripts/dev-login.sh Host)
+
+# Force a fresh token (e.g. after backend restart)
+HOST=$(./scripts/dev-login.sh Host --refresh)
+
+# Clear all cached tokens
+./scripts/dev-login.sh --clear
+```
+
+Combined with the `userId` in bot token files, a full action test looks like:
+
+```bash
+HOST=$(./scripts/dev-login.sh Host)
+BOT1_ID=$(python3 -c "import json; print(json.load(open('/tmp/werewolf-AB3C.json'))['bots'][0]['userId'])")
+BOT1=$(python3 -c "import json; print(json.load(open('/tmp/werewolf-AB3C.json'))['bots'][0]['token'])")
+
+# Vote for Bot1 using their userId directly — no state API call needed
+curl -s -X POST http://localhost:8080/api/game/action \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $BOT1" \
+  -d "{\"gameId\":3,\"actionType\":\"SHERIFF_VOTE\",\"targetId\":\"$BOT1_ID\"}"
+```
 
 ---
 

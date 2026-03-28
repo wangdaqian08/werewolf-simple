@@ -102,13 +102,18 @@ class GamePhasePipeline(
     fun startNight(request: GameActionRequest, context: GameContext): GameActionResult {
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only the host can start the night")
-        if (context.game.phase != GamePhase.ROLE_REVEAL)
-            return GameActionResult.Rejected("Not in ROLE_REVEAL phase")
-        if (context.room.hasSheriff)
-            return GameActionResult.Rejected("Sheriff election is enabled for this game")
-        val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
-        if (!allPlayers.all { it.confirmedRole })
-            return GameActionResult.Rejected("Not all players have confirmed their role")
+        val fromRoleReveal = context.game.phase == GamePhase.ROLE_REVEAL
+        val fromSheriffResult = context.game.phase == GamePhase.SHERIFF_ELECTION &&
+            context.election?.subPhase == ElectionSubPhase.RESULT
+        if (!fromRoleReveal && !fromSheriffResult)
+            return GameActionResult.Rejected("Cannot start night from current phase")
+        if (fromRoleReveal) {
+            if (context.room.hasSheriff)
+                return GameActionResult.Rejected("Sheriff election is enabled for this game")
+            val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
+            if (!allPlayers.all { it.confirmedRole })
+                return GameActionResult.Rejected("Not all players have confirmed their role")
+        }
         nightOrchestrator.initNight(context.gameId, context.game.dayNumber, withWaiting = true)
         return GameActionResult.Success()
     }
