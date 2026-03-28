@@ -74,6 +74,24 @@
         </div>
       </div>
 
+      <!-- Game settings -->
+      <div class="field-lbl">游戏设置 / Game Settings</div>
+      <div class="role-list">
+        <div class="role-row row-on">
+          <span class="role-emoji">⭐</span>
+          <div class="role-names">
+            <span class="role-name">警长竞选 Sheriff Election</span>
+          </div>
+          <button
+            :class="hasSheriff ? 'toggle-on' : 'toggle-off'"
+            class="toggle"
+            @click="hasSheriff = !hasSheriff"
+          >
+            <span class="toggle-thumb" />
+          </button>
+        </div>
+      </div>
+
       <button :disabled="loading" class="btn btn-primary" @click="handleCreate">
         {{ loading ? '创建中…' : '创建房间 / Create Room' }}
       </button>
@@ -108,6 +126,7 @@ const ROLE_DEFINITIONS = [
 const totalPlayers = ref(9)
 // Optional roles enabled by default
 const enabledOptional = ref(new Set(['SEER', 'WITCH', 'HUNTER']))
+const hasSheriff = ref(true)
 
 const loading = ref(false)
 const error = ref('')
@@ -144,7 +163,7 @@ async function handleCreate() {
   try {
     const roles = ROLE_DEFINITIONS.filter((r) => isEnabled(r.id)).map((r) => r.id)
     const room = await roomService.createRoom({
-      config: { totalPlayers: totalPlayers.value, roles },
+      config: { totalPlayers: totalPlayers.value, roles, hasSheriff: hasSheriff.value },
     })
     roomStore.setRoom(room)
     router.push({ name: 'room', params: { roomId: room.roomId } })

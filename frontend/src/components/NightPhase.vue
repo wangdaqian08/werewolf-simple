@@ -13,7 +13,7 @@
     </header>
 
     <!-- ── Role badge (hidden for WAITING) ────────────────────────────── -->
-    <div v-if="subPhase !== 'WAITING' && meta" class="rb">
+    <div v-if="isMyTurn && meta" class="rb">
       <span class="rb-emoji">{{ meta.emoji }}</span>
       <div class="rb-body">
         <div class="rb-names">
@@ -25,7 +25,7 @@
     </div>
 
     <!-- ── WEREWOLF_PICK ──────────────────────────────────────────────── -->
-    <template v-if="subPhase === 'WEREWOLF_PICK'">
+    <template v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF'">
       <div v-if="nightPhase.teammates?.length" class="team-row">
         <span class="tr-label">队友：</span>
         <span v-for="(t, i) in nightPhase.teammates" :key="t" class="tr-name">
@@ -62,7 +62,7 @@
     </template>
 
     <!-- ── SEER_PICK ──────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'SEER_PICK'">
+    <template v-else-if="subPhase === 'SEER_PICK' && myRole === 'SEER'">
       <div class="pick-hint">选择查验目标 · Select a player to check:</div>
       <section class="player-grid">
         <PlayerSlot
@@ -93,7 +93,7 @@
     </template>
 
     <!-- ── SEER_RESULT ────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'SEER_RESULT' && nightPhase.seerResult">
+    <template v-else-if="subPhase === 'SEER_RESULT' && myRole === 'SEER' && nightPhase.seerResult">
       <div class="sr-wrap">
         <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
           <div class="sr-player">
@@ -124,15 +124,13 @@
           <div v-else class="srh-empty">暂无历史记录</div>
         </div>
         <footer class="nf" style="margin-top: auto">
-          <button class="btn btn-secondary nf-btn" @click="emit('confirm')">
-            查验完毕 Checking Complete in ({{ seerCountdown }}s)
-          </button>
+          <button class="btn btn-secondary nf-btn" @click="emit('confirm')">查验完毕 · Done</button>
         </footer>
       </div>
     </template>
 
     <!-- ── WITCH_ACT ───────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'WITCH_ACT'">
+    <template v-else-if="subPhase === 'WITCH_ACT' && myRole === 'WITCH'">
       <!-- Antidote — always visible when witch has it; grayed out after decision -->
       <div
         v-if="nightPhase.hasAntidote"
@@ -224,7 +222,7 @@
     </template>
 
     <!-- ── GUARD_PICK ──────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'GUARD_PICK'">
+    <template v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD'">
       <div class="pick-hint">
         选择守护目标 · Protect a player:
         <span v-if="nightPhase.previousGuardTargetId" class="guard-note">
@@ -262,13 +260,23 @@
       </footer>
     </template>
 
+    <!-- ── Sleep screen — non-actor during any active phase ──────────── -->
+    <template v-else-if="subPhase !== 'WAITING'">
+      <div class="sleep-screen">
+        <div class="ss-emoji">🌙</div>
+        <div class="ss-title">请闭眼</div>
+        <div class="ss-en">Night is in progress...</div>
+        <div class="ss-sub">等待其他玩家行动 / Waiting for others</div>
+      </div>
+    </template>
+
     <!-- ── WAITING ────────────────────────────────────────────────────── -->
     <template v-else-if="subPhase === 'WAITING'">
       <div class="sleep-screen">
-        <div class="ss-emoji">😴</div>
-        <div class="ss-title">请闭眼</div>
-        <div class="ss-en">Please close your eyes</div>
-        <div class="ss-sub">其他玩家正在行动 / Other players are taking actions...</div>
+        <div class="ss-emoji">🌙</div>
+        <div class="ss-title">夜晚即将开始</div>
+        <div class="ss-en">Night is beginning...</div>
+        <div class="ss-sub">所有人请闭眼 / Everyone please close your eyes</div>
       </div>
     </template>
   </div>
@@ -276,6 +284,7 @@
 
 <script lang="ts" setup>
 import { computed, onUnmounted, ref, watch } from 'vue'
+
 import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import {
@@ -307,6 +316,18 @@ const emit = defineEmits<{
 
 const subPhase = computed(() => props.nightPhase.subPhase)
 const poisonMode = ref(false)
+
+// True only when the current sub-phase is this player's active turn
+const isMyTurn = computed(() => {
+  const sp = subPhase.value
+  const role = props.myRole
+  if (!role) return false
+  if (sp === 'WEREWOLF_PICK') return role === 'WEREWOLF'
+  if (sp === 'SEER_PICK' || sp === 'SEER_RESULT') return role === 'SEER'
+  if (sp === 'WITCH_ACT') return role === 'WITCH'
+  if (sp === 'GUARD_PICK') return role === 'GUARD'
+  return false
+})
 
 // Selection is local UI state — server is notified but not authoritative for display
 const localSelected = ref<string | undefined>(props.nightPhase.selectedTargetId)
@@ -380,17 +401,18 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
 const meta = computed(() => (props.myRole ? ROLE_META[props.myRole] : null))
 
 const badgeSub = computed(() => {
+  const role = props.myRole
   switch (subPhase.value) {
     case 'WEREWOLF_PICK':
-      return '与队友商议攻击目标'
+      return role === 'WEREWOLF' ? '与队友商议攻击目标' : '请闭眼 / Eyes closed'
     case 'SEER_PICK':
-      return '查验一名玩家的身份'
+      return role === 'SEER' ? '查验一名玩家的身份' : '请闭眼 / Eyes closed'
     case 'SEER_RESULT':
-      return '查验完毕'
+      return role === 'SEER' ? '查验完毕' : '请闭眼 / Eyes closed'
     case 'WITCH_ACT':
-      return '你的行动时间 / Your turn'
+      return role === 'WITCH' ? '你的行动时间 / Your turn' : '请闭眼 / Eyes closed'
     case 'GUARD_PICK':
-      return '选择守护的玩家'
+      return role === 'GUARD' ? '选择守护的玩家' : '请闭眼 / Eyes closed'
     default:
       return ''
   }
@@ -863,6 +885,16 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   font-size: 0.75rem;
   color: rgba(245, 240, 232, 0.38);
   margin-top: 0.375rem;
+}
+
+.ss-countdown {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--paper);
+  line-height: 1;
+  margin: 0.25rem 0;
+  opacity: 0.9;
 }
 
 /* ── Button overrides for night mode ─────────────────────────────────────── */

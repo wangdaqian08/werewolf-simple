@@ -34,6 +34,7 @@ class RoomService(
                 hasHunter = PlayerRole.HUNTER in cfg.roles,
                 hasGuard = PlayerRole.GUARD in cfg.roles,
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
+                hasSheriff = cfg.hasSheriff,
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")
@@ -133,7 +134,7 @@ class RoomService(
             hostId = room.hostUserId,
             status = room.status.name,
             players = playerDtos,
-            config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles),
+            config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles, hasSheriff = room.hasSheriff),
         )
     }
 

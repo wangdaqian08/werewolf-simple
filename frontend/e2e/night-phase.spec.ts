@@ -153,18 +153,14 @@ test('night: SEER_RESULT — history shown even when empty (srh-empty message)',
   await expect(page.locator('.srh-row').first()).toBeVisible()
 })
 
-test('night: SEER_RESULT — countdown timer shows and decrements', async ({ page }) => {
+test('night: SEER_RESULT — confirm button visible and enabled (no countdown displayed)', async ({ page }) => {
   await setup(page)
   await loadNight(page, 'SEER_RESULT')
 
-  // Should show enabled confirm button with countdown
+  // Confirm button should be visible and enabled; countdown is no longer shown
   const btn = page.getByRole('button', { name: /查验完毕/i })
   await expect(btn).toBeVisible()
   await expect(btn).not.toBeDisabled()
-  // Countdown decrements after 1.5 seconds
-  await page.waitForTimeout(1500)
-  const btnText = await btn.textContent()
-  expect(btnText).toContain('s') // has countdown
 })
 
 // ── Witch ─────────────────────────────────────────────────────────────────────
@@ -314,11 +310,36 @@ test('night: WAITING — sleep emoji and messages visible', async ({ page }) => 
   await setup(page)
   await loadNight(page, 'WAITING')
 
-  await expect(page.getByText('请闭眼')).toBeVisible()
-  await expect(page.getByText(/Please close your eyes/i)).toBeVisible()
-  await expect(page.getByText(/Other players are taking actions/i)).toBeVisible()
+  await expect(page.getByText('夜晚即将开始')).toBeVisible()
+  await expect(page.getByText(/Night is beginning/i)).toBeVisible()
+  await expect(page.getByText(/所有人请闭眼/i)).toBeVisible()
   // No role badge for WAITING
   await expect(page.locator('.rb')).not.toBeVisible()
+})
+
+test('night: WAITING — header shows Night Falls and Round number', async ({ page }) => {
+  await setup(page)
+  await loadNight(page, 'WAITING')
+
+  // The header is always visible regardless of sub-phase
+  await expect(page.getByText(/Night Falls/i).first()).toBeVisible()
+  await expect(page.getByText(/Round \d+/i).first()).toBeVisible()
+})
+
+test('night: non-active role during WEREWOLF_PICK sees sleep screen and Night Falls header (no role badge)', async ({
+  page,
+}) => {
+  await setup(page)
+  // SEER_IDLE: SEER role, WEREWOLF_PICK subPhase — not the seer's turn
+  await loadNight(page, 'SEER_IDLE')
+
+  // No role badge — not this player's active turn
+  await expect(page.locator('.rb')).not.toBeVisible()
+  // Sleep screen shown
+  await expect(page.getByText('请闭眼').first()).toBeVisible()
+  // Persistent header always shows Night Falls and Round number
+  await expect(page.getByText(/Night Falls/i).first()).toBeVisible()
+  await expect(page.getByText(/Round \d+/i).first()).toBeVisible()
 })
 
 // ── Night → Day advance ───────────────────────────────────────────────────────

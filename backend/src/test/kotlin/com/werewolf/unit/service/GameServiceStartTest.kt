@@ -5,6 +5,7 @@ import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
+import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
@@ -31,6 +32,7 @@ class GameServiceStartTest {
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var sheriffService: SheriffService
+    @Mock lateinit var nightPhaseRepository: NightPhaseRepository
     @InjectMocks lateinit var gameService: GameService
 
     private val hostId = "host:001"

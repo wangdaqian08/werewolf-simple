@@ -123,6 +123,7 @@ export const MOCK_GAME_STATE: GameState = {
   myRole: 'SEER',
   sheriff: 'u2',
   hostId: 'u1',
+  hasSheriff: true,
   players: [
     { userId: 'u1', nickname: 'You', seatIndex: 1, isAlive: true, isSheriff: false, avatar: '⭐' },
     { userId: 'u2', nickname: 'Alice', seatIndex: 2, isAlive: true, isSheriff: true, avatar: '😊' },
@@ -414,7 +415,7 @@ export const MOCK_SHERIFF_RESULT: SheriffElectionState = {
 // All night scenarios use MOCK_GAME_STATE players; u4 (Carol, seat 4) is dead.
 
 export function makeNightScenario(
-  variant: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING',
+  variant: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING' | 'SEER_IDLE',
 ): GameState {
   const base: GameState = { ...MOCK_GAME_STATE, phase: 'NIGHT' }
   switch (variant) {
@@ -482,6 +483,13 @@ export function makeNightScenario(
         ...base,
         myRole: 'VILLAGER',
         nightPhase: { subPhase: 'WAITING', dayNumber: 2 } satisfies NightPhaseState,
+      }
+    case 'SEER_IDLE':
+      // SEER player during WEREWOLF_PICK — not their turn, should see sleep screen
+      return {
+        ...base,
+        myRole: 'SEER',
+        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1 } satisfies NightPhaseState,
       }
   }
 }

@@ -40,6 +40,9 @@ class Room(
     @Column(name = "has_idiot", nullable = false)
     val hasIdiot: Boolean = false,
 
+    @Column(name = "has_sheriff", nullable = false)
+    val hasSheriff: Boolean = true,
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreationTimestamp
     val createdAt: LocalDateTime? = null,
