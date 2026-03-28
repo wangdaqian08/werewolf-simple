@@ -219,3 +219,88 @@ test('quit candidate does not appear as a vote column in result', async ({ page 
   await expect(page.locator('.vote-col-quit')).toBeVisible()
   await expect(page.locator('.vote-col-quit').getByText('Eve')).toBeVisible()
 })
+
+// ── Test 9: row click immediately highlights candidate (no server call needed) ─
+// Bug: clicking Confirm Vote had no visible feedback because the old design went
+// straight to a server call with no local UI state. The Confirm Vote button stayed
+// disabled and no row was highlighted.
+// Fix: row click sets local `selectedId` ref for instant visual selection;
+// only Confirm Vote sends the server call.
+
+test('selecting a candidate immediately highlights the row and enables Confirm Vote', async ({
+  page,
+}) => {
+  await goToSheriffSignup(page)
+  await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING'))
+  await page.waitForTimeout(100)
+
+  // Before any selection: no row highlighted, Confirm Vote disabled
+  await expect(page.locator('.vote-row-selected')).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /确认投票 \/ Confirm Vote/i })).toBeDisabled()
+
+  // Click Tom's candidate row
+  await page.locator('.vote-row').filter({ hasText: 'Tom' }).click()
+  await page.waitForTimeout(100)
+
+  // Row is immediately highlighted — no server roundtrip needed
+  await expect(page.locator('.vote-row-selected')).toBeVisible()
+  // Confirm Vote is now enabled
+  await expect(page.getByRole('button', { name: /确认投票 \/ Confirm Vote/i })).toBeEnabled()
+})
+
+// ── Test 10: Confirm Vote transitions to locked voted state ───────────────────
+// Bug: after clicking Confirm Vote the UI showed no change — locked "已投票" state
+// was never shown because there was no `myVote` field update fed back from the mock.
+// Fix: SHERIFF_VOTE action returns updated state with myVote set; component renders
+// the locked voted badge showing the confirmed candidate's name.
+
+test('Confirm Vote shows locked voted badge with candidate name', async ({ page }) => {
+  await goToSheriffSignup(page)
+  await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING'))
+  await page.waitForTimeout(100)
+
+  // Select Tom
+  await page.locator('.vote-row').filter({ hasText: 'Tom' }).click()
+  await page.waitForTimeout(100)
+
+  // Confirm the vote
+  await page.getByRole('button', { name: /确认投票 \/ Confirm Vote/i }).click()
+  await page.waitForTimeout(200)
+
+  // Locked state: "已投票 — Tom" badge visible
+  await expect(page.locator('.voted-badge')).toBeVisible()
+  await expect(page.locator('.voted-badge')).toContainText('已投票')
+  await expect(page.locator('.voted-badge')).toContainText('Tom')
+
+  // Vote action buttons are gone
+  await expect(page.getByRole('button', { name: /确认投票 \/ Confirm Vote/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /放弃投票 \/ Give Up Vote/i })).not.toBeVisible()
+})
+
+// ── Test 11: result tally columns are sorted from high votes to low ───────────
+// Improvement: the vote result screen should rank candidates by votes descending
+// so the winner column is always first and comparison is natural.
+// Fix: sortedTally computed property sorts result.tally by votes descending.
+
+test('result tally columns are sorted highest votes first', async ({ page }) => {
+  await goToSheriffSignup(page)
+  await page.evaluate(() => (window as any).__debug.sheriffPhase('RESULT'))
+  await page.waitForTimeout(100)
+
+  await expect(page.getByText(/警长当选/i)).toBeVisible()
+
+  // Collect vote count numbers from tally columns in DOM order.
+  // The mock result has Tom(5), Alice(3), Bob(2) — winner first.
+  const countTexts = await page.locator('.vote-col-count').allInnerTexts()
+  const numericCounts = countTexts
+    .map((t) => parseInt(t.trim(), 10))
+    .filter((n) => !isNaN(n))
+
+  // Must be in descending order
+  for (let i = 0; i < numericCounts.length - 1; i++) {
+    expect(numericCounts[i]).toBeGreaterThanOrEqual(numericCounts[i + 1])
+  }
+
+  // Sanity: we got at least 2 numeric counts from the mock (Tom, Alice, Bob)
+  expect(numericCounts.length).toBeGreaterThanOrEqual(2)
+})

@@ -163,4 +163,41 @@ class GamePipelineSheriffTest {
         assertThat((result as GameActionResult.Rejected).reason).contains("confirmed")
         verifyNoInteractions(nightOrchestrator)
     }
+
+    // ── startNight from SHERIFF_ELECTION RESULT ────────────────────────────────
+
+    @Test
+    fun `startNight - succeeds from SHERIFF_ELECTION when sub-phase is RESULT`() {
+        // New path: after sheriff is elected, host clicks "Start Night" from the RESULT screen.
+        // The game phase is SHERIFF_ELECTION and election.subPhase is RESULT.
+        val sheriffGame = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.SHERIFF_ELECTION
+        }
+        val resultElection = SheriffElection(gameId = gameId, subPhase = ElectionSubPhase.RESULT)
+        val ctx = GameContext(sheriffGame, room(hasSheriff = true), emptyList(), election = resultElection)
+
+        val req = GameActionRequest(gameId, hostId, ActionType.START_NIGHT)
+        val result = pipeline.startNight(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        verify(nightOrchestrator).initNight(gameId, 1, null, true)
+    }
+
+    @Test
+    fun `startNight - rejected from SHERIFF_ELECTION when sub-phase is not RESULT`() {
+        // Guard: startNight must not be callable in mid-election (e.g., VOTING sub-phase).
+        val sheriffGame = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.SHERIFF_ELECTION
+        }
+        val votingElection = SheriffElection(gameId = gameId, subPhase = ElectionSubPhase.VOTING)
+        val ctx = GameContext(sheriffGame, room(hasSheriff = true), emptyList(), election = votingElection)
+
+        val req = GameActionRequest(gameId, hostId, ActionType.START_NIGHT)
+        val result = pipeline.startNight(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        verifyNoInteractions(nightOrchestrator)
+    }
 }
