@@ -1,36 +1,36 @@
 import AxiosMockAdapter from 'axios-mock-adapter'
 import http from '@/services/http'
 import {
+  makeDayHidden,
+  makeDayRevealed,
+  makeDayScenario,
+  makeNightScenario,
+  makeRoleRevealState,
+  makeVotingScenario,
+  MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
+  MOCK_DAY_SCENARIO_ALIVE_REVEALED,
+  MOCK_DAY_SCENARIO_DEAD,
+  MOCK_DAY_SCENARIO_GUEST,
+  MOCK_DAY_SCENARIO_HOST_HIDDEN,
+  MOCK_DAY_SCENARIO_HOST_REVEALED,
   MOCK_GAME_RESULT,
   MOCK_GAME_RESULT_WOLVES,
   MOCK_GAME_STATE,
   MOCK_LOGIN,
+  MOCK_ROLE_ASSIGNMENTS,
   MOCK_ROOM_AS_GUEST,
   MOCK_ROOM_AS_HOST,
-  MOCK_STOMP_EVENTS,
+  MOCK_SHERIFF_RESULT,
   MOCK_SHERIFF_SIGNUP,
-  MOCK_SHERIFF_SPEECH_CANDIDATE,
   MOCK_SHERIFF_SPEECH_AUDIENCE,
+  MOCK_SHERIFF_SPEECH_CANDIDATE,
   MOCK_SHERIFF_VOTING,
   MOCK_SHERIFF_VOTING_HOST_QUIT,
   MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
-  MOCK_SHERIFF_RESULT,
-  MOCK_ROLE_ASSIGNMENTS,
-  makeDayHidden,
-  makeDayRevealed,
-  makeDayScenario,
-  makeRoleRevealState,
-  makeNightScenario,
-  makeVotingScenario,
-  MOCK_DAY_SCENARIO_HOST_HIDDEN,
-  MOCK_DAY_SCENARIO_HOST_REVEALED,
-  MOCK_DAY_SCENARIO_DEAD,
-  MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
-  MOCK_DAY_SCENARIO_ALIVE_REVEALED,
-  MOCK_DAY_SCENARIO_GUEST,
+  MOCK_STOMP_EVENTS,
 } from './data'
-import { mockStompClient } from './mockStompClient'
-import type { DayPhaseState, GameState, RoomPlayer, SheriffElectionState } from '@/types'
+import {mockStompClient} from './mockStompClient'
+import type {DayPhaseState, GameState, RoomPlayer, SheriffElectionState} from '@/types'
 
 // Mutable room state shared across mock endpoints so debug actions see current players.
 let mockRoomId = MOCK_ROOM_AS_HOST.roomId
@@ -328,12 +328,14 @@ export function setupMocks() {
     const prevHostId = mockGameState.hostId
     const prevPlayers = mockGameState.players
     try {
-      // Preserve hostId and player alive/dead states from the prior day scenario
-      mockGameState = {
-        ...makeVotingScenario(scenario as Parameters<typeof makeVotingScenario>[0]),
-        hostId: prevHostId,
-        players: prevPlayers,
-      }
+      const scenarioState = makeVotingScenario(scenario as Parameters<typeof makeVotingScenario>[0])
+      // Preserve hostId and alive/dead states from the prior day scenario,
+      // but merge any per-player overrides from the scenario (e.g. canVote, idiotRevealed).
+      const mergedPlayers = prevPlayers.map((p) => {
+        const override = scenarioState.players.find((sp) => sp.userId === p.userId)
+        return override ? { ...p, ...override } : p
+      })
+      mockGameState = { ...scenarioState, hostId: prevHostId, players: mergedPlayers }
     } catch {
       return [400, { error: 'Unknown scenario' }]
     }

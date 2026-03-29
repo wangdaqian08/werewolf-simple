@@ -7,8 +7,10 @@ import com.werewolf.model.ActionType
 import com.werewolf.model.GamePhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.VotingSubPhase
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
+@Order(11)
 @Component
 class HunterHandler : RoleHandler {
 

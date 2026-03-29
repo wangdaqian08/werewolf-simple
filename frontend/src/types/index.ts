@@ -24,10 +24,13 @@ export interface RoomPlayer {
   avatar?: string // emoji shown in the waiting room grid
 }
 
+export type WinConditionMode = 'CLASSIC' | 'HARD_MODE'
+
 export interface RoomConfig {
   totalPlayers: number
   roles: string[] // backend decides counts based on totalPlayers
   hasSheriff?: boolean
+  winCondition?: WinConditionMode
 }
 
 export interface Room {
@@ -67,6 +70,8 @@ export interface GamePlayer {
   isSheriff: boolean
   avatar?: string
   role?: PlayerRole // only revealed to self, or at game end
+  canVote?: boolean // false if idiot was revealed; undefined/true = can vote
+  idiotRevealed?: boolean // true after idiot self-reveals on first elimination
 }
 
 export interface RoleRevealState {
@@ -120,7 +125,7 @@ export interface GameActionRequest {
   gameId?: number
   actionType: string
   targetId?: string
-  data?: Record<string, unknown>
+  payload?: Record<string, unknown>
 }
 
 export interface GameActionResponse {
@@ -203,6 +208,7 @@ export interface DayPhaseState {
 
 export type VotingSubPhase =
   | 'VOTING'
+  | 'RE_VOTING'
   | 'VOTE_RESULT'
   | 'HUNTER_SHOOT'
   | 'BADGE_HANDOVER'
@@ -245,6 +251,10 @@ export interface VotingState {
   eliminatedSeatIndex?: number
   eliminatedAvatar?: string
   eliminatedRole?: PlayerRole
+  // VOTE_RESULT — idiot survives (no elimination)
+  idiotRevealedId?: string
+  idiotRevealedNickname?: string
+  idiotRevealedSeatIndex?: number
   // HUNTER_SHOOT — hunter's selected target
   hunterSelectedId?: string
   // BADGE_HANDOVER + BADGE_RECEIVED

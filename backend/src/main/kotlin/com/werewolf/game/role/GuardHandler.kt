@@ -8,8 +8,10 @@ import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.repository.NightPhaseRepository
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
+@Order(4)
 @Component
 class GuardHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
 

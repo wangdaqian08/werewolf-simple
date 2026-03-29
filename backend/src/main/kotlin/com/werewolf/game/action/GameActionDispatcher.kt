@@ -53,6 +53,18 @@ class GameActionDispatcher(
                 result
             }
 
+            ActionType.WOLF_SELECT -> {
+                val result = handlers.first { it.role == PlayerRole.WEREWOLF }.handle(request, context)
+                if (result is GameActionResult.Success) {
+                    // Broadcast selection to all alive wolves (no sub-phase advance)
+                    val aliveWolves = context.alivePlayers.filter { it.role == PlayerRole.WEREWOLF }
+                    result.events.forEach { event ->
+                        aliveWolves.forEach { wolf -> stompPublisher.sendPrivate(wolf.userId, event) }
+                    }
+                }
+                result
+            }
+
             // ── Night: seer ───────────────────────────────────────────────────
             ActionType.SEER_CHECK -> {
                 val result = handlers.first { it.role == PlayerRole.SEER }.handle(request, context)
@@ -92,8 +104,9 @@ class GameActionDispatcher(
                 )
                 result
             }
-            // ── Night: idiot ──────────────────────────────────────────────────
-            // TODO implement idiot action
+            // ── Idiot reveal (day) ────────────────────────────────────────────
+            ActionType.IDIOT_REVEAL -> handlers.first { it.role == PlayerRole.IDIOT }.handle(request, context)
+
             // ── Sheriff election ──────────────────────────────────────────────
             ActionType.SHERIFF_CAMPAIGN, ActionType.SHERIFF_QUIT,
             ActionType.SHERIFF_START_SPEECH, ActionType.SHERIFF_ADVANCE_SPEECH,

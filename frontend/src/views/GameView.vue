@@ -194,6 +194,8 @@
         <button class="debug-btn" @click="debugVoting('BADGE_BURNED')">Badge: Burned</button>
         <button class="debug-btn" @click="debugVoting('VOTING_NO_HISTORY')">No History</button>
         <button class="debug-btn" @click="debugVoting('VOTING_NO_DATA')">No Data</button>
+        <button class="debug-btn" @click="debugVoting('IDIOT_REVEAL')">Idiot Reveal</button>
+        <button class="debug-btn" @click="debugVoting('RE_VOTING')">Re-Vote</button>
         <button class="debug-btn debug-btn-exit" @click="debugVotingAdvance">→ Night</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Game Over</div>
@@ -235,13 +237,13 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/userStore'
-import { useGameStore } from '@/stores/gameStore'
-import { useRoomStore } from '@/stores/roomStore'
-import { gameService } from '@/services/gameService'
-import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import {useUserStore} from '@/stores/userStore'
+import {useGameStore} from '@/stores/gameStore'
+import {useRoomStore} from '@/stores/roomStore'
+import {gameService} from '@/services/gameService'
+import {createStompClient, disconnectStomp, subscribeToTopic} from '@/services/stompClient'
 import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
@@ -249,8 +251,8 @@ import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
 import VotingPhase from '@/components/VotingPhase.vue'
-import { useNavigationGuard } from '@/composables/useNavigationGuard'
-import type { GamePlayer } from '@/types'
+import {useNavigationGuard} from '@/composables/useNavigationGuard'
+import type {GamePlayer} from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -390,22 +392,60 @@ async function handleDaySelectPlayer(userId: string) {
 }
 
 async function handleNightSelect(userId: string) {
-  await action({ actionType: 'NIGHT_SELECT', targetId: userId })
+  // Wolf selection is shared with teammates in real-time; other roles select locally only
+  if (gameStore.state?.nightPhase?.subPhase === 'WEREWOLF_PICK') {
+    await action({ actionType: 'WOLF_SELECT', targetId: userId })
+  }
 }
 async function handleNightConfirm(targetId?: string) {
-  await action({ actionType: 'NIGHT_CONFIRM', targetId })
+  const subPhase = gameStore.state?.nightPhase?.subPhase
+  switch (subPhase) {
+    case 'WEREWOLF_PICK':
+      if (targetId) await action({ actionType: 'WOLF_KILL', targetId })
+      break
+    case 'SEER_PICK':
+      if (targetId) await action({ actionType: 'SEER_CHECK', targetId })
+      break
+    case 'SEER_RESULT':
+      await action({ actionType: 'SEER_CONFIRM' })
+      break
+    case 'GUARD_PICK':
+      if (targetId) await action({ actionType: 'GUARD_PROTECT', targetId })
+      break
+  }
 }
+
+// Witch decisions are held locally until both antidote and poison sections are resolved
+const witchUseAntidote = ref<boolean | undefined>(undefined)
+const witchPoisonTargetId = ref<string | null | undefined>(undefined)
+
 async function handleWitchAntidote() {
-  await action({ actionType: 'NIGHT_WITCH_USE_ANTIDOTE' })
+  witchUseAntidote.value = true
+  await trySubmitWitchAct()
 }
 async function handleWitchPassAntidote() {
-  await action({ actionType: 'NIGHT_WITCH_PASS_ANTIDOTE' })
+  witchUseAntidote.value = false
+  await trySubmitWitchAct()
 }
 async function handleWitchPoison(targetId: string) {
-  await action({ actionType: 'NIGHT_WITCH_USE_POISON', targetId })
+  witchPoisonTargetId.value = targetId
+  await trySubmitWitchAct()
 }
 async function handleWitchPassPoison() {
-  await action({ actionType: 'NIGHT_WITCH_PASS_POISON' })
+  witchPoisonTargetId.value = null
+  await trySubmitWitchAct()
+}
+async function trySubmitWitchAct() {
+  const nightPhase = gameStore.state?.nightPhase
+  if (!nightPhase) return
+  const antidoteReady = !nightPhase.hasAntidote || witchUseAntidote.value !== undefined
+  const poisonReady = !nightPhase.hasPoison || witchPoisonTargetId.value !== undefined
+  if (!antidoteReady || !poisonReady) return
+  const payload: Record<string, unknown> = { useAntidote: witchUseAntidote.value ?? false }
+  if (witchPoisonTargetId.value) payload.poisonTargetUserId = witchPoisonTargetId.value
+  await action({ actionType: 'WITCH_ACT', payload })
+  witchUseAntidote.value = undefined
+  witchPoisonTargetId.value = undefined
 }
 
 async function handleVotingSelect(userId: string) {
@@ -538,6 +578,11 @@ onMounted(async () => {
           const state = await gameService.getState(gameId)
           gameStore.setState(state)
         }
+        // Idiot revealed → re-fetch to get updated canVote/idiotRevealed player state
+        if (data.type === 'IdiotRevealed') {
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+        }
         // Both mock (GAME_OVER) and real backend (GameOver) navigate to result
         if (data.type === 'GAME_OVER' || data.type === 'GameOver') {
           router.push({ name: 'result', params: { gameId } })
@@ -546,7 +591,11 @@ onMounted(async () => {
       // Private channel for role-specific info (night actions, etc.)
       subscribeToTopic('/user/queue/private', (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
-        gameStore.addEvent(data)
+        if (data.type === 'WolfSelectionChanged') {
+          gameStore.updateNightPhaseSelection(data.selectedTargetUserId)
+        } else {
+          gameStore.addEvent(data)
+        }
       })
     }
     client.activate()

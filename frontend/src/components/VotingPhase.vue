@@ -16,6 +16,11 @@
         :phase-started="votingPhase.phaseStarted"
       />
 
+      <!-- RE_VOTING banner -->
+      <div v-if="votingPhase.subPhase === 'RE_VOTING'" class="revote-banner">
+        🔁 第二轮投票 · Round 2
+      </div>
+
       <!-- Role + history row -->
       <div v-if="myRole || voteHistory?.length" class="role-history-row">
         <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
@@ -49,6 +54,18 @@
             <span v-if="votingPhase.eliminatedRole" class="elim-banner-role">
               {{ roleDisplay(votingPhase.eliminatedRole) }}
             </span>
+          </div>
+        </div>
+
+        <!-- Idiot reveal banner (survived vote, loses voting right) -->
+        <div v-else-if="votingPhase.idiotRevealedId" class="banner banner-idiot">
+          <span class="elim-banner-avatar">🃏</span>
+          <div class="elim-banner-body">
+            <span class="elim-banner-tag">白痴翻牌 · IDIOT REVEALED</span>
+            <span class="elim-banner-name">
+              {{ votingPhase.idiotRevealedNickname }} · 座位 {{ votingPhase.idiotRevealedSeatIndex }}
+            </span>
+            <span class="elim-banner-role">存活，失去投票权 · Survives, loses vote</span>
           </div>
         </div>
 
@@ -89,7 +106,10 @@
           mode="room"
           @click="onVotingTap(player)"
         >
-          <template v-if="!player.isAlive" #overlay>
+          <template v-if="player.idiotRevealed" #overlay>
+            <div class="slot-overlay idiot-overlay">🃏</div>
+          </template>
+          <template v-else-if="!player.isAlive" #overlay>
             <div class="slot-overlay dead-overlay">✕</div>
           </template>
         </PlayerSlot>
@@ -120,7 +140,11 @@
           <!-- HOST: own vote (if alive) + reveal button -->
           <template v-if="viewRole === 'HOST'">
             <template v-if="hostIsAlive">
-              <template v-if="votingPhase.myVote || votingPhase.myVoteSkipped">
+              <!-- Idiot revealed: host lost voting right -->
+              <template v-if="!myCanVote">
+                <p class="footer-hint idiot-no-vote">🃏 已揭示白痴 · 无投票权</p>
+              </template>
+              <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
                 <button class="btn btn-secondary" @click="emit('unvote')">取消投票 · Unvote</button>
               </template>
               <template v-else>
@@ -146,9 +170,12 @@
             <button class="btn btn-secondary" disabled>投票已禁用 · Voting disabled</button>
           </template>
 
-          <!-- ALIVE: vote/skip or unvote -->
+          <!-- ALIVE: vote/skip or unvote (or no vote right if idiot revealed) -->
           <template v-else-if="viewRole === 'ALIVE'">
-            <template v-if="votingPhase.myVote || votingPhase.myVoteSkipped">
+            <template v-if="!myCanVote">
+              <button class="btn btn-secondary" disabled>🃏 已揭示白痴 · 无投票权</button>
+            </template>
+            <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
               <button class="btn btn-secondary" @click="emit('unvote')">取消投票 · Unvote</button>
             </template>
             <template v-else>
@@ -418,8 +445,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { GamePlayer, PlayerRole, VoteRoundHistory, VotingState } from '@/types'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import type {GamePlayer, PlayerRole, VoteRoundHistory, VotingState} from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 
@@ -448,7 +475,10 @@ const emit = defineEmits<{
 // ── Screen grouping ───────────────────────────────────────────────────────────
 // VOTE_RESULT is merged into the VOTING screen (shown when tallyRevealed)
 const isVotingScreen = computed(
-  () => props.votingPhase.subPhase === 'VOTING' || props.votingPhase.subPhase === 'VOTE_RESULT',
+  () =>
+    props.votingPhase.subPhase === 'VOTING' ||
+    props.votingPhase.subPhase === 'RE_VOTING' ||
+    props.votingPhase.subPhase === 'VOTE_RESULT',
 )
 // BADGE_RECEIVED is merged into the BADGE_HANDOVER screen
 const isBadgeScreen = computed(
@@ -481,6 +511,12 @@ const viewRole = computed<ViewRole>(() => {
 const hostIsAlive = computed(() => {
   const me = props.players.find((p) => p.userId === props.myUserId)
   return me?.isAlive ?? false
+})
+
+// false when idiot has been revealed (permanently lost voting right)
+const myCanVote = computed(() => {
+  const me = props.players.find((p) => p.userId === props.myUserId)
+  return me?.canVote !== false
 })
 
 const allVotesIn = computed(
@@ -1068,5 +1104,38 @@ function onBadgeTap(player: GamePlayer) {
   line-height: 1.6;
   text-align: center;
   margin: 0;
+}
+
+/* Dead / Idiot overlays on player slots */
+.dead-overlay {
+  background: rgba(26, 20, 12, 0.55);
+  color: #fff;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.idiot-overlay {
+  background: rgba(160, 120, 48, 0.75);
+  font-size: 1.375rem;
+}
+
+/* RE_VOTING banner */
+.revote-banner {
+  margin: 0.25rem 1rem 0;
+  padding: 0.375rem 0.75rem;
+  background: rgba(160, 120, 48, 0.12);
+  border: 1px solid var(--gold);
+  border-radius: 0.5rem;
+  color: var(--gold);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Idiot no-vote hint line in footer */
+.footer-hint.idiot-no-vote {
+  color: var(--gold);
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 </style>

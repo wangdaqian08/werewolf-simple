@@ -36,6 +36,12 @@ class GamePlayer(
 
     @Column(name = "confirmed_role", nullable = false)
     var confirmedRole: Boolean = false,
+
+    @Column(name = "can_vote", nullable = false)
+    var canVote: Boolean = true,
+
+    @Column(name = "idiot_revealed", nullable = false)
+    var idiotRevealed: Boolean = false,
 ) {
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }

@@ -13,8 +13,8 @@ import type {
   LoginResponse,
   NightPhaseState,
   PlayerRole,
-  Room,
   RoleRevealState,
+  Room,
   SheriffElectionState,
   VoteRoundHistory,
   VoteTally,
@@ -804,7 +804,9 @@ export function makeVotingScenario(
     | 'BADGE_SHERIFF'
     | 'BADGE_BURNED'
     | 'VOTING_NO_HISTORY'
-    | 'VOTING_NO_DATA',
+    | 'VOTING_NO_DATA'
+    | 'IDIOT_REVEAL'
+    | 'RE_VOTING',
 ): GameState {
   const now = Date.now()
   const base: GameState = {
@@ -939,6 +941,39 @@ export function makeVotingScenario(
         voteHistory: undefined,
         votingPhase: {
           subPhase: 'VOTING',
+          ...commonTiming,
+          canVote: true,
+          votedPlayerIds: [],
+          votesSubmitted: 0,
+          totalVoters: 8,
+        } satisfies VotingState,
+      }
+    case 'IDIOT_REVEAL':
+      // You (u1) are the Idiot — revealed, alive but permanently lost voting right.
+      // u3 (Bob) also has idiotRevealed=true badge to show on another slot.
+      return {
+        ...base,
+        myRole: 'IDIOT' as PlayerRole,
+        players: base.players.map((p) => {
+          if (p.userId === 'u1') return { ...p, canVote: false, idiotRevealed: true }
+          if (p.userId === 'u3') return { ...p, canVote: false, idiotRevealed: true }
+          return p
+        }),
+        votingPhase: {
+          subPhase: 'VOTING',
+          ...commonTiming,
+          canVote: false,
+          votedPlayerIds: ['u5', 'u6'],
+          votesSubmitted: 2,
+          totalVoters: 7,
+        } satisfies VotingState,
+      }
+    case 'RE_VOTING':
+      // Vote tied → second round open to all living candidates
+      return {
+        ...base,
+        votingPhase: {
+          subPhase: 'RE_VOTING',
           ...commonTiming,
           canVote: true,
           votedPlayerIds: [],

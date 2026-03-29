@@ -1,11 +1,13 @@
 package com.werewolf.dto
 
 import com.werewolf.model.PlayerRole
+import com.werewolf.model.WinConditionMode
 
 data class RoomConfigRequest(
     val totalPlayers: Int = 6,
     val roles: List<PlayerRole> = listOf(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER),
     val hasSheriff: Boolean = true,
+    val winCondition: WinConditionMode = WinConditionMode.CLASSIC,
 )
 
 data class CreateRoomRequest(val config: RoomConfigRequest = RoomConfigRequest())
@@ -24,7 +26,7 @@ data class RoomPlayerDto(
     val isHost: Boolean,
 )
 
-data class RoomConfigDto(val totalPlayers: Int, val roles: List<PlayerRole>, val hasSheriff: Boolean = true)
+data class RoomConfigDto(val totalPlayers: Int, val roles: List<PlayerRole>, val hasSheriff: Boolean = true, val winCondition: WinConditionMode = WinConditionMode.CLASSIC)
 
 data class RoomDto(
     val roomId: String,

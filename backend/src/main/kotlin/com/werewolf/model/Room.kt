@@ -43,6 +43,10 @@ class Room(
     @Column(name = "has_sheriff", nullable = false)
     val hasSheriff: Boolean = true,
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "win_condition", nullable = false, length = 20)
+    val winCondition: WinConditionMode = WinConditionMode.CLASSIC,
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreationTimestamp
     val createdAt: LocalDateTime? = null,

@@ -6,6 +6,7 @@ import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.phase.WinConditionChecker
+import com.werewolf.game.role.RoleHandler
 import com.werewolf.model.*
 import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
@@ -19,6 +20,7 @@ import java.time.LocalDateTime
 
 @Service
 class VotingPipeline(
+    private val handlers: List<RoleHandler>,
     private val voteRepository: VoteRepository,
     private val gameRepository: GameRepository,
     private val gamePlayerRepository: GamePlayerRepository,
@@ -32,12 +34,13 @@ class VotingPipeline(
     fun submitVote(request: GameActionRequest, context: GameContext): GameActionResult {
         if (context.game.phase != GamePhase.VOTING)
             return GameActionResult.Rejected("Not in voting phase")
-        if (context.game.subPhase != VotingSubPhase.VOTING.name)
+        if (context.game.subPhase !in setOf(VotingSubPhase.VOTING.name, VotingSubPhase.RE_VOTING.name))
             return GameActionResult.Rejected("Voting is not open")
 
         val actor = context.playerById(request.actorUserId)
             ?: return GameActionResult.Rejected("Actor not found")
         if (!actor.alive) return GameActionResult.Rejected("Dead players cannot vote")
+        if (!actor.canVote) return GameActionResult.Rejected("You have lost your voting right")
 
         val alreadyVoted = voteRepository.findByGameIdAndVoteContextAndDayNumber(
             context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
@@ -68,8 +71,8 @@ class VotingPipeline(
             return GameActionResult.Rejected("Only host can reveal tally")
         if (context.game.phase != GamePhase.VOTING)
             return GameActionResult.Rejected("Not in voting phase")
-        if (context.game.subPhase != VotingSubPhase.VOTING.name)
-            return GameActionResult.Rejected("Not in VOTING sub-phase")
+        if (context.game.subPhase !in setOf(VotingSubPhase.VOTING.name, VotingSubPhase.RE_VOTING.name))
+            return GameActionResult.Rejected("Not in a voting sub-phase")
 
         val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
             context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
@@ -81,8 +84,8 @@ class VotingPipeline(
 
         val maxVotes = tally.values.maxOrNull() ?: 0
         val topCandidates = tally.filterValues { it == maxVotes }.keys.toList()
-        // Tie = no elimination
         val eliminated = if (topCandidates.size == 1 && maxVotes > 0) topCandidates.first() else null
+        val wasRevote = context.game.subPhase == VotingSubPhase.RE_VOTING.name
 
         context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
         gameRepository.save(context.game)
@@ -91,8 +94,11 @@ class VotingPipeline(
 
         if (eliminated != null) {
             eliminateByVote(context, eliminated)
+        } else if (!wasRevote) {
+            // First-round tie — give players a second vote (open to all living candidates)
+            initiateRevote(context)
         } else {
-            // No elimination — proceed to night
+            // Second-round tie — no elimination, skip to night
             goToNight(context)
         }
 
@@ -245,6 +251,28 @@ class VotingPipeline(
         val player = gamePlayerRepository.findByGameIdAndUserId(context.gameId, targetId)
             .orElse(null) ?: return
 
+        // Check onEliminationPending hook: allows role handlers to veto or modify elimination
+        val modifier = handlers.find { it.role == player.role }?.onEliminationPending(context, targetId)
+        if (modifier?.cancelled == true) {
+            modifier.extraEvents.forEach { stompPublisher.broadcastGame(context.gameId, it) }
+            afterElimination(context)
+            return
+        }
+
+        // Idiot reveal: first elimination survives but permanently loses voting right
+        if (player.role == PlayerRole.IDIOT && !player.idiotRevealed) {
+            player.canVote = false
+            player.idiotRevealed = true
+            gamePlayerRepository.save(player)
+            stompPublisher.broadcastGame(
+                context.gameId,
+                DomainEvent.IdiotRevealed(context.gameId, targetId)
+            )
+            // No elimination — day phase ends normally without HUNTER or BADGE_HANDOVER
+            afterElimination(context)
+            return
+        }
+
         player.alive = false
         gamePlayerRepository.save(player)
 
@@ -290,7 +318,7 @@ class VotingPipeline(
     /** Check win condition; if no winner, stay in VOTE_RESULT for host to proceed to night. */
     private fun afterElimination(context: GameContext) {
         val updatedContext = contextLoader.load(context.gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers)
+        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
         if (winner != null) {
             endGame(updatedContext, winner)
         }
@@ -300,12 +328,27 @@ class VotingPipeline(
     /** After hunter acts (no badge needed): check win, then go directly to night. */
     private fun afterHunterAct(context: GameContext) {
         val updatedContext = contextLoader.load(context.gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers)
+        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
         if (winner != null) {
             endGame(updatedContext, winner)
         } else {
             goToNight(updatedContext)
         }
+    }
+
+    /** Clear first-round votes and open a second vote round (open to all living candidates). */
+    private fun initiateRevote(context: GameContext) {
+        val existingVotes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
+            context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
+        )
+        voteRepository.deleteAll(existingVotes)
+
+        context.game.subPhase = VotingSubPhase.RE_VOTING.name
+        gameRepository.save(context.game)
+        stompPublisher.broadcastGame(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.RE_VOTING.name)
+        )
     }
 
     private fun goToNight(context: GameContext) {

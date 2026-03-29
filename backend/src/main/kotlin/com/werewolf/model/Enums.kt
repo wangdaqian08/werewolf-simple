@@ -20,7 +20,9 @@ enum class WinnerSide { WEREWOLF, VILLAGER }
 
 enum class DaySubPhase { RESULT_HIDDEN, RESULT_REVEALED }
 
-enum class VotingSubPhase { VOTING, VOTE_RESULT, HUNTER_SHOOT, BADGE_HANDOVER }
+enum class VotingSubPhase { VOTING, RE_VOTING, VOTE_RESULT, HUNTER_SHOOT, BADGE_HANDOVER }
+
+enum class WinConditionMode { CLASSIC, HARD_MODE }
 
 enum class ActionType {
     // Role reveal
@@ -36,7 +38,7 @@ enum class ActionType {
     HUNTER_SHOOT, HUNTER_SKIP, BADGE_PASS, BADGE_DESTROY,
 
     // Night: werewolf
-    WOLF_KILL,
+    WOLF_KILL, WOLF_SELECT,
 
     // Night: seer
     SEER_CHECK, SEER_CONFIRM,
@@ -46,6 +48,9 @@ enum class ActionType {
 
     // Night: guard
     GUARD_PROTECT, GUARD_SKIP,
+
+    // Idiot reveal (day)
+    IDIOT_REVEAL,
 
     // Sheriff election
     SHERIFF_CAMPAIGN, SHERIFF_QUIT, SHERIFF_START_SPEECH, SHERIFF_ADVANCE_SPEECH, SHERIFF_REVEAL_RESULT,

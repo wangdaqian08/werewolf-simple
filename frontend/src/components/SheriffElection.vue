@@ -406,8 +406,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
-import type { SheriffCandidate, SheriffElectionState } from '@/types'
+import {computed, ref} from 'vue'
+import type {SheriffCandidate, SheriffElectionState} from '@/types'
 
 const props = defineProps<{
   election: SheriffElectionState
@@ -437,7 +437,11 @@ const runningCandidates = computed(() =>
   props.election.candidates.filter((c) => c.status === 'RUNNING'),
 )
 
-const quitCandidates = computed(() => props.election.candidates.filter((c) => c.status === 'QUIT'))
+const quitCandidates = computed(() =>
+  props.election.candidates.filter(
+    (c) => c.status === 'QUIT' && props.election.speakingOrder.includes(c.userId),
+  ),
+)
 
 const candidateMap = computed(() => {
   const m = new Map<string, SheriffCandidate>()
@@ -1005,3 +1009,6 @@ function speakerLabel(uid: string, idx: number) {
   font-weight: 700;
 }
 </style>
+
+
+

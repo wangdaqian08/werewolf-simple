@@ -151,7 +151,7 @@ class NightOrchestrator(
 
         // Check win condition
         val updatedContext = contextLoader.load(gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers)
+        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
 
         if (winner != null) {
             endGame(updatedContext, winner)
@@ -164,6 +164,13 @@ class NightOrchestrator(
                 gameId,
                 DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
             )
+
+            // Fire onDayEnter hooks — allows role handlers to produce day-start events
+            val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
+            handlers.filter { it.role in activeRoles }.forEach { handler ->
+                val events = handler.onDayEnter(updatedContext)
+                events.forEach { stompPublisher.broadcastGame(gameId, it) }
+            }
         }
     }
 
