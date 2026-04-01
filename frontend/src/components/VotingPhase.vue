@@ -335,18 +335,23 @@
       </section>
 
       <footer class="voting-footer">
-        <div class="vote-actions">
-          <button
-            class="btn btn-danger vote-btn"
-            :disabled="!effectiveSelected"
-            @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
-          >
-            开枪 · Shoot
-          </button>
-          <button class="btn btn-secondary skip-btn" @click="emit('hunterPass')">
-            放弃 · Pass
-          </button>
-        </div>
+        <template v-if="myUserId === votingPhase.eliminatedPlayerId">
+          <div class="vote-actions">
+            <button
+              class="btn btn-danger vote-btn"
+              :disabled="!effectiveSelected"
+              @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
+            >
+              开枪 · Shoot
+            </button>
+            <button class="btn btn-secondary skip-btn" @click="emit('hunterPass')">
+              放弃 · Pass
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <p class="footer-hint">等待猎人行动 · Waiting for hunter...</p>
+        </template>
       </footer>
     </template>
 
@@ -537,6 +542,17 @@ watch(
   },
 )
 
+// Sync local selection with vote state
+watch(
+  () => props.votingPhase.myVote || props.votingPhase.myVoteSkipped,
+  (hasVoted) => {
+    if (hasVoted) {
+      // User has voted or skipped - clear local selection
+      localSelected.value = undefined
+    }
+  },
+)
+
 const effectiveSelected = computed(() => localSelected.value)
 
 function selectPlayer(userId: string) {
@@ -706,13 +722,19 @@ const ROLE_META: Record<string, RoleMeta> = {
 // ── Slot variants ─────────────────────────────────────────────────────────────
 function votingSlotVariant(player: GamePlayer) {
   if (!player.isAlive) return 'dead' as const
-  const myVoted = !!(props.votingPhase.myVote || props.votingPhase.myVoteSkipped)
-  // Only show gold selection before the player has submitted their vote
-  if (!myVoted && player.userId === effectiveSelected.value) return 'selected' as const
   const hasVoted = props.votingPhase.votedPlayerIds?.includes(player.userId)
+
+  // Selected player being voted for (red border) - show before or after voting
+  if (player.userId === effectiveSelected.value) {
+    return 'selected' as const
+  }
+
+  // After voting, current player shows 'me-ready', other players show 'ready'
   if (hasVoted) {
     return player.userId === props.myUserId ? ('me-ready' as const) : ('ready' as const)
   }
+
+  // Current player shows 'me', others show 'alive'
   if (player.userId === props.myUserId) return 'me' as const
   return 'alive' as const
 }
@@ -741,10 +763,14 @@ function badgeSlotVariant(player: GamePlayer) {
 function onVotingTap(player: GamePlayer) {
   if (!player.isAlive) return
   if (!props.votingPhase.canVote) return
+  // During HUNTER_SHOOT, only the hunter can select targets
+  if (props.votingPhase.subPhase === 'HUNTER_SHOOT') return
   selectPlayer(player.userId)
 }
 
 function onHunterTap(player: GamePlayer) {
+  // Only the hunter (eliminated player) can select a target
+  if (props.myUserId !== props.votingPhase.eliminatedPlayerId) return
   if (!player.isAlive) return
   if (player.userId === props.votingPhase.eliminatedPlayerId) return
   selectPlayer(player.userId)

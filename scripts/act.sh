@@ -24,9 +24,10 @@
 #     CONFIRM_ROLE      player confirms their role card
 #     START_NIGHT       host starts the night phase
 #   Voting phase:
-#     SUBMIT_VOTE       player votes for target              (requires --target)
-#     VOTING_REVEAL_TALLY   host reveals vote tally
-#     VOTING_CONTINUE   host continues after tied vote / normal elimination
+#     SUBMIT_VOTE       player votes for target (no target = skip/abstain)
+#     VOTING_UNVOTE     player retracts their vote
+#     VOTING_REVEAL_TALLY   host reveals vote tally (auto-uses host token)
+#     VOTING_CONTINUE   host continues after tied vote / normal elimination (auto-uses host token)
 #     IDIOT_REVEAL      idiot reveals identity when voted out (first time only, stays alive)
 #   Hunter / Badge:
 #     HUNTER_SHOOT      hunter shoots a target               (requires --target)
@@ -87,6 +88,10 @@
 #   ./scripts/act.sh DAY_ADVANCE                                  # host advances day
 #   ./scripts/act.sh SUBMIT_VOTE --target 3                       # all bots vote for seat 3
 #   ./scripts/act.sh SUBMIT_VOTE 2 --target 5                     # bot at seat 2 votes seat 5
+#   ./scripts/act.sh SUBMIT_VOTE                                  # all bots skip/abstain (no target)
+#   ./scripts/act.sh SUBMIT_VOTE 2                                # bot at seat 2 skips/abstains
+#   ./scripts/act.sh VOTING_UNVOTE                               # all bots retract their votes
+#   ./scripts/act.sh VOTING_UNVOTE 2                              # bot at seat 2 retracts vote
 #   ./scripts/act.sh IDIOT_REVEAL <idiot-nick>                    # idiot reveals identity (stays alive)
 #   ./scripts/act.sh VOTING_REVEAL_TALLY                          # host reveals tally
 #   ./scripts/act.sh VOTING_CONTINUE                              # host continues after result
@@ -120,7 +125,7 @@ Usage: $0 <ACTION_TYPE> [PLAYER] [--target PLAYER] [--payload JSON] [--room CODE
   Pseudo  : STATUS
   Actions : WOLF_SELECT WOLF_KILL SEER_CHECK SEER_CONFIRM WITCH_ACT GUARD_PROTECT GUARD_SKIP
             CONFIRM_ROLE START_NIGHT REVEAL_NIGHT_RESULT DAY_ADVANCE
-            SUBMIT_VOTE VOTING_REVEAL_TALLY VOTING_CONTINUE IDIOT_REVEAL
+            SUBMIT_VOTE VOTING_UNVOTE VOTING_REVEAL_TALLY VOTING_CONTINUE IDIOT_REVEAL
             HUNTER_SHOOT HUNTER_SKIP BADGE_PASS BADGE_DESTROY
             SHERIFF_CAMPAIGN SHERIFF_PASS SHERIFF_QUIT SHERIFF_QUIT_CAMPAIGN
             SHERIFF_VOTE SHERIFF_ABSTAIN SHERIFF_CONFIRM_VOTE
@@ -175,7 +180,7 @@ case "$ACTION_TYPE" in
   STATUS) ;;  # pseudo-action handled below
   WOLF_SELECT|WOLF_KILL|SEER_CHECK|SEER_CONFIRM|WITCH_ACT|GUARD_PROTECT|GUARD_SKIP| \
   CONFIRM_ROLE|START_NIGHT|REVEAL_NIGHT_RESULT|DAY_ADVANCE| \
-  SUBMIT_VOTE|VOTING_REVEAL_TALLY|VOTING_CONTINUE|IDIOT_REVEAL| \
+  SUBMIT_VOTE|VOTING_UNVOTE|VOTING_REVEAL_TALLY|VOTING_CONTINUE|IDIOT_REVEAL| \
   HUNTER_SHOOT|HUNTER_SKIP|BADGE_PASS|BADGE_DESTROY| \
   SHERIFF_CAMPAIGN|SHERIFF_PASS|SHERIFF_QUIT|SHERIFF_QUIT_CAMPAIGN| \
   SHERIFF_VOTE|SHERIFF_ABSTAIN|SHERIFF_CONFIRM_VOTE| \
@@ -185,7 +190,7 @@ esac
 
 # Actions that require --target
 case "$ACTION_TYPE" in
-  WOLF_SELECT|WOLF_KILL|SEER_CHECK|GUARD_PROTECT|SUBMIT_VOTE|HUNTER_SHOOT|BADGE_PASS|SHERIFF_VOTE|SHERIFF_APPOINT)
+  WOLF_SELECT|WOLF_KILL|SEER_CHECK|GUARD_PROTECT|HUNTER_SHOOT|BADGE_PASS|SHERIFF_VOTE|SHERIFF_APPOINT)
     [ -z "$TARGET_SEL" ] && fail "'$ACTION_TYPE' requires --target <seat|nick|userId>" ;;
 esac
 

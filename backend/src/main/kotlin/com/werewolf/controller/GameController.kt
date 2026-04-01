@@ -24,7 +24,7 @@ class GameController(
         val userId = authentication.principal as String
         return when (val result = gameService.startGame(userId, body.roomId)) {
             is GameActionResult.Success -> ResponseEntity.ok(mapOf("success" to true))
-            is GameActionResult.Rejected -> ResponseEntity.badRequest().body(mapOf("error" to result.reason))
+            is GameActionResult.Rejected -> ResponseEntity.badRequest().body(mapOf("success" to false, "message" to result.reason))
         }
     }
 
@@ -43,7 +43,7 @@ class GameController(
         )
         return when (val result = gameActionDispatcher.dispatch(request)) {
             is GameActionResult.Success -> ResponseEntity.ok(mapOf("success" to true))
-            is GameActionResult.Rejected -> ResponseEntity.badRequest().body(mapOf("error" to result.reason))
+            is GameActionResult.Rejected -> ResponseEntity.badRequest().body(mapOf("success" to false, "message" to result.reason))
         }
     }
 

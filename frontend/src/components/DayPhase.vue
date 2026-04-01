@@ -100,25 +100,8 @@
         <template v-if="dayPhase.subPhase === 'RESULT_HIDDEN'">
           <p class="footer-hint">等待房主公布结果 · Waiting for host to reveal the result</p>
         </template>
-        <template v-else-if="!dayPhase.canVote">
-          <button class="btn btn-secondary" disabled>投票已禁用 · Voting disabled</button>
-        </template>
         <template v-else>
-          <p class="footer-hint-sm">点击后更新信息将显示 · Tap to select</p>
-          <div class="vote-actions">
-            <button
-              class="btn btn-primary vote-btn"
-              :disabled="!!dayPhase.myVote || !localSelected"
-              @click="!dayPhase.myVote && localSelected && emit('vote', localSelected)"
-            >
-              投票 · Vote
-            </button>
-            <button
-              class="btn btn-secondary skip-btn"
-              :disabled="!dayPhase.myVote"
-              @click="dayPhase.myVote && emit('skip')"
-            >弃权</button>
-          </div>
+          <p class="footer-hint">等待房主开始投票 · Waiting for host to start voting</p>
         </template>
       </template>
 

@@ -252,6 +252,7 @@ class GameService(
                 "phaseStarted" to 0L,
                 "canVote" to (myVotingPlayer != null && myVotingPlayer.alive && myVotingPlayer.canVote),
                 "myVote" to myVoteRecord?.targetUserId,
+                "myVoteSkipped" to (myVoteRecord != null && myVoteRecord.targetUserId == null),
                 "votedPlayerIds" to votes.map { it.voterUserId },
                 "votesSubmitted" to votes.size,
                 "totalVoters" to players.count { it.alive && it.canVote },
