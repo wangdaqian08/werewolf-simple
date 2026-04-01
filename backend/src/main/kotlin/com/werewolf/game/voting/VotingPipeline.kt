@@ -108,6 +108,7 @@ class VotingPipeline(
         context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
         gameRepository.save(context.game)
 
+        stompPublisher.broadcastGame(context.gameId, DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTE_RESULT.name))
         stompPublisher.broadcastGame(context.gameId, DomainEvent.VoteTally(context.gameId, eliminated, tally))
 
         if (eliminated != null) {

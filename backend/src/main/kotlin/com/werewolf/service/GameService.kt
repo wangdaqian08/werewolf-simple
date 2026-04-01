@@ -69,12 +69,18 @@ class GameService(
         return GameActionResult.Success()
     }
 
+@Transactional
     fun getGameState(gameId: Int, requestingUserId: String): Map<String, Any?> {
         val game = gameRepository.findById(gameId).orElse(null)
             ?: return mapOf("error" to "Game not found")
         val room = roomRepository.findById(game.roomId).orElse(null)
         val players = gamePlayerRepository.findByGameId(gameId)
         val myPlayer = players.firstOrNull { it.userId == requestingUserId }
+
+        // Recover stuck night phases (e.g., after backend restart when a role has no alive players)
+        if (game.phase == GamePhase.NIGHT) {
+            nightOrchestrator.recoverStuckNightPhase(gameId)
+        }
 
         // Always look up user nicknames — used by players map, roleReveal, nightPhase, votingPhase
         val userLookup = userRepository.findAllById(players.map { it.userId }).associateBy { it.userId }
@@ -166,20 +172,27 @@ class GameService(
                 if (np != null) {
                     val wolfTarget = np.wolfTargetUserId
                     val wolfKilled = wolfTarget != null && !np.witchAntidoteUsed && np.guardTargetUserId != wolfTarget
-                    val killedId = when {
-                        wolfKilled -> wolfTarget
-                        np.witchPoisonTargetUserId != null -> np.witchPoisonTargetUserId
-                        else -> null
-                    }
-                    killedId?.let {
-                        val killedPlayer = playerMap[it]
-                        val killedUser = userLookup[it]
+                    val poisonTarget = np.witchPoisonTargetUserId
+                    
+                    // Collect all killed players (wolf kill + witch poison)
+                    val killedIds = mutableListOf<String>()
+                    if (wolfKilled) wolfTarget?.let { killedIds.add(it) }
+                    if (poisonTarget != null) killedIds.add(poisonTarget)
+                    
+                    if (killedIds.isNotEmpty()) {
                         mapOf(
-                            "killedPlayerId"  to it,
-                            "killedNickname"  to (killedUser?.nickname ?: it),
-                            "killedSeatIndex" to (killedPlayer?.seatIndex ?: 0),
+                            "killedPlayers" to killedIds.map { killedId ->
+                                val killedPlayer = playerMap[killedId]
+                                val killedUser = userLookup[killedId]
+                                mapOf(
+                                    "killedPlayerId"  to killedId,
+                                    "killedNickname"  to (killedUser?.nickname ?: killedId),
+                                    "killedSeatIndex" to (killedPlayer?.seatIndex ?: 0),
+                                    "killedAvatar"    to killedUser?.avatarUrl,
+                                )
+                            }
                         )
-                    }
+                    } else null
                 } else null
             } else null
             mapOf(

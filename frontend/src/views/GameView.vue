@@ -40,6 +40,7 @@
       v-else-if="gameStore.state?.phase === 'SHERIFF_ELECTION' && gameStore.state?.sheriffElection"
     >
       <SheriffElection
+        :key="`sheriff-${gameStore.state.sheriffElection.subPhase}`"
         :election="gameStore.state.sheriffElection"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
@@ -60,6 +61,7 @@
     <!-- Night phase -->
     <template v-else-if="gameStore.state?.phase === 'NIGHT' && gameStore.state?.nightPhase">
       <NightPhase
+        :key="`night-${gameStore.state.nightPhase.subPhase}-${gameStore.state.dayNumber}`"
         :night-phase="gameStore.state.nightPhase"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
@@ -76,6 +78,7 @@
     <!-- Voting phase -->
     <template v-else-if="gameStore.state?.phase === 'VOTING' && gameStore.state?.votingPhase">
       <VotingPhase
+        :key="`voting-${gameStore.state.votingPhase.subPhase}-${gameStore.state.dayNumber}`"
         :voting-phase="gameStore.state.votingPhase"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
@@ -84,7 +87,7 @@
         :vote-history="gameStore.state?.voteHistory"
         @select-player="handleVotingSelect"
         @vote="handleVotingVote"
-        @skip-vote="handleVotingSkip"
+        @skip="handleVotingSkip"
         @unvote="handleVotingUnvote"
         @reveal-voting="handleVotingReveal"
         @continue-voting="handleVotingContinue"
@@ -98,6 +101,7 @@
     <!-- Day phase -->
     <template v-else-if="gameStore.state?.phase === 'DAY' && gameStore.state?.dayPhase">
       <DayPhase
+        :key="`${gameStore.state.dayPhase.subPhase}-${gameStore.state.dayPhase.dayNumber}`"
         :day-phase="gameStore.state.dayPhase"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
@@ -267,9 +271,20 @@ const isRoleRevealed = ref(false)
 
 // Wraps gameService.submitAction to always include the gameId from the route
 async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) {
-  const res = await gameService.submitAction({ ...req, gameId: parseInt(route.params.gameId as string) })
+  const gameId = route.params.gameId as string
+  console.log('[GameView] Sending action:', { ...req, gameId })
+  const res = await gameService.submitAction({ ...req, gameId })
+  console.log('[GameView] Action response:', res)
   if (res && !res.success && res.message) {
+    console.error('[GameView] Action failed:', res.message)
     ElMessage({ message: res.message, type: 'error', duration: 3000 })
+    // If the action failed due to phase mismatch, refresh the state
+    if (res.message.includes('phase') || res.message.includes('Phase')) {
+      console.log('[GameView] Phase mismatch detected, refreshing state...')
+      const state = await gameService.getState(gameId)
+      console.log('[GameView] Refreshed state:', state)
+      gameStore.setState(state)
+    }
   }
   return res
 }
@@ -384,6 +399,36 @@ async function handleRevealResult() {
   await action({ actionType: 'REVEAL_NIGHT_RESULT' })
 }
 async function handleStartVote() {
+  const currentPhase = gameStore.state?.phase
+  const currentSubPhase = gameStore.state?.dayPhase?.subPhase
+  console.log('[handleStartVote] Current state:', { phase: currentPhase, subPhase: currentSubPhase })
+  
+  if (currentPhase !== 'DAY') {
+    console.error(`[handleStartVote] Cannot start vote: current phase is ${currentPhase}, expected DAY`)
+    ElMessage({ 
+      message: `当前游戏阶段不正确，无法开始投票。当前阶段: ${currentPhase}`, 
+      type: 'error', 
+      duration: 5000 
+    })
+    // Refresh state to sync with backend
+    const gameId = route.params.gameId as string
+    const state = await gameService.getState(gameId)
+    console.log('[handleStartVote] Refreshed state:', state)
+    gameStore.setState(state)
+    return
+  }
+  
+  if (currentSubPhase !== 'RESULT_REVEALED') {
+    console.error(`[handleStartVote] Cannot start vote: current subPhase is ${currentSubPhase}, expected RESULT_REVEALED`)
+    ElMessage({ 
+      message: `请先公布昨晚的结果`, 
+      type: 'error', 
+      duration: 5000 
+    })
+    return
+  }
+  
+  console.log('[handleStartVote] Sending DAY_ADVANCE action')
   await action({ actionType: 'DAY_ADVANCE' })
 }
 async function handleDayVote(targetId: string) {
@@ -574,7 +619,11 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
+          console.log('[GameView] PhaseChanged event received:', data)
+          console.log('[GameView] New phase:', data.phase, 'subPhase:', data.subPhase)
           const state = await gameService.getState(gameId)
+          console.log('[GameView] New state after PhaseChanged:', state)
+          console.log('[GameView] New votingPhase subPhase:', state.votingPhase?.subPhase)
           gameStore.setState(state)
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
@@ -595,6 +644,17 @@ onMounted(async () => {
         // Vote cast → re-fetch so votedPlayerIds/votesSubmitted updates for all viewers
         if (data.type === 'VoteSubmitted') {
           const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+        }
+        // Vote tally revealed → re-fetch to get updated subPhase and tally
+        // This is the main event that should trigger UI update; PhaseChanged is also sent but VoteTally is more complete
+        if (data.type === 'VoteTally') {
+          console.log('[GameView] VoteTally event received:', data)
+          console.log('[GameView] Eliminated:', data.eliminated, 'Tally size:', data.tally?.length)
+          const state = await gameService.getState(gameId)
+          console.log('[GameView] New state after VoteTally:', state)
+          console.log('[GameView] New votingPhase subPhase:', state.votingPhase?.subPhase)
+          console.log('[GameView] New votingPhase tallyRevealed:', state.votingPhase?.tallyRevealed)
           gameStore.setState(state)
         }
         // Both mock (GAME_OVER) and real backend (GameOver) navigate to result

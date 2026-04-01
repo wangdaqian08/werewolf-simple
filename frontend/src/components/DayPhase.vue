@@ -20,16 +20,16 @@
           </div>
         </div>
         <div
-          v-if="dayPhase.subPhase === 'RESULT_REVEALED' && dayPhase.nightResult"
+          v-if="dayPhase.subPhase === 'RESULT_REVEALED' && killedPlayers.length > 0"
           class="banner banner-kill"
         >
           <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
-            <span class="banner-kill-red"
-              >{{ dayPhase.nightResult.killedSeatIndex }}号 ·
-              {{ dayPhase.nightResult.killedNickname }}</span
-            >
+            <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
+              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span class="banner-kill-red">{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span>
+            </template>
             <span class="banner-kill-muted">出局了</span>
           </div>
         </div>
@@ -38,14 +38,14 @@
       <template
         v-else-if="(viewRole === 'ALIVE' || viewRole === 'HOST') && dayPhase.subPhase === 'RESULT_REVEALED'"
       >
-        <div v-if="dayPhase.nightResult" class="banner banner-kill">
+        <div v-if="killedPlayers.length > 0" class="banner banner-kill">
           <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
-            <span class="banner-kill-red"
-              >{{ dayPhase.nightResult.killedSeatIndex }}号 ·
-              {{ dayPhase.nightResult.killedNickname }}</span
-            >
+            <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
+              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span class="banner-kill-red">{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span>
+            </template>
             <span class="banner-kill-muted">出局了</span>
           </div>
         </div>
@@ -174,16 +174,28 @@ watch(
   },
 )
 
-const killedId = computed(() => props.dayPhase.nightResult?.killedPlayerId)
+const killedIds = computed(() => 
+  props.dayPhase.nightResult?.killedPlayers?.map(k => k.killedPlayerId) ?? []
+)
+
+const killedPlayers = computed(() => 
+  props.dayPhase.nightResult?.killedPlayers ?? []
+)
 
 function isKilledAndVisible(player: GamePlayer) {
-  return killedId.value === player.userId && props.dayPhase.subPhase === 'RESULT_REVEALED'
+  return killedIds.value.includes(player.userId) && props.dayPhase.subPhase === 'RESULT_REVEALED'
 }
 
 function slotVariant(player: GamePlayer) {
   if (props.dayPhase.subPhase === 'RESULT_REVEALED') {
     if (isKilledAndVisible(player)) return 'killed' as const
     if (!player.isAlive) return 'dead' as const
+    // In RESULT_REVEALED phase, no player should be selected (waiting for host to start vote)
+    return 'alive' as const
+  }
+  if (props.dayPhase.subPhase === 'RESULT_HIDDEN') {
+    // In RESULT_HIDDEN phase, no player should be selected (waiting for host to reveal result)
+    return 'alive' as const
   }
   if (player.userId === localSelected.value) return 'selected' as const
   return 'alive' as const
@@ -193,6 +205,9 @@ function onTap(player: GamePlayer) {
   if (viewRole.value !== 'ALIVE') return
   if (!props.dayPhase.canVote) return
   if (!player.isAlive) return
+  // Prevent selection in both RESULT_HIDDEN and RESULT_REVEALED phases
+  // Players can only select after host starts the voting phase
+  if (props.dayPhase.subPhase === 'RESULT_HIDDEN' || props.dayPhase.subPhase === 'RESULT_REVEALED') return
   localSelected.value = player.userId
   emit('selectPlayer', player.userId)
 }

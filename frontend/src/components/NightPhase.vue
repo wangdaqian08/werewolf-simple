@@ -45,6 +45,9 @@
           :aria-disabled="!isWolfTargetFn(p) ? 'true' : undefined"
           @click="isWolfTargetFn(p) && selectPlayer(p.userId)"
         >
+          <template v-if="p.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
           <template v-if="!p.isAlive" #overlay>
             <div class="slot-overlay np-dead-x">✕</div>
           </template>
@@ -76,6 +79,9 @@
           :aria-disabled="!isSeerTargetFn(p) ? 'true' : undefined"
           @click="isSeerTargetFn(p) && selectPlayer(p.userId)"
         >
+          <template v-if="p.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
           <template v-if="!p.isAlive" #overlay>
             <div class="slot-overlay np-dead-x">✕</div>
           </template>
@@ -186,6 +192,9 @@
               :aria-disabled="!isPoisonTargetFn(p) ? 'true' : undefined"
               @click="isPoisonTargetFn(p) && selectPlayer(p.userId)"
             >
+              <template v-if="p.isSheriff" #badge>
+                <div class="sheriff-badge">⭐</div>
+              </template>
               <template v-if="!p.isAlive" #overlay>
                 <div class="slot-overlay np-dead-x">✕</div>
               </template>
@@ -243,6 +252,9 @@
           :aria-disabled="!isGuardTargetFn(p) ? 'true' : undefined"
           @click="isGuardTargetFn(p) && selectPlayer(p.userId)"
         >
+          <template v-if="p.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
           <template v-if="!p.isAlive" #overlay>
             <div class="slot-overlay np-dead-x">✕</div>
           </template>
@@ -918,5 +930,13 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   background: rgba(245, 240, 232, 0.1);
   color: rgba(245, 240, 232, 0.72);
   border: 1px solid rgba(245, 240, 232, 0.14);
+}
+
+/* ── Sheriff badge ─────────────────────────────────────────────────────────── */
+.sheriff-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.75rem;
 }
 </style>

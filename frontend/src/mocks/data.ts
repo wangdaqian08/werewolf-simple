@@ -209,10 +209,14 @@ export function makeRoleRevealState(totalCount: number, teammates?: string[]): R
 // Carol (u4, seat 4) was killed last night.
 
 const NIGHT_RESULT = {
-  killedPlayerId: 'u4',
-  killedNickname: 'Carol',
-  killedSeatIndex: 4,
-  killedAvatar: '🌙',
+  killedPlayers: [
+    {
+      killedPlayerId: 'u4',
+      killedNickname: 'Carol',
+      killedSeatIndex: 4,
+      killedAvatar: '🌙',
+    },
+  ],
 }
 
 // Factory functions so each debug trigger gets a fresh deadline relative to now.

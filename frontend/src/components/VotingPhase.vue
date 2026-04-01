@@ -106,6 +106,9 @@
           mode="room"
           @click="onVotingTap(player)"
         >
+          <template v-if="player.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
           <template v-if="player.idiotRevealed" #overlay>
             <div class="slot-overlay idiot-overlay">🃏</div>
           </template>
@@ -160,7 +163,13 @@
                 </div>
               </template>
             </template>
-            <button class="btn btn-gold" :disabled="!allVotesIn" @click="emit('revealVoting')">
+            <!-- Only show reveal button if subPhase is VOTING or RE_VOTING -->
+            <button
+              v-if="votingPhase.subPhase === 'VOTING' || votingPhase.subPhase === 'RE_VOTING'"
+              class="btn btn-gold"
+              :disabled="!allVotesIn"
+              @click="emit('revealVoting')"
+            >
               公布结果 · Reveal
             </button>
           </template>
@@ -497,6 +506,16 @@ const isRevealed = computed(
   () => props.votingPhase.tallyRevealed || props.votingPhase.subPhase === 'VOTE_RESULT',
 )
 
+// Debug: watch votingPhase changes
+watch(
+  () => props.votingPhase,
+  (newPhase) => {
+    console.log('[VotingPhase] votingPhase changed:', newPhase)
+    console.log('[VotingPhase] isRevealed:', isRevealed.value)
+  },
+  { deep: true, immediate: true },
+)
+
 // Badge screen: post-action states
 const badgeDone = computed(
   () => !!(props.votingPhase.newSheriffId || props.votingPhase.badgeDestroyed),
@@ -763,6 +782,8 @@ function badgeSlotVariant(player: GamePlayer) {
 function onVotingTap(player: GamePlayer) {
   if (!player.isAlive) return
   if (!props.votingPhase.canVote) return
+  // Prevent selection after player has already voted or skipped
+  if (props.votingPhase.myVote || props.votingPhase.myVoteSkipped) return
   // During HUNTER_SHOOT, only the hunter can select targets
   if (props.votingPhase.subPhase === 'HUNTER_SHOOT') return
   selectPlayer(player.userId)

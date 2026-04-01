@@ -258,6 +258,40 @@ case "$ACTION" in
   abstain)  ACTION_TYPE="SHERIFF_ABSTAIN"  ;;
 esac
 
+# ── Check current phase and sub-phase ─────────────────────────────────────────
+GAME_STATE=$(curl -s -X GET "$BASE/game/$GAME_ID/state" \
+  -H "Authorization: Bearer $FIRST_TOKEN")
+
+PHASE=$(echo "$GAME_STATE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("phase","N/A"))' 2>/dev/null)
+SUBPHASE=$(echo "$GAME_STATE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("sheriffElection",{}).get("subPhase","N/A"))' 2>/dev/null)
+
+info "Current phase: $PHASE"
+info "Sheriff election sub-phase: $SUBPHASE"
+
+# Validate that we're in the correct phase
+if [ "$PHASE" != "SHERIFF_ELECTION" ]; then
+  fail "Game is not in SHERIFF_ELECTION phase (current: $PHASE)"
+fi
+
+# Validate action against current sub-phase
+case "$ACTION" in
+  campaign|pass)
+    if [ "$SUBPHASE" != "SIGNUP" ]; then
+      fail "Action '$ACTION' requires SIGNUP sub-phase (current: $SUBPHASE)"
+    fi
+    ;;
+  quit)
+    if [ "$SUBPHASE" != "SPEECH" ]; then
+      fail "Action 'quit' requires SPEECH sub-phase (current: $SUBPHASE)"
+    fi
+    ;;
+  vote|abstain)
+    if [ "$SUBPHASE" != "VOTING" ]; then
+      fail "Action '$ACTION' requires VOTING sub-phase (current: $SUBPHASE)"
+    fi
+    ;;
+esac
+
 # ── Send actions ──────────────────────────────────────────────────────────────
 section "$ACTION_TYPE  [$PLAYER_COUNT player(s)]  game=$GAME_ID"
 
@@ -276,14 +310,14 @@ for idx in $(seq 0 $(( PLAYER_COUNT - 1 ))); do
     -d "$BODY")
 
   OK=$(echo "$RESP"  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("success",False))' 2>/dev/null)
-  ERR=$(echo "$RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("error",""))' 2>/dev/null)
+  MSG=$(echo "$RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("message",""))' 2>/dev/null)
 
   if [ "$OK" = "True" ]; then
     TGT=""
     [ -n "$TARGET_UID" ] && TGT=" → seat $TARGET_SEL"
     ok "$(printf 'seat %-3s  %-20s  %s%s' "$SEAT" "$NICK" "$ACTION_TYPE" "$TGT")"
   else
-    echo -e "  ${YELLOW}!  $(printf 'seat %-3s  %-20s  rejected: %s' "$SEAT" "$NICK" "$ERR")${RESET}"
+    echo -e "  ${YELLOW}!  $(printf 'seat %-3s  %-20s  rejected: %s' "$SEAT" "$NICK" "$MSG")${RESET}"
   fi
 done
 

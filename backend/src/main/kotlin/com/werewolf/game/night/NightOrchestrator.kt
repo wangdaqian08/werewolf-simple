@@ -79,6 +79,32 @@ class NightOrchestrator(
     }
 
     /**
+     * Checks if the current night sub-phase is stuck (role has no alive players) and advances if needed.
+     * Call this on backend startup or when loading a game context to recover from restarts.
+     */
+    @Transactional
+    fun recoverStuckNightPhase(gameId: Int) {
+        val context = contextLoader.load(gameId)
+        val nightPhase = context.nightPhase ?: return
+
+        // Only recover if game is in NIGHT phase and not COMPLETE
+        if (context.game.phase != GamePhase.NIGHT || nightPhase.subPhase == NightSubPhase.COMPLETE) {
+            return
+        }
+
+        val currentSubPhase = nightPhase.subPhase
+        val roleForCurrentPhase = getRoleForSubPhase(currentSubPhase)
+
+        if (roleForCurrentPhase != null) {
+            val hasAlivePlayersForRole = context.alivePlayers.any { it.role == roleForCurrentPhase }
+            if (!hasAlivePlayersForRole) {
+                // Current role has no alive players - advance to next sub-phase
+                advance(gameId, currentSubPhase)
+            }
+        }
+    }
+
+    /**
      * Advances the night from WAITING to the first real sub-phase (WEREWOLF_PICK).
      * Called automatically by [NightWaitingScheduler] after the 5-second countdown.
      */
@@ -91,6 +117,20 @@ class NightOrchestrator(
         nightPhase.subPhase = firstRealSubPhase
         nightPhaseRepository.save(nightPhase)
         stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstRealSubPhase))
+    }
+
+    /**
+     * Advances to a specific sub-phase after a scheduled delay.
+     * Used when a role has no alive players and we want to wait 20 seconds before moving to the next role.
+     */
+    @Transactional
+    fun advanceToSubPhase(gameId: Int, targetSubPhase: NightSubPhase?) {
+        if (targetSubPhase == null) return
+        val context = contextLoader.load(gameId)
+        val nightPhase = context.nightPhase ?: return
+        nightPhase.subPhase = targetSubPhase
+        nightPhaseRepository.save(nightPhase)
+        stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, targetSubPhase))
     }
 
     /**
@@ -111,9 +151,31 @@ class NightOrchestrator(
         if (nextSubPhase == null) {
             resolveNightKills(context, nightPhase)
         } else {
-            nightPhase.subPhase = nextSubPhase
-            nightPhaseRepository.save(nightPhase)
-            stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, nextSubPhase))
+            // Check if the next role has any alive players
+            val roleForNextPhase = getRoleForSubPhase(nextSubPhase)
+            val hasAlivePlayersForRole = roleForNextPhase?.let { role ->
+                context.alivePlayers.any { it.role == role }
+            } ?: true // If we can't determine the role, assume we should advance
+
+            if (roleForNextPhase != null && !hasAlivePlayersForRole) {
+                // All players with this role are dead - wait 20 seconds before advancing
+                nightWaitingScheduler.scheduleAdvance(gameId, 20_000, nextSubPhase)
+            } else {
+                // At least one player with this role is alive - advance immediately
+                nightPhase.subPhase = nextSubPhase
+                nightPhaseRepository.save(nightPhase)
+                stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, nextSubPhase))
+            }
+        }
+    }
+
+    private fun getRoleForSubPhase(subPhase: NightSubPhase): PlayerRole? {
+        return when (subPhase) {
+            NightSubPhase.WEREWOLF_PICK -> PlayerRole.WEREWOLF
+            NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT -> PlayerRole.SEER
+            NightSubPhase.WITCH_ACT -> PlayerRole.WITCH
+            NightSubPhase.GUARD_PICK -> PlayerRole.GUARD
+            else -> null
         }
     }
 

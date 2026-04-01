@@ -186,11 +186,15 @@ export interface SheriffElectionState {
 
 export type DaySubPhase = 'RESULT_HIDDEN' | 'RESULT_REVEALED'
 
-export interface NightResult {
+export interface KilledPlayer {
   killedPlayerId: string
   killedNickname: string
   killedSeatIndex: number
   killedAvatar?: string
+}
+
+export interface NightResult {
+  killedPlayers: KilledPlayer[]
 }
 
 export interface DayPhaseState {

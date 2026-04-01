@@ -6,7 +6,9 @@ import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
-import com.werewolf.repository.*
+import com.werewolf.repository.GamePlayerRepository
+import com.werewolf.repository.GameRepository
+import com.werewolf.repository.SheriffElectionRepository
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
@@ -28,15 +30,24 @@ class GamePhasePipeline(
     /** Host: reveal the night kill result (DAY/RESULT_HIDDEN → DAY/RESULT_REVEALED). */
     @Transactional
     fun revealNightResult(request: GameActionRequest, context: GameContext): GameActionResult {
+        println("[revealNightResult] Received request from ${request.actorUserId}")
+        println("[revealNightResult] Current game state: phase=${context.game.phase}, subPhase=${context.game.subPhase}, dayNumber=${context.game.dayNumber}")
+        
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can reveal night result")
-        if (context.game.phase != GamePhase.DAY)
+        if (context.game.phase != GamePhase.DAY) {
+            println("[revealNightResult] ERROR: Not in DAY phase, actual phase is ${context.game.phase}")
             return GameActionResult.Rejected("Not in DAY phase")
-        if (context.game.subPhase != DaySubPhase.RESULT_HIDDEN.name)
+        }
+        if (context.game.subPhase != DaySubPhase.RESULT_HIDDEN.name) {
+            println("[revealNightResult] WARNING: SubPhase is ${context.game.subPhase}, not RESULT_HIDDEN. Result already revealed?")
             return GameActionResult.Rejected("Result already revealed")
+        }
 
         context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
         gameRepository.save(context.game)
+        
+        println("[revealNightResult] Successfully revealed night result")
         stompPublisher.broadcastGame(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY, DaySubPhase.RESULT_REVEALED.name)
@@ -47,16 +58,25 @@ class GamePhasePipeline(
     /** Host: advance day discussion to voting phase (DAY/RESULT_REVEALED → VOTING/VOTING). */
     @Transactional
     fun dayAdvance(request: GameActionRequest, context: GameContext): GameActionResult {
+        println("[dayAdvance] Received request from ${request.actorUserId}")
+        println("[dayAdvance] Current game state: phase=${context.game.phase}, subPhase=${context.game.subPhase}, dayNumber=${context.game.dayNumber}")
+        
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can start the vote")
-        if (context.game.phase != GamePhase.DAY)
+        if (context.game.phase != GamePhase.DAY) {
+            println("[dayAdvance] ERROR: Not in DAY phase, actual phase is ${context.game.phase}")
             return GameActionResult.Rejected("Not in DAY phase")
-        if (context.game.subPhase != DaySubPhase.RESULT_REVEALED.name)
+        }
+        if (context.game.subPhase != DaySubPhase.RESULT_REVEALED.name) {
+            println("[dayAdvance] ERROR: SubPhase is not RESULT_REVEALED, actual is ${context.game.subPhase}")
             return GameActionResult.Rejected("Reveal the night result before starting the vote")
+        }
 
         context.game.phase = GamePhase.VOTING
         context.game.subPhase = VotingSubPhase.VOTING.name
         gameRepository.save(context.game)
+        
+        println("[dayAdvance] Successfully advanced to VOTING phase")
         stompPublisher.broadcastGame(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTING.name)

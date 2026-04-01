@@ -6,7 +6,10 @@ export const useGameStore = defineStore('game', () => {
   const state = ref<GameState | null>(null)
 
   function setState(s: GameState) {
-    state.value = { ...s, events: state.value?.events ?? s.events ?? [] }
+    // Create a deep copy to ensure Vue's reactivity detects nested object changes
+    // This prevents UI from waiting for setInterval tick to update
+    const newState = JSON.parse(JSON.stringify(s))
+    state.value = { ...newState, events: state.value?.events ?? s.events ?? [] }
   }
 
   function addEvent(event: GameEvent) {
