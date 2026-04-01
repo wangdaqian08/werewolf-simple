@@ -459,6 +459,10 @@ async function handleNightConfirm(targetId?: string) {
     case 'SEER_RESULT':
       await action({ actionType: 'SEER_CONFIRM' })
       break
+    case 'WITCH_ACT':
+      // Witch confirm - submit all decisions to advance phase
+      await trySubmitWitchAct()
+      break
     case 'GUARD_PICK':
       if (targetId) await action({ actionType: 'GUARD_PROTECT', targetId })
       break
@@ -471,32 +475,32 @@ const witchPoisonTargetId = ref<string | null | undefined>(undefined)
 
 async function handleWitchAntidote() {
   witchUseAntidote.value = true
-  await trySubmitWitchAct()
+  // Don't submit yet - wait for all decisions
 }
 async function handleWitchPassAntidote() {
   witchUseAntidote.value = false
-  await trySubmitWitchAct()
+  // Don't submit yet - wait for all decisions
 }
 async function handleWitchPoison(targetId: string) {
   witchPoisonTargetId.value = targetId
-  await trySubmitWitchAct()
+  // Don't submit yet - wait for all decisions
 }
 async function handleWitchPassPoison() {
   witchPoisonTargetId.value = null
-  await trySubmitWitchAct()
+  // Don't submit yet - wait for all decisions
 }
 async function trySubmitWitchAct() {
   const nightPhase = gameStore.state?.nightPhase
   if (!nightPhase) return
-  // Each section (antidote / poison) is optional — submit as soon as one is decided.
-  // If the witch only decides poison, antidote defaults to false (not used).
-  // If the witch only decides antidote, poison defaults to not used (null).
+  // Only submit when both decisions are made (via the "Done" button)
   const antidoteReady = !nightPhase.hasAntidote || witchUseAntidote.value !== undefined
   const poisonReady = !nightPhase.hasPoison || witchPoisonTargetId.value !== undefined
-  if (!antidoteReady && !poisonReady) return   // nothing decided yet — wait
-  // If one section is still undecided, default it
-  const payload: Record<string, unknown> = { useAntidote: witchUseAntidote.value ?? false }
-  if (witchPoisonTargetId.value) payload.poisonTargetUserId = witchPoisonTargetId.value
+  if (!antidoteReady && !poisonReady) return
+  // This function is now only called from the "Done" button
+  const payload: Record<string, unknown> = { 
+    useAntidote: witchUseAntidote.value ?? false,
+    poisonTargetUserId: witchPoisonTargetId.value // Always include, even if null (means passed)
+  }
   await action({ actionType: 'WITCH_ACT', payload })
   witchUseAntidote.value = undefined
   witchPoisonTargetId.value = undefined

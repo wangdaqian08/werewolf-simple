@@ -148,8 +148,8 @@ class GameService(
                     base["hasPoison"]   = allNights.none { it.witchPoisonTargetUserId != null }
                     if (np.wolfTargetUserId != null) {
                         val attackedPlayer = playerMap[np.wolfTargetUserId]
-                        base["attackedPlayerId"]  = np.wolfTargetUserId
-                        base["attackedNickname"]  = userLookup[np.wolfTargetUserId]?.nickname ?: np.wolfTargetUserId
+                        base["attackedPlayerId"]  to np.wolfTargetUserId
+                        base["attackedNickname"]  to userLookup[np.wolfTargetUserId]?.nickname ?: np.wolfTargetUserId
                         base["attackedSeatIndex"] = attackedPlayer?.seatIndex
                     }
                 }

@@ -228,6 +228,13 @@
           </button>
         </div>
       </div>
+
+      <!-- Done button - shown when all decisions are made -->
+      <footer v-if="witchBothDecided" class="nf">
+        <button class="btn btn-primary nf-btn" @click="emit('confirm')">
+          完成行动 · Done
+        </button>
+      </footer>
     </template>
 
     <!-- ── GUARD_PICK ──────────────────────────────────────────────────── -->
@@ -353,6 +360,14 @@ const effectivePhase = computed(() => ({
   ...props.nightPhase,
   selectedTargetId: localSelected.value,
 }))
+
+// Witch: both decisions made?
+const witchBothDecided = computed(() => {
+  if (!props.nightPhase.subPhase || props.nightPhase.subPhase !== 'WITCH_ACT') return false
+  const antidoteDecided = !props.nightPhase.hasAntidote || props.nightPhase.antidoteDecided
+  const poisonDecided = !props.nightPhase.hasPoison || props.nightPhase.poisonDecided
+  return antidoteDecided && poisonDecided
+})
 
 function selectPlayer(userId: string) {
   localSelected.value = userId
