@@ -158,6 +158,28 @@ class RoleHandlerTest {
             assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
             assertThat((result as GameActionResult.Rejected).reason).contains("werewolf")
         }
+
+        @Test
+        fun `wolf kill - rejected when not in WEREWOLF_PICK sub-phase`() {
+            val np = nightPhase(NightSubPhase.SEER_PICK)
+            val wolf = player("wolf", 1, PlayerRole.WEREWOLF)
+            val target = player("u2", 2, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(wolf, target), nightPhase = np)
+            val result = handler.handle(req("wolf", ActionType.WOLF_KILL, "u2"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((result as GameActionResult.Rejected).reason).contains("WEREWOLF_PICK")
+        }
+
+        @Test
+        fun `wolf select - rejected when not in WEREWOLF_PICK sub-phase`() {
+            val np = nightPhase(NightSubPhase.SEER_PICK)
+            val wolf = player("wolf", 1, PlayerRole.WEREWOLF)
+            val target = player("u2", 2, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(wolf, target), nightPhase = np)
+            val result = handler.handle(req("wolf", ActionType.WOLF_SELECT, "u2"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((result as GameActionResult.Rejected).reason).contains("WEREWOLF_PICK")
+        }
     }
 
     // ── SeerHandler ───────────────────────────────────────────────────────────
@@ -375,6 +397,17 @@ class RoleHandlerTest {
             val captor = argumentCaptor<NightPhase>()
             verify(nightPhaseRepository).save(captor.capture())
             assertThat(captor.firstValue.guardTargetUserId).isNull()
+        }
+
+        @Test
+        fun `guard protect - rejected when not in GUARD_PICK sub-phase`() {
+            val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
+            val guard = player("guard", 1, PlayerRole.GUARD)
+            val target = player("u2", 2, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(guard, target), nightPhase = np)
+            val result = handler.handle(req("guard", ActionType.GUARD_PROTECT, "u2"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((result as GameActionResult.Rejected).reason).contains("GUARD_PICK")
         }
     }
 }

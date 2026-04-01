@@ -17,8 +17,8 @@
           class="role-pill"
           :class="rolePillClass(player.role)"
         >
-          <span class="pill-avatar">{{ player.avatar }}</span>
-          <span class="pill-name">{{ player.nickname }}</span>
+          <span class="pill-avatar">{{ roleIcon(player.role) }}</span>
+          <span class="pill-name">{{ displayName(player) }}</span>
           <span class="pill-sep">—</span>
           <span class="pill-role">{{ roleZh(player.role) }}</span>
         </div>
@@ -30,11 +30,26 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/gameStore'
+import {computed, onMounted} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import {useGameStore} from '@/stores/gameStore'
+import {useUserStore} from '@/stores/userStore'
+import {gameService} from '@/services/gameService'
+
+const route = useRoute()
 const router = useRouter()
 const gameStore = useGameStore()
+const userStore = useUserStore()
+
+onMounted(async () => {
+  if (!gameStore.state?.winner) {
+    const gameId = Number(route.params.gameId)
+    if (gameId) {
+      const state = await gameService.getState(gameId)
+      gameStore.setState(state)
+    }
+  }
+})
 
 const winner = computed(() => gameStore.state?.winner)
 
@@ -46,6 +61,24 @@ const ROLE_ZH: Record<string, string> = {
   HUNTER: '猎人',
   GUARD: '守卫',
   IDIOT: '白痴',
+}
+
+const ROLE_ICON: Record<string, string> = {
+  WEREWOLF: '🐺',
+  VILLAGER: '👤',
+  SEER: '🔮',
+  WITCH: '🌿',
+  HUNTER: '🏹',
+  GUARD: '🛡',
+  IDIOT: '🃏',
+}
+
+function roleIcon(role?: string): string {
+  return role ? (ROLE_ICON[role] ?? '❓') : '❓'
+}
+
+function displayName(player: { userId: string; nickname: string }): string {
+  return player.userId === userStore.userId ? '我' : player.nickname
 }
 
 function roleZh(role?: string): string {

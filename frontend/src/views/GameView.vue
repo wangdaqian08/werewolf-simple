@@ -238,6 +238,7 @@
 
 <script lang="ts" setup>
 import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import {ElMessage} from 'element-plus'
 import {useRoute, useRouter} from 'vue-router'
 import {useUserStore} from '@/stores/userStore'
 import {useGameStore} from '@/stores/gameStore'
@@ -266,7 +267,11 @@ const isRoleRevealed = ref(false)
 
 // Wraps gameService.submitAction to always include the gameId from the route
 async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) {
-  return gameService.submitAction({ ...req, gameId: parseInt(route.params.gameId as string) })
+  const res = await gameService.submitAction({ ...req, gameId: parseInt(route.params.gameId as string) })
+  if (res && !res.success && res.message) {
+    ElMessage({ message: res.message, type: 'error', duration: 3000 })
+  }
+  return res
 }
 
 const isHost = computed(() => {
@@ -438,9 +443,13 @@ async function handleWitchPassPoison() {
 async function trySubmitWitchAct() {
   const nightPhase = gameStore.state?.nightPhase
   if (!nightPhase) return
+  // Each section (antidote / poison) is optional — submit as soon as one is decided.
+  // If the witch only decides poison, antidote defaults to false (not used).
+  // If the witch only decides antidote, poison defaults to not used (null).
   const antidoteReady = !nightPhase.hasAntidote || witchUseAntidote.value !== undefined
   const poisonReady = !nightPhase.hasPoison || witchPoisonTargetId.value !== undefined
-  if (!antidoteReady || !poisonReady) return
+  if (!antidoteReady && !poisonReady) return   // nothing decided yet — wait
+  // If one section is still undecided, default it
   const payload: Record<string, unknown> = { useAntidote: witchUseAntidote.value ?? false }
   if (witchPoisonTargetId.value) payload.poisonTargetUserId = witchPoisonTargetId.value
   await action({ actionType: 'WITCH_ACT', payload })
@@ -448,14 +457,14 @@ async function trySubmitWitchAct() {
   witchPoisonTargetId.value = undefined
 }
 
-async function handleVotingSelect(userId: string) {
-  await action({ actionType: 'VOTING_SELECT', targetId: userId })
+async function handleVotingSelect(_userId: string) {
+  // Selection is local UI state only — no backend call needed
 }
 async function handleVotingVote(targetId: string) {
-  await action({ actionType: 'VOTING_VOTE', targetId })
+  await action({ actionType: 'SUBMIT_VOTE', targetId })
 }
 async function handleVotingSkip() {
-  await action({ actionType: 'VOTING_SKIP' })
+  await action({ actionType: 'SUBMIT_VOTE' }) // no targetId = abstain
 }
 async function handleVotingUnvote() {
   await action({ actionType: 'VOTING_UNVOTE' })
@@ -580,6 +589,11 @@ onMounted(async () => {
         }
         // Idiot revealed → re-fetch to get updated canVote/idiotRevealed player state
         if (data.type === 'IdiotRevealed') {
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+        }
+        // Vote cast → re-fetch so votedPlayerIds/votesSubmitted updates for all viewers
+        if (data.type === 'VoteSubmitted') {
           const state = await gameService.getState(gameId)
           gameStore.setState(state)
         }

@@ -36,6 +36,7 @@ class GameActionDispatcher(
 
             // ── Voting control ────────────────────────────────────────────────
             ActionType.SUBMIT_VOTE -> votingPipeline.submitVote(request, context)
+            ActionType.VOTING_UNVOTE -> votingPipeline.unvote(request, context)
             ActionType.VOTING_REVEAL_TALLY -> votingPipeline.revealTally(request, context)
             ActionType.VOTING_CONTINUE -> votingPipeline.continueToNight(request, context)
 

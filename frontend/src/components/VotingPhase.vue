@@ -547,6 +547,9 @@ function selectPlayer(userId: string) {
 // ── Timer ─────────────────────────────────────────────────────────────────────
 const now = ref(Date.now())
 let intervalId = 0
+const AUTO_CONTINUE_SECS = 30
+const revealedAt = ref<number | null>(null)
+let autoContinueTimer = 0
 
 onMounted(() => {
   intervalId = window.setInterval(() => {
@@ -556,8 +559,26 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(intervalId)
+  clearTimeout(autoContinueTimer)
   document.body.style.overflow = ''
 })
+
+// When tally is revealed and no server deadline, run a local 30s auto-continue
+watch(
+  () => props.votingPhase.tallyRevealed,
+  (revealed) => {
+    if (revealed && !props.votingPhase.revealDeadline) {
+      revealedAt.value = Date.now()
+      autoContinueTimer = window.setTimeout(() => {
+        if (props.isHost) emit('continueVoting')
+      }, AUTO_CONTINUE_SECS * 1000)
+    } else {
+      revealedAt.value = null
+      clearTimeout(autoContinueTimer)
+    }
+  },
+  { immediate: true },
+)
 
 const formattedTime = computed(() => {
   const remaining = Math.max(0, props.votingPhase.phaseDeadline - now.value) / 1000
@@ -567,11 +588,20 @@ const formattedTime = computed(() => {
 })
 
 const formattedRevealTime = computed(() => {
-  if (!props.votingPhase.revealDeadline) return '0:30'
-  const remaining = Math.max(0, props.votingPhase.revealDeadline - now.value) / 1000
-  const m = Math.floor(remaining / 60)
-  const s = Math.floor(remaining % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
+  if (props.votingPhase.revealDeadline) {
+    const remaining = Math.max(0, props.votingPhase.revealDeadline - now.value) / 1000
+    const m = Math.floor(remaining / 60)
+    const s = Math.floor(remaining % 60)
+    return `${m}:${String(s).padStart(2, '0')}`
+  }
+  if (revealedAt.value) {
+    const elapsed = Math.floor((now.value - revealedAt.value) / 1000)
+    const remaining = Math.max(0, AUTO_CONTINUE_SECS - elapsed)
+    const m = Math.floor(remaining / 60)
+    const s = remaining % 60
+    return `${m}:${String(s).padStart(2, '0')}`
+  }
+  return `0:${String(AUTO_CONTINUE_SECS).padStart(2, '0')}`
 })
 
 // ── Sorted tally ──────────────────────────────────────────────────────────────

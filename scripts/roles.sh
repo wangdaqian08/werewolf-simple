@@ -55,6 +55,16 @@ else
 fi
 
 BOTS_JSON=$(python3 -c "import json; print(json.dumps(json.load(open('$STATE_FILE'))['bots']))")
+# ALL_PLAYERS = bots + manually-logged-in users (added via: dev-login.sh <nick> --room <code>)
+ALL_PLAYERS_JSON=$(python3 -c "
+import json
+state = json.load(open('$STATE_FILE'))
+bots  = state['bots']
+users = state.get('users', [])
+for u in users:
+    u.setdefault('seat', 0)
+print(json.dumps(bots + users))
+")
 FIRST_TOKEN=$(echo "$BOTS_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['token'])")
 BOT_USER_IDS=$(echo "$BOTS_JSON" | python3 -c "
 import json,sys
@@ -116,29 +126,38 @@ ROLE_HINTS='{
 python3 << PYEOF
 import json, urllib.request, urllib.error
 
-base   = "$BASE"
-gid    = "$GAME_ID"
-bots   = json.loads(r"""$BOTS_JSON""")
-hints  = $ROLE_HINTS
+base        = "$BASE"
+gid         = "$GAME_ID"
+all_players = json.loads(r"""$ALL_PLAYERS_JSON""")
+hints       = $ROLE_HINTS
 
-for b in sorted(bots, key=lambda x: x["seat"]):
+# Fetch alive status once using the first token
+alive_by_uid = {}
+try:
     req = urllib.request.Request(
         f"{base}/game/{gid}/state",
-        headers={"Authorization": "Bearer " + b["token"]}
+        headers={"Authorization": "Bearer " + all_players[0]["token"]}
     )
-    try:
-        with urllib.request.urlopen(req) as r:
-            d = json.loads(r.read())
-    except urllib.error.HTTPError:
-        role = "?"
-    else:
-        role = d.get("myRole", "?")
+    with urllib.request.urlopen(req) as r:
+        alive_by_uid = {p["userId"]: p.get("isAlive", True)
+                        for p in json.loads(r.read()).get("players", [])}
+except Exception:
+    pass
 
-    hint = hints.get(role, "")
-    alive_marker = "" if any(
-        p["userId"] == b["userId"] and p.get("isAlive", True)
-        for p in d.get("players", [])
-    ) else "  [DEAD]"
-    print(f'  seat {b["seat"]:2d}  {b["nick"]:<20}  {role:<12}{alive_marker}  {hint}')
+for b in sorted(all_players, key=lambda x: (x.get("seat") or 0, x["nick"])):
+    try:
+        req = urllib.request.Request(
+            f"{base}/game/{gid}/state",
+            headers={"Authorization": "Bearer " + b["token"]}
+        )
+        with urllib.request.urlopen(req) as r:
+            role = json.loads(r.read()).get("myRole") or "?"
+    except Exception:
+        role = "?"
+
+    seat         = b["seat"] or 0
+    alive_marker = "  [DEAD]" if alive_by_uid.get(b["userId"]) is False else ""
+    hint         = hints.get(role, "")
+    print(f'  seat {seat:2d}  {b["nick"]:<20}  {role:<12}{alive_marker}  {hint}')
 PYEOF
 echo ""

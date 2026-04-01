@@ -212,20 +212,72 @@ else
   [ -f "$STATE_FILE" ] || fail "No state file for room $ROOM_CODE (expected $STATE_FILE)"
 fi
 
-BOTS_JSON=$(python3 -c "import json; print(json.dumps(json.load(open('$STATE_FILE'))['bots']))")
+STATE_DATA=$(python3 -c "import json; print(json.dumps(json.load(open('$STATE_FILE'))))")
+BOTS_JSON=$(echo "$STATE_DATA" | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin)['bots']))")
 BOT_COUNT=$(echo "$BOTS_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
 [ "$BOT_COUNT" -eq 0 ] && fail "No bots in state file for room $ROOM_CODE"
 
-# ── Auto-detect game ID ───────────────────────────────────────────────────────
+# Manually-logged-in users saved via: ./scripts/dev-login.sh <nick> --room <code>
+USERS_JSON=$(echo "$STATE_DATA" | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin).get('users', [])))")
+# ALL_PLAYERS = bots + manual users (used for player/target resolution)
+ALL_PLAYERS_JSON=$(python3 -c "
+import json, sys
+bots  = json.loads('''$BOTS_JSON''')
+users = json.loads('''$USERS_JSON''')
+# users may lack a 'seat' key — normalise to None
+for u in users:
+    u.setdefault('seat', None)
+print(json.dumps(bots + users))
+")
+
+# ── Host token (for HOST player selector and host-only actions) ───────────────
+HOST_TOKEN=$(echo "$STATE_DATA" | python3 -c "import json,sys; print(json.load(sys.stdin).get('hostToken',''))" 2>/dev/null || true)
+HOST_FILE="$STATE_DIR/werewolf-host-${ROOM_CODE}.json"
+[ -z "$HOST_TOKEN" ] && [ -f "$HOST_FILE" ] && HOST_TOKEN=$(python3 -c "import json; print(json.load(open('$HOST_FILE')).get('token',''))" 2>/dev/null || true)
+
+# NOTE: Token refresh via re-login is NOT supported — each login creates a new
+# guest user UUID. Fix: set expiration-hours: 24 in application.yml (already done).
+# This function is kept as a stub so the call sites below don't break.
+refresh_token() {
+  local nick="$1" old_token="$2"
+  echo -e "  ${RED}✗  Token for $nick is expired. Restart the backend or re-run join-room.sh.${RESET}" >&2
+  echo "$old_token"
+}
+
+# ── Resolve + cache game ID ───────────────────────────────────────────────────
 FIRST_TOKEN=$(echo "$BOTS_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['token'])")
-BOT_USER_IDS=$(echo "$BOTS_JSON" | python3 -c "
+FIRST_NICK=$(echo "$BOTS_JSON"  | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['nick'])")
+
+# 1. Use cached gameId from state file if present
+CACHED_GAME_ID=$(echo "$STATE_DATA" | python3 -c "import json,sys; print(json.load(sys.stdin).get('gameId',''))" 2>/dev/null || true)
+
+if [ -n "$CACHED_GAME_ID" ]; then
+  # Verify cached ID is still valid (quick probe, refresh token on 401)
+  PROBE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $FIRST_TOKEN" "$BASE/game/$CACHED_GAME_ID/state")
+  if [ "$PROBE" = "401" ]; then
+    echo -e "  ${CYAN}→  Token expired — refreshing …${RESET}" >&2
+    FIRST_TOKEN=$(refresh_token "$FIRST_NICK" "$FIRST_TOKEN")
+    BOTS_JSON=$(python3 -c "import json; print(json.dumps(json.load(open('$STATE_FILE'))['bots']))")
+    PROBE=$(curl -s -o /dev/null -w "%{http_code}" \
+      -H "Authorization: Bearer $FIRST_TOKEN" "$BASE/game/$CACHED_GAME_ID/state")
+  fi
+  if [ "$PROBE" = "200" ]; then
+    GAME_ID="$CACHED_GAME_ID"
+    echo -e "  ${CYAN}→  Game ID = $GAME_ID (cached)${RESET}" >&2
+  else
+    CACHED_GAME_ID=""  # stale cache — fall through to scan
+  fi
+fi
+
+if [ -z "$CACHED_GAME_ID" ]; then
+  BOT_USER_IDS=$(echo "$BOTS_JSON" | python3 -c "
 import json,sys
 bots=json.load(sys.stdin)
 print(','.join(b['userId'] for b in bots))
 ")
-
-info "Discovering game ID …"
-GAME_ID=$(python3 << PYEOF
+  echo -e "  ${CYAN}→  Discovering game ID …${RESET}" >&2
+  GAME_ID=$(python3 << PYEOF
 import json, urllib.request, urllib.error
 
 base     = "$BASE"
@@ -260,9 +312,19 @@ for gid in range(1, 500):
 if last_match is not None:
     print(last_match)
 PYEOF
-)
-[ -z "$GAME_ID" ] && fail "Could not find active game for room $ROOM_CODE"
-info "Game ID = $GAME_ID"
+  )
+  [ -z "$GAME_ID" ] && fail "Could not find active game for room $ROOM_CODE"
+  # Cache game ID in state file for all future calls
+  python3 - "$STATE_FILE" "$GAME_ID" << 'PYEOF'
+import json, sys
+path, gid = sys.argv[1], int(sys.argv[2])
+d = json.load(open(path))
+d["gameId"] = gid
+with open(path, "w") as f:
+    json.dump(d, f)
+PYEOF
+  echo -e "  ${CYAN}→  Game ID = $GAME_ID (discovered + cached)${RESET}" >&2
+fi
 
 # ── STATUS pseudo-action ──────────────────────────────────────────────────────
 if [ "$ACTION_TYPE" = "STATUS" ]; then
@@ -297,26 +359,36 @@ PYEOF
 fi
 
 # ── Resolve acting players ────────────────────────────────────────────────────
-PLAYERS_JSON=$(python3 -c "
+# Special selector: HOST → use host token
+USE_HOST_ONLY=false
+if [ "$(echo "$PLAYER_SEL" | tr 'a-z' 'A-Z')" = "HOST" ]; then
+  [ -z "$HOST_TOKEN" ] && fail "No host token found. Run join-room.sh or set hostToken in state file."
+  HOST_NICK=$(echo "$STATE_DATA" | python3 -c "import json,sys; print(json.load(sys.stdin).get('hostNick','Host'))" 2>/dev/null || echo "Host")
+  PLAYERS_JSON="[{\"nick\":\"$HOST_NICK\",\"token\":\"$HOST_TOKEN\",\"seat\":\"host\",\"userId\":\"\"}]"
+  USE_HOST_ONLY=true
+else
+  PLAYERS_JSON=$(python3 -c "
 import json
-bots = json.loads('''$BOTS_JSON''')
-sel  = '$PLAYER_SEL'.strip()
+all_players = json.loads('''$ALL_PLAYERS_JSON''')
+bots        = json.loads('''$BOTS_JSON''')
+sel         = '$PLAYER_SEL'.strip()
 
 if sel.lower() == 'all':
-    result = bots
+    result = all_players
 elif sel.isdigit():
     idx = int(sel) - 1
     if 0 <= idx < len(bots):
         result = [bots[idx]]
     else:
-        result = [b for b in bots if str(b['seat']) == sel]
+        result = [p for p in all_players if str(p.get('seat')) == sel]
 else:
     lo = sel.lower()
-    result = [b for b in bots if lo in b['nick'].lower()]
+    result = [p for p in all_players if lo in p['nick'].lower()]
 
 print(json.dumps(result) if result else '')
 ")
-[ -z "$PLAYERS_JSON" ] && fail "No bots matched '$PLAYER_SEL'"
+  [ -z "$PLAYERS_JSON" ] && fail "No player matched '$PLAYER_SEL' (bots + manual users)"
+fi
 
 PLAYER_COUNT=$(echo "$PLAYERS_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
 
@@ -326,15 +398,16 @@ if [ -n "$TARGET_SEL" ]; then
   TARGET_UID=$(python3 << PYEOF
 import json, urllib.request, urllib.error
 
-bots  = json.loads(r"""$BOTS_JSON""")
-sel   = "$TARGET_SEL"
-base  = "$BASE"
-gid   = "$GAME_ID"
-token = "$FIRST_TOKEN"
+all_players = json.loads(r"""$ALL_PLAYERS_JSON""")
+bots        = json.loads(r"""$BOTS_JSON""")
+sel         = "$TARGET_SEL"
+base        = "$BASE"
+gid         = "$GAME_ID"
+token       = "$FIRST_TOKEN"
 
-# Try bot state file first
+# Try state file (bots + manual users) first
 if sel.isdigit():
-    match = next((b for b in bots if str(b["seat"]) == sel), None) \
+    match = next((p for p in all_players if str(p.get("seat")) == sel), None) \
          or (bots[int(sel)-1] if 0 <= int(sel)-1 < len(bots) else None)
     if match:
         print(match["userId"]); exit()
@@ -342,7 +415,7 @@ elif len(sel) > 20 and ("-" in sel or len(sel) == 36):
     print(sel); exit()   # raw UUID
 else:
     lo    = sel.lower()
-    match = next((b for b in bots if lo in b["nick"].lower()), None)
+    match = next((p for p in all_players if lo in p["nick"].lower()), None)
     if match:
         print(match["userId"]); exit()
 
@@ -390,7 +463,7 @@ payload_str = r\"\"\"$PAYLOAD_JSON\"\"\"
 if payload_str.strip():
     try:
         extra = json.loads(payload_str)
-        body.update(extra)
+        body['payload'] = extra
     except json.JSONDecodeError as e:
         print(f'Invalid --payload JSON: {e}', file=sys.stderr)
         sys.exit(1)
@@ -402,6 +475,17 @@ print(json.dumps(body))
     -H "Authorization: Bearer $TOKEN" \
     -H 'Content-Type: application/json' \
     -d "$BODY")
+
+  # Auto-refresh token on 401 and retry once
+  HTTP_STATUS=$(echo "$RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status",""))' 2>/dev/null)
+  if [ "$HTTP_STATUS" = "401" ] && [ "$USE_HOST_ONLY" = "false" ]; then
+    TOKEN=$(refresh_token "$NICK" "$TOKEN")
+    BOTS_JSON=$(python3 -c "import json; print(json.dumps(json.load(open('$STATE_FILE'))['bots']))")
+    RESP=$(curl -s -X POST "$BASE/game/action" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H 'Content-Type: application/json' \
+      -d "$BODY")
+  fi
 
   OK=$(echo "$RESP"  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("success",False))' 2>/dev/null)
   ERR=$(echo "$RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("error",""))' 2>/dev/null)

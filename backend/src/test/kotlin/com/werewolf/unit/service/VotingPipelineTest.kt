@@ -439,6 +439,21 @@ class VotingPipelineTest {
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
     }
 
+    @Test
+    fun `submitVote - rejected when target is dead`() {
+        val voter = player(hostId, 0)
+        val deadTarget = player("u2", 2).also { it.alive = false }
+        val context = ctx(game(), voter, deadTarget)
+
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(emptyList())
+
+        val result = votingPipeline.submitVote(req(hostId, ActionType.SUBMIT_VOTE, "u2"), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("not found or dead")
+    }
+
     // ── WinConditionMode ──────────────────────────────────────────────────────
 
     @Test

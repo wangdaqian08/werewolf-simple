@@ -6,7 +6,7 @@
 # Room code is enough — game ID is auto-detected from the state file.
 #
 # Usage:
-#   ./scripts/sheriff.sh <ACTION> [PLAYER] [--target PLAYER] [--room CODE]
+#   ./scripts/sheriff.sh <ACTION> [--player NAME] [--target NAME] [--room CODE]
 #
 # ACTION:
 #   campaign    player runs for sheriff              (sub-phase: SIGNUP)
@@ -14,28 +14,28 @@
 #   vote        player votes for TARGET              (sub-phase: VOTING, requires --target)
 #   abstain     player casts a null vote             (sub-phase: VOTING)
 #
-# PLAYER (optional, default = all bots):
+# --player NAME  (optional, default = all bots):
 #   all         every bot in the state file
-#   <INDEX>     1-based position in the bot list (e.g. 1 = first bot joined)
-#   <SEAT>      seat number (fallback when INDEX is out of range)
-#   <NICK>      case-insensitive nickname substring
+#   <NAME>      case-insensitive nickname substring  e.g. --player Bot2
+#   <SEAT>      seat number                          e.g. --player 3
+#   <INDEX>     1-based index in bot list            e.g. --player 1
 #
-# TARGET (required for 'vote'):
-#   <SEAT>      resolved via live game state (works for host too)
-#   <NICK>      nickname substring (state file first, then pass-through)
+# --target NAME  (required for 'vote'):
+#   <NAME>      nickname substring                   e.g. --target Bot3
+#   <SEAT>      seat number                          e.g. --target 4
 #   <USER_ID>   raw userId string
 #
 # OPTIONS:
 #   --room CODE   room code (auto-detect if only one state file in /tmp)
-#   --target P    named form of TARGET (same as third positional arg)
 #
 # Examples:
-#   ./scripts/sheriff.sh campaign                    # all bots campaign
-#   ./scripts/sheriff.sh pass Bot1_123               # Bot1_123 opts out
-#   ./scripts/sheriff.sh vote --target 3             # all bots vote for seat 3
-#   ./scripts/sheriff.sh vote 2 --target Bot3        # seat-2 bot votes for Bot3
-#   ./scripts/sheriff.sh vote Bot2 Bot3              # Bot2 votes for Bot3 (positional)
-#   ./scripts/sheriff.sh abstain 1                   # 1st bot abstains
+#   ./scripts/sheriff.sh campaign                          # all bots campaign
+#   ./scripts/sheriff.sh campaign --player Bot1            # Bot1 runs
+#   ./scripts/sheriff.sh pass --player Bot2                # Bot2 opts out
+#   ./scripts/sheriff.sh vote --target Bot3                # all bots vote for Bot3
+#   ./scripts/sheriff.sh vote --player Bot2 --target Bot3  # Bot2 votes for Bot3
+#   ./scripts/sheriff.sh vote --player 2 --target 3        # seat 2 votes for seat 3
+#   ./scripts/sheriff.sh abstain --player Bot1
 #   ./scripts/sheriff.sh campaign --room AB3C
 # =============================================================================
 
@@ -55,19 +55,20 @@ section() { echo -e "\n${BOLD}${YELLOW}══  $*${RESET}"; }
 usage() {
   cat <<EOF
 
-Usage: $0 <ACTION> [PLAYER] [--target PLAYER] [--room CODE]
+Usage: $0 <ACTION> [--player NAME] [--target NAME] [--room CODE]
 
   Actions : campaign | pass | vote | abstain
-  Player  : all (default) | <seat> | <nick> | <index>
-  Target  : <seat> | <nick> | <userId>   (required for 'vote')
+  --player: all (default) | <name> | <seat>   who performs the action
+  --target: <name> | <seat> | <userId>        required for 'vote'
 
 Examples:
   $0 campaign
-  $0 pass Bot1_123
-  $0 vote --target 3          # all bots vote for seat 3
-  $0 vote 2 --target Bot3     # seat-2 bot votes for Bot3
-  $0 vote Bot2 Bot3           # positional target
-  $0 abstain 1
+  $0 campaign --player Bot1
+  $0 pass     --player Bot2
+  $0 vote     --target Bot3
+  $0 vote     --player Bot2  --target Bot3
+  $0 vote     --player 2     --target 3
+  $0 abstain  --player Bot1
 EOF
   exit 1
 }
@@ -80,14 +81,14 @@ ROOM_CODE=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --room)    ROOM_CODE=$(echo "$2" | tr 'a-z' 'A-Z'); shift 2 ;;
-    --target)  TARGET_SEL="$2"; shift 2 ;;
-    -h|--help) usage ;;
-    -*)        echo "Unknown flag: $1"; usage ;;
+    --room|-r)     ROOM_CODE=$(echo "$2" | tr 'a-z' 'A-Z'); shift 2 ;;
+    --target|-t)   TARGET_SEL="$2"; shift 2 ;;
+    --player|-p)   PLAYER_SEL="$2"; shift 2 ;;
+    -h|--help)     usage ;;
+    -*)            echo "Unknown flag: $1"; usage ;;
     *)
-      if   [ -z "$ACTION"          ]; then ACTION=$(echo "$1" | tr 'A-Z' 'a-z')
-      elif [ "$PLAYER_SEL" = "all" ]; then PLAYER_SEL="$1"
-      else                                 TARGET_SEL="$1"   # 3rd positional = target
+      if [ -z "$ACTION" ]; then ACTION=$(echo "$1" | tr 'A-Z' 'a-z')
+      else echo "Unexpected argument '$1'. Use --player and --target flags."; usage
       fi
       shift ;;
   esac
@@ -101,7 +102,7 @@ case "$ACTION" in
 esac
 
 [ "$ACTION" = "vote" ] && [ -z "$TARGET_SEL" ] && \
-  fail "'vote' requires --target <seat|nick|userId>"
+  fail "'vote' requires --target <name|seat|userId>"
 
 # ── Resolve state file ────────────────────────────────────────────────────────
 if [ -z "$ROOM_CODE" ]; then

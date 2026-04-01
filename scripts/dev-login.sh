@@ -9,9 +9,22 @@
 # Usage:
 #   TOKEN=$(./scripts/dev-login.sh Host)
 #   TOKEN=$(./scripts/dev-login.sh Alice)
-#   ./scripts/dev-login.sh Host --print    # print token to stdout (also cache)
-#   ./scripts/dev-login.sh Host --refresh  # force new token even if cached
-#   ./scripts/dev-login.sh --clear         # remove all cached tokens
+#   ./scripts/dev-login.sh Host --print          # print token to stdout (also cache)
+#   ./scripts/dev-login.sh Host --refresh        # force new token even if cached
+#   ./scripts/dev-login.sh --clear               # remove all cached tokens
+#
+#   # Save to room state file so act.sh / roles.sh can resolve this user by nick:
+#   ./scripts/dev-login.sh Alice --room ABCD
+#   ./scripts/dev-login.sh Host  --room ABCD --seat 0   # with known seat index
+#
+# If you logged in via the browser as "Alice", run the same command —
+# same nickname = same userId, so the script and browser share the same game seat:
+#   ./scripts/dev-login.sh Alice --room ABCD            # no seat known yet
+#   ./scripts/dev-login.sh Alice --room ABCD --seat 2   # seat known
+#
+# After --room is used, act.sh resolves the user by nickname just like a bot:
+#   ./scripts/act.sh CONFIRM_ROLE Alice
+#   ./scripts/act.sh SUBMIT_VOTE  Alice --target 3
 #
 # Examples (in shell scripts):
 #   TOKEN=$(./scripts/dev-login.sh Host)
@@ -30,14 +43,18 @@ NICKNAME=""
 REFRESH=false
 PRINT=false
 CLEAR=false
+ROOM_CODE=""
+SEAT=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --refresh) REFRESH=true; shift ;;
-    --print)   PRINT=true;   shift ;;
-    --clear)   CLEAR=true;   shift ;;
-    -*)        echo "Unknown flag: $1" >&2; exit 1 ;;
-    *)         NICKNAME="$1"; shift ;;
+    --refresh)    REFRESH=true; shift ;;
+    --print)      PRINT=true;   shift ;;
+    --clear)      CLEAR=true;   shift ;;
+    --room)       ROOM_CODE="$2"; shift 2 ;;
+    --seat)       SEAT="$2";    shift 2 ;;
+    -*)           echo "Unknown flag: $1" >&2; exit 1 ;;
+    *)            NICKNAME="$1"; shift ;;
   esac
 done
 
@@ -47,7 +64,7 @@ if $CLEAR; then
   exit 0
 fi
 
-[ -z "$NICKNAME" ] && { echo "Usage: $0 <NICKNAME> [--refresh] [--print]" >&2; exit 1; }
+[ -z "$NICKNAME" ] && { echo "Usage: $0 <NICKNAME> [--room CODE] [--seat N] [--refresh] [--print]" >&2; exit 1; }
 
 CACHE_FILE="$CACHE_DIR/werewolf-token-$(echo "$NICKNAME" | tr 'A-Z' 'a-z').txt"
 
@@ -65,6 +82,44 @@ fi
 
 if $PRINT; then
   echo -e "  Token: ${TOKEN:0:30}..." >&2
+fi
+
+# ── Save to room state file (--room CODE) ─────────────────────────────────────
+if [ -n "$ROOM_CODE" ]; then
+  STATE_FILE="$CACHE_DIR/werewolf-${ROOM_CODE}.json"
+  [ -f "$STATE_FILE" ] || { echo -e "${RED}✗ No state file for room $ROOM_CODE — run join-room.sh first${RESET}" >&2; exit 1; }
+
+  python3 - "$STATE_FILE" "$NICKNAME" "$TOKEN" "$SEAT" << 'PYEOF'
+import json, sys, base64
+
+path, nick, token, seat = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+
+# Decode userId from JWT payload (no external libraries needed)
+def decode_user_id(t):
+    payload = t.split('.')[1]
+    payload += '=' * (-len(payload) % 4)   # pad to multiple of 4
+    return json.loads(base64.b64decode(payload))['sub']
+
+user_id = decode_user_id(token)
+seat_val = int(seat) if seat.isdigit() else None
+
+state = json.load(open(path))
+users = state.get('users', [])
+
+# Upsert: replace existing entry for same nick, otherwise append
+entry = {'nick': nick, 'token': token, 'userId': user_id, 'seat': seat_val}
+users = [u for u in users if u.get('nick', '').lower() != nick.lower()]
+users.append(entry)
+state['users'] = users
+
+with open(path, 'w') as f:
+    json.dump(state, f, indent=2)
+
+print(f"  Saved {nick} (userId={user_id[:12]}..., seat={seat_val}) → {path}")
+PYEOF
+
+  echo -e "${GREEN}✔ User '$NICKNAME' saved to room $ROOM_CODE state file${RESET}" >&2
+  echo -e "  act.sh now resolves '$NICKNAME' by nickname (e.g. ./scripts/act.sh CONFIRM_ROLE $NICKNAME)" >&2
 fi
 
 # Print token to stdout so callers can do: TOKEN=$(./scripts/dev-login.sh Host)

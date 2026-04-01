@@ -66,6 +66,24 @@ class VotingPipeline(
     }
 
     @Transactional
+    fun unvote(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (context.game.phase != GamePhase.VOTING)
+            return GameActionResult.Rejected("Not in voting phase")
+        if (context.game.subPhase !in setOf(VotingSubPhase.VOTING.name, VotingSubPhase.RE_VOTING.name))
+            return GameActionResult.Rejected("Voting is not open")
+
+        val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
+            context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
+        )
+        val myVote = votes.firstOrNull { it.voterUserId == request.actorUserId }
+            ?: return GameActionResult.Rejected("No vote to retract")
+
+        voteRepository.delete(myVote)
+        stompPublisher.broadcastGame(context.gameId, DomainEvent.VoteSubmitted(context.gameId, request.actorUserId))
+        return GameActionResult.Success()
+    }
+
+    @Transactional
     fun revealTally(request: GameActionRequest, context: GameContext): GameActionResult {
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can reveal tally")

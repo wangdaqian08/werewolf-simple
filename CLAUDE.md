@@ -321,5 +321,40 @@ If in doubt, default to backend implementation.
 
 ---
 
+## ⚠️ CRITICAL: Backend Restart Safety — Database Wipe Risk
+
+**NEVER tell the user it is safe to restart the backend without completing ALL of the following checks first.**
+
+A previous restart wiped the entire database because `application-dev.yml` had `clean-disabled: false` and `DevFlywayConfig` ran `flyway.clean()` on startup. The user lost all their data. This must never happen again.
+
+### Mandatory pre-restart checklist
+
+Before advising any backend restart, you MUST verify every item:
+
+1. **Check `application.yml`** — confirm `ddl-auto` is `validate` or `none`, not `create` / `create-drop`
+2. **Check ALL `application-*.yml` profile overrides** — each profile file can independently override `ddl-auto` or `flyway.clean-disabled`
+3. **Search for `FlywayMigrationStrategy` beans** — any class implementing this can call `flyway.clean()` regardless of config
+   ```
+   Grep: FlywayMigrationStrategy
+   Files: backend/src/main/kotlin/**
+   ```
+4. **Identify the active Spring profile** — IntelliJ run configs often set `-Dspring.profiles.active=dev` or similar; confirm which profile files will be loaded
+5. **Cross-check `clean-disabled`** — must be `true` in every profile that will be active
+
+### Current setup (as of 2026-04-01)
+
+| File | Setting | Effect |
+|------|---------|--------|
+| `application.yml` | `ddl-auto: validate` | Safe |
+| `application-dev.yml` | `ddl-auto: validate`, `clean-disabled: true` | Safe |
+| `application-dev.yml` | `@Profile("dev")` | Safe — DevFlywayConfig no longer activates on `dev` |
+| `application-dev-clean.yml` | `clean-disabled: false` | **WIPES DB** — only activate intentionally |
+| `DevFlywayConfig.kt` | `@Profile("dev-clean")` | Runs `flyway.clean()` + `migrate()` — **destroys all data** |
+
+### To intentionally wipe and recreate the schema
+Use `-Dspring.profiles.active=dev,dev-clean` — **only when the user explicitly asks to reset the database**.
+
+---
+
 **Remember**: This is a mobile-web game for real multiplayer gameplay. A robust client-server architecture is essential
 for security, fairness, and scalability.

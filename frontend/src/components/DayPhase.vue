@@ -23,34 +23,37 @@
           v-if="dayPhase.subPhase === 'RESULT_REVEALED' && dayPhase.nightResult"
           class="banner banner-kill"
         >
-          <span class="banner-avatar">{{ dayPhase.nightResult.killedAvatar ?? '💀' }}</span>
+          <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
             <span class="banner-kill-red"
               >{{ dayPhase.nightResult.killedSeatIndex }}号 ·
               {{ dayPhase.nightResult.killedNickname }}</span
             >
-            <span class="banner-kill-muted">被狼人杀害</span>
+            <span class="banner-kill-muted">出局了</span>
           </div>
         </div>
       </template>
 
       <template
-        v-else-if="
-          (viewRole === 'ALIVE' || viewRole === 'HOST') &&
-          dayPhase.subPhase === 'RESULT_REVEALED' &&
-          dayPhase.nightResult
-        "
+        v-else-if="(viewRole === 'ALIVE' || viewRole === 'HOST') && dayPhase.subPhase === 'RESULT_REVEALED'"
       >
-        <div class="banner banner-kill">
-          <span class="banner-avatar">{{ dayPhase.nightResult.killedAvatar ?? '💀' }}</span>
+        <div v-if="dayPhase.nightResult" class="banner banner-kill">
+          <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
             <span class="banner-kill-red"
               >{{ dayPhase.nightResult.killedSeatIndex }}号 ·
               {{ dayPhase.nightResult.killedNickname }}</span
             >
-            <span class="banner-kill-muted">被狼人杀害</span>
+            <span class="banner-kill-muted">出局了</span>
+          </div>
+        </div>
+        <div v-else class="banner banner-info">
+          <span class="banner-icon">❤️</span>
+          <div>
+            <div class="banner-title">昨晚平安夜</div>
+            <div class="banner-sub">Peaceful night — no one was eliminated</div>
           </div>
         </div>
       </template>
@@ -68,7 +71,7 @@
         mode="room"
         @click="onTap(player)"
       >
-        <template v-if="!player.isAlive || isKilledAndVisible(player)" #overlay>
+        <template v-if="!player.isAlive && dayPhase.subPhase === 'RESULT_REVEALED'" #overlay>
           <div class="slot-overlay dead-overlay">✕</div>
         </template>
       </PlayerSlot>
@@ -105,12 +108,16 @@
           <div class="vote-actions">
             <button
               class="btn btn-primary vote-btn"
-              :disabled="!localSelected"
-              @click="localSelected && emit('vote', localSelected)"
+              :disabled="!!dayPhase.myVote || !localSelected"
+              @click="!dayPhase.myVote && localSelected && emit('vote', localSelected)"
             >
               投票 · Vote
             </button>
-            <button class="btn btn-secondary skip-btn" @click="emit('skip')">弃权</button>
+            <button
+              class="btn btn-secondary skip-btn"
+              :disabled="!dayPhase.myVote"
+              @click="dayPhase.myVote && emit('skip')"
+            >弃权</button>
           </div>
         </template>
       </template>
@@ -123,8 +130,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { DayPhaseState, GamePlayer } from '@/types'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import type {DayPhaseState, GamePlayer} from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 
@@ -187,23 +194,21 @@ watch(
 const killedId = computed(() => props.dayPhase.nightResult?.killedPlayerId)
 
 function isKilledAndVisible(player: GamePlayer) {
-  return (
-    killedId.value === player.userId &&
-    (props.isHost || props.dayPhase.subPhase === 'RESULT_REVEALED')
-  )
+  return killedId.value === player.userId && props.dayPhase.subPhase === 'RESULT_REVEALED'
 }
 
 function slotVariant(player: GamePlayer) {
-  if (isKilledAndVisible(player)) return 'killed' as const
-  if (!player.isAlive) return 'dead' as const
+  if (props.dayPhase.subPhase === 'RESULT_REVEALED') {
+    if (isKilledAndVisible(player)) return 'killed' as const
+    if (!player.isAlive) return 'dead' as const
+  }
   if (player.userId === localSelected.value) return 'selected' as const
-  if (player.userId === props.myUserId) return 'me' as const
   return 'alive' as const
 }
 
 function onTap(player: GamePlayer) {
   if (viewRole.value !== 'ALIVE') return
-  if (props.dayPhase.subPhase !== 'RESULT_REVEALED') return
+  if (!props.dayPhase.canVote) return
   if (!player.isAlive) return
   localSelected.value = player.userId
   emit('selectPlayer', player.userId)
@@ -252,5 +257,12 @@ function onTap(player: GamePlayer) {
   color: var(--muted);
   font-size: 0.6875rem;
   margin: 0;
+}
+
+.player-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  padding: 0 1rem 1rem;
 }
 </style>

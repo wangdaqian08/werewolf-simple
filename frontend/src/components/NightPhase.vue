@@ -101,7 +101,7 @@
             {{ nightPhase.seerResult.checkedNickname }}
           </div>
           <div class="sr-verdict">
-            {{ nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '🌾 村民 · Villager' }}
+            {{ nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 平民阵营 · Good Camp' }}
           </div>
         </div>
         <div class="sr-hist">
@@ -117,7 +117,7 @@
               <span class="srh-name">{{ h.nickname }}</span>
               <span class="srh-arrow">→</span>
               <span :class="h.isWerewolf ? 'srh-wolf' : 'srh-ok'">
-                {{ h.isWerewolf ? '狼人 ✗' : '村民 ✓' }}
+                {{ h.isWerewolf ? '狼人 ✗' : '平民 ✓' }}
               </span>
             </div>
           </template>
@@ -283,19 +283,19 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onUnmounted, ref, watch } from 'vue'
+import {computed, onUnmounted, ref, watch} from 'vue'
 
-import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
+import type {GamePlayer, NightPhaseState, PlayerRole} from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import {
-  wolfVariant,
-  isWolfTarget,
-  seerVariant,
-  isSeerTarget,
   guardVariant,
   isGuardTarget,
-  poisonVariant,
   isPoisonTarget,
+  isSeerTarget,
+  isWolfTarget,
+  poisonVariant,
+  seerVariant,
+  wolfVariant,
 } from '@/utils/nightPhaseHelpers'
 
 const props = defineProps<{

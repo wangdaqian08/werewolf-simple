@@ -20,7 +20,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import {computed, onMounted, onUnmounted, ref} from 'vue'
 
 const props = defineProps<{
   phaseDeadline: number
@@ -48,7 +48,12 @@ onUnmounted(() => {
 
 // Quadratic bezier: M 0,H Q W/2,0 W,H
 // Progress 0 = sunrise (left), 1 = sunset (right)
+const FALLBACK_PERIOD = 120_000 // 2-min loop when no deadline set
+
 const progress = computed(() => {
+  if (!props.phaseDeadline || !props.phaseStarted) {
+    return (now.value % FALLBACK_PERIOD) / FALLBACK_PERIOD
+  }
   const total = props.phaseDeadline - props.phaseStarted
   const elapsed = now.value - props.phaseStarted
   return Math.min(1, Math.max(0, elapsed / total))

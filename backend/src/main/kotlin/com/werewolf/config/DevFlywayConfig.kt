@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Profile
  * can be freely edited during development without manual DB cleanup.
  */
 @Configuration
-@Profile("dev")
+@Profile("dev-clean")
 class DevFlywayConfig {
 
     @Bean
