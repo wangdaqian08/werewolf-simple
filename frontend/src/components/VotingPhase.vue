@@ -334,6 +334,9 @@
           mode="room"
           @click="onHunterTap(player)"
         >
+          <template v-if="player.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
           <template
             v-if="!player.isAlive || player.userId === votingPhase.eliminatedPlayerId"
             #overlay
@@ -385,11 +388,11 @@
             <div class="banner-title">警徽已销毁 · Badge Destroyed</div>
           </div>
         </div>
-        <div v-else-if="votingPhase.newSheriffId" class="banner badge-status-passed">
+        <div v-else-if="newSheriffInfo" class="banner badge-status-passed">
           <span class="banner-avatar">⭐</span>
           <div>
             <div class="banner-title">
-              警徽已移交给 {{ votingPhase.newSheriffNickname }} · Badge Passed
+              警徽已移交给 {{ newSheriffInfo.nickname }} · Badge Passed
             </div>
           </div>
         </div>
@@ -413,8 +416,8 @@
           mode="room"
           @click="onBadgeTap(player)"
         >
-          <!-- Star on new sheriff's card -->
-          <template v-if="player.userId === votingPhase.newSheriffId" #badge>
+          <!-- Star on sheriff's card -->
+          <template v-if="player.isSheriff" #badge>
             <span class="sheriff-pin">⭐</span>
           </template>
           <template
@@ -517,9 +520,22 @@ watch(
 )
 
 // Badge screen: post-action states
-const badgeDone = computed(
-  () => !!(props.votingPhase.newSheriffId || props.votingPhase.badgeDestroyed),
-)
+const badgeDone = computed(() => {
+  if (props.votingPhase.badgeDestroyed) return true
+  // Check if eliminated sheriff still has badge (if false, badge has been handed over)
+  const eliminatedSheriff = props.players.find(
+    (p) => p.userId === props.votingPhase.eliminatedPlayerId
+  )
+  return eliminatedSheriff ? !eliminatedSheriff.isSheriff : false
+})
+
+// Get new sheriff info (alive player with isSheriff=true in BADGE_HANDOVER)
+const newSheriffInfo = computed(() => {
+  if (badgeDone.value && !props.votingPhase.badgeDestroyed) {
+    return props.players.find((p) => p.isSheriff && p.isAlive) ?? null
+  }
+  return null
+})
 
 // ── View role ─────────────────────────────────────────────────────────────────
 type ViewRole = 'HOST' | 'DEAD' | 'ALIVE' | 'GUEST'
@@ -769,8 +785,8 @@ function shootSlotVariant(player: GamePlayer) {
 function badgeSlotVariant(player: GamePlayer) {
   if (!player.isAlive || player.userId === props.votingPhase.eliminatedPlayerId)
     return 'dead' as const
-  // New sheriff gets green styling
-  if (player.userId === props.votingPhase.newSheriffId) {
+  // New sheriff (alive player with isSheriff=true) gets green styling
+  if (player.isSheriff && player.isAlive) {
     return player.userId === props.myUserId ? ('me-ready' as const) : ('ready' as const)
   }
   if (player.userId === effectiveSelected.value) return 'selected' as const

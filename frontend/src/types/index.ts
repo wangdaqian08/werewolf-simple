@@ -264,9 +264,6 @@ export interface VotingState {
   // BADGE_HANDOVER + BADGE_RECEIVED
   badgeTargetId?: string
   badgeDestroyed?: boolean // badge was destroyed instead of passed
-  newSheriffId?: string
-  newSheriffNickname?: string
-  newSheriffAvatar?: string
 }
 
 // ── Night Phase ───────────────────────────────────────────────────────────────

@@ -901,13 +901,15 @@ export function makeVotingScenario(
       return {
         ...base,
         sheriff: 'u2',
+        players: base.players.map((p) => {
+          if (p.userId === 'u2') return { ...p, sheriff: true }
+          if (p.userId === 'u6') return { ...p, sheriff: false, isAlive: false }
+          return p
+        }),
         votingPhase: {
           subPhase: 'BADGE_HANDOVER',
           ...commonTiming,
           ...eliminated,
-          newSheriffId: 'u2',
-          newSheriffNickname: 'Alice',
-          newSheriffAvatar: '😊',
         } satisfies VotingState,
       }
     case 'BADGE_BURNED':

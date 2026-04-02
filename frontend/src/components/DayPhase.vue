@@ -71,6 +71,9 @@
         mode="room"
         @click="onTap(player)"
       >
+        <template v-if="player.isSheriff" #badge>
+          <div class="sheriff-badge">⭐</div>
+        </template>
         <template v-if="!player.isAlive && dayPhase.subPhase === 'RESULT_REVEALED'" #overlay>
           <div class="slot-overlay dead-overlay">✕</div>
         </template>

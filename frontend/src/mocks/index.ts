@@ -766,15 +766,19 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'VOTING_CONTINUE') {
-        if (vp.subPhase === 'BADGE_HANDOVER' && (vp.newSheriffId || vp.badgeDestroyed)) {
-          // Badge done — advance to NIGHT
-          const nextDay = (mockGameState.dayNumber ?? 1) + 1
-          mockGameState = {
-            ...mockGameState,
-            phase: 'NIGHT',
-            dayNumber: nextDay,
-            votingPhase: undefined,
-            nightPhase: { subPhase: 'WAITING', dayNumber: nextDay },
+        if (vp.subPhase === 'BADGE_HANDOVER') {
+          const eliminatedSheriff = mockGameState.players.find((p) => p.userId === vp.eliminatedPlayerId)
+          const badgeDone = vp.badgeDestroyed || (eliminatedSheriff ? !eliminatedSheriff.isSheriff : false)
+          if (badgeDone) {
+            // Badge done — advance to NIGHT
+            const nextDay = (mockGameState.dayNumber ?? 1) + 1
+            mockGameState = {
+              ...mockGameState,
+              phase: 'NIGHT',
+              dayNumber: nextDay,
+              votingPhase: undefined,
+              nightPhase: { subPhase: 'WAITING', dayNumber: nextDay },
+            }
           }
         } else {
           // VOTING (tallyRevealed) → HUNTER_SHOOT or BADGE_HANDOVER or NIGHT (skip VOTE_RESULT)
@@ -819,16 +823,16 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'BADGE_PASS') {
-        const target = mockGameState.players.find((p) => p.userId === targetId)
         mockGameState = {
           ...mockGameState,
           sheriff: targetId,
+          players: mockGameState.players.map((p) => {
+            if (p.userId === targetId) return { ...p, sheriff: true }
+            if (p.userId === vp.eliminatedPlayerId) return { ...p, sheriff: false }
+            return p
+          }),
           votingPhase: {
             ...vp,
-            // Stay on BADGE_HANDOVER; newSheriffId triggers the "passed" UI
-            newSheriffId: targetId,
-            newSheriffNickname: target?.nickname ?? '',
-            newSheriffAvatar: target?.avatar,
             selectedPlayerId: undefined,
           },
         }
