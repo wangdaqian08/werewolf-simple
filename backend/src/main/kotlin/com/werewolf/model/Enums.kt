@@ -35,7 +35,7 @@ enum class ActionType {
     SUBMIT_VOTE, VOTING_UNVOTE, VOTING_REVEAL_TALLY, VOTING_CONTINUE,
 
     // Hunter + badge (post-elimination)
-    HUNTER_SHOOT, HUNTER_SKIP, BADGE_PASS, BADGE_DESTROY,
+    HUNTER_SHOOT, HUNTER_PASS, BADGE_PASS, BADGE_DESTROY,
 
     // Night: werewolf
     WOLF_KILL, WOLF_SELECT,

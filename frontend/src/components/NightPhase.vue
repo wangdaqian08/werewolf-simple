@@ -363,10 +363,10 @@ const effectivePhase = computed(() => ({
 
 // Witch: both decisions made?
 const witchBothDecided = computed(() => {
+  // Simplified: always show Done button when in WITCH_ACT phase
+  // Let the backend validate if decisions are needed
   if (!props.nightPhase.subPhase || props.nightPhase.subPhase !== 'WITCH_ACT') return false
-  const antidoteDecided = !props.nightPhase.hasAntidote || props.nightPhase.antidoteDecided
-  const poisonDecided = !props.nightPhase.hasPoison || props.nightPhase.poisonDecided
-  return antidoteDecided && poisonDecided
+  return true
 })
 
 function selectPlayer(userId: string) {

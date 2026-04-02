@@ -51,7 +51,7 @@ class HunterHandlerTest {
         @Test
         fun `returns HUNTER_SHOOT and HUNTER_SKIP during VOTING HUNTER_SHOOT sub-phase`() {
             val actions = handler.acceptedActions(GamePhase.VOTING, VotingSubPhase.HUNTER_SHOOT.name)
-            assertThat(actions).containsExactlyInAnyOrder(ActionType.HUNTER_SHOOT, ActionType.HUNTER_SKIP)
+            assertThat(actions).containsExactlyInAnyOrder(ActionType.HUNTER_SHOOT, ActionType.HUNTER_PASS)
         }
 
         @Test
@@ -106,7 +106,7 @@ class HunterHandlerTest {
 
         @Test
         fun `handle HUNTER_SKIP always returns Rejected - routed through VotingPipeline`() {
-            val result = handler.handle(req(ActionType.HUNTER_SKIP), ctx())
+            val result = handler.handle(req(ActionType.HUNTER_PASS), ctx())
             assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
             assertThat((result as GameActionResult.Rejected).reason).contains("VotingPipeline")
         }

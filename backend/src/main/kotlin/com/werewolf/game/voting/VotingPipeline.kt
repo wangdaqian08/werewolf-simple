@@ -191,7 +191,7 @@ class VotingPipeline(
                 afterHunterAct(context)
             }
 
-            ActionType.HUNTER_SKIP -> {
+            ActionType.HUNTER_PASS -> {
                 // Hunter chooses not to shoot; check if hunter was sheriff (badge handover needed)
                 if (actor.userId == context.game.sheriffUserId) {
                     context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name

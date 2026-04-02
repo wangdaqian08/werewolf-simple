@@ -11,6 +11,7 @@
 # ACTION:
 #   campaign    player runs for sheriff              (sub-phase: SIGNUP)
 #   pass        player opts out of running           (sub-phase: SIGNUP)
+#   quit        player quits during speech           (sub-phase: SPEECH)
 #   vote        player votes for TARGET              (sub-phase: VOTING, requires --target)
 #   abstain     player casts a null vote             (sub-phase: VOTING)
 #
@@ -32,6 +33,8 @@
 #   ./scripts/sheriff.sh campaign                          # all bots campaign
 #   ./scripts/sheriff.sh campaign --player Bot1            # Bot1 runs
 #   ./scripts/sheriff.sh pass --player Bot2                # Bot2 opts out
+#   ./scripts/sheriff.sh quit --player Bot2                 # Bot2 在演讲阶段退出竞选
+#   ./scripts/sheriff.sh quit --player all                  # 所有在演讲顺序中的 bot 退出竞选
 #   ./scripts/sheriff.sh vote --target Bot3                # all bots vote for Bot3
 #   ./scripts/sheriff.sh vote --player Bot2 --target Bot3  # Bot2 votes for Bot3
 #   ./scripts/sheriff.sh vote --player 2 --target 3        # seat 2 votes for seat 3
@@ -57,7 +60,7 @@ usage() {
 
 Usage: $0 <ACTION> [--player NAME] [--target NAME] [--room CODE]
 
-  Actions : campaign | pass | vote | abstain
+  Actions : campaign | pass | quit | vote | abstain
   --player: all (default) | <name> | <seat>   who performs the action
   --target: <name> | <seat> | <userId>        required for 'vote'
 
@@ -65,6 +68,7 @@ Examples:
   $0 campaign
   $0 campaign --player Bot1
   $0 pass     --player Bot2
+  $0 quit     --player Bot2
   $0 vote     --target Bot3
   $0 vote     --player Bot2  --target Bot3
   $0 vote     --player 2     --target 3
@@ -97,8 +101,8 @@ done
 [ -z "$ACTION" ] && usage
 
 case "$ACTION" in
-  campaign|pass|vote|abstain) ;;
-  *) fail "Unknown action '$ACTION'. Valid: campaign | pass | vote | abstain" ;;
+  campaign|pass|quit|vote|abstain) ;;
+  *) fail "Unknown action '$ACTION'. Valid: campaign | pass | quit | vote | abstain" ;;
 esac
 
 [ "$ACTION" = "vote" ] && [ -z "$TARGET_SEL" ] && \
@@ -250,14 +254,6 @@ PYEOF
   info "Target: $TARGET_SEL → ${TARGET_UID:0:16}…"
 fi
 
-# ── Map action to ActionType ──────────────────────────────────────────────────
-case "$ACTION" in
-  campaign) ACTION_TYPE="SHERIFF_CAMPAIGN" ;;
-  pass)     ACTION_TYPE="SHERIFF_PASS"     ;;
-  vote)     ACTION_TYPE="SHERIFF_VOTE"     ;;
-  abstain)  ACTION_TYPE="SHERIFF_ABSTAIN"  ;;
-esac
-
 # ── Check current phase and sub-phase ─────────────────────────────────────────
 GAME_STATE=$(curl -s -X GET "$BASE/game/$GAME_ID/state" \
   -H "Authorization: Bearer $FIRST_TOKEN")
@@ -281,8 +277,9 @@ case "$ACTION" in
     fi
     ;;
   quit)
-    if [ "$SUBPHASE" != "SPEECH" ]; then
-      fail "Action 'quit' requires SPEECH sub-phase (current: $SUBPHASE)"
+    # Quit can be used in both SIGNUP and SPEECH sub-phases, but with different ActionType
+    if [ "$SUBPHASE" != "SIGNUP" ] && [ "$SUBPHASE" != "SPEECH" ]; then
+      fail "Action 'quit' requires SIGNUP or SPEECH sub-phase (current: $SUBPHASE)"
     fi
     ;;
   vote|abstain)
@@ -290,6 +287,21 @@ case "$ACTION" in
       fail "Action '$ACTION' requires VOTING sub-phase (current: $SUBPHASE)"
     fi
     ;;
+esac
+
+# ── Map action to ActionType ──────────────────────────────────────────────────
+case "$ACTION" in
+  campaign) ACTION_TYPE="SHERIFF_CAMPAIGN" ;;
+  pass)     ACTION_TYPE="SHERIFF_PASS"     ;;
+  quit)
+    if [ "$SUBPHASE" = "SPEECH" ]; then
+      ACTION_TYPE="SHERIFF_QUIT_CAMPAIGN"
+    else
+      ACTION_TYPE="SHERIFF_QUIT"
+    fi
+    ;;
+  vote)     ACTION_TYPE="SHERIFF_VOTE"     ;;
+  abstain)  ACTION_TYPE="SHERIFF_ABSTAIN"  ;;
 esac
 
 # ── Send actions ──────────────────────────────────────────────────────────────

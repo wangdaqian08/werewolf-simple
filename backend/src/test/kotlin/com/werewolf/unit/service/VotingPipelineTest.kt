@@ -269,7 +269,7 @@ class VotingPipelineTest {
         stubLoader(hunter)
         whenever(winConditionChecker.check(any(), any())).thenReturn(null)
 
-        val result = votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SKIP), context)
+        val result = votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
@@ -281,7 +281,7 @@ class VotingPipelineTest {
         val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = hostId), hunter)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
-        votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SKIP), context)
+        votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context)
 
         val captor = argumentCaptor<Game>()
         verify(gameRepository).save(captor.capture())

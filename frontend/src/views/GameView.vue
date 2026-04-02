@@ -467,6 +467,8 @@ const witchPoisonTargetId = ref<string | null | undefined>(undefined)
 
 async function handleWitchAntidote() {
   witchUseAntidote.value = true
+  console.log('[GameView] handleWitchAntidote called');
+
   // Don't submit yet - wait for all decisions
 }
 async function handleWitchPassAntidote() {
@@ -484,15 +486,16 @@ async function handleWitchPassPoison() {
 async function trySubmitWitchAct() {
   const nightPhase = gameStore.state?.nightPhase
   if (!nightPhase) return
-  // Only submit when both decisions are made (via the "Done" button)
+  // Allow submission if all decisions are made (or if there are no decisions to make)
   const antidoteReady = !nightPhase.hasAntidote || witchUseAntidote.value !== undefined
   const poisonReady = !nightPhase.hasPoison || witchPoisonTargetId.value !== undefined
-  if (!antidoteReady && !poisonReady) return
+  if (!antidoteReady || !poisonReady) return
   // This function is now only called from the "Done" button
-  const payload: Record<string, unknown> = { 
+  const payload: Record<string, unknown> = {
     useAntidote: witchUseAntidote.value ?? false,
     poisonTargetUserId: witchPoisonTargetId.value // Always include, even if null (means passed)
   }
+  console.log('[GameView] trySubmitWitchAct', 'payload:', payload)
   await action({ actionType: 'WITCH_ACT', payload })
   witchUseAntidote.value = undefined
   witchPoisonTargetId.value = undefined

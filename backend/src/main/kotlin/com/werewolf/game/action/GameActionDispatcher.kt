@@ -41,7 +41,7 @@ class GameActionDispatcher(
             ActionType.VOTING_CONTINUE -> votingPipeline.continueToNight(request, context)
 
             // ── Hunter + badge actions (post-elimination) ─────────────────────
-            ActionType.HUNTER_SHOOT, ActionType.HUNTER_SKIP -> votingPipeline.handleHunterShoot(request, context)
+            ActionType.HUNTER_SHOOT, ActionType.HUNTER_PASS -> votingPipeline.handleHunterShoot(request, context)
             ActionType.BADGE_PASS, ActionType.BADGE_DESTROY -> votingPipeline.handleBadge(request, context)
 
             // ── Night: werewolf ───────────────────────────────────────────────
@@ -86,13 +86,35 @@ class GameActionDispatcher(
                 result
             }
 
-            // ── Night: witch ──────────────────────────────────────────────────
+            // Night: witch ──────────────────────────────────────────────────
             ActionType.WITCH_ACT -> {
                 val result = handlers.first { it.role == PlayerRole.WITCH }.handle(request, context)
-                if (result is GameActionResult.Success) nightOrchestrator.advance(
-                    request.gameId,
-                    NightSubPhase.WITCH_ACT
-                )
+                if (result is GameActionResult.Success) {
+                    // Only advance if witch has made decisions for all items she has
+                    val nightPhase = context.nightPhase
+                    if (nightPhase != null) {
+                        // Antidote is available if witch exists and has never been used in previous nights
+                        val hasAntidote = context.room.hasWitch &&
+                            !context.allNightPhases.any { it.witchAntidoteUsed && it.id != nightPhase.id }
+
+                        // Poison is available if witch exists and has never been used in previous nights
+                        val hasPoison = context.room.hasWitch &&
+                            !context.allNightPhases.any { it.witchPoisonTargetUserId != null && it.id != nightPhase.id }
+
+                        val antidoteDecided = !hasAntidote || nightPhase.witchAntidoteUsed
+                        val poisonDecided = !hasPoison || nightPhase.witchPoisonTargetUserId != null
+
+                        // Add logging
+                        println("[GameActionDispatcher] WITCH_ACT: hasAntidote=$hasAntidote, hasPoison=$hasPoison, antidoteDecided=$antidoteDecided, poisonDecided=$poisonDecided, witchAntidoteUsed=${nightPhase.witchAntidoteUsed}, witchPoisonTargetUserId=${nightPhase.witchPoisonTargetUserId}")
+
+                        if (antidoteDecided && poisonDecided) {
+                            println("[GameActionDispatcher] Advancing from WITCH_ACT")
+                            nightOrchestrator.advance(request.gameId, NightSubPhase.WITCH_ACT)
+                        } else {
+                            println("[GameActionDispatcher] Not advancing from WITCH_ACT")
+                        }
+                    }
+                }
                 result
             }
 

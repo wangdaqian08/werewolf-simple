@@ -51,9 +51,6 @@
             <span class="elim-banner-name">
               {{ votingPhase.eliminatedNickname }} · 座位 {{ votingPhase.eliminatedSeatIndex }}
             </span>
-            <span v-if="votingPhase.eliminatedRole" class="elim-banner-role">
-              {{ roleDisplay(votingPhase.eliminatedRole) }}
-            </span>
           </div>
         </div>
 
@@ -659,21 +656,6 @@ const formattedRevealTime = computed(() => {
 const sortedTally = computed(() =>
   [...(props.votingPhase.tally ?? [])].sort((a, b) => b.votes - a.votes),
 )
-
-// ── Role display ──────────────────────────────────────────────────────────────
-const ROLE_DISPLAY: Record<PlayerRole, string> = {
-  WEREWOLF: '🐺 狼人',
-  VILLAGER: '👤 村民',
-  SEER: '🔮 预言家',
-  WITCH: '🧪 女巫',
-  HUNTER: '🔫 猎人',
-  GUARD: '🛡 守卫',
-  IDIOT: '🃏 白痴',
-}
-
-function roleDisplay(role: PlayerRole) {
-  return ROLE_DISPLAY[role] ?? role
-}
 
 // ── My Role badge ─────────────────────────────────────────────────────────────
 const ROLE_ZH: Record<string, string> = {

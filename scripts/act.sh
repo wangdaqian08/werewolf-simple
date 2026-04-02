@@ -49,6 +49,7 @@
 #
 # PSEUDO-ACTIONS:
 #   STATUS            print phase/subPhase/dayNumber for the current game and exit
+#   CONSOLE_LOGIN     generate browser console command to switch to player (run in browser devtools)
 #
 # PLAYER (optional, default = all bots):
 #   all         every bot in the state file
@@ -73,6 +74,8 @@
 #
 # Examples:
 #   ./scripts/act.sh STATUS                                       # show phase/subPhase/day
+#   ./scripts/act.sh CONSOLE_LOGIN Bot2                           # switch to Bot2 in browser
+#   ./scripts/act.sh CONSOLE_LOGIN 3                              # switch to seat 3 in browser
 #   ./scripts/act.sh WOLF_SELECT --target 3                       # wolf pre-selects seat 3 (visible to teammates)
 #   ./scripts/act.sh WOLF_KILL --target 3                         # wolf confirms kill seat 3
 #   ./scripts/act.sh SEER_CHECK Bot2 --target 4                   # Bot2 checks seat 4
@@ -137,6 +140,7 @@ Usage: $0 <ACTION_TYPE> [PLAYER] [--target PLAYER] [--payload JSON] [--room CODE
 
 Examples:
   $0 STATUS
+  $0 CONSOLE_LOGIN Bot2
   $0 WOLF_SELECT --target 3
   $0 WOLF_KILL --target 3
   $0 SEER_CHECK Bot2 --target 4
@@ -177,7 +181,7 @@ done
 
 # Validate ACTION_TYPE
 case "$ACTION_TYPE" in
-  STATUS) ;;  # pseudo-action handled below
+  STATUS|CONSOLE_LOGIN) ;;  # pseudo-action handled below
   WOLF_SELECT|WOLF_KILL|SEER_CHECK|SEER_CONFIRM|WITCH_ACT|GUARD_PROTECT|GUARD_SKIP| \
   CONFIRM_ROLE|START_NIGHT|REVEAL_NIGHT_RESULT|DAY_ADVANCE| \
   SUBMIT_VOTE|VOTING_UNVOTE|VOTING_REVEAL_TALLY|VOTING_CONTINUE|IDIOT_REVEAL| \
@@ -359,6 +363,63 @@ total    = len(d.get("players", []))
 
 print(f"  Game {gid}  phase={phase}  subPhase={sub}  day={day}  alive={alive}/{total}" +
       (f"  winner={winner}" if winner else ""))
+PYEOF
+  exit 0
+fi
+
+# ── CONSOLE_LOGIN pseudo-action ────────────────────────────────────────────────
+if [ "$ACTION_TYPE" = "CONSOLE_LOGIN" ]; then
+  # Resolve player (similar to normal player selection)
+  if [ "$(echo "$PLAYER_SEL" | tr 'a-z' 'A-Z')" = "HOST" ]; then
+    [ -z "$HOST_TOKEN" ] && fail "No host token found. Run join-room.sh or set hostToken in state file."
+    HOST_NICK=$(echo "$STATE_DATA" | python3 -c "import json,sys; print(json.load(sys.stdin).get('hostNick','Host'))" 2>/dev/null || echo "Host")
+    PLAYERS_JSON="[{\"nick\":\"$HOST_NICK\",\"token\":\"$HOST_TOKEN\",\"seat\":\"host\",\"userId\":\"\"}]"
+  else
+    PLAYERS_JSON=$(python3 -c "
+import json
+all_players = json.loads('''$ALL_PLAYERS_JSON''')
+bots        = json.loads('''$BOTS_JSON''')
+sel         = '$PLAYER_SEL'.strip()
+
+if sel.lower() == 'all':
+    result = all_players
+elif sel.isdigit():
+    idx = int(sel) - 1
+    if 0 <= idx < len(bots):
+        result = [bots[idx]]
+    else:
+        result = [p for p in all_players if str(p.get('seat')) == sel]
+else:
+    lo = sel.lower()
+    result = [p for p in all_players if lo in p['nick'].lower()]
+
+print(json.dumps(result) if result else '')
+")
+    [ -z "$PLAYERS_JSON" ] && fail "No player matched '$PLAYER_SEL' (bots + manual users)"
+  fi
+
+  python3 << PYEOF
+import json
+import urllib.parse
+
+players = json.loads("""$PLAYERS_JSON""")
+
+for p in players:
+    nick = p.get("nick", "")
+    token = p.get("token", "")
+    user_id = p.get("userId", "")
+    seat = p.get("seat", "")
+
+    # Escape values for safe embedding in JavaScript
+    nick_escaped = json.dumps(nick)
+    token_escaped = json.dumps(token)
+    user_id_escaped = json.dumps(user_id)
+
+    js_cmd = f'''localStorage.setItem("jwt", {token_escaped}); localStorage.setItem("nickname", {nick_escaped}); localStorage.setItem("userId", {user_id_escaped}); location.reload();'''
+
+    print(f"\nCopy & paste this into browser console (F12 → Console):\n")
+    print(f"{js_cmd}\n")
+    print(f"Switching to: seat {seat} | {nick} | userId: {user_id[:20]}…")
 PYEOF
   exit 0
 fi
