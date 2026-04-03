@@ -24,8 +24,19 @@
       </div>
     </div>
 
+    <!-- ── Dead player banner ─────────────────────────────────────────── -->
+    <div v-if="me && !me.isAlive" class="banner-area">
+      <div class="banner banner-info">
+        <span class="banner-icon"> 👤 </span>
+        <div>
+          <div class="srh-title">你已经出局</div>
+          <div class="banner-sub">You are eliminated</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── WEREWOLF_PICK ──────────────────────────────────────────────── -->
-    <template v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF'">
+    <template v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF' && me?.isAlive">
       <div v-if="nightPhase.teammates?.length" class="team-row">
         <span class="tr-label">队友：</span>
         <span v-for="(t, i) in nightPhase.teammates" :key="t" class="tr-name">
@@ -65,7 +76,7 @@
     </template>
 
     <!-- ── SEER_PICK ──────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'SEER_PICK' && myRole === 'SEER'">
+    <template v-else-if="subPhase === 'SEER_PICK' && myRole === 'SEER' && me?.isAlive">
       <div class="pick-hint">选择查验目标 · Select a player to check:</div>
       <section class="player-grid">
         <PlayerSlot
@@ -99,7 +110,7 @@
     </template>
 
     <!-- ── SEER_RESULT ────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'SEER_RESULT' && myRole === 'SEER' && nightPhase.seerResult">
+    <template v-else-if="subPhase === 'SEER_RESULT' && myRole === 'SEER' && nightPhase.seerResult && me?.isAlive">
       <div class="sr-wrap">
         <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
           <div class="sr-player">
@@ -136,7 +147,7 @@
     </template>
 
     <!-- ── WITCH_ACT ───────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'WITCH_ACT' && myRole === 'WITCH'">
+    <template v-else-if="subPhase === 'WITCH_ACT' && myRole === 'WITCH' && me?.isAlive">
       <!-- Antidote — always visible when witch has it; grayed out after decision -->
       <div
         v-if="nightPhase.hasAntidote"
@@ -244,7 +255,7 @@
     </template>
 
     <!-- ── GUARD_PICK ──────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD'">
+    <template v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD' && me?.isAlive">
       <div class="pick-hint">
         选择守护目标 · Protect a player:
         <span v-if="nightPhase.previousGuardTargetId" class="guard-note">
@@ -342,10 +353,15 @@ const emit = defineEmits<{
 const subPhase = computed(() => props.nightPhase.subPhase)
 const poisonMode = ref(false)
 
+// Current player (me)
+const me = computed(() => props.players.find((p) => p.userId === props.myUserId))
+
 // True only when the current sub-phase is this player's active turn
 const isMyTurn = computed(() => {
   const sp = subPhase.value
   const role = props.myRole
+  // Dead players cannot take turns
+  if (!me.value?.isAlive) return false
   if (!role) return false
   if (sp === 'WEREWOLF_PICK') return role === 'WEREWOLF'
   if (sp === 'SEER_PICK' || sp === 'SEER_RESULT') return role === 'SEER'
@@ -752,7 +768,7 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 }
 
 .srh-title {
-  font-size: 0.5625rem;
+  font-size: 0.7625rem;
   letter-spacing: 0.1em;
   color: rgba(245, 240, 232, 0.35);
   text-transform: uppercase;

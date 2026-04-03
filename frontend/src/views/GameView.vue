@@ -186,6 +186,7 @@
         <button class="debug-btn" @click="debugNight('WITCH')">Witch</button>
         <button class="debug-btn" @click="debugNight('GUARD')">Guard</button>
         <button class="debug-btn" @click="debugNight('WAITING')">Waiting</button>
+        <button class="debug-btn" @click="debugNight('DEAD')">Dead Night</button>
         <button class="debug-btn debug-btn-exit" @click="debugNightAdvance">→ Day</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Voting Screens</div>

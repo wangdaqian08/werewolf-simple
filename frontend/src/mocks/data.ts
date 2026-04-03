@@ -453,7 +453,7 @@ export const MOCK_SHERIFF_RESULT: SheriffElectionState = {
 // All night scenarios use MOCK_GAME_STATE players; u4 (Carol, seat 4) is dead.
 
 export function makeNightScenario(
-  variant: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING' | 'SEER_IDLE',
+  variant: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING' | 'SEER_IDLE' | 'DEAD',
 ): GameState {
   const base: GameState = { ...MOCK_GAME_STATE, phase: 'NIGHT' }
   switch (variant) {
@@ -528,6 +528,14 @@ export function makeNightScenario(
         ...base,
         myRole: 'SEER',
         nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1 } satisfies NightPhaseState,
+      }
+    case 'DEAD':
+      // Dead player (u1) during WEREWOLF_PICK — should see elimination banner and sleep screen
+      return {
+        ...base,
+        myRole: 'VILLAGER',
+        players: base.players.map((p) => (p.userId === 'u1' ? { ...p, isAlive: false } : p)),
+        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 2 } satisfies NightPhaseState,
       }
   }
 }

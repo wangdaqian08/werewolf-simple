@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import {expect, test} from '@playwright/test'
 
 // Navigate to game view with a specific day phase scenario loaded
 async function loadScenario(
@@ -27,7 +27,7 @@ async function loadScenario(
   await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   // Load the scenario via debug panel button — STOMP subscription is now ready
-  await page.getByRole('button', { name: new RegExp(scenarioLabel(scenario)) }).click()
+  await page.getByRole('button', { name: scenarioLabel(scenario), exact: true }).click()
   await page.waitForTimeout(70)
 }
 

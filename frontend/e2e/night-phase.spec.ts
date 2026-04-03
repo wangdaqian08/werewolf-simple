@@ -1,8 +1,8 @@
 /**
  * Night phase E2E tests — covers all six scenarios and key interactions.
  */
-import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type {Page} from '@playwright/test'
+import {expect, test} from '@playwright/test'
 
 async function setup(page: Page) {
   await page.goto('/')
@@ -376,4 +376,37 @@ test('night: debug panel Werewolf button loads werewolf screen', async ({ page }
 
   await expect(page.getByText('夜晚降临').first()).toBeVisible()
   await expect(page.locator('.rb-tag-wolf')).toBeVisible()
+})
+
+// ── Dead Player ─────────────────────────────────────────────────────────────────
+
+test('night: DEAD — dead player sees elimination banner and sleep screen', async ({ page }) => {
+  await setup(page)
+  await loadNight(page, 'DEAD')
+
+  // Should see elimination banner
+  await expect(page.getByText(/你已经出局/i)).toBeVisible()
+  await expect(page.getByText(/You are eliminated/i)).toBeVisible()
+
+  // Should see sleep screen (not role badge or action interface)
+  await expect(page.locator('.rb')).not.toBeVisible()
+  await expect(page.getByText('请闭眼').first()).toBeVisible()
+
+  // Should NOT see any player selection grid or action buttons
+  await expect(page.locator('.player-grid').first()).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /确认袭击 Confirm/i })).not.toBeVisible()
+})
+
+test('night: debug panel Dead Night button loads dead player screen', async ({ page }) => {
+  await setup(page)
+
+  await page.getByRole('button', { name: 'Dead Night', exact: true }).click()
+  await page.waitForTimeout(70)
+
+  // Should see elimination banner
+  await expect(page.getByText(/你已经出局/i)).toBeVisible()
+  await expect(page.getByText(/You are eliminated/i)).toBeVisible()
+
+  // Should NOT see role badge (dead players can't take turns)
+  await expect(page.locator('.rb')).not.toBeVisible()
 })
