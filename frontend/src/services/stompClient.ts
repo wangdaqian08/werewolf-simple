@@ -1,4 +1,4 @@
-import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs'
+import {Client, type IMessage, type StompSubscription} from '@stomp/stompjs'
 
 // In mock mode this singleton is used instead of a real WebSocket connection.
 // Vite removes this dead-code branch in production builds (VITE_MOCK is not set).
@@ -17,7 +17,18 @@ export function createStompClient(token: string): Client {
     brokerURL: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`,
     connectHeaders: { Authorization: `Bearer ${token}` },
     reconnectDelay: 3000,
-    onStompError: (frame) => console.error('STOMP error:', frame),
+    onConnect: () => {
+      console.log('[stompClient] WebSocket已连接')
+    },
+    onDisconnect: () => {
+      console.log('[stompClient] WebSocket已断开')
+    },
+    onWebSocketClose: (evt) => {
+      console.log('[stompClient] WebSocket连接关闭:', evt)
+    },
+    onStompError: (frame) => {
+      console.error('[stompClient] STOMP错误:', frame)
+    },
   })
   return client as Client
 }

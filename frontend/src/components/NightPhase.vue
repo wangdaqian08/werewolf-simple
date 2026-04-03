@@ -229,12 +229,18 @@
         </div>
       </div>
 
-      <!-- Done button - shown when all decisions are made -->
-      <footer v-if="witchBothDecided" class="nf">
-        <button class="btn btn-primary nf-btn" @click="emit('confirm')">
-          完成行动 · Done
-        </button>
-      </footer>
+      <!-- No items available - show done button -->
+      <div v-if="!nightPhase.hasAntidote && !nightPhase.hasPoison" class="w-section">
+        <div class="ws-hdr">
+          <span class="ws-pill">女巫 · WITCH</span>
+        </div>
+        <p class="ws-desc">你没有可用的道具。</p>
+        <div class="ws-row">
+          <button class="btn btn-primary ws-btn" @click="emit('witchSkip')">
+            完成操作 · Done
+          </button>
+        </div>
+      </div>
     </template>
 
     <!-- ── GUARD_PICK ──────────────────────────────────────────────────── -->
@@ -360,14 +366,6 @@ const effectivePhase = computed(() => ({
   ...props.nightPhase,
   selectedTargetId: localSelected.value,
 }))
-
-// Witch: both decisions made?
-const witchBothDecided = computed(() => {
-  // Simplified: always show Done button when in WITCH_ACT phase
-  // Let the backend validate if decisions are needed
-  if (!props.nightPhase.subPhase || props.nightPhase.subPhase !== 'WITCH_ACT') return false
-  return true
-})
 
 function selectPlayer(userId: string) {
   localSelected.value = userId

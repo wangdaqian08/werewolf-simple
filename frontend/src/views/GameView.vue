@@ -72,6 +72,7 @@
         @witch-pass-antidote="handleWitchPassAntidote"
         @witch-poison="handleWitchPoison"
         @witch-pass-poison="handleWitchPassPoison"
+        @witch-skip="handleWitchSkip"
       />
     </template>
 
@@ -278,7 +279,7 @@ async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) 
     ElMessage({ message: res.message, type: 'error', duration: 3000 })
     // If the action failed due to phase mismatch, refresh the state
     if (res.message.includes('phase') || res.message.includes('Phase')) {
-      const state = await gameService.getState(gameId)
+      const state = await gameService.getState(gameId.toString())
       gameStore.setState(state)
     }
   }
@@ -440,7 +441,9 @@ async function handleNightSelect(userId: string) {
   }
 }
 async function handleNightConfirm(targetId?: string) {
+  console.log('[GameView] handleNightConfirm called with targetId:', targetId)
   const subPhase = gameStore.state?.nightPhase?.subPhase
+  console.log('[GameView] handleNightConfirm subPhase:', subPhase)
   switch (subPhase) {
     case 'WEREWOLF_PICK':
       if (targetId) await action({ actionType: 'WOLF_KILL', targetId })
@@ -453,49 +456,66 @@ async function handleNightConfirm(targetId?: string) {
       break
     case 'WITCH_ACT':
       // Witch confirm - submit all decisions to advance phase
+      console.log('[GameView] handleNightConfirm calling trySubmitWitchAct')
       await trySubmitWitchAct()
       break
     case 'GUARD_PICK':
       if (targetId) await action({ actionType: 'GUARD_PROTECT', targetId })
       break
+    default:
+      console.log('[GameView] handleNightConfirm unknown subPhase:', subPhase)
   }
 }
 
-// Witch decisions are held locally until both antidote and poison sections are resolved
+// Witch decisions - now submits immediately after each action
 const witchUseAntidote = ref<boolean | undefined>(undefined)
 const witchPoisonTargetId = ref<string | null | undefined>(undefined)
 
 async function handleWitchAntidote() {
   witchUseAntidote.value = true
-  console.log('[GameView] handleWitchAntidote called');
-
-  // Don't submit yet - wait for all decisions
+  witchPoisonTargetId.value = null  // Automatically not using poison
+  await trySubmitWitchAct()
 }
+
 async function handleWitchPassAntidote() {
   witchUseAntidote.value = false
-  // Don't submit yet - wait for all decisions
+  witchPoisonTargetId.value = null  // Automatically not using poison
+  await trySubmitWitchAct()
 }
+
 async function handleWitchPoison(targetId: string) {
+  witchUseAntidote.value = false  // Automatically not using antidote
   witchPoisonTargetId.value = targetId
-  // Don't submit yet - wait for all decisions
+  await trySubmitWitchAct()
 }
+
 async function handleWitchPassPoison() {
+  witchUseAntidote.value = false
   witchPoisonTargetId.value = null
-  // Don't submit yet - wait for all decisions
+  await trySubmitWitchAct()
 }
+
+async function handleWitchSkip() {
+  // When witch has no items, just skip the phase
+  await action({ actionType: 'WITCH_ACT', payload: { useAntidote: false, poisonTargetUserId: null } })
+}
+
 async function trySubmitWitchAct() {
   const nightPhase = gameStore.state?.nightPhase
-  if (!nightPhase) return
-  // Allow submission if all decisions are made (or if there are no decisions to make)
-  const antidoteReady = !nightPhase.hasAntidote || witchUseAntidote.value !== undefined
-  const poisonReady = !nightPhase.hasPoison || witchPoisonTargetId.value !== undefined
-  if (!antidoteReady || !poisonReady) return
-  // This function is now only called from the "Done" button
+  if (!nightPhase) {
+    return
+  }
+
+  // Allow submission as soon as any decision is made
+  const hasDecision = witchUseAntidote.value !== undefined || witchPoisonTargetId.value !== undefined
+  if (!hasDecision) {
+    return
+  }
+
   const payload: Record<string, unknown> = {
     useAntidote: witchUseAntidote.value ?? false,
-    poisonTargetUserId: witchPoisonTargetId.value // Always include, even if null (means passed)
+    poisonTargetUserId: witchPoisonTargetId.value
   }
-  console.log('[GameView] trySubmitWitchAct', 'payload:', payload)
   await action({ actionType: 'WITCH_ACT', payload })
   witchUseAntidote.value = undefined
   witchPoisonTargetId.value = undefined
@@ -605,6 +625,8 @@ onMounted(async () => {
     client.onConnect = () => {
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
+        // 添加事件接收日志
+        console.log('[GameView] 收到WebSocket事件:', data.type, data)
         // Mock sends full state snapshots; real backend sends typed domain events
         if (data.type === 'GAME_STATE_UPDATE') {
           gameStore.setState(data.payload)
@@ -618,13 +640,24 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
+          console.log('[GameView] 处理PhaseChanged事件')
           const state = await gameService.getState(gameId)
+          console.log('[GameView] 获取到的状态:', state)
           gameStore.setState(state)
+          console.log('[GameView] 状态已更新，当前phase:', gameStore.state?.phase)
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {
+          console.log('[GameView] 处理NightSubPhaseChanged事件')
           const state = await gameService.getState(gameId)
           gameStore.setState(state)
+        }
+        // Real backend: night result (kills) → re-fetch state
+        if (data.type === 'NightResult') {
+          console.log('[GameView] 处理NightResult事件:', data)
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+          console.log('[GameView] NightResult处理后phase:', gameStore.state?.phase)
         }
         // Sheriff elected (winner or host appointment) → re-fetch to get updated sheriff state
         if (data.type === 'SheriffElected') {

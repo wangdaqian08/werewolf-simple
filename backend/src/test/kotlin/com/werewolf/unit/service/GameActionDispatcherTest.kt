@@ -218,17 +218,6 @@ class GameActionDispatcherTest {
     // ── WITCH_ACT routing ─────────────────────────────────────────────────────
 
     @Test
-    fun `WITCH_ACT success - advances WITCH_ACT sub-phase`() {
-        val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Success())
-        val ctx = GameContext(game(subPhase = NightSubPhase.WITCH_ACT.name), room(), emptyList())
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-
-        makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
-
-        verify(nightOrchestrator).advance(gameId, NightSubPhase.WITCH_ACT)
-    }
-
-    @Test
     fun `WITCH_ACT rejected - does NOT advance sub-phase`() {
         val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Rejected("antidote already used"))
         val ctx = GameContext(game(subPhase = NightSubPhase.WITCH_ACT.name), room(), emptyList())
@@ -271,6 +260,126 @@ class GameActionDispatcherTest {
 
         makeDispatcher(listOf(guardHandler)).dispatch(req("guard:001", ActionType.GUARD_PROTECT, "u2"))
 
+        verify(nightOrchestrator, never()).advance(any(), any())
+    }
+
+    // ── WITCH_ACT auto-advance logic ─────────────────────────────────────────
+
+    @Test
+    fun `WITCH_ACT - both potions used in current night, advances to next phase`() {
+        // 女巫在当前夜晚使用了两种药水，自动推进
+        val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Success())
+        val witch = player("witch:001", 1, PlayerRole.WITCH)
+        val target = player("target:001", 2)
+
+        // 当前夜晚阶段（第一夜）
+        val currentNightPhase = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.WITCH_ACT
+            it.witchAntidoteUsed = true  // 女巫使用了解药
+            it.witchPoisonTargetUserId = "target:001"  // 女巫使用了毒药
+        }
+
+        val ctx = GameContext(
+            game(subPhase = NightSubPhase.WITCH_ACT.name),
+            Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasWitch = true),
+            listOf(witch, target),
+            nightPhase = currentNightPhase,
+            allNightPhases = emptyList()
+        )
+
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+
+        makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
+
+        // 应该自动推进
+        verify(nightOrchestrator).advance(gameId, NightSubPhase.WITCH_ACT)
+    }
+
+    @Test
+    fun `WITCH_ACT - only antidote used in current night, not advance`() {
+        // 女巫在当前夜晚只使用了解药，不推进
+        val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Success())
+        val witch = player("witch:001", 1, PlayerRole.WITCH)
+
+        // 当前夜晚阶段（第一夜）
+        val currentNightPhase = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.WITCH_ACT
+            it.witchAntidoteUsed = true  // 女巫使用了解药
+            it.witchPoisonTargetUserId = null  // 没有使用毒药
+        }
+
+        val ctx = GameContext(
+            game(subPhase = NightSubPhase.WITCH_ACT.name),
+            Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasWitch = true),
+            listOf(witch),
+            nightPhase = currentNightPhase,
+            allNightPhases = emptyList()
+        )
+
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+
+        makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
+
+        // 不应该推进
+        verify(nightOrchestrator, never()).advance(any(), any())
+    }
+
+    @Test
+    fun `WITCH_ACT - only poison used in current night, not advance`() {
+        // 女巫在当前夜晚只使用了毒药，不推进
+        val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Success())
+        val witch = player("witch:001", 1, PlayerRole.WITCH)
+        val target = player("target:001", 2)
+
+        // 当前夜晚阶段（第一夜）
+        val currentNightPhase = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.WITCH_ACT
+            it.witchAntidoteUsed = false  // 没有使用解药
+            it.witchPoisonTargetUserId = "target:001"  // 女巫使用了毒药
+        }
+
+        val ctx = GameContext(
+            game(subPhase = NightSubPhase.WITCH_ACT.name),
+            Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasWitch = true),
+            listOf(witch, target),
+            nightPhase = currentNightPhase,
+            allNightPhases = emptyList()
+        )
+
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+
+        makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
+
+        // 不应该推进
+        verify(nightOrchestrator, never()).advance(any(), any())
+    }
+
+    @Test
+    fun `WITCH_ACT - both potions available but not used, not advance`() {
+        // 女巫有两种药水但都没有使用，不推进
+        val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Success())
+        val witch = player("witch:001", 1, PlayerRole.WITCH)
+
+        // 当前夜晚阶段（第一夜）
+        val currentNightPhase = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.WITCH_ACT
+            it.witchAntidoteUsed = false  // 没有使用解药
+            it.witchPoisonTargetUserId = null  // 没有使用毒药
+        }
+
+        val ctx = GameContext(
+            game(subPhase = NightSubPhase.WITCH_ACT.name),
+            Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasWitch = true),
+            listOf(witch),
+            nightPhase = currentNightPhase,
+            allNightPhases = emptyList()
+        )
+
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+
+        makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
+
+        // 不应该推进
         verify(nightOrchestrator, never()).advance(any(), any())
     }
 }

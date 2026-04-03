@@ -34,9 +34,6 @@ class HunterHandlerTest {
 
     private fun room() = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6)
 
-    private fun player(userId: String, seat: Int, role: PlayerRole = PlayerRole.HUNTER) =
-        GamePlayer(gameId = gameId, userId = userId, seatIndex = seat, role = role)
-
     private fun req(actionType: ActionType, target: String? = null) =
         GameActionRequest(gameId = gameId, actorUserId = "hunter", actionType = actionType, targetUserId = target)
 
@@ -49,7 +46,7 @@ class HunterHandlerTest {
     inner class AcceptedActionsTests {
 
         @Test
-        fun `returns HUNTER_SHOOT and HUNTER_SKIP during VOTING HUNTER_SHOOT sub-phase`() {
+        fun `returns HUNTER_SHOOT and HUNTER_PASS during VOTING HUNTER_SHOOT sub-phase`() {
             val actions = handler.acceptedActions(GamePhase.VOTING, VotingSubPhase.HUNTER_SHOOT.name)
             assertThat(actions).containsExactlyInAnyOrder(ActionType.HUNTER_SHOOT, ActionType.HUNTER_PASS)
         }

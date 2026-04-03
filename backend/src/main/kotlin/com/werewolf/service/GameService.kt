@@ -78,8 +78,12 @@ class GameService(
         val myPlayer = players.firstOrNull { it.userId == requestingUserId }
 
         // Recover stuck night phases (e.g., after backend restart when a role has no alive players)
+        // Only recover if the night phase is not COMPLETE (to avoid interfering with phase transitions)
         if (game.phase == GamePhase.NIGHT) {
-            nightOrchestrator.recoverStuckNightPhase(gameId)
+            val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
+            if (nightPhase != null && nightPhase.subPhase != NightSubPhase.COMPLETE) {
+                nightOrchestrator.recoverStuckNightPhase(gameId)
+            }
         }
 
         // Always look up user nicknames — used by players map, roleReveal, nightPhase, votingPhase
@@ -148,8 +152,8 @@ class GameService(
                     base["hasPoison"]   = allNights.none { it.witchPoisonTargetUserId != null }
                     if (np.wolfTargetUserId != null) {
                         val attackedPlayer = playerMap[np.wolfTargetUserId]
-                        base["attackedPlayerId"]  to np.wolfTargetUserId
-                        base["attackedNickname"]  to userLookup[np.wolfTargetUserId]?.nickname ?: np.wolfTargetUserId
+                        base["attackedPlayerId"] = np.wolfTargetUserId
+                        base["attackedNickname"] = userLookup[np.wolfTargetUserId]?.nickname
                         base["attackedSeatIndex"] = attackedPlayer?.seatIndex
                     }
                 }

@@ -156,7 +156,7 @@
                   >
                     投票 · Vote
                   </button>
-                  <button class="btn btn-secondary skip-btn" @click="emit('skipVote')">弃权</button>
+                  <button class="btn btn-secondary skip-btn" @click="emit('skip')">弃权</button>
                 </div>
               </template>
             </template>
@@ -193,7 +193,7 @@
                 >
                   投票 · Vote
                 </button>
-                <button class="btn btn-secondary skip-btn" @click="emit('skipVote')">弃权</button>
+                <button class="btn btn-secondary skip-btn" @click="emit('skip')">弃权</button>
               </div>
             </template>
           </template>
@@ -476,7 +476,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   selectPlayer: [userId: string]
   vote: [targetId: string]
-  skipVote: []
+  skip: []
   unvote: []
   revealVoting: []
   continueVoting: []
@@ -741,18 +741,17 @@ function votingSlotVariant(player: GamePlayer) {
   if (!player.isAlive) return 'dead' as const
   const hasVoted = props.votingPhase.votedPlayerIds?.includes(player.userId)
 
-  // Selected player being voted for (red border) - show before or after voting
+  // Selected player being voted for (gold border) - show before or after voting
   if (player.userId === effectiveSelected.value) {
     return 'selected' as const
   }
 
-  // After voting, current player shows 'me-ready', other players show 'ready'
+  // After voting, all voted players show 'ready' (green)
   if (hasVoted) {
-    return player.userId === props.myUserId ? ('me-ready' as const) : ('ready' as const)
+    return 'ready' as const
   }
 
-  // Current player shows 'me', others show 'alive'
-  if (player.userId === props.myUserId) return 'me' as const
+  // Alive players show 'alive' (no special border)
   return 'alive' as const
 }
 
