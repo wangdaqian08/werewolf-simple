@@ -39,3 +39,7 @@ app:
 
 server:
   port: 8080
+
+# WebSocket configuration
+websocket:
+  allowed-origins: "*"

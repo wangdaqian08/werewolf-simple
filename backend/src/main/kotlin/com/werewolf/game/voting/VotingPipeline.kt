@@ -394,13 +394,27 @@ class VotingPipeline(
         nightOrchestrator.initNight(context.gameId, newDayNumber, currentGuardTarget)
     }
 
-    private fun endGame(context: GameContext, winner: WinnerSide) {
+    private fun endGame(context: GameContext, winner: WinnerSide, events: MutableList<DomainEvent>? = null) {
         val game = context.game
         game.winner = winner
         game.phase = GamePhase.GAME_OVER
         game.endedAt = LocalDateTime.now()
         gameRepository.save(game)
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.GameOver(context.gameId, winner))
+
+        // Broadcast GameOver after transaction commit if in transaction context
+        val gameOverEvent = DomainEvent.GameOver(context.gameId, winner)
+        if (events != null) {
+            // Add to events list for later broadcasting after commit
+            events.add(gameOverEvent)
+        } else if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : org.springframework.transaction.support.TransactionSynchronization {
+                override fun afterCommit() {
+                    stompPublisher.broadcastGame(context.gameId, gameOverEvent)
+                }
+            })
+        } else {
+            stompPublisher.broadcastGame(context.gameId, gameOverEvent)
+        }
     }
 
     // ── Event collection helpers for transaction-safe broadcasting ─────────────
