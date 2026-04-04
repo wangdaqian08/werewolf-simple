@@ -348,6 +348,7 @@ const emit = defineEmits<{
   witchPassAntidote: []
   witchPoison: [targetId: string]
   witchPassPoison: []
+  witchSkip: []
 }>()
 
 const subPhase = computed(() => props.nightPhase.subPhase)

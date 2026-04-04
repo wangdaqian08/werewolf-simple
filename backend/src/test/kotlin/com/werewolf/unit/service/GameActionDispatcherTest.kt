@@ -296,8 +296,8 @@ class GameActionDispatcherTest {
     }
 
     @Test
-    fun `WITCH_ACT - only antidote used in current night, not advance`() {
-        // 女巫在当前夜晚只使用了解药，不推进
+    fun `WITCH_ACT - only antidote used in current night, advances to next phase`() {
+        // 女巫在当前夜晚只使用了解药，应该推进
         val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Success())
         val witch = player("witch:001", 1, PlayerRole.WITCH)
 
@@ -320,13 +320,13 @@ class GameActionDispatcherTest {
 
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
-        // 不应该推进
-        verify(nightOrchestrator, never()).advance(any(), any())
+        // 应该推进
+        verify(nightOrchestrator).advance(gameId, NightSubPhase.WITCH_ACT)
     }
 
     @Test
-    fun `WITCH_ACT - only poison used in current night, not advance`() {
-        // 女巫在当前夜晚只使用了毒药，不推进
+    fun `WITCH_ACT - only poison used in current night, advances to next phase`() {
+        // 女巫在当前夜晚只使用了毒药，应该推进
         val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Success())
         val witch = player("witch:001", 1, PlayerRole.WITCH)
         val target = player("target:001", 2)
@@ -350,13 +350,13 @@ class GameActionDispatcherTest {
 
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
-        // 不应该推进
-        verify(nightOrchestrator, never()).advance(any(), any())
+        // 应该推进
+        verify(nightOrchestrator).advance(gameId, NightSubPhase.WITCH_ACT)
     }
 
     @Test
-    fun `WITCH_ACT - both potions available but not used, not advance`() {
-        // 女巫有两种药水但都没有使用，不推进
+    fun `WITCH_ACT - both potions available but not used, advances to next phase`() {
+        // 女巫有两种药水但都没有使用（放弃），应该推进
         val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Success())
         val witch = player("witch:001", 1, PlayerRole.WITCH)
 
@@ -379,7 +379,7 @@ class GameActionDispatcherTest {
 
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
-        // 不应该推进
-        verify(nightOrchestrator, never()).advance(any(), any())
+        // 应该推进
+        verify(nightOrchestrator).advance(gameId, NightSubPhase.WITCH_ACT)
     }
 }

@@ -3,9 +3,7 @@ package com.werewolf.service
 import com.werewolf.game.GameContext
 import com.werewolf.model.GamePhase
 import com.werewolf.repository.*
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
-import org.springframework.web.server.ResponseStatusException
 
 @Service
 class GameContextLoader(
@@ -17,10 +15,10 @@ class GameContextLoader(
 ) {
     fun load(gameId: Int): GameContext {
         val game = gameRepository.findById(gameId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Game $gameId not found") }
+            .orElseThrow { IllegalArgumentException("Game $gameId not found") }
         val players = gamePlayerRepository.findByGameId(gameId)
         val room = roomRepository.findById(game.roomId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Room ${game.roomId} not found") }
+            .orElseThrow { IllegalArgumentException("Room ${game.roomId} not found") }
 
         val nightPhase = if (game.phase == GamePhase.NIGHT)
             nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)

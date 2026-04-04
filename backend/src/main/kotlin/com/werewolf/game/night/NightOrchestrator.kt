@@ -219,14 +219,31 @@ class NightOrchestrator(
             nightPhase.subPhase = NightSubPhase.COMPLETE
             nightPhaseRepository.save(nightPhase)
     
-            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
-    
             // Check win condition
             val updatedContext = contextLoader.load(gameId)
             val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
     
             if (winner != null) {
-                endGame(updatedContext, winner)
+                // Update game state immediately (before transaction commit)
+                context.game.apply {
+                    this.winner = winner
+                    phase = GamePhase.GAME_OVER
+                    endedAt = LocalDateTime.now()
+                }
+                gameRepository.save(context.game)
+
+                // Broadcast events after transaction commit
+                if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                    TransactionSynchronizationManager.registerSynchronization(object : org.springframework.transaction.support.TransactionSynchronization {
+                        override fun afterCommit() {
+                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+                            stompPublisher.broadcastGame(gameId, DomainEvent.GameOver(gameId, winner))
+                        }
+                    })
+                } else {
+                    stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+                    stompPublisher.broadcastGame(gameId, DomainEvent.GameOver(gameId, winner))
+                }
             } else {
                 val game = updatedContext.game
                 game.phase = GamePhase.DAY
@@ -237,6 +254,8 @@ class NightOrchestrator(
                 if (TransactionSynchronizationManager.isActualTransactionActive()) {
                     TransactionSynchronizationManager.registerSynchronization(object : org.springframework.transaction.support.TransactionSynchronization {
                         override fun afterCommit() {
+                            // Broadcast NightResult first, then PhaseChanged
+                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
                             stompPublisher.broadcastGame(
                                 gameId,
                                 DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
@@ -251,6 +270,7 @@ class NightOrchestrator(
                     })
                 } else {
                     // If no transaction is active, broadcast immediately
+                    stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
                     stompPublisher.broadcastGame(
                         gameId,
                         DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)

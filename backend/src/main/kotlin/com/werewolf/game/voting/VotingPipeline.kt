@@ -16,6 +16,7 @@ import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDateTime
 
 @Service
@@ -108,17 +109,31 @@ class VotingPipeline(
         context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
         gameRepository.save(context.game)
 
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTE_RESULT.name))
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.VoteTally(context.gameId, eliminated, tally))
+        // Prepare events to send after transaction commit
+        val eventsToSend = mutableListOf<DomainEvent>()
+        eventsToSend.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTE_RESULT.name))
+        eventsToSend.add(DomainEvent.VoteTally(context.gameId, eliminated, tally))
 
+        // Collect events from elimination process
         if (eliminated != null) {
-            eliminateByVote(context, eliminated)
+            collectEliminationEvents(context, eliminated, eventsToSend)
         } else if (!wasRevote) {
             // First-round tie — give players a second vote (open to all living candidates)
-            initiateRevote(context)
+            processRevoteWithEventCollection(context, eventsToSend)
         } else {
             // Second-round tie — no elimination, skip to night
-            goToNight(context)
+            processGoToNightWithEventCollection(context, eventsToSend)
+        }
+
+        // Broadcast all events after transaction commit
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : org.springframework.transaction.support.TransactionSynchronization {
+                override fun afterCommit() {
+                    eventsToSend.forEach { stompPublisher.broadcastGame(context.gameId, it) }
+                }
+            })
+        } else {
+            eventsToSend.forEach { stompPublisher.broadcastGame(context.gameId, it) }
         }
 
         return GameActionResult.Success()
@@ -386,5 +401,99 @@ class VotingPipeline(
         game.endedAt = LocalDateTime.now()
         gameRepository.save(game)
         stompPublisher.broadcastGame(context.gameId, DomainEvent.GameOver(context.gameId, winner))
+    }
+
+    // ── Event collection helpers for transaction-safe broadcasting ─────────────
+
+    private fun collectEliminationEvents(context: GameContext, targetId: String, events: MutableList<DomainEvent>) {
+        val player = gamePlayerRepository.findByGameIdAndUserId(context.gameId, targetId)
+            .orElse(null) ?: return
+
+        // Check onEliminationPending hook: allows role handlers to veto or modify elimination
+        val modifier = handlers.find { it.role == player.role }?.onEliminationPending(context, targetId)
+        if (modifier?.cancelled == true) {
+            modifier.extraEvents.forEach { events.add(it) }
+            // After elimination: check win condition
+            val updatedContext = contextLoader.load(context.gameId)
+            val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+            if (winner != null) {
+                events.add(DomainEvent.GameOver(context.gameId, winner))
+            }
+            return
+        }
+
+        // Idiot reveal: first elimination survives but permanently loses voting right
+        if (player.role == PlayerRole.IDIOT && !player.idiotRevealed) {
+            player.canVote = false
+            player.idiotRevealed = true
+            gamePlayerRepository.save(player)
+            events.add(DomainEvent.IdiotRevealed(context.gameId, targetId))
+            // After elimination: check win condition
+            val updatedContext = contextLoader.load(context.gameId)
+            val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+            if (winner != null) {
+                events.add(DomainEvent.GameOver(context.gameId, winner))
+            }
+            return
+        }
+
+        player.alive = false
+        gamePlayerRepository.save(player)
+
+        // Record elimination
+        val history = EliminationHistory(
+            gameId = context.gameId,
+            dayNumber = context.game.dayNumber,
+            eliminatedUserId = targetId,
+            eliminatedRole = player.role,
+        )
+        eliminationHistoryRepository.save(history)
+
+        events.add(DomainEvent.PlayerEliminated(context.gameId, targetId, player.role))
+
+        // Hunter gets to shoot
+        if (player.role == PlayerRole.HUNTER) {
+            context.game.subPhase = VotingSubPhase.HUNTER_SHOOT.name
+            gameRepository.save(context.game)
+            events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.HUNTER_SHOOT.name))
+            return
+        }
+
+        // Sheriff needs to pass the badge
+        if (targetId == context.game.sheriffUserId) {
+            context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
+            gameRepository.save(context.game)
+            events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.BADGE_HANDOVER.name))
+            return
+        }
+
+        // After elimination: check win condition
+        val updatedContext = contextLoader.load(context.gameId)
+        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+        if (winner != null) {
+            events.add(DomainEvent.GameOver(context.gameId, winner))
+        }
+    }
+
+    private fun processRevoteWithEventCollection(context: GameContext, events: MutableList<DomainEvent>) {
+        val existingVotes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
+            context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
+        )
+        voteRepository.deleteAll(existingVotes)
+
+        context.game.subPhase = VotingSubPhase.RE_VOTING.name
+        gameRepository.save(context.game)
+        events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.RE_VOTING.name))
+    }
+
+    private fun processGoToNightWithEventCollection(context: GameContext, events: MutableList<DomainEvent>) {
+        val currentGuardTarget = context.allNightPhases
+            .firstOrNull { it.dayNumber == context.game.dayNumber }
+            ?.guardTargetUserId
+
+        val newDayNumber = context.game.dayNumber + 1
+        // nightOrchestrator.initNight handles its own transaction and event broadcasting
+        // We don't need to collect its events here
+        nightOrchestrator.initNight(context.gameId, newDayNumber, currentGuardTarget)
     }
 }
