@@ -25,15 +25,15 @@ export function createStompClient(token: string): Client {
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
     onConnect: () => {
-      console.log('[stompClient] WebSocket已连接')
+      //console.log('[stompClient] WebSocket已连接')
     },
     onDisconnect: () => {
-      console.log('[stompClient] WebSocket已断开，将在3秒后重连...')
+      //console.log('[stompClient] WebSocket已断开，将在3秒后重连...')
     },
     onWebSocketClose: (evt) => {
-      console.log('[stompClient] WebSocket连接关闭:', evt)
+      //console.log('[stompClient] WebSocket连接关闭:', evt)
       if (evt.wasClean) {
-        console.log('[stompClient] 连接正常关闭，代码:', evt.code)
+        //console.log('[stompClient] 连接正常关闭，代码:', evt.code)
       } else {
         console.error('[stompClient] 连接异常关闭，代码:', evt.code, '原因:', evt.reason)
       }

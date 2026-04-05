@@ -6,10 +6,10 @@ export const useGameStore = defineStore('game', () => {
   const state = ref<GameState | null>(null)
 
   function setState(s: GameState) {
-    console.log('[gameStore] setState被调用，新状态phase:', s.phase)
+    //console.log('[gameStore] setState被调用，新状态phase:', s.phase)
     const newState = JSON.parse(JSON.stringify(s))
     state.value = { ...newState, events: s.events ?? [] }
-    console.log('[gameStore] state.value已更新，当前phase:', state.value?.phase)
+    //console.log('[gameStore] state.value已更新，当前phase:', state.value?.phase)
   }
 
   function addEvent(event: GameEvent) {

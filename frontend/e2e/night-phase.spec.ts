@@ -209,14 +209,12 @@ test('night: WITCH — using antidote immediately transitions to WAITING (only 1
   await expect(page.getByText('请闭眼')).toBeVisible()
 })
 
-test('night: WITCH — both decisions made → transitions to WAITING screen', async ({ page }) => {
+test('night: WITCH — passing antidote submits immediately → transitions to WAITING screen', async ({ page }) => {
   await setup(page)
   await loadNight(page, 'WITCH')
 
-  // Pass antidote then pass poison
+  // Pass antidote — submits immediately (one action per round)
   await page.getByRole('button', { name: '放弃' }).click()
-  await page.waitForTimeout(70)
-  await page.getByRole('button', { name: '不用' }).click()
   await page.waitForTimeout(70)
 
   // Should transition to WAITING subPhase — shows sleep screen
@@ -235,8 +233,8 @@ test('night: WITCH — using poison (full flow) → WAITING', async ({ page }) =
   const confirmPoison = page.getByRole('button', { name: /确认毒杀/i })
   await expect(confirmPoison).toBeDisabled()
 
-  // Select a target
-  await page.locator('.player-grid .slot-alive').first().click()
+  // Select a target — poison grid uses player-grid-sm with slot-alive
+  await page.locator('.player-grid-sm .slot-alive').first().click()
   await page.waitForTimeout(70)
   await expect(confirmPoison).not.toBeDisabled()
 
@@ -246,28 +244,16 @@ test('night: WITCH — using poison (full flow) → WAITING', async ({ page }) =
   await expect(page.getByText('请闭眼')).toBeVisible()
 })
 
-test('night: WITCH — pass antidote → poison section still active', async ({ page }) => {
+test('night: WITCH — passing poison submits immediately → transitions to WAITING', async ({ page }) => {
   await setup(page)
   await loadNight(page, 'WITCH')
 
-  await page.getByRole('button', { name: '放弃' }).click()
-  await page.waitForTimeout(70)
-
-  // Antidote section grayed out, poison section still interactive
-  await expect(page.getByRole('button', { name: /使用解药/i })).toBeDisabled()
-  await expect(page.getByRole('button', { name: /使用毒药/i })).not.toBeDisabled()
-})
-
-test('night: WITCH — pass poison → antidote section still active', async ({ page }) => {
-  await setup(page)
-  await loadNight(page, 'WITCH')
-
+  // Pass poison — submits immediately (one action per round)
   await page.getByRole('button', { name: '不用' }).click()
   await page.waitForTimeout(70)
 
-  // Poison section grayed out, antidote section still interactive
-  await expect(page.getByRole('button', { name: /使用毒药/i })).toBeDisabled()
-  await expect(page.getByRole('button', { name: /使用解药/i })).not.toBeDisabled()
+  // Should transition to WAITING subPhase — shows sleep screen
+  await expect(page.getByText('请闭眼')).toBeVisible()
 })
 
 // ── Guard ─────────────────────────────────────────────────────────────────────

@@ -111,15 +111,11 @@ test('alive player sees kill banner after result is revealed', async ({ page }) 
   await expect(page.locator('.banner-kill')).toBeVisible()
 })
 
-test('alive player sees Vote and 弃权 buttons after result is revealed', async ({ page }) => {
+test('alive player sees waiting hint after result is revealed', async ({ page }) => {
   await loadScenario(page, 'ALIVE_REVEALED')
-  await expect(page.getByRole('button', { name: /投票/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /弃权/ })).toBeVisible()
-})
-
-test('alive player Vote button is disabled until a player is selected', async ({ page }) => {
-  await loadScenario(page, 'ALIVE_REVEALED')
-  await expect(page.getByRole('button', { name: /投票/ })).toBeDisabled()
+  // Vote buttons are now in VotingPhase — DayPhase shows waiting hint
+  await expect(page.getByText(/等待房主开始投票/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /投票/ })).not.toBeVisible()
 })
 
 // ── REGRESSION: guest joining via room join should not see host UI ─────────────
@@ -155,7 +151,8 @@ test('guest joined via room join does not see 显示结果 on day revealed', asy
   await page.locator('[data-testid="debug-day-btns"]').getByRole('button', { name: 'Revealed' }).click()
   await page.waitForTimeout(70)
   await expect(page.getByRole('button', { name: /显示结果/ })).not.toBeVisible()
-  await expect(page.getByRole('button', { name: /投票/ })).toBeVisible()
+  // Vote buttons are now in VotingPhase — DayPhase shows waiting hint for non-host
+  await expect(page.getByText(/等待房主开始投票/)).toBeVisible()
 })
 
 // ── GUEST view ────────────────────────────────────────────────────────────────

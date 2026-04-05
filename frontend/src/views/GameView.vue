@@ -259,6 +259,7 @@ import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
 import VotingPhase from '@/components/VotingPhase.vue'
 import {useNavigationGuard} from '@/composables/useNavigationGuard'
+import {useAudioService} from '@/composables/useAudioService'
 import type {GamePlayer} from '@/types'
 
 const route = useRoute()
@@ -266,6 +267,9 @@ const router = useRouter()
 const userStore = useUserStore()
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
+
+// Initialize audio service
+useAudioService()
 
 const isMock = import.meta.env.VITE_MOCK === 'true'
 const hasConfirmedRole = ref(false)
@@ -442,9 +446,9 @@ async function handleNightSelect(userId: string) {
   }
 }
 async function handleNightConfirm(targetId?: string) {
-  console.log('[GameView] handleNightConfirm called with targetId:', targetId)
+  //console.log('[GameView] handleNightConfirm called with targetId:', targetId)
   const subPhase = gameStore.state?.nightPhase?.subPhase
-  console.log('[GameView] handleNightConfirm subPhase:', subPhase)
+  //console.log('[GameView] handleNightConfirm subPhase:', subPhase)
   switch (subPhase) {
     case 'WEREWOLF_PICK':
       if (targetId) await action({ actionType: 'WOLF_KILL', targetId })
@@ -457,14 +461,14 @@ async function handleNightConfirm(targetId?: string) {
       break
     case 'WITCH_ACT':
       // Witch confirm - submit all decisions to advance phase
-      console.log('[GameView] handleNightConfirm calling trySubmitWitchAct')
+      //console.log('[GameView] handleNightConfirm calling trySubmitWitchAct')
       await trySubmitWitchAct()
       break
     case 'GUARD_PICK':
       if (targetId) await action({ actionType: 'GUARD_PROTECT', targetId })
       break
     default:
-      console.log('[GameView] handleNightConfirm unknown subPhase:', subPhase)
+      //console.log('[GameView] handleNightConfirm unknown subPhase:', subPhase)
   }
 }
 
@@ -627,7 +631,7 @@ onMounted(async () => {
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
         // 添加事件接收日志
-        console.log('[GameView] 收到WebSocket事件:', data.type, data)
+        // console.log('[GameView] 收到WebSocket事件:', data.type, data)
         // Mock sends full state snapshots; real backend sends typed domain events
         if (data.type === 'GAME_STATE_UPDATE') {
           gameStore.setState(data.payload)
@@ -641,24 +645,24 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
-          console.log('[GameView] 处理PhaseChanged事件')
+          //console.log('[GameView] 处理PhaseChanged事件')
           const state = await gameService.getState(gameId)
-          console.log('[GameView] 获取到的状态:', state)
+          //console.log('[GameView] 获取到的状态:', state)
           gameStore.setState(state)
-          console.log('[GameView] 状态已更新，当前phase:', gameStore.state?.phase)
+          //console.log('[GameView] 状态已更新，当前phase:', gameStore.state?.phase)
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {
-          console.log('[GameView] 处理NightSubPhaseChanged事件')
+          //console.log('[GameView] 处理NightSubPhaseChanged事件')
           const state = await gameService.getState(gameId)
           gameStore.setState(state)
         }
         // Real backend: night result (kills) → re-fetch state
         if (data.type === 'NightResult') {
-          console.log('[GameView] 处理NightResult事件:', data)
+          //console.log('[GameView] 处理NightResult事件:', data)
           const state = await gameService.getState(gameId)
           gameStore.setState(state)
-          console.log('[GameView] NightResult处理后phase:', gameStore.state?.phase)
+          //console.log('[GameView] NightResult处理后phase:', gameStore.state?.phase)
         }
         // Sheriff elected (winner or host appointment) → re-fetch to get updated sheriff state
         if (data.type === 'SheriffElected') {

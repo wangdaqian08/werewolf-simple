@@ -2,8 +2,8 @@
  * Verification suite for all debug mock endpoints.
  * Each test starts fresh from the lobby.
  */
-import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type {Page} from '@playwright/test'
+import {expect, test} from '@playwright/test'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -169,9 +169,9 @@ test('POST /debug/day/scenario HOST_REVEALED — host, result revealed', async (
 
 test('POST /debug/day/scenario DEAD — user is dead', async ({ page }) => {
   await goToDayView(page)
-  await page.getByRole('button', { name: 'Dead' }).click()
-  await page.waitForTimeout(70)
-  await expect(page.getByText(/淘汰|eliminated|dead/i).first()).toBeVisible()
+  await page.locator('[data-testid="debug-day-scenario-btns"]').getByRole('button', { name: 'Dead' }).click()
+  await page.waitForTimeout(500)
+  await expect(page.getByText(/你在上一晚被淘汰/).first()).toBeVisible()
 })
 
 test('POST /debug/day/scenario ALIVE_HIDDEN — alive player, result hidden', async ({ page }) => {

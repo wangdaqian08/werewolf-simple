@@ -507,14 +507,15 @@ const isRevealed = computed(
 )
 
 // Debug: watch votingPhase changes
-watch(
-  () => props.votingPhase,
-  (newPhase) => {
-    console.log('[VotingPhase] votingPhase changed:', newPhase)
-    console.log('[VotingPhase] isRevealed:', isRevealed.value)
-  },
-  { deep: true, immediate: true },
-)
+
+// watch(
+  // () => props.votingPhase,
+  // (newPhase) => {
+  //   console.log('[VotingPhase] votingPhase changed:', newPhase)
+  //   console.log('[VotingPhase] isRevealed:', isRevealed.value)
+  // },
+  // { deep: true, immediate: true },
+// )
 
 // Badge screen: post-action states
 const badgeDone = computed(() => {
