@@ -18,10 +18,10 @@ import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-scr
 let ctx: GameContext
 
 test.describe('Game flow — multi-browser STOMP verification', () => {
-  test.setTimeout(180_000) // 3 minutes for the full flow
+  test.setTimeout(60_000) // 3 minutes for the full flow
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(120_000) // setup can take a while with shell scripts
+    testInfo.setTimeout(30_000) // setup can take a while with shell scripts
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
@@ -42,12 +42,31 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
   // ── Test 1: Role reveal ──────────────────────────────────────────────
 
   test('1. Role reveal — all browsers show ROLE_REVEAL phase', async ({}, testInfo) => {
-    // All role browsers should be on the waiting screen (bots already confirmed)
-    for (const [role, page] of Array.from(ctx.pages.entries())) {
-      await expect(page.locator('.waiting-screen, .reveal-wrap')).toBeVisible({ timeout: 3_000 })
-    }
+    // All role browsers should be on the waiting screen (roles already confirmed via scripts)
+    // Since setupGame() confirms all roles via scripts, the browsers should either show
+    // the waiting screen or the role reveal screen (if phase hasn't advanced yet)
+    for (const [_, page] of Array.from(ctx.pages.entries())) {
+      // Wait for either waiting screen or role reveal screen
+      const locator = page.locator('.waiting-screen, .reveal-wrap')
+      await expect(locator).toBeVisible({ timeout: 5_000 })
 
-    // TODO click "Reveal Role" button should show role, click "Got it" button, show "Waiting for others"
+      // If on role reveal screen, complete the reveal flow
+      const revealWrap = page.locator('.reveal-wrap')
+      const revealVisible = await revealWrap.isVisible().catch(() => false)
+      if (revealVisible) {
+        const revealBtn = page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i  })
+        const revealBtnVisible = await revealBtn.isVisible().catch(() => false)
+        expect(revealBtnVisible).toBe(true)
+        await revealBtn.click()
+        await page.waitForTimeout(300)
+        const gotItBtn = page.getByRole('button', { name: /知道了 \/ Got it/i })
+        await gotItBtn.waitFor({ state: 'visible', timeout: 2_000 })
+        await gotItBtn.click()
+      }
+
+      // Verify waiting screen is shown (after role confirm or if already there)
+      await expect(page.locator('.waiting-screen')).toBeVisible({ timeout: 3_000 })
+    }
 
     await captureSnapshot(ctx.pages, testInfo, '01-role-reveal')
   })
@@ -121,11 +140,9 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
 
   test('4. Night — seer/witch/guard complete night, all browsers show DAY', async ({}, testInfo) => {
     const seerBots = ctx.roleMap.SEER ?? []
-    const witchBots = ctx.roleMap.WITCH ?? []
     const guardBots = ctx.roleMap.GUARD ?? []
     const villagerBots = ctx.roleMap.VILLAGER ?? []
 
-    // TODO seer role action should screenshot
     // ── Seer ──
     const seerBot = seerBots.find((b) => b.nick !== 'Host')
     if (seerBot) {
@@ -136,64 +153,107 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       const seerPage = ctx.pages.get('SEER')
       if (seerPage) {
         await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
+        // Screenshot: seer sees check result
+        await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
       }
 
       act('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
     } else if (ctx.isHostRole('SEER')) {
       // Seer is the host — use browser clicks
       const seerPage = ctx.pages.get('SEER')!
-      await expect(seerPage.getByText(/选择查验目标|Select a player to check/i).first()).toBeVisible({ timeout: 10_000 })
+      await expect(seerPage.getByText(/选择查验目标 · Select a player to check:/i).first()).toBeVisible({ timeout: 10_000 })
       const targetSlot = seerPage.locator('.player-grid .slot-selectable').first()
       await targetSlot.waitFor({ state: 'visible', timeout: 5_000 })
       await targetSlot.click()
-      await seerPage.getByRole('button', { name: /查验|Check/i }).click()
+      await seerPage.getByRole('button', { name: /查验 · Check/i }).click()
       // Wait for result and confirm
       await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
+      // Screenshot: seer sees check result
+      await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
       await seerPage.getByRole('button', { name: /查验完毕|Done/i }).click()
     }
 
-    // TODO witch role action should screenshot
-    // ── Witch ──
-    const witchBot = witchBots.find((b) => b.nick !== 'Host')
-    if (witchBot) {
-      // Witch is a bot — use script
-      act('WITCH_ACT', witchBot.nick, {
-        payload: '{"useAntidote":false}',
-        room: ctx.roomCode,
-      })
-    } else if (ctx.isHostRole('WITCH')) {
-      // Witch is the host — use browser clicks to skip
-      const witchPage = ctx.pages.get('WITCH')!
-      // Wait for witch UI to appear
-      await expect(witchPage.locator('.w-section').first()).toBeVisible({ timeout: 10_000 })
-      // Click "放弃" (pass antidote) if visible
-      const passAntidoteBtn = witchPage.getByRole('button', { name: /放弃/ })
-      if (await passAntidoteBtn.isVisible().catch(() => false)) {
-        await passAntidoteBtn.click()
-        await witchPage.waitForTimeout(500)
-      }
-      // Click "不用" (skip poison) if visible
-      const skipPoisonBtn = witchPage.getByRole('button', { name: /不用/ })
-      if (await skipPoisonBtn.isVisible().catch(() => false)) {
-        await skipPoisonBtn.click()
-      }
-      // If neither visible, click "完成操作" (done — no items)
-      const doneBtn = witchPage.getByRole('button', { name: /完成操作|Done/i })
-      if (await doneBtn.isVisible().catch(() => false)) {
-        await doneBtn.click()
+    // ── Witch (always via browser to capture UI at each step) ──
+    // Both antidote and poison sections are visible simultaneously.
+    // We interact with poison FIRST (since passing antidote may auto-complete the turn).
+    const witchPage = ctx.pages.get('WITCH')!
+    await expect(witchPage.locator('.w-section').first()).toBeVisible({ timeout: 15_000 })
+
+    // Screenshot: before witch makes any action (both sections visible)
+    await captureSnapshot(ctx.pages, testInfo, '04-witch-before-action')
+
+    // -- Poison: enter target selection mode --
+    const usePoisonBtn = witchPage.getByRole('button', { name: /使用毒药/ })
+    if (await usePoisonBtn.isVisible().catch(() => false)) {
+      await usePoisonBtn.click()
+      await witchPage.waitForTimeout(500)
+
+      // Screenshot: poison target selection grid shown
+      await captureSnapshot(ctx.pages, testInfo, '04-witch-poison-select')
+
+      // Select a target — poison grid uses 'alive' variant (slot-alive class)
+      const poisonTarget = witchPage.locator('.player-grid-sm .slot-alive').first()
+      if (await poisonTarget.isVisible().catch(() => false)) {
+        await poisonTarget.click()
+        await witchPage.waitForTimeout(300)
+
+        // Screenshot: poison target selected (before confirm)
+        await captureSnapshot(ctx.pages, testInfo, '04-witch-poison-selected')
+
+        // Cancel — we don't actually want to poison in round 1
+        const cancelBtn = witchPage.getByRole('button', { name: /取消/ })
+        await cancelBtn.click()
+        await witchPage.waitForTimeout(300)
       }
     }
 
-    // TODO guard role action should screenshot
+    // -- Antidote decision --
+    const useAntidoteBtn = witchPage.getByRole('button', { name: /使用解药/ })
+    if (await useAntidoteBtn.isVisible().catch(() => false)) {
+      // Screenshot: antidote choice visible
+      await captureSnapshot(ctx.pages, testInfo, '04-witch-antidote-choice')
+
+      // Use antidote to save the attacked player
+      await useAntidoteBtn.click()
+      await witchPage.waitForTimeout(500)
+
+      // Screenshot: after using antidote
+      await captureSnapshot(ctx.pages, testInfo, '04-witch-after-antidote')
+    }
+
+    // -- Skip poison (if still available after antidote) --
+    const skipPoisonBtn = witchPage.getByRole('button', { name: /不用/ })
+    if (await skipPoisonBtn.isVisible().catch(() => false)) {
+      await skipPoisonBtn.click()
+      await witchPage.waitForTimeout(500)
+
+      // Screenshot: after skipping poison (witch turn complete)
+      await captureSnapshot(ctx.pages, testInfo, '04-witch-after-action')
+    }
+
+    // If no items at all, click done
+    const doneBtn = witchPage.getByRole('button', { name: /完成操作|Done/i })
+    if (await doneBtn.isVisible().catch(() => false)) {
+      await doneBtn.click()
+    }
+
     // ── Guard ──
     const guardBot = guardBots.find((b) => b.nick !== 'Host')
     if (guardBot) {
       // Guard is a bot — use script
+      const guardPage = ctx.pages.get('GUARD')
+      if (guardPage) {
+        // Screenshot: guard UI is shown before action
+        await expect(guardPage.getByText(/选择守护目标|Protect a player/i).first()).toBeVisible({ timeout: 10_000 })
+        await captureSnapshot(ctx.pages, testInfo, '04-guard-ui')
+      }
       act('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
     } else if (ctx.isHostRole('GUARD')) {
       // Guard is the host — use browser clicks to protect someone
       const guardPage = ctx.pages.get('GUARD')!
       await expect(guardPage.getByText(/选择守护目标|Protect a player/i).first()).toBeVisible({ timeout: 10_000 })
+      // Screenshot: guard UI is shown
+      await captureSnapshot(ctx.pages, testInfo, '04-guard-ui')
       const targetSlot = guardPage.locator('.player-grid .slot-selectable').first()
       await targetSlot.waitFor({ state: 'visible', timeout: 5_000 })
       await targetSlot.click()
@@ -219,7 +279,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     await revealBtn.click()
 
     // All browsers should see the result (kill banner or "peaceful night")
-    for (const [role, page] of Array.from(ctx.pages.entries())) {
+    for (const [_, page] of Array.from(ctx.pages.entries())) {
       // Wait for the button to change or kill info to appear
       await page.waitForTimeout(2_000)
       // After reveal, the sub-phase changes to RESULT_REVEALED
