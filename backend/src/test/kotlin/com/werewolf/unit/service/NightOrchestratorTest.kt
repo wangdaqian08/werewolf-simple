@@ -524,4 +524,133 @@ class NightOrchestratorTest {
         // Should NOT advance
         verify(nightWaitingScheduler, never()).scheduleAdvance(any(), any(), any())
     }
+
+    // ── advanceFromWaiting ───────────────────────────────────────────────────
+
+    @Test
+    fun `advanceFromWaiting - transitions from WAITING to first sub-phase`() {
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler))
+
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.WAITING
+        }
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val ctx = GameContext(game(), room(), listOf(wolf), nightPhase = np)
+
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+        orchestrator.advanceFromWaiting(gameId)
+
+        assertThat(np.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK)
+        verify(nightPhaseRepository).save(np)
+        verify(stompPublisher).broadcastGame(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
+    }
+
+    @Test
+    fun `advanceFromWaiting - idempotent when already past WAITING`() {
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.WEREWOLF_PICK // already advanced
+        }
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val ctx = GameContext(game(), room(), listOf(wolf), nightPhase = np)
+
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+
+        nightOrchestrator.advanceFromWaiting(gameId)
+
+        verify(nightPhaseRepository, never()).save(any())
+        verify(stompPublisher, never()).broadcastGame(any(), any())
+    }
+
+    @Test
+    fun `advanceFromWaiting - does nothing when no night phase exists`() {
+        val ctx = GameContext(game(), room(), emptyList(), nightPhase = null)
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+
+        nightOrchestrator.advanceFromWaiting(gameId)
+
+        verify(nightPhaseRepository, never()).save(any())
+    }
+
+    // ── advanceToSubPhase ────────────────────────────────────────────────────
+
+    @Test
+    fun `advanceToSubPhase - updates sub-phase and broadcasts`() {
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.WEREWOLF_PICK
+        }
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val ctx = GameContext(game(), room(), listOf(wolf), nightPhase = np)
+
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_PICK)
+
+        assertThat(np.subPhase).isEqualTo(NightSubPhase.SEER_PICK)
+        verify(nightPhaseRepository).save(np)
+        verify(stompPublisher).broadcastGame(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
+    }
+
+    @Test
+    fun `advanceToSubPhase - does nothing when targetSubPhase is null`() {
+        nightOrchestrator.advanceToSubPhase(gameId, null)
+
+        verify(contextLoader, never()).load(any())
+        verify(nightPhaseRepository, never()).save(any())
+    }
+
+    @Test
+    fun `advanceToSubPhase - does nothing when no night phase exists`() {
+        val ctx = GameContext(game(), room(), emptyList(), nightPhase = null)
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_PICK)
+
+        verify(nightPhaseRepository, never()).save(any())
+    }
+
+    // ── nightSequence / firstSubPhase ────────────────────────────────────────
+
+    @Test
+    fun `nightSequence - wolves-only room returns only WEREWOLF_PICK`() {
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler))
+
+        val ctx = GameContext(game(), room(), emptyList())
+        val sequence = orchestrator.nightSequence(ctx)
+
+        assertThat(sequence).containsExactly(NightSubPhase.WEREWOLF_PICK)
+    }
+
+    @Test
+    fun `nightSequence - full role room returns correct ordering`() {
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
+        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
+        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler, guardHandler))
+
+        val fullRoom = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
+            hasSeer = true, hasWitch = true, hasGuard = true)
+        val ctx = GameContext(game(), fullRoom, emptyList())
+        val sequence = orchestrator.nightSequence(ctx)
+
+        assertThat(sequence).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    @Test
+    fun `firstSubPhase - returns WEREWOLF_PICK by default`() {
+        val ctx = GameContext(game(), room(), emptyList())
+        val result = nightOrchestrator.firstSubPhase(ctx)
+        assertThat(result).isEqualTo(NightSubPhase.WEREWOLF_PICK)
+    }
 }

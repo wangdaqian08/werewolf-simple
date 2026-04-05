@@ -1,0 +1,302 @@
+/**
+ * Multi-browser game fixture.
+ *
+ * Creates a real game via the browser UI + shell scripts, discovers role
+ * assignments, and opens an isolated browser context per unique role.
+ *
+ * Usage in tests:
+ *   const ctx = await setupGame(browser, { totalPlayers: 9, hasSheriff: false })
+ *   // ctx.pages.get('WEREWOLF') — wolf's browser page
+ *   // ctx.pages.get('SEER')     — seer's browser page
+ *   // ctx.hostPage              — host's browser page
+ */
+import {readFileSync, writeFileSync} from 'fs'
+import path from 'path'
+import {type Browser, type BrowserContext, expect, type Page} from '@playwright/test'
+import {
+  act,
+  type BotInfo,
+  getConsoleLogin,
+  getRoles,
+  joinBots,
+  readStateFile,
+  type RoleMap,
+  type RoleName,
+} from './shell-runner'
+
+const BASE_URL = 'http://localhost:5174'
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface GameContext {
+  roomCode: string
+  gameId: string
+  hostPage: Page
+  hostContext: BrowserContext
+  /** One page per role (WEREWOLF, SEER, WITCH, GUARD, VILLAGER, etc.) */
+  pages: Map<string, Page>
+  /** Corresponding BotInfo per role */
+  bots: Map<string, BotInfo>
+  /** All bots from the state file */
+  allBots: BotInfo[]
+  /** Role map from roles.sh (includes host) */
+  roleMap: RoleMap
+  /** The role assigned to the host player */
+  hostRole: RoleName | null
+  /** Roles where the host IS the player (use browser, not scripts) */
+  isHostRole: (role: RoleName) => boolean
+  /** Clean up all browser contexts */
+  cleanup: () => Promise<void>
+}
+
+export interface GameSetupOptions {
+  totalPlayers?: number
+  hasSheriff?: boolean
+  /** Which roles to open browsers for. Defaults to all special roles + 1 villager. */
+  browserRoles?: RoleName[]
+}
+
+// ── Setup ────────────────────────────────────────────────────────────────────
+
+/**
+ * Set up a complete game with multi-browser contexts.
+ *
+ * 1. Host logs in + creates room via browser UI
+ * 2. Bots join + ready via shell scripts
+ * 3. Host clicks "Start Game"
+ * 4. All bots confirm roles via shell scripts
+ * 5. Host confirms role in browser
+ * 6. Discovers roles via roles.sh
+ * 7. Opens a browser context per desired role
+ */
+export async function setupGame(
+  browser: Browser,
+  opts: GameSetupOptions = {},
+): Promise<GameContext> {
+  const totalPlayers = opts.totalPlayers ?? 9
+  const hasSheriff = opts.hasSheriff ?? false
+  const contexts: BrowserContext[] = []
+
+  // ── Step 1: Host logs in and creates room ──────────────────────────────
+
+  const hostContext = await browser.newContext()
+  contexts.push(hostContext)
+  const hostPage = await hostContext.newPage()
+
+  await hostPage.goto(`${BASE_URL}/`)
+  await hostPage.evaluate(() => localStorage.clear())
+  await hostPage.goto(`${BASE_URL}/`)
+
+  // Login
+  await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
+  await hostPage.getByRole('button', { name: /Create Room/i }).first().click()
+  await hostPage.waitForURL(/\/create-room/, { timeout: 10_000 })
+
+  // Configure room: set player count
+  // The stepper shows the current total. Default is 9.
+  // Adjust if needed by clicking +/- buttons.
+  const currentCount = await hostPage.locator('.stepper-num').textContent()
+  const current = parseInt(currentCount ?? '9', 10)
+  if (totalPlayers > current) {
+    for (let i = 0; i < totalPlayers - current; i++) {
+      await hostPage.locator('.stepper-btn').last().click()
+    }
+  } else if (totalPlayers < current) {
+    for (let i = 0; i < current - totalPlayers; i++) {
+      await hostPage.locator('.stepper-btn').first().click()
+    }
+  }
+
+  // Toggle sheriff if needed (default is on, we may want to turn it off)
+  if (!hasSheriff) {
+    // Find the row containing "Sheriff Election" and click its toggle button
+    const sheriffRow = hostPage.locator('.role-row').filter({ hasText: /Sheriff|警长竞选/ })
+    const toggle = sheriffRow.locator('.toggle-on')
+    if ((await toggle.count()) > 0) {
+      await toggle.click()
+      await hostPage.waitForTimeout(300)
+    }
+  }
+
+  // Create the room
+  await hostPage.getByRole('button', { name: /Create Room/i }).click()
+  await hostPage.waitForURL(/\/room\//, { timeout: 10_000 })
+
+  // Get room code
+  const roomCode = (await hostPage.locator('[data-testid="room-code"]').textContent()) ?? ''
+  if (!roomCode.match(/^[A-Z0-9]{4,6}$/)) {
+    throw new Error(`Invalid room code: ${roomCode}`)
+  }
+
+  // ── Step 2: Bots join + ready ──────────────────────────────────────────
+
+  joinBots(roomCode, totalPlayers - 1, true)
+
+  // Inject host into state file so scripts (roles.sh) and getRoles() can discover the host's role
+  const hostJwt = await hostPage.evaluate(() => localStorage.getItem('jwt'))
+  const hostUserId = await hostPage.evaluate(() => localStorage.getItem('userId'))
+  if (hostJwt) {
+    const stateFilePath = path.join('/tmp', `werewolf-${roomCode.toUpperCase()}.json`)
+    const stateData = JSON.parse(readFileSync(stateFilePath, 'utf-8'))
+    stateData.hostToken = hostJwt
+    stateData.hostNick = 'Host'
+    stateData.hostUserId = hostUserId
+    // Add host to users array so getRoles() includes the host
+    if (!stateData.users) stateData.users = []
+    stateData.users.push({
+      nick: 'Host',
+      token: hostJwt,
+      seat: 0, // will be updated after seat claim
+      userId: hostUserId,
+    })
+    writeFileSync(stateFilePath, JSON.stringify(stateData, null, 2))
+  }
+
+  // Wait for room to reflect all bots
+  await hostPage.waitForTimeout(2_000)
+
+  // ── Step 3: Host claims a seat + starts game ───────────────────────────
+
+  // The host needs to click on an empty seat to claim it.
+  // After bots fill seats 1..(N-1), the last seat should be selectable.
+  const emptySlot = hostPage.locator('.slot-selectable').first()
+  await emptySlot.waitFor({ state: 'visible', timeout: 5_000 })
+  await emptySlot.click()
+  await hostPage.waitForTimeout(1_000)
+
+  // Host has no Ready button (only guests do). Claiming the seat auto-readies the host.
+  // Wait for Start Game to become enabled.
+  const startBtn = hostPage.getByRole('button', { name: /Start Game|开始游戏/i })
+  await expect(startBtn).toBeEnabled({ timeout: 15_000 })
+  await startBtn.click()
+
+  // Wait for redirect to game view
+  await hostPage.waitForURL(/\/game\//, { timeout: 15_000 })
+
+  // Extract gameId from URL
+  const gameIdMatch = hostPage.url().match(/\/game\/(\d+)/)
+  if (!gameIdMatch) throw new Error(`Could not extract gameId from URL: ${hostPage.url()}`)
+  const gameId = gameIdMatch[1]
+
+  // ── Step 5: All bots confirm roles ─────────────────────────────────────
+  // Note: this confirms ALL users in the state file, including the host.
+  // So the host's role is confirmed via script — the browser confirm below
+  // may already be past the reveal screen (especially with hasSheriff).
+
+  act('CONFIRM_ROLE', undefined, { room: roomCode })
+
+  // ── Step 6: Host confirms role in browser (if still on reveal screen) ──
+
+  // The script may have already confirmed for the host, causing the game
+  // to auto-advance (e.g., to SHERIFF_ELECTION). Only click if visible.
+  const revealWrap = hostPage.locator('.reveal-wrap')
+  const revealVisible = await revealWrap.isVisible().catch(() => false)
+  if (revealVisible) {
+    const revealBtn = hostPage.getByRole('button', { name: /揭示我的身份|Reveal Role/i })
+    if ((await revealBtn.count()) > 0 && (await revealBtn.isVisible())) {
+      await revealBtn.click()
+      await hostPage.waitForTimeout(300)
+      const confirmBtn = hostPage.getByRole('button', { name: /知道了|Got it/i })
+      await confirmBtn.waitFor({ state: 'visible', timeout: 5_000 })
+      await confirmBtn.click()
+    }
+  }
+
+  // Wait for confirmations / phase transition to complete
+  await hostPage.waitForTimeout(2_000)
+
+  // ── Step 7: Discover roles ─────────────────────────────────────────────
+
+  const roleMap = getRoles(roomCode)
+  const state = readStateFile(roomCode)
+
+  // Detect the host's role from the roleMap
+  let hostRole: RoleName | null = null
+  for (const [role, bots] of Object.entries(roleMap) as [RoleName, BotInfo[]][]) {
+    const hostBot = bots.find((b) => b.nick === 'Host')
+    if (hostBot) {
+      hostRole = role
+      break
+    }
+  }
+
+  // ── Step 8: Open browser contexts per role ─────────────────────────────
+
+  // Determine which roles to open browsers for
+  const desiredRoles =
+    opts.browserRoles ??
+    (['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[])
+
+  const pages = new Map<string, Page>()
+  const botsByRole = new Map<string, BotInfo>()
+
+  // Always include host page
+  pages.set('HOST', hostPage)
+
+  // If the host has a desired role, map that role to the host's page
+  if (hostRole && desiredRoles.includes(hostRole)) {
+    pages.set(hostRole, hostPage)
+  }
+
+  for (const role of desiredRoles) {
+    // Skip if already mapped (host has this role)
+    if (pages.has(role)) continue
+
+    const botsForRole = roleMap[role]
+    if (!botsForRole || botsForRole.length === 0) continue
+
+    // Pick the first non-host bot for this role
+    const bot = botsForRole.find((b) => b.nick !== 'Host') ?? botsForRole[0]
+    if (bot.nick === 'Host') continue // host is already mapped above
+
+    const creds = getConsoleLogin(bot.nick, roomCode)
+
+    const ctx = await browser.newContext()
+    contexts.push(ctx)
+    const page = await ctx.newPage()
+
+    // Login by setting localStorage directly
+    await page.goto(`${BASE_URL}/`)
+    await page.evaluate(
+      ({ jwt, nickname, userId }) => {
+        localStorage.setItem('jwt', jwt)
+        localStorage.setItem('nickname', nickname)
+        localStorage.setItem('userId', userId)
+      },
+      { jwt: creds.jwt, nickname: creds.nickname, userId: creds.userId },
+    )
+
+    // Navigate to game
+    await page.goto(`${BASE_URL}/game/${gameId}`)
+
+    // Wait for game view to load (any phase component)
+    await page.locator('.game-wrap').waitFor({ state: 'visible', timeout: 15_000 })
+
+    pages.set(role, page)
+    botsByRole.set(role, bot)
+  }
+
+  const isHostRole = (role: RoleName) => hostRole === role
+
+  return {
+    roomCode,
+    gameId,
+    hostPage,
+    hostContext,
+    pages,
+    bots: botsByRole,
+    allBots: state.bots,
+    roleMap,
+    hostRole,
+    isHostRole,
+    cleanup: async () => {
+      for (const ctx of contexts) {
+        try {
+          await ctx.close()
+        } catch {
+          // ignore close errors
+        }
+      }
+    },
+  }
+}

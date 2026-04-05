@@ -43,6 +43,8 @@ class SeerHandler(private val nightPhaseRepository: NightPhaseRepository) : Role
 
                 val target = action.targetUserId
                     ?: return GameActionResult.Rejected("Target required")
+                if (target == action.actorUserId)
+                    return GameActionResult.Rejected("Cannot check yourself")
                 val targetPlayer = context.alivePlayerById(target)
                     ?: return GameActionResult.Rejected("Target not found or dead")
 

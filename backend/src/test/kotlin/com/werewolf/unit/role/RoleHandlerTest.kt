@@ -245,6 +245,15 @@ class RoleHandlerTest {
         }
 
         @Test
+        fun `seer check - rejected when seer checks themselves`() {
+            val ctx = seerCtx()
+            val result = handler.handle(req("seer", ActionType.SEER_CHECK, "seer"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((result as GameActionResult.Rejected).reason).contains("Cannot check yourself")
+            verifyNoInteractions(nightPhaseRepository)
+        }
+
+        @Test
         fun `seer confirm - succeeds without side effects`() {
             val ctx = seerCtx(subPhase = NightSubPhase.SEER_RESULT)
             val result = handler.handle(req("seer", ActionType.SEER_CONFIRM), ctx)
@@ -397,6 +406,47 @@ class RoleHandlerTest {
             val captor = argumentCaptor<NightPhase>()
             verify(nightPhaseRepository).save(captor.capture())
             assertThat(captor.firstValue.guardTargetUserId).isNull()
+        }
+
+        @Test
+        fun `guard protect - allowed when guard protects themselves`() {
+            val np = nightPhase(NightSubPhase.GUARD_PICK)
+            val guard = player("guard", 1, PlayerRole.GUARD)
+            val ctx = GameContext(game(), room(), listOf(guard), nightPhase = np)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("guard", ActionType.GUARD_PROTECT, "guard"), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+            val captor = argumentCaptor<NightPhase>()
+            verify(nightPhaseRepository).save(captor.capture())
+            assertThat(captor.firstValue.guardTargetUserId).isEqualTo("guard")
+        }
+
+        @Test
+        fun `guard protect - rejected when guard protects themselves on consecutive night`() {
+            // Guard protected themselves last night, cannot do it again
+            val np = nightPhase(NightSubPhase.GUARD_PICK, prevGuardTarget = "guard")
+            val guard = player("guard", 1, PlayerRole.GUARD)
+            val ctx = GameContext(game(), room(), listOf(guard), nightPhase = np)
+
+            val result = handler.handle(req("guard", ActionType.GUARD_PROTECT, "guard"), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((result as GameActionResult.Rejected).reason).contains("same player two nights")
+        }
+
+        @Test
+        fun `guard protect - allowed on first night with no previous target`() {
+            val np = nightPhase(NightSubPhase.GUARD_PICK, prevGuardTarget = null)
+            val guard = player("guard", 1, PlayerRole.GUARD)
+            val target = player("u2", 2, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(guard, target), nightPhase = np)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("guard", ActionType.GUARD_PROTECT, "u2"), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         }
 
         @Test

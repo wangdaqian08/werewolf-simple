@@ -316,4 +316,114 @@ class GameServiceNightPhaseTest {
 
         assertThat(night["previousGuardTargetId"]).isNull()
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ROLE_REVEAL phase
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `getGameState - ROLE_REVEAL returns confirmedCount and totalCount`() {
+        val p1 = player("u1", 1, PlayerRole.VILLAGER).also { it.confirmedRole = true }
+        val p2 = player("u2", 2, PlayerRole.WEREWOLF)
+        val p3 = player("u3", 3, PlayerRole.SEER)
+        val players = listOf(p1, p2, p3)
+        val users = listOf(user("u1", "Alice"), user("u2", "Bob"), user("u3", "Carol"))
+        val game = game(phase = GamePhase.ROLE_REVEAL).also { it.dayNumber = 1 }
+        setupGameAndPlayers(game, players, users)
+
+        val result = gameService.getGameState(gameId, "u1")
+
+        @Suppress("UNCHECKED_CAST")
+        val roleReveal = result["roleReveal"] as Map<String, Any?>
+        assertThat(roleReveal["confirmedCount"]).isEqualTo(1)
+        assertThat(roleReveal["totalCount"]).isEqualTo(3)
+    }
+
+    @Test
+    fun `getGameState - ROLE_REVEAL werewolf sees teammate list`() {
+        val wolf1 = player("u1", 1, PlayerRole.WEREWOLF)
+        val wolf2 = player("u2", 2, PlayerRole.WEREWOLF)
+        val villager = player("u3", 3, PlayerRole.VILLAGER)
+        val players = listOf(wolf1, wolf2, villager)
+        val users = listOf(user("u1", "Wolf1"), user("u2", "Wolf2"), user("u3", "Dave"))
+        val game = game(phase = GamePhase.ROLE_REVEAL).also { it.dayNumber = 1 }
+        setupGameAndPlayers(game, players, users)
+
+        val result = gameService.getGameState(gameId, "u1")
+
+        @Suppress("UNCHECKED_CAST")
+        val roleReveal = result["roleReveal"] as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val teammates = roleReveal["teammates"] as List<String>
+        assertThat(teammates).containsExactly("Wolf2")
+    }
+
+    @Test
+    fun `getGameState - ROLE_REVEAL non-werewolf gets empty teammates`() {
+        val villager = player("u1", 1, PlayerRole.VILLAGER)
+        val wolf = player("u2", 2, PlayerRole.WEREWOLF)
+        val players = listOf(villager, wolf)
+        val users = listOf(user("u1", "Alice"), user("u2", "Bob"))
+        val game = game(phase = GamePhase.ROLE_REVEAL).also { it.dayNumber = 1 }
+        setupGameAndPlayers(game, players, users)
+
+        val result = gameService.getGameState(gameId, "u1")
+
+        @Suppress("UNCHECKED_CAST")
+        val roleReveal = result["roleReveal"] as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val teammates = roleReveal["teammates"] as List<String>
+        assertThat(teammates).isEmpty()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GAME_OVER phase — roles exposed for all players
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `getGameState - GAME_OVER exposes roles for all players`() {
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val seer = player("u2", 2, PlayerRole.SEER)
+        val villager = player("u3", 3, PlayerRole.VILLAGER)
+        val players = listOf(wolf, seer, villager)
+        val users = listOf(user("u1", "Wolf"), user("u2", "Seer"), user("u3", "Villager"))
+        val game = game(phase = GamePhase.GAME_OVER).also {
+            it.dayNumber = 1
+            it.winner = WinnerSide.WEREWOLF
+        }
+        setupGameAndPlayers(game, players, users)
+
+        // Requesting as u3 (villager) — should still see everyone's roles
+        val result = gameService.getGameState(gameId, "u3")
+
+        @Suppress("UNCHECKED_CAST")
+        val playerList = result["players"] as List<Map<String, Any?>>
+        val wolfEntry = playerList.first { it["userId"] == "u1" }
+        val seerEntry = playerList.first { it["userId"] == "u2" }
+        assertThat(wolfEntry["role"]).isEqualTo("WEREWOLF")
+        assertThat(seerEntry["role"]).isEqualTo("SEER")
+    }
+
+    @Test
+    fun `getGameState - during NIGHT phase other player roles are hidden`() {
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val seer = player("u2", 2, PlayerRole.SEER)
+        val players = listOf(wolf, seer)
+        val users = listOf(user("u1", "Wolf"), user("u2", "Seer"))
+        val game = game(phase = GamePhase.NIGHT)
+        setupGameAndPlayers(game, players, users)
+
+        val np = nightPhase(subPhase = NightSubPhase.WAITING)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+
+        // Requesting as u2 (seer) — should only see own role
+        val result = gameService.getGameState(gameId, "u2")
+
+        @Suppress("UNCHECKED_CAST")
+        val playerList = result["players"] as List<Map<String, Any?>>
+        val wolfEntry = playerList.first { it["userId"] == "u1" }
+        val seerEntry = playerList.first { it["userId"] == "u2" }
+        assertThat(wolfEntry["role"]).isNull() // hidden
+        assertThat(seerEntry["role"]).isEqualTo("SEER") // own role visible
+    }
 }

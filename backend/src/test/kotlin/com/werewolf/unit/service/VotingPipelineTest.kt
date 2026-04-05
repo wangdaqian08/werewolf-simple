@@ -454,6 +454,120 @@ class VotingPipelineTest {
         assertThat((result as GameActionResult.Rejected).reason).contains("not found or dead")
     }
 
+    // ── unvote ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `unvote - rejected when not in VOTING phase`() {
+        val voter = player(hostId, 0)
+        val game = game().also { it.phase = GamePhase.DAY }
+        val context = ctx(game, voter)
+
+        val result = votingPipeline.unvote(req(hostId, ActionType.VOTING_UNVOTE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Not in voting phase")
+    }
+
+    @Test
+    fun `unvote - rejected when sub-phase is VOTE_RESULT`() {
+        val voter = player(hostId, 0)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name), voter)
+
+        val result = votingPipeline.unvote(req(hostId, ActionType.VOTING_UNVOTE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Voting is not open")
+    }
+
+    @Test
+    fun `unvote - rejected when player has no vote to retract`() {
+        val voter = player(hostId, 0)
+        val context = ctx(game(), voter)
+
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(emptyList())
+
+        val result = votingPipeline.unvote(req(hostId, ActionType.VOTING_UNVOTE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("No vote to retract")
+    }
+
+    @Test
+    fun `unvote - success, vote deleted from DB and broadcast sent`() {
+        val voter = player(hostId, 0)
+        val context = ctx(game(), voter)
+
+        val existingVote = vote(hostId, "u2")
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(listOf(existingVote))
+
+        val result = votingPipeline.unvote(req(hostId, ActionType.VOTING_UNVOTE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        verify(voteRepository).delete(existingVote)
+        verify(stompPublisher).broadcastGame(eq(gameId), any())
+    }
+
+    @Test
+    fun `unvote - works in RE_VOTING sub-phase`() {
+        val voter = player(hostId, 0)
+        val context = ctx(game(VotingSubPhase.RE_VOTING.name), voter)
+
+        val existingVote = vote(hostId, "u2")
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(listOf(existingVote))
+
+        val result = votingPipeline.unvote(req(hostId, ActionType.VOTING_UNVOTE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        verify(voteRepository).delete(existingVote)
+    }
+
+    // ── continueToNight ──────────────────────────────────────────────────────
+
+    @Test
+    fun `continueToNight - rejected when actor is not host`() {
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name))
+
+        val result = votingPipeline.continueToNight(req("guest:001", ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Only host")
+    }
+
+    @Test
+    fun `continueToNight - rejected when not in VOTING phase`() {
+        val game = game().also { it.phase = GamePhase.DAY }
+        val context = ctx(game)
+
+        val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Not in voting phase")
+    }
+
+    @Test
+    fun `continueToNight - rejected when sub-phase is not VOTE_RESULT`() {
+        val context = ctx(game(VotingSubPhase.VOTING.name))
+
+        val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("VOTE_RESULT")
+    }
+
+    @Test
+    fun `continueToNight - success, initiates night with correct day number`() {
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name))
+
+        val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        // dayNumber is 1, so next night should be day 2
+        verify(nightOrchestrator).initNight(eq(gameId), eq(2), anyOrNull(), any())
+    }
+
     // ── WinConditionMode ──────────────────────────────────────────────────────
 
     @Test
