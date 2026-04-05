@@ -259,7 +259,7 @@ import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
 import VotingPhase from '@/components/VotingPhase.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
-import { useAudioService } from '@/composables/useAudioService'
+// import { useAudioService } from '@/composables/useAudioService'
 import type { GamePlayer } from '@/types'
 
 const route = useRoute()
@@ -269,7 +269,7 @@ const gameStore = useGameStore()
 const roomStore = useRoomStore()
 
 // Initialize audio service
-useAudioService()
+// useAudioService()
 
 const isMock = import.meta.env.VITE_MOCK === 'true'
 const hasConfirmedRole = ref(false)

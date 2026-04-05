@@ -45,7 +45,7 @@ onMounted(async () => {
   if (!gameStore.state?.winner) {
     const gameId = Number(route.params.gameId)
     if (gameId) {
-      const state = await gameService.getState(gameId)
+      const state = await gameService.getState(gameId.toString())
       gameStore.setState(state)
     }
   }
