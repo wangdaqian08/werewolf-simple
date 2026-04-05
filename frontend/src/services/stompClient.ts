@@ -1,4 +1,4 @@
-import {Client, type IMessage, type StompSubscription} from '@stomp/stompjs'
+import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 
 // In mock mode this singleton is used instead of a real WebSocket connection.

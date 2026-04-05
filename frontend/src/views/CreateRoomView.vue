@@ -122,11 +122,11 @@
 </template>
 
 <script lang="ts" setup>
-import {ref} from 'vue'
-import {useRouter} from 'vue-router'
-import {useRoomStore} from '@/stores/roomStore'
-import {roomService} from '@/services/roomService'
-import type {WinConditionMode} from '@/types'
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useRoomStore } from '@/stores/roomStore'
+import { roomService } from '@/services/roomService'
+import type { WinConditionMode } from '@/types'
 
 const router = useRouter()
 const roomStore = useRoomStore()

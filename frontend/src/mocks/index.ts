@@ -29,8 +29,8 @@ import {
   MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
   MOCK_STOMP_EVENTS,
 } from './data'
-import {mockStompClient} from './mockStompClient'
-import type {DayPhaseState, GameState, RoomPlayer, SheriffElectionState} from '@/types'
+import { mockStompClient } from './mockStompClient'
+import type { DayPhaseState, GameState, RoomPlayer, SheriffElectionState } from '@/types'
 
 // Mutable room state shared across mock endpoints so debug actions see current players.
 let mockRoomId = MOCK_ROOM_AS_HOST.roomId

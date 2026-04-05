@@ -30,11 +30,11 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, onMounted} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
-import {useGameStore} from '@/stores/gameStore'
-import {useUserStore} from '@/stores/userStore'
-import {gameService} from '@/services/gameService'
+import { computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useGameStore } from '@/stores/gameStore'
+import { useUserStore } from '@/stores/userStore'
+import { gameService } from '@/services/gameService'
 
 const route = useRoute()
 const router = useRouter()
