@@ -60,7 +60,8 @@
           <div class="elim-banner-body">
             <span class="elim-banner-tag">白痴翻牌 · IDIOT REVEALED</span>
             <span class="elim-banner-name">
-              {{ votingPhase.idiotRevealedNickname }} · 座位 {{ votingPhase.idiotRevealedSeatIndex }}
+              {{ votingPhase.idiotRevealedNickname }} · 座位
+              {{ votingPhase.idiotRevealedSeatIndex }}
             </span>
             <span class="elim-banner-role">存活，失去投票权 · Survives, loses vote</span>
           </div>
@@ -509,12 +510,12 @@ const isRevealed = computed(
 // Debug: watch votingPhase changes
 
 // watch(
-  // () => props.votingPhase,
-  // (newPhase) => {
-  //   console.log('[VotingPhase] votingPhase changed:', newPhase)
-  //   console.log('[VotingPhase] isRevealed:', isRevealed.value)
-  // },
-  // { deep: true, immediate: true },
+// () => props.votingPhase,
+// (newPhase) => {
+//   console.log('[VotingPhase] votingPhase changed:', newPhase)
+//   console.log('[VotingPhase] isRevealed:', isRevealed.value)
+// },
+// { deep: true, immediate: true },
 // )
 
 // Badge screen: post-action states
@@ -522,7 +523,7 @@ const badgeDone = computed(() => {
   if (props.votingPhase.badgeDestroyed) return true
   // Check if eliminated sheriff still has badge (if false, badge has been handed over)
   const eliminatedSheriff = props.players.find(
-    (p) => p.userId === props.votingPhase.eliminatedPlayerId
+    (p) => p.userId === props.votingPhase.eliminatedPlayerId,
   )
   return eliminatedSheriff ? !eliminatedSheriff.isSheriff : false
 })

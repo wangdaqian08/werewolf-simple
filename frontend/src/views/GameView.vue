@@ -403,13 +403,12 @@ async function handleRevealResult() {
 async function handleStartVote() {
   const currentPhase = gameStore.state?.phase
   const currentSubPhase = gameStore.state?.dayPhase?.subPhase
-  
-  if (currentPhase !== 'DAY') {
 
-    ElMessage({ 
-      message: `当前游戏阶段不正确，无法开始投票。当前阶段: ${currentPhase}`, 
-      type: 'error', 
-      duration: 5000 
+  if (currentPhase !== 'DAY') {
+    ElMessage({
+      message: `当前游戏阶段不正确，无法开始投票。当前阶段: ${currentPhase}`,
+      type: 'error',
+      duration: 5000,
     })
     // Refresh state to sync with backend
     const gameId = route.params.gameId as string
@@ -417,12 +416,12 @@ async function handleStartVote() {
     gameStore.setState(state)
     return
   }
-  
+
   if (currentSubPhase !== 'RESULT_REVEALED') {
-    ElMessage({ 
-      message: `请先公布昨晚的结果`, 
-      type: 'error', 
-      duration: 5000 
+    ElMessage({
+      message: `请先公布昨晚的结果`,
+      type: 'error',
+      duration: 5000,
     })
     return
   }
@@ -468,7 +467,7 @@ async function handleNightConfirm(targetId?: string) {
       if (targetId) await action({ actionType: 'GUARD_PROTECT', targetId })
       break
     default:
-      //console.log('[GameView] handleNightConfirm unknown subPhase:', subPhase)
+    //console.log('[GameView] handleNightConfirm unknown subPhase:', subPhase)
   }
 }
 
@@ -478,18 +477,18 @@ const witchPoisonTargetId = ref<string | null | undefined>(undefined)
 
 async function handleWitchAntidote() {
   witchUseAntidote.value = true
-  witchPoisonTargetId.value = null  // Automatically not using poison
+  witchPoisonTargetId.value = null // Automatically not using poison
   await trySubmitWitchAct()
 }
 
 async function handleWitchPassAntidote() {
   witchUseAntidote.value = false
-  witchPoisonTargetId.value = null  // Automatically not using poison
+  witchPoisonTargetId.value = null // Automatically not using poison
   await trySubmitWitchAct()
 }
 
 async function handleWitchPoison(targetId: string) {
-  witchUseAntidote.value = false  // Automatically not using antidote
+  witchUseAntidote.value = false // Automatically not using antidote
   witchPoisonTargetId.value = targetId
   await trySubmitWitchAct()
 }
@@ -502,7 +501,10 @@ async function handleWitchPassPoison() {
 
 async function handleWitchSkip() {
   // When witch has no items, just skip the phase
-  await action({ actionType: 'WITCH_ACT', payload: { useAntidote: false, poisonTargetUserId: null } })
+  await action({
+    actionType: 'WITCH_ACT',
+    payload: { useAntidote: false, poisonTargetUserId: null },
+  })
 }
 
 async function trySubmitWitchAct() {
@@ -512,14 +514,15 @@ async function trySubmitWitchAct() {
   }
 
   // Allow submission as soon as any decision is made
-  const hasDecision = witchUseAntidote.value !== undefined || witchPoisonTargetId.value !== undefined
+  const hasDecision =
+    witchUseAntidote.value !== undefined || witchPoisonTargetId.value !== undefined
   if (!hasDecision) {
     return
   }
 
   const payload: Record<string, unknown> = {
     useAntidote: witchUseAntidote.value ?? false,
-    poisonTargetUserId: witchPoisonTargetId.value
+    poisonTargetUserId: witchPoisonTargetId.value,
   }
   await action({ actionType: 'WITCH_ACT', payload })
   witchUseAntidote.value = undefined

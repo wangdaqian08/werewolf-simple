@@ -453,7 +453,15 @@ export const MOCK_SHERIFF_RESULT: SheriffElectionState = {
 // All night scenarios use MOCK_GAME_STATE players; u4 (Carol, seat 4) is dead.
 
 export function makeNightScenario(
-  variant: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING' | 'SEER_IDLE' | 'DEAD',
+  variant:
+    | 'WEREWOLF'
+    | 'SEER_PICK'
+    | 'SEER_RESULT'
+    | 'WITCH'
+    | 'GUARD'
+    | 'WAITING'
+    | 'SEER_IDLE'
+    | 'DEAD',
 ): GameState {
   const base: GameState = { ...MOCK_GAME_STATE, phase: 'NIGHT' }
   switch (variant) {

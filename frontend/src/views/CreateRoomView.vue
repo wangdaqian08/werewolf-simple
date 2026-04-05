@@ -95,7 +95,11 @@
           <div class="role-names">
             <span class="role-name">胜利条件 Win Condition</span>
             <span class="win-cond-desc">
-              {{ winCondition === 'CLASSIC' ? '经典：狼人人数 ≥ 好人（Classic: wolves ≥ others）' : '困难：全灭好人（Hard: eliminate all villagers）' }}
+              {{
+                winCondition === 'CLASSIC'
+                  ? '经典：狼人人数 ≥ 好人（Classic: wolves ≥ others）'
+                  : '困难：全灭好人（Hard: eliminate all villagers）'
+              }}
             </span>
           </div>
           <button
@@ -181,7 +185,12 @@ async function handleCreate() {
   try {
     const roles = ROLE_DEFINITIONS.filter((r) => isEnabled(r.id)).map((r) => r.id)
     const room = await roomService.createRoom({
-      config: { totalPlayers: totalPlayers.value, roles, hasSheriff: hasSheriff.value, winCondition: winCondition.value },
+      config: {
+        totalPlayers: totalPlayers.value,
+        roles,
+        hasSheriff: hasSheriff.value,
+        winCondition: winCondition.value,
+      },
     })
     roomStore.setRoom(room)
     router.push({ name: 'room', params: { roomId: room.roomId } })

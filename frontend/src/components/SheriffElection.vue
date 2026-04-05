@@ -1018,6 +1018,3 @@ function speakerLabel(uid: string, idx: number) {
   font-weight: 700;
 }
 </style>
-
-
-

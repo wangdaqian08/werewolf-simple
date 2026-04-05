@@ -33,5 +33,12 @@ export const useGameStore = defineStore('game', () => {
     state.value.nightPhase = { ...state.value.nightPhase, selectedTargetId }
   }
 
-  return { state, setState, addEvent, incrementConfirmedCount, clearGame, updateNightPhaseSelection }
+  return {
+    state,
+    setState,
+    addEvent,
+    incrementConfirmedCount,
+    clearGame,
+    updateNightPhaseSelection,
+  }
 })

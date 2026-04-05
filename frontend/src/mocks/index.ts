@@ -825,8 +825,11 @@ export function setupMocks() {
         pushGameStateUpdate()
       } else if (actionType === 'VOTING_CONTINUE') {
         if (vp.subPhase === 'BADGE_HANDOVER') {
-          const eliminatedSheriff = mockGameState.players.find((p) => p.userId === vp.eliminatedPlayerId)
-          const badgeDone = vp.badgeDestroyed || (eliminatedSheriff ? !eliminatedSheriff.isSheriff : false)
+          const eliminatedSheriff = mockGameState.players.find(
+            (p) => p.userId === vp.eliminatedPlayerId,
+          )
+          const badgeDone =
+            vp.badgeDestroyed || (eliminatedSheriff ? !eliminatedSheriff.isSheriff : false)
           if (badgeDone) {
             // Badge done — advance to NIGHT
             const nextDay = (mockGameState.dayNumber ?? 1) + 1

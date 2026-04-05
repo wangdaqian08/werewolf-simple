@@ -110,7 +110,11 @@
     </template>
 
     <!-- ── SEER_RESULT ────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'SEER_RESULT' && myRole === 'SEER' && nightPhase.seerResult && me?.isAlive">
+    <template
+      v-else-if="
+        subPhase === 'SEER_RESULT' && myRole === 'SEER' && nightPhase.seerResult && me?.isAlive
+      "
+    >
       <div class="sr-wrap">
         <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
           <div class="sr-player">
@@ -118,7 +122,9 @@
             {{ nightPhase.seerResult.checkedNickname }}
           </div>
           <div class="sr-verdict">
-            {{ nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 平民阵营 · Good Camp' }}
+            {{
+              nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 平民阵营 · Good Camp'
+            }}
           </div>
         </div>
         <div class="sr-hist">
@@ -247,9 +253,7 @@
         </div>
         <p class="ws-desc">你没有可用的道具。</p>
         <div class="ws-row">
-          <button class="btn btn-primary ws-btn" @click="emit('witchSkip')">
-            完成操作 · Done
-          </button>
+          <button class="btn btn-primary ws-btn" @click="emit('witchSkip')">完成操作 · Done</button>
         </div>
       </div>
     </template>
