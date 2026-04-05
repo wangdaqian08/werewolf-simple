@@ -203,9 +203,21 @@ class SheriffService(
             return GameActionResult.Rejected("Not in SPEECH sub-phase")
 
         val order = election.speakingOrder?.split(",") ?: emptyList()
-        val nextIdx = election.currentSpeakerIdx + 1
+        val candidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
+        val candidateStatusMap = candidates.associateBy { it.userId }.mapValues { it.value.status }
+
+        // Find the next running candidate, skipping those who have quit
+        var nextIdx = election.currentSpeakerIdx + 1
+        while (nextIdx < order.size) {
+            val nextUserId = order[nextIdx]
+            if (candidateStatusMap[nextUserId] == CandidateStatus.RUNNING) {
+                break
+            }
+            nextIdx++
+        }
 
         if (nextIdx >= order.size) {
+            // All candidates have spoken (or quit) - move to voting
             election.subPhase = ElectionSubPhase.VOTING
             sheriffElectionRepository.save(election)
             stompPublisher.broadcastGame(

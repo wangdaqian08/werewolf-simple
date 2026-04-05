@@ -40,6 +40,7 @@
       v-else-if="gameStore.state?.phase === 'SHERIFF_ELECTION' && gameStore.state?.sheriffElection"
     >
       <SheriffElection
+        :key="`sheriff-${gameStore.state.sheriffElection.subPhase}`"
         :election="gameStore.state.sheriffElection"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
@@ -60,6 +61,7 @@
     <!-- Night phase -->
     <template v-else-if="gameStore.state?.phase === 'NIGHT' && gameStore.state?.nightPhase">
       <NightPhase
+        :key="`night-${gameStore.state.nightPhase.subPhase}-${gameStore.state.dayNumber}`"
         :night-phase="gameStore.state.nightPhase"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
@@ -70,12 +72,14 @@
         @witch-pass-antidote="handleWitchPassAntidote"
         @witch-poison="handleWitchPoison"
         @witch-pass-poison="handleWitchPassPoison"
+        @witch-skip="handleWitchSkip"
       />
     </template>
 
     <!-- Voting phase -->
     <template v-else-if="gameStore.state?.phase === 'VOTING' && gameStore.state?.votingPhase">
       <VotingPhase
+        :key="`voting-${gameStore.state.votingPhase.subPhase}-${gameStore.state.dayNumber}`"
         :voting-phase="gameStore.state.votingPhase"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
@@ -84,7 +88,7 @@
         :vote-history="gameStore.state?.voteHistory"
         @select-player="handleVotingSelect"
         @vote="handleVotingVote"
-        @skip-vote="handleVotingSkip"
+        @skip="handleVotingSkip"
         @unvote="handleVotingUnvote"
         @reveal-voting="handleVotingReveal"
         @continue-voting="handleVotingContinue"
@@ -98,6 +102,7 @@
     <!-- Day phase -->
     <template v-else-if="gameStore.state?.phase === 'DAY' && gameStore.state?.dayPhase">
       <DayPhase
+        :key="`${gameStore.state.dayPhase.subPhase}-${gameStore.state.dayPhase.dayNumber}`"
         :day-phase="gameStore.state.dayPhase"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
@@ -181,6 +186,7 @@
         <button class="debug-btn" @click="debugNight('WITCH')">Witch</button>
         <button class="debug-btn" @click="debugNight('GUARD')">Guard</button>
         <button class="debug-btn" @click="debugNight('WAITING')">Waiting</button>
+        <button class="debug-btn" @click="debugNight('DEAD')">Dead Night</button>
         <button class="debug-btn debug-btn-exit" @click="debugNightAdvance">→ Day</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Voting Screens</div>
@@ -194,6 +200,8 @@
         <button class="debug-btn" @click="debugVoting('BADGE_BURNED')">Badge: Burned</button>
         <button class="debug-btn" @click="debugVoting('VOTING_NO_HISTORY')">No History</button>
         <button class="debug-btn" @click="debugVoting('VOTING_NO_DATA')">No Data</button>
+        <button class="debug-btn" @click="debugVoting('IDIOT_REVEAL')">Idiot Reveal</button>
+        <button class="debug-btn" @click="debugVoting('RE_VOTING')">Re-Vote</button>
         <button class="debug-btn debug-btn-exit" @click="debugVotingAdvance">→ Night</button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Game Over</div>
@@ -236,6 +244,7 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { useGameStore } from '@/stores/gameStore'
@@ -250,6 +259,7 @@ import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
 import VotingPhase from '@/components/VotingPhase.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
+// import { useAudioService } from '@/composables/useAudioService'
 import type { GamePlayer } from '@/types'
 
 const route = useRoute()
@@ -258,13 +268,27 @@ const userStore = useUserStore()
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
 
+// Initialize audio service
+// useAudioService()
+
 const isMock = import.meta.env.VITE_MOCK === 'true'
 const hasConfirmedRole = ref(false)
 const isRoleRevealed = ref(false)
 
 // Wraps gameService.submitAction to always include the gameId from the route
 async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) {
-  return gameService.submitAction({ ...req, gameId: parseInt(route.params.gameId as string) })
+  const gameId = Number(route.params.gameId)
+  const res = await gameService.submitAction({ ...req, gameId })
+  if (res && !res.success && res.message) {
+    console.error('[GameView] Action failed:', res.message)
+    ElMessage({ message: res.message, type: 'error', duration: 3000 })
+    // If the action failed due to phase mismatch, refresh the state
+    if (res.message.includes('phase') || res.message.includes('Phase')) {
+      const state = await gameService.getState(gameId.toString())
+      gameStore.setState(state)
+    }
+  }
+  return res
 }
 
 const isHost = computed(() => {
@@ -377,6 +401,31 @@ async function handleRevealResult() {
   await action({ actionType: 'REVEAL_NIGHT_RESULT' })
 }
 async function handleStartVote() {
+  const currentPhase = gameStore.state?.phase
+  const currentSubPhase = gameStore.state?.dayPhase?.subPhase
+
+  if (currentPhase !== 'DAY') {
+    ElMessage({
+      message: `当前游戏阶段不正确，无法开始投票。当前阶段: ${currentPhase}`,
+      type: 'error',
+      duration: 5000,
+    })
+    // Refresh state to sync with backend
+    const gameId = route.params.gameId as string
+    const state = await gameService.getState(gameId)
+    gameStore.setState(state)
+    return
+  }
+
+  if (currentSubPhase !== 'RESULT_REVEALED') {
+    ElMessage({
+      message: `请先公布昨晚的结果`,
+      type: 'error',
+      duration: 5000,
+    })
+    return
+  }
+
   await action({ actionType: 'DAY_ADVANCE' })
 }
 async function handleDayVote(targetId: string) {
@@ -390,32 +439,104 @@ async function handleDaySelectPlayer(userId: string) {
 }
 
 async function handleNightSelect(userId: string) {
-  await action({ actionType: 'NIGHT_SELECT', targetId: userId })
+  // Wolf selection is shared with teammates in real-time; other roles select locally only
+  if (gameStore.state?.nightPhase?.subPhase === 'WEREWOLF_PICK') {
+    await action({ actionType: 'WOLF_SELECT', targetId: userId })
+  }
 }
 async function handleNightConfirm(targetId?: string) {
-  await action({ actionType: 'NIGHT_CONFIRM', targetId })
-}
-async function handleWitchAntidote() {
-  await action({ actionType: 'NIGHT_WITCH_USE_ANTIDOTE' })
-}
-async function handleWitchPassAntidote() {
-  await action({ actionType: 'NIGHT_WITCH_PASS_ANTIDOTE' })
-}
-async function handleWitchPoison(targetId: string) {
-  await action({ actionType: 'NIGHT_WITCH_USE_POISON', targetId })
-}
-async function handleWitchPassPoison() {
-  await action({ actionType: 'NIGHT_WITCH_PASS_POISON' })
+  //console.log('[GameView] handleNightConfirm called with targetId:', targetId)
+  const subPhase = gameStore.state?.nightPhase?.subPhase
+  //console.log('[GameView] handleNightConfirm subPhase:', subPhase)
+  switch (subPhase) {
+    case 'WEREWOLF_PICK':
+      if (targetId) await action({ actionType: 'WOLF_KILL', targetId })
+      break
+    case 'SEER_PICK':
+      if (targetId) await action({ actionType: 'SEER_CHECK', targetId })
+      break
+    case 'SEER_RESULT':
+      await action({ actionType: 'SEER_CONFIRM' })
+      break
+    case 'WITCH_ACT':
+      // Witch confirm - submit all decisions to advance phase
+      //console.log('[GameView] handleNightConfirm calling trySubmitWitchAct')
+      await trySubmitWitchAct()
+      break
+    case 'GUARD_PICK':
+      if (targetId) await action({ actionType: 'GUARD_PROTECT', targetId })
+      break
+    default:
+    //console.log('[GameView] handleNightConfirm unknown subPhase:', subPhase)
+  }
 }
 
-async function handleVotingSelect(userId: string) {
-  await action({ actionType: 'VOTING_SELECT', targetId: userId })
+// Witch decisions - now submits immediately after each action
+const witchUseAntidote = ref<boolean | undefined>(undefined)
+const witchPoisonTargetId = ref<string | null | undefined>(undefined)
+
+async function handleWitchAntidote() {
+  witchUseAntidote.value = true
+  witchPoisonTargetId.value = null // Automatically not using poison
+  await trySubmitWitchAct()
+}
+
+async function handleWitchPassAntidote() {
+  witchUseAntidote.value = false
+  witchPoisonTargetId.value = null // Automatically not using poison
+  await trySubmitWitchAct()
+}
+
+async function handleWitchPoison(targetId: string) {
+  witchUseAntidote.value = false // Automatically not using antidote
+  witchPoisonTargetId.value = targetId
+  await trySubmitWitchAct()
+}
+
+async function handleWitchPassPoison() {
+  witchUseAntidote.value = false
+  witchPoisonTargetId.value = null
+  await trySubmitWitchAct()
+}
+
+async function handleWitchSkip() {
+  // When witch has no items, just skip the phase
+  await action({
+    actionType: 'WITCH_ACT',
+    payload: { useAntidote: false, poisonTargetUserId: null },
+  })
+}
+
+async function trySubmitWitchAct() {
+  const nightPhase = gameStore.state?.nightPhase
+  if (!nightPhase) {
+    return
+  }
+
+  // Allow submission as soon as any decision is made
+  const hasDecision =
+    witchUseAntidote.value !== undefined || witchPoisonTargetId.value !== undefined
+  if (!hasDecision) {
+    return
+  }
+
+  const payload: Record<string, unknown> = {
+    useAntidote: witchUseAntidote.value ?? false,
+    poisonTargetUserId: witchPoisonTargetId.value,
+  }
+  await action({ actionType: 'WITCH_ACT', payload })
+  witchUseAntidote.value = undefined
+  witchPoisonTargetId.value = undefined
+}
+
+async function handleVotingSelect(_userId: string) {
+  // Selection is local UI state only — no backend call needed
 }
 async function handleVotingVote(targetId: string) {
-  await action({ actionType: 'VOTING_VOTE', targetId })
+  await action({ actionType: 'SUBMIT_VOTE', targetId })
 }
 async function handleVotingSkip() {
-  await action({ actionType: 'VOTING_SKIP' })
+  await action({ actionType: 'SUBMIT_VOTE' }) // no targetId = abstain
 }
 async function handleVotingUnvote() {
   await action({ actionType: 'VOTING_UNVOTE' })
@@ -512,6 +633,8 @@ onMounted(async () => {
     client.onConnect = () => {
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
+        // 添加事件接收日志
+        // console.log('[GameView] 收到WebSocket事件:', data.type, data)
         // Mock sends full state snapshots; real backend sends typed domain events
         if (data.type === 'GAME_STATE_UPDATE') {
           gameStore.setState(data.payload)
@@ -525,16 +648,43 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
+          //console.log('[GameView] 处理PhaseChanged事件')
           const state = await gameService.getState(gameId)
+          //console.log('[GameView] 获取到的状态:', state)
           gameStore.setState(state)
+          //console.log('[GameView] 状态已更新，当前phase:', gameStore.state?.phase)
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {
+          //console.log('[GameView] 处理NightSubPhaseChanged事件')
           const state = await gameService.getState(gameId)
           gameStore.setState(state)
         }
+        // Real backend: night result (kills) → re-fetch state
+        if (data.type === 'NightResult') {
+          //console.log('[GameView] 处理NightResult事件:', data)
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+          //console.log('[GameView] NightResult处理后phase:', gameStore.state?.phase)
+        }
         // Sheriff elected (winner or host appointment) → re-fetch to get updated sheriff state
         if (data.type === 'SheriffElected') {
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+        }
+        // Idiot revealed → re-fetch to get updated canVote/idiotRevealed player state
+        if (data.type === 'IdiotRevealed') {
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+        }
+        // Vote cast → re-fetch so votedPlayerIds/votesSubmitted updates for all viewers
+        if (data.type === 'VoteSubmitted') {
+          const state = await gameService.getState(gameId)
+          gameStore.setState(state)
+        }
+        // Vote tally revealed → re-fetch to get updated subPhase and tally
+        // This is the main event that should trigger UI update; PhaseChanged is also sent but VoteTally is more complete
+        if (data.type === 'VoteTally') {
           const state = await gameService.getState(gameId)
           gameStore.setState(state)
         }
@@ -546,7 +696,11 @@ onMounted(async () => {
       // Private channel for role-specific info (night actions, etc.)
       subscribeToTopic('/user/queue/private', (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
-        gameStore.addEvent(data)
+        if (data.type === 'WolfSelectionChanged') {
+          gameStore.updateNightPhaseSelection(data.selectedTargetUserId)
+        } else {
+          gameStore.addEvent(data)
+        }
       })
     }
     client.activate()

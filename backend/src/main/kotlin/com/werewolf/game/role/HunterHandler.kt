@@ -7,8 +7,10 @@ import com.werewolf.model.ActionType
 import com.werewolf.model.GamePhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.VotingSubPhase
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
+@Order(11)
 @Component
 class HunterHandler : RoleHandler {
 
@@ -16,7 +18,7 @@ class HunterHandler : RoleHandler {
 
     override fun acceptedActions(phase: GamePhase, subPhase: String?): Set<ActionType> =
         if (phase == GamePhase.VOTING && subPhase == VotingSubPhase.HUNTER_SHOOT.name)
-            setOf(ActionType.HUNTER_SHOOT, ActionType.HUNTER_SKIP)
+            setOf(ActionType.HUNTER_SHOOT, ActionType.HUNTER_PASS)
         else emptySet()
 
     // Hunter has no night action — shot is triggered by elimination during voting

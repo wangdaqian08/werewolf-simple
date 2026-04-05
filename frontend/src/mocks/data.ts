@@ -13,8 +13,8 @@ import type {
   LoginResponse,
   NightPhaseState,
   PlayerRole,
-  Room,
   RoleRevealState,
+  Room,
   SheriffElectionState,
   VoteRoundHistory,
   VoteTally,
@@ -209,10 +209,14 @@ export function makeRoleRevealState(totalCount: number, teammates?: string[]): R
 // Carol (u4, seat 4) was killed last night.
 
 const NIGHT_RESULT = {
-  killedPlayerId: 'u4',
-  killedNickname: 'Carol',
-  killedSeatIndex: 4,
-  killedAvatar: '🌙',
+  killedPlayers: [
+    {
+      killedPlayerId: 'u4',
+      killedNickname: 'Carol',
+      killedSeatIndex: 4,
+      killedAvatar: '🌙',
+    },
+  ],
 }
 
 // Factory functions so each debug trigger gets a fresh deadline relative to now.
@@ -449,7 +453,15 @@ export const MOCK_SHERIFF_RESULT: SheriffElectionState = {
 // All night scenarios use MOCK_GAME_STATE players; u4 (Carol, seat 4) is dead.
 
 export function makeNightScenario(
-  variant: 'WEREWOLF' | 'SEER_PICK' | 'SEER_RESULT' | 'WITCH' | 'GUARD' | 'WAITING' | 'SEER_IDLE',
+  variant:
+    | 'WEREWOLF'
+    | 'SEER_PICK'
+    | 'SEER_RESULT'
+    | 'WITCH'
+    | 'GUARD'
+    | 'WAITING'
+    | 'SEER_IDLE'
+    | 'DEAD',
 ): GameState {
   const base: GameState = { ...MOCK_GAME_STATE, phase: 'NIGHT' }
   switch (variant) {
@@ -524,6 +536,14 @@ export function makeNightScenario(
         ...base,
         myRole: 'SEER',
         nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1 } satisfies NightPhaseState,
+      }
+    case 'DEAD':
+      // Dead player (u1) during WEREWOLF_PICK — should see elimination banner and sleep screen
+      return {
+        ...base,
+        myRole: 'VILLAGER',
+        players: base.players.map((p) => (p.userId === 'u1' ? { ...p, isAlive: false } : p)),
+        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 2 } satisfies NightPhaseState,
       }
   }
 }
@@ -804,7 +824,9 @@ export function makeVotingScenario(
     | 'BADGE_SHERIFF'
     | 'BADGE_BURNED'
     | 'VOTING_NO_HISTORY'
-    | 'VOTING_NO_DATA',
+    | 'VOTING_NO_DATA'
+    | 'IDIOT_REVEAL'
+    | 'RE_VOTING',
 ): GameState {
   const now = Date.now()
   const base: GameState = {
@@ -895,13 +917,15 @@ export function makeVotingScenario(
       return {
         ...base,
         sheriff: 'u2',
+        players: base.players.map((p) => {
+          if (p.userId === 'u2') return { ...p, sheriff: true }
+          if (p.userId === 'u6') return { ...p, sheriff: false, isAlive: false }
+          return p
+        }),
         votingPhase: {
           subPhase: 'BADGE_HANDOVER',
           ...commonTiming,
           ...eliminated,
-          newSheriffId: 'u2',
-          newSheriffNickname: 'Alice',
-          newSheriffAvatar: '😊',
         } satisfies VotingState,
       }
     case 'BADGE_BURNED':
@@ -939,6 +963,39 @@ export function makeVotingScenario(
         voteHistory: undefined,
         votingPhase: {
           subPhase: 'VOTING',
+          ...commonTiming,
+          canVote: true,
+          votedPlayerIds: [],
+          votesSubmitted: 0,
+          totalVoters: 8,
+        } satisfies VotingState,
+      }
+    case 'IDIOT_REVEAL':
+      // You (u1) are the Idiot — revealed, alive but permanently lost voting right.
+      // u3 (Bob) also has idiotRevealed=true badge to show on another slot.
+      return {
+        ...base,
+        myRole: 'IDIOT' as PlayerRole,
+        players: base.players.map((p) => {
+          if (p.userId === 'u1') return { ...p, canVote: false, idiotRevealed: true }
+          if (p.userId === 'u3') return { ...p, canVote: false, idiotRevealed: true }
+          return p
+        }),
+        votingPhase: {
+          subPhase: 'VOTING',
+          ...commonTiming,
+          canVote: false,
+          votedPlayerIds: ['u5', 'u6'],
+          votesSubmitted: 2,
+          totalVoters: 7,
+        } satisfies VotingState,
+      }
+    case 'RE_VOTING':
+      // Vote tied → second round open to all living candidates
+      return {
+        ...base,
+        votingPhase: {
+          subPhase: 'RE_VOTING',
           ...commonTiming,
           canVote: true,
           votedPlayerIds: [],

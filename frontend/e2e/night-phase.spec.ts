@@ -1,8 +1,8 @@
 /**
  * Night phase E2E tests — covers all six scenarios and key interactions.
  */
-import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type {Page} from '@playwright/test'
+import {expect, test} from '@playwright/test'
 
 async function setup(page: Page) {
   await page.goto('/')
@@ -209,14 +209,12 @@ test('night: WITCH — using antidote immediately transitions to WAITING (only 1
   await expect(page.getByText('请闭眼')).toBeVisible()
 })
 
-test('night: WITCH — both decisions made → transitions to WAITING screen', async ({ page }) => {
+test('night: WITCH — passing antidote submits immediately → transitions to WAITING screen', async ({ page }) => {
   await setup(page)
   await loadNight(page, 'WITCH')
 
-  // Pass antidote then pass poison
+  // Pass antidote — submits immediately (one action per round)
   await page.getByRole('button', { name: '放弃' }).click()
-  await page.waitForTimeout(70)
-  await page.getByRole('button', { name: '不用' }).click()
   await page.waitForTimeout(70)
 
   // Should transition to WAITING subPhase — shows sleep screen
@@ -235,8 +233,8 @@ test('night: WITCH — using poison (full flow) → WAITING', async ({ page }) =
   const confirmPoison = page.getByRole('button', { name: /确认毒杀/i })
   await expect(confirmPoison).toBeDisabled()
 
-  // Select a target
-  await page.locator('.player-grid .slot-alive').first().click()
+  // Select a target — poison grid uses player-grid-sm with slot-alive
+  await page.locator('.player-grid-sm .slot-alive').first().click()
   await page.waitForTimeout(70)
   await expect(confirmPoison).not.toBeDisabled()
 
@@ -246,28 +244,16 @@ test('night: WITCH — using poison (full flow) → WAITING', async ({ page }) =
   await expect(page.getByText('请闭眼')).toBeVisible()
 })
 
-test('night: WITCH — pass antidote → poison section still active', async ({ page }) => {
+test('night: WITCH — passing poison submits immediately → transitions to WAITING', async ({ page }) => {
   await setup(page)
   await loadNight(page, 'WITCH')
 
-  await page.getByRole('button', { name: '放弃' }).click()
-  await page.waitForTimeout(70)
-
-  // Antidote section grayed out, poison section still interactive
-  await expect(page.getByRole('button', { name: /使用解药/i })).toBeDisabled()
-  await expect(page.getByRole('button', { name: /使用毒药/i })).not.toBeDisabled()
-})
-
-test('night: WITCH — pass poison → antidote section still active', async ({ page }) => {
-  await setup(page)
-  await loadNight(page, 'WITCH')
-
+  // Pass poison — submits immediately (one action per round)
   await page.getByRole('button', { name: '不用' }).click()
   await page.waitForTimeout(70)
 
-  // Poison section grayed out, antidote section still interactive
-  await expect(page.getByRole('button', { name: /使用毒药/i })).toBeDisabled()
-  await expect(page.getByRole('button', { name: /使用解药/i })).not.toBeDisabled()
+  // Should transition to WAITING subPhase — shows sleep screen
+  await expect(page.getByText('请闭眼')).toBeVisible()
 })
 
 // ── Guard ─────────────────────────────────────────────────────────────────────
@@ -376,4 +362,37 @@ test('night: debug panel Werewolf button loads werewolf screen', async ({ page }
 
   await expect(page.getByText('夜晚降临').first()).toBeVisible()
   await expect(page.locator('.rb-tag-wolf')).toBeVisible()
+})
+
+// ── Dead Player ─────────────────────────────────────────────────────────────────
+
+test('night: DEAD — dead player sees elimination banner and sleep screen', async ({ page }) => {
+  await setup(page)
+  await loadNight(page, 'DEAD')
+
+  // Should see elimination banner
+  await expect(page.getByText(/你已经出局/i)).toBeVisible()
+  await expect(page.getByText(/You are eliminated/i)).toBeVisible()
+
+  // Should see sleep screen (not role badge or action interface)
+  await expect(page.locator('.rb')).not.toBeVisible()
+  await expect(page.getByText('请闭眼').first()).toBeVisible()
+
+  // Should NOT see any player selection grid or action buttons
+  await expect(page.locator('.player-grid').first()).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /确认袭击 Confirm/i })).not.toBeVisible()
+})
+
+test('night: debug panel Dead Night button loads dead player screen', async ({ page }) => {
+  await setup(page)
+
+  await page.getByRole('button', { name: 'Dead Night', exact: true }).click()
+  await page.waitForTimeout(70)
+
+  // Should see elimination banner
+  await expect(page.getByText(/你已经出局/i)).toBeVisible()
+  await expect(page.getByText(/You are eliminated/i)).toBeVisible()
+
+  // Should NOT see role badge (dead players can't take turns)
+  await expect(page.locator('.rb')).not.toBeVisible()
 })

@@ -13,6 +13,10 @@ export default defineConfig({
             '@': fileURLToPath(new URL('./src', import.meta.url)),
         },
     },
+    define: {
+        // Fix for SockJS: add global polyfill
+        global: 'globalThis',
+    },
     server: {
         proxy: {
             '/api': 'http://localhost:8080',

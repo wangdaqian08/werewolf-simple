@@ -57,6 +57,8 @@ READY_MODE="none"   # none | all | seats
 READY_SEATS=""
 PREFIX="Bot"
 POSITIONAL_DONE=false
+HOST_TOKEN_SAVE=""
+HOST_NICK_SAVE=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -67,11 +69,13 @@ while [[ $# -gt 0 ]]; do
       else
         READY_MODE="all"
       fi ;;
-    --prefix)      PREFIX="$2"; shift 2 ;;
-    --room-id)     ROOM_ID="$2"; shift 2 ;;
-    --room-code)   ROOM_CODE=$(echo "$2" | tr 'a-z' 'A-Z'); shift 2 ;;
-    --player-num)  PLAYER_NUM="$2"; shift 2 ;;
-    -*)            echo "Unknown flag: $1"; usage ;;
+    --prefix)       PREFIX="$2"; shift 2 ;;
+    --room-id)      ROOM_ID="$2"; shift 2 ;;
+    --room-code)    ROOM_CODE=$(echo "$2" | tr 'a-z' 'A-Z'); shift 2 ;;
+    --player-num)   PLAYER_NUM="$2"; shift 2 ;;
+    --host-token)   HOST_TOKEN_SAVE="$2"; shift 2 ;;
+    --host-nick)    HOST_NICK_SAVE="$2"; shift 2 ;;
+    -*)             echo "Unknown flag: $1"; usage ;;
     *)
       if ! $POSITIONAL_DONE; then
         if [[ "$1" =~ ^[0-9]+$ ]]; then ROOM_ID="$1"
@@ -228,12 +232,18 @@ seats  = '${SAVED_SEATS}'.rstrip('|').split('|')
 new_bots = [{'nick': n, 'token': t, 'seat': int(s), 'userId': decode_user_id(t)} for n,t,s in zip(nicks,tokens,seats)]
 
 # Merge: keep existing bots whose seat is not claimed by a new bot
-existing = json.load(open('$STATE_FILE'))['bots'] if os.path.exists('$STATE_FILE') else []
+existing = json.load(open('$STATE_FILE')).get('bots', []) if os.path.exists('$STATE_FILE') else []
 new_seats = {b['seat'] for b in new_bots}
 merged = [b for b in existing if b['seat'] not in new_seats] + new_bots
 merged.sort(key=lambda b: b['seat'])
 
-json.dump({'roomCode': '$ROOM_CODE', 'roomId': $ROOM_ID, 'bots': merged}, open('$STATE_FILE', 'w'))
+existing_data = json.load(open('$STATE_FILE')) if os.path.exists('$STATE_FILE') else {}
+state = {**existing_data, 'roomCode': '$ROOM_CODE', 'roomId': $ROOM_ID, 'bots': merged}
+if '$HOST_TOKEN_SAVE':
+    state['hostToken'] = '$HOST_TOKEN_SAVE'
+if '$HOST_NICK_SAVE':
+    state['hostNick'] = '$HOST_NICK_SAVE'
+json.dump(state, open('$STATE_FILE', 'w'))
 " 2>/dev/null || true  # best-effort; non-fatal if /tmp is not writable
 
   VIEW_TOKEN=${TOKENS[1]}

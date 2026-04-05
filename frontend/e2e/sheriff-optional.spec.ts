@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import {expect, test} from '@playwright/test'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,20 +39,20 @@ test('sheriff toggle is visible on create-room screen', async ({ page }) => {
 test('sheriff toggle is ON by default', async ({ page }) => {
   await goToCreateRoom(page)
   // The toggle button for sheriff should have class toggle-on
-  const sheriffToggle = page.locator('.toggle').last()
+  const sheriffToggle = page.locator('.toggle').first()
   await expect(sheriffToggle).toHaveClass(/toggle-on/)
 })
 
 test('sheriff toggle can be turned off', async ({ page }) => {
   await goToCreateRoom(page)
-  const sheriffToggle = page.locator('.toggle').last()
+  const sheriffToggle = page.locator('.toggle').first()
   await sheriffToggle.click()
   await expect(sheriffToggle).toHaveClass(/toggle-off/)
 })
 
 test('sheriff toggle can be toggled back on', async ({ page }) => {
   await goToCreateRoom(page)
-  const sheriffToggle = page.locator('.toggle').last()
+  const sheriffToggle = page.locator('.toggle').first()
   await sheriffToggle.click() // turn off
   await expect(sheriffToggle).toHaveClass(/toggle-off/)
   await sheriffToggle.click() // turn back on

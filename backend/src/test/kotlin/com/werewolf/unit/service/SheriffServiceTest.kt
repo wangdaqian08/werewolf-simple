@@ -177,6 +177,152 @@ class SheriffServiceTest {
         assertThat(state["canVote"]).isEqualTo(true)
     }
 
+    // ── Group 2b: signUp() action ────────────────────────────────────────────
+
+    @Test
+    fun `signUp - success when alive player signs up for first time`() {
+        val ctx = context()
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(emptyList())
+        whenever(sheriffCandidateRepository.save(any<SheriffCandidate>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_CAMPAIGN)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        val captor = argumentCaptor<SheriffCandidate>()
+        verify(sheriffCandidateRepository).save(captor.capture())
+        assertThat(captor.firstValue.userId).isEqualTo(guestId)
+        assertThat(captor.firstValue.status).isEqualTo(CandidateStatus.RUNNING)
+    }
+
+    @Test
+    fun `signUp - rejected when player is dead`() {
+        val deadPlayer = player(guestId, 1).also { it.alive = false }
+        val ctx = context(players = listOf(player(hostId, 0), deadPlayer))
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_CAMPAIGN)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Dead")
+    }
+
+    @Test
+    fun `signUp - re-signup after quit resets status to RUNNING`() {
+        val ctx = context()
+        val quitCandidate = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.QUIT)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(quitCandidate))
+        whenever(sheriffCandidateRepository.save(any<SheriffCandidate>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_CAMPAIGN)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(quitCandidate.status).isEqualTo(CandidateStatus.RUNNING)
+    }
+
+    @Test
+    fun `signUp - rejected when not in SIGNUP sub-phase`() {
+        val ctx = context(election = election(subPhase = ElectionSubPhase.SPEECH, speakingOrder = guestId))
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_CAMPAIGN)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Sign-up period is over")
+    }
+
+    // ── Group 2c: advanceSpeech() action ──────────────────────────────────────
+
+    @Test
+    fun `advanceSpeech - advances to next RUNNING candidate, skipping QUIT`() {
+        // Speaking order: guest (idx 0), quit:001 (idx 1, QUIT), other:001 (idx 2, RUNNING)
+        val quitId = "quit:001"
+        val nextId = "other:001"
+        val speakingOrder = "$guestId,$quitId,$nextId"
+        val election = election(
+            subPhase = ElectionSubPhase.SPEECH,
+            speakingOrder = speakingOrder,
+            currentSpeakerIdx = 0, // currently on guestId
+        )
+        val ctx = context(election = election)
+
+        val candidates = listOf(
+            SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING),
+            SheriffCandidate(electionId = electionId, userId = quitId, status = CandidateStatus.QUIT),
+            SheriffCandidate(electionId = electionId, userId = nextId, status = CandidateStatus.RUNNING),
+        )
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(candidates)
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_ADVANCE_SPEECH)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(election.currentSpeakerIdx).isEqualTo(2) // skipped idx 1 (QUIT)
+        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.SPEECH)
+    }
+
+    @Test
+    fun `advanceSpeech - transitions to VOTING when all candidates have spoken`() {
+        val speakingOrder = guestId
+        val election = election(
+            subPhase = ElectionSubPhase.SPEECH,
+            speakingOrder = speakingOrder,
+            currentSpeakerIdx = 0, // currently on guestId (last one)
+        )
+        val ctx = context(election = election)
+
+        val candidates = listOf(
+            SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING),
+        )
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(candidates)
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_ADVANCE_SPEECH)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.VOTING)
+    }
+
+    @Test
+    fun `advanceSpeech - transitions to VOTING when remaining candidates are all QUIT`() {
+        val quitId = "quit:001"
+        val speakingOrder = "$guestId,$quitId"
+        val election = election(
+            subPhase = ElectionSubPhase.SPEECH,
+            speakingOrder = speakingOrder,
+            currentSpeakerIdx = 0,
+        )
+        val ctx = context(election = election)
+
+        val candidates = listOf(
+            SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING),
+            SheriffCandidate(electionId = electionId, userId = quitId, status = CandidateStatus.QUIT),
+        )
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(candidates)
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_ADVANCE_SPEECH)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.VOTING)
+    }
+
+    @Test
+    fun `advanceSpeech - rejected when actor is not host`() {
+        val election = election(subPhase = ElectionSubPhase.SPEECH, speakingOrder = guestId)
+        val ctx = context(election = election)
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_ADVANCE_SPEECH)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("host")
+    }
+
     // ── Group 3: quitCampaign() auto-night ────────────────────────────────────
 
     @Test

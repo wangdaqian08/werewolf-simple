@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test'
+import {defineConfig} from '@playwright/test'
 
 /**
  * Real-backend E2E config.
@@ -13,6 +13,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5174',
     headless: true,
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    trace: 'retain-on-failure',
   },
   reporter: process.env.CI
     ? [['blob'], ['github']]

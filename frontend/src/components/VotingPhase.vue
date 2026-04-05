@@ -16,6 +16,11 @@
         :phase-started="votingPhase.phaseStarted"
       />
 
+      <!-- RE_VOTING banner -->
+      <div v-if="votingPhase.subPhase === 'RE_VOTING'" class="revote-banner">
+        🔁 第二轮投票 · Round 2
+      </div>
+
       <!-- Role + history row -->
       <div v-if="myRole || voteHistory?.length" class="role-history-row">
         <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
@@ -46,9 +51,19 @@
             <span class="elim-banner-name">
               {{ votingPhase.eliminatedNickname }} · 座位 {{ votingPhase.eliminatedSeatIndex }}
             </span>
-            <span v-if="votingPhase.eliminatedRole" class="elim-banner-role">
-              {{ roleDisplay(votingPhase.eliminatedRole) }}
+          </div>
+        </div>
+
+        <!-- Idiot reveal banner (survived vote, loses voting right) -->
+        <div v-else-if="votingPhase.idiotRevealedId" class="banner banner-idiot">
+          <span class="elim-banner-avatar">🃏</span>
+          <div class="elim-banner-body">
+            <span class="elim-banner-tag">白痴翻牌 · IDIOT REVEALED</span>
+            <span class="elim-banner-name">
+              {{ votingPhase.idiotRevealedNickname }} · 座位
+              {{ votingPhase.idiotRevealedSeatIndex }}
             </span>
+            <span class="elim-banner-role">存活，失去投票权 · Survives, loses vote</span>
           </div>
         </div>
 
@@ -89,7 +104,13 @@
           mode="room"
           @click="onVotingTap(player)"
         >
-          <template v-if="!player.isAlive" #overlay>
+          <template v-if="player.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
+          <template v-if="player.idiotRevealed" #overlay>
+            <div class="slot-overlay idiot-overlay">🃏</div>
+          </template>
+          <template v-else-if="!player.isAlive" #overlay>
             <div class="slot-overlay dead-overlay">✕</div>
           </template>
         </PlayerSlot>
@@ -120,7 +141,11 @@
           <!-- HOST: own vote (if alive) + reveal button -->
           <template v-if="viewRole === 'HOST'">
             <template v-if="hostIsAlive">
-              <template v-if="votingPhase.myVote || votingPhase.myVoteSkipped">
+              <!-- Idiot revealed: host lost voting right -->
+              <template v-if="!myCanVote">
+                <p class="footer-hint idiot-no-vote">🃏 已揭示白痴 · 无投票权</p>
+              </template>
+              <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
                 <button class="btn btn-secondary" @click="emit('unvote')">取消投票 · Unvote</button>
               </template>
               <template v-else>
@@ -132,11 +157,17 @@
                   >
                     投票 · Vote
                   </button>
-                  <button class="btn btn-secondary skip-btn" @click="emit('skipVote')">弃权</button>
+                  <button class="btn btn-secondary skip-btn" @click="emit('skip')">弃权</button>
                 </div>
               </template>
             </template>
-            <button class="btn btn-gold" :disabled="!allVotesIn" @click="emit('revealVoting')">
+            <!-- Only show reveal button if subPhase is VOTING or RE_VOTING -->
+            <button
+              v-if="votingPhase.subPhase === 'VOTING' || votingPhase.subPhase === 'RE_VOTING'"
+              class="btn btn-gold"
+              :disabled="!allVotesIn"
+              @click="emit('revealVoting')"
+            >
               公布结果 · Reveal
             </button>
           </template>
@@ -146,9 +177,12 @@
             <button class="btn btn-secondary" disabled>投票已禁用 · Voting disabled</button>
           </template>
 
-          <!-- ALIVE: vote/skip or unvote -->
+          <!-- ALIVE: vote/skip or unvote (or no vote right if idiot revealed) -->
           <template v-else-if="viewRole === 'ALIVE'">
-            <template v-if="votingPhase.myVote || votingPhase.myVoteSkipped">
+            <template v-if="!myCanVote">
+              <button class="btn btn-secondary" disabled>🃏 已揭示白痴 · 无投票权</button>
+            </template>
+            <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
               <button class="btn btn-secondary" @click="emit('unvote')">取消投票 · Unvote</button>
             </template>
             <template v-else>
@@ -160,7 +194,7 @@
                 >
                   投票 · Vote
                 </button>
-                <button class="btn btn-secondary skip-btn" @click="emit('skipVote')">弃权</button>
+                <button class="btn btn-secondary skip-btn" @click="emit('skip')">弃权</button>
               </div>
             </template>
           </template>
@@ -298,6 +332,9 @@
           mode="room"
           @click="onHunterTap(player)"
         >
+          <template v-if="player.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
           <template
             v-if="!player.isAlive || player.userId === votingPhase.eliminatedPlayerId"
             #overlay
@@ -308,18 +345,23 @@
       </section>
 
       <footer class="voting-footer">
-        <div class="vote-actions">
-          <button
-            class="btn btn-danger vote-btn"
-            :disabled="!effectiveSelected"
-            @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
-          >
-            开枪 · Shoot
-          </button>
-          <button class="btn btn-secondary skip-btn" @click="emit('hunterPass')">
-            放弃 · Pass
-          </button>
-        </div>
+        <template v-if="myUserId === votingPhase.eliminatedPlayerId">
+          <div class="vote-actions">
+            <button
+              class="btn btn-danger vote-btn"
+              :disabled="!effectiveSelected"
+              @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
+            >
+              开枪 · Shoot
+            </button>
+            <button class="btn btn-secondary skip-btn" @click="emit('hunterPass')">
+              放弃 · Pass
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <p class="footer-hint">等待猎人行动 · Waiting for hunter...</p>
+        </template>
       </footer>
     </template>
 
@@ -344,11 +386,11 @@
             <div class="banner-title">警徽已销毁 · Badge Destroyed</div>
           </div>
         </div>
-        <div v-else-if="votingPhase.newSheriffId" class="banner badge-status-passed">
+        <div v-else-if="newSheriffInfo" class="banner badge-status-passed">
           <span class="banner-avatar">⭐</span>
           <div>
             <div class="banner-title">
-              警徽已移交给 {{ votingPhase.newSheriffNickname }} · Badge Passed
+              警徽已移交给 {{ newSheriffInfo.nickname }} · Badge Passed
             </div>
           </div>
         </div>
@@ -372,8 +414,8 @@
           mode="room"
           @click="onBadgeTap(player)"
         >
-          <!-- Star on new sheriff's card -->
-          <template v-if="player.userId === votingPhase.newSheriffId" #badge>
+          <!-- Star on sheriff's card -->
+          <template v-if="player.isSheriff" #badge>
             <span class="sheriff-pin">⭐</span>
           </template>
           <template
@@ -435,7 +477,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   selectPlayer: [userId: string]
   vote: [targetId: string]
-  skipVote: []
+  skip: []
   unvote: []
   revealVoting: []
   continueVoting: []
@@ -448,7 +490,10 @@ const emit = defineEmits<{
 // ── Screen grouping ───────────────────────────────────────────────────────────
 // VOTE_RESULT is merged into the VOTING screen (shown when tallyRevealed)
 const isVotingScreen = computed(
-  () => props.votingPhase.subPhase === 'VOTING' || props.votingPhase.subPhase === 'VOTE_RESULT',
+  () =>
+    props.votingPhase.subPhase === 'VOTING' ||
+    props.votingPhase.subPhase === 'RE_VOTING' ||
+    props.votingPhase.subPhase === 'VOTE_RESULT',
 )
 // BADGE_RECEIVED is merged into the BADGE_HANDOVER screen
 const isBadgeScreen = computed(
@@ -462,10 +507,34 @@ const isRevealed = computed(
   () => props.votingPhase.tallyRevealed || props.votingPhase.subPhase === 'VOTE_RESULT',
 )
 
+// Debug: watch votingPhase changes
+
+// watch(
+// () => props.votingPhase,
+// (newPhase) => {
+//   console.log('[VotingPhase] votingPhase changed:', newPhase)
+//   console.log('[VotingPhase] isRevealed:', isRevealed.value)
+// },
+// { deep: true, immediate: true },
+// )
+
 // Badge screen: post-action states
-const badgeDone = computed(
-  () => !!(props.votingPhase.newSheriffId || props.votingPhase.badgeDestroyed),
-)
+const badgeDone = computed(() => {
+  if (props.votingPhase.badgeDestroyed) return true
+  // Check if eliminated sheriff still has badge (if false, badge has been handed over)
+  const eliminatedSheriff = props.players.find(
+    (p) => p.userId === props.votingPhase.eliminatedPlayerId,
+  )
+  return eliminatedSheriff ? !eliminatedSheriff.isSheriff : false
+})
+
+// Get new sheriff info (alive player with isSheriff=true in BADGE_HANDOVER)
+const newSheriffInfo = computed(() => {
+  if (badgeDone.value && !props.votingPhase.badgeDestroyed) {
+    return props.players.find((p) => p.isSheriff && p.isAlive) ?? null
+  }
+  return null
+})
 
 // ── View role ─────────────────────────────────────────────────────────────────
 type ViewRole = 'HOST' | 'DEAD' | 'ALIVE' | 'GUEST'
@@ -481,6 +550,12 @@ const viewRole = computed<ViewRole>(() => {
 const hostIsAlive = computed(() => {
   const me = props.players.find((p) => p.userId === props.myUserId)
   return me?.isAlive ?? false
+})
+
+// false when idiot has been revealed (permanently lost voting right)
+const myCanVote = computed(() => {
+  const me = props.players.find((p) => p.userId === props.myUserId)
+  return me?.canVote !== false
 })
 
 const allVotesIn = computed(
@@ -501,6 +576,17 @@ watch(
   },
 )
 
+// Sync local selection with vote state
+watch(
+  () => props.votingPhase.myVote || props.votingPhase.myVoteSkipped,
+  (hasVoted) => {
+    if (hasVoted) {
+      // User has voted or skipped - clear local selection
+      localSelected.value = undefined
+    }
+  },
+)
+
 const effectiveSelected = computed(() => localSelected.value)
 
 function selectPlayer(userId: string) {
@@ -511,6 +597,9 @@ function selectPlayer(userId: string) {
 // ── Timer ─────────────────────────────────────────────────────────────────────
 const now = ref(Date.now())
 let intervalId = 0
+const AUTO_CONTINUE_SECS = 30
+const revealedAt = ref<number | null>(null)
+let autoContinueTimer = 0
 
 onMounted(() => {
   intervalId = window.setInterval(() => {
@@ -520,8 +609,26 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(intervalId)
+  clearTimeout(autoContinueTimer)
   document.body.style.overflow = ''
 })
+
+// When tally is revealed and no server deadline, run a local 30s auto-continue
+watch(
+  () => props.votingPhase.tallyRevealed,
+  (revealed) => {
+    if (revealed && !props.votingPhase.revealDeadline) {
+      revealedAt.value = Date.now()
+      autoContinueTimer = window.setTimeout(() => {
+        if (props.isHost) emit('continueVoting')
+      }, AUTO_CONTINUE_SECS * 1000)
+    } else {
+      revealedAt.value = null
+      clearTimeout(autoContinueTimer)
+    }
+  },
+  { immediate: true },
+)
 
 const formattedTime = computed(() => {
   const remaining = Math.max(0, props.votingPhase.phaseDeadline - now.value) / 1000
@@ -531,32 +638,26 @@ const formattedTime = computed(() => {
 })
 
 const formattedRevealTime = computed(() => {
-  if (!props.votingPhase.revealDeadline) return '0:30'
-  const remaining = Math.max(0, props.votingPhase.revealDeadline - now.value) / 1000
-  const m = Math.floor(remaining / 60)
-  const s = Math.floor(remaining % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
+  if (props.votingPhase.revealDeadline) {
+    const remaining = Math.max(0, props.votingPhase.revealDeadline - now.value) / 1000
+    const m = Math.floor(remaining / 60)
+    const s = Math.floor(remaining % 60)
+    return `${m}:${String(s).padStart(2, '0')}`
+  }
+  if (revealedAt.value) {
+    const elapsed = Math.floor((now.value - revealedAt.value) / 1000)
+    const remaining = Math.max(0, AUTO_CONTINUE_SECS - elapsed)
+    const m = Math.floor(remaining / 60)
+    const s = remaining % 60
+    return `${m}:${String(s).padStart(2, '0')}`
+  }
+  return `0:${String(AUTO_CONTINUE_SECS).padStart(2, '0')}`
 })
 
 // ── Sorted tally ──────────────────────────────────────────────────────────────
 const sortedTally = computed(() =>
   [...(props.votingPhase.tally ?? [])].sort((a, b) => b.votes - a.votes),
 )
-
-// ── Role display ──────────────────────────────────────────────────────────────
-const ROLE_DISPLAY: Record<PlayerRole, string> = {
-  WEREWOLF: '🐺 狼人',
-  VILLAGER: '👤 村民',
-  SEER: '🔮 预言家',
-  WITCH: '🧪 女巫',
-  HUNTER: '🔫 猎人',
-  GUARD: '🛡 守卫',
-  IDIOT: '🃏 白痴',
-}
-
-function roleDisplay(role: PlayerRole) {
-  return ROLE_DISPLAY[role] ?? role
-}
 
 // ── My Role badge ─────────────────────────────────────────────────────────────
 const ROLE_ZH: Record<string, string> = {
@@ -640,14 +741,19 @@ const ROLE_META: Record<string, RoleMeta> = {
 // ── Slot variants ─────────────────────────────────────────────────────────────
 function votingSlotVariant(player: GamePlayer) {
   if (!player.isAlive) return 'dead' as const
-  const myVoted = !!(props.votingPhase.myVote || props.votingPhase.myVoteSkipped)
-  // Only show gold selection before the player has submitted their vote
-  if (!myVoted && player.userId === effectiveSelected.value) return 'selected' as const
   const hasVoted = props.votingPhase.votedPlayerIds?.includes(player.userId)
-  if (hasVoted) {
-    return player.userId === props.myUserId ? ('me-ready' as const) : ('ready' as const)
+
+  // Selected player being voted for (gold border) - show before or after voting
+  if (player.userId === effectiveSelected.value) {
+    return 'selected' as const
   }
-  if (player.userId === props.myUserId) return 'me' as const
+
+  // After voting, all voted players show 'ready' (green)
+  if (hasVoted) {
+    return 'ready' as const
+  }
+
+  // Alive players show 'alive' (no special border)
   return 'alive' as const
 }
 
@@ -662,8 +768,8 @@ function shootSlotVariant(player: GamePlayer) {
 function badgeSlotVariant(player: GamePlayer) {
   if (!player.isAlive || player.userId === props.votingPhase.eliminatedPlayerId)
     return 'dead' as const
-  // New sheriff gets green styling
-  if (player.userId === props.votingPhase.newSheriffId) {
+  // New sheriff (alive player with isSheriff=true) gets green styling
+  if (player.isSheriff && player.isAlive) {
     return player.userId === props.myUserId ? ('me-ready' as const) : ('ready' as const)
   }
   if (player.userId === effectiveSelected.value) return 'selected' as const
@@ -675,10 +781,16 @@ function badgeSlotVariant(player: GamePlayer) {
 function onVotingTap(player: GamePlayer) {
   if (!player.isAlive) return
   if (!props.votingPhase.canVote) return
+  // Prevent selection after player has already voted or skipped
+  if (props.votingPhase.myVote || props.votingPhase.myVoteSkipped) return
+  // During HUNTER_SHOOT, only the hunter can select targets
+  if (props.votingPhase.subPhase === 'HUNTER_SHOOT') return
   selectPlayer(player.userId)
 }
 
 function onHunterTap(player: GamePlayer) {
+  // Only the hunter (eliminated player) can select a target
+  if (props.myUserId !== props.votingPhase.eliminatedPlayerId) return
   if (!player.isAlive) return
   if (player.userId === props.votingPhase.eliminatedPlayerId) return
   selectPlayer(player.userId)
@@ -1068,5 +1180,38 @@ function onBadgeTap(player: GamePlayer) {
   line-height: 1.6;
   text-align: center;
   margin: 0;
+}
+
+/* Dead / Idiot overlays on player slots */
+.dead-overlay {
+  background: rgba(26, 20, 12, 0.55);
+  color: #fff;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.idiot-overlay {
+  background: rgba(160, 120, 48, 0.75);
+  font-size: 1.375rem;
+}
+
+/* RE_VOTING banner */
+.revote-banner {
+  margin: 0.25rem 1rem 0;
+  padding: 0.375rem 0.75rem;
+  background: rgba(160, 120, 48, 0.12);
+  border: 1px solid var(--gold);
+  border-radius: 0.5rem;
+  color: var(--gold);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Idiot no-vote hint line in footer */
+.footer-hint.idiot-no-vote {
+  color: var(--gold);
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 </style>

@@ -9,8 +9,10 @@ import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.repository.NightPhaseRepository
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
+@Order(2)
 @Component
 class SeerHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
 
@@ -41,6 +43,8 @@ class SeerHandler(private val nightPhaseRepository: NightPhaseRepository) : Role
 
                 val target = action.targetUserId
                     ?: return GameActionResult.Rejected("Target required")
+                if (target == action.actorUserId)
+                    return GameActionResult.Rejected("Cannot check yourself")
                 val targetPlayer = context.alivePlayerById(target)
                     ?: return GameActionResult.Rejected("Target not found or dead")
 

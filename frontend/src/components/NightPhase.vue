@@ -24,8 +24,19 @@
       </div>
     </div>
 
+    <!-- ── Dead player banner ─────────────────────────────────────────── -->
+    <div v-if="me && !me.isAlive" class="banner-area">
+      <div class="banner banner-info">
+        <span class="banner-icon"> 👤 </span>
+        <div>
+          <div class="srh-title">你已经出局</div>
+          <div class="banner-sub">You are eliminated</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── WEREWOLF_PICK ──────────────────────────────────────────────── -->
-    <template v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF'">
+    <template v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF' && me?.isAlive">
       <div v-if="nightPhase.teammates?.length" class="team-row">
         <span class="tr-label">队友：</span>
         <span v-for="(t, i) in nightPhase.teammates" :key="t" class="tr-name">
@@ -45,6 +56,9 @@
           :aria-disabled="!isWolfTargetFn(p) ? 'true' : undefined"
           @click="isWolfTargetFn(p) && selectPlayer(p.userId)"
         >
+          <template v-if="p.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
           <template v-if="!p.isAlive" #overlay>
             <div class="slot-overlay np-dead-x">✕</div>
           </template>
@@ -62,7 +76,7 @@
     </template>
 
     <!-- ── SEER_PICK ──────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'SEER_PICK' && myRole === 'SEER'">
+    <template v-else-if="subPhase === 'SEER_PICK' && myRole === 'SEER' && me?.isAlive">
       <div class="pick-hint">选择查验目标 · Select a player to check:</div>
       <section class="player-grid">
         <PlayerSlot
@@ -76,6 +90,9 @@
           :aria-disabled="!isSeerTargetFn(p) ? 'true' : undefined"
           @click="isSeerTargetFn(p) && selectPlayer(p.userId)"
         >
+          <template v-if="p.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
           <template v-if="!p.isAlive" #overlay>
             <div class="slot-overlay np-dead-x">✕</div>
           </template>
@@ -93,7 +110,11 @@
     </template>
 
     <!-- ── SEER_RESULT ────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'SEER_RESULT' && myRole === 'SEER' && nightPhase.seerResult">
+    <template
+      v-else-if="
+        subPhase === 'SEER_RESULT' && myRole === 'SEER' && nightPhase.seerResult && me?.isAlive
+      "
+    >
       <div class="sr-wrap">
         <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
           <div class="sr-player">
@@ -101,7 +122,9 @@
             {{ nightPhase.seerResult.checkedNickname }}
           </div>
           <div class="sr-verdict">
-            {{ nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '🌾 村民 · Villager' }}
+            {{
+              nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 平民阵营 · Good Camp'
+            }}
           </div>
         </div>
         <div class="sr-hist">
@@ -117,7 +140,7 @@
               <span class="srh-name">{{ h.nickname }}</span>
               <span class="srh-arrow">→</span>
               <span :class="h.isWerewolf ? 'srh-wolf' : 'srh-ok'">
-                {{ h.isWerewolf ? '狼人 ✗' : '村民 ✓' }}
+                {{ h.isWerewolf ? '狼人 ✗' : '平民 ✓' }}
               </span>
             </div>
           </template>
@@ -130,7 +153,7 @@
     </template>
 
     <!-- ── WITCH_ACT ───────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'WITCH_ACT' && myRole === 'WITCH'">
+    <template v-else-if="subPhase === 'WITCH_ACT' && myRole === 'WITCH' && me?.isAlive">
       <!-- Antidote — always visible when witch has it; grayed out after decision -->
       <div
         v-if="nightPhase.hasAntidote"
@@ -186,6 +209,9 @@
               :aria-disabled="!isPoisonTargetFn(p) ? 'true' : undefined"
               @click="isPoisonTargetFn(p) && selectPlayer(p.userId)"
             >
+              <template v-if="p.isSheriff" #badge>
+                <div class="sheriff-badge">⭐</div>
+              </template>
               <template v-if="!p.isAlive" #overlay>
                 <div class="slot-overlay np-dead-x">✕</div>
               </template>
@@ -219,10 +245,21 @@
           </button>
         </div>
       </div>
+
+      <!-- No items available - show done button -->
+      <div v-if="!nightPhase.hasAntidote && !nightPhase.hasPoison" class="w-section">
+        <div class="ws-hdr">
+          <span class="ws-pill">女巫 · WITCH</span>
+        </div>
+        <p class="ws-desc">你没有可用的道具。</p>
+        <div class="ws-row">
+          <button class="btn btn-primary ws-btn" @click="emit('witchSkip')">完成操作 · Done</button>
+        </div>
+      </div>
     </template>
 
     <!-- ── GUARD_PICK ──────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD'">
+    <template v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD' && me?.isAlive">
       <div class="pick-hint">
         选择守护目标 · Protect a player:
         <span v-if="nightPhase.previousGuardTargetId" class="guard-note">
@@ -243,6 +280,9 @@
           :aria-disabled="!isGuardTargetFn(p) ? 'true' : undefined"
           @click="isGuardTargetFn(p) && selectPlayer(p.userId)"
         >
+          <template v-if="p.isSheriff" #badge>
+            <div class="sheriff-badge">⭐</div>
+          </template>
           <template v-if="!p.isAlive" #overlay>
             <div class="slot-overlay np-dead-x">✕</div>
           </template>
@@ -288,14 +328,14 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import {
-  wolfVariant,
-  isWolfTarget,
-  seerVariant,
-  isSeerTarget,
   guardVariant,
   isGuardTarget,
-  poisonVariant,
   isPoisonTarget,
+  isSeerTarget,
+  isWolfTarget,
+  poisonVariant,
+  seerVariant,
+  wolfVariant,
 } from '@/utils/nightPhaseHelpers'
 
 const props = defineProps<{
@@ -312,15 +352,21 @@ const emit = defineEmits<{
   witchPassAntidote: []
   witchPoison: [targetId: string]
   witchPassPoison: []
+  witchSkip: []
 }>()
 
 const subPhase = computed(() => props.nightPhase.subPhase)
 const poisonMode = ref(false)
 
+// Current player (me)
+const me = computed(() => props.players.find((p) => p.userId === props.myUserId))
+
 // True only when the current sub-phase is this player's active turn
 const isMyTurn = computed(() => {
   const sp = subPhase.value
   const role = props.myRole
+  // Dead players cannot take turns
+  if (!me.value?.isAlive) return false
   if (!role) return false
   if (sp === 'WEREWOLF_PICK') return role === 'WEREWOLF'
   if (sp === 'SEER_PICK' || sp === 'SEER_RESULT') return role === 'SEER'
@@ -727,7 +773,7 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 }
 
 .srh-title {
-  font-size: 0.5625rem;
+  font-size: 0.7625rem;
   letter-spacing: 0.1em;
   color: rgba(245, 240, 232, 0.35);
   text-transform: uppercase;
@@ -918,5 +964,13 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   background: rgba(245, 240, 232, 0.1);
   color: rgba(245, 240, 232, 0.72);
   border: 1px solid rgba(245, 240, 232, 0.14);
+}
+
+/* ── Sheriff badge ─────────────────────────────────────────────────────────── */
+.sheriff-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.75rem;
 }
 </style>

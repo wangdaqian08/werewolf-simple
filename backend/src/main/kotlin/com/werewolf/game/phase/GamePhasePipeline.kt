@@ -6,10 +6,14 @@ import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
-import com.werewolf.repository.*
+import com.werewolf.repository.GamePlayerRepository
+import com.werewolf.repository.GameRepository
+import com.werewolf.repository.SheriffElectionRepository
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -23,20 +27,30 @@ class GamePhasePipeline(
     private val sheriffService: SheriffService,
     private val nightOrchestrator: NightOrchestrator,
 ) {
+    val log: Logger = LoggerFactory.getLogger(GamePhasePipeline::class.java)
     // ── Phase transition actions ───────────────────────────────────────────────
 
     /** Host: reveal the night kill result (DAY/RESULT_HIDDEN → DAY/RESULT_REVEALED). */
     @Transactional
     fun revealNightResult(request: GameActionRequest, context: GameContext): GameActionResult {
+        log.info("[revealNightResult] Received request from ${request.actorUserId}")
+        log.info("[revealNightResult] Current game state: phase=${context.game.phase}, subPhase=${context.game.subPhase}, dayNumber=${context.game.dayNumber}")
+        
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can reveal night result")
-        if (context.game.phase != GamePhase.DAY)
+        if (context.game.phase != GamePhase.DAY) {
+            log.info("[revealNightResult] ERROR: Not in DAY phase, actual phase is ${context.game.phase}")
             return GameActionResult.Rejected("Not in DAY phase")
-        if (context.game.subPhase != DaySubPhase.RESULT_HIDDEN.name)
+        }
+        if (context.game.subPhase != DaySubPhase.RESULT_HIDDEN.name) {
+            log.info("[revealNightResult] WARNING: SubPhase is ${context.game.subPhase}, not RESULT_HIDDEN. Result already revealed?")
             return GameActionResult.Rejected("Result already revealed")
+        }
 
         context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
         gameRepository.save(context.game)
+        
+        log.info("[revealNightResult] Successfully revealed night result")
         stompPublisher.broadcastGame(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY, DaySubPhase.RESULT_REVEALED.name)
@@ -47,16 +61,25 @@ class GamePhasePipeline(
     /** Host: advance day discussion to voting phase (DAY/RESULT_REVEALED → VOTING/VOTING). */
     @Transactional
     fun dayAdvance(request: GameActionRequest, context: GameContext): GameActionResult {
+        log.info("[dayAdvance] Received request from ${request.actorUserId}")
+        log.info("[dayAdvance] Current game state: phase=${context.game.phase}, subPhase=${context.game.subPhase}, dayNumber=${context.game.dayNumber}")
+        
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can start the vote")
-        if (context.game.phase != GamePhase.DAY)
+        if (context.game.phase != GamePhase.DAY) {
+            log.info("[dayAdvance] ERROR: Not in DAY phase, actual phase is ${context.game.phase}")
             return GameActionResult.Rejected("Not in DAY phase")
-        if (context.game.subPhase != DaySubPhase.RESULT_REVEALED.name)
+        }
+        if (context.game.subPhase != DaySubPhase.RESULT_REVEALED.name) {
+            log.info("[dayAdvance] ERROR: SubPhase is not RESULT_REVEALED, actual is ${context.game.subPhase}")
             return GameActionResult.Rejected("Reveal the night result before starting the vote")
+        }
 
         context.game.phase = GamePhase.VOTING
         context.game.subPhase = VotingSubPhase.VOTING.name
         gameRepository.save(context.game)
+        
+        log.info("[dayAdvance] Successfully advanced to VOTING phase")
         stompPublisher.broadcastGame(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTING.name)

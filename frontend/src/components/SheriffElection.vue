@@ -76,18 +76,27 @@
       </div>
 
       <div class="spacer" />
-      <div class="quit-warning">⚠ Quitting forfeits your right to vote for sheriff.</div>
-      <div class="action-footer">
-        <button class="btn btn-danger-outline" @click="emit('quit')">
-          退出竞选 / Quit Campaign
-        </button>
-        <template v-if="isHost">
-          <div class="host-divider" />
+      <template v-if="iAmCandidate">
+        <div class="quit-warning">⚠ Quitting forfeits your right to vote for sheriff.</div>
+        <div class="action-footer">
+          <button class="btn btn-danger-outline" @click="emit('quit')">
+            退出竞选 / Quit Campaign
+          </button>
+          <template v-if="isHost">
+            <div class="host-divider" />
+            <button class="btn btn-primary" @click="emit('advanceSpeech')">
+              下一位 / Next Speaker
+            </button>
+          </template>
+        </div>
+      </template>
+      <template v-else-if="isHost">
+        <div class="action-footer">
           <button class="btn btn-primary" @click="emit('advanceSpeech')">
             下一位 / Next Speaker
           </button>
-        </template>
-      </div>
+        </div>
+      </template>
     </template>
 
     <!-- ── SPEECH - Audience ── -->
@@ -437,7 +446,11 @@ const runningCandidates = computed(() =>
   props.election.candidates.filter((c) => c.status === 'RUNNING'),
 )
 
-const quitCandidates = computed(() => props.election.candidates.filter((c) => c.status === 'QUIT'))
+const quitCandidates = computed(() =>
+  props.election.candidates.filter(
+    (c) => c.status === 'QUIT' && props.election.speakingOrder.includes(c.userId),
+  ),
+)
 
 const candidateMap = computed(() => {
   const m = new Map<string, SheriffCandidate>()

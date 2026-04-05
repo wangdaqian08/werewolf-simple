@@ -90,6 +90,26 @@
             <span class="toggle-thumb" />
           </button>
         </div>
+        <div class="role-row" :class="winCondition === 'HARD_MODE' ? 'row-wolf' : 'row-on'">
+          <span class="role-emoji">⚔️</span>
+          <div class="role-names">
+            <span class="role-name">胜利条件 Win Condition</span>
+            <span class="win-cond-desc">
+              {{
+                winCondition === 'CLASSIC'
+                  ? '经典：狼人人数 ≥ 好人（Classic: wolves ≥ others）'
+                  : '困难：全灭好人（Hard: eliminate all villagers）'
+              }}
+            </span>
+          </div>
+          <button
+            :class="winCondition === 'HARD_MODE' ? 'toggle-on' : 'toggle-off'"
+            class="toggle"
+            @click="winCondition = winCondition === 'CLASSIC' ? 'HARD_MODE' : 'CLASSIC'"
+          >
+            <span class="toggle-thumb" />
+          </button>
+        </div>
       </div>
 
       <button :disabled="loading" class="btn btn-primary" @click="handleCreate">
@@ -106,6 +126,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
+import type { WinConditionMode } from '@/types'
 
 const router = useRouter()
 const roomStore = useRoomStore()
@@ -127,6 +148,7 @@ const totalPlayers = ref(9)
 // Optional roles enabled by default
 const enabledOptional = ref(new Set(['SEER', 'WITCH', 'HUNTER']))
 const hasSheriff = ref(true)
+const winCondition = ref<WinConditionMode>('CLASSIC')
 
 const loading = ref(false)
 const error = ref('')
@@ -163,7 +185,12 @@ async function handleCreate() {
   try {
     const roles = ROLE_DEFINITIONS.filter((r) => isEnabled(r.id)).map((r) => r.id)
     const room = await roomService.createRoom({
-      config: { totalPlayers: totalPlayers.value, roles, hasSheriff: hasSheriff.value },
+      config: {
+        totalPlayers: totalPlayers.value,
+        roles,
+        hasSheriff: hasSheriff.value,
+        winCondition: winCondition.value,
+      },
     })
     roomStore.setRoom(room)
     router.push({ name: 'room', params: { roomId: room.roomId } })
@@ -357,6 +384,13 @@ async function handleCreate() {
 
 .role-name-muted {
   color: var(--muted);
+}
+
+.win-cond-desc {
+  display: block;
+  font-size: 0.625rem;
+  color: var(--muted);
+  margin-top: 1px;
 }
 
 .req-label {

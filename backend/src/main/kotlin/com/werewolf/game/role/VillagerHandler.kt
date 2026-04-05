@@ -6,8 +6,10 @@ import com.werewolf.game.action.GameActionResult
 import com.werewolf.model.ActionType
 import com.werewolf.model.GamePhase
 import com.werewolf.model.PlayerRole
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
+@Order(10)
 @Component
 class VillagerHandler : RoleHandler {
     override val role = PlayerRole.VILLAGER

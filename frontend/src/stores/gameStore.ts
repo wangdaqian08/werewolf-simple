@@ -6,7 +6,10 @@ export const useGameStore = defineStore('game', () => {
   const state = ref<GameState | null>(null)
 
   function setState(s: GameState) {
-    state.value = { ...s, events: state.value?.events ?? s.events ?? [] }
+    //console.log('[gameStore] setState被调用，新状态phase:', s.phase)
+    const newState = JSON.parse(JSON.stringify(s))
+    state.value = { ...newState, events: s.events ?? [] }
+    //console.log('[gameStore] state.value已更新，当前phase:', state.value?.phase)
   }
 
   function addEvent(event: GameEvent) {
@@ -25,5 +28,17 @@ export const useGameStore = defineStore('game', () => {
     state.value = null
   }
 
-  return { state, setState, addEvent, incrementConfirmedCount, clearGame }
+  function updateNightPhaseSelection(selectedTargetId: string | undefined) {
+    if (!state.value?.nightPhase) return
+    state.value.nightPhase = { ...state.value.nightPhase, selectedTargetId }
+  }
+
+  return {
+    state,
+    setState,
+    addEvent,
+    incrementConfirmedCount,
+    clearGame,
+    updateNightPhaseSelection,
+  }
 })

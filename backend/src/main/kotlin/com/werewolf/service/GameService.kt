@@ -19,6 +19,8 @@ class GameService(
     private val userRepository: UserRepository,
     private val sheriffService: SheriffService,
     private val nightPhaseRepository: NightPhaseRepository,
+    private val voteRepository: VoteRepository,
+    private val eliminationHistoryRepository: EliminationHistoryRepository,
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
@@ -67,6 +69,7 @@ class GameService(
         return GameActionResult.Success()
     }
 
+@Transactional
     fun getGameState(gameId: Int, requestingUserId: String): Map<String, Any?> {
         val game = gameRepository.findById(gameId).orElse(null)
             ?: return mapOf("error" to "Game not found")
@@ -74,13 +77,24 @@ class GameService(
         val players = gamePlayerRepository.findByGameId(gameId)
         val myPlayer = players.firstOrNull { it.userId == requestingUserId }
 
+        // Recover stuck night phases (e.g., after backend restart when a role has no alive players)
+        // Only recover if the night phase is not COMPLETE (to avoid interfering with phase transitions)
+        if (game.phase == GamePhase.NIGHT) {
+            val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
+            if (nightPhase != null && nightPhase.subPhase != NightSubPhase.COMPLETE) {
+                nightOrchestrator.recoverStuckNightPhase(gameId)
+            }
+        }
+
+        // Always look up user nicknames — used by players map, roleReveal, nightPhase, votingPhase
+        val userLookup = userRepository.findAllById(players.map { it.userId }).associateBy { it.userId }
+
         val roleReveal = if (game.phase == GamePhase.ROLE_REVEAL) {
             val confirmedCount = players.count { it.confirmedRole }
             val teammates = if (myPlayer?.role == PlayerRole.WEREWOLF) {
-                val wolfIds = players
+                players
                     .filter { it.role == PlayerRole.WEREWOLF && it.userId != requestingUserId }
-                    .map { it.userId }
-                userRepository.findAllById(wolfIds).map { it.nickname }
+                    .map { userLookup[it.userId]?.nickname ?: it.userId }
             } else emptyList()
             mapOf(
                 "confirmedCount" to confirmedCount,
@@ -95,12 +109,185 @@ class GameService(
 
         val nightPhase = if (game.phase == GamePhase.NIGHT) {
             nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)?.let { np ->
-                mapOf("subPhase" to np.subPhase.name, "dayNumber" to np.dayNumber)
+                val base = mutableMapOf<String, Any?>(
+                    "subPhase"  to np.subPhase.name,
+                    "dayNumber" to np.dayNumber,
+                )
+                val playerMap = players.associateBy { it.userId }
+
+                // ── WEREWOLF: share selected target + formatted teammate list ──────────
+                if (myPlayer?.role == PlayerRole.WEREWOLF) {
+                    if (np.wolfTargetUserId != null) base["selectedTargetId"] = np.wolfTargetUserId
+                    val teammates = players.filter { it.role == PlayerRole.WEREWOLF && it.userId != requestingUserId }
+                    base["teammates"] = teammates.map { tp ->
+                        "${tp.seatIndex}·${userLookup[tp.userId]?.nickname ?: tp.userId}"
+                    }
+                }
+
+                // ── SEER: share result + full check history ───────────────────────────
+                if (myPlayer?.role == PlayerRole.SEER && np.seerCheckedUserId != null) {
+                    val allNights = nightPhaseRepository.findByGameId(gameId)
+                    val history = allNights
+                        .filter { it.seerCheckedUserId != null }
+                        .sortedBy { it.dayNumber }
+                    base["seerResult"] = mapOf(
+                        "checkedPlayerId"  to np.seerCheckedUserId,
+                        "checkedNickname"  to (userLookup[np.seerCheckedUserId]?.nickname ?: np.seerCheckedUserId),
+                        "checkedSeatIndex" to (playerMap[np.seerCheckedUserId]?.seatIndex ?: 0),
+                        "isWerewolf"       to (np.seerResultIsWerewolf ?: false),
+                        "history"          to history.map { h ->
+                            mapOf(
+                                "round"      to h.dayNumber,
+                                "nickname"   to (userLookup[h.seerCheckedUserId]?.nickname ?: h.seerCheckedUserId),
+                                "isWerewolf" to (h.seerResultIsWerewolf ?: false),
+                            )
+                        }
+                    )
+                }
+
+                // ── WITCH: share attack info + per-game potion availability ───────────
+                if (myPlayer?.role == PlayerRole.WITCH && np.subPhase == NightSubPhase.WITCH_ACT) {
+                    val allNights = nightPhaseRepository.findByGameId(gameId)
+                    base["hasAntidote"] = allNights.none { it.witchAntidoteUsed }
+                    base["hasPoison"]   = allNights.none { it.witchPoisonTargetUserId != null }
+                    if (np.wolfTargetUserId != null) {
+                        val attackedPlayer = playerMap[np.wolfTargetUserId]
+                        base["attackedPlayerId"] = np.wolfTargetUserId
+                        base["attackedNickname"] = userLookup[np.wolfTargetUserId]?.nickname
+                        base["attackedSeatIndex"] = attackedPlayer?.seatIndex
+                    }
+                }
+
+                // ── GUARD: share previous protection target ───────────────────────────
+                if (myPlayer?.role == PlayerRole.GUARD) {
+                    base["previousGuardTargetId"] = np.prevGuardTargetUserId
+                }
+
+                base
             }
+        } else null
+
+        val dayPhase = if (game.phase == GamePhase.DAY) {
+            val playerMap = players.associateBy { it.userId }
+            val isResultRevealed = game.subPhase == DaySubPhase.RESULT_REVEALED.name
+            // Night kills come from NightPhase (EliminationHistory only tracks voting eliminations)
+            val nightResult = if (isResultRevealed) {
+                val np = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
+                if (np != null) {
+                    val wolfTarget = np.wolfTargetUserId
+                    val wolfKilled = wolfTarget != null && !np.witchAntidoteUsed && np.guardTargetUserId != wolfTarget
+                    val poisonTarget = np.witchPoisonTargetUserId
+                    
+                    // Collect all killed players (wolf kill + witch poison)
+                    val killedIds = mutableListOf<String>()
+                    if (wolfKilled) wolfTarget?.let { killedIds.add(it) }
+                    if (poisonTarget != null) killedIds.add(poisonTarget)
+                    
+                    if (killedIds.isNotEmpty()) {
+                        mapOf(
+                            "killedPlayers" to killedIds.map { killedId ->
+                                val killedPlayer = playerMap[killedId]
+                                val killedUser = userLookup[killedId]
+                                mapOf(
+                                    "killedPlayerId"  to killedId,
+                                    "killedNickname"  to (killedUser?.nickname ?: killedId),
+                                    "killedSeatIndex" to (killedPlayer?.seatIndex ?: 0),
+                                    "killedAvatar"    to killedUser?.avatarUrl,
+                                )
+                            }
+                        )
+                    } else null
+                } else null
+            } else null
+            mapOf(
+                "subPhase"      to (game.subPhase ?: DaySubPhase.RESULT_HIDDEN.name),
+                "dayNumber"     to game.dayNumber,
+                "phaseDeadline" to 0L,
+                "phaseStarted"  to 0L,
+                "nightResult"   to nightResult,
+                "canVote"       to (myPlayer != null && myPlayer.alive && myPlayer.canVote),
+            )
+        } else null
+
+        val votingPhase = if (game.phase == GamePhase.VOTING) {
+            val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
+                gameId, VoteContext.ELIMINATION, game.dayNumber
+            )
+            val playerMap = players.associateBy { it.userId }
+            val myVotingPlayer = players.firstOrNull { it.userId == requestingUserId }
+            val myVoteRecord = votes.firstOrNull { it.voterUserId == requestingUserId }
+
+            val tallyRevealed = game.subPhase in setOf(
+                VotingSubPhase.VOTE_RESULT.name,
+                VotingSubPhase.HUNTER_SHOOT.name,
+                VotingSubPhase.BADGE_HANDOVER.name,
+            )
+
+            val rawTally: Map<String, Int> = votes
+                .mapNotNull { it.targetUserId }
+                .groupingBy { it }
+                .eachCount()
+
+            val tallyList = if (tallyRevealed) {
+                rawTally.entries.map { (targetId, voteCount) ->
+                    val targetPlayer = playerMap[targetId]
+                    val targetUser = userLookup[targetId]
+                    val voters = votes.filter { it.targetUserId == targetId }.map { v ->
+                        val vp = playerMap[v.voterUserId]
+                        val vu = userLookup[v.voterUserId]
+                        mapOf(
+                            "userId" to v.voterUserId,
+                            "nickname" to (vu?.nickname ?: v.voterUserId),
+                            "seatIndex" to (vp?.seatIndex ?: 0),
+                        )
+                    }
+                    mapOf(
+                        "playerId" to targetId,
+                        "nickname" to (targetUser?.nickname ?: targetId),
+                        "seatIndex" to (targetPlayer?.seatIndex ?: 0),
+                        "votes" to voteCount,
+                        "voters" to voters,
+                    )
+                }.sortedByDescending { it["votes"] as Int }
+            } else null
+
+            val elimHistory = eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
+            val eliminatedPlayer = elimHistory?.eliminatedUserId?.let { playerMap[it] }
+            val eliminatedUser = elimHistory?.eliminatedUserId?.let { userLookup[it] }
+
+            // Idiot reveal: no EliminationHistory record, but the top-voted player survived with idiotRevealed=true
+            val idiotRevealedPlayer = if (elimHistory == null && tallyRevealed) {
+                val topVotedId = rawTally.maxByOrNull { it.value }?.key
+                topVotedId?.let { playerMap[it] }?.takeIf { it.idiotRevealed && it.alive }
+            } else null
+            val idiotRevealedUser = idiotRevealedPlayer?.let { userLookup[it.userId] }
+
+            mapOf(
+                "subPhase" to game.subPhase,
+                "dayNumber" to game.dayNumber,
+                "phaseDeadline" to 0L,
+                "phaseStarted" to 0L,
+                "canVote" to (myVotingPlayer != null && myVotingPlayer.alive && myVotingPlayer.canVote),
+                "myVote" to myVoteRecord?.targetUserId,
+                "myVoteSkipped" to (myVoteRecord != null && myVoteRecord.targetUserId == null),
+                "votedPlayerIds" to votes.map { it.voterUserId },
+                "votesSubmitted" to votes.size,
+                "totalVoters" to players.count { it.alive && it.canVote },
+                "tally" to tallyList,
+                "tallyRevealed" to tallyRevealed,
+                "eliminatedPlayerId" to elimHistory?.eliminatedUserId,
+                "eliminatedNickname" to eliminatedUser?.nickname,
+                "eliminatedSeatIndex" to eliminatedPlayer?.seatIndex,
+                "eliminatedRole" to elimHistory?.eliminatedRole?.name,
+                "idiotRevealedId" to idiotRevealedPlayer?.userId,
+                "idiotRevealedNickname" to idiotRevealedUser?.nickname,
+                "idiotRevealedSeatIndex" to idiotRevealedPlayer?.seatIndex,
+            )
         } else null
 
         return mapOf(
             "gameId" to gameId,
+            "hostId" to game.hostUserId,
             "phase" to game.phase.name,
             "subPhase" to game.subPhase,
             "dayNumber" to game.dayNumber,
@@ -110,15 +297,20 @@ class GameService(
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,
             "sheriffElection" to sheriffElection,
+            "dayPhase" to dayPhase,
+            "votingPhase" to votingPhase,
             "nightPhase" to nightPhase,
             "players" to players.map { p ->
                 mapOf(
-                    "userId" to p.userId,
-                    "seatIndex" to p.seatIndex,
-                    "isAlive" to p.alive,
-                    "isSheriff" to p.sheriff,
+                    "userId"        to p.userId,
+                    "nickname"      to (userLookup[p.userId]?.nickname ?: p.userId),
+                    "seatIndex"     to p.seatIndex,
+                    "isAlive"       to p.alive,
+                    "isSheriff"     to p.sheriff,
                     "confirmedRole" to p.confirmedRole,
-                    "role" to if (p.userId == requestingUserId || game.phase == GamePhase.GAME_OVER) p.role.name else null,
+                    "canVote"       to p.canVote,
+                    "idiotRevealed" to p.idiotRevealed,
+                    "role"          to if (p.userId == requestingUserId || game.phase == GamePhase.GAME_OVER) p.role.name else null,
                 )
             },
         )

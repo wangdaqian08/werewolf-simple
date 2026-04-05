@@ -1,7 +1,7 @@
 package com.werewolf.game
 
-import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.annotation.JsonTypeInfo
+import com.fasterxml.jackson.annotation.JsonTypeName
 import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
@@ -36,4 +36,8 @@ sealed class DomainEvent {
     data class GameOver(val gameId: Int, val winner: WinnerSide) : DomainEvent()
     @JsonTypeName("RoleConfirmed")
     data class RoleConfirmed(val gameId: Int, val userId: String) : DomainEvent()
+    @JsonTypeName("IdiotRevealed")
+    data class IdiotRevealed(val gameId: Int, val userId: String) : DomainEvent()
+    @JsonTypeName("WolfSelectionChanged")
+    data class WolfSelectionChanged(val gameId: Int, val selectedTargetUserId: String) : DomainEvent()
 }

@@ -3,12 +3,7 @@ package com.werewolf.unit.service
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
-import com.werewolf.repository.GamePlayerRepository
-import com.werewolf.repository.GameRepository
-import com.werewolf.repository.NightPhaseRepository
-import com.werewolf.repository.RoomPlayerRepository
-import com.werewolf.repository.RoomRepository
-import com.werewolf.repository.UserRepository
+import com.werewolf.repository.*
 import com.werewolf.service.GameService
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
@@ -33,6 +28,8 @@ class GameServiceStartTest {
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var sheriffService: SheriffService
     @Mock lateinit var nightPhaseRepository: NightPhaseRepository
+    @Mock lateinit var voteRepository: VoteRepository
+    @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
     @InjectMocks lateinit var gameService: GameService
 
     private val hostId = "host:001"

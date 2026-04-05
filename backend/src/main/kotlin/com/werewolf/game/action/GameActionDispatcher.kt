@@ -36,11 +36,12 @@ class GameActionDispatcher(
 
             // ── Voting control ────────────────────────────────────────────────
             ActionType.SUBMIT_VOTE -> votingPipeline.submitVote(request, context)
+            ActionType.VOTING_UNVOTE -> votingPipeline.unvote(request, context)
             ActionType.VOTING_REVEAL_TALLY -> votingPipeline.revealTally(request, context)
             ActionType.VOTING_CONTINUE -> votingPipeline.continueToNight(request, context)
 
             // ── Hunter + badge actions (post-elimination) ─────────────────────
-            ActionType.HUNTER_SHOOT, ActionType.HUNTER_SKIP -> votingPipeline.handleHunterShoot(request, context)
+            ActionType.HUNTER_SHOOT, ActionType.HUNTER_PASS -> votingPipeline.handleHunterShoot(request, context)
             ActionType.BADGE_PASS, ActionType.BADGE_DESTROY -> votingPipeline.handleBadge(request, context)
 
             // ── Night: werewolf ───────────────────────────────────────────────
@@ -50,6 +51,18 @@ class GameActionDispatcher(
                     request.gameId,
                     NightSubPhase.WEREWOLF_PICK
                 )
+                result
+            }
+
+            ActionType.WOLF_SELECT -> {
+                val result = handlers.first { it.role == PlayerRole.WEREWOLF }.handle(request, context)
+                if (result is GameActionResult.Success) {
+                    // Broadcast selection to all alive wolves (no sub-phase advance)
+                    val aliveWolves = context.alivePlayers.filter { it.role == PlayerRole.WEREWOLF }
+                    result.events.forEach { event ->
+                        aliveWolves.forEach { wolf -> stompPublisher.sendPrivate(wolf.userId, event) }
+                    }
+                }
                 result
             }
 
@@ -73,13 +86,14 @@ class GameActionDispatcher(
                 result
             }
 
-            // ── Night: witch ──────────────────────────────────────────────────
+            // Night: witch ──────────────────────────────────────────────────
             ActionType.WITCH_ACT -> {
                 val result = handlers.first { it.role == PlayerRole.WITCH }.handle(request, context)
-                if (result is GameActionResult.Success) nightOrchestrator.advance(
-                    request.gameId,
-                    NightSubPhase.WITCH_ACT
-                )
+                if (result is GameActionResult.Success) {
+                    // Witch actions are now immediate - advance as soon as any decision is made
+                    // Antidote and poison are mutually exclusive
+                    nightOrchestrator.advance(request.gameId, NightSubPhase.WITCH_ACT)
+                }
                 result
             }
 
@@ -92,8 +106,9 @@ class GameActionDispatcher(
                 )
                 result
             }
-            // ── Night: idiot ──────────────────────────────────────────────────
-            // TODO implement idiot action
+            // ── Idiot reveal (day) ────────────────────────────────────────────
+            ActionType.IDIOT_REVEAL -> handlers.first { it.role == PlayerRole.IDIOT }.handle(request, context)
+
             // ── Sheriff election ──────────────────────────────────────────────
             ActionType.SHERIFF_CAMPAIGN, ActionType.SHERIFF_QUIT,
             ActionType.SHERIFF_START_SPEECH, ActionType.SHERIFF_ADVANCE_SPEECH,

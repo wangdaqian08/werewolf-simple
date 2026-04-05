@@ -13,6 +13,7 @@ import com.werewolf.service.StompPublisher
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDateTime
 
 @Service
@@ -79,6 +80,32 @@ class NightOrchestrator(
     }
 
     /**
+     * Checks if the current night sub-phase is stuck (role has no alive players) and advances if needed.
+     * Call this on backend startup or when loading a game context to recover from restarts.
+     */
+    @Transactional
+    fun recoverStuckNightPhase(gameId: Int) {
+        val context = contextLoader.load(gameId)
+        val nightPhase = context.nightPhase ?: return
+
+        // Only recover if game is in NIGHT phase and not COMPLETE
+        if (context.game.phase != GamePhase.NIGHT || nightPhase.subPhase == NightSubPhase.COMPLETE) {
+            return
+        }
+
+        val currentSubPhase = nightPhase.subPhase
+        val roleForCurrentPhase = getRoleForSubPhase(currentSubPhase)
+
+        if (roleForCurrentPhase != null) {
+            val hasAlivePlayersForRole = context.alivePlayers.any { it.role == roleForCurrentPhase }
+            if (!hasAlivePlayersForRole) {
+                // Current role has no alive players - advance to next sub-phase
+                advance(gameId, currentSubPhase)
+            }
+        }
+    }
+
+    /**
      * Advances the night from WAITING to the first real sub-phase (WEREWOLF_PICK).
      * Called automatically by [NightWaitingScheduler] after the 5-second countdown.
      */
@@ -91,6 +118,20 @@ class NightOrchestrator(
         nightPhase.subPhase = firstRealSubPhase
         nightPhaseRepository.save(nightPhase)
         stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstRealSubPhase))
+    }
+
+    /**
+     * Advances to a specific sub-phase after a scheduled delay.
+     * Used when a role has no alive players and we want to wait 20 seconds before moving to the next role.
+     */
+    @Transactional
+    fun advanceToSubPhase(gameId: Int, targetSubPhase: NightSubPhase?) {
+        if (targetSubPhase == null) return
+        val context = contextLoader.load(gameId)
+        val nightPhase = context.nightPhase ?: return
+        nightPhase.subPhase = targetSubPhase
+        nightPhaseRepository.save(nightPhase)
+        stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, targetSubPhase))
     }
 
     /**
@@ -111,9 +152,43 @@ class NightOrchestrator(
         if (nextSubPhase == null) {
             resolveNightKills(context, nightPhase)
         } else {
-            nightPhase.subPhase = nextSubPhase
-            nightPhaseRepository.save(nightPhase)
-            stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, nextSubPhase))
+            // Find the next sub-phase with at least one alive player, or null if none
+            val nextAliveSubPhase = sequence
+                .drop(currentIdx + 1)
+                .firstOrNull { subPhase ->
+                    val role = getRoleForSubPhase(subPhase)
+                    role == null || context.alivePlayers.any { it.role == role }
+                }
+
+            if (nextAliveSubPhase == null) {
+                // All subsequent roles are dead - skip directly to DAY
+                resolveNightKills(context, nightPhase)
+            } else {
+                val skippedCount = sequence.indexOf(nextAliveSubPhase) - (currentIdx + 1)
+                if (skippedCount > 0) {
+                    // Skip dead roles with a brief delay for better UX
+                    nightWaitingScheduler.scheduleAdvance(
+                        gameId,
+                        5_000L * skippedCount.coerceAtMost(2),
+                        nextAliveSubPhase
+                    )
+                } else {
+                    // Advance immediately to next alive role
+                    nightPhase.subPhase = nextAliveSubPhase
+                    nightPhaseRepository.save(nightPhase)
+                    stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, nextAliveSubPhase))
+                }
+            }
+        }
+    }
+
+    private fun getRoleForSubPhase(subPhase: NightSubPhase): PlayerRole? {
+        return when (subPhase) {
+            NightSubPhase.WEREWOLF_PICK -> PlayerRole.WEREWOLF
+            NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT -> PlayerRole.SEER
+            NightSubPhase.WITCH_ACT -> PlayerRole.WITCH
+            NightSubPhase.GUARD_PICK -> PlayerRole.GUARD
+            else -> null
         }
     }
 
@@ -140,6 +215,7 @@ class NightOrchestrator(
         for (killId in kills.distinct()) {
             gamePlayerRepository.findByGameIdAndUserId(gameId, killId).ifPresent { player ->
                 player.alive = false
+                // TODO consider batch action on save
                 gamePlayerRepository.save(player)
             }
         }
@@ -147,32 +223,71 @@ class NightOrchestrator(
         nightPhase.subPhase = NightSubPhase.COMPLETE
         nightPhaseRepository.save(nightPhase)
 
-        stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
-
         // Check win condition
         val updatedContext = contextLoader.load(gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers)
+        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
 
         if (winner != null) {
-            endGame(updatedContext, winner)
+            // Update game state immediately (before transaction commit)
+            context.game.apply {
+                this.winner = winner
+                phase = GamePhase.GAME_OVER
+                endedAt = LocalDateTime.now()
+            }
+            gameRepository.save(context.game)
+
+            // Broadcast events after transaction commit
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(object :
+                    org.springframework.transaction.support.TransactionSynchronization {
+                    override fun afterCommit() {
+                        stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+                        stompPublisher.broadcastGame(gameId, DomainEvent.GameOver(gameId, winner))
+                    }
+                })
+            } else {
+                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+                stompPublisher.broadcastGame(gameId, DomainEvent.GameOver(gameId, winner))
+            }
         } else {
             val game = updatedContext.game
             game.phase = GamePhase.DAY
             game.subPhase = DaySubPhase.RESULT_HIDDEN.name
             gameRepository.save(game)
-            stompPublisher.broadcastGame(
-                gameId,
-                DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
-            )
-        }
-    }
 
-    private fun endGame(context: GameContext, winner: WinnerSide) {
-        val game = context.game
-        game.winner = winner
-        game.phase = GamePhase.GAME_OVER
-        game.endedAt = LocalDateTime.now()
-        gameRepository.save(game)
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.GameOver(context.gameId, winner))
+            // Register transaction synchronization to broadcast after commit
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(object :
+                    org.springframework.transaction.support.TransactionSynchronization {
+                    override fun afterCommit() {
+                        // Broadcast NightResult first, then PhaseChanged
+                        stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+                        stompPublisher.broadcastGame(
+                            gameId,
+                            DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
+                        )
+                        // Fire onDayEnter hooks — allows role handlers to produce day-start events
+                        val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
+                        handlers.filter { it.role in activeRoles }.forEach { handler ->
+                            val events = handler.onDayEnter(updatedContext)
+                            events.forEach { stompPublisher.broadcastGame(gameId, it) }
+                        }
+                    }
+                })
+            } else {
+                // If no transaction is active, broadcast immediately
+                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+                stompPublisher.broadcastGame(
+                    gameId,
+                    DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
+                )
+                // Fire onDayEnter hooks — allows role handlers to produce day-start events
+                val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
+                handlers.filter { it.role in activeRoles }.forEach { handler ->
+                    val events = handler.onDayEnter(updatedContext)
+                    events.forEach { stompPublisher.broadcastGame(gameId, it) }
+                }
+            }
+        }
     }
 }

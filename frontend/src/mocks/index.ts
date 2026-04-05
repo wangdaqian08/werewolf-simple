@@ -1,33 +1,33 @@
 import AxiosMockAdapter from 'axios-mock-adapter'
 import http from '@/services/http'
 import {
+  makeDayHidden,
+  makeDayRevealed,
+  makeDayScenario,
+  makeNightScenario,
+  makeRoleRevealState,
+  makeVotingScenario,
+  MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
+  MOCK_DAY_SCENARIO_ALIVE_REVEALED,
+  MOCK_DAY_SCENARIO_DEAD,
+  MOCK_DAY_SCENARIO_GUEST,
+  MOCK_DAY_SCENARIO_HOST_HIDDEN,
+  MOCK_DAY_SCENARIO_HOST_REVEALED,
   MOCK_GAME_RESULT,
   MOCK_GAME_RESULT_WOLVES,
   MOCK_GAME_STATE,
   MOCK_LOGIN,
+  MOCK_ROLE_ASSIGNMENTS,
   MOCK_ROOM_AS_GUEST,
   MOCK_ROOM_AS_HOST,
-  MOCK_STOMP_EVENTS,
+  MOCK_SHERIFF_RESULT,
   MOCK_SHERIFF_SIGNUP,
-  MOCK_SHERIFF_SPEECH_CANDIDATE,
   MOCK_SHERIFF_SPEECH_AUDIENCE,
+  MOCK_SHERIFF_SPEECH_CANDIDATE,
   MOCK_SHERIFF_VOTING,
   MOCK_SHERIFF_VOTING_HOST_QUIT,
   MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
-  MOCK_SHERIFF_RESULT,
-  MOCK_ROLE_ASSIGNMENTS,
-  makeDayHidden,
-  makeDayRevealed,
-  makeDayScenario,
-  makeRoleRevealState,
-  makeNightScenario,
-  makeVotingScenario,
-  MOCK_DAY_SCENARIO_HOST_HIDDEN,
-  MOCK_DAY_SCENARIO_HOST_REVEALED,
-  MOCK_DAY_SCENARIO_DEAD,
-  MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
-  MOCK_DAY_SCENARIO_ALIVE_REVEALED,
-  MOCK_DAY_SCENARIO_GUEST,
+  MOCK_STOMP_EVENTS,
 } from './data'
 import { mockStompClient } from './mockStompClient'
 import type { DayPhaseState, GameState, RoomPlayer, SheriffElectionState } from '@/types'
@@ -328,12 +328,15 @@ export function setupMocks() {
     const prevHostId = mockGameState.hostId
     const prevPlayers = mockGameState.players
     try {
-      // Preserve hostId and player alive/dead states from the prior day scenario
-      mockGameState = {
-        ...makeVotingScenario(scenario as Parameters<typeof makeVotingScenario>[0]),
-        hostId: prevHostId,
-        players: prevPlayers,
-      }
+      const scenarioState = makeVotingScenario(scenario as Parameters<typeof makeVotingScenario>[0])
+      // Preserve hostId and alive/dead states from the prior day scenario,
+      // but merge any per-player overrides from the scenario (e.g. canVote, idiotRevealed).
+      const mergedPlayers = prevPlayers.map((p) => {
+        const override = scenarioState.players.find((sp) => sp.userId === p.userId)
+        // Preserve isAlive from prior scenario (e.g. Dead day scenario)
+        return override ? { ...p, ...override, isAlive: p.isAlive } : p
+      })
+      mockGameState = { ...scenarioState, hostId: prevHostId, players: mergedPlayers }
     } catch {
       return [400, { error: 'Unknown scenario' }]
     }
@@ -404,7 +407,7 @@ export function setupMocks() {
   mock.onGet(/\/game\/[^/]+\/state/).reply(() => [200, mockGameState])
   mock.onGet(/\/game\/result/).reply((_config) => [200, MOCK_GAME_RESULT])
   mock.onPost('/game/action').reply((config) => {
-    const { actionType, targetId } = JSON.parse(config.data ?? '{}')
+    const { actionType, targetId, payload } = JSON.parse(config.data ?? '{}')
     if (mockGameState.phase === 'ROLE_REVEAL') {
       if (actionType === 'START_NIGHT') {
         mockGameState = {
@@ -597,15 +600,57 @@ export function setupMocks() {
       }
     } else if (mockGameState.phase === 'NIGHT' && mockGameState.nightPhase) {
       const np = mockGameState.nightPhase
-      if (actionType === 'NIGHT_SELECT') {
+      if (actionType === 'NIGHT_SELECT' || actionType === 'WOLF_SELECT') {
         mockGameState = {
           ...mockGameState,
           nightPhase: { ...np, selectedTargetId: targetId },
         }
         pushGameStateUpdate()
+      } else if (actionType === 'SEER_CHECK') {
+        // Seer checks a player → show result (include current check in history)
+        if (targetId) {
+          const target = mockGameState.players.find((p) => p.userId === targetId)
+          const isWerewolf = MOCK_ROLE_ASSIGNMENTS[targetId] === 'WEREWOLF'
+          const prevHistory = np.seerResult?.history ?? []
+          const currentEntry = {
+            round: np.dayNumber,
+            nickname: target?.nickname ?? '',
+            isWerewolf,
+          }
+          mockGameState = {
+            ...mockGameState,
+            nightPhase: {
+              ...np,
+              subPhase: 'SEER_RESULT',
+              selectedTargetId: undefined,
+              seerResult: {
+                checkedPlayerId: targetId,
+                checkedNickname: target?.nickname ?? '',
+                checkedSeatIndex: target?.seatIndex ?? 0,
+                isWerewolf,
+                history: [...prevHistory, currentEntry],
+              },
+            },
+          }
+          pushGameStateUpdate()
+        }
+      } else if (actionType === 'SEER_CONFIRM') {
+        // Seer done — transition to WAITING
+        mockGameState = {
+          ...mockGameState,
+          nightPhase: { ...np, subPhase: 'WAITING', selectedTargetId: undefined },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'WOLF_KILL' || actionType === 'GUARD_PROTECT') {
+        // Wolf attack or guard protect confirmed — switch to WAITING
+        mockGameState = {
+          ...mockGameState,
+          nightPhase: { ...np, subPhase: 'WAITING', selectedTargetId: undefined },
+        }
+        pushGameStateUpdate()
       } else if (actionType === 'NIGHT_CONFIRM') {
+        // Legacy: kept for backward compatibility
         if (np.subPhase === 'SEER_PICK' && targetId) {
-          // Seer checks a player → show result (include current check in history)
           const target = mockGameState.players.find((p) => p.userId === targetId)
           const isWerewolf = MOCK_ROLE_ASSIGNMENTS[targetId] === 'WEREWOLF'
           const prevHistory = np.seerResult?.history ?? []
@@ -630,15 +675,31 @@ export function setupMocks() {
             },
           }
         } else {
-          // Werewolf attack or guard protect confirmed — switch to WAITING
           mockGameState = {
             ...mockGameState,
             nightPhase: { ...np, subPhase: 'WAITING', selectedTargetId: undefined },
           }
         }
         pushGameStateUpdate()
+      } else if (actionType === 'WITCH_ACT') {
+        // Unified witch action — each action submits immediately (one action per round)
+        const useAntidote = payload?.useAntidote ?? false
+        const poisonTargetUserId = payload?.poisonTargetUserId ?? null
+        mockGameState = {
+          ...mockGameState,
+          nightPhase: {
+            ...np,
+            antidoteDecided: true,
+            antidoteUsed: useAntidote,
+            poisonDecided: true,
+            poisonUsed: !!poisonTargetUserId,
+            selectedTargetId: undefined,
+            subPhase: 'WAITING',
+          },
+        }
+        pushGameStateUpdate()
       } else if (actionType === 'NIGHT_WITCH_USE_ANTIDOTE') {
-        // Using antidote ends witch's turn — auto-pass poison
+        // Legacy: kept for backward compatibility
         mockGameState = {
           ...mockGameState,
           nightPhase: {
@@ -658,7 +719,6 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'NIGHT_WITCH_USE_POISON') {
-        // Using poison ends witch's turn — auto-pass antidote
         mockGameState = {
           ...mockGameState,
           nightPhase: {
@@ -764,15 +824,22 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'VOTING_CONTINUE') {
-        if (vp.subPhase === 'BADGE_HANDOVER' && (vp.newSheriffId || vp.badgeDestroyed)) {
-          // Badge done — advance to NIGHT
-          const nextDay = (mockGameState.dayNumber ?? 1) + 1
-          mockGameState = {
-            ...mockGameState,
-            phase: 'NIGHT',
-            dayNumber: nextDay,
-            votingPhase: undefined,
-            nightPhase: { subPhase: 'WAITING', dayNumber: nextDay },
+        if (vp.subPhase === 'BADGE_HANDOVER') {
+          const eliminatedSheriff = mockGameState.players.find(
+            (p) => p.userId === vp.eliminatedPlayerId,
+          )
+          const badgeDone =
+            vp.badgeDestroyed || (eliminatedSheriff ? !eliminatedSheriff.isSheriff : false)
+          if (badgeDone) {
+            // Badge done — advance to NIGHT
+            const nextDay = (mockGameState.dayNumber ?? 1) + 1
+            mockGameState = {
+              ...mockGameState,
+              phase: 'NIGHT',
+              dayNumber: nextDay,
+              votingPhase: undefined,
+              nightPhase: { subPhase: 'WAITING', dayNumber: nextDay },
+            }
           }
         } else {
           // VOTING (tallyRevealed) → HUNTER_SHOOT or BADGE_HANDOVER or NIGHT (skip VOTE_RESULT)
@@ -817,16 +884,16 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'BADGE_PASS') {
-        const target = mockGameState.players.find((p) => p.userId === targetId)
         mockGameState = {
           ...mockGameState,
           sheriff: targetId,
+          players: mockGameState.players.map((p) => {
+            if (p.userId === targetId) return { ...p, sheriff: true }
+            if (p.userId === vp.eliminatedPlayerId) return { ...p, sheriff: false }
+            return p
+          }),
           votingPhase: {
             ...vp,
-            // Stay on BADGE_HANDOVER; newSheriffId triggers the "passed" UI
-            newSheriffId: targetId,
-            newSheriffNickname: target?.nickname ?? '',
-            newSheriffAvatar: target?.avatar,
             selectedPlayerId: undefined,
           },
         }

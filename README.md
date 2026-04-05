@@ -181,3 +181,19 @@ WHERE game_id = 1;
 | Port 8080 in use                       | `lsof -ti:8080 \| xargs kill -9`               |
 | `401 Unauthorized`                     | Re-run `POST /api/auth/dev`, get a fresh token |
 | `{"error":"Rejected(reason=...)"}`     | Check phase + role constraints in backend logs |
+
+## E2E tests
+
+at `werewolf-simple/frontend` folder 
+
+- Single file
+
+`npx playwright test --config=playwright.real.config.ts e2e/real/game-flow.spec.ts`
+
+- Both files
+
+`npx playwright test --config=playwright.real.config.ts e2e/real/game-flow.spec.ts e2e/real/sheriff-flow.spec.ts`
+
+- All real E2E tests
+
+`npx playwright test --config=playwright.real.config.ts` 
