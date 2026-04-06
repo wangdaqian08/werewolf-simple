@@ -45,13 +45,11 @@ class AudioService {
     const enableAudio = () => {
       if (!this.userInteracted) {
         this.userInteracted = true
-        console.log('[AudioService] User interaction detected, audio enabled')
 
         // Initialize AudioContext on first user interaction
         if (!this.audioContext) {
           try {
             this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-            console.log('[AudioService] AudioContext initialized')
           } catch (error) {
             console.warn('[AudioService] Failed to initialize AudioContext:', error)
           }
@@ -72,8 +70,6 @@ class AudioService {
    * @param options - Optional playback settings
    */
   play(filename: string, options: AudioOptions = {}): void {
-    console.log('[AudioService] play() called with:', filename)
-    console.log('[AudioService] Muted:', this.muted)
     if (this.muted) return
 
     // Add to queue and play (queue will prevent overlap)
@@ -88,15 +84,10 @@ class AudioService {
   playSequential(filenames: string[], options: AudioOptions = {}): void {
     if (this.muted || filenames.length === 0) return
 
-    console.log('[AudioService] Adding to queue:', filenames)
-    console.log('[AudioService] Current queue before:', this.audioQueue)
-
     // Add to queue with options
     filenames.forEach((filename) => {
       this.audioQueue.push({ filename, options })
     })
-
-    console.log('[AudioService] Current queue after:', this.audioQueue)
 
     // Start playing queue if not already playing
     if (!this.isPlayingQueue) {
@@ -110,17 +101,12 @@ class AudioService {
    */
   private playNextInQueue(): void {
     if (this.audioQueue.length === 0) {
-      console.log('[AudioService] Queue empty, stopping playback')
       this.isPlayingQueue = false
       return
     }
 
     this.isPlayingQueue = true
     const { filename, options } = this.audioQueue.shift()!
-
-    console.log('[AudioService] Playing from queue:', filename)
-    console.log('[AudioService] Remaining queue:', this.audioQueue)
-    console.log('[AudioService] User interacted:', this.userInteracted)
 
     try {
       const audio = this.getAudio(filename)
@@ -141,7 +127,6 @@ class AudioService {
 
       // Play next audio when current finishes
       audio.onended = () => {
-        console.log('[AudioService] Finished playing:', filename)
         this.playNextInQueue()
       }
 
@@ -207,7 +192,7 @@ class AudioService {
    */
   stopAll(): void {
     try {
-      for (const [_fileName, audio] of this.audioCache) {
+      for (const [, audio] of this.audioCache) {
         audio.pause()
         audio.currentTime = 0
       }
@@ -324,15 +309,9 @@ class AudioService {
    * Clear the audio queue and stop current playback
    */
   clearQueue(): void {
-    console.log('[AudioService] clearQueue() called')
-    console.log(
-      '[AudioService] Current queue before clear:',
-      this.audioQueue.map((item) => item.filename),
-    )
     this.audioQueue = []
     this.stopAll()
     this.isPlayingQueue = false
-    console.log('[AudioService] Queue cleared')
   }
 }
 

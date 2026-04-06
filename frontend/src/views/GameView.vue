@@ -638,8 +638,6 @@ onMounted(async () => {
     client.onConnect = () => {
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
-        // 添加事件接收日志
-        console.log('[GameView] 收到WebSocket事件:', data.type, data)
         // Mock sends full state snapshots; real backend sends typed domain events
         if (data.type === 'GAME_STATE_UPDATE') {
           gameStore.setState(data.payload)
@@ -653,18 +651,11 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
-          console.log('[GameView] 处理PhaseChanged事件:', data.phase, data.subPhase)
           // Small delay to ensure backend transaction has committed before we read state
           await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
           // If fetched state doesn't match the event (transaction not committed yet), retry once
           if (data.phase && state.phase !== data.phase) {
-            console.log(
-              '[GameView] State phase mismatch, retrying...',
-              state.phase,
-              '!=',
-              data.phase,
-            )
             await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
           }
@@ -674,18 +665,11 @@ onMounted(async () => {
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {
-          console.log('[GameView] 处理NightSubPhaseChanged事件:', data.subPhase)
           // Small delay to ensure backend transaction has committed before we read state
           await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
           // If fetched state doesn't match the event, retry once
           if (data.subPhase && state.nightPhase?.subPhase !== data.subPhase) {
-            console.log(
-              '[GameView] SubPhase mismatch, retrying...',
-              state.nightPhase?.subPhase,
-              '!=',
-              data.subPhase,
-            )
             await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
           }
@@ -695,8 +679,6 @@ onMounted(async () => {
         }
         // Real backend: audio sequence from backend
         if (data.type === 'AudioSequence') {
-          console.log('[GameView] 处理AudioSequence事件')
-          console.log('[GameView] AudioSequence数据:', data.audioSequence)
           const state = gameStore.state
           if (state) {
             gameStore.setState({

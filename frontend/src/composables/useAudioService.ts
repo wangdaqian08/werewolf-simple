@@ -22,11 +22,8 @@ export function useAudioService() {
     (newSequence) => {
       if (!newSequence) return
 
-      console.log('[useAudioService] Received audio sequence from backend:', newSequence)
-
       // Prevent duplicate playback of the same sequence
       if (newSequence.id === lastPlayedSequenceId.value) {
-        console.log('[useAudioService] Skipping duplicate audio sequence:', newSequence.id)
         return
       }
 
@@ -35,7 +32,6 @@ export function useAudioService() {
 
       // Play all audio files in sequence
       if (newSequence.audioFiles.length > 0) {
-        console.log('[useAudioService] Playing audio sequence:', newSequence.audioFiles)
         audioService.playSequential(newSequence.audioFiles)
         lastPlayedSequenceId.value = newSequence.id
       }
