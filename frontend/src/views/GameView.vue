@@ -1,5 +1,10 @@
 <template>
   <div :class="{ 'night-mode': isNight }" class="game-wrap">
+    <!-- Mute/unmute floating button -->
+    <button class="audio-mute-btn" :title="isMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
+      {{ isMuted ? '🔇' : '🔊' }}
+    </button>
+
     <!-- Role Reveal phase -->
     <template v-if="gameStore.state?.phase === 'ROLE_REVEAL' && gameStore.state?.myRole">
       <RoleRevealCard
@@ -259,7 +264,7 @@ import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
 import VotingPhase from '@/components/VotingPhase.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
-// import { useAudioService } from '@/composables/useAudioService'
+import { useAudioService } from '@/composables/useAudioService'
 import type { GamePlayer } from '@/types'
 
 const route = useRoute()
@@ -269,7 +274,7 @@ const gameStore = useGameStore()
 const roomStore = useRoomStore()
 
 // Initialize audio service
-// useAudioService()
+const { isMuted, toggleMute } = useAudioService()
 
 const isMock = import.meta.env.VITE_MOCK === 'true'
 const hasConfirmedRole = ref(false)
@@ -634,7 +639,7 @@ onMounted(async () => {
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
         // 添加事件接收日志
-        // console.log('[GameView] 收到WebSocket事件:', data.type, data)
+        console.log('[GameView] 收到WebSocket事件:', data.type, data)
         // Mock sends full state snapshots; real backend sends typed domain events
         if (data.type === 'GAME_STATE_UPDATE') {
           gameStore.setState(data.payload)
@@ -648,45 +653,78 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
-          //console.log('[GameView] 处理PhaseChanged事件')
-          const state = await gameService.getState(gameId)
-          //console.log('[GameView] 获取到的状态:', state)
-          gameStore.setState(state)
-          //console.log('[GameView] 状态已更新，当前phase:', gameStore.state?.phase)
+          console.log('[GameView] 处理PhaseChanged事件:', data.phase, data.subPhase)
+          // Small delay to ensure backend transaction has committed before we read state
+          await new Promise(r => setTimeout(r, 100))
+          let state = await gameService.getState(gameId)
+          // If fetched state doesn't match the event (transaction not committed yet), retry once
+          if (data.phase && state.phase !== data.phase) {
+            console.log('[GameView] State phase mismatch, retrying...', state.phase, '!=', data.phase)
+            await new Promise(r => setTimeout(r, 300))
+            state = await gameService.getState(gameId)
+          }
+          // Preserve audioSequence from STOMP events — getState() no longer includes it
+          const currentAudio = gameStore.state?.audioSequence
+          gameStore.setState({ ...state, audioSequence: currentAudio })
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {
-          //console.log('[GameView] 处理NightSubPhaseChanged事件')
-          const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          console.log('[GameView] 处理NightSubPhaseChanged事件:', data.subPhase)
+          // Small delay to ensure backend transaction has committed before we read state
+          await new Promise(r => setTimeout(r, 100))
+          let state = await gameService.getState(gameId)
+          // If fetched state doesn't match the event, retry once
+          if (data.subPhase && state.nightPhase?.subPhase !== data.subPhase) {
+            console.log('[GameView] SubPhase mismatch, retrying...', state.nightPhase?.subPhase, '!=', data.subPhase)
+            await new Promise(r => setTimeout(r, 300))
+            state = await gameService.getState(gameId)
+          }
+          // Preserve audioSequence from STOMP events — getState() no longer includes it
+          const currentAudio = gameStore.state?.audioSequence
+          gameStore.setState({ ...state, audioSequence: currentAudio })
+        }
+        // Real backend: audio sequence from backend
+        if (data.type === 'AudioSequence') {
+          console.log('[GameView] 处理AudioSequence事件')
+          console.log('[GameView] AudioSequence数据:', data.audioSequence)
+          const state = gameStore.state
+          if (state) {
+            gameStore.setState({
+              ...state,
+              audioSequence: data.audioSequence,
+            })
+          }
         }
         // Real backend: night result (kills) → re-fetch state
         if (data.type === 'NightResult') {
-          //console.log('[GameView] 处理NightResult事件:', data)
           const state = await gameService.getState(gameId)
-          gameStore.setState(state)
-          //console.log('[GameView] NightResult处理后phase:', gameStore.state?.phase)
+          const currentAudio = gameStore.state?.audioSequence
+          gameStore.setState({ ...state, audioSequence: currentAudio })
         }
         // Sheriff elected (winner or host appointment) → re-fetch to get updated sheriff state
         if (data.type === 'SheriffElected') {
           const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          const currentAudio = gameStore.state?.audioSequence
+          gameStore.setState({ ...state, audioSequence: currentAudio })
         }
         // Idiot revealed → re-fetch to get updated canVote/idiotRevealed player state
         if (data.type === 'IdiotRevealed') {
           const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          const currentAudio = gameStore.state?.audioSequence
+          gameStore.setState({ ...state, audioSequence: currentAudio })
         }
         // Vote cast → re-fetch so votedPlayerIds/votesSubmitted updates for all viewers
         if (data.type === 'VoteSubmitted') {
           const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          const currentAudio = gameStore.state?.audioSequence
+          gameStore.setState({ ...state, audioSequence: currentAudio })
         }
         // Vote tally revealed → re-fetch to get updated subPhase and tally
         // This is the main event that should trigger UI update; PhaseChanged is also sent but VoteTally is more complete
         if (data.type === 'VoteTally') {
           const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          const currentAudio = gameStore.state?.audioSequence
+          gameStore.setState({ ...state, audioSequence: currentAudio })
         }
         // Both mock (GAME_OVER) and real backend (GameOver) navigate to result
         if (data.type === 'GAME_OVER' || data.type === 'GameOver') {
@@ -713,6 +751,30 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.audio-mute-btn {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 100;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.night-mode .audio-mute-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
 .game-wrap {
   display: flex;
   flex-direction: column;

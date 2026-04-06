@@ -26,6 +26,7 @@ class NightOrchestrator(
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
     @Lazy private val nightWaitingScheduler: NightWaitingScheduler,
+    private val audioService: com.werewolf.service.AudioService,
 ) {
     /**
      * Ordered night sub-phases for this game based on which roles are active.
@@ -72,7 +73,19 @@ class NightOrchestrator(
         game.dayNumber = newDayNumber
         gameRepository.save(game)
 
+        // Calculate audio sequence for NIGHT phase
+        val audioSequence = audioService.calculatePhaseTransition(
+            gameId = gameId,
+            oldPhase = GamePhase.DAY, // Assuming coming from DAY
+            newPhase = GamePhase.NIGHT,
+            oldSubPhase = null,
+            newSubPhase = initialSubPhase.name,
+            room = context.room,
+        )
+
+        // Send both events
         stompPublisher.broadcastGame(gameId, DomainEvent.PhaseChanged(gameId, GamePhase.NIGHT, initialSubPhase.name))
+        stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
 
         if (withWaiting) {
             nightWaitingScheduler.scheduleAdvance(gameId)
@@ -117,7 +130,17 @@ class NightOrchestrator(
         val firstRealSubPhase = firstSubPhase(context)
         nightPhase.subPhase = firstRealSubPhase
         nightPhaseRepository.save(nightPhase)
+
+        // Calculate audio sequence for this transition
+        val audioSequence = audioService.calculateNightSubPhaseTransition(
+            gameId = gameId,
+            oldSubPhase = NightSubPhase.WAITING,
+            newSubPhase = firstRealSubPhase,
+        )
+
+        // Send both events
         stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstRealSubPhase))
+        stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
     }
 
     /**
@@ -129,9 +152,20 @@ class NightOrchestrator(
         if (targetSubPhase == null) return
         val context = contextLoader.load(gameId)
         val nightPhase = context.nightPhase ?: return
+        val oldSubPhase = nightPhase.subPhase
         nightPhase.subPhase = targetSubPhase
         nightPhaseRepository.save(nightPhase)
+
+        // Calculate audio sequence for this transition
+        val audioSequence = audioService.calculateNightSubPhaseTransition(
+            gameId = gameId,
+            oldSubPhase = oldSubPhase,
+            newSubPhase = targetSubPhase,
+        )
+
+        // Send both events
         stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, targetSubPhase))
+        stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
     }
 
     /**
@@ -176,7 +210,17 @@ class NightOrchestrator(
                     // Advance immediately to next alive role
                     nightPhase.subPhase = nextAliveSubPhase
                     nightPhaseRepository.save(nightPhase)
+
+                    // Calculate audio sequence for this transition
+                    val audioSequence = audioService.calculateNightSubPhaseTransition(
+                        gameId = gameId,
+                        oldSubPhase = completedSubPhase,
+                        newSubPhase = nextAliveSubPhase,
+                    )
+
+                    // Send both events
                     stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, nextAliveSubPhase))
+                    stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
                 }
             }
         }
@@ -255,17 +299,28 @@ class NightOrchestrator(
             game.subPhase = DaySubPhase.RESULT_HIDDEN.name
             gameRepository.save(game)
 
+            // Calculate audio sequence for DAY phase
+            val audioSequence = audioService.calculatePhaseTransition(
+                gameId = gameId,
+                oldPhase = GamePhase.NIGHT,
+                newPhase = GamePhase.DAY,
+                oldSubPhase = null,
+                newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
+                room = updatedContext.room,
+            )
+
             // Register transaction synchronization to broadcast after commit
             if (TransactionSynchronizationManager.isActualTransactionActive()) {
                 TransactionSynchronizationManager.registerSynchronization(object :
                     org.springframework.transaction.support.TransactionSynchronization {
                     override fun afterCommit() {
-                        // Broadcast NightResult first, then PhaseChanged
+                        // Broadcast NightResult first, then PhaseChanged, then AudioSequence
                         stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
                         stompPublisher.broadcastGame(
                             gameId,
                             DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
                         )
+                        stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
                         // Fire onDayEnter hooks — allows role handlers to produce day-start events
                         val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
                         handlers.filter { it.role in activeRoles }.forEach { handler ->
@@ -281,6 +336,7 @@ class NightOrchestrator(
                     gameId,
                     DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
                 )
+                stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
                 // Fire onDayEnter hooks — allows role handlers to produce day-start events
                 val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
                 handlers.filter { it.role in activeRoles }.forEach { handler ->

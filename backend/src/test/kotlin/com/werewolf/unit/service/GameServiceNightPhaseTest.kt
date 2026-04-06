@@ -13,6 +13,8 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
 import java.util.*
 
@@ -76,7 +78,12 @@ class GameServiceNightPhaseTest {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private fun setupGameAndPlayers(game: Game, players: List<GamePlayer>, users: List<User>) {
+    private fun setupGameAndPlayers(
+        game: Game,
+        players: List<GamePlayer>,
+        users: List<User>,
+        nightSubPhase: NightSubPhase? = null
+    ) {
         whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(game))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(players)
         whenever(userRepository.findAllById(players.map { it.userId })).thenReturn(users)
@@ -118,7 +125,7 @@ class GameServiceNightPhaseTest {
         val players = listOf(wolf1, wolf2, villager)
         val users = listOf(user("u1", "Wolf1"), user("u2", "Wolf2"), user("u3", "Dave"))
         val game = game()
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.WEREWOLF_PICK)
 
         val np = nightPhase(subPhase = NightSubPhase.WEREWOLF_PICK, wolfTarget = "u3")
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
@@ -140,7 +147,7 @@ class GameServiceNightPhaseTest {
         )
         val users = listOf(user("u1", "Alice"), user("u2", "Bob"))
         val game = game()
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.WAITING)
         val np = nightPhase(subPhase = NightSubPhase.WAITING)
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
 
@@ -161,7 +168,7 @@ class GameServiceNightPhaseTest {
         val players = listOf(seer, target)
         val users = listOf(user("u1", "Seer"), user("u3", "Wolf"))
         val game = game()
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.SEER_RESULT)
 
         // current night: seer already checked u3
         val np = nightPhase(
@@ -200,7 +207,7 @@ class GameServiceNightPhaseTest {
         val players = listOf(seer)
         val users = listOf(user("u1", "Seer"))
         val game = game()
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.SEER_PICK)
         val np = nightPhase(subPhase = NightSubPhase.SEER_PICK)  // no seerCheckedUserId
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
 
@@ -221,7 +228,7 @@ class GameServiceNightPhaseTest {
         val players = listOf(witch, attacked)
         val users = listOf(user("u1", "Witch"), user("u4", "Dave"))
         val game = game()
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.WITCH_ACT)
 
         val np = nightPhase(subPhase = NightSubPhase.WITCH_ACT, wolfTarget = "u4")
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
@@ -245,7 +252,7 @@ class GameServiceNightPhaseTest {
         val players = listOf(witch, attacked)
         val users = listOf(user("u1", "Witch"), user("u4", "Dave"))
         val game = game()
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.WITCH_ACT)
 
         val np = nightPhase(subPhase = NightSubPhase.WITCH_ACT, wolfTarget = "u4")
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
@@ -266,7 +273,7 @@ class GameServiceNightPhaseTest {
         val players = listOf(witch)
         val users = listOf(user("u1", "Witch"))
         val game = game()
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.WITCH_ACT)
 
         val np = nightPhase(subPhase = NightSubPhase.WITCH_ACT)
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
@@ -289,7 +296,7 @@ class GameServiceNightPhaseTest {
         val players = listOf(guard)
         val users = listOf(user("u1", "Guard"))
         val game = game()
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.GUARD_PICK)
 
         val np = nightPhase(subPhase = NightSubPhase.GUARD_PICK, prevGuardTarget = "u4")
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
@@ -306,7 +313,7 @@ class GameServiceNightPhaseTest {
         val players = listOf(guard)
         val users = listOf(user("u1", "Guard"))
         val game = game()
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.GUARD_PICK)
 
         val np = nightPhase(subPhase = NightSubPhase.GUARD_PICK)  // no prevGuardTarget
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
@@ -411,7 +418,7 @@ class GameServiceNightPhaseTest {
         val players = listOf(wolf, seer)
         val users = listOf(user("u1", "Wolf"), user("u2", "Seer"))
         val game = game(phase = GamePhase.NIGHT)
-        setupGameAndPlayers(game, players, users)
+        setupGameAndPlayers(game, players, users, NightSubPhase.WAITING)
 
         val np = nightPhase(subPhase = NightSubPhase.WAITING)
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))

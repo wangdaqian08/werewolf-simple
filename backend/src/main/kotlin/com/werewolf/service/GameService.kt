@@ -292,7 +292,7 @@ class GameService(
             "subPhase" to game.subPhase,
             "dayNumber" to game.dayNumber,
             "sheriffUserId" to game.sheriffUserId,
-            "hasSheriff" to (room?.hasSheriff ?: true),
+            "hasSheriff" to room.hasSheriff,
             "winner" to game.winner?.name,
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,
