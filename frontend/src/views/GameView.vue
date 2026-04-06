@@ -655,28 +655,38 @@ onMounted(async () => {
         if (data.type === 'PhaseChanged') {
           console.log('[GameView] 处理PhaseChanged事件:', data.phase, data.subPhase)
           // Small delay to ensure backend transaction has committed before we read state
-          await new Promise(r => setTimeout(r, 100))
+          await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
           // If fetched state doesn't match the event (transaction not committed yet), retry once
           if (data.phase && state.phase !== data.phase) {
-            console.log('[GameView] State phase mismatch, retrying...', state.phase, '!=', data.phase)
-            await new Promise(r => setTimeout(r, 300))
+            console.log(
+              '[GameView] State phase mismatch, retrying...',
+              state.phase,
+              '!=',
+              data.phase,
+            )
+            await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
           }
-          // Preserve audioSequence from STOMP events — getState() no longer includes it
-          const currentAudio = gameStore.state?.audioSequence
-          gameStore.setState({ ...state, audioSequence: currentAudio })
+          // Don't preserve audioSequence here - let the AudioSequence event handle it
+          // This ensures that the new AudioSequence will trigger the audio playback
+          gameStore.setState({ ...state })
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {
           console.log('[GameView] 处理NightSubPhaseChanged事件:', data.subPhase)
           // Small delay to ensure backend transaction has committed before we read state
-          await new Promise(r => setTimeout(r, 100))
+          await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
           // If fetched state doesn't match the event, retry once
           if (data.subPhase && state.nightPhase?.subPhase !== data.subPhase) {
-            console.log('[GameView] SubPhase mismatch, retrying...', state.nightPhase?.subPhase, '!=', data.subPhase)
-            await new Promise(r => setTimeout(r, 300))
+            console.log(
+              '[GameView] SubPhase mismatch, retrying...',
+              state.nightPhase?.subPhase,
+              '!=',
+              data.subPhase,
+            )
+            await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
           }
           // Preserve audioSequence from STOMP events — getState() no longer includes it

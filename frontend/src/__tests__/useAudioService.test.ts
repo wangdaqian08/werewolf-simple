@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { nextTick } from 'vue'
+
+// Vue watchers need an active effect scope
+import { effectScope, nextTick } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 import type { AudioSequence, GameState } from '@/types'
 
@@ -56,8 +58,6 @@ function makeSequence(audioFiles: string[], id?: string): AudioSequence {
 let cleanup: (() => void) | null = null
 
 function setupComposable() {
-  // Vue watchers need an active effect scope
-  const { effectScope } = require('vue')
   const scope = effectScope()
   const result = scope.run(() => useAudioService())!
   cleanup = () => scope.stop()
@@ -274,52 +274,66 @@ describe('useAudioService', () => {
     setupComposable()
 
     // 1. Enter night
-    gameStore.setState(makeState({
-      audioSequence: makeSequence(['天黑请闭眼.mp3'], 'night-1'),
-    }))
+    gameStore.setState(
+      makeState({
+        audioSequence: makeSequence(['天黑请闭眼.mp3'], 'night-1'),
+      }),
+    )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['天黑请闭眼.mp3'])
 
     // 2. WAITING → WEREWOLF_PICK
-    gameStore.setState(makeState({
-      audioSequence: makeSequence(['狼人请睁眼.mp3'], 'wolf-open'),
-    }))
+    gameStore.setState(
+      makeState({
+        audioSequence: makeSequence(['狼人请睁眼.mp3'], 'wolf-open'),
+      }),
+    )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['狼人请睁眼.mp3'])
 
     // 3. WEREWOLF_PICK → SEER_PICK (close wolf + open seer)
-    gameStore.setState(makeState({
-      audioSequence: makeSequence(['狼人请闭眼.mp3', '预言家请睁眼.mp3'], 'wolf-seer'),
-    }))
+    gameStore.setState(
+      makeState({
+        audioSequence: makeSequence(['狼人请闭眼.mp3', '预言家请睁眼.mp3'], 'wolf-seer'),
+      }),
+    )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['狼人请闭眼.mp3', '预言家请睁眼.mp3'])
 
     // 4. SEER → WITCH (close seer + open witch)
-    gameStore.setState(makeState({
-      audioSequence: makeSequence(['预言家请闭眼.mp3', '女巫请睁眼.mp3'], 'seer-witch'),
-    }))
+    gameStore.setState(
+      makeState({
+        audioSequence: makeSequence(['预言家请闭眼.mp3', '女巫请睁眼.mp3'], 'seer-witch'),
+      }),
+    )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['预言家请闭眼.mp3', '女巫请睁眼.mp3'])
 
     // 5. WITCH → GUARD (close witch + open guard)
-    gameStore.setState(makeState({
-      audioSequence: makeSequence(['女巫请闭眼.mp3', '守卫请睁眼.mp3'], 'witch-guard'),
-    }))
+    gameStore.setState(
+      makeState({
+        audioSequence: makeSequence(['女巫请闭眼.mp3', '守卫请睁眼.mp3'], 'witch-guard'),
+      }),
+    )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['女巫请闭眼.mp3', '守卫请睁眼.mp3'])
 
     // 6. GUARD → end (close guard)
-    gameStore.setState(makeState({
-      audioSequence: makeSequence(['守卫请闭眼.mp3'], 'guard-end'),
-    }))
+    gameStore.setState(
+      makeState({
+        audioSequence: makeSequence(['守卫请闭眼.mp3'], 'guard-end'),
+      }),
+    )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['守卫请闭眼.mp3'])
 
     // 7. Night → Day
-    gameStore.setState(makeState({
-      phase: 'DAY',
-      audioSequence: makeSequence(['天亮了.mp3'], 'day'),
-    }))
+    gameStore.setState(
+      makeState({
+        phase: 'DAY',
+        audioSequence: makeSequence(['天亮了.mp3'], 'day'),
+      }),
+    )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['天亮了.mp3'])
 

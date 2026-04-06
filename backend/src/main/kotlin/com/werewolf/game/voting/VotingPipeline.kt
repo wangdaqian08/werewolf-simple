@@ -244,7 +244,9 @@ class VotingPipeline(
                 val targetPlayer = context.alivePlayerById(target)
                     ?: return GameActionResult.Rejected("Target not found or dead")
 
+                // Update sheriff
                 context.game.sheriffUserId = targetPlayer.userId
+                context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
                 gameRepository.save(context.game)
 
                 // Update sheriff flags
@@ -258,10 +260,16 @@ class VotingPipeline(
                     context.gameId,
                     DomainEvent.BadgeHandover(context.gameId, actor.userId, target)
                 )
+                stompPublisher.broadcastGame(
+                    context.gameId,
+                    DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTE_RESULT.name)
+                )
             }
 
             ActionType.BADGE_DESTROY -> {
+                // Update sheriff
                 context.game.sheriffUserId = null
+                context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
                 gameRepository.save(context.game)
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
                     it.sheriff = false; gamePlayerRepository.save(it)
@@ -270,14 +278,25 @@ class VotingPipeline(
                     context.gameId,
                     DomainEvent.BadgeHandover(context.gameId, actor.userId, null)
                 )
+                stompPublisher.broadcastGame(
+                    context.gameId,
+                    DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTE_RESULT.name)
+                )
             }
 
             else -> return GameActionResult.Rejected("Unknown action: ${request.actionType}")
-        }
 
-        afterElimination(context)
-        return GameActionResult.Success()
-    }
+            
+
+                    }
+
+            
+
+                    afterElimination(context)
+
+                    return GameActionResult.Success()
+
+                }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 

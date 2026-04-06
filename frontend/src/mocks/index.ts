@@ -81,10 +81,7 @@ function phaseAudio(newPhase: GamePhase, subPhase?: string | null): AudioSequenc
   return makeAudioSequence(newPhase, subPhase ?? null, files, 10)
 }
 
-function nightSubPhaseAudio(
-  oldSubPhase: string | null,
-  newSubPhase: string,
-): AudioSequence {
+function nightSubPhaseAudio(oldSubPhase: string | null, newSubPhase: string): AudioSequence {
   const files: string[] = []
   if (oldSubPhase && oldSubPhase !== 'WAITING' && CLOSE_EYES[oldSubPhase]) {
     files.push(CLOSE_EYES[oldSubPhase])

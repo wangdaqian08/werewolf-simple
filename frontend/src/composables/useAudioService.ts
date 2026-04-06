@@ -5,9 +5,9 @@
  * Backend determines what audio should play, frontend just plays it.
  */
 
-import {onUnmounted, ref, watch} from 'vue'
-import {useGameStore} from '@/stores/gameStore'
-import {audioService} from '@/services/audioService'
+import { onUnmounted, ref, watch } from 'vue'
+import { useGameStore } from '@/stores/gameStore'
+import { audioService } from '@/services/audioService'
 
 export function useAudioService() {
   const gameStore = useGameStore()
@@ -40,7 +40,7 @@ export function useAudioService() {
         lastPlayedSequenceId.value = newSequence.id
       }
     },
-    { deep: true }
+    { deep: true },
   )
 
   /**

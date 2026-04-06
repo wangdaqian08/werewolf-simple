@@ -61,16 +61,9 @@ class AudioService {
 
     // Listen for various user interactions
     const events = ['click', 'touchstart', 'keydown', 'mousedown', 'pointerdown']
-    events.forEach(eventName => {
+    events.forEach((eventName) => {
       document.addEventListener(eventName, enableAudio, { once: true, capture: true })
     })
-  }
-
-  /**
-   * Check if audio can be played (user has interacted with the page)
-   */
-  private canPlayAudio(): boolean {
-    return this.userInteracted
   }
 
   /**
@@ -99,7 +92,7 @@ class AudioService {
     console.log('[AudioService] Current queue before:', this.audioQueue)
 
     // Add to queue with options
-    filenames.forEach(filename => {
+    filenames.forEach((filename) => {
       this.audioQueue.push({ filename, options })
     })
 
@@ -214,7 +207,7 @@ class AudioService {
    */
   stopAll(): void {
     try {
-      for (const [_filename, audio] of this.audioCache) {
+      for (const [_fileName, audio] of this.audioCache) {
         audio.pause()
         audio.currentTime = 0
       }
@@ -332,7 +325,10 @@ class AudioService {
    */
   clearQueue(): void {
     console.log('[AudioService] clearQueue() called')
-    console.log('[AudioService] Current queue before clear:', this.audioQueue.map(item => item.filename))
+    console.log(
+      '[AudioService] Current queue before clear:',
+      this.audioQueue.map((item) => item.filename),
+    )
     this.audioQueue = []
     this.stopAll()
     this.isPlayingQueue = false

@@ -252,4 +252,25 @@ class GameServiceDayPhaseTest {
 
         assertThat(dayPhase["nightResult"]).isNull()
     }
+
+    @Test
+    fun `getGameState DAY - wolf and witch kill same player shows only once (no duplicate)`() {
+        // Bug fix: when wolf and witch kill the same player, they should only appear once
+        val victim = player("u2", 1)
+        val players = listOf(player(hostId, 0), victim)
+        val users = listOf(user(hostId, "Host"), user("u2", "Victim"))
+        setupGameAndPlayers(game(DaySubPhase.RESULT_REVEALED.name), players, users)
+        // Wolf attacks u2, witch also poisons u2 - same player
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.of(nightPhase(wolfTarget = "u2", poisonTarget = "u2")))
+
+        val result = gameService.getGameState(gameId, hostId)
+        val dayPhase = dayResult(result)
+        val nightResult = dayPhase["nightResult"] as Map<String, Any?>
+        val killedPlayers = nightResult["killedPlayers"] as List<Map<String, Any?>>
+
+        // Should only show the player once, not twice
+        assertThat(killedPlayers).hasSize(1)
+        assertThat(killedPlayers[0]["killedPlayerId"]).isEqualTo("u2")
+    }
 }

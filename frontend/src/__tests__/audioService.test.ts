@@ -2,9 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ── Mock HTMLAudioElement ─────────────────────────────────────────────────────
 
-let mockAudioInstances: ReturnType<typeof createMockAudio>[] = []
+type MockAudio = {
+  play: ReturnType<typeof vi.fn>
+  pause: ReturnType<typeof vi.fn>
+  currentTime: number
+  volume: number
+  loop: boolean
+  preload: string
+  onended: (() => void) | null
+}
 
-function createMockAudio() {
+let mockAudioInstances: MockAudio[] = []
+
+function createMockAudio(): MockAudio {
   const inst = {
     play: vi.fn().mockResolvedValue(undefined),
     pause: vi.fn(),
@@ -20,8 +30,18 @@ function createMockAudio() {
 
 vi.stubGlobal('document', { ...globalThis.document, addEventListener: vi.fn() })
 // Must use `function` keyword for constructor mock
-vi.stubGlobal('Audio', vi.fn().mockImplementation(function () { return createMockAudio() }))
-vi.stubGlobal('AudioContext', vi.fn().mockImplementation(function () { return {} }))
+vi.stubGlobal(
+  'Audio',
+  vi.fn().mockImplementation(function () {
+    return createMockAudio()
+  }),
+)
+vi.stubGlobal(
+  'AudioContext',
+  vi.fn().mockImplementation(function () {
+    return {}
+  }),
+)
 
 let audioService: typeof import('@/services/audioService').audioService
 
@@ -34,8 +54,8 @@ describe('audioService', () => {
     const mod = await import('@/services/audioService')
     audioService = mod.audioService
     // Simulate user interaction so play works
-    audioService.toggleMute()  // mute (sets userInteracted=true)
-    audioService.toggleMute()  // unmute
+    audioService.toggleMute() // mute (sets userInteracted=true)
+    audioService.toggleMute() // unmute
   })
 
   // ── Sequential playback (core contract) ─────────────────────────────────
@@ -43,7 +63,7 @@ describe('audioService', () => {
   it('playSequential plays first file immediately', () => {
     audioService.playSequential(['天黑请闭眼.mp3', '狼人请睁眼.mp3'])
     expect(mockAudioInstances).toHaveLength(1)
-    expect(mockAudioInstances[0].play).toHaveBeenCalledTimes(1)
+    expect(mockAudioInstances[0]?.play).toHaveBeenCalledTimes(1)
   })
 
   it('playSequential does NOT play next file until current finishes', () => {
@@ -56,13 +76,13 @@ describe('audioService', () => {
   it('playSequential advances to next file on onended', () => {
     audioService.playSequential(['a.mp3', 'b.mp3', 'c.mp3'])
 
-    mockAudioInstances[0].onended?.()
+    mockAudioInstances[0]?.onended?.()
     expect(mockAudioInstances).toHaveLength(2)
-    expect(mockAudioInstances[1].play).toHaveBeenCalled()
+    expect(mockAudioInstances[1]?.play).toHaveBeenCalled()
 
-    mockAudioInstances[1].onended?.()
+    mockAudioInstances[1]?.onended?.()
     expect(mockAudioInstances).toHaveLength(3)
-    expect(mockAudioInstances[2].play).toHaveBeenCalled()
+    expect(mockAudioInstances[2]?.play).toHaveBeenCalled()
   })
 
   it('playSequential skips all when muted', () => {
@@ -76,10 +96,10 @@ describe('audioService', () => {
   it('clearQueue stops current and prevents queued files from playing', () => {
     audioService.playSequential(['a.mp3', 'b.mp3', 'c.mp3'])
     audioService.clearQueue()
-    expect(mockAudioInstances[0].pause).toHaveBeenCalled()
+    expect(mockAudioInstances[0]?.pause).toHaveBeenCalled()
 
     // onended fires after clear — no new audio should start
-    mockAudioInstances[0].onended?.()
+    mockAudioInstances[0]?.onended?.()
     expect(mockAudioInstances).toHaveLength(1)
   })
 
@@ -98,7 +118,7 @@ describe('audioService', () => {
   it('toggleMute stops playing audio when muting', () => {
     audioService.playSequential(['a.mp3'])
     audioService.toggleMute()
-    expect(mockAudioInstances[0].pause).toHaveBeenCalled()
+    expect(mockAudioInstances[0]?.pause).toHaveBeenCalled()
   })
 
   it('restores mute from localStorage on init', async () => {
@@ -121,7 +141,7 @@ describe('audioService', () => {
   it('setGlobalVolume updates cached instances', () => {
     audioService.playSequential(['a.mp3'])
     audioService.setGlobalVolume(0.3)
-    expect(mockAudioInstances[0].volume).toBeCloseTo(0.3)
+    expect(mockAudioInstances[0]?.volume).toBeCloseTo(0.3)
   })
 
   // ── Error resilience ────────────────────────────────────────────────────
@@ -140,6 +160,6 @@ describe('audioService', () => {
     await vi.waitFor(() => {
       expect(mockAudioInstances).toHaveLength(2)
     })
-    expect(mockAudioInstances[1].play).toHaveBeenCalled()
+    expect(mockAudioInstances[1]?.play).toHaveBeenCalled()
   })
 })

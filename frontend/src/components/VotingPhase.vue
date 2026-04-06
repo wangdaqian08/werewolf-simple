@@ -443,16 +443,21 @@
         </template>
         <!-- Choosing heir -->
         <template v-else>
-          <div class="vote-actions">
-            <button
-              class="btn btn-gold vote-btn"
-              :disabled="!effectiveSelected"
-              @click="effectiveSelected && emit('passBadge', effectiveSelected)"
-            >
-              移交警徽 / Pass Badge
-            </button>
-            <button class="btn btn-secondary skip-btn" @click="emit('destroyBadge')">销毁</button>
-          </div>
+          <template v-if="isEliminatedSheriff">
+            <div class="vote-actions">
+              <button
+                class="btn btn-gold vote-btn"
+                :disabled="!effectiveSelected"
+                @click="effectiveSelected && emit('passBadge', effectiveSelected)"
+              >
+                移交警徽 / Pass Badge
+              </button>
+              <button class="btn btn-secondary skip-btn" @click="emit('destroyBadge')">销毁</button>
+            </div>
+          </template>
+          <template v-else>
+            <p class="footer-hint">等待警长移交警徽 · Waiting for sheriff to pass badge...</p>
+          </template>
         </template>
       </footer>
     </template>
@@ -521,11 +526,19 @@ const isRevealed = computed(
 // Badge screen: post-action states
 const badgeDone = computed(() => {
   if (props.votingPhase.badgeDestroyed) return true
-  // Check if eliminated sheriff still has badge (if false, badge has been handed over)
+  // Check if eliminated player is a sheriff
   const eliminatedSheriff = props.players.find(
-    (p) => p.userId === props.votingPhase.eliminatedPlayerId,
+    (p) => p.userId === props.votingPhase.eliminatedPlayerId && p.isSheriff,
   )
-  return eliminatedSheriff ? !eliminatedSheriff.isSheriff : false
+  // If eliminated player is not a sheriff, no badge handover is needed
+  if (!eliminatedSheriff) return true
+  // Sheriff has handed over the badge (isSheriff is now false)
+  return !eliminatedSheriff.isSheriff
+})
+
+// Check if current player is the eliminated sheriff (only they can pass the badge)
+const isEliminatedSheriff = computed(() => {
+  return props.votingPhase.eliminatedPlayerId === props.myUserId
 })
 
 // Get new sheriff info (alive player with isSheriff=true in BADGE_HANDOVER)

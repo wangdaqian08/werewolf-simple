@@ -292,7 +292,7 @@ class VotingPipelineTest {
     // ── handleBadge ───────────────────────────────────────────────────────────
 
     @Test
-    fun `handleBadge - sheriff passes badge to living player, badge transferred`() {
+    fun `handleBadge - sheriff passes badge to living player, badge transferred and transitions to VOTE_RESULT`() {
         val sheriff = player(hostId, 0)
         val newSheriff = player("u2", 2)
         val context = ctx(game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = hostId), sheriff, newSheriff)
@@ -309,10 +309,12 @@ class VotingPipelineTest {
         val gameCaptor = argumentCaptor<Game>()
         verify(gameRepository).save(gameCaptor.capture())
         assertThat(gameCaptor.firstValue.sheriffUserId).isEqualTo("u2")
+        // Bug fix: after badge handover, phase should transition to VOTE_RESULT
+        assertThat(gameCaptor.firstValue.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
     }
 
     @Test
-    fun `handleBadge - sheriff destroys badge, sheriffUserId becomes null`() {
+    fun `handleBadge - sheriff destroys badge, sheriffUserId becomes null and transitions to VOTE_RESULT`() {
         val sheriff = player(hostId, 0)
         val context = ctx(game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = hostId), sheriff)
 
@@ -327,6 +329,8 @@ class VotingPipelineTest {
         val gameCaptor = argumentCaptor<Game>()
         verify(gameRepository).save(gameCaptor.capture())
         assertThat(gameCaptor.firstValue.sheriffUserId).isNull()
+        // Bug fix: after badge destruction, phase should transition to VOTE_RESULT
+        assertThat(gameCaptor.firstValue.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
     }
 
     // ── Idiot interception ────────────────────────────────────────────────────

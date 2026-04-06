@@ -313,11 +313,19 @@ class AudioSequenceIntegrationTest {
 
     private fun createPlayers(gameId: Int, count: Int): List<GamePlayer> {
         val players = (1..count).map { seatIndex ->
+            // Create a mix of roles to prevent immediate game end
+            val role = when (seatIndex) {
+                1, 2 -> PlayerRole.WEREWOLF // Add wolves to prevent immediate game over
+                3 -> PlayerRole.SEER
+                4 -> PlayerRole.WITCH
+                5 -> PlayerRole.GUARD
+                else -> PlayerRole.VILLAGER
+            }
             GamePlayer(
                 gameId = gameId,
                 userId = "user:$seatIndex",
                 seatIndex = seatIndex,
-                role = PlayerRole.VILLAGER,
+                role = role,
             )
         }
         return gamePlayerRepository.saveAll(players)
