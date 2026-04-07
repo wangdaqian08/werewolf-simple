@@ -33,6 +33,7 @@
           "
           class="btn btn-primary"
           style="margin-top: 1.5rem"
+          :disabled="actionPending"
           @click="handleStartNight"
         >
           开始夜晚 / Start Night
@@ -49,6 +50,7 @@
         :election="gameStore.state.sheriffElection"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :action-pending="actionPending"
         @run="handleSheriffRun"
         @pass="handleSheriffPass"
         @withdraw="handleSheriffWithdraw"
@@ -71,6 +73,7 @@
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :my-role="gameStore.state.myRole"
+        :action-pending="actionPending"
         @select-player="handleNightSelect"
         @confirm="handleNightConfirm"
         @witch-antidote="handleWitchAntidote"
@@ -91,6 +94,7 @@
         :is-host="isHost"
         :my-role="gameStore.state?.myRole"
         :vote-history="gameStore.state?.voteHistory"
+        :action-pending="actionPending"
         @select-player="handleVotingSelect"
         @vote="handleVotingVote"
         @skip="handleVotingSkip"
@@ -112,6 +116,7 @@
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :action-pending="actionPending"
         @reveal-result="handleRevealResult"
         @start-vote="handleStartVote"
         @vote="handleDayVote"
@@ -279,21 +284,27 @@ const { isMuted, toggleMute } = useAudioService()
 const isMock = import.meta.env.VITE_MOCK === 'true'
 const hasConfirmedRole = ref(false)
 const isRoleRevealed = ref(false)
+const actionPending = ref(false)
 
 // Wraps gameService.submitAction to always include the gameId from the route
 async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) {
-  const gameId = Number(route.params.gameId)
-  const res = await gameService.submitAction({ ...req, gameId })
-  if (res && !res.success && res.message) {
-    console.error('[GameView] Action failed:', res.message)
-    ElMessage({ message: res.message, type: 'error', duration: 3000 })
-    // If the action failed due to phase mismatch, refresh the state
-    if (res.message.includes('phase') || res.message.includes('Phase')) {
-      const state = await gameService.getState(gameId.toString())
-      gameStore.setState(state)
+  actionPending.value = true
+  try {
+    const gameId = Number(route.params.gameId)
+    const res = await gameService.submitAction({ ...req, gameId })
+    if (res && !res.success && res.message) {
+      console.error('[GameView] Action failed:', res.message)
+      ElMessage({ message: res.message, type: 'error', duration: 3000 })
+      // If the action failed due to phase mismatch, refresh the state
+      if (res.message.includes('phase') || res.message.includes('Phase')) {
+        const state = await gameService.getState(gameId.toString())
+        gameStore.setState(state)
+      }
     }
+    return res
+  } finally {
+    actionPending.value = false
   }
-  return res
 }
 
 const isHost = computed(() => {

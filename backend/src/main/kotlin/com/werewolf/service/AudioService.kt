@@ -1,7 +1,11 @@
 package com.werewolf.service
 
-import com.werewolf.model.*
+import com.werewolf.model.AudioSequence
+import com.werewolf.model.GamePhase
+import com.werewolf.model.NightSubPhase
+import com.werewolf.model.Room
 import com.werewolf.repository.NightPhaseRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 /**
@@ -26,16 +30,19 @@ class AudioService(
     ): AudioSequence {
         val audioFiles = mutableListOf<String>()
 
+        val log = LoggerFactory.getLogger(this.javaClass)
         when (newPhase) {
             GamePhase.NIGHT -> {
                 // Entering night phase
-                audioFiles.add("天黑请闭眼.mp3")
+                audioFiles.add("goes_dark_close_eyes.mp3")
+                audioFiles.add("wolf_howl.mp3")
 
                 // If transitioning to a specific sub-phase immediately, add role audio
                 if (newSubPhase != null) {
                     val subPhaseEnum = try {
                         NightSubPhase.valueOf(newSubPhase)
                     } catch (e: IllegalArgumentException) {
+                        log.error(e.message, e)
                         null
                     }
                     if (subPhaseEnum != null && subPhaseEnum != NightSubPhase.WAITING) {
@@ -49,7 +56,8 @@ class AudioService(
 
             GamePhase.DAY -> {
                 // Entering day phase
-                audioFiles.add("天亮了.mp3")
+                audioFiles.add("day_time.mp3")
+                audioFiles.add("rooster_crowing.mp3")
             }
 
             GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.VOTING, GamePhase.GAME_OVER -> {
@@ -107,11 +115,11 @@ class AudioService(
      */
     private fun getCloseEyesAudio(subPhase: NightSubPhase): String? {
         return when (subPhase) {
-            NightSubPhase.WEREWOLF_PICK -> "狼人请闭眼.mp3"
-            NightSubPhase.SEER_PICK -> "预言家请闭眼.mp3"
-            NightSubPhase.SEER_RESULT -> "预言家请闭眼.mp3"
-            NightSubPhase.WITCH_ACT -> "女巫请闭眼.mp3"
-            NightSubPhase.GUARD_PICK -> "守卫请闭眼.mp3"
+            NightSubPhase.WEREWOLF_PICK -> "wolf_close_eyes.mp3"
+            NightSubPhase.SEER_PICK -> "seer_close_eyes.mp3"
+            NightSubPhase.SEER_RESULT -> "seer_close_eyes.mp3"
+            NightSubPhase.WITCH_ACT -> "witch_close_eyes.mp3"
+            NightSubPhase.GUARD_PICK -> "guard_close_eyes.mp3"
             else -> null
         }
     }
@@ -121,10 +129,10 @@ class AudioService(
      */
     private fun getOpenEyesAudio(subPhase: NightSubPhase): String? {
         return when (subPhase) {
-            NightSubPhase.WEREWOLF_PICK -> "狼人请睁眼.mp3"
-            NightSubPhase.SEER_PICK -> "预言家请睁眼.mp3"
-            NightSubPhase.WITCH_ACT -> "女巫请睁眼.mp3"
-            NightSubPhase.GUARD_PICK -> "守卫请睁眼.mp3"
+            NightSubPhase.WEREWOLF_PICK -> "wolf_open_eyes.mp3"
+            NightSubPhase.SEER_PICK -> "seer_open_eyes.mp3"
+            NightSubPhase.WITCH_ACT -> "witch_open_eyes.mp3"
+            NightSubPhase.GUARD_PICK -> "guard_open_eyes.mp3"
             else -> null
         }
     }
@@ -143,7 +151,7 @@ class AudioService(
 
         when (phase) {
             GamePhase.NIGHT -> {
-                // NIGHT phase: check if we're entering night (天黑请闭眼) or in a sub-phase
+                // NIGHT phase: check if we're entering night (goes_dark_close_eyes) or in a sub-phase
                 if (nightSubPhase != null) {
                     val subPhaseEnum = try {
                         NightSubPhase.valueOf(nightSubPhase)
@@ -156,12 +164,13 @@ class AudioService(
                     }
                 } else {
                     // Just entered NIGHT phase
-                    audioFiles.add("天黑请闭眼.mp3")
+                    audioFiles.add("goes_dark_close_eyes.mp3")
+                    audioFiles.add("wolf_howl.mp3")
                 }
             }
 
             GamePhase.DAY -> {
-                // DAY phase: 天亮了.mp3 was played during transition
+                // DAY phase: day_time.mp3 was played during transition
                 // Empty sequence for current state
             }
 

@@ -42,18 +42,18 @@ import type {
 // ── Audio sequence helpers (mirrors backend AudioService logic) ───────────────
 
 const OPEN_EYES: Record<string, string> = {
-  WEREWOLF_PICK: '狼人请睁眼.mp3',
-  SEER_PICK: '预言家请睁眼.mp3',
-  WITCH_ACT: '女巫请睁眼.mp3',
-  GUARD_PICK: '守卫请睁眼.mp3',
+  WEREWOLF_PICK: 'wolf_open_eyes.mp3',
+  SEER_PICK: 'seer_open_eyes.mp3',
+  WITCH_ACT: 'witch_open_eyes.mp3',
+  GUARD_PICK: 'guard_open_eyes.mp3',
 }
 
 const CLOSE_EYES: Record<string, string> = {
-  WEREWOLF_PICK: '狼人请闭眼.mp3',
-  SEER_PICK: '预言家请闭眼.mp3',
-  SEER_RESULT: '预言家请闭眼.mp3',
-  WITCH_ACT: '女巫请闭眼.mp3',
-  GUARD_PICK: '守卫请闭眼.mp3',
+  WEREWOLF_PICK: 'wolf_close_eyes.mp3',
+  SEER_PICK: 'seer_close_eyes.mp3',
+  SEER_RESULT: 'seer_close_eyes.mp3',
+  WITCH_ACT: 'witch_close_eyes.mp3',
+  GUARD_PICK: 'guard_close_eyes.mp3',
 }
 
 let audioSeqCounter = 0
@@ -76,8 +76,8 @@ function makeAudioSequence(
 
 function phaseAudio(newPhase: GamePhase, subPhase?: string | null): AudioSequence {
   const files: string[] = []
-  if (newPhase === 'NIGHT') files.push('天黑请闭眼.mp3')
-  if (newPhase === 'DAY') files.push('天亮了.mp3')
+  if (newPhase === 'NIGHT') files.push('goes_dark_close_eyes.mp3')
+  if (newPhase === 'DAY') files.push('day_time.mp3')
   return makeAudioSequence(newPhase, subPhase ?? null, files, 10)
 }
 

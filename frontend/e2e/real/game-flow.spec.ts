@@ -119,7 +119,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       act('WOLF_KILL', wolfBot.nick, { target: String(target), room: ctx.roomCode })
     } else {
       // Wolf is the host — use browser clicks
-      const targetSlot = wolfPage.locator(`.player-grid .slot-selectable`).first()
+      const targetSlot = wolfPage.locator(`.player-grid .slot-alive`).first()
       await targetSlot.click()
       const confirmBtn = wolfPage.getByRole('button', { name: /确认袭击|Confirm/i })
       await confirmBtn.click()
@@ -162,7 +162,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       // Seer is the host — use browser clicks
       const seerPage = ctx.pages.get('SEER')!
       await expect(seerPage.getByText(/选择查验目标 · Select a player to check:/i).first()).toBeVisible({ timeout: 10_000 })
-      const targetSlot = seerPage.locator('.player-grid .slot-selectable').first()
+      const targetSlot = seerPage.locator('.player-grid .slot-alive').first()
       await targetSlot.waitFor({ state: 'visible', timeout: 5_000 })
       await targetSlot.click()
       await seerPage.getByRole('button', { name: /查验 · Check/i }).click()
@@ -254,7 +254,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       await expect(guardPage.getByText(/选择守护目标|Protect a player/i).first()).toBeVisible({ timeout: 10_000 })
       // Screenshot: guard UI is shown
       await captureSnapshot(ctx.pages, testInfo, '04-guard-ui')
-      const targetSlot = guardPage.locator('.player-grid .slot-selectable').first()
+      const targetSlot = guardPage.locator('.player-grid .slot-alive').first()
       await targetSlot.waitFor({ state: 'visible', timeout: 5_000 })
       await targetSlot.click()
       await guardPage.getByRole('button', { name: /确认保护|Confirm/i }).click()
@@ -417,7 +417,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     if (!wolfDone && wolfPage) {
       const playerGrid = wolfPage.locator('.player-grid')
       if (await playerGrid.first().isVisible({ timeout: 10_000 }).catch(() => false)) {
-        const targetSlot = wolfPage.locator('.player-grid .slot-selectable').first()
+        const targetSlot = wolfPage.locator('.player-grid .slot-alive').first()
         await targetSlot.click()
         await wolfPage.getByRole('button', { name: /确认袭击|Confirm/i }).click()
       }
@@ -439,7 +439,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     if (!seerDone && ctx.isHostRole('SEER')) {
       const seerPage = ctx.pages.get('SEER')!
       if (await seerPage.getByText(/选择查验目标|Select a player to check/i).first().isVisible({ timeout: 10_000 }).catch(() => false)) {
-        await seerPage.locator('.player-grid .slot-selectable').first().click()
+        await seerPage.locator('.player-grid .slot-alive').first().click()
         await seerPage.getByRole('button', { name: /查验|Check/i }).click()
         await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
         await seerPage.getByRole('button', { name: /查验完毕|Done/i }).click()
@@ -474,7 +474,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     if (!guardDone && ctx.isHostRole('GUARD')) {
       const guardPage = ctx.pages.get('GUARD')!
       if (await guardPage.getByText(/选择守护目标|Protect a player/i).first().isVisible({ timeout: 10_000 }).catch(() => false)) {
-        await guardPage.locator('.player-grid .slot-selectable').first().click()
+        await guardPage.locator('.player-grid .slot-alive').first().click()
         await guardPage.getByRole('button', { name: /确认保护|Confirm/i }).click()
       }
     }

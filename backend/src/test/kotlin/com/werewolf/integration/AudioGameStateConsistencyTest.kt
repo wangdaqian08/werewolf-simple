@@ -2,7 +2,8 @@ package com.werewolf.integration
 
 import com.werewolf.model.*
 import com.werewolf.repository.*
-import com.werewolf.service.*
+import com.werewolf.service.AudioService
+import com.werewolf.service.GameContextLoader
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import java.util.*
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -95,8 +95,8 @@ class AudioGameStateConsistencyTest {
         assertThat(audioSequence.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
         
         // Verify: Audio files are appropriate for NIGHT phase
-        // When transitioning directly to WEREWOLF_PICK, both "天黑请闭眼.mp3" and "狼人请睁眼.mp3" are played
-        assertThat(audioSequence.audioFiles).containsExactly("天黑请闭眼.mp3", "狼人请睁眼.mp3")
+        // When transitioning directly to WEREWOLF_PICK, both "goes_dark_close_eyes.mp3" and "wolf_open_eyes.mp3" are played
+        assertThat(audioSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "wolf_open_eyes.mp3")
     }
 
     @Test
@@ -121,7 +121,7 @@ class AudioGameStateConsistencyTest {
         assertThat(audioSequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
         
         // Verify: Audio files are appropriate for DAY phase
-        assertThat(audioSequence.audioFiles).containsExactly("天亮了.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
     }
 
     @Test
@@ -144,8 +144,8 @@ class AudioGameStateConsistencyTest {
         
         // Verify: Audio files are appropriate for the transition
         assertThat(audioSequence.audioFiles).containsExactly(
-            "狼人请闭眼.mp3",
-            "预言家请睁眼.mp3"
+            "wolf_close_eyes.mp3",
+            "seer_open_eyes.mp3"
         )
     }
 
@@ -169,8 +169,8 @@ class AudioGameStateConsistencyTest {
         
         // Verify: Audio files are appropriate for the transition
         assertThat(audioSequence.audioFiles).containsExactly(
-            "预言家请闭眼.mp3",
-            "女巫请睁眼.mp3"
+            "seer_close_eyes.mp3",
+            "witch_open_eyes.mp3"
         )
     }
 
@@ -182,8 +182,6 @@ class AudioGameStateConsistencyTest {
         val room = createRoom(hasSeer = true, hasWitch = true, hasGuard = true)
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY, dayNumber = 0)
         val players = createPlayers(game.gameId!!, room.totalPlayers)
-
-        val dayNumber = 1
 
         // Step 1: DAY -> NIGHT transition
         val dayToNightSequence = audioService.calculatePhaseTransition(
@@ -198,8 +196,8 @@ class AudioGameStateConsistencyTest {
         // Verify: Audio sequence matches new game state
         assertThat(dayToNightSequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(dayToNightSequence.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
-        // When transitioning directly to WEREWOLF_PICK, both "天黑请闭眼.mp3" and "狼人请睁眼.mp3" are played
-        assertThat(dayToNightSequence.audioFiles).containsExactly("天黑请闭眼.mp3", "狼人请睁眼.mp3")
+        // When transitioning directly to WEREWOLF_PICK, both "goes_dark_close_eyes.mp3" and "wolf_open_eyes.mp3" are played
+        assertThat(dayToNightSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "wolf_open_eyes.mp3")
 
         // Step 2: WAITING -> WEREWOLF_PICK
         val waitingToWerewolf = audioService.calculateNightSubPhaseTransition(
@@ -211,7 +209,7 @@ class AudioGameStateConsistencyTest {
         // Verify: Audio sequence matches new game state
         assertThat(waitingToWerewolf.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(waitingToWerewolf.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
-        assertThat(waitingToWerewolf.audioFiles).containsExactly("狼人请睁眼.mp3")
+        assertThat(waitingToWerewolf.audioFiles).containsExactly("wolf_open_eyes.mp3")
 
         // Step 3: WEREWOLF_PICK -> SEER_PICK
         val werewolfToSeer = audioService.calculateNightSubPhaseTransition(
@@ -224,8 +222,8 @@ class AudioGameStateConsistencyTest {
         assertThat(werewolfToSeer.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(werewolfToSeer.subPhase).isEqualTo(NightSubPhase.SEER_PICK.name)
         assertThat(werewolfToSeer.audioFiles).containsExactly(
-            "狼人请闭眼.mp3",
-            "预言家请睁眼.mp3"
+            "wolf_close_eyes.mp3",
+            "seer_open_eyes.mp3"
         )
 
         // Step 4: SEER_PICK -> SEER_RESULT
@@ -238,7 +236,7 @@ class AudioGameStateConsistencyTest {
         // Verify: Audio sequence matches new game state
         assertThat(seerToResult.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(seerToResult.subPhase).isEqualTo(NightSubPhase.SEER_RESULT.name)
-        assertThat(seerToResult.audioFiles).containsExactly("预言家请闭眼.mp3")
+        assertThat(seerToResult.audioFiles).containsExactly("seer_close_eyes.mp3")
 
         // Step 5: SEER_RESULT -> WITCH_ACT
         val resultToWitch = audioService.calculateNightSubPhaseTransition(
@@ -251,8 +249,8 @@ class AudioGameStateConsistencyTest {
         assertThat(resultToWitch.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(resultToWitch.subPhase).isEqualTo(NightSubPhase.WITCH_ACT.name)
         assertThat(resultToWitch.audioFiles).containsExactly(
-            "预言家请闭眼.mp3",
-            "女巫请睁眼.mp3"
+            "seer_close_eyes.mp3",
+            "witch_open_eyes.mp3"
         )
 
         // Step 6: WITCH_ACT -> GUARD_PICK
@@ -266,8 +264,8 @@ class AudioGameStateConsistencyTest {
         assertThat(witchToGuard.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(witchToGuard.subPhase).isEqualTo(NightSubPhase.GUARD_PICK.name)
         assertThat(witchToGuard.audioFiles).containsExactly(
-            "女巫请闭眼.mp3",
-            "守卫请睁眼.mp3"
+            "witch_close_eyes.mp3",
+            "guard_open_eyes.mp3"
         )
 
         // Step 7: NIGHT -> DAY transition
@@ -283,7 +281,7 @@ class AudioGameStateConsistencyTest {
         // Verify: Audio sequence matches new game state
         assertThat(nightToDaySequence.phase).isEqualTo(GamePhase.DAY)
         assertThat(nightToDaySequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
-        assertThat(nightToDaySequence.audioFiles).containsExactly("天亮了.mp3")
+        assertThat(nightToDaySequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
     }
 
     // ── Audio Sequence Timing Consistency Tests ────────────────────────────────

@@ -66,7 +66,7 @@ class AudioService {
 
   /**
    * Play an audio file (uses queue system to prevent overlap)
-   * @param filename - The audio filename (e.g., '天黑请闭眼.mp3')
+   * @param filename - The audio filename (e.g., 'goes_dark_close_eyes.mp3')
    * @param options - Optional playback settings
    */
   play(filename: string, options: AudioOptions = {}): void {

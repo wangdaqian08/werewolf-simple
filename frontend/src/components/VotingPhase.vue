@@ -146,18 +146,26 @@
                 <p class="footer-hint idiot-no-vote">🃏 已揭示白痴 · 无投票权</p>
               </template>
               <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
-                <button class="btn btn-secondary" @click="emit('unvote')">取消投票 · Unvote</button>
+                <button class="btn btn-secondary" :disabled="actionPending" @click="emit('unvote')">
+                  取消投票 · Unvote
+                </button>
               </template>
               <template v-else>
                 <div class="vote-actions">
                   <button
                     class="btn btn-primary vote-btn"
-                    :disabled="!effectiveSelected"
+                    :disabled="!effectiveSelected || actionPending"
                     @click="effectiveSelected && emit('vote', effectiveSelected)"
                   >
                     投票 · Vote
                   </button>
-                  <button class="btn btn-secondary skip-btn" @click="emit('skip')">弃权</button>
+                  <button
+                    class="btn btn-secondary skip-btn"
+                    :disabled="actionPending"
+                    @click="emit('skip')"
+                  >
+                    弃权
+                  </button>
                 </div>
               </template>
             </template>
@@ -165,7 +173,7 @@
             <button
               v-if="votingPhase.subPhase === 'VOTING' || votingPhase.subPhase === 'RE_VOTING'"
               class="btn btn-gold"
-              :disabled="!allVotesIn"
+              :disabled="!allVotesIn || actionPending"
               @click="emit('revealVoting')"
             >
               公布结果 · Reveal
@@ -183,18 +191,26 @@
               <button class="btn btn-secondary" disabled>🃏 已揭示白痴 · 无投票权</button>
             </template>
             <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
-              <button class="btn btn-secondary" @click="emit('unvote')">取消投票 · Unvote</button>
+              <button class="btn btn-secondary" :disabled="actionPending" @click="emit('unvote')">
+                取消投票 · Unvote
+              </button>
             </template>
             <template v-else>
               <div class="vote-actions">
                 <button
                   class="btn btn-primary vote-btn"
-                  :disabled="!effectiveSelected"
+                  :disabled="!effectiveSelected || actionPending"
                   @click="effectiveSelected && emit('vote', effectiveSelected)"
                 >
                   投票 · Vote
                 </button>
-                <button class="btn btn-secondary skip-btn" @click="emit('skip')">弃权</button>
+                <button
+                  class="btn btn-secondary skip-btn"
+                  :disabled="actionPending"
+                  @click="emit('skip')"
+                >
+                  弃权
+                </button>
               </div>
             </template>
           </template>
@@ -349,12 +365,16 @@
           <div class="vote-actions">
             <button
               class="btn btn-danger vote-btn"
-              :disabled="!effectiveSelected"
+              :disabled="!effectiveSelected || actionPending"
               @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
             >
               开枪 · Shoot
             </button>
-            <button class="btn btn-secondary skip-btn" @click="emit('hunterPass')">
+            <button
+              class="btn btn-secondary skip-btn"
+              :disabled="actionPending"
+              @click="emit('hunterPass')"
+            >
               放弃 · Pass
             </button>
           </div>
@@ -432,7 +452,11 @@
         <template v-if="badgeDone">
           <template v-if="isHost">
             <div class="vote-actions">
-              <button class="btn btn-primary vote-btn" @click="emit('continueVoting')">
+              <button
+                class="btn btn-primary vote-btn"
+                :disabled="actionPending"
+                @click="emit('continueVoting')"
+              >
                 → 进入夜晚 / Night
               </button>
             </div>
@@ -447,12 +471,18 @@
             <div class="vote-actions">
               <button
                 class="btn btn-gold vote-btn"
-                :disabled="!effectiveSelected"
+                :disabled="!effectiveSelected || actionPending"
                 @click="effectiveSelected && emit('passBadge', effectiveSelected)"
               >
                 移交警徽 / Pass Badge
               </button>
-              <button class="btn btn-secondary skip-btn" @click="emit('destroyBadge')">销毁</button>
+              <button
+                class="btn btn-secondary skip-btn"
+                :disabled="actionPending"
+                @click="emit('destroyBadge')"
+              >
+                销毁
+              </button>
             </div>
           </template>
           <template v-else>
@@ -477,6 +507,7 @@ const props = defineProps<{
   isHost: boolean
   myRole?: PlayerRole
   voteHistory?: VoteRoundHistory[]
+  actionPending?: boolean
 }>()
 
 const emit = defineEmits<{

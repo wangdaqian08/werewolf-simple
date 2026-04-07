@@ -1,11 +1,14 @@
 package com.werewolf.integration
 
-import com.werewolf.model.*
-import com.werewolf.repository.*
-import com.werewolf.service.*
-import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.action.GameActionDispatcher
-import com.werewolf.service.StompPublisher
+import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.model.*
+import com.werewolf.repository.GamePlayerRepository
+import com.werewolf.repository.GameRepository
+import com.werewolf.repository.NightPhaseRepository
+import com.werewolf.repository.RoomRepository
+import com.werewolf.service.AudioService
+import com.werewolf.service.GameContextLoader
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -119,27 +122,28 @@ class AudioSequenceBroadcastTest {
         game.phase = GamePhase.NIGHT
         game.dayNumber = 1
         val savedGame = gameRepository.save(game)
+        val gameId = requireNotNull(savedGame.gameId) { "Game ID should not be null after save" }
 
-        val players = createPlayersWithRoles(savedGame.gameId!!, room)
+        val players = createPlayersWithRoles(gameId, room)
         println("Created ${players.size} players with roles")
 
         // Initialize night phase
-        nightOrchestrator.initNight(savedGame.gameId!!, newDayNumber = 1, withWaiting = false)
+        nightOrchestrator.initNight(gameId, newDayNumber = 1, withWaiting = false)
 
         // Advance to SEER_PICK
-        nightOrchestrator.advance(savedGame.gameId!!, NightSubPhase.WEREWOLF_PICK)
-        val nightPhase1 = nightPhaseRepository.findByGameIdAndDayNumber(savedGame.gameId!!, 1).orElse(null)
+        nightOrchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
+        val nightPhase1 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("Sub-phase after WEREWOLF_PICK: ${nightPhase1?.subPhase}")
         assertThat(nightPhase1?.subPhase).isEqualTo(NightSubPhase.SEER_PICK)
 
         // Calculate what audio sequence should be broadcast when SEER_CHECK is called
         val expectedAudioSequence = audioService.calculateNightSubPhaseTransition(
-            gameId = savedGame.gameId!!,
+            gameId = gameId,
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
         println("Expected audio sequence for SEER_CHECK: ${expectedAudioSequence.audioFiles}")
-        assertThat(expectedAudioSequence.audioFiles).containsExactly("预言家请闭眼.mp3")
+        assertThat(expectedAudioSequence.audioFiles).containsExactly("seer_close_eyes.mp3")
 
         println("\n=== Test Completed Successfully ===")
     }
@@ -157,28 +161,29 @@ class AudioSequenceBroadcastTest {
         game.phase = GamePhase.NIGHT
         game.dayNumber = 1
         val savedGame = gameRepository.save(game)
+        val gameId = requireNotNull(savedGame.gameId) { "Game ID should not be null after save" }
 
-        val players = createPlayersWithRoles(savedGame.gameId!!, room)
+        val players = createPlayersWithRoles(gameId, room)
         println("Created ${players.size} players with roles")
 
         // Initialize night phase
-        nightOrchestrator.initNight(savedGame.gameId!!, newDayNumber = 1, withWaiting = false)
+        nightOrchestrator.initNight(gameId, newDayNumber = 1, withWaiting = false)
 
         // Advance to SEER_PICK
-        nightOrchestrator.advance(savedGame.gameId!!, NightSubPhase.WEREWOLF_PICK)
-        val nightPhase1 = nightPhaseRepository.findByGameIdAndDayNumber(savedGame.gameId!!, 1).orElse(null)
+        nightOrchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
+        val nightPhase1 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("Sub-phase after WEREWOLF_PICK: ${nightPhase1?.subPhase}")
         assertThat(nightPhase1?.subPhase).isEqualTo(NightSubPhase.SEER_PICK)
 
         // Advance to SEER_RESULT (simulating SEER_CHECK)
-        nightOrchestrator.advance(savedGame.gameId!!, NightSubPhase.SEER_PICK)
-        val nightPhase2 = nightPhaseRepository.findByGameIdAndDayNumber(savedGame.gameId!!, 1).orElse(null)
+        nightOrchestrator.advance(gameId, NightSubPhase.SEER_PICK)
+        val nightPhase2 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("Sub-phase after SEER_PICK: ${nightPhase2?.subPhase}")
         assertThat(nightPhase2?.subPhase).isEqualTo(NightSubPhase.SEER_RESULT)
 
         // Calculate what audio sequence should be broadcast when SEER_CONFIRM is called
         val expectedAudioSequence = audioService.calculateNightSubPhaseTransition(
-            gameId = savedGame.gameId!!,
+            gameId = gameId,
             oldSubPhase = NightSubPhase.SEER_RESULT,
             newSubPhase = NightSubPhase.WITCH_ACT,
         )
@@ -187,7 +192,7 @@ class AudioSequenceBroadcastTest {
         // This is the bug: the expected audio sequence should contain both files
         assertThat(expectedAudioSequence.audioFiles)
             .describedAs("SEER_CONFIRM should play both seer close and witch open")
-            .containsExactly("预言家请闭眼.mp3", "女巫请睁眼.mp3")
+            .containsExactly("seer_close_eyes.mp3", "witch_open_eyes.mp3")
 
         println("\n=== Test Completed Successfully ===")
     }

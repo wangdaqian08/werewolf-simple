@@ -5,6 +5,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { effectScope, nextTick } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 import type { AudioSequence, GameState } from '@/types'
+// Must import after mock
+import { useAudioService } from '@/composables/useAudioService'
 
 // ── Mock audioService ─────────────────────────────────────────────────────────
 
@@ -25,9 +27,6 @@ vi.mock('@/services/audioService', () => ({
     getGlobalVolume: vi.fn().mockReturnValue(1),
   },
 }))
-
-// Must import after mock
-import { useAudioService } from '@/composables/useAudioService'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -80,12 +79,15 @@ describe('useAudioService', () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['天黑请闭眼.mp3', '狼人请睁眼.mp3'])
+    const seq = makeSequence(['goes_dark_close_eyes.mp3', 'wolf_open_eyes.mp3'])
     gameStore.setState(makeState({ audioSequence: seq }))
     await nextTick()
 
     expect(mockClearQueue).toHaveBeenCalled()
-    expect(mockPlaySequential).toHaveBeenCalledWith(['天黑请闭眼.mp3', '狼人请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith([
+      'goes_dark_close_eyes.mp3',
+      'wolf_open_eyes.mp3',
+    ])
   })
 
   it('does not play if audioSequence is absent', async () => {
@@ -114,7 +116,7 @@ describe('useAudioService', () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['天黑请闭眼.mp3'], 'seq-001')
+    const seq = makeSequence(['goes_dark_close_eyes.mp3'], 'seq-001')
     gameStore.setState(makeState({ audioSequence: seq }))
     await nextTick()
     expect(mockPlaySequential).toHaveBeenCalledTimes(1)
@@ -130,15 +132,19 @@ describe('useAudioService', () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    gameStore.setState(makeState({ audioSequence: makeSequence(['天黑请闭眼.mp3'], 'seq-001') }))
+    gameStore.setState(
+      makeState({ audioSequence: makeSequence(['goes_dark_close_eyes.mp3'], 'seq-001') }),
+    )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenCalledTimes(1)
 
     // Different id — should play
-    gameStore.setState(makeState({ audioSequence: makeSequence(['狼人请睁眼.mp3'], 'seq-002') }))
+    gameStore.setState(
+      makeState({ audioSequence: makeSequence(['wolf_open_eyes.mp3'], 'seq-002') }),
+    )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenCalledTimes(2)
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['狼人请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['wolf_open_eyes.mp3'])
   })
 
   // ── Queue clearing on new sequence ──────────────────────────────────────
@@ -161,57 +167,60 @@ describe('useAudioService', () => {
 
   // ── Phase-specific audio sequences (backend contract) ───────────────────
 
-  it('NIGHT phase: backend sends 天黑请闭眼 + role open-eyes', async () => {
+  it('NIGHT phase: backend sends goes_dark_close_eyes + role open-eyes', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
     // Backend sends this when entering NIGHT and transitioning to WEREWOLF_PICK
-    const seq = makeSequence(['天黑请闭眼.mp3', '狼人请睁眼.mp3'], 'night-enter')
+    const seq = makeSequence(['goes_dark_close_eyes.mp3', 'wolf_open_eyes.mp3'], 'night-enter')
     seq.phase = 'NIGHT'
     seq.subPhase = 'WEREWOLF_PICK'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['天黑请闭眼.mp3', '狼人请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith([
+      'goes_dark_close_eyes.mp3',
+      'wolf_open_eyes.mp3',
+    ])
   })
 
   it('WEREWOLF_PICK → SEER_PICK: backend sends close + open eyes', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['狼人请闭眼.mp3', '预言家请睁眼.mp3'], 'wolf-to-seer')
+    const seq = makeSequence(['wolf_close_eyes.mp3', 'seer_open_eyes.mp3'], 'wolf-to-seer')
     seq.phase = 'NIGHT'
     seq.subPhase = 'SEER_PICK'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['狼人请闭眼.mp3', '预言家请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['wolf_close_eyes.mp3', 'seer_open_eyes.mp3'])
   })
 
   it('SEER_RESULT → WITCH_ACT: backend sends close + open eyes', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['预言家请闭眼.mp3', '女巫请睁眼.mp3'], 'seer-to-witch')
+    const seq = makeSequence(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'], 'seer-to-witch')
     seq.phase = 'NIGHT'
     seq.subPhase = 'WITCH_ACT'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['预言家请闭眼.mp3', '女巫请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'])
   })
 
   it('WITCH_ACT → GUARD_PICK: backend sends close + open eyes', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['女巫请闭眼.mp3', '守卫请睁眼.mp3'], 'witch-to-guard')
+    const seq = makeSequence(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'], 'witch-to-guard')
     seq.phase = 'NIGHT'
     seq.subPhase = 'GUARD_PICK'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['女巫请闭眼.mp3', '守卫请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'])
   })
 
   it('SEER_PICK → SEER_RESULT: close eyes only (no open-eyes for SEER_RESULT)', async () => {
@@ -219,39 +228,39 @@ describe('useAudioService', () => {
     setupComposable()
 
     // SEER_RESULT has no open-eyes audio — only close seer eyes
-    const seq = makeSequence(['预言家请闭眼.mp3'], 'seer-to-result')
+    const seq = makeSequence(['seer_close_eyes.mp3'], 'seer-to-result')
     seq.phase = 'NIGHT'
     seq.subPhase = 'SEER_RESULT'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['预言家请闭眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3'])
   })
 
   it('GUARD_PICK → end of night: backend sends close eyes only', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['守卫请闭眼.mp3'], 'guard-end')
+    const seq = makeSequence(['guard_close_eyes.mp3'], 'guard-end')
     seq.phase = 'NIGHT'
     seq.subPhase = 'WAITING'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['守卫请闭眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['guard_close_eyes.mp3'])
   })
 
-  it('DAY phase: backend sends 天亮了', async () => {
+  it('DAY phase: backend sends day_time', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['天亮了.mp3'], 'day-enter')
+    const seq = makeSequence(['day_time.mp3'], 'day-enter')
     seq.phase = 'DAY'
     seq.subPhase = null
     gameStore.setState(makeState({ phase: 'DAY', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['天亮了.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['day_time.mp3'])
   })
 
   it('ROLE_REVEAL / VOTING / GAME_OVER: no audio', async () => {
@@ -276,66 +285,75 @@ describe('useAudioService', () => {
     // 1. Enter night
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['天黑请闭眼.mp3'], 'night-1'),
+        audioSequence: makeSequence(['goes_dark_close_eyes.mp3'], 'night-1'),
       }),
     )
     await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['天黑请闭眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['goes_dark_close_eyes.mp3'])
 
     // 2. WAITING → WEREWOLF_PICK
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['狼人请睁眼.mp3'], 'wolf-open'),
+        audioSequence: makeSequence(['wolf_open_eyes.mp3'], 'wolf-open'),
       }),
     )
     await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['狼人请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['wolf_open_eyes.mp3'])
 
     // 3. WEREWOLF_PICK → SEER_PICK (close wolf + open seer)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['狼人请闭眼.mp3', '预言家请睁眼.mp3'], 'wolf-seer'),
+        audioSequence: makeSequence(['wolf_close_eyes.mp3', 'seer_open_eyes.mp3'], 'wolf-seer'),
       }),
     )
     await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['狼人请闭眼.mp3', '预言家请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith([
+      'wolf_close_eyes.mp3',
+      'seer_open_eyes.mp3',
+    ])
 
     // 4. SEER → WITCH (close seer + open witch)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['预言家请闭眼.mp3', '女巫请睁眼.mp3'], 'seer-witch'),
+        audioSequence: makeSequence(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'], 'seer-witch'),
       }),
     )
     await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['预言家请闭眼.mp3', '女巫请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith([
+      'seer_close_eyes.mp3',
+      'witch_open_eyes.mp3',
+    ])
 
     // 5. WITCH → GUARD (close witch + open guard)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['女巫请闭眼.mp3', '守卫请睁眼.mp3'], 'witch-guard'),
+        audioSequence: makeSequence(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'], 'witch-guard'),
       }),
     )
     await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['女巫请闭眼.mp3', '守卫请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith([
+      'witch_close_eyes.mp3',
+      'guard_open_eyes.mp3',
+    ])
 
     // 6. GUARD → end (close guard)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['守卫请闭眼.mp3'], 'guard-end'),
+        audioSequence: makeSequence(['guard_close_eyes.mp3'], 'guard-end'),
       }),
     )
     await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['守卫请闭眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['guard_close_eyes.mp3'])
 
     // 7. Night → Day
     gameStore.setState(
       makeState({
         phase: 'DAY',
-        audioSequence: makeSequence(['天亮了.mp3'], 'day'),
+        audioSequence: makeSequence(['day_time.mp3'], 'day'),
       }),
     )
     await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['天亮了.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['day_time.mp3'])
 
     // Total: 7 sequence plays
     expect(mockPlaySequential).toHaveBeenCalledTimes(7)

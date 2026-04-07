@@ -5,6 +5,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { effectScope, nextTick } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 import type { AudioSequence, GameState } from '@/types'
+// Must import after mock
+import { useAudioService } from '@/composables/useAudioService'
 
 // ── Mock audioService ─────────────────────────────────────────────────────────
 
@@ -25,9 +27,6 @@ vi.mock('@/services/audioService', () => ({
     getGlobalVolume: vi.fn().mockReturnValue(1),
   },
 }))
-
-// Must import after mock
-import { useAudioService } from '@/composables/useAudioService'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -94,7 +93,7 @@ describe('GameView Audio Event Order Bug', () => {
     setupComposable()
 
     // Simulate initial state with audioSequence
-    const initialSeq = makeSequence(['预言家请睁眼.mp3'], 'seq-seer-open')
+    const initialSeq = makeSequence(['seer_open_eyes.mp3'], 'seq-seer-open')
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
@@ -104,12 +103,12 @@ describe('GameView Audio Event Order Bug', () => {
     )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenCalledTimes(1)
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['预言家请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['seer_open_eyes.mp3'])
 
     // Simulate user clicking "查验完毕" - this triggers SEER_CONFIRM action
     // Backend sends two events in order:
     // 1. NightSubPhaseChanged (SEER_RESULT -> WITCH_ACT)
-    // 2. AudioSequence ([预言家请闭眼.mp3, 女巫请睁眼.mp3])
+    // 2. AudioSequence ([seer_close_eyes.mp3, witch_open_eyes.mp3])
 
     // Event 1: NightSubPhaseChanged
     // This simulates what GameView.vue does in the NightSubPhaseChanged handler
@@ -132,7 +131,7 @@ describe('GameView Audio Event Order Bug', () => {
     expect(mockPlaySequential).not.toHaveBeenCalled()
 
     // Event 2: AudioSequence
-    const newSeq = makeSequence(['预言家请闭眼.mp3', '女巫请睁眼.mp3'], 'seq-seer-to-witch')
+    const newSeq = makeSequence(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'], 'seq-seer-to-witch')
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
@@ -143,9 +142,9 @@ describe('GameView Audio Event Order Bug', () => {
     await nextTick()
 
     // With the bug fix, both audio files should play
-    // With the bug, only the first file (预言家请闭眼.mp3) would play
+    // With the bug, only the first file (seer_close_eyes.mp3) would play
     expect(mockClearQueue).toHaveBeenCalled()
-    expect(mockPlaySequential).toHaveBeenCalledWith(['预言家请闭眼.mp3', '女巫请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'])
   })
 
   it('SEER_PICK to SEER_RESULT transition - plays correct audio', async () => {
@@ -153,7 +152,7 @@ describe('GameView Audio Event Order Bug', () => {
     setupComposable()
 
     // Initial state: SEER_PICK phase with seer open eyes audio
-    const initialSeq = makeSequence(['预言家请睁眼.mp3'], 'seq-seer-open')
+    const initialSeq = makeSequence(['seer_open_eyes.mp3'], 'seq-seer-open')
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
@@ -179,7 +178,7 @@ describe('GameView Audio Event Order Bug', () => {
     await nextTick()
 
     // AudioSequence
-    const newSeq = makeSequence(['预言家请闭眼.mp3'], 'seq-seer-result')
+    const newSeq = makeSequence(['seer_close_eyes.mp3'], 'seq-seer-result')
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
@@ -189,8 +188,8 @@ describe('GameView Audio Event Order Bug', () => {
     )
     await nextTick()
 
-    // Should play only 预言家请闭眼.mp3 (no open eyes for SEER_RESULT)
-    expect(mockPlaySequential).toHaveBeenCalledWith(['预言家请闭眼.mp3'])
+    // Should play only seer_close_eyes.mp3 (no open eyes for SEER_RESULT)
+    expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3'])
   })
 
   it('SEER_RESULT to WITCH_ACT transition - plays both audio files', async () => {
@@ -198,7 +197,7 @@ describe('GameView Audio Event Order Bug', () => {
     setupComposable()
 
     // Initial state: SEER_RESULT phase
-    const initialSeq = makeSequence(['预言家请闭眼.mp3'], 'seq-seer-result')
+    const initialSeq = makeSequence(['seer_close_eyes.mp3'], 'seq-seer-result')
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
@@ -224,7 +223,7 @@ describe('GameView Audio Event Order Bug', () => {
     await nextTick()
 
     // AudioSequence
-    const newSeq = makeSequence(['预言家请闭眼.mp3', '女巫请睁眼.mp3'], 'seq-seer-to-witch')
+    const newSeq = makeSequence(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'], 'seq-seer-to-witch')
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
@@ -235,8 +234,8 @@ describe('GameView Audio Event Order Bug', () => {
     await nextTick()
 
     // CRITICAL: Should play BOTH audio files
-    // This was the bug - only 预言家请闭眼.mp3 was playing
-    expect(mockPlaySequential).toHaveBeenCalledWith(['预言家请闭眼.mp3', '女巫请睁眼.mp3'])
+    // This was the bug - only seer_close_eyes.mp3 was playing
+    expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'])
   })
 
   it('WITCH_ACT to GUARD_PICK transition - plays both audio files', async () => {
@@ -244,7 +243,7 @@ describe('GameView Audio Event Order Bug', () => {
     setupComposable()
 
     // Initial state: WITCH_ACT phase
-    const initialSeq = makeSequence(['女巫请睁眼.mp3'], 'seq-witch-open')
+    const initialSeq = makeSequence(['witch_open_eyes.mp3'], 'seq-witch-open')
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
@@ -270,7 +269,10 @@ describe('GameView Audio Event Order Bug', () => {
     await nextTick()
 
     // AudioSequence
-    const newSeq = makeSequence(['女巫请闭眼.mp3', '守卫请睁眼.mp3'], 'seq-witch-to-guard')
+    const newSeq = makeSequence(
+      ['witch_close_eyes.mp3', 'guard_open_eyes.mp3'],
+      'seq-witch-to-guard',
+    )
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
@@ -281,15 +283,15 @@ describe('GameView Audio Event Order Bug', () => {
     await nextTick()
 
     // Should play both audio files
-    expect(mockPlaySequential).toHaveBeenCalledWith(['女巫请闭眼.mp3', '守卫请睁眼.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'])
   })
 
-  it('GUARD_PICK to DAY transition - plays 天亮了.mp3', async () => {
+  it('GUARD_PICK to DAY transition - plays day_time.mp3', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
     // Initial state: GUARD_PICK phase
-    const initialSeq = makeSequence(['守卫请睁眼.mp3'], 'seq-guard-open')
+    const initialSeq = makeSequence(['guard_open_eyes.mp3'], 'seq-guard-open')
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
@@ -321,7 +323,7 @@ describe('GameView Audio Event Order Bug', () => {
     await nextTick()
 
     // AudioSequence
-    const newSeq = makeSequence(['天亮了.mp3'], 'seq-night-to-day')
+    const newSeq = makeSequence(['day_time.mp3'], 'seq-night-to-day')
     gameStore.setState(
       makeState({
         phase: 'DAY',
@@ -337,8 +339,8 @@ describe('GameView Audio Event Order Bug', () => {
     )
     await nextTick()
 
-    // Should play 天亮了.mp3
-    expect(mockPlaySequential).toHaveBeenCalledWith(['天亮了.mp3'])
+    // Should play day_time.mp3
+    expect(mockPlaySequential).toHaveBeenCalledWith(['day_time.mp3'])
   })
 
   it('Multiple rapid audio sequence changes - each plays with queue clearing', async () => {

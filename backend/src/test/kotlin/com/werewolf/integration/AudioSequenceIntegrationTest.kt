@@ -2,16 +2,15 @@ package com.werewolf.integration
 
 import com.werewolf.model.*
 import com.werewolf.repository.*
-import com.werewolf.service.*
+import com.werewolf.service.AudioService
+import com.werewolf.service.GameContextLoader
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import java.util.*
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -76,10 +75,10 @@ class AudioSequenceIntegrationTest {
             room = room,
         )
 
-        // Verify: Audio sequence contains 天黑请闭眼.mp3
+        // Verify: Audio sequence contains goes_dark_close_eyes.mp3
         assertThat(audioSequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(audioSequence.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
-        assertThat(audioSequence.audioFiles).containsExactly("天黑请闭眼.mp3", "狼人请睁眼.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "wolf_open_eyes.mp3")
         assertThat(audioSequence.priority).isEqualTo(10)
     }
 
@@ -99,10 +98,10 @@ class AudioSequenceIntegrationTest {
             room = room,
         )
 
-        // Verify: Audio sequence contains 天亮了.mp3
+        // Verify: Audio sequence contains day_time.mp3
         assertThat(audioSequence.phase).isEqualTo(GamePhase.DAY)
         assertThat(audioSequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
-        assertThat(audioSequence.audioFiles).containsExactly("天亮了.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
         assertThat(audioSequence.priority).isEqualTo(10)
     }
 
@@ -110,11 +109,11 @@ class AudioSequenceIntegrationTest {
     fun `Night sub-phase transitions - generate correct audio sequences`() {
         // Test all night sub-phase transitions
         val transitions = listOf(
-            Triple(NightSubPhase.WAITING, NightSubPhase.WEREWOLF_PICK, listOf("狼人请睁眼.mp3")),
-            Triple(NightSubPhase.WEREWOLF_PICK, NightSubPhase.SEER_PICK, listOf("狼人请闭眼.mp3", "预言家请睁眼.mp3")),
-            Triple(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT, listOf("预言家请闭眼.mp3")),
-            Triple(NightSubPhase.SEER_RESULT, NightSubPhase.WITCH_ACT, listOf("预言家请闭眼.mp3", "女巫请睁眼.mp3")),
-            Triple(NightSubPhase.WITCH_ACT, NightSubPhase.GUARD_PICK, listOf("女巫请闭眼.mp3", "守卫请睁眼.mp3")),
+            Triple(NightSubPhase.WAITING, NightSubPhase.WEREWOLF_PICK, listOf("wolf_open_eyes.mp3")),
+            Triple(NightSubPhase.WEREWOLF_PICK, NightSubPhase.SEER_PICK, listOf("wolf_close_eyes.mp3", "seer_open_eyes.mp3")),
+            Triple(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT, listOf("seer_close_eyes.mp3")),
+            Triple(NightSubPhase.SEER_RESULT, NightSubPhase.WITCH_ACT, listOf("seer_close_eyes.mp3", "witch_open_eyes.mp3")),
+            Triple(NightSubPhase.WITCH_ACT, NightSubPhase.GUARD_PICK, listOf("witch_close_eyes.mp3", "guard_open_eyes.mp3")),
         )
 
         transitions.forEach { (oldSubPhase, newSubPhase, expectedAudioFiles) ->
@@ -167,7 +166,7 @@ class AudioSequenceIntegrationTest {
             newSubPhase = NightSubPhase.SEER_PICK,
         )
 
-        assertThat(audioSequence.audioFiles).containsExactly("狼人请闭眼.mp3", "预言家请睁眼.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("wolf_close_eyes.mp3", "seer_open_eyes.mp3")
     }
 
     @Test
@@ -189,7 +188,7 @@ class AudioSequenceIntegrationTest {
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
             room = room,
         )
-        assertThat(dayToNightSequence.audioFiles).containsExactly("天黑请闭眼.mp3", "狼人请睁眼.mp3")
+        assertThat(dayToNightSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3","wolf_open_eyes.mp3")
 
         // WAITING -> WEREWOLF_PICK
         val waitingToWerewolf = audioService.calculateNightSubPhaseTransition(
@@ -197,7 +196,7 @@ class AudioSequenceIntegrationTest {
             oldSubPhase = NightSubPhase.WAITING,
             newSubPhase = NightSubPhase.WEREWOLF_PICK,
         )
-        assertThat(waitingToWerewolf.audioFiles).containsExactly("狼人请睁眼.mp3")
+        assertThat(waitingToWerewolf.audioFiles).containsExactly("wolf_open_eyes.mp3")
 
         // WEREWOLF_PICK -> SEER_PICK
         val werewolfToSeer = audioService.calculateNightSubPhaseTransition(
@@ -205,7 +204,7 @@ class AudioSequenceIntegrationTest {
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
             newSubPhase = NightSubPhase.SEER_PICK,
         )
-        assertThat(werewolfToSeer.audioFiles).containsExactly("狼人请闭眼.mp3", "预言家请睁眼.mp3")
+        assertThat(werewolfToSeer.audioFiles).containsExactly("wolf_close_eyes.mp3", "seer_open_eyes.mp3")
 
         // SEER_PICK -> SEER_RESULT
         val seerToResult = audioService.calculateNightSubPhaseTransition(
@@ -213,7 +212,7 @@ class AudioSequenceIntegrationTest {
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
-        assertThat(seerToResult.audioFiles).containsExactly("预言家请闭眼.mp3")
+        assertThat(seerToResult.audioFiles).containsExactly("seer_close_eyes.mp3")
 
         // SEER_RESULT -> WITCH_ACT
         val resultToWitch = audioService.calculateNightSubPhaseTransition(
@@ -221,7 +220,7 @@ class AudioSequenceIntegrationTest {
             oldSubPhase = NightSubPhase.SEER_RESULT,
             newSubPhase = NightSubPhase.WITCH_ACT,
         )
-        assertThat(resultToWitch.audioFiles).containsExactly("预言家请闭眼.mp3", "女巫请睁眼.mp3")
+        assertThat(resultToWitch.audioFiles).containsExactly("seer_close_eyes.mp3", "witch_open_eyes.mp3")
 
         // WITCH_ACT -> GUARD_PICK
         val witchToGuard = audioService.calculateNightSubPhaseTransition(
@@ -229,7 +228,7 @@ class AudioSequenceIntegrationTest {
             oldSubPhase = NightSubPhase.WITCH_ACT,
             newSubPhase = NightSubPhase.GUARD_PICK,
         )
-        assertThat(witchToGuard.audioFiles).containsExactly("女巫请闭眼.mp3", "守卫请睁眼.mp3")
+        assertThat(witchToGuard.audioFiles).containsExactly("witch_close_eyes.mp3", "guard_open_eyes.mp3")
 
         // NIGHT -> DAY transition
         val nightToDaySequence = audioService.calculatePhaseTransition(
@@ -240,7 +239,7 @@ class AudioSequenceIntegrationTest {
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
         )
-        assertThat(nightToDaySequence.audioFiles).containsExactly("天亮了.mp3")
+        assertThat(nightToDaySequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
     }
 
     @Test

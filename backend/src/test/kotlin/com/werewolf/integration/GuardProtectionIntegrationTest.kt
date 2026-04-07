@@ -104,11 +104,11 @@ class GuardProtectionIntegrationTest {
 
     private fun mockAudioSequenceForDayTransition() {
         // Mock audioService to return valid AudioSequence for NIGHT -> DAY transition
-        val audioSequence = com.werewolf.model.AudioSequence(
+        val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-DAY",
             phase = GamePhase.DAY,
             subPhase = DaySubPhase.RESULT_HIDDEN.name,
-            audioFiles = listOf("天亮了.mp3"),
+            audioFiles = listOf("day_time.mp3"),
             priority = 10,
             timestamp = System.currentTimeMillis()
         )

@@ -61,7 +61,7 @@ describe('audioService', () => {
   // ── Sequential playback (core contract) ─────────────────────────────────
 
   it('playSequential plays first file immediately', () => {
-    audioService.playSequential(['天黑请闭眼.mp3', '狼人请睁眼.mp3'])
+    audioService.playSequential(['goes_dark_close_eyes.mp3', 'wolf_open_eyes.mp3'])
     expect(mockAudioInstances).toHaveLength(1)
     expect(mockAudioInstances[0]?.play).toHaveBeenCalledTimes(1)
   })

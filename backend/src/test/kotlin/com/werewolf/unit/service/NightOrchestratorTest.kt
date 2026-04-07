@@ -20,8 +20,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
-import org.mockito.kotlin.*
 import org.mockito.junit.jupiter.MockitoSettings
+import org.mockito.kotlin.*
 import org.mockito.quality.Strictness
 import java.util.*
 
@@ -67,7 +67,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
             id = "$gameId-${System.currentTimeMillis()}-DAY",
             phase = GamePhase.DAY,
             subPhase = DaySubPhase.RESULT_HIDDEN.name,
-            audioFiles = listOf("天亮了.mp3"),
+            audioFiles = listOf("day_time.mp3"),
             priority = 10,
             timestamp = System.currentTimeMillis()
         )
@@ -82,14 +82,14 @@ private fun mockAudioServiceForDayTransition(r: Room) {
     }
 
     private fun mockAudioServiceForNightSubPhaseTransition(oldSubPhase: NightSubPhase?, newSubPhase: NightSubPhase) {
-        val audioSequence = com.werewolf.model.AudioSequence(
+        val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-NIGHT-TRANSITION",
             phase = GamePhase.NIGHT,
             subPhase = newSubPhase.name,
             audioFiles = if (oldSubPhase != null) {
-                listOf("狼人请闭眼.mp3", "预言家请睁眼.mp3")
+                listOf("wolf_close_eyes.mp3", "seer_open_eyes.mp3")
             } else {
-                listOf("预言家请睁眼.mp3")
+                listOf("seer_open_eyes.mp3")
             },
             priority = 5,
             timestamp = System.currentTimeMillis()
@@ -102,11 +102,11 @@ private fun mockAudioServiceForDayTransition(r: Room) {
     }
 
     private fun mockAudioServiceForNightTransition(r: Room, initialSubPhase: NightSubPhase) {
-        val audioSequence = com.werewolf.model.AudioSequence(
+        val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-NIGHT",
             phase = GamePhase.NIGHT,
             subPhase = initialSubPhase.name,
-            audioFiles = if (initialSubPhase == NightSubPhase.WAITING) emptyList() else listOf("天黑请闭眼.mp3"),
+            audioFiles = if (initialSubPhase == NightSubPhase.WAITING) emptyList() else listOf("goes_dark_close_eyes.mp3"),
             priority = 10,
             timestamp = System.currentTimeMillis()
         )
@@ -762,7 +762,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
     // ── Audio Sequence Tests ─────────────────────────────────────────────────
 
     @Test
-    fun `initNight - broadcasts AudioSequence with 天黑请闭眼 mp3`() {
+    fun `initNight - broadcasts AudioSequence with goes_dark_close_eyes mp3`() {
         val wolf = player("u1", 1, PlayerRole.WEREWOLF)
         val r = room()
         val context = GameContext(game(), r, listOf(wolf))
@@ -781,7 +781,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
         assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
-            .containsExactly("天黑请闭眼.mp3")
+            .containsExactly("goes_dark_close_eyes.mp3")
     }
 
     @Test
@@ -822,11 +822,11 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
         // Setup correct audio files for SEER_PICK to SEER_RESULT transition
-        val audioSequence = com.werewolf.model.AudioSequence(
+        val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-NIGHT-TRANSITION",
             phase = GamePhase.NIGHT,
             subPhase = NightSubPhase.SEER_RESULT.name,
-            audioFiles = listOf("预言家请闭眼.mp3"), // Only close eyes audio for SEER_PICK
+            audioFiles = listOf("seer_close_eyes.mp3"), // Only close eyes audio for SEER_PICK
             priority = 5,
             timestamp = System.currentTimeMillis()
         )
@@ -846,11 +846,11 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
         assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
-            .containsExactly("预言家请闭眼.mp3")
+            .containsExactly("seer_close_eyes.mp3")
     }
 
     @Test
-    fun `resolveNightKills - broadcasts AudioSequence with 天亮了 mp3 when transitioning to DAY`() {
+    fun `resolveNightKills - broadcasts AudioSequence with day_time mp3 when transitioning to DAY`() {
         val wolf = player("u1", 1, PlayerRole.WEREWOLF)
         val v1 = player("u2", 2)
         val v2 = player("u3", 3)
@@ -872,11 +872,11 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
         assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
-            .containsExactly("天亮了.mp3")
+            .containsExactly("day_time.mp3")
     }
 
     @Test
-    fun `advanceFromWaiting - broadcasts AudioSequence with 狼人请睁眼 mp3`() {
+    fun `advanceFromWaiting - broadcasts AudioSequence with wolf_open_eyes mp3`() {
         val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
         val orchestrator = makeOrchestrator(listOf(wolfHandler))
 
@@ -891,11 +891,11 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
         // Setup correct audio files for WAITING to WEREWOLF_PICK transition
-        val audioSequence = com.werewolf.model.AudioSequence(
+        val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-NIGHT-TRANSITION",
             phase = GamePhase.NIGHT,
             subPhase = NightSubPhase.WEREWOLF_PICK.name,
-            audioFiles = listOf("狼人请睁眼.mp3"), // Only open eyes audio
+            audioFiles = listOf("wolf_open_eyes.mp3"), // Only open eyes audio
             priority = 5,
             timestamp = System.currentTimeMillis()
         )
@@ -915,7 +915,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
         assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
-            .containsExactly("狼人请睁眼.mp3")
+            .containsExactly("wolf_open_eyes.mp3")
     }
 
     @Test
@@ -931,11 +931,11 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
         // Setup correct audio files for SEER_RESULT to WITCH_ACT transition
-        val audioSequence = com.werewolf.model.AudioSequence(
+        val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-NIGHT-TRANSITION",
             phase = GamePhase.NIGHT,
             subPhase = NightSubPhase.WITCH_ACT.name,
-            audioFiles = listOf("预言家请闭眼.mp3", "女巫请睁眼.mp3"),
+            audioFiles = listOf("seer_close_eyes.mp3", "witch_open_eyes.mp3"),
             priority = 5,
             timestamp = System.currentTimeMillis()
         )
@@ -955,6 +955,6 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
         assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
-            .containsExactly("预言家请闭眼.mp3", "女巫请睁眼.mp3")
+            .containsExactly("seer_close_eyes.mp3", "witch_open_eyes.mp3")
     }
 }

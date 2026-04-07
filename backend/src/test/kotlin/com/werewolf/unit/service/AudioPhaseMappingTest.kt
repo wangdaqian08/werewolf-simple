@@ -1,6 +1,9 @@
 package com.werewolf.unit.service
 
-import com.werewolf.model.*
+import com.werewolf.model.DaySubPhase
+import com.werewolf.model.GamePhase
+import com.werewolf.model.NightSubPhase
+import com.werewolf.model.Room
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.service.AudioService
 import org.assertj.core.api.Assertions.assertThat
@@ -25,10 +28,10 @@ class AudioPhaseMappingTest {
     // ── Audio File to Phase Mapping Tests ─────────────────────────────────────
 
     @Test
-    fun `Audio file mapping - 天黑请闭眼 mp3 must only be used for NIGHT phase initialization`() {
+    fun `Audio file mapping - goes_dark_close_eyes mp3 must only be used for NIGHT phase initialization`() {
         val room = room()
         
-        // Test: 天黑请闭眼.mp3 should appear in DAY -> NIGHT transition
+        // Test: goes_dark_close_eyes.mp3 should appear in DAY -> NIGHT transition
         // When transitioning directly to WEREWOLF_PICK, it also includes role audio
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
@@ -39,17 +42,17 @@ class AudioPhaseMappingTest {
             room = room,
         )
 
-        // Both "天黑请闭眼.mp3" and "狼人请睁眼.mp3" are included when transitioning to WEREWOLF_PICK
-        assertThat(sequence.audioFiles).contains("天黑请闭眼.mp3")
-        assertThat(sequence.audioFiles).contains("狼人请睁眼.mp3")
+        // Both "goes_dark_close_eyes.mp3" and "wolf_open_eyes.mp3" are included when transitioning to WEREWOLF_PICK
+        assertThat(sequence.audioFiles).contains("goes_dark_close_eyes.mp3")
+        assertThat(sequence.audioFiles).contains("wolf_open_eyes.mp3")
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
     }
 
     @Test
-    fun `Audio file mapping - 天亮了 mp3 must only be used for NIGHT to DAY transition`() {
+    fun `Audio file mapping - day_time mp3 must only be used for NIGHT to DAY transition`() {
         val room = room()
         
-        // Test: 天亮了.mp3 should only appear in NIGHT -> DAY transition
+        // Test: day_time.mp3 should only appear in NIGHT -> DAY transition
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
@@ -59,109 +62,109 @@ class AudioPhaseMappingTest {
             room = room,
         )
 
-        assertThat(sequence.audioFiles).containsExactly("天亮了.mp3")
+        assertThat(sequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
         assertThat(sequence.phase).isEqualTo(GamePhase.DAY)
     }
 
     @Test
-    fun `Audio file mapping - 狼人请睁眼 mp3 must only be used for WEREWOLF_PICK phase`() {
-        // Test: 狼人请睁眼.mp3 should only appear for WEREWOLF_PICK
+    fun `Audio file mapping - wolf_open_eyes mp3 must only be used for WEREWOLF_PICK phase`() {
+        // Test: wolf_open_eyes.mp3 should only appear for WEREWOLF_PICK
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WAITING,
             newSubPhase = NightSubPhase.WEREWOLF_PICK,
         )
 
-        assertThat(sequence.audioFiles).containsExactly("狼人请睁眼.mp3")
+        assertThat(sequence.audioFiles).containsExactly("wolf_open_eyes.mp3")
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
     }
 
     @Test
-    fun `Audio file mapping - 狼人请闭眼 mp3 must only be used when leaving WEREWOLF_PICK phase`() {
-        // Test: 狼人请闭眼.mp3 should only appear when transitioning FROM WEREWOLF_PICK
+    fun `Audio file mapping - wolf_close_eyes mp3 must only be used when leaving WEREWOLF_PICK phase`() {
+        // Test: wolf_close_eyes.mp3 should only appear when transitioning FROM WEREWOLF_PICK
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
             newSubPhase = NightSubPhase.SEER_PICK,
         )
 
-        assertThat(sequence.audioFiles).contains("狼人请闭眼.mp3")
-        assertThat(sequence.audioFiles).isNotEqualTo(listOf("狼人请闭眼.mp3"))
+        assertThat(sequence.audioFiles).contains("wolf_close_eyes.mp3")
+        assertThat(sequence.audioFiles).isNotEqualTo(listOf("wolf_close_eyes.mp3"))
     }
 
     @Test
-    fun `Audio file mapping - 预言家请睁眼 mp3 must only be used for SEER_PICK phase`() {
-        // Test: 预言家请睁眼.mp3 should only appear for SEER_PICK
+    fun `Audio file mapping - seer_open_eyes mp3 must only be used for SEER_PICK phase`() {
+        // Test: seer_open_eyes.mp3 should only appear for SEER_PICK
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
             newSubPhase = NightSubPhase.SEER_PICK,
         )
 
-        assertThat(sequence.audioFiles).contains("预言家请睁眼.mp3")
+        assertThat(sequence.audioFiles).contains("seer_open_eyes.mp3")
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.SEER_PICK.name)
     }
 
     @Test
-    fun `Audio file mapping - 预言家请闭眼 mp3 must be used for both SEER_PICK and SEER_RESULT exits`() {
-        // Test: 预言家请闭眼.mp3 should appear when leaving SEER_PICK
+    fun `Audio file mapping - seer_close_eyes mp3 must be used for both SEER_PICK and SEER_RESULT exits`() {
+        // Test: seer_close_eyes.mp3 should appear when leaving SEER_PICK
         val sequence1 = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
-        assertThat(sequence1.audioFiles).containsExactly("预言家请闭眼.mp3")
+        assertThat(sequence1.audioFiles).containsExactly("seer_close_eyes.mp3")
 
-        // Test: 预言家请闭眼.mp3 should also appear when leaving SEER_RESULT
+        // Test: seer_close_eyes.mp3 should also appear when leaving SEER_RESULT
         val sequence2 = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_RESULT,
             newSubPhase = NightSubPhase.WITCH_ACT,
         )
-        assertThat(sequence2.audioFiles).contains("预言家请闭眼.mp3")
+        assertThat(sequence2.audioFiles).contains("seer_close_eyes.mp3")
     }
 
     @Test
-    fun `Audio file mapping - 女巫请睁眼 mp3 must only be used for WITCH_ACT phase`() {
-        // Test: 女巫请睁眼.mp3 should only appear for WITCH_ACT
+    fun `Audio file mapping - witch_open_eyes mp3 must only be used for WITCH_ACT phase`() {
+        // Test: witch_open_eyes.mp3 should only appear for WITCH_ACT
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_RESULT,
             newSubPhase = NightSubPhase.WITCH_ACT,
         )
 
-        assertThat(sequence.audioFiles).contains("女巫请睁眼.mp3")
+        assertThat(sequence.audioFiles).contains("witch_open_eyes.mp3")
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.WITCH_ACT.name)
     }
 
     @Test
-    fun `Audio file mapping - 女巫请闭眼 mp3 must only be used when leaving WITCH_ACT phase`() {
-        // Test: 女巫请闭眼.mp3 should only appear when transitioning FROM WITCH_ACT
+    fun `Audio file mapping - witch_close_eyes mp3 must only be used when leaving WITCH_ACT phase`() {
+        // Test: witch_close_eyes.mp3 should only appear when transitioning FROM WITCH_ACT
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WITCH_ACT,
             newSubPhase = NightSubPhase.GUARD_PICK,
         )
 
-        assertThat(sequence.audioFiles).contains("女巫请闭眼.mp3")
+        assertThat(sequence.audioFiles).contains("witch_close_eyes.mp3")
     }
 
     @Test
-    fun `Audio file mapping - 守卫请睁眼 mp3 must only be used for GUARD_PICK phase`() {
-        // Test: 守卫请睁眼.mp3 should only appear for GUARD_PICK
+    fun `Audio file mapping - guard_open_eyes mp3 must only be used for GUARD_PICK phase`() {
+        // Test: guard_open_eyes.mp3 should only appear for GUARD_PICK
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WITCH_ACT,
             newSubPhase = NightSubPhase.GUARD_PICK,
         )
 
-        assertThat(sequence.audioFiles).contains("守卫请睁眼.mp3")
+        assertThat(sequence.audioFiles).contains("guard_open_eyes.mp3")
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.GUARD_PICK.name)
     }
 
     @Test
-    fun `Audio file mapping - 守卫请闭眼 mp3 must only be used when leaving GUARD_PICK phase`() {
-        // Test: 守卫请闭眼.mp3 should only appear when transitioning FROM GUARD_PICK
+    fun `Audio file mapping - guard_close_eyes mp3 must only be used when leaving GUARD_PICK phase`() {
+        // Test: guard_close_eyes.mp3 should only appear when transitioning FROM GUARD_PICK
         val room = room(hasGuard = true)
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
@@ -172,9 +175,9 @@ class AudioPhaseMappingTest {
             room = room,
         )
 
-        // 守卫请闭眼.mp3 is NOT in the sequence for NIGHT -> DAY transition
-        // This is because the sequence only contains "天亮了.mp3"
-        assertThat(sequence.audioFiles).doesNotContain("守卫请闭眼.mp3")
+        // guard_close_eyes.mp3 is NOT in the sequence for NIGHT -> DAY transition
+        // This is because the sequence only contains "day_time.mp3"
+        assertThat(sequence.audioFiles).doesNotContain("guard_close_eyes.mp3")
     }
 
     // ── Audio Sequence Correctness Tests ────────────────────────────────────────
@@ -198,11 +201,11 @@ class AudioPhaseMappingTest {
 
             if (sequence.audioFiles.size == 2) {
                 // Should be [close eyes, open eyes]
-                assertThat(sequence.audioFiles[0]).contains("闭眼")
-                assertThat(sequence.audioFiles[1]).contains("睁眼")
+                assertThat(sequence.audioFiles[0]).contains("close_eyes")
+                assertThat(sequence.audioFiles[1]).contains("open_eyes")
             } else if (sequence.audioFiles.size == 1) {
                 // Should be close eyes only (for SEER_RESULT)
-                assertThat(sequence.audioFiles[0]).contains("闭眼")
+                assertThat(sequence.audioFiles[0]).contains("close_eyes")
             }
         }
     }
@@ -216,10 +219,10 @@ class AudioPhaseMappingTest {
             newSubPhase = NightSubPhase.SEER_PICK,
         )
 
-        // Sequence should be: ["狼人请闭眼.mp3", "预言家请睁眼.mp3"]
-        // Not: ["狼人请闭眼.mp3", "狼人请睁眼.mp3"]
-        assertThat(sequence.audioFiles).doesNotContain("狼人请睁眼.mp3")
-        assertThat(sequence.audioFiles).doesNotContain("预言家请闭眼.mp3")
+        // Sequence should be: ["wolf_close_eyes.mp3", "seer_open_eyes.mp3"]
+        // Not: ["wolf_close_eyes.mp3", "wolf_open_eyes.mp3"]
+        assertThat(sequence.audioFiles).doesNotContain("wolf_open_eyes.mp3")
+        assertThat(sequence.audioFiles).doesNotContain("seer_close_eyes.mp3")
     }
 
     @Test
