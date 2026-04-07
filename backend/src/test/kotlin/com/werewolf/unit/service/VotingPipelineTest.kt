@@ -262,6 +262,31 @@ class VotingPipelineTest {
     }
 
     @Test
+    fun `revealTally - last wolf voted out, game ends with VILLAGER win`() {
+        val host = player(hostId, 0)
+        val lastWolf = player("wolf", 1, PlayerRole.WEREWOLF)
+        val villager = player("v1", 2)
+        val context = ctx(game(), host, lastWolf, villager)
+
+        val votes = listOf(vote(hostId, "wolf"), vote("v1", "wolf"))
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(votes)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wolf")).thenReturn(Optional.of(lastWolf))
+        // After wolf elimination: only host and villager alive
+        stubLoader(host, villager)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(WinnerSide.VILLAGER)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.allValues).anyMatch { it.phase == GamePhase.GAME_OVER }
+        assertThat(captor.allValues).anyMatch { it.winner == WinnerSide.VILLAGER }
+    }
+
+    @Test
     fun `handleHunterShoot - hunter skips, not sheriff, goes to night`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER)
         val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter)

@@ -450,7 +450,7 @@ class VotingPipeline(
             val updatedContext = contextLoader.load(context.gameId)
             val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
             if (winner != null) {
-                events.add(DomainEvent.GameOver(context.gameId, winner))
+                endGame(updatedContext, winner, events)
             }
             return
         }
@@ -465,7 +465,7 @@ class VotingPipeline(
             val updatedContext = contextLoader.load(context.gameId)
             val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
             if (winner != null) {
-                events.add(DomainEvent.GameOver(context.gameId, winner))
+                endGame(updatedContext, winner, events)
             }
             return
         }
@@ -504,7 +504,7 @@ class VotingPipeline(
         val updatedContext = contextLoader.load(context.gameId)
         val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
         if (winner != null) {
-            events.add(DomainEvent.GameOver(context.gameId, winner))
+            endGame(updatedContext, winner, events)
         }
     }
 
