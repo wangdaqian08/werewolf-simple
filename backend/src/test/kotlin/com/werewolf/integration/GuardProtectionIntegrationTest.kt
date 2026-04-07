@@ -35,6 +35,7 @@ class GuardProtectionIntegrationTest {
     @Mock lateinit var winConditionChecker: com.werewolf.game.phase.WinConditionChecker
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
+    @Mock lateinit var audioService: com.werewolf.service.AudioService
 
     private lateinit var nightOrchestrator: NightOrchestrator
     private lateinit var guardHandler: GuardHandler
@@ -58,7 +59,8 @@ class GuardProtectionIntegrationTest {
             winConditionChecker = winConditionChecker,
             stompPublisher = stompPublisher,
             contextLoader = contextLoader,
-            nightWaitingScheduler = mock() // Not needed for this test
+            nightWaitingScheduler = mock(), // Not needed for this test
+            audioService = audioService,
         )
     }
 
@@ -99,6 +101,26 @@ class GuardProtectionIntegrationTest {
 
     private fun ctx(vararg players: GamePlayer, nightPhase: NightPhase = nightPhase()) =
         GameContext(game(), room(), players.toList(), nightPhase = nightPhase)
+
+    private fun mockAudioSequenceForDayTransition() {
+        // Mock audioService to return valid AudioSequence for NIGHT -> DAY transition
+        val audioSequence = AudioSequence(
+            id = "$gameId-${System.currentTimeMillis()}-DAY",
+            phase = GamePhase.DAY,
+            subPhase = DaySubPhase.RESULT_HIDDEN.name,
+            audioFiles = listOf("day_time.mp3"),
+            priority = 10,
+            timestamp = System.currentTimeMillis()
+        )
+        whenever(audioService.calculatePhaseTransition(
+            eq(gameId),
+            eq(GamePhase.NIGHT),
+            eq(GamePhase.DAY),
+            isNull(),
+            eq(DaySubPhase.RESULT_HIDDEN.name),
+            any()
+        )).thenReturn(audioSequence)
+    }
 
     // ── Integration Tests ────────────────────────────────────────────────────
 
@@ -143,6 +165,7 @@ class GuardProtectionIntegrationTest {
         whenever(contextLoader.load(gameId))
             .thenReturn(ctx(wolf, guard, victim))
         whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        mockAudioSequenceForDayTransition()
 
         nightOrchestrator.resolveNightKills(guardCtx, np)
 
@@ -196,6 +219,7 @@ class GuardProtectionIntegrationTest {
         whenever(contextLoader.load(gameId))
             .thenReturn(ctx(wolf, guard, victim, otherPlayer))
         whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        mockAudioSequenceForDayTransition()
 
         nightOrchestrator.resolveNightKills(wolfCtx, np)
 

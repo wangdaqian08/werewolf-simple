@@ -30,7 +30,67 @@ import {
   MOCK_STOMP_EVENTS,
 } from './data'
 import { mockStompClient } from './mockStompClient'
-import type { DayPhaseState, GameState, RoomPlayer, SheriffElectionState } from '@/types'
+import type {
+  AudioSequence,
+  DayPhaseState,
+  GamePhase,
+  GameState,
+  RoomPlayer,
+  SheriffElectionState,
+} from '@/types'
+
+// ── Audio sequence helpers (mirrors backend AudioService logic) ───────────────
+
+const OPEN_EYES: Record<string, string> = {
+  WEREWOLF_PICK: 'wolf_open_eyes.mp3',
+  SEER_PICK: 'seer_open_eyes.mp3',
+  WITCH_ACT: 'witch_open_eyes.mp3',
+  GUARD_PICK: 'guard_open_eyes.mp3',
+}
+
+const CLOSE_EYES: Record<string, string> = {
+  WEREWOLF_PICK: 'wolf_close_eyes.mp3',
+  SEER_PICK: 'seer_close_eyes.mp3',
+  SEER_RESULT: 'seer_close_eyes.mp3',
+  WITCH_ACT: 'witch_close_eyes.mp3',
+  GUARD_PICK: 'guard_close_eyes.mp3',
+}
+
+let audioSeqCounter = 0
+
+function makeAudioSequence(
+  phase: GamePhase,
+  subPhase: string | null,
+  audioFiles: string[],
+  priority = 5,
+): AudioSequence {
+  return {
+    id: `mock-${++audioSeqCounter}-${phase}`,
+    phase,
+    subPhase,
+    audioFiles,
+    priority,
+    timestamp: Date.now(),
+  }
+}
+
+function phaseAudio(newPhase: GamePhase, subPhase?: string | null): AudioSequence {
+  const files: string[] = []
+  if (newPhase === 'NIGHT') files.push('goes_dark_close_eyes.mp3')
+  if (newPhase === 'DAY') files.push('day_time.mp3')
+  return makeAudioSequence(newPhase, subPhase ?? null, files, 10)
+}
+
+function nightSubPhaseAudio(oldSubPhase: string | null, newSubPhase: string): AudioSequence {
+  const files: string[] = []
+  if (oldSubPhase && oldSubPhase !== 'WAITING' && CLOSE_EYES[oldSubPhase]) {
+    files.push(CLOSE_EYES[oldSubPhase])
+  }
+  if (OPEN_EYES[newSubPhase]) {
+    files.push(OPEN_EYES[newSubPhase])
+  }
+  return makeAudioSequence('NIGHT', newSubPhase, files)
+}
 
 // Mutable room state shared across mock endpoints so debug actions see current players.
 let mockRoomId = MOCK_ROOM_AS_HOST.roomId
@@ -182,6 +242,7 @@ export function setupMocks() {
       phase: 'NIGHT',
       roleReveal: undefined,
       nightPhase: { subPhase: 'WAITING', dayNumber: 1 },
+      audioSequence: phaseAudio('NIGHT', 'WAITING'),
     }
     pushGameStateUpdate()
     // Simulate 5-second server timer → WEREWOLF_PICK
@@ -190,6 +251,7 @@ export function setupMocks() {
         mockGameState = {
           ...mockGameState,
           nightPhase: { ...mockGameState.nightPhase!, subPhase: 'WEREWOLF_PICK' },
+          audioSequence: nightSubPhaseAudio('WAITING', 'WEREWOLF_PICK'),
         }
         pushGameStateUpdate()
       }
@@ -301,6 +363,9 @@ export function setupMocks() {
     const { scenario } = JSON.parse(config.data ?? '{}')
     try {
       mockGameState = makeNightScenario(scenario as Parameters<typeof makeNightScenario>[0])
+      // Attach audio sequence matching the loaded subPhase
+      const sub = mockGameState.nightPhase?.subPhase ?? 'WAITING'
+      mockGameState.audioSequence = nightSubPhaseAudio(null, sub)
     } catch {
       return [400, { error: 'Unknown scenario' }]
     }
@@ -317,6 +382,7 @@ export function setupMocks() {
       dayNumber: nextDay,
       nightPhase: undefined,
       dayPhase: makeDayHidden(),
+      audioSequence: phaseAudio('DAY'),
     }
     pushGameStateUpdate()
     return [200]
@@ -361,6 +427,7 @@ export function setupMocks() {
       dayNumber: nextDay,
       votingPhase: undefined,
       nightPhase: { subPhase: 'WAITING', dayNumber: nextDay },
+      audioSequence: phaseAudio('NIGHT', 'WAITING'),
     }
     pushGameStateUpdate()
     return [200]
@@ -415,6 +482,7 @@ export function setupMocks() {
           phase: 'NIGHT',
           roleReveal: undefined,
           nightPhase: { subPhase: 'WAITING', dayNumber: 1 },
+          audioSequence: phaseAudio('NIGHT', 'WAITING'),
         }
         pushGameStateUpdate()
         // Simulate the 5-second server-side timer → advance to WEREWOLF_PICK
@@ -423,6 +491,7 @@ export function setupMocks() {
             mockGameState = {
               ...mockGameState,
               nightPhase: { ...mockGameState.nightPhase!, subPhase: 'WEREWOLF_PICK' },
+              audioSequence: nightSubPhaseAudio('WAITING', 'WEREWOLF_PICK'),
             }
             pushGameStateUpdate()
           }
@@ -595,6 +664,7 @@ export function setupMocks() {
           phase: 'NIGHT',
           sheriffElection: undefined,
           nightPhase: { subPhase: 'WAITING', dayNumber: 1 },
+          audioSequence: phaseAudio('NIGHT', 'WAITING'),
         }
         pushGameStateUpdate()
       }
@@ -631,6 +701,7 @@ export function setupMocks() {
                 history: [...prevHistory, currentEntry],
               },
             },
+            audioSequence: nightSubPhaseAudio('SEER_PICK', 'SEER_RESULT'),
           }
           pushGameStateUpdate()
         }
@@ -639,6 +710,7 @@ export function setupMocks() {
         mockGameState = {
           ...mockGameState,
           nightPhase: { ...np, subPhase: 'WAITING', selectedTargetId: undefined },
+          audioSequence: nightSubPhaseAudio(np.subPhase, 'WAITING'),
         }
         pushGameStateUpdate()
       } else if (actionType === 'WOLF_KILL' || actionType === 'GUARD_PROTECT') {
@@ -646,6 +718,7 @@ export function setupMocks() {
         mockGameState = {
           ...mockGameState,
           nightPhase: { ...np, subPhase: 'WAITING', selectedTargetId: undefined },
+          audioSequence: nightSubPhaseAudio(np.subPhase, 'WAITING'),
         }
         pushGameStateUpdate()
       } else if (actionType === 'NIGHT_CONFIRM') {
@@ -673,11 +746,13 @@ export function setupMocks() {
                 history: [...prevHistory, currentEntry],
               },
             },
+            audioSequence: nightSubPhaseAudio('SEER_PICK', 'SEER_RESULT'),
           }
         } else {
           mockGameState = {
             ...mockGameState,
             nightPhase: { ...np, subPhase: 'WAITING', selectedTargetId: undefined },
+            audioSequence: nightSubPhaseAudio(np.subPhase, 'WAITING'),
           }
         }
         pushGameStateUpdate()
@@ -696,6 +771,7 @@ export function setupMocks() {
             selectedTargetId: undefined,
             subPhase: 'WAITING',
           },
+          audioSequence: nightSubPhaseAudio('WITCH_ACT', 'WAITING'),
         }
         pushGameStateUpdate()
       } else if (actionType === 'NIGHT_WITCH_USE_ANTIDOTE') {
@@ -709,13 +785,16 @@ export function setupMocks() {
             poisonDecided: true,
             subPhase: 'WAITING',
           },
+          audioSequence: nightSubPhaseAudio('WITCH_ACT', 'WAITING'),
         }
         pushGameStateUpdate()
       } else if (actionType === 'NIGHT_WITCH_PASS_ANTIDOTE') {
         const updated = { ...np, antidoteDecided: true, antidoteUsed: false }
+        const goToWaiting = updated.poisonDecided
         mockGameState = {
           ...mockGameState,
-          nightPhase: updated.poisonDecided ? { ...updated, subPhase: 'WAITING' } : updated,
+          nightPhase: goToWaiting ? { ...updated, subPhase: 'WAITING' } : updated,
+          ...(goToWaiting ? { audioSequence: nightSubPhaseAudio('WITCH_ACT', 'WAITING') } : {}),
         }
         pushGameStateUpdate()
       } else if (actionType === 'NIGHT_WITCH_USE_POISON') {
@@ -729,13 +808,16 @@ export function setupMocks() {
             selectedTargetId: undefined,
             subPhase: 'WAITING',
           },
+          audioSequence: nightSubPhaseAudio('WITCH_ACT', 'WAITING'),
         }
         pushGameStateUpdate()
       } else if (actionType === 'NIGHT_WITCH_PASS_POISON') {
         const updated = { ...np, poisonDecided: true, poisonUsed: false }
+        const goToWaiting = updated.antidoteDecided
         mockGameState = {
           ...mockGameState,
-          nightPhase: updated.antidoteDecided ? { ...updated, subPhase: 'WAITING' } : updated,
+          nightPhase: goToWaiting ? { ...updated, subPhase: 'WAITING' } : updated,
+          ...(goToWaiting ? { audioSequence: nightSubPhaseAudio('WITCH_ACT', 'WAITING') } : {}),
         }
         pushGameStateUpdate()
       }

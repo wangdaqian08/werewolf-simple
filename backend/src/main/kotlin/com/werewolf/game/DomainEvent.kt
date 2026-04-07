@@ -40,4 +40,9 @@ sealed class DomainEvent {
     data class IdiotRevealed(val gameId: Int, val userId: String) : DomainEvent()
     @JsonTypeName("WolfSelectionChanged")
     data class WolfSelectionChanged(val gameId: Int, val selectedTargetUserId: String) : DomainEvent()
+    @JsonTypeName("AudioSequence")
+    data class AudioSequence(
+        val gameId: Int,
+        val audioSequence: com.werewolf.model.AudioSequence
+    ) : DomainEvent()
 }

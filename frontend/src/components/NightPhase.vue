@@ -67,7 +67,7 @@
       <footer class="nf">
         <button
           class="btn btn-danger nf-btn"
-          :disabled="!effectivePhase.selectedTargetId"
+          :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="emit('confirm', localSelected)"
         >
           确认袭击 Confirm
@@ -101,7 +101,7 @@
       <footer class="nf">
         <button
           class="btn btn-danger nf-btn"
-          :disabled="!effectivePhase.selectedTargetId"
+          :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="emit('confirm', localSelected)"
         >
           查验 · Check
@@ -147,7 +147,13 @@
           <div v-else class="srh-empty">暂无历史记录</div>
         </div>
         <footer class="nf" style="margin-top: auto">
-          <button class="btn btn-secondary nf-btn" @click="emit('confirm')">查验完毕 · Done</button>
+          <button
+            class="btn btn-secondary nf-btn"
+            :disabled="actionPending"
+            @click="emit('confirm')"
+          >
+            查验完毕 · Done
+          </button>
         </footer>
       </div>
     </template>
@@ -172,14 +178,14 @@
         <div class="ws-row">
           <button
             class="btn btn-success ws-btn"
-            :disabled="!!nightPhase.antidoteDecided"
+            :disabled="!!nightPhase.antidoteDecided || actionPending"
             @click="emit('witchAntidote')"
           >
             使用解药
           </button>
           <button
             class="btn btn-secondary ws-btn"
-            :disabled="!!nightPhase.antidoteDecided"
+            :disabled="!!nightPhase.antidoteDecided || actionPending"
             @click="emit('witchPassAntidote')"
           >
             放弃
@@ -220,7 +226,7 @@
           <div class="ws-row">
             <button
               class="btn btn-danger ws-btn"
-              :disabled="!effectivePhase.selectedTargetId"
+              :disabled="!effectivePhase.selectedTargetId || actionPending"
               @click="emit('witchPoison', effectivePhase.selectedTargetId!)"
             >
               确认毒杀 Confirm
@@ -231,14 +237,14 @@
         <div v-else class="ws-row">
           <button
             class="btn btn-danger ws-btn"
-            :disabled="!!nightPhase.poisonDecided"
+            :disabled="!!nightPhase.poisonDecided || actionPending"
             @click="poisonMode = true"
           >
             使用毒药
           </button>
           <button
             class="btn btn-secondary ws-btn"
-            :disabled="!!nightPhase.poisonDecided"
+            :disabled="!!nightPhase.poisonDecided || actionPending"
             @click="emit('witchPassPoison')"
           >
             不用
@@ -253,7 +259,13 @@
         </div>
         <p class="ws-desc">你没有可用的道具。</p>
         <div class="ws-row">
-          <button class="btn btn-primary ws-btn" @click="emit('witchSkip')">完成操作 · Done</button>
+          <button
+            class="btn btn-primary ws-btn"
+            :disabled="actionPending"
+            @click="emit('witchSkip')"
+          >
+            完成操作 · Done
+          </button>
         </div>
       </div>
     </template>
@@ -292,7 +304,7 @@
         <!-- Guard confirm is RED per design -->
         <button
           class="btn btn-danger nf-btn"
-          :disabled="!effectivePhase.selectedTargetId"
+          :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="emit('confirm', localSelected)"
         >
           确认保护 Confirm
@@ -343,6 +355,7 @@ const props = defineProps<{
   players: GamePlayer[]
   myUserId: string
   myRole?: PlayerRole
+  actionPending?: boolean
 }>()
 
 const emit = defineEmits<{

@@ -46,17 +46,17 @@ class DayPhaseResultRevealTest {
     @BeforeEach
     fun setUp() {
         gameService = GameService(
-            gameRepository,
-            roomRepository,
-            roomPlayerRepository,
-            gamePlayerRepository,
-            stompPublisher,
-            nightOrchestrator,
-            userRepository,
-            sheriffService,
-            nightPhaseRepository,
-            voteRepository,
-            eliminationHistoryRepository
+            gameRepository = gameRepository,
+            roomRepository = roomRepository,
+            roomPlayerRepository = roomPlayerRepository,
+            gamePlayerRepository = gamePlayerRepository,
+            stompPublisher = stompPublisher,
+            nightOrchestrator = nightOrchestrator,
+            userRepository = userRepository,
+            sheriffService = sheriffService,
+            nightPhaseRepository = nightPhaseRepository,
+            voteRepository = voteRepository,
+            eliminationHistoryRepository = eliminationHistoryRepository,
         )
     }
 

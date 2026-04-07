@@ -183,9 +183,12 @@ class GameService(
                     if (wolfKilled) wolfTarget?.let { killedIds.add(it) }
                     if (poisonTarget != null) killedIds.add(poisonTarget)
                     
-                    if (killedIds.isNotEmpty()) {
+                    // Deduplicate killed players (wolf and witch may target the same player)
+                    val uniqueKilledIds = killedIds.toSet()
+                    
+                    if (uniqueKilledIds.isNotEmpty()) {
                         mapOf(
-                            "killedPlayers" to killedIds.map { killedId ->
+                            "killedPlayers" to uniqueKilledIds.map { killedId ->
                                 val killedPlayer = playerMap[killedId]
                                 val killedUser = userLookup[killedId]
                                 mapOf(
@@ -292,7 +295,7 @@ class GameService(
             "subPhase" to game.subPhase,
             "dayNumber" to game.dayNumber,
             "sheriffUserId" to game.sheriffUserId,
-            "hasSheriff" to (room?.hasSheriff ?: true),
+            "hasSheriff" to room.hasSheriff,
             "winner" to game.winner?.name,
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,

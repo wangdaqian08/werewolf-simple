@@ -34,6 +34,7 @@ class HookInvocationTest {
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var nightWaitingScheduler: NightWaitingScheduler
+    @Mock lateinit var audioService: com.werewolf.service.AudioService
     @Mock lateinit var nightOrchestrator: NightOrchestrator
 
     private val gameId = 1
@@ -95,6 +96,7 @@ class HookInvocationTest {
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
         nightWaitingScheduler = nightWaitingScheduler,
+        audioService = audioService,
     )
 
     private fun makeVotingPipeline(handlers: List<RoleHandler>) = VotingPipeline(
@@ -125,6 +127,24 @@ class HookInvocationTest {
         whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
         whenever(winConditionChecker.check(any(), any())).thenReturn(null)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        // Mock audioService to avoid NullPointerException
+        val mockAudioSequence = AudioSequence(
+            id = "$gameId-${System.currentTimeMillis()}-DAY",
+            phase = GamePhase.DAY,
+            subPhase = DaySubPhase.RESULT_HIDDEN.name,
+            audioFiles = listOf("day_time.mp3"),
+            priority = 10,
+            timestamp = System.currentTimeMillis()
+        )
+        whenever(audioService.calculatePhaseTransition(
+            eq(gameId),
+            eq(GamePhase.NIGHT),
+            eq(GamePhase.DAY),
+            eq(null),
+            eq(DaySubPhase.RESULT_HIDDEN.name),
+            eq(initialCtx.room)
+        )).thenReturn(mockAudioSequence)
 
         orchestrator.resolveNightKills(initialCtx, np)
 

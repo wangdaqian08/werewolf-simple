@@ -42,12 +42,11 @@ const gameStore = useGameStore()
 const userStore = useUserStore()
 
 onMounted(async () => {
-  if (!gameStore.state?.winner) {
-    const gameId = Number(route.params.gameId)
-    if (gameId) {
-      const state = await gameService.getState(gameId.toString())
-      gameStore.setState(state)
-    }
+  // Always fetch fresh state to ensure all player roles are revealed
+  const gameId = Number(route.params.gameId)
+  if (gameId) {
+    const state = await gameService.getState(gameId.toString())
+    gameStore.setState(state)
   }
 })
 

@@ -50,6 +50,17 @@ export interface JoinRoomRequest {
   roomCode: string
 }
 
+// ── Audio ───────────────────────────────────────────────────────────────────────
+
+export interface AudioSequence {
+  id: string
+  phase: GamePhase
+  subPhase: string | null
+  audioFiles: string[]
+  priority: number
+  timestamp: number
+}
+
 // ── Game ──────────────────────────────────────────────────────────────────────
 
 export type GamePhase =
@@ -112,6 +123,7 @@ export interface GameState {
   votingPhase?: VotingState
   nightPhase?: NightPhaseState
   voteHistory?: VoteRoundHistory[]
+  audioSequence?: AudioSequence // 🎯 Backend-calculated audio sequence
 }
 
 export interface GameEvent {

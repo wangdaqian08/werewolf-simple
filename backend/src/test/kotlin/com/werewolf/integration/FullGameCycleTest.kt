@@ -193,8 +193,8 @@ class FullGameCycleTest {
         action(wolfToken, gameId, "WOLF_KILL", villagerTarget.userId)
 
         // In HARD_MODE: 2 wolves vs 1 villager — not all non-wolves eliminated → no win yet
-        val finalGame = gameRepository.findById(gameId).orElseThrow()
-        assertThat(finalGame.phase).isEqualTo(GamePhase.DAY)
-        assertThat(finalGame.winner).isNull()
-    }
-}
+            val finalGame = gameRepository.findById(gameId).orElseThrow()
+            assertThat(finalGame.phase).isEqualTo(GamePhase.DAY)
+            assertThat(finalGame.winner).isNull()
+        }
+        }

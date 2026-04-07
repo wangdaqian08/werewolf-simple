@@ -90,12 +90,20 @@
     <footer class="day-footer">
       <template v-if="viewRole === 'HOST'">
         <div v-if="dayPhase.subPhase === 'RESULT_HIDDEN'" class="vote-actions">
-          <button class="btn btn-primary vote-btn" @click="emit('revealResult')">
+          <button
+            class="btn btn-primary vote-btn"
+            :disabled="actionPending"
+            @click="emit('revealResult')"
+          >
             显示结果 · Result
           </button>
         </div>
         <div v-else-if="dayPhase.subPhase === 'RESULT_REVEALED'" class="vote-actions">
-          <button class="btn btn-gold vote-btn" @click="emit('startVote')">
+          <button
+            class="btn btn-gold vote-btn"
+            :disabled="actionPending"
+            @click="emit('startVote')"
+          >
             开始投票 · Start Vote
           </button>
         </div>
@@ -132,6 +140,7 @@ const props = defineProps<{
   players: GamePlayer[]
   myUserId: string
   isHost: boolean
+  actionPending?: boolean
 }>()
 
 const emit = defineEmits<{

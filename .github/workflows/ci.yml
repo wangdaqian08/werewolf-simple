@@ -89,7 +89,7 @@ jobs:
         run: npx vue-tsc -b --noEmit
 
       - name: Unit tests with coverage
-        run: npm run test:coverage
+        run: npm run test:unit:coverage
 
   e2e-ui:
     name: E2E · UI (${{ matrix.shard }}/3)
@@ -132,7 +132,7 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: E2E tests (shard ${{ matrix.shard }}/3)
-        run: npx playwright test --shard=${{ matrix.shard }}/3
+        run: npm run test:e2e:ui -- --shard=${{ matrix.shard }}/3
 
       - name: Upload blob report
         if: always()
@@ -234,7 +234,7 @@ jobs:
         working-directory: frontend
 
       - name: E2E integration tests
-        run: npx playwright test --config=playwright.real.config.ts
+        run: npm run test:e2e:integration
         working-directory: frontend
 
       - name: Upload report on failure
