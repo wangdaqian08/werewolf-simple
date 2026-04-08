@@ -21,10 +21,21 @@ async function goToVotingScenario(page: Page, scenario: string) {
   await page.waitForTimeout(300) // allow mock state to load
 
   // Click the scenario button in the debug voting buttons section
-  await page
-    .locator('[data-testid="debug-voting-btns"]')
-    .getByRole('button', { name: scenario })
-    .click()
+  const testIdMap: Record<string, string> = {
+    'Voting': 'debug-voting',
+    'Voted': 'debug-voting-voted',
+    'Revealed': 'debug-voting-revealed',
+    'Hunter': 'debug-voting-hunter',
+    'Badge: Pick': 'debug-voting-badge-handover',
+    'Badge: Sheriff': 'debug-voting-badge-sheriff',
+    'Badge: Burned': 'debug-voting-badge-burned',
+    'No History': 'debug-voting-no-history',
+    'No Data': 'debug-voting-no-data',
+    'Idiot Reveal': 'debug-voting-idiot-reveal',
+    'Re-Vote': 'debug-voting-re-voting',
+  }
+  const testId = testIdMap[scenario] || `debug-voting-${scenario.toLowerCase().replace(/\s+/g, '-')}`
+  await page.locator(`[data-testid="${testId}"]`).click()
   await page.waitForTimeout(100)
 }
 
