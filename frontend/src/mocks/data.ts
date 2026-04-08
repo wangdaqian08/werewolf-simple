@@ -972,22 +972,62 @@ export function makeVotingScenario(
       }
     case 'IDIOT_REVEAL':
       // You (u1) are the Idiot — revealed, alive but permanently lost voting right.
-      // u3 (Bob) also has idiotRevealed=true badge to show on another slot.
+      // u1 received highest votes and triggered idiot reveal.
       return {
         ...base,
         myRole: 'IDIOT' as PlayerRole,
         players: base.players.map((p) => {
           if (p.userId === 'u1') return { ...p, canVote: false, idiotRevealed: true }
-          if (p.userId === 'u3') return { ...p, canVote: false, idiotRevealed: true }
           return p
         }),
         votingPhase: {
-          subPhase: 'VOTING',
+          subPhase: 'VOTE_RESULT',
           ...commonTiming,
           canVote: false,
-          votedPlayerIds: ['u5', 'u6'],
-          votesSubmitted: 2,
-          totalVoters: 7,
+          votedPlayerIds: ['u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9'],
+          votesSubmitted: 8,
+          totalVoters: 8,
+          tallyRevealed: true,
+          idiotRevealedId: 'u1',
+          idiotRevealedNickname: 'You',
+          idiotRevealedSeatIndex: 1,
+          tally: [
+            {
+              playerId: 'u1',
+              nickname: 'You',
+              seatIndex: 1,
+              avatar: '⭐',
+              votes: 5,
+              voters: [
+                { userId: 'u2', nickname: 'Alice', avatar: '😊', seatIndex: 2 } satisfies VoteVoter,
+                { userId: 'u3', nickname: 'Bob', avatar: '🎭', seatIndex: 3 } satisfies VoteVoter,
+                { userId: 'u4', nickname: 'Carol', avatar: '🌙', seatIndex: 4 } satisfies VoteVoter,
+                { userId: 'u5', nickname: 'Dave', avatar: '🌸', seatIndex: 5 } satisfies VoteVoter,
+                { userId: 'u6', nickname: 'Eve', avatar: '🦊', seatIndex: 6 } satisfies VoteVoter,
+              ],
+            },
+            {
+              playerId: 'u2',
+              nickname: 'Alice',
+              seatIndex: 2,
+              avatar: '😊',
+              votes: 2,
+              voters: [
+                { userId: 'u7', nickname: 'Frank', avatar: '🎸', seatIndex: 7 } satisfies VoteVoter,
+                { userId: 'u8', nickname: 'Grace', avatar: '🌺', seatIndex: 8 } satisfies VoteVoter,
+              ],
+            },
+            {
+              playerId: 'u3',
+              nickname: 'Bob',
+              seatIndex: 3,
+              avatar: '🎭',
+              votes: 1,
+              voters: [
+                { userId: 'u9', nickname: 'Hank', avatar: '🐯', seatIndex: 9 } satisfies VoteVoter,
+              ],
+            },
+          ],
         } satisfies VotingState,
       }
     case 'RE_VOTING':

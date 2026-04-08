@@ -176,3 +176,51 @@ test('eliminated player banner shown after reveal', async ({ page }) => {
   await expect(page.locator('.elim-banner-body')).toBeVisible()
   await expect(page.getByText(/ELIMINATED/i)).toBeVisible()
 })
+
+test('idiot reveal banner shows correct content', async ({ page }) => {
+  await goToGame(page)
+  await loadDayScenario(page, 'Host·Hidden')
+  await loadVotingScenario(page, 'Idiot Reveal')
+
+  // Verify idiot reveal banner is visible
+  await expect(page.locator('.elim-banner-body')).toBeVisible()
+  
+  // Verify banner title
+  await expect(page.getByText(/白痴翻牌/i)).toBeVisible()
+  await expect(page.getByText(/IDIOT REVEALED/i)).toBeVisible()
+  
+  // Verify nickname and seat number format (use specific selector to avoid multiple matches)
+  await expect(page.locator('.elim-banner-name')).toContainText('You')
+  await expect(page.locator('.elim-banner-name')).toContainText('座位')
+  
+  // Verify status message
+  await expect(page.locator('.elim-banner-role')).toContainText('存活，失去投票权')
+  await expect(page.locator('.elim-banner-role')).toContainText('Survives, loses vote')
+})
+
+test('idiot card shows 🃏 overlay', async ({ page }) => {
+  await goToGame(page)
+  await loadDayScenario(page, 'Host·Hidden')
+  await loadVotingScenario(page, 'Idiot Reveal')
+
+  // Verify 🃏 overlay is visible on the idiot player card
+  const idiotOverlay = page.locator('.slot-overlay.idiot-overlay')
+  await expect(idiotOverlay).toBeVisible()
+  
+  // Verify the overlay contains the 🃏 emoji
+  await expect(idiotOverlay.getByText('🃏')).toBeVisible()
+})
+
+test('idiot voting button shows disabled state', async ({ page }) => {
+  await goToGame(page)
+  await loadDayScenario(page, 'Host·Hidden')
+  await loadVotingScenario(page, 'Idiot Reveal')
+
+  // In VOTE_RESULT phase, host should see continue button (not voting buttons)
+  const continueButton = page.locator('.vote-actions').getByRole('button', { name: /继续/i })
+  await expect(continueButton).toBeVisible()
+  
+  // Verify no voting buttons are shown (since voting phase is over)
+  const voteButtons = page.locator('.vote-actions .vote-btn').filter({ hasText: /投票/i })
+  await expect(voteButtons).toHaveCount(0)
+})
