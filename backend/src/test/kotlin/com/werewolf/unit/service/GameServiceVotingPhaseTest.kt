@@ -13,8 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
-import org.mockito.kotlin.any
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
 import java.util.*
 
@@ -200,7 +198,7 @@ class GameServiceVotingPhaseTest {
         val tally = voting["tally"] as List<Map<String, Any?>>
         assertThat(tally).hasSize(1)
         assertThat(tally[0]["playerId"]).isEqualTo("u2")
-        assertThat(tally[0]["votes"]).isEqualTo(2)
+        assertThat(tally[0]["votes"]).isEqualTo(2.0)
         val voters = tally[0]["voters"] as List<Map<String, Any?>>
         assertThat(voters).hasSize(2)
     }
