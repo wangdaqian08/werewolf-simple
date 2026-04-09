@@ -12,7 +12,6 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {execSync} from 'child_process'
 
 let ctx: GameContext
 
@@ -347,17 +346,6 @@ test.describe('Voting tie → revote → game proceeds', () => {
     })
     testInfo.attach('initial-game-state', { body: JSON.stringify(initialPhase, null, 2) })
 
-    // Check backend game status using STATUS command
-    try {
-      const statusOutput = execSync(
-        `./scripts/act.sh STATUS --room ${ctx.roomCode}`, 
-        { encoding: 'utf8', cwd: '/Users/dq/workspace/werewolf-simple' }
-      )
-      testInfo.attach('backend-game-status', { body: statusOutput })
-    } catch (error) {
-      testInfo.attach('status-check-failed', { body: `Failed to check game status: ${error}` })
-    }
-
     /** Complete a vote cycle: abstain → reveal → continue. Handles revotes. */
     async function completeVote() {
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -464,18 +452,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
           }
         }
       }
-      
-      // Check backend game status using STATUS command
-      try {
-        const statusOutput = execSync(
-          `./scripts/act.sh STATUS --room ${ctx.roomCode}`, 
-          { encoding: 'utf8', cwd: '/Users/dq/workspace/werewolf-simple' }
-        )
-        testInfo.attach(`backend-status-round-${round}`, { body: statusOutput })
-      } catch (error) {
-        testInfo.attach(`status-failed-round-${round}`, { body: `Failed to check game status: ${error}` })
-      }
-      
+
       // Wait and retry
       await ctx.hostPage.waitForTimeout(3_000)
     }
