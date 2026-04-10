@@ -416,6 +416,68 @@ class VotingPipelineTest {
     }
 
     @Test
+    fun `revealTally - unrevealed Idiot sheriff voted out, survives and keeps sheriff badge`() {
+        val host = player(hostId, 0)
+        val idiot = player("u1", 1, PlayerRole.IDIOT).also { it.sheriff = true }
+        val wolf = player("u2", 2, PlayerRole.WEREWOLF)
+        val context = ctx(game(), host, idiot, wolf)
+
+        val votes = listOf(vote("u2", "u1"), vote("u3", "u1"))
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(votes)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(idiot))
+        stubLoader(host, idiot, wolf) // everyone still alive (idiot survives)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        // Idiot survives and keeps sheriff badge
+        assertThat(idiot.alive).isTrue()
+        assertThat(idiot.sheriff).isTrue()
+        assertThat(idiot.canVote).isFalse()
+        assertThat(idiot.idiotRevealed).isTrue()
+        verify(gamePlayerRepository).save(idiot)
+    }
+
+    @Test
+    fun `handleBadge - revealed Idiot sheriff can pass badge despite canVote=false`() {
+        val host = player(hostId, 0)
+        val idiot = player("u1", 1, PlayerRole.IDIOT).also {
+            it.sheriff = true
+            it.canVote = false
+            it.idiotRevealed = true
+            it.alive = true
+        }
+        val target = player("u2", 2, PlayerRole.VILLAGER)
+        // Create game with idiot as sheriff
+        val gameWithSheriff = game(VotingSubPhase.BADGE_HANDOVER.name, "u1")
+        val context = ctx(gameWithSheriff, host, idiot, target)
+
+        // Idiot sheriff is passing badge - use idiot's userId as actor
+        val req = req("u1", ActionType.BADGE_PASS, "u2")
+
+        // Mock game player repository to return players
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(idiot))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(target))
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        stubLoader(host, idiot, target)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+
+        val result = votingPipeline.handleBadge(req, context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        // Idiot loses sheriff badge but stays alive
+        assertThat(idiot.sheriff).isFalse()
+        assertThat(idiot.alive).isTrue()
+        assertThat(idiot.canVote).isFalse()  // still can't vote
+        assertThat(idiot.idiotRevealed).isTrue()  // still revealed
+        // Target gets sheriff badge
+        assertThat(target.sheriff).isTrue()
+    }
+
+    @Test
     fun `submitVote - success, vote saved and broadcast`() {
         val voter = player(hostId, 0)
         val target = player("u2", 2)

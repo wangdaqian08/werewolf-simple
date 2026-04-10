@@ -96,14 +96,12 @@ class VotingPipeline(
         val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
             context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
         )
-        val tally: Map<String, Int> = votes
-            .mapNotNull { it.targetUserId }
-            .groupingBy { it }
-            .eachCount()
+        val tally: Map<String, Double> = TallyCalculator.calculateWeightedTally(
+            votes,
+            context.game.sheriffUserId
+        )
 
-        val maxVotes = tally.values.maxOrNull() ?: 0
-        val topCandidates = tally.filterValues { it == maxVotes }.keys.toList()
-        val eliminated = if (topCandidates.size == 1 && maxVotes > 0) topCandidates.first() else null
+        val eliminated = TallyCalculator.findTopCandidate(tally)
         val wasRevote = context.game.subPhase == VotingSubPhase.RE_VOTING.name
 
         context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
@@ -298,76 +296,6 @@ class VotingPipeline(
 
                 }
 
-    // ── Internal helpers ──────────────────────────────────────────────────────
-
-    private fun eliminateByVote(context: GameContext, targetId: String) {
-        val player = gamePlayerRepository.findByGameIdAndUserId(context.gameId, targetId)
-            .orElse(null) ?: return
-
-        // Check onEliminationPending hook: allows role handlers to veto or modify elimination
-        val modifier = handlers.find { it.role == player.role }?.onEliminationPending(context, targetId)
-        if (modifier?.cancelled == true) {
-            modifier.extraEvents.forEach { stompPublisher.broadcastGame(context.gameId, it) }
-            afterElimination(context)
-            return
-        }
-
-        // Idiot reveal: first elimination survives but permanently loses voting right
-        if (player.role == PlayerRole.IDIOT && !player.idiotRevealed) {
-            player.canVote = false
-            player.idiotRevealed = true
-            gamePlayerRepository.save(player)
-            stompPublisher.broadcastGame(
-                context.gameId,
-                DomainEvent.IdiotRevealed(context.gameId, targetId)
-            )
-            // No elimination — day phase ends normally without HUNTER or BADGE_HANDOVER
-            afterElimination(context)
-            return
-        }
-
-        player.alive = false
-        gamePlayerRepository.save(player)
-
-        // Record elimination
-        val history = EliminationHistory(
-            gameId = context.gameId,
-            dayNumber = context.game.dayNumber,
-            eliminatedUserId = targetId,
-            eliminatedRole = player.role,
-        )
-        eliminationHistoryRepository.save(history)
-
-        stompPublisher.broadcastGame(
-            context.gameId,
-            DomainEvent.PlayerEliminated(context.gameId, targetId, player.role)
-        )
-
-        // Hunter gets to shoot
-        if (player.role == PlayerRole.HUNTER) {
-            context.game.subPhase = VotingSubPhase.HUNTER_SHOOT.name
-            gameRepository.save(context.game)
-            stompPublisher.broadcastGame(
-                context.gameId,
-                DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.HUNTER_SHOOT.name)
-            )
-            return
-        }
-
-        // Sheriff needs to pass the badge
-        if (targetId == context.game.sheriffUserId) {
-            context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
-            gameRepository.save(context.game)
-            stompPublisher.broadcastGame(
-                context.gameId,
-                DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.BADGE_HANDOVER.name)
-            )
-            return
-        }
-
-        afterElimination(context)
-    }
-
     /** Check win condition; if no winner, stay in VOTE_RESULT for host to proceed to night. */
     private fun afterElimination(context: GameContext) {
         val updatedContext = contextLoader.load(context.gameId)
@@ -387,21 +315,6 @@ class VotingPipeline(
         } else {
             goToNight(updatedContext)
         }
-    }
-
-    /** Clear first-round votes and open a second vote round (open to all living candidates). */
-    private fun initiateRevote(context: GameContext) {
-        val existingVotes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
-            context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
-        )
-        voteRepository.deleteAll(existingVotes)
-
-        context.game.subPhase = VotingSubPhase.RE_VOTING.name
-        gameRepository.save(context.game)
-        stompPublisher.broadcastGame(
-            context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.RE_VOTING.name)
-        )
     }
 
     private fun goToNight(context: GameContext) {

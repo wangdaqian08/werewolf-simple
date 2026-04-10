@@ -108,7 +108,7 @@ test('POST /debug/sheriff/phase SPEECH_AUDIENCE — shows speech screen as audie
 
 test('POST /debug/sheriff/phase VOTING — shows voting screen', async ({ page }) => {
   await goToSheriffView(page)
-  await page.locator('[data-testid="debug-sheriff-btns"]').getByRole('button', { name: 'Voting' }).click()
+  await page.locator('[data-testid="debug-sheriff-voting"]').click()
   await page.waitForTimeout(70)
   await expect(page.getByText(/投票|Vote|VOTING/i).first()).toBeVisible()
 })

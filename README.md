@@ -196,4 +196,39 @@ at `werewolf-simple/frontend` folder
 
 - All real E2E tests
 
-`npx playwright test --config=playwright.real.config.ts` 
+`npx playwright test --config=playwright.real.config.ts`
+
+## E2E Testing Best Practices
+
+### Common Pitfalls
+
+**1. Initialization Consistency**
+- All tests in the same suite should have identical initialization logic
+- Missing initialization steps (like `START_NIGHT`) can cause tests to hang or fail mysteriously
+- Always verify that each test has the same setup as passing tests
+
+**2. Timeout Settings**
+- Complex E2E tests need adequate timeout periods (90s+ for full game flows)
+- Short timeouts (30s) can prevent proper debugging and error diagnosis
+- Set `testInfo.setTimeout(90_000)` for comprehensive test scenarios
+
+**3. State Diagnosis**
+- Capture game state early in tests, not just at failure points
+- Log phase transitions, button states, and game wrap information
+- Use `testInfo.attach()` to record diagnostic data for debugging
+
+**4. Debugging Approach**
+- Start with simple solutions before complex workarounds
+- Check if tests have matching initialization logic
+- Verify game state progression before adding complex waiting strategies
+- Don't over-engineer solutions for simple missing initialization steps
+
+**5. Multi-browser Testing**
+- Ensure all browsers synchronize state correctly
+- Use `verifyAllBrowsersPhase()` to confirm phase transitions across all clients
+- Test role-specific functionality from multiple perspectives
+
+**Example: Idiot Role Testing**
+- Tests 1 & 2 had different initialization → test2 failed
+- Solution: Added `act('START_NIGHT', ...)` to test2
+- Lesson: Always compare initialization logic between passing and failing tests 

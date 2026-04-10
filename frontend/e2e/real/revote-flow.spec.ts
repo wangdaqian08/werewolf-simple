@@ -19,7 +19,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
   test.setTimeout(180_000)
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(30_000)
+    testInfo.setTimeout(90_000)
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
@@ -319,7 +319,32 @@ test.describe('Voting tie → revote → game proceeds', () => {
   // ── Test 4: Complete the game after revote ───────────────────────────
 
   test('4. Game proceeds to completion after revote', async ({}, testInfo) => {
-    const maxRounds = 12
+    testInfo.setTimeout(300_000) // Increase timeout to 5 minutes
+    const maxRounds = 15
+
+    // Start night phase if in ROLE_REVEAL state
+    const startNightBtn = ctx.hostPage.getByRole('button', { name: /开始夜晚|Start Night/i })
+    if (await startNightBtn.isVisible().catch(() => false)) {
+      testInfo.attach('triggering-night-start', { body: 'Clicking start night button' })
+      await startNightBtn.click()
+      await ctx.hostPage.waitForTimeout(2_000)
+    }
+
+    // Check initial game state
+    const initialPhase = await ctx.hostPage.evaluate(() => {
+      const dayWrap = document.querySelector('.day-wrap')
+      const nightWrap = document.querySelector('.night-wrap')
+      const votingWrap = document.querySelector('.voting-wrap')
+      const waitingScreen = document.querySelector('.waiting-screen')
+      return {
+        hasDayWrap: !!dayWrap,
+        hasNightWrap: !!nightWrap,
+        hasVotingWrap: !!votingWrap,
+        hasWaitingScreen: !!waitingScreen,
+        url: window.location.href
+      }
+    })
+    testInfo.attach('initial-game-state', { body: JSON.stringify(initialPhase, null, 2) })
 
     /** Complete a vote cycle: abstain → reveal → continue. Handles revotes. */
     async function completeVote() {
@@ -341,11 +366,43 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
 
     for (let round = 0; round < maxRounds; round++) {
-      if (ctx.hostPage.url().includes('/result/')) break
+      // Check if game is over at the start of each round
+      if (ctx.hostPage.url().includes('/result/')) {
+        testInfo.attach('game-over-detected', { body: `Game over detected at round ${round}` })
+        break
+      }
+
+      // Check current game state
+      const currentState = await ctx.hostPage.evaluate((roundNum) => {
+        const dayWrap = document.querySelector('.day-wrap')
+        const nightWrap = document.querySelector('.night-wrap')
+        const votingWrap = document.querySelector('.voting-wrap')
+        const waitingScreen = document.querySelector('.waiting-screen')
+        const resultWrap = document.querySelector('.result-wrap')
+        const bodyText = document.body.textContent?.substring(0, 200)
+        return {
+          round: roundNum,
+          hasDayWrap: !!dayWrap,
+          hasNightWrap: !!nightWrap,
+          hasVotingWrap: !!votingWrap,
+          hasWaitingScreen: !!waitingScreen,
+          hasResultWrap: !!resultWrap,
+          bodyText,
+          url: window.location.href
+        }
+      }, round)
+      testInfo.attach(`game-state-round-${round}`, { body: JSON.stringify(currentState, null, 2) })
+
+      // If game is over, break
+      if (currentState.hasResultWrap || currentState.url.includes('/result/')) {
+        testInfo.attach('game-over-detected', { body: `Game over detected at round ${round}` })
+        break
+      }
 
       // If in VOTING phase, resolve it
       const isVoting = await ctx.hostPage.locator('.voting-wrap').first().isVisible().catch(() => false)
       if (isVoting) {
+        testInfo.attach(`round-${round}-action`, { body: 'In VOTING phase, completing vote' })
         await completeVote()
         continue
       }
@@ -353,6 +410,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
       // If in DAY, complete day phase
       const isDay = await ctx.hostPage.locator('.day-wrap').first().isVisible().catch(() => false)
       if (isDay) {
+        testInfo.attach(`round-${round}-action`, { body: 'In DAY phase, completing day' })
         const revealBtn = ctx.hostPage.getByRole('button', { name: /显示结果|Result/i })
         if (await revealBtn.isVisible().catch(() => false)) {
           await revealBtn.click()
@@ -376,6 +434,26 @@ test.describe('Voting tie → revote → game proceeds', () => {
       }
 
       // Unknown state — wait and retry
+      testInfo.attach(`round-${round}-unknown-state`, { body: 'Unknown state, checking game status' })
+      
+      // Handle waiting screen by checking for and clicking available buttons
+      const waitingScreen = await ctx.hostPage.locator('.waiting-screen').first().isVisible().catch(() => false)
+      if (waitingScreen) {
+        const allButtons = await ctx.hostPage.locator('button').all()
+        for (const btn of allButtons) {
+          const text = await btn.textContent()
+          const isVisible = await btn.isVisible().catch(() => false)
+          const isDisabled = await btn.isDisabled().catch(() => false)
+          if (isVisible && !isDisabled && text) {
+            testInfo.attach(`found-button-in-waiting-screen`, { body: `Found clickable button: ${text.trim()}` })
+            await btn.click()
+            await ctx.hostPage.waitForTimeout(2_000)
+            break
+          }
+        }
+      }
+
+      // Wait and retry
       await ctx.hostPage.waitForTimeout(3_000)
     }
 

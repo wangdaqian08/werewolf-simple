@@ -52,6 +52,8 @@ export interface GameContext {
 export interface GameSetupOptions {
   totalPlayers?: number
   hasSheriff?: boolean
+  /** Custom roles to include in the game. If not provided, uses default configuration. */
+  roles?: RoleName[]
   /** Which roles to open browsers for. Defaults to all special roles + 1 villager. */
   browserRoles?: RoleName[]
 }
@@ -104,6 +106,38 @@ export async function setupGame(
   } else if (totalPlayers < current) {
     for (let i = 0; i < current - totalPlayers; i++) {
       await hostPage.locator('.stepper-btn').first().click()
+    }
+  }
+
+  // Configure custom roles if provided
+  if (opts.roles && opts.roles.length > 0) {
+    // Default optional roles that are enabled by default
+    const defaultOptional = ['SEER', 'WITCH', 'HUNTER']
+    const requiredRoles = ['WEREWOLF', 'VILLAGER']
+    const allOptionalRoles = ['SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT']
+    
+    // For each optional role, toggle to match desired state
+    for (const role of allOptionalRoles) {
+      const shouldBeEnabled = opts.roles.includes(<"WEREWOLF" | "SEER" | "WITCH" | "GUARD" | "HUNTER" | "IDIOT" | "VILLAGER">role)
+      
+      // Find the role row
+      const roleRow = hostPage.locator('.role-row').filter({ hasText: new RegExp(role, 'i') })
+      
+      // Check current state - if has toggle-on, it's enabled; toggle-off means disabled
+      const toggleOn = roleRow.locator('.toggle-on')
+      const toggleOff = roleRow.locator('.toggle-off')
+      
+      const isCurrentlyEnabled = (await toggleOn.count()) > 0
+      
+      // Toggle if state doesn't match
+      if (isCurrentlyEnabled !== shouldBeEnabled) {
+        // Click the appropriate toggle
+        const toggleToClick = isCurrentlyEnabled ? toggleOn : toggleOff
+        if ((await toggleToClick.count()) > 0) {
+          await toggleToClick.click()
+          await hostPage.waitForTimeout(300)
+        }
+      }
     }
   }
 

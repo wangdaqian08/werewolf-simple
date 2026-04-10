@@ -3,6 +3,7 @@ package com.werewolf.service
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.voting.TallyCalculator
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import org.springframework.stereotype.Service
@@ -226,10 +227,10 @@ class GameService(
                 VotingSubPhase.BADGE_HANDOVER.name,
             )
 
-            val rawTally: Map<String, Int> = votes
-                .mapNotNull { it.targetUserId }
-                .groupingBy { it }
-                .eachCount()
+            val rawTally: Map<String, Double> = TallyCalculator.calculateWeightedTally(
+                votes,
+                game.sheriffUserId
+            )
 
             val tallyList = if (tallyRevealed) {
                 rawTally.entries.map { (targetId, voteCount) ->
@@ -251,7 +252,7 @@ class GameService(
                         "votes" to voteCount,
                         "voters" to voters,
                     )
-                }.sortedByDescending { it["votes"] as Int }
+                }.sortedByDescending { it["votes"] as Double }
             } else null
 
             val elimHistory = eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
@@ -295,7 +296,7 @@ class GameService(
             "subPhase" to game.subPhase,
             "dayNumber" to game.dayNumber,
             "sheriffUserId" to game.sheriffUserId,
-            "hasSheriff" to room.hasSheriff,
+            "hasSheriff" to room?.hasSheriff,
             "winner" to game.winner?.name,
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,

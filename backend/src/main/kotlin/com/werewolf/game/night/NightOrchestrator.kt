@@ -33,11 +33,11 @@ class NightOrchestrator(
      * Werewolves are always included; other roles follow the room config.
      */
     fun nightSequence(context: GameContext): List<NightSubPhase> {
-        val activeRoles = mutableSetOf(PlayerRole.WEREWOLF)
+        val activeRoles = mutableSetOf<PlayerRole>(PlayerRole.WEREWOLF)
         if (context.room.hasSeer) activeRoles.add(PlayerRole.SEER)
         if (context.room.hasWitch) activeRoles.add(PlayerRole.WITCH)
         if (context.room.hasGuard) activeRoles.add(PlayerRole.GUARD)
-        if (context.room.hasIdiot) activeRoles.add(PlayerRole.IDIOT)
+        // Note: IDIOT has no night sub-phases, so we don't need to check for it
 
         return handlers
             .filter { it.role in activeRoles }
@@ -221,6 +221,18 @@ class NightOrchestrator(
                     // Send both events
                     stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, nextAliveSubPhase))
                     stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+                    
+                    // Additional check: reload context and check if the next sub-phase has no alive players
+                    // We need to check after the sub-phase change is saved
+                    val updatedContext = contextLoader.load(gameId)
+                    val roleForNextPhase = getRoleForSubPhase(nextAliveSubPhase)
+                    if (roleForNextPhase != null) {
+                        val hasAlivePlayersForRole = updatedContext.alivePlayers.any { it.role == roleForNextPhase }
+                        if (!hasAlivePlayersForRole) {
+                            // No alive players for this role - advance immediately
+                            advance(gameId, nextAliveSubPhase)
+                        }
+                    }
                 }
             }
         }

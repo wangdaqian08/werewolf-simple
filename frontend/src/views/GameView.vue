@@ -169,68 +169,256 @@
     <div v-if="isMock" class="debug-panel">
       <div class="debug-title">🛠 Debug — Role Reveal</div>
       <div class="debug-btns">
-        <button class="debug-btn" @click="debugStartGame">Role Reveal</button>
-        <button class="debug-btn" @click="debugSkipRole">Skip → Sheriff</button>
-        <button class="debug-btn" @click="debugSkipToNight">Skip → Night</button>
-        <button class="debug-btn" @click="debugConfirmAll">All Confirmed</button>
+        <button class="debug-btn" data-testid="debug-role-reveal" @click="debugStartGame">
+          Role Reveal
+        </button>
+        <button class="debug-btn" data-testid="debug-skip-sheriff" @click="debugSkipRole">
+          Skip → Sheriff
+        </button>
+        <button class="debug-btn" data-testid="debug-skip-night" @click="debugSkipToNight">
+          Skip → Night
+        </button>
+        <button class="debug-btn" data-testid="debug-confirm-all" @click="debugConfirmAll">
+          All Confirmed
+        </button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Day Scenarios</div>
       <div class="debug-btns" data-testid="debug-day-scenario-btns">
-        <button class="debug-btn" @click="debugScenario('HOST_HIDDEN')">Host·Hidden</button>
-        <button class="debug-btn" @click="debugScenario('HOST_REVEALED')">Host·Revealed</button>
-        <button class="debug-btn" @click="debugScenario('DEAD')">Dead</button>
-        <button class="debug-btn" @click="debugScenario('ALIVE_HIDDEN')">Alive·Hidden</button>
-        <button class="debug-btn" @click="debugScenario('ALIVE_REVEALED')">Alive·Revealed</button>
-        <button class="debug-btn" @click="debugScenario('GUEST')">Guest</button>
+        <button
+          class="debug-btn"
+          data-testid="debug-scenario-host-hidden"
+          @click="debugScenario('HOST_HIDDEN')"
+        >
+          Host·Hidden
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-scenario-host-revealed"
+          @click="debugScenario('HOST_REVEALED')"
+        >
+          Host·Revealed
+        </button>
+        <button class="debug-btn" data-testid="debug-scenario-dead" @click="debugScenario('DEAD')">
+          Dead
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-scenario-alive-hidden"
+          @click="debugScenario('ALIVE_HIDDEN')"
+        >
+          Alive·Hidden
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-scenario-alive-revealed"
+          @click="debugScenario('ALIVE_REVEALED')"
+        >
+          Alive·Revealed
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-scenario-guest"
+          @click="debugScenario('GUEST')"
+        >
+          Guest
+        </button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Day Phase</div>
       <div class="debug-btns" data-testid="debug-day-btns">
-        <button class="debug-btn" @click="debugDay('HIDDEN')">Hidden</button>
-        <button class="debug-btn" @click="debugDay('REVEALED')">Revealed</button>
+        <button class="debug-btn" data-testid="debug-day-hidden" @click="debugDay('HIDDEN')">
+          Hidden
+        </button>
+        <button class="debug-btn" data-testid="debug-day-revealed" @click="debugDay('REVEALED')">
+          Revealed
+        </button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Night Screens</div>
       <div class="debug-btns">
-        <button class="debug-btn" @click="debugNight('WEREWOLF')">Werewolf</button>
-        <button class="debug-btn" @click="debugNight('SEER_PICK')">Seer: Pick</button>
-        <button class="debug-btn" @click="debugNight('SEER_RESULT')">Seer: Result</button>
-        <button class="debug-btn" @click="debugNight('WITCH')">Witch</button>
-        <button class="debug-btn" @click="debugNight('GUARD')">Guard</button>
-        <button class="debug-btn" @click="debugNight('WAITING')">Waiting</button>
-        <button class="debug-btn" @click="debugNight('DEAD')">Dead Night</button>
-        <button class="debug-btn debug-btn-exit" @click="debugNightAdvance">→ Day</button>
+        <button
+          class="debug-btn"
+          data-testid="debug-night-werewolf"
+          @click="debugNight('WEREWOLF')"
+        >
+          Werewolf
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-night-seer-pick"
+          @click="debugNight('SEER_PICK')"
+        >
+          Seer: Pick
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-night-seer-result"
+          @click="debugNight('SEER_RESULT')"
+        >
+          Seer: Result
+        </button>
+        <button class="debug-btn" data-testid="debug-night-witch" @click="debugNight('WITCH')">
+          Witch
+        </button>
+        <button class="debug-btn" data-testid="debug-night-guard" @click="debugNight('GUARD')">
+          Guard
+        </button>
+        <button class="debug-btn" data-testid="debug-night-waiting" @click="debugNight('WAITING')">
+          Waiting
+        </button>
+        <button class="debug-btn" data-testid="debug-night-dead" @click="debugNight('DEAD')">
+          Dead Night
+        </button>
+        <button
+          class="debug-btn debug-btn-exit"
+          data-testid="debug-night-advance"
+          @click="debugNightAdvance"
+        >
+          → Day
+        </button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Voting Screens</div>
       <div class="debug-btns" data-testid="debug-voting-btns">
-        <button class="debug-btn" @click="debugVoting('VOTING')">Voting</button>
-        <button class="debug-btn" @click="debugVoting('VOTING_VOTED')">Voted</button>
-        <button class="debug-btn" @click="debugVoting('VOTING_REVEALED')">Revealed</button>
-        <button class="debug-btn" @click="debugVoting('HUNTER_SHOOT')">Hunter</button>
-        <button class="debug-btn" @click="debugVoting('BADGE_HANDOVER')">Badge: Pick</button>
-        <button class="debug-btn" @click="debugVoting('BADGE_SHERIFF')">Badge: Sheriff</button>
-        <button class="debug-btn" @click="debugVoting('BADGE_BURNED')">Badge: Burned</button>
-        <button class="debug-btn" @click="debugVoting('VOTING_NO_HISTORY')">No History</button>
-        <button class="debug-btn" @click="debugVoting('VOTING_NO_DATA')">No Data</button>
-        <button class="debug-btn" @click="debugVoting('IDIOT_REVEAL')">Idiot Reveal</button>
-        <button class="debug-btn" @click="debugVoting('RE_VOTING')">Re-Vote</button>
-        <button class="debug-btn debug-btn-exit" @click="debugVotingAdvance">→ Night</button>
+        <button class="debug-btn" data-testid="debug-voting" @click="debugVoting('VOTING')">
+          Voting
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-voted"
+          @click="debugVoting('VOTING_VOTED')"
+        >
+          Voted
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-revealed"
+          @click="debugVoting('VOTING_REVEALED')"
+        >
+          Revealed
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-hunter"
+          @click="debugVoting('HUNTER_SHOOT')"
+        >
+          Hunter
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-badge-handover"
+          @click="debugVoting('BADGE_HANDOVER')"
+        >
+          Badge: Pick
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-badge-sheriff"
+          @click="debugVoting('BADGE_SHERIFF')"
+        >
+          Badge: Sheriff
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-badge-burned"
+          @click="debugVoting('BADGE_BURNED')"
+        >
+          Badge: Burned
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-no-history"
+          @click="debugVoting('VOTING_NO_HISTORY')"
+        >
+          No History
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-no-data"
+          @click="debugVoting('VOTING_NO_DATA')"
+        >
+          No Data
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-idiot-reveal"
+          @click="debugVoting('IDIOT_REVEAL')"
+        >
+          Idiot Reveal
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-voting-re-voting"
+          @click="debugVoting('RE_VOTING')"
+        >
+          Re-Vote
+        </button>
+        <button
+          class="debug-btn debug-btn-exit"
+          data-testid="debug-voting-advance"
+          @click="debugVotingAdvance"
+        >
+          → Night
+        </button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Game Over</div>
       <div class="debug-btns">
-        <button class="debug-btn debug-btn-exit" @click="debugGameOver('VILLAGER')">
+        <button
+          class="debug-btn debug-btn-exit"
+          data-testid="debug-game-over-village"
+          @click="debugGameOver('VILLAGER')"
+        >
           → Village Wins
         </button>
-        <button class="debug-btn debug-btn-exit" @click="debugGameOver('WEREWOLF')">
+        <button
+          class="debug-btn debug-btn-exit"
+          data-testid="debug-game-over-wolf"
+          @click="debugGameOver('WEREWOLF')"
+        >
           → Wolf Wins
         </button>
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Sheriff Screens</div>
       <div class="debug-btns" data-testid="debug-sheriff-btns">
-        <button class="debug-btn" @click="debugSheriff('SIGNUP')">Sign-up</button>
-        <button class="debug-btn" @click="debugSheriff('SPEECH_CANDIDATE')">Speech: Me</button>
-        <button class="debug-btn" @click="debugSheriff('SPEECH_AUDIENCE')">Speech: Watch</button>
-        <button class="debug-btn" @click="debugSheriff('VOTING')">Voting</button>
-        <button class="debug-btn" @click="debugSheriff('RESULT')">Result</button>
-        <button class="debug-btn debug-btn-exit" @click="debugExitSheriff">← Day</button>
+        <button
+          class="debug-btn"
+          data-testid="debug-sheriff-signup"
+          @click="debugSheriff('SIGNUP')"
+        >
+          Sign-up
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-sheriff-speech-candidate"
+          @click="debugSheriff('SPEECH_CANDIDATE')"
+        >
+          Speech: Me
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-sheriff-speech-audience"
+          @click="debugSheriff('SPEECH_AUDIENCE')"
+        >
+          Speech: Watch
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-sheriff-voting"
+          @click="debugSheriff('VOTING')"
+        >
+          Voting
+        </button>
+        <button
+          class="debug-btn"
+          data-testid="debug-sheriff-result"
+          @click="debugSheriff('RESULT')"
+        >
+          Result
+        </button>
+        <button
+          class="debug-btn debug-btn-exit"
+          data-testid="debug-sheriff-exit"
+          @click="debugExitSheriff"
+        >
+          ← Day
+        </button>
       </div>
       <template
         v-if="
