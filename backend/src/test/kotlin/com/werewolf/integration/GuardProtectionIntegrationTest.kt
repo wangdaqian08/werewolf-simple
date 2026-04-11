@@ -50,7 +50,7 @@ class GuardProtectionIntegrationTest {
     @BeforeEach
     fun setUp() {
         guardHandler = GuardHandler(nightPhaseRepository)
-        wolfHandler = WerewolfHandler(nightPhaseRepository)
+        wolfHandler = WerewolfHandler(nightPhaseRepository, audioService)
         nightOrchestrator = NightOrchestrator(
             handlers = listOf(wolfHandler, guardHandler),
             gameRepository = gameRepository,

@@ -19,7 +19,24 @@ class AudioServiceTest {
 
     @BeforeEach
     fun setUp() {
+        // Initialize RoleRegistry for unit tests
+        initRoleRegistry()
+
         audioService = AudioService(nightPhaseRepository)
+    }
+
+    private fun initRoleRegistry() {
+        // Manually register role configs for unit tests
+        val configs = listOf(
+            com.werewolf.audio.impl.WerewolfAudioConfig(),
+            com.werewolf.audio.impl.SeerAudioConfig(),
+            com.werewolf.audio.impl.WitchAudioConfig(),
+            com.werewolf.audio.impl.GuardAudioConfig(),
+            com.werewolf.audio.impl.HunterAudioConfig(),
+            com.werewolf.audio.impl.IdiotAudioConfig(),
+            com.werewolf.audio.impl.VillagerAudioConfig()
+        )
+        com.werewolf.audio.RoleRegistry.registerAll(configs)
     }
 
     // ── calculatePhaseTransition Tests ──────────────────────────────────────

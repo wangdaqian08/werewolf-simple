@@ -195,16 +195,31 @@ class NightOrchestrator(
                 }
 
             if (nextAliveSubPhase == null) {
-                // All subsequent roles are dead - skip directly to DAY
+                // All subsequent roles are dead - skip to DAY with delayed audio for dead roles
+                val skippedRoles = sequence.drop(currentIdx + 1)
+                if (skippedRoles.isNotEmpty()) {
+                    val audioDelayMs = 5_000L * skippedRoles.size.coerceAtMost(2)
+                    val audioSequence = audioService.calculateDeadRoleAudioSequence(
+                        gameId = gameId,
+                        skippedRoles = skippedRoles,
+                        targetSubPhase = NightSubPhase.COMPLETE
+                    )
+                    // Schedule audio delay for dead roles
+                    nightWaitingScheduler.scheduleAudioDelay(gameId, audioSequence, audioDelayMs)
+                }
                 resolveNightKills(context, nightPhase)
             } else {
                 val skippedCount = sequence.indexOf(nextAliveSubPhase) - (currentIdx + 1)
                 if (skippedCount > 0) {
-                    // Skip dead roles with a brief delay for better UX
-                    nightWaitingScheduler.scheduleAdvance(
-                        gameId,
-                        5_000L * skippedCount.coerceAtMost(2),
-                        nextAliveSubPhase
+                    // Skip dead roles with new improved UX: immediate UI update + delayed audio
+                    val skippedRoles = sequence.subList(currentIdx + 1, sequence.indexOf(nextAliveSubPhase))
+                    val audioDelayMs = 5_000L * skippedCount.coerceAtMost(2)
+
+                    advanceToSubPhaseWithDelayedAudio(
+                        gameId = gameId,
+                        skippedRoles = skippedRoles,
+                        targetSubPhase = nextAliveSubPhase,
+                        audioDelayMs = audioDelayMs
                     )
                 } else {
                     // Advance immediately to next alive role
@@ -312,50 +327,134 @@ class NightOrchestrator(
             gameRepository.save(game)
 
             // Calculate audio sequence for DAY phase
-            val audioSequence = audioService.calculatePhaseTransition(
-                gameId = gameId,
-                oldPhase = GamePhase.NIGHT,
-                newPhase = GamePhase.DAY,
-                oldSubPhase = null,
-                newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-                room = updatedContext.room,
-            )
 
-            // Register transaction synchronization to broadcast after commit
-            if (TransactionSynchronizationManager.isActualTransactionActive()) {
-                TransactionSynchronizationManager.registerSynchronization(object :
-                    org.springframework.transaction.support.TransactionSynchronization {
-                    override fun afterCommit() {
-                        // Broadcast NightResult first, then PhaseChanged, then AudioSequence
-                        stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
-                        stompPublisher.broadcastGame(
-                            gameId,
-                            DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
+                        val audioSequence = audioService.calculatePhaseTransition(
+
+                            gameId = gameId,
+
+                            oldPhase = GamePhase.NIGHT,
+
+                            newPhase = GamePhase.DAY,
+
+                            oldSubPhase = null,
+
+                            newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
+
+                            room = updatedContext.room,
+
                         )
-                        stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
-                        // Fire onDayEnter hooks — allows role handlers to produce day-start events
-                        val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
-                        handlers.filter { it.role in activeRoles }.forEach { handler ->
-                            val events = handler.onDayEnter(updatedContext)
-                            events.forEach { stompPublisher.broadcastGame(gameId, it) }
+
+            
+
+                        // Register transaction synchronization to broadcast after commit
+
+                        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+
+                            TransactionSynchronizationManager.registerSynchronization(object :
+
+                                org.springframework.transaction.support.TransactionSynchronization {
+
+                                override fun afterCommit() {
+
+                                    // Broadcast NightResult first, then PhaseChanged, then AudioSequence
+
+                                    stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+
+            
+
+                                    stompPublisher.broadcastGame(
+
+                                        gameId,
+
+                                        DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
+
+                                    )
+
+                                    stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+
+                                    // Fire onDayEnter hooks — allows role handlers to produce day-start events
+
+                                    val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
+
+                                    handlers.filter { it.role in activeRoles }.forEach { handler ->
+
+                                        val events = handler.onDayEnter(updatedContext)
+
+                                        events.forEach { stompPublisher.broadcastGame(gameId, it) }
+
+                                    }
+
+                                }
+
+                            })
+
+                        } else {
+
+                            // If no transaction is active, broadcast immediately
+
+                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+
+                            stompPublisher.broadcastGame(
+
+                                gameId,
+
+                                DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
+
+                            )
+
+                            stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+
+                            // Fire onDayEnter hooks — allows role handlers to produce day-start events
+
+                            val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
+
+                            handlers.filter { it.role in activeRoles }.forEach { handler ->
+
+                                val events = handler.onDayEnter(updatedContext)
+
+                                events.forEach { stompPublisher.broadcastGame(gameId, it) }
+
+                            }
+
                         }
-                    }
-                })
-            } else {
-                // If no transaction is active, broadcast immediately
-                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
-                stompPublisher.broadcastGame(
-                    gameId,
-                    DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
-                )
-                stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
-                // Fire onDayEnter hooks — allows role handlers to produce day-start events
-                val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
-                handlers.filter { it.role in activeRoles }.forEach { handler ->
-                    val events = handler.onDayEnter(updatedContext)
-                    events.forEach { stompPublisher.broadcastGame(gameId, it) }
-                }
-            }
         }
+    }
+
+    /**
+     * Advances to a specific sub-phase with immediate UI update and delayed audio.
+     * Used when skipping dead roles to provide immediate feedback while maintaining atmosphere.
+     *
+     * Implementation based on expert team review:
+     * - UI updates immediately for better user experience
+     * - Audio plays with delay to simulate dead role operation time
+     * - Dead roles get complete audio sequence: open eyes → close eyes
+     * - Backend controls all audio sending, frontend only plays
+     */
+    @Transactional
+    fun advanceToSubPhaseWithDelayedAudio(
+        gameId: Int,
+        skippedRoles: List<NightSubPhase>,
+        targetSubPhase: NightSubPhase,
+        audioDelayMs: Long,
+    ) {
+        val context = contextLoader.load(gameId)
+        val nightPhase = context.nightPhase ?: return
+
+        // Update phase immediately (UI update)
+        nightPhase.subPhase = targetSubPhase
+        nightPhaseRepository.save(nightPhase)
+
+        // Send UI event immediately
+        stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, targetSubPhase))
+
+        // Calculate audio sequence for dead roles
+        val audioSequence = audioService.calculateDeadRoleAudioSequence(
+            gameId = gameId,
+            skippedRoles = skippedRoles,
+            targetSubPhase = targetSubPhase
+        )
+
+        // Schedule audio delay
+        nightWaitingScheduler.scheduleAudioDelay(gameId, audioSequence, audioDelayMs)
     }
 }

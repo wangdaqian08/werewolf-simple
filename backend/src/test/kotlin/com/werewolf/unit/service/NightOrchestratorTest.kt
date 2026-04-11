@@ -63,7 +63,7 @@ class NightOrchestratorTest {
     )
 
 private fun mockAudioServiceForDayTransition(r: Room) {
-        val audioSequence = com.werewolf.model.AudioSequence(
+        val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-DAY",
             phase = GamePhase.DAY,
             subPhase = DaySubPhase.RESULT_HIDDEN.name,
@@ -98,6 +98,62 @@ private fun mockAudioServiceForDayTransition(r: Room) {
             eq(gameId),
             eq(oldSubPhase),
             eq(newSubPhase)
+        )).thenReturn(audioSequence)
+    }
+
+    private fun mockAudioServiceForDeadRoleTransition(skippedRoles: List<NightSubPhase>, targetSubPhase: NightSubPhase) {
+        val audioFiles = mutableListOf<String>()
+        
+        // Add complete audio sequence for skipped (dead) roles
+        for (skippedRole in skippedRoles) {
+            if (skippedRole != NightSubPhase.WAITING) {
+                val openEyesAudio = when (skippedRole) {
+                    NightSubPhase.WEREWOLF_PICK -> "wolf_open_eyes.mp3"
+                    NightSubPhase.SEER_PICK -> "seer_open_eyes.mp3"
+                    NightSubPhase.SEER_RESULT -> null // SEER_RESULT doesn't have open eyes audio
+                    NightSubPhase.WITCH_ACT -> "witch_open_eyes.mp3"
+                    NightSubPhase.GUARD_PICK -> "guard_open_eyes.mp3"
+                    else -> null
+                }
+                val closeEyesAudio = when (skippedRole) {
+                    NightSubPhase.WEREWOLF_PICK -> "wolf_close_eyes.mp3"
+                    NightSubPhase.SEER_PICK -> "seer_close_eyes.mp3"
+                    NightSubPhase.SEER_RESULT -> "seer_close_eyes.mp3"
+                    NightSubPhase.WITCH_ACT -> "witch_close_eyes.mp3"
+                    NightSubPhase.GUARD_PICK -> "guard_close_eyes.mp3"
+                    else -> null
+                }
+                if (openEyesAudio != null) audioFiles.add(openEyesAudio)
+                if (closeEyesAudio != null) audioFiles.add(closeEyesAudio)
+            }
+        }
+
+        // Add "open eyes" audio for the target (alive) role
+        if (targetSubPhase != NightSubPhase.WAITING && targetSubPhase != NightSubPhase.COMPLETE) {
+            val openEyesAudio = when (targetSubPhase) {
+                NightSubPhase.WEREWOLF_PICK -> "wolf_open_eyes.mp3"
+                NightSubPhase.SEER_PICK -> "seer_open_eyes.mp3"
+                NightSubPhase.SEER_RESULT -> null // SEER_RESULT doesn't have open eyes audio
+                NightSubPhase.WITCH_ACT -> "witch_open_eyes.mp3"
+                NightSubPhase.GUARD_PICK -> "guard_open_eyes.mp3"
+                else -> null
+            }
+            if (openEyesAudio != null) audioFiles.add(openEyesAudio)
+        }
+
+        val audioSequence = AudioSequence(
+            id = "$gameId-${System.currentTimeMillis()}-DEAD-ROLE-$targetSubPhase",
+            phase = GamePhase.NIGHT,
+            subPhase = targetSubPhase.name,
+            audioFiles = audioFiles,
+            priority = 3,
+            timestamp = System.currentTimeMillis()
+        )
+        
+        whenever(audioService.calculateDeadRoleAudioSequence(
+            eq(gameId),
+            eq(skippedRoles),
+            eq(targetSubPhase)
         )).thenReturn(audioSequence)
     }
 
@@ -473,12 +529,12 @@ private fun mockAudioServiceForDayTransition(r: Room) {
     @Test
     fun `advance - skips WITCH_ACT when all witches are dead, schedules 20s delay to SEER_PICK`() {
         val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
         val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, witchHandler, seerHandler))
+        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler))
 
         val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
+            it.subPhase = NightSubPhase.SEER_RESULT
         }
         val wolf = player("u1", 1, PlayerRole.WEREWOLF)
         val deadWitch = player("u2", 2, PlayerRole.WITCH, alive = false)
@@ -487,20 +543,24 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         val ctx = GameContext(game(), r, listOf(wolf, deadWitch, seer), nightPhase = np)
 
         whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        mockAudioServiceForNightSubPhaseTransition(NightSubPhase.WEREWOLF_PICK, NightSubPhase.SEER_PICK)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        mockAudioServiceForDayTransition(r)
 
-        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
+        orchestrator.advance(gameId, NightSubPhase.SEER_RESULT)
 
-        // Should schedule short delay to SEER_PICK since all witches are dead and seer is alive
-        verify(nightWaitingScheduler).scheduleAdvance(gameId, 5_000, NightSubPhase.SEER_PICK)
+        // Should skip directly to resolveNightKills since witch is the only remaining role and is dead
+        verify(nightWaitingScheduler, never()).scheduleAudioDelay(any(), any(), any())
+        verify(nightPhaseRepository).save(argThat<NightPhase> { np -> np.subPhase == NightSubPhase.COMPLETE })
+        verify(stompPublisher).broadcastGame(eq(gameId), argThat { e -> e is DomainEvent.NightResult })
+        verify(gameRepository).save(argThat<Game> { g -> g.phase == GamePhase.DAY })
     }
 
     @Test
     fun `advance - skips SEER_PICK when all seers are dead, moves to WITCH_ACT`() {
         val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
         val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, witchHandler, seerHandler))
+        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler))
 
         val np = NightPhase(gameId = gameId, dayNumber = 1).also {
             it.subPhase = NightSubPhase.WEREWOLF_PICK
@@ -512,15 +572,22 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         val ctx = GameContext(game(), r, listOf(wolf, witch, deadSeer), nightPhase = np)
 
         whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightSubPhaseTransition(NightSubPhase.WEREWOLF_PICK, NightSubPhase.WITCH_ACT)
+        
+        mockAudioServiceForDeadRoleTransition(listOf(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT), NightSubPhase.WITCH_ACT)
 
         orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
 
-        // Should move to WITCH_ACT since all seers are dead
-        assertThat(np.subPhase).isEqualTo(NightSubPhase.WITCH_ACT)
-        verify(nightPhaseRepository).save(np)
-        verify(stompPublisher).broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, NightSubPhase.WITCH_ACT))
+        // Verify: UI should immediately update to WITCH_ACT
+        verify(stompPublisher).broadcastGame(eq(gameId), argThat { event ->
+            event is DomainEvent.NightSubPhaseChanged && event.subPhase == NightSubPhase.WITCH_ACT
+        })
+
+        // Verify: Audio delay should be scheduled for dead SEER roles (10 seconds because we skip 2 roles)
+        verify(nightWaitingScheduler).scheduleAudioDelay(eq(gameId), any(), eq(10_000L))
+
+        // Verify: Night phase should be updated to WITCH_ACT
+        val updatedCtx = contextLoader.load(gameId)
+        assertThat(updatedCtx.nightPhase?.subPhase).isEqualTo(NightSubPhase.WITCH_ACT)
     }
 
     @Test
@@ -585,6 +652,160 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         verify(nightPhaseRepository).save(argThat<NightPhase> { np -> np.subPhase == NightSubPhase.COMPLETE })
         verify(stompPublisher).broadcastGame(eq(gameId), argThat { event -> event is DomainEvent.NightResult })
         verify(gameRepository).save(argThat<Game> { g -> g.phase == GamePhase.DAY })
+    }
+
+    @Test
+    fun `advance - when only werewolves and villagers survive, skips all dead roles correctly`() {
+        // Scenario: Only wolves and villagers survive (seer, witch, guard all dead)
+        // Test that night phase correctly skips all dead roles and resolves kills
+        
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
+        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
+        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler, guardHandler))
+
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.WEREWOLF_PICK
+            it.wolfTargetUserId = "v1" // Wolf targets a villager
+        }
+        
+        // Only wolves alive, all special roles dead
+        val wolf1 = player("w1", 1, PlayerRole.WEREWOLF, alive = true)
+        val wolf2 = player("w2", 2, PlayerRole.WEREWOLF, alive = true)
+        val deadSeer = player("s1", 3, PlayerRole.SEER, alive = false)
+        val deadWitch = player("w1", 4, PlayerRole.WITCH, alive = false)
+        val deadGuard = player("g1", 5, PlayerRole.GUARD, alive = false)
+        val villager1 = player("v1", 6, PlayerRole.VILLAGER, alive = true) // Wolf target
+        val villager2 = player("v2", 7, PlayerRole.VILLAGER, alive = true)
+        
+        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 7,
+            hasSeer = true, hasWitch = true, hasGuard = true)
+        val ctx = GameContext(
+            game(),
+            r,
+            listOf(wolf1, wolf2, deadSeer, deadWitch, deadGuard, villager1, villager2),
+            nightPhase = np
+        )
+
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null) // No winner yet
+        mockAudioServiceForDayTransition(r)
+        
+        // Mock audio service for dead role transition
+        mockAudioServiceForDeadRoleTransition(
+            listOf(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT, NightSubPhase.WITCH_ACT, NightSubPhase.GUARD_PICK),
+            NightSubPhase.COMPLETE
+        )
+        
+        // Mock gamePlayerRepository to simulate villager being killed
+        whenever(gamePlayerRepository.findByGameIdAndUserId(eq(gameId), eq("v1")))
+            .thenReturn(Optional.of(villager1))
+
+        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
+
+        // Verify: Should schedule audio delay for dead roles (seer, witch, guard)
+        verify(nightWaitingScheduler).scheduleAudioDelay(
+            eq(gameId),
+            any(),
+            eq(10_000L) // 4 dead roles, max 2 => 10 seconds
+        )
+        
+        // Verify: Night phase completes
+        verify(nightPhaseRepository).save(argThat<NightPhase> { np -> np.subPhase == NightSubPhase.COMPLETE })
+        
+        // Verify: Game transitions to DAY
+        verify(gameRepository).save(argThat<Game> { g -> g.phase == GamePhase.DAY })
+        
+        // Verify: Night result is broadcast
+        verify(stompPublisher).broadcastGame(eq(gameId), argThat { event -> event is DomainEvent.NightResult })
+        
+        // Verify: Villager should be killed
+        verify(gamePlayerRepository).save(argThat<GamePlayer> { gp -> gp.userId == "v1" && !gp.alive })
+    }
+
+    @Test
+    fun `advance - when only werewolves and villagers survive, dead role audio sequence is correct`() {
+        // Test that dead role audio sequence is correct: seer_open_eyes, seer_close_eyes, witch_open_eyes, witch_close_eyes, guard_open_eyes, guard_close_eyes
+        
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
+        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
+        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler, guardHandler))
+
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.WEREWOLF_PICK
+            it.wolfTargetUserId = "v1"
+        }
+        
+        // Only wolves alive, all special roles dead
+        val wolf1 = player("w1", 1, PlayerRole.WEREWOLF, alive = true)
+        val wolf2 = player("w2", 2, PlayerRole.WEREWOLF, alive = true)
+        val deadSeer = player("s1", 3, PlayerRole.SEER, alive = false)
+        val deadWitch = player("w1", 4, PlayerRole.WITCH, alive = false)
+        val deadGuard = player("g1", 5, PlayerRole.GUARD, alive = false)
+        val villager1 = player("v1", 6, PlayerRole.VILLAGER, alive = true)
+        val villager2 = player("v2", 7, PlayerRole.VILLAGER, alive = true)
+        
+        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 7,
+            hasSeer = true, hasWitch = true, hasGuard = true)
+        val ctx = GameContext(
+            game(),
+            r,
+            listOf(wolf1, wolf2, deadSeer, deadWitch, deadGuard, villager1, villager2),
+            nightPhase = np
+        )
+
+        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        mockAudioServiceForDayTransition(r)
+        
+        // Mock audio service to capture the audio sequence
+        val audioSequenceCaptor = mutableListOf<AudioSequence>()
+        whenever(audioService.calculateDeadRoleAudioSequence(
+            eq(gameId),
+            eq(listOf(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT, NightSubPhase.WITCH_ACT, NightSubPhase.GUARD_PICK)),
+            eq(NightSubPhase.COMPLETE)
+        )).thenAnswer {
+            AudioSequence(
+                id = "$gameId-${System.currentTimeMillis()}-DEAD-ROLE-COMPLETE",
+                phase = GamePhase.NIGHT,
+                subPhase = NightSubPhase.COMPLETE.name,
+                audioFiles = listOf(
+                    "seer_open_eyes.mp3",
+                    "seer_close_eyes.mp3",
+                    "seer_close_eyes.mp3", // SEER_RESULT
+                    "witch_open_eyes.mp3",
+                    "witch_close_eyes.mp3",
+                    "guard_open_eyes.mp3",
+                    "guard_close_eyes.mp3"
+                ),
+                priority = 3,
+                timestamp = System.currentTimeMillis()
+            ).also { audioSequenceCaptor.add(it) }
+        }
+        
+        whenever(gamePlayerRepository.findByGameIdAndUserId(eq(gameId), eq("v1")))
+            .thenReturn(Optional.of(villager1))
+
+        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
+
+        // Verify: Audio sequence should contain all dead role audio files in correct order
+        assertThat(audioSequenceCaptor).hasSize(1)
+        val audioSequence = audioSequenceCaptor[0]
+        assertThat(audioSequence.audioFiles).containsExactly(
+            "seer_open_eyes.mp3",
+            "seer_close_eyes.mp3",
+            "seer_close_eyes.mp3", // SEER_RESULT
+            "witch_open_eyes.mp3",
+            "witch_close_eyes.mp3",
+            "guard_open_eyes.mp3",
+            "guard_close_eyes.mp3"
+        )
+        
+        // Verify: Audio delay should be 10 seconds (4 dead roles, max 2)
+        verify(nightWaitingScheduler).scheduleAudioDelay(eq(gameId), any(), eq(10_000L))
     }
 
     // ── recoverStuckNightPhase ───────────────────────────────────────────────

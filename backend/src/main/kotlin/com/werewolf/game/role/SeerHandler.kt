@@ -1,5 +1,6 @@
 package com.werewolf.game.role
 
+import com.werewolf.audio.RoleRegistry
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
@@ -70,4 +71,14 @@ class SeerHandler(private val nightPhaseRepository: NightPhaseRepository) : Role
             else -> GameActionResult.Rejected("Unknown seer action: ${action.actionType}")
         }
     }
+
+    /**
+     * Get audio configuration for this role
+     */
+    fun getAudioConfig() = RoleRegistry.getAudioConfig(role)
+
+    /**
+     * Get default delay time for dead role simulation
+     */
+    fun getDefaultDelayMs() = RoleRegistry.getDefaultDelayMs(role) ?: 5000L
 }

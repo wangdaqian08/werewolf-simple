@@ -1,5 +1,6 @@
 package com.werewolf.game.role
 
+import com.werewolf.audio.RoleRegistry
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
@@ -14,7 +15,10 @@ import org.springframework.stereotype.Component
 
 @Order(1)
 @Component
-class WerewolfHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
+class WerewolfHandler(
+    private val nightPhaseRepository: NightPhaseRepository,
+    private val audioService: com.werewolf.service.AudioService
+) : RoleHandler {
 
     override val role = PlayerRole.WEREWOLF
 
@@ -52,4 +56,17 @@ class WerewolfHandler(private val nightPhaseRepository: NightPhaseRepository) : 
         else
             GameActionResult.Success()
     }
+
+    override fun onEliminationPending(context: GameContext, targetId: String): EliminationModifier? = null
+
+    /**
+     * Get audio configuration for this role
+     * Allows handlers to access role-specific audio settings
+     */
+    fun getAudioConfig() = RoleRegistry.getAudioConfig(role)
+
+    /**
+     * Get default delay time for dead role simulation
+     */
+    fun getDefaultDelayMs() = RoleRegistry.getDefaultDelayMs(role) ?: 5000L
 }

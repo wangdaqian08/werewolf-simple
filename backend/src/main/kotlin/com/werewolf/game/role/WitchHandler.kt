@@ -1,5 +1,6 @@
 package com.werewolf.game.role
 
+import com.werewolf.audio.RoleRegistry
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
@@ -77,4 +78,14 @@ class WitchHandler(private val nightPhaseRepository: NightPhaseRepository) : Rol
         log.info("[WitchHandler] Witch action completed successfully")
         return GameActionResult.Success()
     }
+
+    /**
+     * Get audio configuration for this role
+     */
+    fun getAudioConfig() = RoleRegistry.getAudioConfig(role)
+
+    /**
+     * Get default delay time for dead role simulation
+     */
+    fun getDefaultDelayMs() = RoleRegistry.getDefaultDelayMs(role) ?: 5000L
 }

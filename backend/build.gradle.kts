@@ -63,6 +63,7 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
     runtimeOnly("com.h2database:h2")
+    implementation(kotlin("stdlib"))
 }
 
 kotlin {

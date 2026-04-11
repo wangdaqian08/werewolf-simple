@@ -1,9 +1,7 @@
 package com.werewolf.service
 
-import com.werewolf.model.AudioSequence
-import com.werewolf.model.GamePhase
-import com.werewolf.model.NightSubPhase
-import com.werewolf.model.Room
+import com.werewolf.audio.RoleRegistry
+import com.werewolf.model.*
 import com.werewolf.repository.NightPhaseRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -16,6 +14,22 @@ import org.springframework.stereotype.Service
 class AudioService(
     private val nightPhaseRepository: NightPhaseRepository,
 ) {
+
+    private val log = LoggerFactory.getLogger(AudioService::class.java)
+
+    /**
+     * Map NightSubPhase to PlayerRole
+     */
+    private fun mapSubPhaseToRole(subPhase: NightSubPhase): PlayerRole? {
+        return when (subPhase) {
+            NightSubPhase.WEREWOLF_PICK -> PlayerRole.WEREWOLF
+            NightSubPhase.SEER_PICK -> PlayerRole.SEER
+            NightSubPhase.SEER_RESULT -> PlayerRole.SEER
+            NightSubPhase.WITCH_ACT -> PlayerRole.WITCH
+            NightSubPhase.GUARD_PICK -> PlayerRole.GUARD
+            else -> null
+        }
+    }
 
     /**
      * Calculate audio sequence for phase transition
@@ -111,30 +125,22 @@ class AudioService(
     }
 
     /**
-     * Get "close eyes" audio for a role
+     * Get "close eyes" audio for a role using RoleRegistry
      */
     private fun getCloseEyesAudio(subPhase: NightSubPhase): String? {
-        return when (subPhase) {
-            NightSubPhase.WEREWOLF_PICK -> "wolf_close_eyes.mp3"
-            NightSubPhase.SEER_PICK -> "seer_close_eyes.mp3"
-            NightSubPhase.SEER_RESULT -> "seer_close_eyes.mp3"
-            NightSubPhase.WITCH_ACT -> "witch_close_eyes.mp3"
-            NightSubPhase.GUARD_PICK -> "guard_close_eyes.mp3"
-            else -> null
-        }
+        val role = mapSubPhaseToRole(subPhase) ?: return null
+        return RoleRegistry.getCloseEyesAudio(role)
     }
 
     /**
-     * Get "open eyes" audio for a role
+     * Get "open eyes" audio for a role using RoleRegistry
      */
     private fun getOpenEyesAudio(subPhase: NightSubPhase): String? {
-        return when (subPhase) {
-            NightSubPhase.WEREWOLF_PICK -> "wolf_open_eyes.mp3"
-            NightSubPhase.SEER_PICK -> "seer_open_eyes.mp3"
-            NightSubPhase.WITCH_ACT -> "witch_open_eyes.mp3"
-            NightSubPhase.GUARD_PICK -> "guard_open_eyes.mp3"
-            else -> null
-        }
+        // SEER_RESULT doesn't have open eyes audio (it's just showing results)
+        if (subPhase == NightSubPhase.SEER_RESULT) return null
+
+        val role = mapSubPhaseToRole(subPhase) ?: return null
+        return RoleRegistry.getOpenEyesAudio(role)
     }
 
     /**
@@ -186,5 +192,54 @@ class AudioService(
             audioFiles = audioFiles,
             priority = 0, // State audio has lowest priority
         )
+    }
+
+    /**
+     * Calculate audio sequence for dead role transitions
+     * For dead roles, we play the complete sequence: open eyes → close eyes
+     * to simulate player operation time.
+     */
+    fun calculateDeadRoleAudioSequence(
+        gameId: Int,
+        skippedRoles: List<NightSubPhase>,
+        targetSubPhase: NightSubPhase,
+    ): AudioSequence {
+        val audioFiles = mutableListOf<String>()
+
+        // Add complete audio sequence for each skipped (dead) role
+        for (skippedRole in skippedRoles) {
+            if (skippedRole != NightSubPhase.WAITING) {
+                val openEyesAudio = getOpenEyesAudio(skippedRole)
+                val closeEyesAudio = getCloseEyesAudio(skippedRole)
+
+                // Complete sequence: open eyes → close eyes
+                if (openEyesAudio != null) audioFiles.add(openEyesAudio)
+                if (closeEyesAudio != null) audioFiles.add(closeEyesAudio)
+            }
+        }
+
+        // Add "open eyes" audio for the target (alive) role
+        if (targetSubPhase != NightSubPhase.WAITING && targetSubPhase != NightSubPhase.COMPLETE) {
+            val openEyesAudio = getOpenEyesAudio(targetSubPhase)
+            if (openEyesAudio != null) {
+                audioFiles.add(openEyesAudio)
+            }
+        }
+
+        return AudioSequence(
+            id = "${gameId}-${System.currentTimeMillis()}-DEAD-ROLE-${targetSubPhase.name}",
+            phase = GamePhase.NIGHT,
+            subPhase = targetSubPhase.name,
+            audioFiles = audioFiles,
+            priority = 3, // Dead role audio has lower priority than normal transitions
+        )
+    }
+
+    /**
+     * Get default delay time for a dead role
+     */
+    fun getDefaultDelayForRole(subPhase: NightSubPhase): Long {
+        val role = mapSubPhaseToRole(subPhase)
+        return role?.let { RoleRegistry.getDefaultDelayMs(it) } ?: 5000L
     }
 }

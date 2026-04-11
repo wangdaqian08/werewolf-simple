@@ -1,5 +1,6 @@
 package com.werewolf.game.night
 
+import com.werewolf.model.AudioSequence
 import com.werewolf.model.NightSubPhase
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -14,7 +15,10 @@ import org.springframework.stereotype.Component
  * Lives in a separate bean to avoid a circular dependency with NightOrchestrator.
  */
 @Component
-class NightWaitingScheduler(@Lazy private val nightOrchestrator: NightOrchestrator) {
+class NightWaitingScheduler(
+    @Lazy private val nightOrchestrator: NightOrchestrator,
+    private val stompPublisher: com.werewolf.service.StompPublisher,
+) {
 
     val log: Logger = LoggerFactory.getLogger(NightWaitingScheduler::class.java)
 
@@ -37,6 +41,28 @@ class NightWaitingScheduler(@Lazy private val nightOrchestrator: NightOrchestrat
             log.info("[NightWaitingScheduler] Advance completed for game $gameId")
         } catch (e: Exception) {
             log.error("[NightWaitingScheduler] ERROR during advance for game $gameId: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Schedules audio delay for dead role transitions.
+     * Provides delayed audio playback while maintaining immediate UI updates.
+     */
+    @Async
+    fun scheduleAudioDelay(
+        gameId: Int,
+        audioSequence: AudioSequence,
+        delayMs: Long,
+    ) {
+        log.info("[NightWaitingScheduler] Scheduling audio delay for game $gameId with delay ${delayMs}ms")
+        try {
+            Thread.sleep(delayMs)
+            log.info("[NightWaitingScheduler] Audio delay completed for game $gameId, broadcasting audio sequence...")
+            stompPublisher.broadcastGame(gameId, com.werewolf.game.DomainEvent.AudioSequence(gameId, audioSequence))
+            log.info("[NightWaitingScheduler] Audio sequence broadcast completed for game $gameId")
+        } catch (e: Exception) {
+            log.error("[NightWaitingScheduler] ERROR during audio delay for game $gameId: ${e.message}")
             e.printStackTrace()
         }
     }
