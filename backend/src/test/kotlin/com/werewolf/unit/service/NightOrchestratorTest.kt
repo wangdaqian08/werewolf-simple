@@ -117,7 +117,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
                 }
                 val closeEyesAudio = when (skippedRole) {
                     NightSubPhase.WEREWOLF_PICK -> "wolf_close_eyes.mp3"
-                    NightSubPhase.SEER_PICK -> "seer_close_eyes.mp3"
+                    NightSubPhase.SEER_PICK -> null // SEER_PICK does NOT play close eyes - happens at SEER_RESULT
                     NightSubPhase.SEER_RESULT -> "seer_close_eyes.mp3"
                     NightSubPhase.WITCH_ACT -> "witch_close_eyes.mp3"
                     NightSubPhase.GUARD_PICK -> "guard_close_eyes.mp3"
@@ -774,8 +774,8 @@ private fun mockAudioServiceForDayTransition(r: Room) {
                 subPhase = NightSubPhase.COMPLETE.name,
                 audioFiles = listOf(
                     "seer_open_eyes.mp3",
+                    // Note: SEER_PICK does NOT play close eyes - only SEER_RESULT plays it
                     "seer_close_eyes.mp3",
-                    "seer_close_eyes.mp3", // SEER_RESULT
                     "witch_open_eyes.mp3",
                     "witch_close_eyes.mp3",
                     "guard_open_eyes.mp3",
@@ -796,8 +796,8 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         val audioSequence = audioSequenceCaptor[0]
         assertThat(audioSequence.audioFiles).containsExactly(
             "seer_open_eyes.mp3",
-            "seer_close_eyes.mp3",
-            "seer_close_eyes.mp3", // SEER_RESULT
+            // Note: SEER_PICK does NOT play close eyes - close eyes happens at SEER_RESULT
+            "seer_close_eyes.mp3", // SEER_RESULT plays close eyes
             "witch_open_eyes.mp3",
             "witch_close_eyes.mp3",
             "guard_open_eyes.mp3",

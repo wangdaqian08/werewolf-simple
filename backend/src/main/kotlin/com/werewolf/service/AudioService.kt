@@ -2,7 +2,6 @@ package com.werewolf.service
 
 import com.werewolf.audio.RoleRegistry
 import com.werewolf.model.*
-import com.werewolf.repository.NightPhaseRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -11,9 +10,7 @@ import org.springframework.stereotype.Service
  * Backend determines what audio should play, frontend just plays it
  */
 @Service
-class AudioService(
-    private val nightPhaseRepository: NightPhaseRepository,
-) {
+class AudioService {
 
     private val log = LoggerFactory.getLogger(AudioService::class.java)
 
@@ -44,51 +41,62 @@ class AudioService(
     ): AudioSequence {
         val audioFiles = mutableListOf<String>()
 
-        val log = LoggerFactory.getLogger(this.javaClass)
-        when (newPhase) {
-            GamePhase.NIGHT -> {
-                // Entering night phase
-                audioFiles.add("goes_dark_close_eyes.mp3")
-                audioFiles.add("wolf_howl.mp3")
+        try {
+            when (newPhase) {
+                GamePhase.NIGHT -> {
+                    // Entering night phase
+                    audioFiles.add("goes_dark_close_eyes.mp3")
+                    audioFiles.add("wolf_howl.mp3")
 
-                // If transitioning to a specific sub-phase immediately, add role audio
-                if (newSubPhase != null) {
-                    val subPhaseEnum = try {
-                        NightSubPhase.valueOf(newSubPhase)
-                    } catch (e: IllegalArgumentException) {
-                        log.error(e.message, e)
-                        null
-                    }
-                    if (subPhaseEnum != null && subPhaseEnum != NightSubPhase.WAITING) {
-                        val roleAudio = getOpenEyesAudio(subPhaseEnum)
-                        if (roleAudio != null) {
-                            audioFiles.add(roleAudio)
+                    // If transitioning to a specific sub-phase immediately, add role audio
+                    if (newSubPhase != null) {
+                        val subPhaseEnum = try {
+                            NightSubPhase.valueOf(newSubPhase)
+                        } catch (e: IllegalArgumentException) {
+                            log.error("Invalid night sub-phase: $newSubPhase", e)
+                            null
+                        }
+                        if (subPhaseEnum != null && subPhaseEnum != NightSubPhase.WAITING) {
+                            val roleAudio = getOpenEyesAudio(subPhaseEnum)
+                            if (roleAudio != null) {
+                                audioFiles.add(roleAudio)
+                            }
                         }
                     }
                 }
+
+                GamePhase.DAY -> {
+                    // Entering day phase
+                    audioFiles.add("day_time.mp3")
+                    audioFiles.add("rooster_crowing.mp3")
+                }
+
+                GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.VOTING, GamePhase.GAME_OVER -> {
+                    // No audio for these phases
+                }
             }
 
-            GamePhase.DAY -> {
-                // Entering day phase
-                audioFiles.add("day_time.mp3")
-                audioFiles.add("rooster_crowing.mp3")
-            }
+            // Determine priority based on whether this phase has audio
+            val priority = if (audioFiles.isEmpty()) 0 else 10
 
-            GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.VOTING, GamePhase.GAME_OVER -> {
-                // No audio for these phases
-            }
+            return AudioSequence(
+                id = "${gameId}-${System.currentTimeMillis()}-${newPhase.name}",
+                phase = newPhase,
+                subPhase = newSubPhase,
+                audioFiles = audioFiles,
+                priority = priority,
+            )
+        } catch (e: Exception) {
+            log.error("Error calculating phase transition audio for game $gameId: ${e.message}", e)
+            // Return empty audio sequence on error
+            return AudioSequence(
+                id = "${gameId}-${System.currentTimeMillis()}-${newPhase.name}-ERROR",
+                phase = newPhase,
+                subPhase = newSubPhase,
+                audioFiles = emptyList(),
+                priority = 0,
+            )
         }
-
-        // Determine priority based on whether this phase has audio
-        val priority = if (audioFiles.isEmpty()) 0 else 10
-
-        return AudioSequence(
-            id = "${gameId}-${System.currentTimeMillis()}-${newPhase.name}",
-            phase = newPhase,
-            subPhase = newSubPhase,
-            audioFiles = audioFiles,
-            priority = priority,
-        )
     }
 
     /**
@@ -101,27 +109,38 @@ class AudioService(
     ): AudioSequence {
         val audioFiles = mutableListOf<String>()
 
-        // Add "close eyes" audio for previous role
-        if (oldSubPhase != null && oldSubPhase != NightSubPhase.WAITING) {
-            val closeEyesAudio = getCloseEyesAudio(oldSubPhase)
-            if (closeEyesAudio != null) {
-                audioFiles.add(closeEyesAudio)
+        try {
+            // Add "close eyes" audio for previous role
+            if (oldSubPhase != null && oldSubPhase != NightSubPhase.WAITING) {
+                val closeEyesAudio = getCloseEyesAudio(oldSubPhase)
+                if (closeEyesAudio != null) {
+                    audioFiles.add(closeEyesAudio)
+                }
             }
-        }
 
-        // Add "open eyes" audio for new role
-        val openEyesAudio = getOpenEyesAudio(newSubPhase)
-        if (openEyesAudio != null) {
-            audioFiles.add(openEyesAudio)
-        }
+            // Add "open eyes" audio for new role
+            val openEyesAudio = getOpenEyesAudio(newSubPhase)
+            if (openEyesAudio != null) {
+                audioFiles.add(openEyesAudio)
+            }
 
-        return AudioSequence(
-            id = "${gameId}-${System.currentTimeMillis()}-NIGHT-${newSubPhase.name}",
-            phase = GamePhase.NIGHT,
-            subPhase = newSubPhase.name,
-            audioFiles = audioFiles,
-            priority = 5, // Sub-phase transitions have lower priority than phase transitions
-        )
+            return AudioSequence(
+                id = "${gameId}-${System.currentTimeMillis()}-NIGHT-${newSubPhase.name}",
+                phase = GamePhase.NIGHT,
+                subPhase = newSubPhase.name,
+                audioFiles = audioFiles,
+                priority = 5, // Sub-phase transitions have lower priority than phase transitions
+            )
+        } catch (e: Exception) {
+            log.error("Error calculating night sub-phase transition audio for game $gameId: ${e.message}", e)
+            return AudioSequence(
+                id = "${gameId}-${System.currentTimeMillis()}-NIGHT-${newSubPhase.name}-ERROR",
+                phase = GamePhase.NIGHT,
+                subPhase = newSubPhase.name,
+                audioFiles = emptyList(),
+                priority = 0,
+            )
+        }
     }
 
     /**
@@ -155,43 +174,55 @@ class AudioService(
     ): AudioSequence {
         val audioFiles = mutableListOf<String>()
 
-        when (phase) {
-            GamePhase.NIGHT -> {
-                // NIGHT phase: check if we're entering night (goes_dark_close_eyes) or in a sub-phase
-                if (nightSubPhase != null) {
-                    val subPhaseEnum = try {
-                        NightSubPhase.valueOf(nightSubPhase)
-                    } catch (e: IllegalArgumentException) {
-                        null
+        try {
+            when (phase) {
+                GamePhase.NIGHT -> {
+                    // NIGHT phase: check if we're entering night (goes_dark_close_eyes) or in a sub-phase
+                    if (nightSubPhase != null) {
+                        val subPhaseEnum = try {
+                            NightSubPhase.valueOf(nightSubPhase)
+                        } catch (e: IllegalArgumentException) {
+                            log.error("Invalid night sub-phase in game state: $nightSubPhase", e)
+                            null
+                        }
+                        if (subPhaseEnum != null) {
+                            // In a sub-phase, no audio (audio was played during transition)
+                            // But we include an empty sequence for consistency
+                        }
+                    } else {
+                        // Just entered NIGHT phase
+                        audioFiles.add("goes_dark_close_eyes.mp3")
+                        audioFiles.add("wolf_howl.mp3")
                     }
-                    if (subPhaseEnum != null) {
-                        // In a sub-phase, no audio (audio was played during transition)
-                        // But we include an empty sequence for consistency
-                    }
-                } else {
-                    // Just entered NIGHT phase
-                    audioFiles.add("goes_dark_close_eyes.mp3")
-                    audioFiles.add("wolf_howl.mp3")
+                }
+
+                GamePhase.DAY -> {
+                    // DAY phase: day_time.mp3 was played during transition
+                    // Empty sequence for current state
+                }
+
+                GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.VOTING, GamePhase.GAME_OVER -> {
+                    // No audio for these phases
                 }
             }
 
-            GamePhase.DAY -> {
-                // DAY phase: day_time.mp3 was played during transition
-                // Empty sequence for current state
-            }
-
-            GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.VOTING, GamePhase.GAME_OVER -> {
-                // No audio for these phases
-            }
+            return AudioSequence(
+                id = "${gameId}-${System.currentTimeMillis()}-STATE-${phase.name}",
+                phase = phase,
+                subPhase = subPhase ?: nightSubPhase,
+                audioFiles = audioFiles,
+                priority = 0, // State audio has lowest priority
+            )
+        } catch (e: Exception) {
+            log.error("Error calculating game state audio for game $gameId: ${e.message}", e)
+            return AudioSequence(
+                id = "${gameId}-${System.currentTimeMillis()}-STATE-${phase.name}-ERROR",
+                phase = phase,
+                subPhase = subPhase ?: nightSubPhase,
+                audioFiles = emptyList(),
+                priority = 0,
+            )
         }
-
-        return AudioSequence(
-            id = "${gameId}-${System.currentTimeMillis()}-STATE-${phase.name}",
-            phase = phase,
-            subPhase = subPhase ?: nightSubPhase,
-            audioFiles = audioFiles,
-            priority = 0, // State audio has lowest priority
-        )
     }
 
     /**
@@ -206,40 +237,52 @@ class AudioService(
     ): AudioSequence {
         val audioFiles = mutableListOf<String>()
 
-        // Add complete audio sequence for each skipped (dead) role
-        for (skippedRole in skippedRoles) {
-            if (skippedRole != NightSubPhase.WAITING) {
-                val openEyesAudio = getOpenEyesAudio(skippedRole)
-                val closeEyesAudio = getCloseEyesAudio(skippedRole)
+        try {
+            // Add complete audio sequence for each skipped (dead) role
+            for (skippedRole in skippedRoles) {
+                if (skippedRole != NightSubPhase.WAITING) {
+                    val openEyesAudio = getOpenEyesAudio(skippedRole)
+                    val closeEyesAudio = getCloseEyesAudio(skippedRole)
 
-                // Complete sequence: open eyes → close eyes
-                if (openEyesAudio != null) audioFiles.add(openEyesAudio)
-                if (closeEyesAudio != null) audioFiles.add(closeEyesAudio)
+                    // Special case: SEER_PICK should not play close eyes audio
+                    // because SEER_RESULT will play it (close eyes happens after showing result)
+                    if (skippedRole == NightSubPhase.SEER_PICK) {
+                        if (openEyesAudio != null) audioFiles.add(openEyesAudio)
+                        // Don't add closeEyesAudio for SEER_PICK - will be played by SEER_RESULT
+                    } else {
+                        // Complete sequence: open eyes → close eyes
+                        if (openEyesAudio != null) audioFiles.add(openEyesAudio)
+                        if (closeEyesAudio != null) audioFiles.add(closeEyesAudio)
+                    }
+                }
             }
-        }
 
-        // Add "open eyes" audio for the target (alive) role
-        if (targetSubPhase != NightSubPhase.WAITING && targetSubPhase != NightSubPhase.COMPLETE) {
-            val openEyesAudio = getOpenEyesAudio(targetSubPhase)
-            if (openEyesAudio != null) {
-                audioFiles.add(openEyesAudio)
+            // Add "open eyes" audio for the target (alive) role
+            if (targetSubPhase != NightSubPhase.WAITING && targetSubPhase != NightSubPhase.COMPLETE) {
+                val openEyesAudio = getOpenEyesAudio(targetSubPhase)
+                if (openEyesAudio != null) {
+                    audioFiles.add(openEyesAudio)
+                }
             }
+
+            log.debug("Calculated dead role audio sequence for game $gameId: ${audioFiles.joinToString(", ")}")
+
+            return AudioSequence(
+                id = "${gameId}-${System.currentTimeMillis()}-DEAD-ROLE-${targetSubPhase.name}",
+                phase = GamePhase.NIGHT,
+                subPhase = targetSubPhase.name,
+                audioFiles = audioFiles,
+                priority = 3, // Dead role audio has lower priority than normal transitions
+            )
+        } catch (e: Exception) {
+            log.error("Error calculating dead role audio sequence for game $gameId: ${e.message}", e)
+            return AudioSequence(
+                id = "${gameId}-${System.currentTimeMillis()}-DEAD-ROLE-${targetSubPhase.name}-ERROR",
+                phase = GamePhase.NIGHT,
+                subPhase = targetSubPhase.name,
+                audioFiles = emptyList(),
+                priority = 0,
+            )
         }
-
-        return AudioSequence(
-            id = "${gameId}-${System.currentTimeMillis()}-DEAD-ROLE-${targetSubPhase.name}",
-            phase = GamePhase.NIGHT,
-            subPhase = targetSubPhase.name,
-            audioFiles = audioFiles,
-            priority = 3, // Dead role audio has lower priority than normal transitions
-        )
-    }
-
-    /**
-     * Get default delay time for a dead role
-     */
-    fun getDefaultDelayForRole(subPhase: NightSubPhase): Long {
-        val role = mapSubPhaseToRole(subPhase)
-        return role?.let { RoleRegistry.getDefaultDelayMs(it) } ?: 5000L
     }
 }

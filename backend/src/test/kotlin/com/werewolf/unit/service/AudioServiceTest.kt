@@ -1,19 +1,12 @@
 package com.werewolf.unit.service
 
 import com.werewolf.model.*
-import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.service.AudioService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.Mock
-import org.mockito.junit.jupiter.MockitoExtension
 
-@ExtendWith(MockitoExtension::class)
 class AudioServiceTest {
-
-    @Mock lateinit var nightPhaseRepository: NightPhaseRepository
 
     private lateinit var audioService: AudioService
 
@@ -22,7 +15,7 @@ class AudioServiceTest {
         // Initialize RoleRegistry for unit tests
         initRoleRegistry()
 
-        audioService = AudioService(nightPhaseRepository)
+        audioService = AudioService()
     }
 
     private fun initRoleRegistry() {

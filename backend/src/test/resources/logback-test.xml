@@ -1,0 +1,19 @@
+<configuration>
+    <!-- Console appender for tests -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Root logger level - set to INFO to see normal logs, but suppress expected test errors -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </root>
+
+    <!-- Suppress expected error logs from exception testing -->
+    <logger name="com.werewolf.game.night.NightWaitingScheduler" level="WARN"/>
+    
+    <!-- Keep debug logs for audio service -->
+    <logger name="com.werewolf.service.AudioService" level="DEBUG"/>
+</configuration>

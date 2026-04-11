@@ -4,25 +4,18 @@ import com.werewolf.model.DaySubPhase
 import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.Room
-import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.service.AudioService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.Mock
-import org.mockito.junit.jupiter.MockitoExtension
 
-@ExtendWith(MockitoExtension::class)
 class AudioPhaseMappingTest {
-
-    @Mock lateinit var nightPhaseRepository: NightPhaseRepository
 
     private lateinit var audioService: AudioService
 
     @BeforeEach
     fun setUp() {
-        audioService = AudioService(nightPhaseRepository)
+        audioService = AudioService()
     }
 
     // ── Audio File to Phase Mapping Tests ─────────────────────────────────────
