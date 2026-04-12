@@ -34,6 +34,7 @@
           class="btn btn-primary"
           style="margin-top: 1.5rem"
           :disabled="actionPending"
+          data-testid="start-night"
           @click="handleStartNight"
         >
           开始夜晚 / Start Night

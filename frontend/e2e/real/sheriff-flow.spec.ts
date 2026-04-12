@@ -162,7 +162,7 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // 2. Or via script
 
     // Try clicking the button first
-    const startNightBtn = ctx.hostPage.getByRole('button', { name: /开始夜晚|Start Night/i })
+    const startNightBtn = ctx.hostPage.getByTestId('start-night')
     const btnVisible = await startNightBtn.isVisible().catch(() => false)
 
     if (btnVisible) {

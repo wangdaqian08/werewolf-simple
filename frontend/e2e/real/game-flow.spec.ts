@@ -77,7 +77,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const hostPage = ctx.hostPage
 
     // Host should see "Start Night" button (all confirmed, no sheriff)
-    const startNightBtn = hostPage.getByRole('button', { name: /开始夜晚|Start Night/i })
+    const startNightBtn = hostPage.getByTestId('start-night')
 
     // If button not visible yet, wait a bit for all confirmations to propagate
     if (!(await startNightBtn.isVisible().catch(() => false))) {
