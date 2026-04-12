@@ -342,7 +342,7 @@
     <template v-else-if="subPhase === 'WAITING'">
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
-        <div class="ss-title">夜晚即将开始</div>
+        <div class="ss-title" data-testid="sleep-screen-title">夜晚即将开始</div>
         <div class="ss-en">Night is beginning...</div>
         <div class="ss-sub">所有人请闭眼 / Everyone please close your eyes</div>
       </div>
