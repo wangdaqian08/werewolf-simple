@@ -32,7 +32,9 @@
 
     <!-- Buttons -->
     <template v-if="!revealed">
-      <button class="btn btn-gold" data-testid="reveal-role-btn" @click="$emit('reveal')">揭示我的身份 / Reveal Role</button>
+      <button class="btn btn-gold" data-testid="reveal-role-btn" @click="$emit('reveal')">
+        揭示我的身份 / Reveal Role
+      </button>
     </template>
     <template v-else>
       <button class="btn btn-primary" @click="$emit('confirm')">知道了 / Got it</button>
@@ -47,8 +49,8 @@
 </template>
 
 <script lang="ts" setup>
-import {computed} from 'vue'
-import type {PlayerRole} from '@/types'
+import { computed } from 'vue'
+import type { PlayerRole } from '@/types'
 
 const props = withDefaults(
   defineProps<{

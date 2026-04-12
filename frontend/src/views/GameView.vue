@@ -441,14 +441,14 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
-import {ElMessage} from 'element-plus'
-import {useRoute, useRouter} from 'vue-router'
-import {useUserStore} from '@/stores/userStore'
-import {useGameStore} from '@/stores/gameStore'
-import {useRoomStore} from '@/stores/roomStore'
-import {gameService} from '@/services/gameService'
-import {createStompClient, disconnectStomp, subscribeToTopic} from '@/services/stompClient'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/userStore'
+import { useGameStore } from '@/stores/gameStore'
+import { useRoomStore } from '@/stores/roomStore'
+import { gameService } from '@/services/gameService'
+import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
 import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
@@ -456,9 +456,9 @@ import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
 import VotingPhase from '@/components/VotingPhase.vue'
-import {useNavigationGuard} from '@/composables/useNavigationGuard'
-import {useAudioService} from '@/composables/useAudioService'
-import type {GamePlayer} from '@/types'
+import { useNavigationGuard } from '@/composables/useNavigationGuard'
+import { useAudioService } from '@/composables/useAudioService'
+import type { GamePlayer } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
