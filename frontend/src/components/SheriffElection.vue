@@ -38,7 +38,12 @@
           </button>
         </template>
         <template v-else>
-          <button class="btn btn-gold" data-testid="sheriff-run" :disabled="actionPending" @click="emit('run')">
+          <button
+            class="btn btn-gold"
+            data-testid="sheriff-run"
+            :disabled="actionPending"
+            @click="emit('run')"
+          >
             参选 / Run for Sheriff
           </button>
           <button
@@ -95,7 +100,12 @@
       <template v-if="iAmCandidate">
         <div class="quit-warning">⚠ Quitting forfeits your right to vote for sheriff.</div>
         <div class="action-footer">
-          <button class="btn btn-danger-outline" data-testid="sheriff-quit" :disabled="actionPending" @click="emit('quit')">
+          <button
+            class="btn btn-danger-outline"
+            data-testid="sheriff-quit"
+            :disabled="actionPending"
+            @click="emit('quit')"
+          >
             退出竞选 / Quit Campaign
           </button>
           <template v-if="isHost">
@@ -113,7 +123,12 @@
       </template>
       <template v-else-if="isHost">
         <div class="action-footer">
-          <button class="btn btn-primary" data-testid="sheriff-advance-speech" :disabled="actionPending" @click="emit('advanceSpeech')">
+          <button
+            class="btn btn-primary"
+            data-testid="sheriff-advance-speech"
+            :disabled="actionPending"
+            @click="emit('advanceSpeech')"
+          >
             下一位 / Next Speaker
           </button>
         </div>
@@ -150,14 +165,24 @@
       <div class="action-footer">
         <template v-if="iAmCandidate">
           <div class="quit-warning">⚠ Quitting forfeits your right to vote for sheriff.</div>
-          <button class="btn btn-danger-outline" data-testid="sheriff-quit" :disabled="actionPending" @click="emit('quit')">
+          <button
+            class="btn btn-danger-outline"
+            data-testid="sheriff-quit"
+            :disabled="actionPending"
+            @click="emit('quit')"
+          >
             退出竞选 / Quit Campaign
           </button>
         </template>
         <button v-else class="btn btn-secondary" disabled>等待投票 / Waiting for vote…</button>
         <template v-if="isHost">
           <div class="host-divider" />
-          <button class="btn btn-primary" data-testid="sheriff-advance-speech" :disabled="actionPending" @click="emit('advanceSpeech')">
+          <button
+            class="btn btn-primary"
+            data-testid="sheriff-advance-speech"
+            :disabled="actionPending"
+            @click="emit('advanceSpeech')"
+          >
             下一位 / Next Speaker
           </button>
         </template>
@@ -231,7 +256,12 @@
           >
             确认投票 / Confirm Vote
           </button>
-          <button class="btn btn-outline" data-testid="sheriff-abstain" :disabled="actionPending" @click="emit('abstain')">
+          <button
+            class="btn btn-outline"
+            data-testid="sheriff-abstain"
+            :disabled="actionPending"
+            @click="emit('abstain')"
+          >
             放弃投票 / Give Up Vote
           </button>
         </template>

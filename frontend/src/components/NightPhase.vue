@@ -237,7 +237,13 @@
             >
               确认毒杀 Confirm
             </button>
-            <button class="btn btn-secondary ws-btn" data-testid="poison-mode-cancel" @click="poisonMode = false">取消</button>
+            <button
+              class="btn btn-secondary ws-btn"
+              data-testid="poison-mode-cancel"
+              @click="poisonMode = false"
+            >
+              取消
+            </button>
           </div>
         </template>
         <div v-else class="ws-row">

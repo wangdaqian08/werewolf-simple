@@ -126,7 +126,11 @@
               <span class="reveal-countdown-time">{{ formattedRevealTime }}</span>
             </div>
             <div class="vote-actions">
-              <button class="btn btn-primary vote-btn" data-testid="voting-continue" @click="emit('continueVoting')">
+              <button
+                class="btn btn-primary vote-btn"
+                data-testid="voting-continue"
+                @click="emit('continueVoting')"
+              >
                 继续 / Continue
               </button>
             </div>
@@ -146,7 +150,12 @@
                 <p class="footer-hint idiot-no-vote">🃏 已揭示白痴 · 无投票权</p>
               </template>
               <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
-                <button class="btn btn-secondary" data-testid="voting-unvote" :disabled="actionPending" @click="emit('unvote')">
+                <button
+                  class="btn btn-secondary"
+                  data-testid="voting-unvote"
+                  :disabled="actionPending"
+                  @click="emit('unvote')"
+                >
                   取消投票 · Unvote
                 </button>
               </template>
@@ -194,7 +203,12 @@
               <button class="btn btn-secondary" disabled>🃏 已揭示白痴 · 无投票权</button>
             </template>
             <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
-              <button class="btn btn-secondary" data-testid="voting-unvote" :disabled="actionPending" @click="emit('unvote')">
+              <button
+                class="btn btn-secondary"
+                data-testid="voting-unvote"
+                :disabled="actionPending"
+                @click="emit('unvote')"
+              >
                 取消投票 · Unvote
               </button>
             </template>
