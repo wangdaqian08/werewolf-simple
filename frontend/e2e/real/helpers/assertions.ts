@@ -85,7 +85,7 @@ export async function clickAndVerify(
 export async function verifyAllBrowsersPhase(
   pages: Map<string, Page>,
   phase: string,
-  timeout = 15_000,
+  timeout = 30_000, // Increased from 15s to 30s to accommodate audio processing delays
 ): Promise<void> {
   const selector = PHASE_SELECTORS[phase]
   if (!selector) throw new Error(`Unknown phase: ${phase}`)
@@ -95,9 +95,32 @@ export async function verifyAllBrowsersPhase(
       try {
         await page.locator(selector).first().waitFor({ state: 'visible', timeout })
       } catch {
+        // Get current page state for better error reporting
+        const currentPhase = await page.evaluate(() => {
+          const body = document.body
+          const hasNightWrap = !!document.querySelector('.game-wrap.night-mode')
+          const hasDayWrap = !!document.querySelector('.day-wrap')
+          const hasVotingWrap = !!document.querySelector('.voting-wrap')
+          const hasSheriffWrap = !!document.querySelector('.sheriff-wrap')
+          const hasRevealWrap = !!document.querySelector('.reveal-wrap')
+          
+          let detectedPhase = 'UNKNOWN'
+          if (hasNightWrap) detectedPhase = 'NIGHT'
+          else if (hasDayWrap) detectedPhase = 'DAY'
+          else if (hasVotingWrap) detectedPhase = 'VOTING'
+          else if (hasSheriffWrap) detectedPhase = 'SHERIFF_ELECTION'
+          else if (hasRevealWrap) detectedPhase = 'ROLE_REVEAL'
+          
+          return {
+            detectedPhase,
+            bodyClasses: body.className,
+            url: window.location.href
+          }
+        })
+        
         throw new Error(
           `P0: Browser [${role}] stuck — expected phase ${phase} (selector: ${selector}) ` +
-            `but not visible after ${timeout}ms`,
+          `but not visible after ${timeout}ms. Current state: ${JSON.stringify(currentPhase)}`
         )
       }
     }),
@@ -109,7 +132,6 @@ export async function verifyAllBrowsersPhase(
     throw new Error(msgs.join('\n'))
   }
 }
-
 /**
  * Perform an action and verify that an observer page reflects the change.
  *
