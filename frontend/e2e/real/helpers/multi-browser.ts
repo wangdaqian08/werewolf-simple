@@ -67,7 +67,7 @@ export interface GameSetupOptions {
  * 2. Bots join + ready via shell scripts
  * 3. Host clicks "Start Game"
  * 4. All bots confirm roles via shell scripts
- * 5. Host confirms role in browser
+ * 5. Wait for STMP synchronization
  * 6. Discovers roles via roles.sh
  * 7. Opens a browser context per desired role
  */
@@ -214,36 +214,15 @@ export async function setupGame(
 
   // ── Step 5: All bots confirm roles ─────────────────────────────────────
   // Note: this confirms ALL users in the state file, including the host.
-  // So the host's role is confirmed via script — the browser confirm below
-  // may already be past the reveal screen (especially with hasSheriff).
+  // The game logic relies on STMP synchronization to handle state transitions.
 
   act('CONFIRM_ROLE', undefined, { room: roomCode })
 
-  // ── Step 6: Host confirms role in browser (if still on reveal screen) ──
+  // ── Step 6: Wait for STMP synchronization ────────────────────────────────
+  // All players are confirmed via script. Wait for STMP events to synchronize
+  // all browsers with the current game state. The game will automatically
+  // transition to the next phase (e.g., SHERIFF_ELECTION if hasSheriff=true).
 
-  // The script may have already confirmed for the host, causing the game
-  // to auto-advance (e.g., to SHERIFF_ELECTION). Only click if visible.
-  const revealWrap = hostPage.locator('.reveal-wrap')
-  const revealVisible = await revealWrap.isVisible().catch(() => false)
-  if (revealVisible) {
-    const revealBtn = hostPage.getByTestId('reveal-role-btn')
-    if ((await revealBtn.count()) > 0 && (await revealBtn.isVisible())) {
-      await revealBtn.click()
-      await hostPage.waitForTimeout(300)
-      
-      // Check if confirm button appears - it may not if page already transitioned
-      const confirmBtn = hostPage.getByTestId('confirm-role-btn')
-      try {
-        await confirmBtn.waitFor({ state: 'visible', timeout: 3_000 })
-        await confirmBtn.click()
-      } catch {
-        // Confirm button not found - page likely transitioned, which is acceptable
-        console.log('Confirm button not found (page may have transitioned), continuing...')
-      }
-    }
-  }
-
-  // Wait for confirmations / phase transition to complete
   await hostPage.waitForTimeout(2_000)
 
   // ── Step 7: Discover roles ─────────────────────────────────────────────
