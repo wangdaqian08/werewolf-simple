@@ -37,7 +37,7 @@
       </button>
     </template>
     <template v-else>
-      <button class="btn btn-primary" @click="$emit('confirm')">知道了 / Got it</button>
+      <button class="btn btn-primary" data-testid="confirm-role-btn" @click="$emit('confirm')">知道了 / Got it</button>
       <button class="btn btn-secondary hide-btn" @click="$emit('hide')">隐藏 / Hide</button>
     </template>
 

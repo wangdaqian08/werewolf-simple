@@ -59,7 +59,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         expect(revealBtnVisible).toBe(true)
         await revealBtn.click()
         await page.waitForTimeout(300)
-        const gotItBtn = page.getByRole('button', { name: /知道了 \/ Got it/i })
+        const gotItBtn = page.getByTestId('confirm-role-btn')
         await gotItBtn.waitFor({ state: 'visible', timeout: 2_000 })
         await gotItBtn.click()
       }
