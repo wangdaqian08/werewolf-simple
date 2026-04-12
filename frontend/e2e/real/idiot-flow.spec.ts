@@ -253,7 +253,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       testInfo.attach('day-phase-reached', { body: 'Day phase reached successfully' })
 
       // Host reveals night result
-      const revealBtn = hostPage.getByRole('button', { name: /显示结果|Result/i })
+      const revealBtn = hostPage.getByTestId('day-reveal-result')
       await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
       await revealBtn.click()
       
@@ -262,7 +262,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       
       // ── Phase 3: Voting Phase ──
       // Host starts voting
-      const startVoteBtn = hostPage.getByRole('button', { name: /开始投票|Start Vote/i })
+      const startVoteBtn = hostPage.getByTestId('day-start-vote')
       await startVoteBtn.waitFor({ state: 'visible', timeout: 10_000 })
       await startVoteBtn.click()
       
@@ -449,14 +449,14 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       // ── Phase 2: Day Phase ──
       await verifyAllBrowsersPhase(localCtx.pages, 'DAY', 15_000)
 
-      const revealBtn = hostPage.getByRole('button', { name: /显示结果|Result/i })
+      const revealBtn = hostPage.getByTestId('day-reveal-result')
       await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
       await revealBtn.click()
       
       await hostPage.waitForTimeout(2_000)
       
       // ── Phase 3: Voting Phase with Idiot Reveal ──
-      const startVoteBtn = hostPage.getByRole('button', { name: /开始投票|Start Vote/i })
+      const startVoteBtn = hostPage.getByTestId('day-start-vote')
       await startVoteBtn.waitFor({ state: 'visible', timeout: 10_000 })
       await startVoteBtn.click()
       
@@ -481,7 +481,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       
       // ── Phase 4: Transition to NIGHT ──
       // Host can click continue button to advance to night
-      const continueBtn = hostPage.getByRole('button', { name: /继续|Continue/i })
+      const continueBtn = hostPage.getByTestId('voting-continue')
       await continueBtn.waitFor({ state: 'visible', timeout: 10_000 })
       await continueBtn.click()
       testInfo.attach('continue-clicked', { body: 'Host clicked continue to advance to night' })

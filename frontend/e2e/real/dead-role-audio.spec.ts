@@ -35,7 +35,7 @@ test.describe('Dead Role Audio Flow', () => {
     const hostPage = ctx.hostPage
     
     // Start night
-    const startNightBtn = hostPage.getByRole('button', { name: /开始夜晚|Start Night/i })
+    const startNightBtn = hostPage.getByTestId('start-night')
     await startNightBtn.waitFor({ state: 'visible', timeout: 10_000 })
     await startNightBtn.click()
     
@@ -57,7 +57,7 @@ test.describe('Dead Role Audio Flow', () => {
       const wolfPage = ctx.pages.get('WEREWOLF')
       const targetSlot = wolfPage!.locator(`.player-grid .slot-alive`).first()
       await targetSlot.click()
-      const confirmBtn = wolfPage!.getByRole('button', { name: /确认袭击|Confirm/i })
+      const confirmBtn = wolfPage!.getByTestId('wolf-confirm-kill')
       await confirmBtn.click()
     }
     

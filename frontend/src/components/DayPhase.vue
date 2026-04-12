@@ -92,6 +92,7 @@
         <div v-if="dayPhase.subPhase === 'RESULT_HIDDEN'" class="vote-actions">
           <button
             class="btn btn-primary vote-btn"
+            data-testid="day-reveal-result"
             :disabled="actionPending"
             @click="emit('revealResult')"
           >
@@ -101,6 +102,7 @@
         <div v-else-if="dayPhase.subPhase === 'RESULT_REVEALED'" class="vote-actions">
           <button
             class="btn btn-gold vote-btn"
+            data-testid="day-start-vote"
             :disabled="actionPending"
             @click="emit('startVote')"
           >

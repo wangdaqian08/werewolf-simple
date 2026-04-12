@@ -50,7 +50,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
 
   test('1. Start night', async ({}, testInfo) => {
     const hostPage = ctx.hostPage
-    const startNightBtn = hostPage.getByRole('button', { name: /开始夜晚|Start Night/i })
+    const startNightBtn = hostPage.getByTestId('start-night')
     if (!(await startNightBtn.isVisible().catch(() => false))) {
       await startNightBtn.waitFor({ state: 'visible', timeout: 10_000 })
     }
@@ -104,7 +104,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
       if (await slot.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await slot.click()
         await wolfPage.waitForTimeout(500)
-        await wolfPage.getByRole('button', { name: /确认袭击|Confirm/i }).click()
+        await wolfPage.getByTestId('wolf-confirm-kill').click()
       }
     }
 
@@ -144,9 +144,9 @@ test.describe('Voting tie → revote → game proceeds', () => {
           .catch(() => false)
       ) {
         await seerPage.locator('.player-grid .slot-alive').first().click()
-        await seerPage.getByRole('button', { name: /查验|Check/i }).click()
+        await seerPage.getByTestId('seer-check').click()
         await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-        await seerPage.getByRole('button', { name: /查验完毕|Done/i }).click()
+        await seerPage.getByTestId('seer-done').click()
       }
     }
 
@@ -169,20 +169,18 @@ test.describe('Voting tie → revote → game proceeds', () => {
     if (!witchDone && witchPage) {
       if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
         if (opts.witchUseAntidote) {
-          const useBtn = witchPage.getByRole('button', { name: /使用解药/ })
+          const useBtn = witchPage.getByTestId('witch-antidote')
           if (await useBtn.isVisible().catch(() => false)) {
             await useBtn.click()
             await witchPage.waitForTimeout(500)
           }
         } else {
-          const passBtn = witchPage.getByRole('button', { name: /放弃/ })
+          const passBtn = witchPage.getByTestId('switch-pass-antidote')
           if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
           await witchPage.waitForTimeout(500)
         }
-        const skipBtn = witchPage.getByRole('button', { name: /不用/ })
+        const skipBtn = witchPage.getByTestId('witch-skip')
         if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
-        const doneBtn = witchPage.getByRole('button', { name: /完成操作|Done/i })
-        if (await doneBtn.isVisible().catch(() => false)) await doneBtn.click()
       }
     }
 
@@ -209,7 +207,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
       ) {
         // Pick LAST alive player to avoid protecting the wolf's target (which is first)
         await guardPage.locator('.player-grid .slot-alive').last().click()
-        await guardPage.getByRole('button', { name: /确认保护|Confirm/i }).click()
+        await guardPage.getByTestId('guard-confirm-protect').click()
       }
     }
   }
@@ -228,13 +226,13 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const hostPage = ctx.hostPage
 
     // Host reveals night result
-    const revealBtn = hostPage.getByRole('button', { name: /显示结果|Result/i })
+    const revealBtn = hostPage.getByTestId('day-reveal-result')
     await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
     await revealBtn.click()
     await hostPage.waitForTimeout(1_000)
 
     // Host starts vote
-    const startVoteBtn = hostPage.getByRole('button', { name: /开始投票|Start Vote/i })
+    const startVoteBtn = hostPage.getByTestId('day-start-vote')
     await startVoteBtn.waitFor({ state: 'visible', timeout: 10_000 })
     await startVoteBtn.click()
     await verifyAllBrowsersPhase(ctx.pages, 'VOTING', 15_000)
@@ -242,7 +240,6 @@ test.describe('Voting tie → revote → game proceeds', () => {
 
     // To create a tie: we need to split votes between 2 targets.
     // Pick 2 non-wolf players as targets (e.g., first 2 villagers/specials)
-    const wolfBots = ctx.roleMap.WEREWOLF ?? []
     const villagerBots = ctx.roleMap.VILLAGER ?? []
     const seerBots = ctx.roleMap.SEER ?? []
     const guardBots = ctx.roleMap.GUARD ?? []
@@ -254,7 +251,6 @@ test.describe('Voting tie → revote → game proceeds', () => {
 
     // Host votes for target1
     const abstainBtn = hostPage.locator('.skip-btn').first()
-    const voteBtn = hostPage.locator('.vote-btn').first()
     // Select target1 slot and vote
     await hostPage.waitForTimeout(500)
 
@@ -323,7 +319,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const maxRounds = 15
 
     // Start night phase if in ROLE_REVEAL state
-    const startNightBtn = ctx.hostPage.getByRole('button', { name: /开始夜晚|Start Night/i })
+    const startNightBtn = ctx.hostPage.getByTestId('start-night')
     if (await startNightBtn.isVisible().catch(() => false)) {
       testInfo.attach('triggering-night-start', { body: 'Clicking start night button' })
       await startNightBtn.click()
@@ -411,12 +407,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
       const isDay = await ctx.hostPage.locator('.day-wrap').first().isVisible().catch(() => false)
       if (isDay) {
         testInfo.attach(`round-${round}-action`, { body: 'In DAY phase, completing day' })
-        const revealBtn = ctx.hostPage.getByRole('button', { name: /显示结果|Result/i })
+        const revealBtn = ctx.hostPage.getByTestId('day-reveal-result')
         if (await revealBtn.isVisible().catch(() => false)) {
           await revealBtn.click()
           await ctx.hostPage.waitForTimeout(1_000)
         }
-        const startVoteBtn = ctx.hostPage.getByRole('button', { name: /开始投票|Start Vote/i })
+        const startVoteBtn = ctx.hostPage.getByTestId('day-start-vote')
         if (await startVoteBtn.isVisible().catch(() => false)) {
           await startVoteBtn.click()
           await ctx.hostPage.waitForTimeout(1_000)

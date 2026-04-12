@@ -67,6 +67,7 @@
       <footer class="nf">
         <button
           class="btn btn-danger nf-btn"
+          data-testid="wolf-confirm-kill"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="emit('confirm', localSelected)"
         >
@@ -101,6 +102,7 @@
       <footer class="nf">
         <button
           class="btn btn-danger nf-btn"
+          data-testid="seer-check"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="emit('confirm', localSelected)"
         >
@@ -149,6 +151,7 @@
         <footer class="nf" style="margin-top: auto">
           <button
             class="btn btn-secondary nf-btn"
+            data-testid="seer-done"
             :disabled="actionPending"
             @click="emit('confirm')"
           >
@@ -178,15 +181,17 @@
         <div class="ws-row">
           <button
             class="btn btn-success ws-btn"
+            data-testid="witch-antidote"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
-            @click="emit('witchAntidote')"
+            @click="emit('switchAntidote')"
           >
             使用解药
           </button>
           <button
             class="btn btn-secondary ws-btn"
+            data-testid="switch-pass-antidote"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
-            @click="emit('witchPassAntidote')"
+            @click="emit('switchPassAntidote')"
           >
             放弃
           </button>
@@ -226,17 +231,19 @@
           <div class="ws-row">
             <button
               class="btn btn-danger ws-btn"
+              data-testid="witch-poison-confirm"
               :disabled="!effectivePhase.selectedTargetId || actionPending"
-              @click="emit('witchPoison', effectivePhase.selectedTargetId!)"
+              @click="emit('switchPoison', effectivePhase.selectedTargetId!)"
             >
               确认毒杀 Confirm
             </button>
-            <button class="btn btn-secondary ws-btn" @click="poisonMode = false">取消</button>
+            <button class="btn btn-secondary ws-btn" data-testid="poison-mode-cancel" @click="poisonMode = false">取消</button>
           </div>
         </template>
         <div v-else class="ws-row">
           <button
             class="btn btn-danger ws-btn"
+            data-testid="use-poison"
             :disabled="!!nightPhase.poisonDecided || actionPending"
             @click="poisonMode = true"
           >
@@ -244,6 +251,7 @@
           </button>
           <button
             class="btn btn-secondary ws-btn"
+            data-testid="switch-pass-poison"
             :disabled="!!nightPhase.poisonDecided || actionPending"
             @click="emit('witchPassPoison')"
           >
@@ -261,6 +269,7 @@
         <div class="ws-row">
           <button
             class="btn btn-primary ws-btn"
+            data-testid="witch-skip"
             :disabled="actionPending"
             @click="emit('witchSkip')"
           >
@@ -304,6 +313,7 @@
         <!-- Guard confirm is RED per design -->
         <button
           class="btn btn-danger nf-btn"
+          data-testid="guard-confirm-protect"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="emit('confirm', localSelected)"
         >
