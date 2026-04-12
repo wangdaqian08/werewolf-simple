@@ -21,7 +21,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
   test.setTimeout(60_000) // 3 minutes for the full flow
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(30_000) // setup can take a while with shell scripts
+    testInfo.setTimeout(120_000) // setup can take a while with shell scripts
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
@@ -54,7 +54,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       const revealWrap = page.locator('.reveal-wrap')
       const revealVisible = await revealWrap.isVisible().catch(() => false)
       if (revealVisible) {
-        const revealBtn = page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i  })
+        const revealBtn = page.getByTestId('reveal-role-btn')
         const revealBtnVisible = await revealBtn.isVisible().catch(() => false)
         expect(revealBtnVisible).toBe(true)
         await revealBtn.click()

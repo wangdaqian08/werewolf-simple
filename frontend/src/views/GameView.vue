@@ -441,14 +441,14 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/userStore'
-import { useGameStore } from '@/stores/gameStore'
-import { useRoomStore } from '@/stores/roomStore'
-import { gameService } from '@/services/gameService'
-import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import {ElMessage} from 'element-plus'
+import {useRoute, useRouter} from 'vue-router'
+import {useUserStore} from '@/stores/userStore'
+import {useGameStore} from '@/stores/gameStore'
+import {useRoomStore} from '@/stores/roomStore'
+import {gameService} from '@/services/gameService'
+import {createStompClient, disconnectStomp, subscribeToTopic} from '@/services/stompClient'
 import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
@@ -456,9 +456,9 @@ import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
 import VotingPhase from '@/components/VotingPhase.vue'
-import { useNavigationGuard } from '@/composables/useNavigationGuard'
-import { useAudioService } from '@/composables/useAudioService'
-import type { GamePlayer } from '@/types'
+import {useNavigationGuard} from '@/composables/useNavigationGuard'
+import {useAudioService} from '@/composables/useAudioService'
+import type {GamePlayer} from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -850,6 +850,8 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
+          // Preserve current audioSequence to prevent it from being lost
+          const currentAudio = gameStore.state?.audioSequence
           // Small delay to ensure backend transaction has committed before we read state
           await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
@@ -858,9 +860,8 @@ onMounted(async () => {
             await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
           }
-          // Don't preserve audioSequence here - let the AudioSequence event handle it
-          // This ensures that the new AudioSequence will trigger the audio playback
-          gameStore.setState({ ...state })
+          // Preserve audioSequence - AudioSequence event will update it if needed
+          gameStore.setState({ ...state, audioSequence: currentAudio })
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {

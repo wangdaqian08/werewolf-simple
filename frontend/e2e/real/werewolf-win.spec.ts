@@ -20,7 +20,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
   test.setTimeout(180_000)
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(30_000)
+    testInfo.setTimeout(120_000)
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,

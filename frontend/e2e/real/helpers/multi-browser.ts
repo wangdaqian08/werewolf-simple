@@ -14,14 +14,14 @@ import {readFileSync, writeFileSync} from 'fs'
 import path from 'path'
 import {type Browser, type BrowserContext, expect, type Page} from '@playwright/test'
 import {
-  act,
-  type BotInfo,
-  getConsoleLogin,
-  getRoles,
-  joinBots,
-  readStateFile,
-  type RoleMap,
-  type RoleName,
+    act,
+    type BotInfo,
+    getConsoleLogin,
+    getRoles,
+    joinBots,
+    readStateFile,
+    type RoleMap,
+    type RoleName,
 } from './shell-runner'
 
 const BASE_URL = 'http://localhost:5174'
@@ -226,7 +226,7 @@ export async function setupGame(
   const revealWrap = hostPage.locator('.reveal-wrap')
   const revealVisible = await revealWrap.isVisible().catch(() => false)
   if (revealVisible) {
-    const revealBtn = hostPage.getByRole('button', { name: /揭示我的身份|Reveal Role/i })
+    const revealBtn = hostPage.getByTestId('reveal-role-btn')
     if ((await revealBtn.count()) > 0 && (await revealBtn.isVisible())) {
       await revealBtn.click()
       await hostPage.waitForTimeout(300)

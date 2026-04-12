@@ -19,7 +19,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
   test.setTimeout(180_000)
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(90_000)
+    testInfo.setTimeout(120_000)
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,

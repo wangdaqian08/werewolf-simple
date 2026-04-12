@@ -13,7 +13,7 @@ test.describe('Dead Role Audio Flow', () => {
   test.setTimeout(60_000)
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(30_000)
+    testInfo.setTimeout(120_000)
     ctx = await setupGame(browser, {
       totalPlayers: 7,
       hasSheriff: false,

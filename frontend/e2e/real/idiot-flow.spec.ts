@@ -15,7 +15,7 @@ import {expect, test} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
-import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import {captureSnapshot} from './helpers/composite-screenshot'
 
 let ctx: GameContext
 
@@ -25,7 +25,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
   // ── Test 1: Setup verification ──────────────────────────────────────────────
 
   test('1. Setup — idiot role assigned correctly', async ({ browser }, testInfo) => {
-    testInfo.setTimeout(90_000)
+    testInfo.setTimeout(120_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
       hasSheriff: false,
@@ -56,7 +56,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
   // ── Test 2: Night → Day → Voting → Idiot Reveal ─────────────────────────────────
 
   test('2. Idiot reveal — all browsers show idiot reveal banner', async ({ browser }, testInfo) => {
-    testInfo.setTimeout(90_000)
+    testInfo.setTimeout(120_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
       hasSheriff: false,
@@ -325,7 +325,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
   // ── Test 2: Phase Transition after Idiot Reveal ──────────────────────────────
 
   test('3. Phase transition — VOTE_RESULT to NIGHT', async ({ browser }, testInfo) => {
-    testInfo.setTimeout(90_000)
+    testInfo.setTimeout(120_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
       hasSheriff: false,
