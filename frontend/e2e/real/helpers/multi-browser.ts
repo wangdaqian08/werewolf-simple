@@ -218,11 +218,44 @@ export async function setupGame(
 
   act('CONFIRM_ROLE', undefined, { room: roomCode })
 
-  // ── Step 6: Wait for STMP synchronization ────────────────────────────────
-  // All players are confirmed via script. Wait for STMP events to synchronize
-  // all browsers with the current game state. The game will automatically
-  // transition to the next phase (e.g., SHERIFF_ELECTION if hasSheriff=true).
+  // ── Step 6: Host confirms role in browser (if still on reveal screen) ──
+  // The script confirms roles via API, but we need to ensure the browser state
+  // is synchronized. For hosts with hasSheriff=false, the browser should show
+  // the role reveal screen until all players are confirmed.
 
+  await hostPage.waitForTimeout(1_000)
+
+  // Check if we're still on the role reveal screen
+  const revealWrap = hostPage.locator('.reveal-wrap')
+  const revealVisible = await revealWrap.isVisible().catch(() => false)
+  
+  if (revealVisible) {
+    // Still on role reveal screen - need to complete the browser confirm flow
+    const revealBtn = hostPage.getByTestId('reveal-role-btn')
+    const revealBtnCount = await revealBtn.count()
+    
+    if (revealBtnCount > 0) {
+      const revealBtnVisible = await revealBtn.isVisible().catch(() => false)
+      
+      if (revealBtnVisible) {
+        // Click reveal button
+        await revealBtn.click()
+        await hostPage.waitForTimeout(300)
+        
+        // Click confirm button
+        const confirmBtn = hostPage.getByTestId('confirm-role-btn')
+        try {
+          await confirmBtn.waitFor({ state: 'visible', timeout: 2_000 })
+          await confirmBtn.click()
+        } catch {
+          // Confirm button not found - page likely transitioned, which is acceptable
+          console.log('Confirm button not found (page may have transitioned), continuing...')
+        }
+      }
+    }
+  }
+  
+  // Additional wait to ensure all STMP events are processed
   await hostPage.waitForTimeout(2_000)
 
   // ── Step 7: Discover roles ─────────────────────────────────────────────
