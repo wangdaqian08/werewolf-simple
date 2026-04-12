@@ -407,6 +407,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       for (const tgt of allTargets) {
         if (tryAct('WOLF_KILL', wb.nick, { target: String(tgt.seat), room: ctx.roomCode })) {
           wolfDone = true
+          // Wait for wolf action to be processed
+          await ctx.hostPage.waitForTimeout(1_000)
           break
         }
       }
@@ -431,6 +433,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       for (const tgt of allTargets) {
         if (tryAct('SEER_CHECK', seerBot.nick, { target: String(tgt.seat), room: ctx.roomCode })) {
           seerDone = true
+          // Wait for SEER result to be displayed before confirming
+          await ctx.hostPage.waitForTimeout(2_000)
           tryAct('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
           break
         }
@@ -451,6 +455,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     let witchDone = false
     if (witchBot) {
       witchDone = tryAct('WITCH_ACT', witchBot.nick, { payload: '{"useAntidote":false}', room: ctx.roomCode })
+      // Wait for Witch action to be submitted
+      await ctx.hostPage.waitForTimeout(1_000)
     }
     if (!witchDone && ctx.isHostRole('WITCH')) {
       const witchPage = ctx.pages.get('WITCH')!
@@ -470,6 +476,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     let guardDone = false
     if (guardBot) {
       guardDone = tryAct('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
+      // Wait for guard action to be submitted
+      await ctx.hostPage.waitForTimeout(1_000)
     }
     if (!guardDone && ctx.isHostRole('GUARD')) {
       const guardPage = ctx.pages.get('GUARD')!
@@ -480,7 +488,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // After night, should transition to DAY (or GAME_OVER)
-    await ctx.hostPage.waitForTimeout(5_000)
+    // Wait longer for backend to process all actions and trigger phase transition
+    await ctx.hostPage.waitForTimeout(10_000)
 
     const isOver = ctx.hostPage.url().includes('/result/')
     if (!isOver) {
