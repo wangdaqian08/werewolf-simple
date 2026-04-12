@@ -180,10 +180,10 @@
         </p>
         <div class="ws-row">
           <button
-            class="btn btn-success ws-btn"
+            class="btn btn-primary ws-btn"
             data-testid="witch-antidote"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
-            @click="emit('switchAntidote')"
+            @click="emit('witchAntidote')"
           >
             使用解药
           </button>
@@ -191,7 +191,7 @@
             class="btn btn-secondary ws-btn"
             data-testid="switch-pass-antidote"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
-            @click="emit('switchPassAntidote')"
+            @click="emit('witchPassAntidote')"
           >
             放弃
           </button>
@@ -230,10 +230,10 @@
           </section>
           <div class="ws-row">
             <button
-              class="btn btn-danger ws-btn"
+              class="btn btn-primary ws-btn"
               data-testid="witch-poison-confirm"
               :disabled="!effectivePhase.selectedTargetId || actionPending"
-              @click="emit('switchPoison', effectivePhase.selectedTargetId!)"
+              @click="emit('witchPoison', effectivePhase.selectedTargetId!)"
             >
               确认毒杀 Confirm
             </button>
@@ -326,7 +326,7 @@
     <template v-else-if="subPhase !== 'WAITING'">
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
-        <div class="ss-title">请闭眼</div>
+        <div class="ss-title" data-testid="sleep-screen-title">请闭眼</div>
         <div class="ss-en">Night is in progress...</div>
         <div class="ss-sub">等待其他玩家行动 / Waiting for others</div>
       </div>
