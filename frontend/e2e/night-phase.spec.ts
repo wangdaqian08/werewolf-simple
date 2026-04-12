@@ -206,7 +206,7 @@ test('night: WITCH — using antidote immediately transitions to WAITING (only 1
   await page.waitForTimeout(70)
 
   // Should go straight to sleep screen — no second action allowed
-  await expect(page.getByText('请闭眼')).toBeVisible()
+  await expect(page.getByTestId('sleep-screen-title')).toBeVisible()
 })
 
 test('night: WITCH — passing antidote submits immediately → transitions to WAITING screen', async ({ page }) => {
@@ -218,7 +218,7 @@ test('night: WITCH — passing antidote submits immediately → transitions to W
   await page.waitForTimeout(70)
 
   // Should transition to WAITING subPhase — shows sleep screen
-  await expect(page.getByText('请闭眼')).toBeVisible()
+  await expect(page.getByTestId('sleep-screen-title')).toBeVisible()
 })
 
 test('night: WITCH — using poison (full flow) → WAITING', async ({ page }) => {
@@ -241,7 +241,7 @@ test('night: WITCH — using poison (full flow) → WAITING', async ({ page }) =
   // Confirm poison — should go straight to WAITING (no second action)
   await confirmPoison.click()
   await page.waitForTimeout(70)
-  await expect(page.getByText('请闭眼')).toBeVisible()
+  await expect(page.getByTestId('sleep-screen-title')).toBeVisible()
 })
 
 test('night: WITCH — passing poison submits immediately → transitions to WAITING', async ({ page }) => {
@@ -253,7 +253,7 @@ test('night: WITCH — passing poison submits immediately → transitions to WAI
   await page.waitForTimeout(70)
 
   // Should transition to WAITING subPhase — shows sleep screen
-  await expect(page.getByText('请闭眼')).toBeVisible()
+  await expect(page.getByTestId('sleep-screen-title')).toBeVisible()
 })
 
 // ── Guard ─────────────────────────────────────────────────────────────────────
@@ -322,7 +322,7 @@ test('night: non-active role during WEREWOLF_PICK sees sleep screen and Night Fa
   // No role badge — not this player's active turn
   await expect(page.locator('.rb')).not.toBeVisible()
   // Sleep screen shown
-  await expect(page.getByText('请闭眼').first()).toBeVisible()
+  await expect(page.getByTestId('sleep-screen-title').first()).toBeVisible()
   // Persistent header always shows Night Falls and Round number
   await expect(page.getByText(/Night Falls/i).first()).toBeVisible()
   await expect(page.getByText(/Round \d+/i).first()).toBeVisible()
@@ -376,7 +376,7 @@ test('night: DEAD — dead player sees elimination banner and sleep screen', asy
 
   // Should see sleep screen (not role badge or action interface)
   await expect(page.locator('.rb')).not.toBeVisible()
-  await expect(page.getByText('请闭眼').first()).toBeVisible()
+  await expect(page.getByTestId('sleep-screen-title').first()).toBeVisible()
 
   // Should NOT see any player selection grid or action buttons
   await expect(page.locator('.player-grid').first()).not.toBeVisible()
