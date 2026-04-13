@@ -99,16 +99,16 @@ class AudioPhaseMappingTest {
     }
 
     @Test
-    fun `Audio file mapping - seer_close_eyes mp3 must be used for both SEER_PICK and SEER_RESULT exits`() {
-        // Test: seer_close_eyes.mp3 should appear when leaving SEER_PICK
+    fun `Audio file mapping - seer_close_eyes mp3 must only be used when leaving SEER_RESULT`() {
+        // Test: seer_close_eyes.mp3 should NOT appear when leaving SEER_PICK
         val sequence1 = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
-        assertThat(sequence1.audioFiles).containsExactly("seer_close_eyes.mp3")
+        assertThat(sequence1.audioFiles).isEmpty()
 
-        // Test: seer_close_eyes.mp3 should also appear when leaving SEER_RESULT
+        // Test: seer_close_eyes.mp3 should appear when leaving SEER_RESULT
         val sequence2 = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_RESULT,

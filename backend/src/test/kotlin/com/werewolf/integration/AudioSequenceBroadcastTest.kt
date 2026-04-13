@@ -143,7 +143,7 @@ class AudioSequenceBroadcastTest {
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
         println("Expected audio sequence for SEER_CHECK: ${expectedAudioSequence.audioFiles}")
-        assertThat(expectedAudioSequence.audioFiles).containsExactly("seer_close_eyes.mp3")
+        assertThat(expectedAudioSequence.audioFiles).isEmpty()
 
         println("\n=== Test Completed Successfully ===")
     }

@@ -107,7 +107,7 @@ class AudioServiceTest {
     }
 
     @Test
-    fun `calculateNightSubPhaseTransition - SEER_PICK to SEER_RESULT returns seer_close_eyes`() {
+    fun `calculateNightSubPhaseTransition - SEER_PICK to SEER_RESULT returns empty audio`() {
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_PICK,
@@ -116,7 +116,7 @@ class AudioServiceTest {
 
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.SEER_RESULT.name)
-        assertThat(sequence.audioFiles).containsExactly("seer_close_eyes.mp3")
+        assertThat(sequence.audioFiles).isEmpty()
     }
 
     @Test

@@ -104,7 +104,7 @@ class AudioGameStateConsistencyTest {
         // Setup: Create game in NIGHT phase
         val room = createRoom()
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
-        val nightPhase = createNightPhase(game.gameId!!, 1, NightSubPhase.GUARD_PICK)
+        createNightPhase(game.gameId!!, 1, NightSubPhase.GUARD_PICK)
 
         // Execute: Generate audio sequence for NIGHT to DAY transition
         val audioSequence = audioService.calculatePhaseTransition(
@@ -129,7 +129,7 @@ class AudioGameStateConsistencyTest {
         // Setup: Create game in NIGHT phase with WEREWOLF_PICK
         val room = createRoom(hasSeer = true)
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
-        val nightPhase = createNightPhase(game.gameId!!, 1, NightSubPhase.WEREWOLF_PICK)
+        createNightPhase(game.gameId!!, 1, NightSubPhase.WEREWOLF_PICK)
 
         // Execute: Generate audio sequence for WEREWOLF_PICK to SEER_PICK transition
         val audioSequence = audioService.calculateNightSubPhaseTransition(
@@ -154,11 +154,11 @@ class AudioGameStateConsistencyTest {
         // Setup: Create game in NIGHT phase with SEER_RESULT
         val room = createRoom(hasSeer = true, hasWitch = true)
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
-        val nightPhase = createNightPhase(game.gameId!!, 1, NightSubPhase.SEER_RESULT)
+        createNightPhase(game.gameId!!, 1, NightSubPhase.SEER_RESULT)
 
         // Execute: Generate audio sequence for SEER_RESULT to WITCH_ACT transition
         val audioSequence = audioService.calculateNightSubPhaseTransition(
-            gameId = game.gameId!!,
+            gameId = game.gameId,
             oldSubPhase = NightSubPhase.SEER_RESULT,
             newSubPhase = NightSubPhase.WITCH_ACT,
         )
@@ -181,11 +181,11 @@ class AudioGameStateConsistencyTest {
         // Setup: Create a complete game setup
         val room = createRoom(hasSeer = true, hasWitch = true, hasGuard = true)
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY, dayNumber = 0)
-        val players = createPlayers(game.gameId!!, room.totalPlayers)
+        createPlayers(game.gameId!!, room.totalPlayers)
 
         // Step 1: DAY -> NIGHT transition
         val dayToNightSequence = audioService.calculatePhaseTransition(
-            gameId = game.gameId!!,
+            gameId = game.gameId,
             oldPhase = GamePhase.DAY,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = null,
@@ -236,7 +236,7 @@ class AudioGameStateConsistencyTest {
         // Verify: Audio sequence matches new game state
         assertThat(seerToResult.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(seerToResult.subPhase).isEqualTo(NightSubPhase.SEER_RESULT.name)
-        assertThat(seerToResult.audioFiles).containsExactly("seer_close_eyes.mp3")
+        assertThat(seerToResult.audioFiles).isEmpty()
 
         // Step 5: SEER_RESULT -> WITCH_ACT
         val resultToWitch = audioService.calculateNightSubPhaseTransition(
@@ -358,7 +358,7 @@ class AudioGameStateConsistencyTest {
 
         // Calculate audio sequence for new state
         val newAudioSequence = audioService.calculateNightSubPhaseTransition(
-            gameId = game.gameId!!,
+            gameId = game.gameId,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
             newSubPhase = updatedNightPhase.subPhase
         )

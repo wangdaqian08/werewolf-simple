@@ -111,7 +111,7 @@ class AudioSequenceIntegrationTest {
         val transitions = listOf(
             Triple(NightSubPhase.WAITING, NightSubPhase.WEREWOLF_PICK, listOf("wolf_open_eyes.mp3")),
             Triple(NightSubPhase.WEREWOLF_PICK, NightSubPhase.SEER_PICK, listOf("wolf_close_eyes.mp3", "seer_open_eyes.mp3")),
-            Triple(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT, listOf("seer_close_eyes.mp3")),
+            Triple(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT, emptyList()),
             Triple(NightSubPhase.SEER_RESULT, NightSubPhase.WITCH_ACT, listOf("seer_close_eyes.mp3", "witch_open_eyes.mp3")),
             Triple(NightSubPhase.WITCH_ACT, NightSubPhase.GUARD_PICK, listOf("witch_close_eyes.mp3", "guard_open_eyes.mp3")),
         )
@@ -138,7 +138,7 @@ class AudioSequenceIntegrationTest {
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
         assertThat(gameRepository.findById(game.gameId!!)).isPresent
 
-        val players = createPlayers(game.gameId!!, room.totalPlayers)
+        createPlayers(game.gameId!!, room.totalPlayers)
 
         // Verify the game has correct roomId
         val loadedGame = gameRepository.findById(game.gameId!!).orElseThrow()
@@ -212,7 +212,7 @@ class AudioSequenceIntegrationTest {
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
-        assertThat(seerToResult.audioFiles).containsExactly("seer_close_eyes.mp3")
+        assertThat(seerToResult.audioFiles).isEmpty()
 
         // SEER_RESULT -> WITCH_ACT
         val resultToWitch = audioService.calculateNightSubPhaseTransition(

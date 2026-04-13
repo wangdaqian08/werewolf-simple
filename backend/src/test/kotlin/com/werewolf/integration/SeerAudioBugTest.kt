@@ -98,8 +98,8 @@ class SeerAudioBugTest {
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
 
-        // Then: Should only contain "seer_close_eyes.mp3"
-        assertThat(audioSequence.audioFiles).containsExactly("seer_close_eyes.mp3")
+        // Then: Should be empty (seer_close_eyes.mp3 is only played when leaving SEER_RESULT)
+        assertThat(audioSequence.audioFiles).isEmpty()
         println("SEER_PICK -> SEER_RESULT: ${audioSequence.audioFiles}")
     }
 
@@ -180,7 +180,7 @@ class SeerAudioBugTest {
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
         println("  Audio: ${audio2.audioFiles}")
-        assertThat(audio2.audioFiles).containsExactly("seer_close_eyes.mp3")
+        assertThat(audio2.audioFiles).isEmpty()
 
         // Step 4: Simulate SEER_RESULT -> WITCH_ACT (seer confirms and advances)
         println("\nStep 4: SEER_RESULT -> WITCH_ACT (seer confirms and advances)")
