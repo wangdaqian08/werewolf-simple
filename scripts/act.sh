@@ -306,7 +306,7 @@ def get(gid):
 
 last_match = None
 misses = 0
-for gid in range(1, 500):
+for gid in range(1, 10000):
     d = get(gid)
     if "phase" not in d:
         misses += 1
