@@ -104,7 +104,7 @@ class GameServiceNightPhaseTest {
             player("u2", 2, PlayerRole.WEREWOLF),
         )
         val users = listOf(user("u1", "Alice"), user("u2", "Bob"))
-        val game = game(phase = GamePhase.DAY).also { it.dayNumber = 1 }
+        val game = game(phase = GamePhase.DAY_DISCUSSION).also { it.dayNumber = 1 }
         setupGameAndPlayers(game, players, users)
 
         val result = gameService.getGameState(gameId, "u1")

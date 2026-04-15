@@ -28,7 +28,7 @@ class GameContextLoaderTest {
     private val roomId = 10
     private val hostId = "host:001"
 
-    private fun game(phase: GamePhase = GamePhase.DAY, dayNumber: Int = 1): Game {
+    private fun game(phase: GamePhase = GamePhase.DAY_DISCUSSION, dayNumber: Int = 1): Game {
         val g = Game(roomId = roomId, hostUserId = hostId)
         val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(g, gameId)
         g.phase = phase
@@ -43,7 +43,7 @@ class GameContextLoaderTest {
         GamePlayer(gameId = gameId, userId = "g1", seatIndex = 1, role = PlayerRole.WEREWOLF),
     )
 
-    private fun stubBasics(phase: GamePhase = GamePhase.DAY) {
+    private fun stubBasics(phase: GamePhase = GamePhase.DAY_DISCUSSION) {
         val g = game(phase)
         whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(g))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(players())
@@ -76,7 +76,7 @@ class GameContextLoaderTest {
 
     @Test
     fun `load - nightPhase is null when game phase is not NIGHT`() {
-        stubBasics(GamePhase.DAY)
+        stubBasics(GamePhase.DAY_DISCUSSION)
 
         val ctx = loader.load(gameId)
 
@@ -97,7 +97,7 @@ class GameContextLoaderTest {
 
     @Test
     fun `load - election is null when game phase is not SHERIFF_ELECTION`() {
-        stubBasics(GamePhase.DAY)
+        stubBasics(GamePhase.DAY_DISCUSSION)
 
         val ctx = loader.load(gameId)
 
@@ -106,7 +106,7 @@ class GameContextLoaderTest {
 
     @Test
     fun `load - allNightPhases is populated from repository`() {
-        stubBasics(GamePhase.DAY)
+        stubBasics(GamePhase.DAY_DISCUSSION)
         val phase1 = NightPhase(gameId = gameId, dayNumber = 1)
         val phase2 = NightPhase(gameId = gameId, dayNumber = 2)
         whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(phase1, phase2))

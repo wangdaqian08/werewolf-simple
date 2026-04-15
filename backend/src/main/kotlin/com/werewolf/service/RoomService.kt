@@ -36,6 +36,7 @@ class RoomService(
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
+                config = GameConfig.createDefault()
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")

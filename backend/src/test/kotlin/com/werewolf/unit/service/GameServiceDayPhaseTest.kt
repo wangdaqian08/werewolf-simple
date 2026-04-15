@@ -43,7 +43,7 @@ class GameServiceDayPhaseTest {
     private fun game(subPhase: String = DaySubPhase.RESULT_HIDDEN.name) =
         Game(roomId = 1, hostUserId = hostId).also { g ->
             val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(g, gameId)
-            g.phase = GamePhase.DAY
+            g.phase = GamePhase.DAY_DISCUSSION
             g.subPhase = subPhase
             g.dayNumber = day
         }

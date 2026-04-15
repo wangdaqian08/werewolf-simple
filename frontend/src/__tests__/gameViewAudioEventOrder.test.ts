@@ -310,7 +310,7 @@ describe('GameView Audio Event Order Bug', () => {
     // NightSubPhaseChanged (actually PhaseChanged)
     gameStore.setState(
       makeState({
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         dayPhase: {
           subPhase: 'RESULT_HIDDEN',
           dayNumber: 1,
@@ -326,7 +326,7 @@ describe('GameView Audio Event Order Bug', () => {
     const newSeq = makeSequence(['day_time.mp3'], 'seq-night-to-day')
     gameStore.setState(
       makeState({
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         dayPhase: {
           subPhase: 'RESULT_HIDDEN',
           dayNumber: 1,

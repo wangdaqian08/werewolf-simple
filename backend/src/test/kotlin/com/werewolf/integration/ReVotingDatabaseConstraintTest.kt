@@ -72,7 +72,7 @@ class ReVotingDatabaseConstraintTest {
             roomId = roomId,
             hostUserId = hostId,
         )
-        game.phase = GamePhase.VOTING
+        game.phase = GamePhase.DAY_VOTING
         game.dayNumber = 1
         return gameRepository.save(game)
     }
@@ -146,7 +146,7 @@ class ReVotingDatabaseConstraintTest {
         val context = gameContextLoader.load(game.gameId!!)
 
         // First, set up voting phase
-        game.phase = GamePhase.VOTING
+        game.phase = GamePhase.DAY_VOTING
         game.subPhase = VotingSubPhase.VOTING.name
         gameRepository.save(game)
 

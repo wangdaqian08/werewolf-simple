@@ -4,7 +4,16 @@ enum class RoomStatus { WAITING, IN_GAME, CLOSED }
 
 enum class ReadyStatus { NOT_READY, READY }
 
-enum class GamePhase { ROLE_REVEAL, SHERIFF_ELECTION, DAY, VOTING, NIGHT, GAME_OVER }
+enum class GamePhase { 
+    ROLE_REVEAL,        // 角色揭示阶段
+    SHERIFF_ELECTION,   // 警长选举阶段
+    WAITING,            // 等待进入夜阶段
+    NIGHT,              // 夜阶段
+    DAY_PENDING,        // 夜结束，等待公布结果
+    DAY_DISCUSSION,     // 白天讨论阶段
+    DAY_VOTING,         // 白天投票阶段
+    GAME_OVER           // 游戏结束
+}
 
 enum class PlayerRole { WEREWOLF, VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT }
 

@@ -7,7 +7,7 @@ import type { GameEvent, GameState } from '@/types'
 function freshState(): GameState {
   return {
     gameId: 'game-001',
-    phase: 'DAY',
+    phase: 'DAY_DISCUSSION',
     dayNumber: 1,
     myRole: 'SEER',
     sheriff: 'u2',
@@ -39,7 +39,7 @@ describe('gameStore', () => {
     const store = useGameStore()
     store.setState(freshState())
     expect(store.state?.gameId).toBe('game-001')
-    expect(store.state?.phase).toBe('DAY')
+    expect(store.state?.phase).toBe('DAY_DISCUSSION')
     expect(store.state?.players).toHaveLength(2)
   })
 

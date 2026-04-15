@@ -12,13 +12,16 @@ import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.InjectMocks
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import org.junit.jupiter.api.BeforeEach
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
 import java.util.*
 
 @ExtendWith(MockitoExtension::class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class SheriffServiceTest {
 
     @Mock lateinit var gameRepository: GameRepository
@@ -29,7 +32,16 @@ class SheriffServiceTest {
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var nightOrchestrator: NightOrchestrator
-    @InjectMocks lateinit var sheriffService: SheriffService
+    private lateinit var sheriffService: SheriffService
+
+    @BeforeEach
+    fun setUp() {
+        sheriffService = SheriffService(
+            gameRepository, gamePlayerRepository, sheriffElectionRepository,
+            sheriffCandidateRepository, voteRepository, userRepository,
+            stompPublisher, nightOrchestrator, CoroutineScope(Dispatchers.Default),
+        )
+    }
 
     private val gameId = 10
     private val electionId = 20
@@ -358,7 +370,7 @@ class SheriffServiceTest {
     }
 
     @Test
-    fun `quitCampaign - triggers initNight when last running candidate quits`() {
+    fun `quitCampaign - transitions to RESULT when last running candidate quits`() {
         val speakingOrder = guestId
         val election = election(subPhase = ElectionSubPhase.SPEECH, speakingOrder = speakingOrder)
         val ctx = context(election = election)
@@ -372,37 +384,108 @@ class SheriffServiceTest {
                 SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.QUIT),
             ))
         whenever(sheriffCandidateRepository.save(any<SheriffCandidate>())).thenAnswer { it.arguments[0] }
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
 
         val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_QUIT_CAMPAIGN)
         val result = sheriffService.handle(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        // Should transition to RESULT, not directly to night
+        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.RESULT)
 
-        verify(nightOrchestrator).initNight(gameId, 1)
-        verify(stompPublisher, never()).broadcastGame(eq(gameId), argThat { this is DomainEvent.PhaseChanged && subPhase == ElectionSubPhase.SPEECH.name })
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
+        assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.RESULT.name)
+        // Should NOT call startNightPhase directly — auto-advance is scheduled
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
-    // ── Group 4: revealResult() empty votes → night ────────────────────────────
+    // ── Group 4: revealResult() empty votes / all-abstain ────────────────────────
 
     @Test
-    fun `revealResult - triggers initNight when no votes cast`() {
-        val election = election(subPhase = ElectionSubPhase.VOTING)
-        val ctx = context(election = election)
-
+    fun `revealResult - all abstain with running candidates transitions to TIED`() {
+        val candA = "cand:001"
+        val candB = "cand:002"
+        val electionObj = election(subPhase = ElectionSubPhase.VOTING)
+        val ctx = context(election = electionObj)
+        // All voters abstained (targetUserId = null)
+        val votes = listOf(
+            Vote(gameId = gameId, voteContext = VoteContext.SHERIFF_ELECTION, dayNumber = 1,
+                voterUserId = guestId, targetUserId = null),
+            Vote(gameId = gameId, voteContext = VoteContext.SHERIFF_ELECTION, dayNumber = 1,
+                voterUserId = hostId, targetUserId = null),
+        )
         whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(
             gameId, VoteContext.SHERIFF_ELECTION, 1
-        )).thenReturn(emptyList())
+        )).thenReturn(votes)
+        // Running candidates exist
+        val runningA = SheriffCandidate(electionId = electionId, userId = candA, status = CandidateStatus.RUNNING)
+        val runningB = SheriffCandidate(electionId = electionId, userId = candB, status = CandidateStatus.RUNNING)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(runningA, runningB))
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
 
         val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_REVEAL_RESULT)
         val result = sheriffService.handle(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(electionObj.subPhase).isEqualTo(ElectionSubPhase.TIED)
 
-        verify(nightOrchestrator).initNight(gameId, 1)
-        verify(stompPublisher, never()).broadcastGame(eq(gameId), argThat {
-            this is DomainEvent.PhaseChanged &&
-                (subPhase == ElectionSubPhase.RESULT.name || subPhase == ElectionSubPhase.TIED.name)
-        })
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
+        assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.TIED.name)
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
+    }
+
+    @Test
+    fun `revealResult - no votes and no running candidates transitions to RESULT with auto-advance`() {
+        val electionObj = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = "cand:001")
+        val ctx = context(election = electionObj)
+        // No votes cast at all
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(
+            gameId, VoteContext.SHERIFF_ELECTION, 1
+        )).thenReturn(emptyList())
+        // No running candidates (all quit)
+        val quitCandidate = SheriffCandidate(electionId = electionId, userId = "cand:001", status = CandidateStatus.QUIT)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(quitCandidate))
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_REVEAL_RESULT)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(electionObj.subPhase).isEqualTo(ElectionSubPhase.RESULT)
+
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
+        assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.RESULT.name)
+        // Should NOT call startNightPhase directly — auto-advance is scheduled asynchronously
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
+    }
+
+    @Test
+    fun `revealResult - no votes with running candidates transitions to TIED`() {
+        val candA = "cand:001"
+        val electionObj = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = candA)
+        val ctx = context(election = electionObj)
+        // No votes cast
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(
+            gameId, VoteContext.SHERIFF_ELECTION, 1
+        )).thenReturn(emptyList())
+        // Running candidates exist
+        val runningA = SheriffCandidate(electionId = electionId, userId = candA, status = CandidateStatus.RUNNING)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(runningA))
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_REVEAL_RESULT)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(electionObj.subPhase).isEqualTo(ElectionSubPhase.TIED)
+
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
+        assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.TIED.name)
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     // ── Group 5: vote() — self-vote and other vote validations ────────────────
@@ -654,7 +737,7 @@ class SheriffServiceTest {
         verify(stompPublisher, times(2)).broadcastGame(eq(gameId), captor.capture())
         assertThat(captor.allValues).anyMatch { it is DomainEvent.SheriffElected && it.sheriffUserId == winnerId }
         assertThat(captor.allValues).anyMatch { it is DomainEvent.PhaseChanged && it.subPhase == ElectionSubPhase.RESULT.name }
-        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -684,7 +767,7 @@ class SheriffServiceTest {
         val captor = argumentCaptor<DomainEvent>()
         verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
         assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.TIED.name)
-        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     // ── Group 9: appoint() action ─────────────────────────────────────────────

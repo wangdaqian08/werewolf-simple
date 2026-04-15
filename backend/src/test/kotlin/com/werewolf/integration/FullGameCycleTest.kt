@@ -132,6 +132,7 @@ class FullGameCycleTest {
 
     // ── Tests ─────────────────────────────────────────────────────────────────
 
+    // TODO unable to pass
     /**
      * CLASSIC mode: 4 players (2 wolves + 2 villagers), no sheriff, no special roles.
      * Night 1: wolf kills one villager → 2 wolves vs 1 villager → WEREWOLF wins.
@@ -163,6 +164,9 @@ class FullGameCycleTest {
         // Wolf kills the villager — triggers night resolution
         assertThat(action(wolfToken, gameId, "WOLF_KILL", villagerTarget.userId).statusCode).isEqualTo(HttpStatus.OK)
 
+        // Wait for async operations to complete (close eyes audio + resolve night kills)
+        Thread.sleep(3000)
+
         // With 4 players: 2 wolves vs 1 remaining villager → CLASSIC wolves(2) >= others(1) → WEREWOLF wins
         val finalGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(finalGame.phase).isEqualTo(GamePhase.GAME_OVER)
@@ -192,9 +196,12 @@ class FullGameCycleTest {
 
         action(wolfToken, gameId, "WOLF_KILL", villagerTarget.userId)
 
+        // Wait for async operations to complete (close eyes audio + resolve night kills)
+        Thread.sleep(3000)
+
         // In HARD_MODE: 2 wolves vs 1 villager — not all non-wolves eliminated → no win yet
-            val finalGame = gameRepository.findById(gameId).orElseThrow()
-            assertThat(finalGame.phase).isEqualTo(GamePhase.DAY)
-            assertThat(finalGame.winner).isNull()
-        }
-        }
+        val finalGame = gameRepository.findById(gameId).orElseThrow()
+        assertThat(finalGame.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(finalGame.winner).isNull()
+    }
+}

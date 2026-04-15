@@ -61,6 +61,7 @@ class GuardProtectionIntegrationTest {
             contextLoader = contextLoader,
             nightWaitingScheduler = mock(), // Not needed for this test
             audioService = audioService,
+            coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
         )
     }
 
@@ -106,7 +107,7 @@ class GuardProtectionIntegrationTest {
         // Mock audioService to return valid AudioSequence for NIGHT -> DAY transition
         val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-DAY",
-            phase = GamePhase.DAY,
+            phase = GamePhase.DAY_DISCUSSION,
             subPhase = DaySubPhase.RESULT_HIDDEN.name,
             audioFiles = listOf("day_time.mp3"),
             priority = 10,
@@ -115,7 +116,7 @@ class GuardProtectionIntegrationTest {
         whenever(audioService.calculatePhaseTransition(
             eq(gameId),
             eq(GamePhase.NIGHT),
-            eq(GamePhase.DAY),
+            eq(GamePhase.DAY_DISCUSSION),
             isNull(),
             eq(DaySubPhase.RESULT_HIDDEN.name),
             any()
@@ -181,7 +182,7 @@ class GuardProtectionIntegrationTest {
         })
 
         // Verify game transitions to DAY phase
-        verify(gameRepository).save(argThat<Game> { g -> g.phase == GamePhase.DAY })
+        verify(gameRepository).save(argThat<Game> { g -> g.phase == GamePhase.DAY_DISCUSSION })
     }
 
     @Test

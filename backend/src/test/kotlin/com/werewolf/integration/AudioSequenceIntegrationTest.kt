@@ -63,12 +63,12 @@ class AudioSequenceIntegrationTest {
     fun `DAY to NIGHT transition - generates correct audio sequence`() {
         // Setup: Create a room and game in DAY phase
         val room = createRoom()
-        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY, dayNumber = 1)
+        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY_DISCUSSION, dayNumber = 1)
 
         // Execute: Calculate audio sequence for DAY to NIGHT transition
         val audioSequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
-            oldPhase = GamePhase.DAY,
+            oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
@@ -92,14 +92,14 @@ class AudioSequenceIntegrationTest {
         val audioSequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
         )
 
         // Verify: Audio sequence contains day_time.mp3
-        assertThat(audioSequence.phase).isEqualTo(GamePhase.DAY)
+        assertThat(audioSequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
         assertThat(audioSequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
         assertThat(audioSequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
         assertThat(audioSequence.priority).isEqualTo(10)
@@ -145,7 +145,7 @@ class AudioSequenceIntegrationTest {
         assertThat(loadedGame.roomId).isEqualTo(room.roomId!!)
 
         // Initialize night phase
-        nightOrchestrator.initNight(game.gameId!!, newDayNumber = game.dayNumber, withWaiting = false)
+        nightOrchestrator.startNightPhase(game.gameId!!, newDayNumber = game.dayNumber, withWaiting = false)
 
         // Get the created night phase
         val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(game.gameId!!, game.dayNumber)
@@ -173,7 +173,7 @@ class AudioSequenceIntegrationTest {
     fun `Complete night cycle - generates correct audio sequences for all transitions`() {
         // Setup: Create a complete game setup with all roles
         val room = createRoom(hasSeer = true, hasWitch = true, hasGuard = true)
-        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY, dayNumber = 0)
+        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY_DISCUSSION, dayNumber = 0)
         val players = createPlayers(game.gameId!!, room.totalPlayers)
 
         // Simulate a complete night cycle
@@ -182,7 +182,7 @@ class AudioSequenceIntegrationTest {
         // DAY -> NIGHT transition
         val dayToNightSequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
-            oldPhase = GamePhase.DAY,
+            oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
@@ -234,7 +234,7 @@ class AudioSequenceIntegrationTest {
         val nightToDaySequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
@@ -245,12 +245,12 @@ class AudioSequenceIntegrationTest {
     @Test
     fun `AudioSequence IDs are unique across multiple transitions`() {
         val room = createRoom()
-        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY, dayNumber = 1)
+        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY_DISCUSSION, dayNumber = 1)
 
         // Generate multiple audio sequences
         val sequence1 = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
-            oldPhase = GamePhase.DAY,
+            oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
@@ -266,7 +266,7 @@ class AudioSequenceIntegrationTest {
         val sequence3 = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,

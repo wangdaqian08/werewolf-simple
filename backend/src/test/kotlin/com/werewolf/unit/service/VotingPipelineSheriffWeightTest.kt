@@ -64,7 +64,7 @@ class VotingPipelineSheriffWeightTest {
     private fun game(subPhase: String = VotingSubPhase.VOTING.name, sheriff: String? = sheriffId) =
         Game(roomId = 1, hostUserId = hostId).also {
             val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
-            it.phase = GamePhase.VOTING
+            it.phase = GamePhase.DAY_VOTING
             it.subPhase = subPhase
             it.dayNumber = 1
             it.sheriffUserId = sheriff
@@ -371,7 +371,7 @@ class VotingPipelineSheriffWeightTest {
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
 
         // Verify night orchestrator was called
-        verify(nightOrchestrator).initNight(eq(gameId), eq(2), anyOrNull(), eq(false))
+        verify(nightOrchestrator).startNightPhase(eq(gameId), eq(2), anyOrNull(), eq(false))
     }
 
     // ── Test Case 9: Sheriff votes for dead player (should be rejected) ────────

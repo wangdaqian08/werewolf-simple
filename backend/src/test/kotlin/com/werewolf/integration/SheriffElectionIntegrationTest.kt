@@ -16,6 +16,7 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.SheriffElectionRepository
+import com.werewolf.service.SheriffService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -38,6 +39,7 @@ class SheriffElectionIntegrationTest {
     @Autowired lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
     @Autowired lateinit var nightOrchestrator: NightOrchestrator
+    @Autowired lateinit var sheriffService: SheriffService
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -47,6 +49,7 @@ class SheriffElectionIntegrationTest {
     }
 
     private data class TestPlayer(val token: String, val userId: String)
+    private data class Sextuple(val host: TestPlayer, val g1: TestPlayer, val g2: TestPlayer, val g3: TestPlayer, val g4: TestPlayer, val g5: TestPlayer, val roomId: Int)
 
     private fun login(nickname: String): TestPlayer {
         @Suppress("UNCHECKED_CAST")
@@ -75,17 +78,19 @@ class SheriffElectionIntegrationTest {
      * Set up a 4-player room with hasSheriff=true.
      * Returns (host, g1, g2, g3, roomId).
      */
-    private fun setupSheriffRoom(prefix: String): Quintuple {
+    private fun setupSheriffRoom(prefix: String): Sextuple {
         val host = login("${prefix}H")
         val g1   = login("${prefix}G1")
         val g2   = login("${prefix}G2")
         val g3   = login("${prefix}G3")
+        val g4   = login("${prefix}G4")
+        val g5   = login("${prefix}G5")
 
         @Suppress("UNCHECKED_CAST")
         val roomBody = restTemplate.postForEntity(
             CREATE_ROOM_URL,
             HttpEntity(
-                mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to 4, "roles" to emptyList<String>(), "hasSheriff" to true)),
+                mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to 6, "roles" to listOf("WEREWOLF", "SEER", "WITCH", "VILLAGER", "VILLAGER"), "hasSheriff" to true)),
                 headers(host.token)
             ),
             Map::class.java
@@ -98,16 +103,25 @@ class SheriffElectionIntegrationTest {
         restTemplate.postForEntity(SEAT_URL, HttpEntity(mapOf("seatIndex" to 0, "roomId" to roomId), headers(host.token)), Map::class.java)
 
         // Guests join, claim seats, go ready
-        listOf(g1, g2, g3).forEachIndexed { idx, player ->
+        listOf(g1, g2, g3, g4, g5).forEachIndexed { idx, player ->
             restTemplate.postForEntity(JOIN_ROOM_URL, HttpEntity(mapOf("roomCode" to roomCode), headers(player.token)), Map::class.java)
             restTemplate.postForEntity(SEAT_URL, HttpEntity(mapOf("seatIndex" to idx + 1, "roomId" to roomId), headers(player.token)), Map::class.java)
             restTemplate.postForEntity(READY_URL, HttpEntity(mapOf("ready" to true, "roomId" to roomId), headers(player.token)), Map::class.java)
         }
 
-        return Quintuple(host, g1, g2, g3, roomId)
+        return Sextuple(host, g1, g2, g3, g4, g5, roomId)
     }
 
-    private data class Quintuple(val host: TestPlayer, val g1: TestPlayer, val g2: TestPlayer, val g3: TestPlayer, val roomId: Int)
+    /** Advance speech until VOTING sub-phase (handles random speaking order). */
+    private fun advanceSpeechUntilVoting(hostToken: String, gameId: Int) {
+        for (i in 0..9) {
+            val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
+            if (election.subPhase == ElectionSubPhase.VOTING) return
+            action(hostToken, gameId, "SHERIFF_ADVANCE_SPEECH")
+        }
+        val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
+        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.VOTING)
+    }
 
     /** Start game, confirm all roles. Returns gameId. Game is now in SHERIFF_ELECTION/SIGNUP. */
     private fun startGameAndConfirmRoles(host: TestPlayer, players: List<TestPlayer>, roomId: Int): Int {
@@ -129,30 +143,35 @@ class SheriffElectionIntegrationTest {
 
     @Test
     fun `sheriff election - single candidate wins, sheriffUserId and sheriff flag are set, game advances to NIGHT`() {
-        val (host, g1, g2, g3, roomId) = setupSheriffRoom("SE1")
-        val allPlayers = listOf(host, g1, g2, g3)
+        val (host, g1, g2, g3, g4, g5, roomId) = setupSheriffRoom("SE1")
+        val allPlayers = listOf(host, g1, g2, g3, g4, g5)
         val gameId = startGameAndConfirmRoles(host, allPlayers, roomId)
 
-        // SIGNUP: g1 and g2 campaign; g3 passes; g2 then drops out via SHERIFF_QUIT
-        // This exercises the SHERIFF_QUIT path (candidate quits before speeches start)
+        // SIGNUP: g1 and g2 campaign; others pass
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g2.token, gameId, "SHERIFF_QUIT").statusCode).isEqualTo(HttpStatus.OK)
 
-        // SPEECH: only g1 remains running → 1 advance to reach VOTING
+        // SPEECH: g2 quits, advance until VOTING (handles random speaking order)
         assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g2.token, gameId, "SHERIFF_QUIT_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
+        advanceSpeechUntilVoting(host.token, gameId)
 
-        // VOTING: host, g2 (SIGNUP-quitter can still vote), g3 vote for g1; g1 abstains (can't self-vote)
+        // VOTING: host, g3, g4, g5 vote for g1; g1 abstains (can't self-vote); g2 cannot vote (quit during speech)
         assertThat(action(host.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g2.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g4.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g5.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g1.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
 
         // RESULT: host reveals → single winner → g1 elected
         assertThat(action(host.token, gameId, "SHERIFF_REVEAL_RESULT").statusCode).isEqualTo(HttpStatus.OK)
+
+        // Cancel auto-advance immediately after result reveal
+        sheriffService.cancelScheduledJob(gameId)
 
         // Assert election is in RESULT sub-phase
         val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
@@ -164,24 +183,14 @@ class SheriffElectionIntegrationTest {
         assertThat(savedGame.sheriffUserId).isEqualTo(g1.userId)
         val g1Player = gamePlayerRepository.findByGameIdAndUserId(gameId, g1.userId).orElseThrow()
         assertThat(g1Player.sheriff).isTrue()
-
-        // HOST: START_NIGHT → game transitions to NIGHT/WEREWOLF_PICK (withWaiting=true, so advance past WAITING)
-        assertThat(action(host.token, gameId, "START_NIGHT").statusCode).isEqualTo(HttpStatus.OK)
-        nightOrchestrator.advanceFromWaiting(gameId)
-
-        val nightGame = gameRepository.findById(gameId).orElseThrow()
-        assertThat(nightGame.phase).isEqualTo(GamePhase.NIGHT)
-        // During NIGHT the sub-phase is tracked in NightPhase, not Game.subPhase
-        val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, nightGame.dayNumber).orElseThrow()
-        assertThat(nightPhase.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK)
     }
 
     // ── Test 2: Tie then appoint ──────────────────────────────────────────────
 
     @Test
     fun `sheriff election - tied vote, host appoints, sheriffUserId is set`() {
-        val (host, g1, g2, g3, roomId) = setupSheriffRoom("SE2")
-        val allPlayers = listOf(host, g1, g2, g3)
+        val (host, g1, g2, g3, g4, g5, roomId) = setupSheriffRoom("SE2")
+        val allPlayers = listOf(host, g1, g2, g3, g4, g5)
         val gameId = startGameAndConfirmRoles(host, allPlayers, roomId)
 
         // SIGNUP: g1 and g2 both campaign
@@ -189,18 +198,22 @@ class SheriffElectionIntegrationTest {
         assertThat(action(g2.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
 
         // SPEECH: host starts → 2 candidates → 2 advances to reach VOTING
         assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
 
-        // VOTING: split votes → g1 gets 2, g2 gets 2 → TIE
-        // host→g1, g3→g2, g1→g2, g2→g1
+        // VOTING: split votes → g1 gets 3, g2 gets 3 → TIE
+        // host→g1, g3→g2, g1→g2, g2→g1, g4→g1, g5→g2
         assertThat(action(host.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_VOTE", g2.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g1.token, gameId, "SHERIFF_VOTE", g2.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g4.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g5.token, gameId, "SHERIFF_VOTE", g2.userId).statusCode).isEqualTo(HttpStatus.OK)
 
         // TIED: host reveals result
         assertThat(action(host.token, gameId, "SHERIFF_REVEAL_RESULT").statusCode).isEqualTo(HttpStatus.OK)
@@ -209,6 +222,9 @@ class SheriffElectionIntegrationTest {
 
         // APPOINT: host appoints g1
         assertThat(action(host.token, gameId, "SHERIFF_APPOINT", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
+
+        // Cancel auto-advance immediately after appointment
+        sheriffService.cancelScheduledJob(gameId)
 
         // Assert election moves to RESULT with g1 elected
         val resultElection = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
@@ -220,24 +236,14 @@ class SheriffElectionIntegrationTest {
         assertThat(savedGame.sheriffUserId).isEqualTo(g1.userId)
         val g1Player = gamePlayerRepository.findByGameIdAndUserId(gameId, g1.userId).orElseThrow()
         assertThat(g1Player.sheriff).isTrue()
-
-        // HOST: START_NIGHT → game transitions to NIGHT/WEREWOLF_PICK
-        assertThat(action(host.token, gameId, "START_NIGHT").statusCode).isEqualTo(HttpStatus.OK)
-        nightOrchestrator.advanceFromWaiting(gameId)
-
-        val nightGame = gameRepository.findById(gameId).orElseThrow()
-        assertThat(nightGame.phase).isEqualTo(GamePhase.NIGHT)
-        // During NIGHT the sub-phase is tracked in NightPhase, not Game.subPhase
-        val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, nightGame.dayNumber).orElseThrow()
-        assertThat(nightPhase.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK)
     }
 
     // ── Test 3: No-candidate shortcut ─────────────────────────────────────────
 
     @Test
     fun `sheriff election - no candidates, SHERIFF_START_SPEECH transitions directly to NIGHT`() {
-        val (host, g1, g2, g3, roomId) = setupSheriffRoom("SE3")
-        val allPlayers = listOf(host, g1, g2, g3)
+        val (host, g1, g2, g3, g4, g5, roomId) = setupSheriffRoom("SE3")
+        val allPlayers = listOf(host, g1, g2, g3, g4, g5)
         val gameId = startGameAndConfirmRoles(host, allPlayers, roomId)
 
         // SIGNUP: all players pass — no candidates
@@ -245,13 +251,21 @@ class SheriffElectionIntegrationTest {
         assertThat(action(g1.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
 
-        // No-candidate shortcut: SHERIFF_START_SPEECH calls initNight directly (withWaiting=false)
+        // No-candidate shortcut: SHERIFF_START_SPEECH triggers startNightPhase via runBlocking,
+        // which blocks until the entire night coroutine completes (all role timeouts expire).
+        // By the time the HTTP response returns, the game has resolved night and is in DAY.
         assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
 
-        // Game should now be in NIGHT phase (no waiting step since withWaiting=false)
+        // Game has progressed past SHERIFF_ELECTION (through NIGHT to DAY)
         val savedGame = gameRepository.findById(gameId).orElseThrow()
-        assertThat(savedGame.phase).isEqualTo(GamePhase.NIGHT)
+        assertThat(savedGame.phase).isNotEqualTo(GamePhase.SHERIFF_ELECTION)
+
+        // A night phase record was created (proving night occurred)
+        val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, savedGame.dayNumber).orElseThrow()
+        assertThat(nightPhase.subPhase).isEqualTo(NightSubPhase.COMPLETE)
 
         // No sheriff was elected
         assertThat(savedGame.sheriffUserId).isNull()

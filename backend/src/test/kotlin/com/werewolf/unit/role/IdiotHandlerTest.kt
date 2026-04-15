@@ -31,7 +31,7 @@ class IdiotHandlerTest {
 
     private fun game() = Game(roomId = 1, hostUserId = hostId).also {
         val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
-        it.phase = GamePhase.VOTING
+        it.phase = GamePhase.DAY_VOTING
         it.subPhase = VotingSubPhase.VOTE_RESULT.name
         it.dayNumber = 1
     }
@@ -50,7 +50,7 @@ class IdiotHandlerTest {
 
     @Test
     fun `acceptedActions - returns IDIOT_REVEAL during VOTING VOTE_RESULT sub-phase`() {
-        val accepted = handler().acceptedActions(GamePhase.VOTING, VotingSubPhase.VOTE_RESULT.name)
+        val accepted = handler().acceptedActions(GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
         assertThat(accepted).contains(ActionType.IDIOT_REVEAL)
     }
 
@@ -62,7 +62,7 @@ class IdiotHandlerTest {
 
     @Test
     fun `acceptedActions - returns nothing during VOTING sub-phase other than VOTE_RESULT`() {
-        val accepted = handler().acceptedActions(GamePhase.VOTING, VotingSubPhase.VOTING.name)
+        val accepted = handler().acceptedActions(GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
         assertThat(accepted).doesNotContain(ActionType.IDIOT_REVEAL)
     }
 

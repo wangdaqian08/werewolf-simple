@@ -50,28 +50,20 @@ class AudioService {
 
                     // If transitioning to a specific sub-phase immediately, add role audio
                     if (newSubPhase != null) {
-                        val subPhaseEnum = try {
-                            NightSubPhase.valueOf(newSubPhase)
-                        } catch (e: IllegalArgumentException) {
-                            log.error("Invalid night sub-phase: $newSubPhase", e)
-                            null
-                        }
+                        val subPhaseEnum = runCatching { NightSubPhase.valueOf(newSubPhase) }.onFailure { log.error("Invalid night sub-phase: $newSubPhase", it) }.getOrNull()
                         if (subPhaseEnum != null && subPhaseEnum != NightSubPhase.WAITING) {
-                            val roleAudio = getOpenEyesAudio(subPhaseEnum)
-                            if (roleAudio != null) {
-                                audioFiles.add(roleAudio)
-                            }
+                            getOpenEyesAudio(subPhaseEnum)?.let { audioFiles.add(it) }
                         }
                     }
                 }
 
-                GamePhase.DAY -> {
+                GamePhase.DAY_DISCUSSION -> {
                     // Entering day phase
                     audioFiles.add("day_time.mp3")
                     audioFiles.add("rooster_crowing.mp3")
                 }
 
-                GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.VOTING, GamePhase.GAME_OVER -> {
+                GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.DAY_VOTING, GamePhase.GAME_OVER, GamePhase.WAITING, GamePhase.DAY_PENDING -> {
                     // No audio for these phases
                 }
             }
@@ -115,18 +107,12 @@ class AudioService {
                 // SEER_RESULT is a result display phase, not a role phase
                 // Don't add close eyes audio when entering SEER_RESULT
                 if (newSubPhase != NightSubPhase.SEER_RESULT) {
-                    val closeEyesAudio = getCloseEyesAudio(oldSubPhase)
-                    if (closeEyesAudio != null) {
-                        audioFiles.add(closeEyesAudio)
-                    }
+                    getCloseEyesAudio(oldSubPhase)?.let { audioFiles.add(it) }
                 }
             }
 
             // Add "open eyes" audio for new role
-            val openEyesAudio = getOpenEyesAudio(newSubPhase)
-            if (openEyesAudio != null) {
-                audioFiles.add(openEyesAudio)
-            }
+            getOpenEyesAudio(newSubPhase)?.let { audioFiles.add(it) }
 
             return AudioSequence(
                 id = "${gameId}-${System.currentTimeMillis()}-NIGHT-${newSubPhase.name}",
@@ -148,23 +134,35 @@ class AudioService {
     }
 
     /**
-     * Get "close eyes" audio for a role using RoleRegistry
+     * Calculate "close eyes" audio for a role using RoleRegistry
+     * Public for testing purposes.
      */
-    private fun getCloseEyesAudio(subPhase: NightSubPhase): String? {
+    fun calculateCloseEyesAudio(subPhase: NightSubPhase): String? {
         val role = mapSubPhaseToRole(subPhase) ?: return null
         return RoleRegistry.getCloseEyesAudio(role)
     }
 
     /**
-     * Get "open eyes" audio for a role using RoleRegistry
+     * Calculate "open eyes" audio for a role using RoleRegistry
+     * Public for testing purposes.
      */
-    private fun getOpenEyesAudio(subPhase: NightSubPhase): String? {
+    fun calculateOpenEyesAudio(subPhase: NightSubPhase): String? {
         // SEER_RESULT doesn't have open eyes audio (it's just showing results)
         if (subPhase == NightSubPhase.SEER_RESULT) return null
 
         val role = mapSubPhaseToRole(subPhase) ?: return null
         return RoleRegistry.getOpenEyesAudio(role)
     }
+
+    /**
+     * Get "close eyes" audio for a role using RoleRegistry (internal use)
+     */
+    private fun getCloseEyesAudio(subPhase: NightSubPhase): String? = calculateCloseEyesAudio(subPhase)
+
+    /**
+     * Get "open eyes" audio for a role using RoleRegistry (internal use)
+     */
+    private fun getOpenEyesAudio(subPhase: NightSubPhase): String? = calculateOpenEyesAudio(subPhase)
 
     /**
      * Calculate audio sequence for current game state
@@ -183,12 +181,7 @@ class AudioService {
                 GamePhase.NIGHT -> {
                     // NIGHT phase: check if we're entering night (goes_dark_close_eyes) or in a sub-phase
                     if (nightSubPhase != null) {
-                        val subPhaseEnum = try {
-                            NightSubPhase.valueOf(nightSubPhase)
-                        } catch (e: IllegalArgumentException) {
-                            log.error("Invalid night sub-phase in game state: $nightSubPhase", e)
-                            null
-                        }
+                        val subPhaseEnum = runCatching { NightSubPhase.valueOf(nightSubPhase) }.onFailure { log.error("Invalid night sub-phase in game state: $nightSubPhase", it) }.getOrNull()
                         if (subPhaseEnum != null) {
                             // In a sub-phase, no audio (audio was played during transition)
                             // But we include an empty sequence for consistency
@@ -200,12 +193,12 @@ class AudioService {
                     }
                 }
 
-                GamePhase.DAY -> {
+                GamePhase.DAY_DISCUSSION -> {
                     // DAY phase: day_time.mp3 was played during transition
                     // Empty sequence for current state
                 }
 
-                GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.VOTING, GamePhase.GAME_OVER -> {
+                GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.DAY_VOTING, GamePhase.GAME_OVER, GamePhase.WAITING, GamePhase.DAY_PENDING -> {
                     // No audio for these phases
                 }
             }
@@ -242,35 +235,44 @@ class AudioService {
         val audioFiles = mutableListOf<String>()
 
         try {
-            // Special case: if both SEER_PICK and SEER_RESULT are skipped (seer is dead),
-            // play the complete sequence once: open eyes → close eyes
-            val seerPickSkipped = skippedRoles.contains(NightSubPhase.SEER_PICK)
-            val seerResultSkipped = skippedRoles.contains(NightSubPhase.SEER_RESULT)
-
-            if (seerPickSkipped && seerResultSkipped) {
-                // Dead seer: play seer_open_eyes.mp3 → seer_close_eyes.mp3
-                val seerOpenAudio = getOpenEyesAudio(NightSubPhase.SEER_PICK)
-                val seerCloseAudio = getCloseEyesAudio(NightSubPhase.SEER_RESULT)
-                if (seerOpenAudio != null) audioFiles.add(seerOpenAudio)
-                if (seerCloseAudio != null) audioFiles.add(seerCloseAudio)
-            } else {
-                // Normal case: add complete audio sequence for each skipped (dead) role
-                for (skippedRole in skippedRoles) {
-                    if (skippedRole != NightSubPhase.WAITING) {
+            // Process all skipped roles in order
+            for (skippedRole in skippedRoles) {
+                if (skippedRole == NightSubPhase.WAITING) continue
+                
+                // Special handling for seer: SEER_PICK and SEER_RESULT together form one complete sequence
+                if (skippedRole == NightSubPhase.SEER_PICK) {
+                    // Check if SEER_RESULT is also skipped (seer is completely dead)
+                    val seerResultSkipped = skippedRoles.contains(NightSubPhase.SEER_RESULT)
+                    if (seerResultSkipped) {
+                        // Dead seer: play seer_open_eyes.mp3 → seer_close_eyes.mp3
+                        val seerOpenAudio = getOpenEyesAudio(NightSubPhase.SEER_PICK)
+                        val seerCloseAudio = getCloseEyesAudio(NightSubPhase.SEER_RESULT)
+                        if (seerOpenAudio != null) audioFiles.add(seerOpenAudio)
+                        if (seerCloseAudio != null) audioFiles.add(seerCloseAudio)
+                        // Skip SEER_RESULT since we already handled it
+                        continue
+                    } else {
+                        // Only SEER_PICK skipped (unusual case)
                         val openEyesAudio = getOpenEyesAudio(skippedRole)
-                        val closeEyesAudio = getCloseEyesAudio(skippedRole)
-
-                        // Special case: SEER_PICK should not play close eyes audio
-                        // because SEER_RESULT will play it (close eyes happens after showing result)
-                        if (skippedRole == NightSubPhase.SEER_PICK) {
-                            if (openEyesAudio != null) audioFiles.add(openEyesAudio)
-                            // Don't add closeEyesAudio for SEER_PICK - will be played by SEER_RESULT
-                        } else {
-                            // Complete sequence: open eyes → close eyes
-                            if (openEyesAudio != null) audioFiles.add(openEyesAudio)
-                            if (closeEyesAudio != null) audioFiles.add(closeEyesAudio)
-                        }
+                        if (openEyesAudio != null) audioFiles.add(openEyesAudio)
                     }
+                } else if (skippedRole == NightSubPhase.SEER_RESULT) {
+                    // SEER_RESULT without SEER_PICK - check if SEER_PICK was processed
+                    val seerPickSkipped = skippedRoles.contains(NightSubPhase.SEER_PICK)
+                    if (seerPickSkipped) {
+                        // Already handled together with SEER_PICK above
+                        continue
+                    } else {
+                        // Only SEER_RESULT skipped (unusual case)
+                        val closeEyesAudio = getCloseEyesAudio(skippedRole)
+                        if (closeEyesAudio != null) audioFiles.add(closeEyesAudio)
+                    }
+                } else {
+                    // Normal role: complete sequence open eyes → close eyes
+                    val openEyesAudio = getOpenEyesAudio(skippedRole)
+                    val closeEyesAudio = getCloseEyesAudio(skippedRole)
+                    if (openEyesAudio != null) audioFiles.add(openEyesAudio)
+                    if (closeEyesAudio != null) audioFiles.add(closeEyesAudio)
                 }
             }
 
@@ -282,7 +284,7 @@ class AudioService {
                 }
             }
 
-            log.debug("Calculated dead role audio sequence for game $gameId: ${audioFiles.joinToString(", ")}")
+            log.info("[AudioService] game=$gameId: calculated dead-role audio sequence: [${audioFiles.joinToString(", ")}]")
 
             return AudioSequence(
                 id = "${gameId}-${System.currentTimeMillis()}-DEAD-ROLE-${targetSubPhase.name}",

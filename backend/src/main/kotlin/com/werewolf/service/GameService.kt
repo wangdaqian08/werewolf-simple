@@ -168,7 +168,7 @@ class GameService(
             }
         } else null
 
-        val dayPhase = if (game.phase == GamePhase.DAY) {
+        val dayPhase = if (game.phase == GamePhase.DAY_DISCUSSION) {
             val playerMap = players.associateBy { it.userId }
             val isResultRevealed = game.subPhase == DaySubPhase.RESULT_REVEALED.name
             // Night kills come from NightPhase (EliminationHistory only tracks voting eliminations)
@@ -213,7 +213,7 @@ class GameService(
             )
         } else null
 
-        val votingPhase = if (game.phase == GamePhase.VOTING) {
+        val votingPhase = if (game.phase == GamePhase.DAY_VOTING) {
             val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
                 gameId, VoteContext.ELIMINATION, game.dayNumber
             )

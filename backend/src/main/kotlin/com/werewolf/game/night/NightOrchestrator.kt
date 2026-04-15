@@ -1,5 +1,6 @@
 package com.werewolf.game.night
 
+import com.werewolf.audio.RoleRegistry
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.phase.WinConditionChecker
@@ -10,13 +11,22 @@ import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionSynchronization.STATUS_COMMITTED
 import java.time.LocalDateTime
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 @Service
 class NightOrchestrator(
@@ -29,8 +39,13 @@ class NightOrchestrator(
     private val contextLoader: GameContextLoader,
     @Lazy private val nightWaitingScheduler: NightWaitingScheduler,
     private val audioService: com.werewolf.service.AudioService,
+    private val coroutineScope: CoroutineScope, // 新增：协程作用域
 ) {
     private val log = LoggerFactory.getLogger(NightOrchestrator::class.java)
+
+    // 协程相关字段
+    private val activeNightJobs = ConcurrentHashMap<Int, Job>() // 存储正在进行的夜阶段任务
+    private val pendingActions = ConcurrentHashMap<PlayerRole, CompletableDeferred<com.werewolf.game.action.GameActionResult?>>() // 存储角色动作的 CompletableDeferred
     /**
      * Ordered night sub-phases for this game based on which roles are active.
      * Werewolves are always included; other roles follow the room config.
@@ -42,9 +57,12 @@ class NightOrchestrator(
         if (context.room.hasGuard) activeRoles.add(PlayerRole.GUARD)
         // Note: IDIOT has no night sub-phases, so we don't need to check for it
 
-        return handlers
+        val sequence = handlers
             .filter { it.role in activeRoles }
             .flatMap { it.nightSubPhases() }
+        
+        log.info("[nightSequence] gameId=${context.gameId}, activeRoles=$activeRoles, sequence=$sequence")
+        return sequence
     }
 
     fun firstSubPhase(context: GameContext): NightSubPhase =
@@ -60,6 +78,9 @@ class NightOrchestrator(
     @Transactional
     fun initNight(gameId: Int, newDayNumber: Int, previousGuardTarget: String? = null, withWaiting: Boolean = false) {
         val context = contextLoader.load(gameId)
+        requireNotNull(context.room.config) {
+            "[initNight] game=$gameId: Room.config must not be null — set GameConfig before starting night phase"
+        }
         val initialSubPhase = if (withWaiting) NightSubPhase.WAITING else firstSubPhase(context)
 
         val nightPhase = NightPhase(
@@ -79,7 +100,7 @@ class NightOrchestrator(
         // Calculate audio sequence for NIGHT phase
         val audioSequence = audioService.calculatePhaseTransition(
             gameId = gameId,
-            oldPhase = GamePhase.DAY, // Assuming coming from DAY
+            oldPhase = GamePhase.DAY_DISCUSSION, // Assuming coming from DAY
             newPhase = GamePhase.NIGHT,
             oldSubPhase = null,
             newSubPhase = initialSubPhase.name,
@@ -185,74 +206,118 @@ class NightOrchestrator(
         if (currentIdx < 0) return
 
         val nextSubPhase = sequence.getOrNull(currentIdx + 1)
+        
+        // Debug logging
+        log.info("[advance] gameId=$gameId, completedSubPhase=$completedSubPhase, sequence=$sequence, currentIdx=$currentIdx, nextSubPhase=$nextSubPhase")
+        log.info("[advance] alivePlayers=${context.alivePlayers.map { "${it.userId}:${it.role}" }}")
 
         if (nextSubPhase == null) {
-            resolveNightKills(context, nightPhase)
+            log.info("[advance] No next sub-phase, last special role is $completedSubPhase")
+            
+            // Get close eyes audio for the last special role
+            val closeEyesAudio = getCloseEyesAudioForSubPhase(completedSubPhase)
+            
+            if (closeEyesAudio != null) {
+                log.info("[advance] Playing close eyes audio for last special role: $closeEyesAudio")
+                // Play close eyes audio, then advance to day
+                nightWaitingScheduler.scheduleLastSpecialRoleCloseEyesAndAdvanceToDay(gameId, nightPhase.dayNumber, closeEyesAudio)
+            } else {
+                log.info("[advance] No close eyes audio for $completedSubPhase, resolving night kills directly")
+                resolveNightKills(context, nightPhase)
+            }
         } else {
-            // Find the next sub-phase with at least one alive player, or null if none
-            val nextAliveSubPhase = sequence
-                .drop(currentIdx + 1)
-                .firstOrNull { subPhase ->
-                    val role = getRoleForSubPhase(subPhase)
-                    role == null || context.alivePlayers.any { it.role == role }
-                }
+            // Special handling: if seer is dead, SEER_PICK → SEER_RESULT
+            val isSeerDead = nextSubPhase == NightSubPhase.SEER_PICK && 
+                             !context.alivePlayers.any { it.role == PlayerRole.SEER }
 
-            if (nextAliveSubPhase == null) {
-                // All subsequent roles are dead - skip to DAY with delayed audio for dead roles
-                val skippedRoles = sequence.drop(currentIdx + 1)
-                if (skippedRoles.isNotEmpty()) {
-                    val audioDelayMs = 5_000L * skippedRoles.size.coerceAtMost(2)
+            if (isSeerDead) {
+                // Seer is dead: skip SEER_PICK and go directly to SEER_RESULT
+                nightPhase.subPhase = NightSubPhase.SEER_RESULT
+                nightPhaseRepository.save(nightPhase)
+                
+                // Send UI event
+                stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, NightSubPhase.SEER_RESULT))
+                
+                // Calculate audio sequence: seer_open_eyes.mp3 → pause → seer_close_eyes.mp3
+                val audioSequence = audioService.calculateDeadRoleAudioSequence(
+                    gameId = gameId,
+                    skippedRoles = listOf(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT),
+                    targetSubPhase = NightSubPhase.SEER_RESULT
+                )
+                
+                // Find the next phase after SEER_RESULT
+                val seerResultIdx = sequence.indexOf(NightSubPhase.SEER_RESULT)
+                val phaseAfterSeerResultIdx = seerResultIdx + 1
+                val nextSubPhaseAfterSeerResult = sequence.getOrNull(phaseAfterSeerResultIdx)
+                
+                // Schedule audio playback and auto-advance
+                nightWaitingScheduler.scheduleDeadRoleAudio(
+                    gameId = gameId,
+                    dayNumber = nightPhase.dayNumber,
+                    audioSequence = audioSequence,
+                    delayMs = 5000L, // Pause for 5 seconds
+                    nextSubPhase = nextSubPhaseAfterSeerResult,
+                    autoAdvanceToDay = false, // Not the last special role
+                )
+            } else {
+                // Check if the role for next sub-phase is alive
+                val nextRole = getRoleForSubPhase(nextSubPhase)
+                val isRoleAlive = nextRole == null || context.alivePlayers.any { it.role == nextRole }
+                
+                log.info("[advance] gameId=$gameId, nextSubPhase=$nextSubPhase, nextRole=$nextRole, isRoleAlive=$isRoleAlive")
+
+                if (!isRoleAlive) {
+                    // Role is dead: enter the phase, play audio with pause, then advance
+                    nightPhase.subPhase = nextSubPhase
+                    nightPhaseRepository.save(nightPhase)
+                    
+                    // Send UI event
+                    stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, nextSubPhase))
+                    
+                    // Calculate audio sequence: open_eyes.mp3 → close_eyes.mp3
                     val audioSequence = audioService.calculateDeadRoleAudioSequence(
                         gameId = gameId,
-                        skippedRoles = skippedRoles,
-                        targetSubPhase = NightSubPhase.COMPLETE
+                        skippedRoles = listOf(nextSubPhase),
+                        targetSubPhase = nextSubPhase
                     )
-                    // Schedule audio delay for dead roles
-                    nightWaitingScheduler.scheduleAudioDelay(gameId, audioSequence, audioDelayMs)
-                }
-                resolveNightKills(context, nightPhase)
-            } else {
-                val skippedCount = sequence.indexOf(nextAliveSubPhase) - (currentIdx + 1)
-                if (skippedCount > 0) {
-                    // Skip dead roles with new improved UX: immediate UI update + delayed audio
-                    val skippedRoles = sequence.subList(currentIdx + 1, sequence.indexOf(nextAliveSubPhase))
-                    val audioDelayMs = 5_000L * skippedCount.coerceAtMost(2)
-
-                    advanceToSubPhaseWithDelayedAudio(
+                    
+                    // Check if this is the last special role
+                    // nextSubPhaseIdx is the index of nextSubPhase (currentIdx + 1)
+                    // phaseAfterNextIdx is the index of the phase after nextSubPhase (currentIdx + 2)
+                    val nextSubPhaseIdx = currentIdx + 1
+                    val phaseAfterNextIdx = nextSubPhaseIdx + 1
+                    val isLastSpecialRole = nextSubPhaseIdx == sequence.lastIndex
+                    
+                    log.info("[advance] gameId=$gameId, nextSubPhase=$nextSubPhase, nextSubPhaseIdx=$nextSubPhaseIdx, sequence.lastIndex=${sequence.lastIndex}, isLastSpecialRole=$isLastSpecialRole")
+                    
+                    // Schedule audio playback and auto-advance
+                    nightWaitingScheduler.scheduleDeadRoleAudio(
                         gameId = gameId,
-                        skippedRoles = skippedRoles,
-                        targetSubPhase = nextAliveSubPhase,
-                        audioDelayMs = audioDelayMs
+                        dayNumber = nightPhase.dayNumber,
+                        audioSequence = audioSequence,
+                        delayMs = 5000L, // Pause for 5 seconds
+                        nextSubPhase = if (isLastSpecialRole) null else sequence[phaseAfterNextIdx],
+                        autoAdvanceToDay = isLastSpecialRole,
                     )
                 } else {
-                    // Advance immediately to next alive role
-                    nightPhase.subPhase = nextAliveSubPhase
+                    // Role is alive: advance normally with separate audio broadcasts
+                    nightPhase.subPhase = nextSubPhase
                     nightPhaseRepository.save(nightPhase)
-
-                    // Calculate audio sequence for this transition
-                    val audioSequence = audioService.calculateNightSubPhaseTransition(
-                        gameId = gameId,
-                        oldSubPhase = completedSubPhase,
-                        newSubPhase = nextAliveSubPhase,
-                    )
-
-                    // Send both events
-                    stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, nextAliveSubPhase))
-                    stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
                     
-                    // Additional check: reload context and check if the next sub-phase has no alive players
-                    // Use non-recursive approach by re-entering the function with the new sub-phase
-                    // This is handled by calling advance() again with the new sub-phase as "completed"
-                    val updatedContext = contextLoader.load(gameId)
-                    val roleForNextPhase = getRoleForSubPhase(nextAliveSubPhase)
-                    if (roleForNextPhase != null) {
-                        val hasAlivePlayersForRole = updatedContext.alivePlayers.any { it.role == roleForNextPhase }
-                        if (!hasAlivePlayersForRole) {
-                            // No alive players for this role - advance immediately
-                            // Re-enter advance() with this sub-phase as "completed"
-                            advance(gameId, nextAliveSubPhase)
-                        }
-                    }
+                    // Get separate audio for close_eyes and open_eyes
+                    val closeEyesAudio = audioService.calculateCloseEyesAudio(completedSubPhase)
+                    val openEyesAudio = audioService.calculateOpenEyesAudio(nextSubPhase)
+                    
+                    // Send UI update immediately
+                    stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, nextSubPhase))
+                    
+                    // Schedule audio playback with gap between close_eyes and open_eyes
+                    nightWaitingScheduler.scheduleAliveRoleTransition(
+                        gameId = gameId,
+                        closeEyesAudio = closeEyesAudio,
+                        openEyesAudio = openEyesAudio,
+                        gapMs = 3000L, // 3 second gap between roles
+                    )
                 }
             }
         }
@@ -266,6 +331,11 @@ class NightOrchestrator(
             NightSubPhase.GUARD_PICK -> PlayerRole.GUARD
             else -> null
         }
+    }
+
+    private fun getCloseEyesAudioForSubPhase(subPhase: NightSubPhase): String? {
+        val role = getRoleForSubPhase(subPhase) ?: return null
+        return RoleRegistry.getCloseEyesAudio(role)
     }
 
     @Transactional
@@ -314,8 +384,7 @@ class NightOrchestrator(
 
             // Broadcast events after transaction commit
             if (TransactionSynchronizationManager.isActualTransactionActive()) {
-                TransactionSynchronizationManager.registerSynchronization(object :
-                    org.springframework.transaction.support.TransactionSynchronization {
+                TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
                     override fun afterCommit() {
                         try {
                             stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
@@ -342,7 +411,7 @@ class NightOrchestrator(
             }
         } else {
             val game = updatedContext.game
-            game.phase = GamePhase.DAY
+            game.phase = GamePhase.DAY_DISCUSSION
             game.subPhase = DaySubPhase.RESULT_HIDDEN.name
             gameRepository.save(game)
 
@@ -354,7 +423,7 @@ class NightOrchestrator(
 
                             oldPhase = GamePhase.NIGHT,
 
-                            newPhase = GamePhase.DAY,
+                            newPhase = GamePhase.DAY_DISCUSSION,
 
                             oldSubPhase = null,
 
@@ -382,7 +451,7 @@ class NightOrchestrator(
                                     try {
                                         stompPublisher.broadcastGame(
                                             gameId,
-                                            DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
+                                            DomainEvent.PhaseChanged(gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name)
                                         )
                                     } catch (e: Exception) {
                                         log.error("[resolveNightKills] CRITICAL: Failed to broadcast PhaseChanged for game $gameId", e)
@@ -422,7 +491,7 @@ class NightOrchestrator(
                             stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
                             stompPublisher.broadcastGame(
                                 gameId,
-                                DomainEvent.PhaseChanged(gameId, GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
+                                DomainEvent.PhaseChanged(gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name)
                             )
                             stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
                             
@@ -472,5 +541,200 @@ class NightOrchestrator(
 
         // Schedule audio delay
         nightWaitingScheduler.scheduleAudioDelay(gameId, audioSequence, audioDelayMs)
+    }
+
+    /**
+     * 使用协程启动夜阶段
+     * 这是符合 ADR-010 的主入口点，使用 Kotlin 协程来管理夜阶段流程
+     * 
+     * @param gameId 游戏ID
+     * @param newDayNumber 新的白天编号
+     * @param previousGuardTarget 上一个守卫保护的目标ID
+     * @param withWaiting 是否以WAITING子阶段开始（无警长第一夜）
+     */
+    fun startNightPhase(gameId: Int, newDayNumber: Int, previousGuardTarget: String? = null, withWaiting: Boolean = false): Job {
+        // 取消之前的任务（如果存在）
+        activeNightJobs[gameId]?.cancel()
+        
+        val job = coroutineScope.launch {
+            try {
+                executeNightSequence(gameId, newDayNumber, previousGuardTarget, withWaiting)
+            } catch (e: Exception) {
+                log.error("[startNightPhase] Night phase failed for game $gameId", e)
+            } finally {
+                activeNightJobs.remove(gameId)
+            }
+        }
+        
+        activeNightJobs[gameId] = job
+        log.info("[startNightPhase] Started night phase for game $gameId")
+        return job
+    }
+
+    /**
+     * 提交角色动作
+     * 使用 CompletableDeferred 来完成等待中的协程
+     */
+    fun submitAction(gameId: Int, role: PlayerRole, action: com.werewolf.game.action.GameActionResult) {
+        val deferred = pendingActions[role]
+        if (deferred != null) {
+            log.info("[submitAction] Submitting action for game $gameId, role $role")
+            deferred.complete(action)
+        } else {
+            log.warn("[submitAction] No pending action for game $gameId, role $role")
+        }
+    }
+
+    /**
+     * 取消夜阶段
+     * 取消所有正在进行的协程任务并清理状态
+     */
+    fun cancelNightPhase(gameId: Int) {
+        log.info("[cancelNightPhase] Cancelling night phase for game $gameId")
+        activeNightJobs[gameId]?.cancel()
+        activeNightJobs.remove(gameId)
+        pendingActions.clear()
+    }
+
+    /**
+     * 使用协程执行夜阶段序列
+     * 这是核心的协程逻辑，按照 ADR-010 的描述实现
+     * 
+     * @param gameId 游戏ID
+     * @param newDayNumber 新的白天编号
+     * @param previousGuardTarget 上一个守卫保护的目标ID
+     * @param withWaiting 是否以WAITING子阶段开始
+     */
+    private suspend fun executeNightSequence(gameId: Int, newDayNumber: Int, previousGuardTarget: String? = null, withWaiting: Boolean = false) {
+        // 初始化夜阶段
+        initNightInternal(gameId, newDayNumber, previousGuardTarget, withWaiting)
+        
+        val context = contextLoader.load(gameId)
+        val nightSequence = nightSequence(context)
+        
+        log.info("[executeNightSequence] Starting night sequence for game $gameId: $nightSequence")
+        
+        for (subPhase in nightSequence) {
+            val role = getRoleForSubPhase(subPhase) ?: continue
+            
+            // 获取角色配置
+            val gameConfig = context.room.config?: throw IllegalArgumentException("[executeNightSequence] No configuration for game $gameId")
+            val config = gameConfig.getDelayForRole(role)
+            
+            log.info("[executeNightSequence] Processing sub-phase $subPhase for role $role in game $gameId")
+            
+            // 发送 OPEN_EYES 事件
+            broadcastOpenEyes(gameId, role, context.game.dayNumber)
+            
+            // 检查角色是否存活
+            val isRoleAlive = context.alivePlayers.any { it.role == role }
+            
+            if (isRoleAlive) {
+                // 角色存活：等待动作
+                log.info("[executeNightSequence] Role $role is alive, waiting for action")
+                
+                val deferred = CompletableDeferred<com.werewolf.game.action.GameActionResult?>()
+                pendingActions[role] = deferred
+                
+                // 发送动作提示给相关玩家
+                context.alivePlayers.filter { it.role == role }.forEach { player ->
+                    // TODO: 实现动作提示发送
+                    log.info("[executeNightSequence] Sending action prompt to player ${player.userId}")
+                }
+                
+                // 等待动作完成（带超时）
+                val action = withTimeoutOrNull(config.actionWindowMs.milliseconds) {
+                    deferred.await()
+                }
+                
+                log.info("[executeNightSequence] Action received for role $role: $action")
+                
+                // 处理动作
+                if (action != null) {
+                    val handler = handlers.find { it.role == role }
+                    if (handler != null) {
+                        // TODO: 实现动作处理
+                        log.info("[executeNightSequence] Handling action for role $role")
+                    }
+                }
+                
+                pendingActions.remove(role)
+            } else {
+                // 角色死亡：模拟延迟
+                log.info("[executeNightSequence] Role $role is dead, simulating delay for ${config.deadRoleDelayMs}ms")
+                delay(config.deadRoleDelayMs)
+            }
+            
+            // 发送 CLOSE_EYES 事件
+            broadcastCloseEyes(gameId, role, context.game.dayNumber)
+            
+            log.info("[executeNightSequence] Completed sub-phase $subPhase for role $role")
+        }
+        
+        // 解析夜阶段结果
+        val nightPhase = context.nightPhase
+        if (nightPhase != null) {
+            log.info("[executeNightSequence] Resolving night kills for game $gameId")
+            resolveNightKills(context, nightPhase)
+        }
+    }
+
+    /**
+     * 内部初始化夜阶段的方法
+     * 与 initNight 相同的逻辑，但在协程上下文中调用
+     */
+    private fun initNightInternal(gameId: Int, newDayNumber: Int, previousGuardTarget: String? = null, withWaiting: Boolean = false) {
+        val context = contextLoader.load(gameId)
+        val initialSubPhase = if (withWaiting) NightSubPhase.WAITING else firstSubPhase(context)
+
+        val nightPhase = NightPhase(
+            gameId = gameId,
+            dayNumber = newDayNumber,
+            subPhase = initialSubPhase,
+            prevGuardTargetUserId = previousGuardTarget,
+        )
+        nightPhaseRepository.save(nightPhase)
+
+        val game = context.game
+        game.phase = GamePhase.NIGHT
+        game.subPhase = null
+        game.dayNumber = newDayNumber
+        gameRepository.save(game)
+
+        // Calculate audio sequence for NIGHT phase
+        val audioSequence = audioService.calculatePhaseTransition(
+            gameId = gameId,
+            oldPhase = GamePhase.DAY_DISCUSSION, // Assuming coming from DAY
+            newPhase = GamePhase.NIGHT,
+            oldSubPhase = null,
+            newSubPhase = initialSubPhase.name,
+            room = context.room,
+        )
+
+        // Send both events
+        stompPublisher.broadcastGame(gameId, DomainEvent.PhaseChanged(gameId, GamePhase.NIGHT, initialSubPhase.name))
+        stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+
+        if (withWaiting) {
+            nightWaitingScheduler.scheduleAdvance(gameId)
+        }
+    }
+
+    /**
+     * 广播 OPEN_EYES 事件
+     */
+    private fun broadcastOpenEyes(gameId: Int, role: PlayerRole, nightNumber: Int) {
+        val event = DomainEvent.OpenEyes(gameId, role, GamePhase.NIGHT, nightNumber)
+        stompPublisher.broadcastGame(gameId, event)
+        log.info("[broadcastOpenEyes] Broadcasting OPEN_EYES for game $gameId, role $role")
+    }
+
+    /**
+     * 广播 CLOSE_EYES 事件
+     */
+    private fun broadcastCloseEyes(gameId: Int, role: PlayerRole, nightNumber: Int) {
+        val event = DomainEvent.CloseEyes(gameId, role, GamePhase.NIGHT, nightNumber)
+        stompPublisher.broadcastGame(gameId, event)
+        log.info("[broadcastCloseEyes] Broadcasting CLOSE_EYES for game $gameId, role $role")
     }
 }

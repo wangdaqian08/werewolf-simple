@@ -255,9 +255,9 @@ describe('useAudioService', () => {
     setupComposable()
 
     const seq = makeSequence(['day_time.mp3'], 'day-enter')
-    seq.phase = 'DAY'
+    seq.phase = 'DAY_DISCUSSION'
     seq.subPhase = null
-    gameStore.setState(makeState({ phase: 'DAY', audioSequence: seq }))
+    gameStore.setState(makeState({ phase: 'DAY_DISCUSSION', audioSequence: seq }))
     await nextTick()
 
     expect(mockPlaySequential).toHaveBeenCalledWith(['day_time.mp3'])
@@ -348,7 +348,7 @@ describe('useAudioService', () => {
     // 7. Night → Day
     gameStore.setState(
       makeState({
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         audioSequence: makeSequence(['day_time.mp3'], 'day'),
       }),
     )

@@ -9,6 +9,7 @@ import com.werewolf.model.ActionType
 import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
+import com.werewolf.model.RoleDelayConfig
 import com.werewolf.repository.NightPhaseRepository
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
@@ -81,4 +82,13 @@ class SeerHandler(private val nightPhaseRepository: NightPhaseRepository) : Role
      * Get default delay time for dead role simulation
      */
     fun getDefaultDelayMs() = RoleRegistry.getDefaultDelayMs(role) ?: 5000L
+
+    /**
+     * 获取角色的延迟配置
+     * 从 Room.config 中读取配置化延迟
+     */
+    fun getDelayConfig(context: GameContext): RoleDelayConfig {
+        val gameConfig = context.room.config ?: return RoleDelayConfig.getDefaultForRole(role)
+        return gameConfig.getDelayForRole(role)
+    }
 }

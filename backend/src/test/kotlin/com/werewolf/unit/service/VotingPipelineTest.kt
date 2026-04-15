@@ -62,7 +62,7 @@ class VotingPipelineTest {
     private fun game(subPhase: String = VotingSubPhase.VOTING.name, sheriff: String? = null) =
         Game(roomId = 1, hostUserId = hostId).also {
             val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
-            it.phase = GamePhase.VOTING
+            it.phase = GamePhase.DAY_VOTING
             it.subPhase = subPhase
             it.dayNumber = 1
             it.sheriffUserId = sheriff
@@ -133,8 +133,8 @@ class VotingPipelineTest {
 
         // No re-vote deletion should happen
         verify(voteRepository, never()).deleteAll(any<Collection<Vote>>())
-        // initNight called (goToNight path)
-        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
+        // startNightPhase called (goToNight path)
+        verify(nightOrchestrator).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     // ── revealTally — elimination ─────────────────────────────────────────────
@@ -216,7 +216,7 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(target.alive).isFalse()
-        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -234,7 +234,7 @@ class VotingPipelineTest {
         val captor = argumentCaptor<Game>()
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
-        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -254,7 +254,7 @@ class VotingPipelineTest {
 
         votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SHOOT, "wolf"), context)
 
-        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
         val captor = argumentCaptor<Game>()
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.phase).isEqualTo(GamePhase.GAME_OVER)
@@ -279,7 +279,7 @@ class VotingPipelineTest {
 
         votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
-        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
         val captor = argumentCaptor<Game>()
         verify(gameRepository, atLeastOnce()).save(captor.capture())
         assertThat(captor.allValues).anyMatch { it.phase == GamePhase.GAME_OVER }
@@ -297,7 +297,7 @@ class VotingPipelineTest {
         val result = votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -311,7 +311,7 @@ class VotingPipelineTest {
         val captor = argumentCaptor<Game>()
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
-        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     // ── handleBadge ───────────────────────────────────────────────────────────
@@ -550,7 +550,7 @@ class VotingPipelineTest {
     @Test
     fun `unvote - rejected when not in VOTING phase`() {
         val voter = player(hostId, 0)
-        val game = game().also { it.phase = GamePhase.DAY }
+        val game = game().also { it.phase = GamePhase.DAY_DISCUSSION }
         val context = ctx(game, voter)
 
         val result = votingPipeline.unvote(req(hostId, ActionType.VOTING_UNVOTE), context)
@@ -629,7 +629,7 @@ class VotingPipelineTest {
 
     @Test
     fun `continueToNight - rejected when not in VOTING phase`() {
-        val game = game().also { it.phase = GamePhase.DAY }
+        val game = game().also { it.phase = GamePhase.DAY_DISCUSSION }
         val context = ctx(game)
 
         val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
@@ -656,7 +656,7 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         // dayNumber is 1, so next night should be day 2
-        verify(nightOrchestrator).initNight(eq(gameId), eq(2), anyOrNull(), any())
+        verify(nightOrchestrator).startNightPhase(eq(gameId), eq(2), anyOrNull(), any())
     }
 
     // ── WinConditionMode ──────────────────────────────────────────────────────

@@ -63,7 +63,7 @@ class DayPhaseResultRevealTest {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private fun game(
-        phase: GamePhase = GamePhase.DAY,
+        phase: GamePhase = GamePhase.DAY_DISCUSSION,
         subPhase: String = DaySubPhase.RESULT_REVEALED.name,
         dayNumber: Int = 2
     ) = Game(roomId = 1, hostUserId = hostId).also {
@@ -111,7 +111,7 @@ class DayPhaseResultRevealTest {
             antidoteUsed = false
         )
 
-        val g = game(phase = GamePhase.DAY, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
+        val g = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
         val r = room()
 
         // Mock repository responses
@@ -165,7 +165,7 @@ class DayPhaseResultRevealTest {
             antidoteUsed = false
         )
 
-        val g = game(phase = GamePhase.DAY, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
+        val g = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
         val r = room()
 
         // Mock repository responses
@@ -210,7 +210,7 @@ class DayPhaseResultRevealTest {
             poisonTarget = victimId // witch poisoned victim
         )
 
-        val g = game(phase = GamePhase.DAY, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
+        val g = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
         val r = room()
 
         // Mock repository responses

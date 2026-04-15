@@ -66,9 +66,11 @@ export interface AudioSequence {
 export type GamePhase =
   | 'ROLE_REVEAL'
   | 'SHERIFF_ELECTION'
-  | 'DAY'
-  | 'VOTING'
+  | 'WAITING'
   | 'NIGHT'
+  | 'DAY_PENDING'
+  | 'DAY_DISCUSSION'
+  | 'DAY_VOTING'
   | 'GAME_OVER'
 
 export type PlayerRole = 'WEREWOLF' | 'VILLAGER' | 'SEER' | 'WITCH' | 'HUNTER' | 'GUARD' | 'IDIOT'
@@ -133,6 +135,35 @@ export interface GameEvent {
   targetId?: string
 }
 
+// ── New event-driven night phase events ──────────────────────────────────────
+export interface OpenEyesEvent {
+  type: 'OpenEyes'
+  gameId: number
+  role: string
+  phase: string
+  nightNumber: number
+}
+
+export interface CloseEyesEvent {
+  type: 'CloseEyes'
+  gameId: number
+  role: string
+  phase: string
+  nightNumber: number
+}
+
+export interface RoleActionEvent {
+  type: 'RoleAction'
+  gameId: number
+  userId: string
+  role: string
+  actionType: string
+  targets: string[]
+  canHeal?: boolean
+  canPoison?: boolean
+  timeoutMs: number
+}
+
 export interface GameActionRequest {
   gameId?: number
   actionType: string
@@ -148,7 +179,7 @@ export interface GameActionResponse {
 
 // ── Sheriff Election ──────────────────────────────────────────────────────────
 
-export type SheriffSubPhase = 'SIGNUP' | 'SPEECH' | 'VOTING' | 'RESULT' | 'TIED'
+export type SheriffSubPhase = 'SIGNUP' | 'SPEECH' | 'DAY_VOTING' | 'RESULT' | 'TIED'
 
 export interface SheriffCandidate {
   userId: string
@@ -223,7 +254,7 @@ export interface DayPhaseState {
 // ── Voting Phase ──────────────────────────────────────────────────────────────
 
 export type VotingSubPhase =
-  | 'VOTING'
+  | 'DAY_VOTING'
   | 'RE_VOTING'
   | 'VOTE_RESULT'
   | 'HUNTER_SHOOT'

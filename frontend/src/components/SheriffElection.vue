@@ -190,7 +190,7 @@
     </template>
 
     <!-- ── VOTING ── -->
-    <template v-else-if="election.subPhase === 'VOTING'">
+    <template v-else-if="election.subPhase === 'DAY_VOTING'">
       <div class="info-banner-sm">
         <div class="muted sm">演讲结束，选出你心中的警长。</div>
         <div class="gold bold sm">Speeches done — vote for sheriff</div>
@@ -560,7 +560,7 @@ const phaseChipLabel = computed(() => {
       return '👮‍♂️ 竞选警长'
     case 'SPEECH':
       return '👮‍♂️ 竞选演讲'
-    case 'VOTING':
+    case 'DAY_VOTING':
       return '👮‍ 投票选警长'
     case 'RESULT':
       return '👮‍ 警长产生'

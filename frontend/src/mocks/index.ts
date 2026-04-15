@@ -77,7 +77,7 @@ function makeAudioSequence(
 function phaseAudio(newPhase: GamePhase, subPhase?: string | null): AudioSequence {
   const files: string[] = []
   if (newPhase === 'NIGHT') files.push('goes_dark_close_eyes.mp3')
-  if (newPhase === 'DAY') files.push('day_time.mp3')
+  if (newPhase === 'DAY_DISCUSSION') files.push('day_time.mp3')
   return makeAudioSequence(newPhase, subPhase ?? null, files, 10)
 }
 
@@ -304,7 +304,7 @@ export function setupMocks() {
   mock.onPost('/debug/sheriff/exit').reply(() => {
     mockGameState = {
       ...mockGameState,
-      phase: 'DAY',
+      phase: 'DAY_DISCUSSION',
       sheriffElection: undefined,
       dayPhase: makeDayHidden(),
     }
@@ -341,7 +341,7 @@ export function setupMocks() {
     const { preset } = JSON.parse(config.data ?? '{}')
     const factory = DAY_PRESET_FACTORIES[preset]
     if (!factory) return [400, { error: 'Unknown preset' }]
-    mockGameState = { ...mockGameState, phase: 'DAY', dayPhase: factory() }
+    mockGameState = { ...mockGameState, phase: 'DAY_DISCUSSION', dayPhase: factory() }
     pushGameStateUpdate()
     return [200]
   })
@@ -350,7 +350,7 @@ export function setupMocks() {
   mock.onPost('/debug/day/reveal').reply(() => {
     mockGameState = {
       ...mockGameState,
-      phase: 'DAY',
+      phase: 'DAY_DISCUSSION',
       dayPhase: makeDayRevealed(),
     }
     pushGameStateUpdate()
@@ -378,11 +378,11 @@ export function setupMocks() {
     const nextDay = (mockGameState.dayNumber ?? 1) + 1
     mockGameState = {
       ...mockGameState,
-      phase: 'DAY',
+      phase: 'DAY_DISCUSSION',
       dayNumber: nextDay,
       nightPhase: undefined,
       dayPhase: makeDayHidden(),
-      audioSequence: phaseAudio('DAY'),
+      audioSequence: phaseAudio('DAY_DISCUSSION'),
     }
     pushGameStateUpdate()
     return [200]
@@ -601,7 +601,7 @@ export function setupMocks() {
         if (nextIdx >= order.length) {
           mockGameState = {
             ...mockGameState,
-            sheriffElection: { ...e, subPhase: 'VOTING', currentSpeakerId: undefined },
+            sheriffElection: { ...e, subPhase: 'DAY_VOTING', currentSpeakerId: undefined },
           }
         } else {
           mockGameState = {
@@ -821,7 +821,7 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       }
-    } else if (mockGameState.phase === 'DAY') {
+    } else if (mockGameState.phase === 'DAY_DISCUSSION') {
       if (actionType === 'REVEAL_NIGHT_RESULT') {
         mockGameState = {
           ...mockGameState,
@@ -837,7 +837,7 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'DAY_ADVANCE') {
-        const voting = makeVotingScenario('VOTING')
+        const voting = makeVotingScenario('DAY_VOTING')
         mockGameState = {
           ...voting,
           hostId: mockGameState.hostId,
@@ -845,7 +845,7 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       }
-    } else if (mockGameState.phase === 'VOTING' && mockGameState.votingPhase) {
+    } else if (mockGameState.phase === 'DAY_VOTING' && mockGameState.votingPhase) {
       const vp = mockGameState.votingPhase
       if (actionType === 'VOTING_SELECT') {
         mockGameState = {

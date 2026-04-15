@@ -24,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Transactional
 class SeerAudioBugTest {
 
     @Autowired
@@ -117,6 +116,7 @@ class SeerAudioBugTest {
         println("SEER_RESULT -> WITCH_ACT: ${audioSequence.audioFiles}")
     }
 
+    // TODO unable to pass
     @Test
     fun `Complete seer workflow - verifies audio sequences for all transitions`() {
         println("\n=== Complete Seer Workflow Test ===")
@@ -129,13 +129,14 @@ class SeerAudioBugTest {
             hasSeer = true,
             hasWitch = true,
             hasGuard = true,
+            config = GameConfig.createDefault(),
         )
         val savedRoom = roomRepository.save(room)
         val game = Game(
             roomId = savedRoom.roomId!!,
             hostUserId = hostId,
         )
-        game.phase = GamePhase.DAY
+        game.phase = GamePhase.DAY_DISCUSSION
         game.dayNumber = 1
         val savedGame = gameRepository.save(game)
         val gameId = requireNotNull(savedGame.gameId) { "Game ID should not be null after save" }
@@ -237,7 +238,7 @@ class SeerAudioBugTest {
         val audioSequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = savedRoom,

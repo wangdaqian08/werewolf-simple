@@ -332,9 +332,9 @@
     <template v-else-if="subPhase !== 'WAITING'">
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
-        <div class="ss-title" data-testid="sleep-screen-title">请闭眼</div>
-        <div class="ss-en">Night is in progress...</div>
-        <div class="ss-sub">等待其他玩家行动 / Waiting for others</div>
+        <div class="ss-title" data-testid="sleep-screen-title">{{ me && !me.isAlive ? '夜晚即将开始' : '请闭眼' }}</div>
+        <div class="ss-en">{{ me && !me.isAlive ? 'Night is beginning...' : 'Night is in progress...' }}</div>
+        <div class="ss-sub">{{ me && !me.isAlive ? '所有人请闭眼 / Everyone please close your eyes' : '等待其他玩家行动 / Waiting for others' }}</div>
       </div>
     </template>
 

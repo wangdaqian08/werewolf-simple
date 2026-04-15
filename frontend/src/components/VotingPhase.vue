@@ -182,7 +182,7 @@
             </template>
             <!-- Only show reveal button if subPhase is VOTING or RE_VOTING -->
             <button
-              v-if="votingPhase.subPhase === 'VOTING' || votingPhase.subPhase === 'RE_VOTING'"
+              v-if="votingPhase.subPhase === 'DAY_VOTING' || votingPhase.subPhase === 'RE_VOTING'"
               class="btn btn-gold"
               data-testid="voting-reveal"
               :disabled="!allVotesIn || actionPending"
@@ -546,7 +546,7 @@ const emit = defineEmits<{
 // VOTE_RESULT is merged into the VOTING screen (shown when tallyRevealed)
 const isVotingScreen = computed(
   () =>
-    props.votingPhase.subPhase === 'VOTING' ||
+    props.votingPhase.subPhase === 'DAY_VOTING' ||
     props.votingPhase.subPhase === 'RE_VOTING' ||
     props.votingPhase.subPhase === 'VOTE_RESULT',
 )

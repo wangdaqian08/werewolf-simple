@@ -63,7 +63,7 @@ describe('ResultView - Game Over Role Reveal Bug', () => {
     // The GameOver handler in GameView should re-fetch state before navigation
     const stateBeforeRefetch: GameState = {
       gameId: '1',
-      phase: 'VOTING', // Phase before GameOver
+      phase: 'DAY_VOTING', // Phase before GameOver
       dayNumber: 7,
       players: [
         {
@@ -181,7 +181,7 @@ describe('ResultView - Game Over Role Reveal Bug', () => {
     // Set initial state without winner
     const stateBeforeRefetch: GameState = {
       gameId: '2',
-      phase: 'VOTING',
+      phase: 'DAY_VOTING',
       dayNumber: 5,
       players: [
         {
@@ -344,7 +344,7 @@ describe('ResultView - Game Over Role Reveal Bug', () => {
     // where other players' roles are hidden
     const votingState: GameState = {
       gameId: '4',
-      phase: 'VOTING',
+      phase: 'DAY_VOTING',
       dayNumber: 7,
       players: [
         {

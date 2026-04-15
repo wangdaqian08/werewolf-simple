@@ -40,7 +40,7 @@ class GamePhasePipelineDayTest {
     private val guestId = "guest:001"
 
     private fun game(
-        phase: GamePhase = GamePhase.DAY,
+        phase: GamePhase = GamePhase.DAY_DISCUSSION,
         subPhase: String? = DaySubPhase.RESULT_HIDDEN.name,
     ) = Game(roomId = 1, hostUserId = hostId).also {
         val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
@@ -68,7 +68,7 @@ class GamePhasePipelineDayTest {
 
     @Test
     fun `revealNightResult - rejected when not in DAY phase`() {
-        val game = game(phase = GamePhase.VOTING)
+        val game = game(phase = GamePhase.DAY_VOTING)
         val result = pipeline.revealNightResult(req(hostId, ActionType.REVEAL_NIGHT_RESULT), ctx(game))
 
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
@@ -134,7 +134,7 @@ class GamePhasePipelineDayTest {
         val result = pipeline.dayAdvance(req(hostId, ActionType.DAY_ADVANCE), ctx(game))
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(game.phase).isEqualTo(GamePhase.VOTING)
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_VOTING)
         assertThat(game.subPhase).isEqualTo(VotingSubPhase.VOTING.name)
         verify(gameRepository).save(game)
         verify(stompPublisher).broadcastGame(eq(gameId), any())

@@ -118,7 +118,7 @@ export const MOCK_ROOM_AS_GUEST: Room = {
 
 export const MOCK_GAME_STATE: GameState = {
   gameId: 'game-001',
-  phase: 'DAY',
+  phase: 'DAY_DISCUSSION',
   dayNumber: 1,
   myRole: 'SEER',
   sheriff: 'u2',
@@ -262,14 +262,14 @@ export function makeDayScenario(
 ): GameState {
   switch (variant) {
     case 'HOST_HIDDEN':
-      return { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase: makeDayHidden() }
+      return { ...MOCK_GAME_STATE, phase: 'DAY_DISCUSSION', dayPhase: makeDayHidden() }
     case 'HOST_REVEALED':
-      return { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase: makeDayRevealed() }
+      return { ...MOCK_GAME_STATE, phase: 'DAY_DISCUSSION', dayPhase: makeDayRevealed() }
     case 'DEAD':
       return {
         ...MOCK_GAME_STATE,
         hostId: 'u2',
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         players: PLAYERS_AS_DEAD,
         dayPhase: makeDayRevealed(),
       }
@@ -277,7 +277,7 @@ export function makeDayScenario(
       return {
         ...MOCK_GAME_STATE,
         hostId: 'u2',
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         players: PLAYERS_AS_ALIVE,
         dayPhase: makeDayHidden(),
       }
@@ -285,7 +285,7 @@ export function makeDayScenario(
       return {
         ...MOCK_GAME_STATE,
         hostId: 'u2',
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         players: PLAYERS_AS_ALIVE,
         dayPhase: makeDayRevealed(),
       }
@@ -293,7 +293,7 @@ export function makeDayScenario(
       return {
         ...MOCK_GAME_STATE,
         hostId: 'u2',
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         players: PLAYERS_AS_GUEST,
         dayPhase: makeDayHidden(),
       }
@@ -348,7 +348,7 @@ export const MOCK_SHERIFF_SPEECH_AUDIENCE: SheriffElectionState = {
 }
 
 export const MOCK_SHERIFF_VOTING: SheriffElectionState = {
-  subPhase: 'VOTING',
+  subPhase: 'DAY_VOTING',
   timeRemaining: 45,
   candidates: [
     { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'QUIT' },
@@ -363,7 +363,7 @@ export const MOCK_SHERIFF_VOTING: SheriffElectionState = {
 // Host (u1) quit campaign during SPEECH — canVote=false, allVoted=false
 // Tests that Reveal Result stays visible (disabled) even when host can't vote
 export const MOCK_SHERIFF_VOTING_HOST_QUIT: SheriffElectionState = {
-  subPhase: 'VOTING',
+  subPhase: 'DAY_VOTING',
   timeRemaining: 45,
   candidates: [
     { userId: 'u1', nickname: '我', avatar: '⭐', status: 'QUIT' },
@@ -378,7 +378,7 @@ export const MOCK_SHERIFF_VOTING_HOST_QUIT: SheriffElectionState = {
 
 // u1 (host) is a running candidate in VOTING — tests self-vote prevention
 export const MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE: SheriffElectionState = {
-  subPhase: 'VOTING',
+  subPhase: 'DAY_VOTING',
   timeRemaining: 45,
   candidates: [
     { userId: 'u1', nickname: '我', avatar: '⭐', status: 'RUNNING' },
@@ -816,7 +816,7 @@ const MOCK_VOTE_TALLY: VoteTally[] = [
 
 export function makeVotingScenario(
   scenario:
-    | 'VOTING'
+    | 'DAY_VOTING'
     | 'VOTING_VOTED'
     | 'VOTING_REVEALED'
     | 'HUNTER_SHOOT'
@@ -831,7 +831,7 @@ export function makeVotingScenario(
   const now = Date.now()
   const base: GameState = {
     ...MOCK_GAME_STATE,
-    phase: 'VOTING',
+    phase: 'DAY_VOTING',
     dayNumber: 2,
     dayPhase: undefined,
     voteHistory: MOCK_VOTE_HISTORY,
@@ -849,11 +849,11 @@ export function makeVotingScenario(
     phaseStarted: now,
   }
   switch (scenario) {
-    case 'VOTING':
+    case 'DAY_VOTING':
       return {
         ...base,
         votingPhase: {
-          subPhase: 'VOTING',
+          subPhase: 'DAY_VOTING',
           ...commonTiming,
           canVote: true,
           votedPlayerIds: ['u3', 'u5', 'u7'],
@@ -866,7 +866,7 @@ export function makeVotingScenario(
       return {
         ...base,
         votingPhase: {
-          subPhase: 'VOTING',
+          subPhase: 'DAY_VOTING',
           ...commonTiming,
           canVote: false,
           myVote: 'u6',
@@ -880,7 +880,7 @@ export function makeVotingScenario(
       return {
         ...base,
         votingPhase: {
-          subPhase: 'VOTING',
+          subPhase: 'DAY_VOTING',
           ...commonTiming,
           canVote: false,
           myVote: 'u6',
@@ -947,7 +947,7 @@ export function makeVotingScenario(
         myRole: 'SEER',
         voteHistory: [],
         votingPhase: {
-          subPhase: 'VOTING',
+          subPhase: 'DAY_VOTING',
           ...commonTiming,
           canVote: true,
           votedPlayerIds: [],
@@ -962,7 +962,7 @@ export function makeVotingScenario(
         myRole: undefined,
         voteHistory: undefined,
         votingPhase: {
-          subPhase: 'VOTING',
+          subPhase: 'DAY_VOTING',
           ...commonTiming,
           canVote: true,
           votedPlayerIds: [],

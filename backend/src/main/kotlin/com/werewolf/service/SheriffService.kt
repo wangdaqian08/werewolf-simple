@@ -7,6 +7,12 @@ import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
 import com.werewolf.repository.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -20,7 +26,10 @@ class SheriffService(
     private val userRepository: UserRepository,
     private val stompPublisher: StompPublisher,
     private val nightOrchestrator: NightOrchestrator,
+    private val coroutineScope: CoroutineScope,
 ) {
+    val log = LoggerFactory.getLogger(SheriffService::class.java)
+    private val scheduledJobs = mutableMapOf<Int, Job>()
     // ── Action dispatcher ──────────────────────────────────────────────────────
 
     @Transactional
@@ -180,7 +189,9 @@ class SheriffService(
             .filter { it.status == CandidateStatus.RUNNING }
 
         if (candidates.isEmpty()) {
-            nightOrchestrator.initNight(context.gameId, context.game.dayNumber)
+            runBlocking {
+                nightOrchestrator.startNightPhase(context.gameId, context.game.dayNumber, withWaiting = true).join()
+            }
             return GameActionResult.Success()
         }
 
@@ -249,8 +260,23 @@ class SheriffService(
         val maxVotes = tally.values.maxOrNull() ?: 0
         val topCandidates = tally.filterValues { it == maxVotes }.keys.toList()
         if (topCandidates.isEmpty()) {
-            // No votes cast (e.g. all candidates quit) — skip election, proceed to night
-            nightOrchestrator.initNight(context.gameId, context.game.dayNumber)
+            // No effective votes (all abstained or no votes cast)
+            val runningCandidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
+                .filter { it.status == CandidateStatus.RUNNING }
+            if (runningCandidates.isNotEmpty()) {
+                // Running candidates exist but got zero votes → TIED → host appoints
+                election.subPhase = ElectionSubPhase.TIED
+                sheriffElectionRepository.save(election)
+                stompPublisher.broadcastGame(context.gameId,
+                    DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.TIED.name))
+            } else {
+                // No running candidates at all → RESULT with auto-advance to night
+                election.subPhase = ElectionSubPhase.RESULT
+                sheriffElectionRepository.save(election)
+                stompPublisher.broadcastGame(context.gameId,
+                    DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
+                scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
+            }
             return GameActionResult.Success()
         }
         if (topCandidates.size == 1) {
@@ -262,6 +288,8 @@ class SheriffService(
             stompPublisher.broadcastGame(context.gameId, DomainEvent.SheriffElected(context.gameId, winnerUserId))
             stompPublisher.broadcastGame(context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
+            // Schedule auto-advance to night in 30 seconds
+            scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
         } else {
             election.subPhase = ElectionSubPhase.TIED
             sheriffElectionRepository.save(election)
@@ -292,6 +320,8 @@ class SheriffService(
         stompPublisher.broadcastGame(context.gameId, DomainEvent.SheriffElected(context.gameId, targetUserId))
         stompPublisher.broadcastGame(context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
+        // Schedule auto-advance to night in 30 seconds
+        scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
         return GameActionResult.Success()
     }
 
@@ -322,7 +352,12 @@ class SheriffService(
         val allCandidates = sheriffCandidateRepository.findByElectionId(election.id)
         val anyRunningLeft = allCandidates.any { it.status == CandidateStatus.RUNNING && speakingOrderIds.contains(it.userId) }
         if (!anyRunningLeft) {
-            nightOrchestrator.initNight(context.gameId, context.game.dayNumber)
+            // No running candidates remain → show RESULT phase with auto-advance to night
+            election.subPhase = ElectionSubPhase.RESULT
+            sheriffElectionRepository.save(election)
+            stompPublisher.broadcastGame(context.gameId,
+                DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
+            scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
             return GameActionResult.Success()
         }
 
@@ -462,5 +497,23 @@ class SheriffService(
                 )
             },
         )
+    }
+
+    private fun scheduleAutoAdvanceToNight(gameId: Int, dayNumber: Int): Job {
+        log.info("[SheriffService] Scheduling auto-advance to night for game $gameId in 60 seconds")
+        return coroutineScope.launch {
+            delay(60_000) // 60 seconds for manual interaction
+            log.info("[SheriffService] Auto-advance to night triggered for game $gameId")
+            runBlocking {
+                nightOrchestrator.startNightPhase(gameId, dayNumber, withWaiting = true).join()
+            }
+        }.also { job ->
+            scheduledJobs[gameId] = job
+        }
+    }
+
+    fun cancelScheduledJob(gameId: Int) {
+        scheduledJobs[gameId]?.cancel()
+        scheduledJobs.remove(gameId)
     }
 }

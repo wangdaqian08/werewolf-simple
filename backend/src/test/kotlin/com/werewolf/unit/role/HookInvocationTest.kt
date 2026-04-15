@@ -72,7 +72,7 @@ class HookInvocationTest {
         override fun acceptedActions(phase: GamePhase, subPhase: String?) = emptySet<ActionType>()
         override fun handle(action: GameActionRequest, context: GameContext) = GameActionResult.Success()
         override fun onDayEnter(context: GameContext) =
-            listOf(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY, "HOOK_FIRED_$role"))
+            listOf(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, "HOOK_FIRED_$role"))
     }
 
     /** Stub handler whose onEliminationPending cancels elimination with an extra event. */
@@ -83,7 +83,7 @@ class HookInvocationTest {
         override fun onEliminationPending(context: GameContext, targetId: String) =
             EliminationModifier(
                 cancelled = true,
-                extraEvents = listOf(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, "VETO_$role"))
+                extraEvents = listOf(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, "VETO_$role"))
             )
     }
 
@@ -97,6 +97,7 @@ class HookInvocationTest {
         contextLoader = contextLoader,
         nightWaitingScheduler = nightWaitingScheduler,
         audioService = audioService,
+        coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
     )
 
     private fun makeVotingPipeline(handlers: List<RoleHandler>) = VotingPipeline(
@@ -131,7 +132,7 @@ class HookInvocationTest {
         // Mock audioService to avoid NullPointerException
         val mockAudioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-DAY",
-            phase = GamePhase.DAY,
+            phase = GamePhase.DAY_DISCUSSION,
             subPhase = DaySubPhase.RESULT_HIDDEN.name,
             audioFiles = listOf("day_time.mp3"),
             priority = 10,
@@ -140,7 +141,7 @@ class HookInvocationTest {
         whenever(audioService.calculatePhaseTransition(
             eq(gameId),
             eq(GamePhase.NIGHT),
-            eq(GamePhase.DAY),
+            eq(GamePhase.DAY_DISCUSSION),
             eq(null),
             eq(DaySubPhase.RESULT_HIDDEN.name),
             eq(initialCtx.room)
@@ -188,7 +189,7 @@ class HookInvocationTest {
         val host = player(hostId, 0)
         val target = player("u1", 1, PlayerRole.VILLAGER)
         val context = GameContext(
-            game(GamePhase.VOTING, VotingSubPhase.VOTING.name), room(), listOf(host, target)
+            game(GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name), room(), listOf(host, target)
         )
 
         val cancellingHandler = cancellingEliminationHandler(PlayerRole.VILLAGER)
@@ -220,7 +221,7 @@ class HookInvocationTest {
         val host = player(hostId, 0)
         val target = player("u1", 1, PlayerRole.VILLAGER)
         val context = GameContext(
-            game(GamePhase.VOTING, VotingSubPhase.VOTING.name), room(), listOf(host, target)
+            game(GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name), room(), listOf(host, target)
         )
 
         // A handler that does NOT cancel

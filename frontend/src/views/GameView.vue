@@ -86,7 +86,7 @@
     </template>
 
     <!-- Voting phase -->
-    <template v-else-if="gameStore.state?.phase === 'VOTING' && gameStore.state?.votingPhase">
+    <template v-else-if="gameStore.state?.phase === 'DAY_VOTING' && gameStore.state?.votingPhase">
       <VotingPhase
         :key="`voting-${gameStore.state.votingPhase.subPhase}-${gameStore.state.dayNumber}`"
         :voting-phase="gameStore.state.votingPhase"
@@ -110,7 +110,7 @@
     </template>
 
     <!-- Day phase -->
-    <template v-else-if="gameStore.state?.phase === 'DAY' && gameStore.state?.dayPhase">
+    <template v-else-if="gameStore.state?.phase === 'DAY_DISCUSSION' && gameStore.state?.dayPhase">
       <DayPhase
         :key="`${gameStore.state.dayPhase.subPhase}-${gameStore.state.dayPhase.dayNumber}`"
         :day-phase="gameStore.state.dayPhase"
@@ -278,7 +278,7 @@
       </div>
       <div class="debug-title" style="margin-top: 0.5rem">🛠 Debug — Voting Screens</div>
       <div class="debug-btns" data-testid="debug-voting-btns">
-        <button class="debug-btn" data-testid="debug-voting" @click="debugVoting('VOTING')">
+        <button class="debug-btn" data-testid="debug-voting" @click="debugVoting('DAY_VOTING')">
           Voting
         </button>
         <button
@@ -402,7 +402,7 @@
         <button
           class="debug-btn"
           data-testid="debug-sheriff-voting"
-          @click="debugSheriff('VOTING')"
+          @click="debugSheriff('DAY_VOTING')"
         >
           Voting
         </button>
@@ -509,9 +509,9 @@ const phaseLabel = computed(() => {
   switch (gameStore.state?.phase) {
     case 'SHERIFF_ELECTION':
       return '警长竞选 Sheriff Election'
-    case 'DAY':
+    case 'DAY_DISCUSSION':
       return '白天 Day Phase'
-    case 'VOTING':
+    case 'DAY_VOTING':
       return '投票 Voting'
     case 'NIGHT':
       return '黑夜 Night Phase'
@@ -526,9 +526,9 @@ const actionHint = computed(() => {
   switch (gameStore.state?.phase) {
     case 'SHERIFF_ELECTION':
       return 'Waiting for sheriff election...'
-    case 'DAY':
+    case 'DAY_DISCUSSION':
       return 'Listen to discussions...'
-    case 'VOTING':
+    case 'DAY_VOTING':
       return 'Tap a player to vote'
     case 'NIGHT':
       return 'Night falls... close your eyes'
@@ -609,7 +609,7 @@ async function handleStartVote() {
   const currentPhase = gameStore.state?.phase
   const currentSubPhase = gameStore.state?.dayPhase?.subPhase
 
-  if (currentPhase !== 'DAY') {
+  if (currentPhase !== 'DAY_DISCUSSION') {
     ElMessage({
       message: `当前游戏阶段不正确，无法开始投票。当前阶段: ${currentPhase}`,
       type: 'error',
@@ -851,15 +851,22 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
+          // Normalize phase name for backward compatibility
+          const normalizedPhase = normalizePhaseName(data.phase)
+          
           // Preserve current audioSequence to prevent it from being lost
           const currentAudio = gameStore.state?.audioSequence
           // Small delay to ensure backend transaction has committed before we read state
           await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
           // If fetched state doesn't match the event (transaction not committed yet), retry once
-          if (data.phase && state.phase !== data.phase) {
+          if (normalizedPhase && state.phase !== normalizedPhase) {
             await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
+          }
+          // Normalize state phase for consistency
+          if (state) {
+            state.phase = normalizePhaseName(state.phase) as any
           }
           // Preserve audioSequence - AudioSequence event will update it if needed
           gameStore.setState({ ...state, audioSequence: currentAudio })
@@ -887,6 +894,62 @@ onMounted(async () => {
               audioSequence: data.audioSequence,
             })
           }
+        }
+        // New event-driven approach: OpenEyes event
+        if (data.type === 'OpenEyes') {
+          // Play open eyes audio for the role
+          const state = gameStore.state
+          if (state) {
+            // Create audio sequence for open eyes
+            const audioFile = getOpenEyesAudioFile(data.role)
+            if (audioFile) {
+              const audioSequence = {
+                id: `open-eyes-${data.role}-${Date.now()}`,
+                phase: data.phase,
+                subPhase: data.role,
+                audioFiles: [audioFile],
+                priority: 10,
+                timestamp: Date.now()
+              }
+              gameStore.setState({
+                ...state,
+                audioSequence,
+              })
+            } else {
+              console.warn(`No audio file found for role: ${data.role}`)
+            }
+          }
+        }
+        // New event-driven approach: CloseEyes event
+        if (data.type === 'CloseEyes') {
+          // Play close eyes audio for the role
+          const state = gameStore.state
+          if (state) {
+            // Create audio sequence for close eyes
+            const audioFile = getCloseEyesAudioFile(data.role)
+            if (audioFile) {
+              const audioSequence = {
+                id: `close-eyes-${data.role}-${Date.now()}`,
+                phase: data.phase,
+                subPhase: data.role,
+                audioFiles: [audioFile],
+                priority: 10,
+                timestamp: Date.now()
+              }
+              gameStore.setState({
+                ...state,
+                audioSequence,
+              })
+            } else {
+              console.warn(`No audio file found for role: ${data.role}`)
+            }
+          }
+        }
+        // New event-driven approach: RoleAction event
+        if (data.type === 'RoleAction') {
+          // Handle role action prompt (for future UI enhancements)
+          console.log('RoleAction received:', data)
+          // This can be used to show action prompts for the current player
         }
         // Real backend: night result (kills) → re-fetch state
         if (data.type === 'NightResult') {
@@ -941,6 +1004,41 @@ onMounted(async () => {
 onUnmounted(() => {
   disconnectStomp()
 })
+
+// ── Audio file helpers for new event-driven approach ─────────────────────────────
+function getOpenEyesAudioFile(role: string): string {
+  const audioMap: Record<string, string> = {
+    'WEREWOLF': 'wolf_open_eyes.mp3',
+    'SEER': 'seer_open_eyes.mp3',
+    'WITCH': 'witch_open_eyes.mp3',
+    'GUARD': 'guard_open_eyes.mp3'
+  }
+  return audioMap[role] || ''
+}
+
+function getCloseEyesAudioFile(role: string): string {
+  const audioMap: Record<string, string> = {
+    'WEREWOLF': 'wolf_close_eyes.mp3',
+    'SEER': 'seer_close_eyes.mp3',
+    'SEER_RESULT': 'seer_close_eyes.mp3',
+    'WITCH': 'witch_close_eyes.mp3',
+    'GUARD': 'guard_close_eyes.mp3'
+  }
+  return audioMap[role] || ''
+}
+
+// ── Backward compatibility helpers ────────────────────────────────────────────────
+/**
+ * Map old phase names to new ones for backward compatibility
+ */
+function normalizePhaseName(phase: string | undefined): string {
+  if (!phase) return phase || ''
+  const phaseMap: Record<string, string> = {
+    'DAY_DISCUSSION': 'DAY_DISCUSSION',
+    'DAY_VOTING': 'DAY_VOTING'
+  }
+  return phaseMap[phase] || phase
+}
 </script>
 
 <style scoped>
