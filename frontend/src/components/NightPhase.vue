@@ -332,9 +332,19 @@
     <template v-else-if="subPhase !== 'WAITING'">
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
-        <div class="ss-title" data-testid="sleep-screen-title">{{ me && !me.isAlive ? '夜晚即将开始' : '请闭眼' }}</div>
-        <div class="ss-en">{{ me && !me.isAlive ? 'Night is beginning...' : 'Night is in progress...' }}</div>
-        <div class="ss-sub">{{ me && !me.isAlive ? '所有人请闭眼 / Everyone please close your eyes' : '等待其他玩家行动 / Waiting for others' }}</div>
+        <div class="ss-title" data-testid="sleep-screen-title">
+          {{ me && !me.isAlive ? '夜晚即将开始' : '请闭眼' }}
+        </div>
+        <div class="ss-en">
+          {{ me && !me.isAlive ? 'Night is beginning...' : 'Night is in progress...' }}
+        </div>
+        <div class="ss-sub">
+          {{
+            me && !me.isAlive
+              ? '所有人请闭眼 / Everyone please close your eyes'
+              : '等待其他玩家行动 / Waiting for others'
+          }}
+        </div>
       </div>
     </template>
 
@@ -351,9 +361,9 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onUnmounted, ref, watch } from 'vue'
+import {computed, onUnmounted, ref, watch} from 'vue'
 
-import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
+import type {GamePlayer, NightPhaseState, PlayerRole} from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import {
   guardVariant,

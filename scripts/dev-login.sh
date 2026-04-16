@@ -89,7 +89,62 @@ if [ -n "$ROOM_CODE" ]; then
   STATE_FILE="$CACHE_DIR/werewolf-${ROOM_CODE}.json"
   [ -f "$STATE_FILE" ] || { echo -e "${RED}✗ No state file for room $ROOM_CODE — run join-room.sh first${RESET}" >&2; exit 1; }
 
-  python3 - "$STATE_FILE" "$NICKNAME" "$TOKEN" "$SEAT" << 'PYEOF'
+  # Extract roomId from state file
+  ROOM_ID=$(python3 -c "import json; print(json.load(open('$STATE_FILE'))['roomId'])")
+
+  # Get totalPlayers from API (state file may not have it)
+  ROOM_INFO=$(curl -s "$BASE/room/$ROOM_ID" -H "Authorization: Bearer $TOKEN")
+  TOTAL=$(echo "$ROOM_INFO" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("config",{}).get("totalPlayers",12))' 2>/dev/null)
+
+  # ── Actually join the room ─────────────────────────────────────────────────
+  JOIN_RESP=$(curl -s -X POST "$BASE/room/join" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"roomCode\":\"$ROOM_CODE\"}")
+  JOIN_ERR=$(echo "$JOIN_RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("error",""))' 2>/dev/null)
+  if [ -n "$JOIN_ERR" ]; then
+    # Check if already joined (error might be "already in room" or similar)
+    echo -e "${YELLOW}⚠ Join returned: $JOIN_ERR (may already be in room)${RESET}" >&2
+  fi
+
+  # ── Select a seat ───────────────────────────────────────────────────────────
+  ACTUAL_SEAT=""
+  if [ -n "$SEAT" ] && [ "$SEAT" -ge 1 ] 2>/dev/null; then
+    # Use provided seat
+    SEAT_RESP=$(curl -s -X POST "$BASE/room/seat" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"seatIndex\":$SEAT,\"roomId\":$ROOM_ID}")
+    OK=$(echo "$SEAT_RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("success",False))' 2>/dev/null)
+    if [ "$OK" = "True" ]; then
+      ACTUAL_SEAT=$SEAT
+    else
+      echo -e "${YELLOW}⚠ Seat $SEAT not available, trying to find another...${RESET}" >&2
+    fi
+  fi
+
+  # If no seat specified or failed, find first available
+  if [ -z "$ACTUAL_SEAT" ]; then
+    for s in $(seq 1 "$TOTAL"); do
+      SEAT_RESP=$(curl -s -X POST "$BASE/room/seat" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"seatIndex\":$s,\"roomId\":$ROOM_ID}")
+      OK=$(echo "$SEAT_RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("success",False))' 2>/dev/null)
+      if [ "$OK" = "True" ]; then
+        ACTUAL_SEAT=$s
+        break
+      fi
+    done
+  fi
+
+  if [ -z "$ACTUAL_SEAT" ]; then
+    echo -e "${RED}✗ Could not claim any seat in room $ROOM_CODE (room may be full)${RESET}" >&2
+    exit 1
+  fi
+
+  # ── Save to state file ──────────────────────────────────────────────────────
+  python3 - "$STATE_FILE" "$NICKNAME" "$TOKEN" "$ACTUAL_SEAT" << 'PYEOF'
 import json, sys, base64
 
 path, nick, token, seat = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
@@ -101,7 +156,7 @@ def decode_user_id(t):
     return json.loads(base64.b64decode(payload))['sub']
 
 user_id = decode_user_id(token)
-seat_val = int(seat) if seat.isdigit() else None
+seat_val = int(seat)
 
 state = json.load(open(path))
 users = state.get('users', [])
@@ -118,7 +173,7 @@ with open(path, 'w') as f:
 print(f"  Saved {nick} (userId={user_id[:12]}..., seat={seat_val}) → {path}")
 PYEOF
 
-  echo -e "${GREEN}✔ User '$NICKNAME' saved to room $ROOM_CODE state file${RESET}" >&2
+  echo -e "${GREEN}✔ User '$NICKNAME' joined room $ROOM_CODE at seat $ACTUAL_SEAT${RESET}" >&2
   echo -e "  act.sh now resolves '$NICKNAME' by nickname (e.g. ./scripts/act.sh CONFIRM_ROLE $NICKNAME)" >&2
 fi
 

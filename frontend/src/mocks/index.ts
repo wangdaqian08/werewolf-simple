@@ -1,44 +1,37 @@
 import AxiosMockAdapter from 'axios-mock-adapter'
 import http from '@/services/http'
 import {
-  makeDayHidden,
-  makeDayRevealed,
-  makeDayScenario,
-  makeNightScenario,
-  makeRoleRevealState,
-  makeVotingScenario,
-  MOCK_ACTION_LOG,
-  MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
-  MOCK_DAY_SCENARIO_ALIVE_REVEALED,
-  MOCK_DAY_SCENARIO_DEAD,
-  MOCK_DAY_SCENARIO_GUEST,
-  MOCK_DAY_SCENARIO_HOST_HIDDEN,
-  MOCK_DAY_SCENARIO_HOST_REVEALED,
-  MOCK_GAME_RESULT,
-  MOCK_GAME_RESULT_WOLVES,
-  MOCK_GAME_STATE,
-  MOCK_LOGIN,
-  MOCK_ROLE_ASSIGNMENTS,
-  MOCK_ROOM_AS_GUEST,
-  MOCK_ROOM_AS_HOST,
-  MOCK_SHERIFF_RESULT,
-  MOCK_SHERIFF_SIGNUP,
-  MOCK_SHERIFF_SPEECH_AUDIENCE,
-  MOCK_SHERIFF_SPEECH_CANDIDATE,
-  MOCK_SHERIFF_VOTING,
-  MOCK_SHERIFF_VOTING_HOST_QUIT,
-  MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
-  MOCK_STOMP_EVENTS,
+    makeDayHidden,
+    makeDayRevealed,
+    makeDayScenario,
+    makeNightScenario,
+    makeRoleRevealState,
+    makeVotingScenario,
+    MOCK_ACTION_LOG,
+    MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
+    MOCK_DAY_SCENARIO_ALIVE_REVEALED,
+    MOCK_DAY_SCENARIO_DEAD,
+    MOCK_DAY_SCENARIO_GUEST,
+    MOCK_DAY_SCENARIO_HOST_HIDDEN,
+    MOCK_DAY_SCENARIO_HOST_REVEALED,
+    MOCK_GAME_RESULT,
+    MOCK_GAME_RESULT_WOLVES,
+    MOCK_GAME_STATE,
+    MOCK_LOGIN,
+    MOCK_ROLE_ASSIGNMENTS,
+    MOCK_ROOM_AS_GUEST,
+    MOCK_ROOM_AS_HOST,
+    MOCK_SHERIFF_RESULT,
+    MOCK_SHERIFF_SIGNUP,
+    MOCK_SHERIFF_SPEECH_AUDIENCE,
+    MOCK_SHERIFF_SPEECH_CANDIDATE,
+    MOCK_SHERIFF_VOTING,
+    MOCK_SHERIFF_VOTING_HOST_QUIT,
+    MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
+    MOCK_STOMP_EVENTS,
 } from './data'
-import { mockStompClient } from './mockStompClient'
-import type {
-  AudioSequence,
-  DayPhaseState,
-  GamePhase,
-  GameState,
-  RoomPlayer,
-  SheriffElectionState,
-} from '@/types'
+import {mockStompClient} from './mockStompClient'
+import type {AudioSequence, DayPhaseState, GamePhase, GameState, RoomPlayer, SheriffElectionState,} from '@/types'
 
 // ── Audio sequence helpers (mirrors backend AudioService logic) ───────────────
 
@@ -85,7 +78,12 @@ function phaseAudio(newPhase: GamePhase, subPhase?: string | null): AudioSequenc
 function nightSubPhaseAudio(oldSubPhase: string | null, newSubPhase: string): AudioSequence {
   const files: string[] = []
   // Skip close-eyes when entering SEER_RESULT (seer still awake viewing result)
-  if (oldSubPhase && oldSubPhase !== 'WAITING' && newSubPhase !== 'SEER_RESULT' && CLOSE_EYES[oldSubPhase]) {
+  if (
+    oldSubPhase &&
+    oldSubPhase !== 'WAITING' &&
+    newSubPhase !== 'SEER_RESULT' &&
+    CLOSE_EYES[oldSubPhase]
+  ) {
     files.push(CLOSE_EYES[oldSubPhase])
   }
   if (OPEN_EYES[newSubPhase]) {

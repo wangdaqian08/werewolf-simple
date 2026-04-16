@@ -8,6 +8,7 @@
  */
 
 import type {
+  ActionLogEntry,
   DayPhaseState,
   GameState,
   LoginResponse,
@@ -348,7 +349,7 @@ export const MOCK_SHERIFF_SPEECH_AUDIENCE: SheriffElectionState = {
 }
 
 export const MOCK_SHERIFF_VOTING: SheriffElectionState = {
-  subPhase: 'DAY_VOTING',
+  subPhase: 'VOTING',
   timeRemaining: 45,
   candidates: [
     { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'QUIT' },
@@ -363,7 +364,7 @@ export const MOCK_SHERIFF_VOTING: SheriffElectionState = {
 // Host (u1) quit campaign during SPEECH — canVote=false, allVoted=false
 // Tests that Reveal Result stays visible (disabled) even when host can't vote
 export const MOCK_SHERIFF_VOTING_HOST_QUIT: SheriffElectionState = {
-  subPhase: 'DAY_VOTING',
+  subPhase: 'VOTING',
   timeRemaining: 45,
   candidates: [
     { userId: 'u1', nickname: '我', avatar: '⭐', status: 'QUIT' },
@@ -378,7 +379,7 @@ export const MOCK_SHERIFF_VOTING_HOST_QUIT: SheriffElectionState = {
 
 // u1 (host) is a running candidate in VOTING — tests self-vote prevention
 export const MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE: SheriffElectionState = {
-  subPhase: 'DAY_VOTING',
+  subPhase: 'VOTING',
   timeRemaining: 45,
   candidates: [
     { userId: 'u1', nickname: '我', avatar: '⭐', status: 'RUNNING' },
@@ -853,7 +854,7 @@ export function makeVotingScenario(
       return {
         ...base,
         votingPhase: {
-          subPhase: 'DAY_VOTING',
+          subPhase: 'VOTING',
           ...commonTiming,
           canVote: true,
           votedPlayerIds: ['u3', 'u5', 'u7'],
@@ -866,7 +867,7 @@ export function makeVotingScenario(
       return {
         ...base,
         votingPhase: {
-          subPhase: 'DAY_VOTING',
+          subPhase: 'VOTING',
           ...commonTiming,
           canVote: false,
           myVote: 'u6',
@@ -880,7 +881,7 @@ export function makeVotingScenario(
       return {
         ...base,
         votingPhase: {
-          subPhase: 'DAY_VOTING',
+          subPhase: 'VOTING',
           ...commonTiming,
           canVote: false,
           myVote: 'u6',
@@ -947,7 +948,7 @@ export function makeVotingScenario(
         myRole: 'SEER',
         voteHistory: [],
         votingPhase: {
-          subPhase: 'DAY_VOTING',
+          subPhase: 'VOTING',
           ...commonTiming,
           canVote: true,
           votedPlayerIds: [],
@@ -962,7 +963,7 @@ export function makeVotingScenario(
         myRole: undefined,
         voteHistory: undefined,
         votingPhase: {
-          subPhase: 'DAY_VOTING',
+          subPhase: 'VOTING',
           ...commonTiming,
           canVote: true,
           votedPlayerIds: [],
@@ -1064,3 +1065,41 @@ export const MOCK_STOMP_EVENTS = {
     },
   },
 }
+
+// ── Action Log ────────────────────────────────────────────────────────────────
+
+export const MOCK_ACTION_LOG: ActionLogEntry[] = [
+  {
+    id: 1,
+    eventType: 'NIGHT_DEATH',
+    message: JSON.stringify({ dayNumber: 1, userId: 'u3', nickname: 'Charlie', seatIndex: 3 }),
+    targetUserId: 'u3',
+    createdAt: '2024-01-01T00:00:00Z',
+  },
+  {
+    id: 2,
+    eventType: 'VOTE_RESULT',
+    message: JSON.stringify({
+      dayNumber: 1,
+      tally: [
+        {
+          userId: 'u5',
+          nickname: 'Eve',
+          seatIndex: 5,
+          votes: 3,
+          voters: [
+            { userId: 'u1', nickname: 'You', seatIndex: 1 },
+            { userId: 'u2', nickname: 'Bob', seatIndex: 2 },
+            { userId: 'u4', nickname: 'Dave', seatIndex: 4 },
+          ],
+        },
+      ],
+      eliminatedUserId: 'u5',
+      eliminatedNickname: 'Eve',
+      eliminatedSeatIndex: 5,
+      eliminatedRole: 'VILLAGER',
+    }),
+    targetUserId: 'u5',
+    createdAt: '2024-01-01T12:00:00Z',
+  },
+]

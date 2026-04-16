@@ -190,7 +190,7 @@
     </template>
 
     <!-- ── VOTING ── -->
-    <template v-else-if="election.subPhase === 'DAY_VOTING'">
+    <template v-else-if="election.subPhase === 'VOTING'">
       <div class="info-banner-sm">
         <div class="muted sm">演讲结束，选出你心中的警长。</div>
         <div class="gold bold sm">Speeches done — vote for sheriff</div>
@@ -476,8 +476,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
-import type { SheriffCandidate, SheriffElectionState } from '@/types'
+import {computed, ref} from 'vue'
+import type {SheriffCandidate, SheriffElectionState} from '@/types'
 
 const props = defineProps<{
   election: SheriffElectionState

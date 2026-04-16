@@ -59,11 +59,15 @@
                 <div v-else class="log-row muted">无人出局</div>
                 <!-- Vote breakdown -->
                 <div v-if="round.voteResult.tally.length > 0" class="tally">
-                  <div v-for="entry in round.voteResult.tally" :key="entry.userId" class="tally-row">
+                  <div
+                    v-for="entry in round.voteResult.tally"
+                    :key="entry.userId"
+                    class="tally-row"
+                  >
                     <span class="tally-name">{{ entry.seatIndex }}号 {{ entry.nickname }}</span>
                     <span class="tally-votes">{{ entry.votes }} 票</span>
                     <span class="tally-voters">
-                      （{{ entry.voters.map(v => v.seatIndex + '号').join('、') }}）
+                      （{{ entry.voters.map((v) => v.seatIndex + '号').join('、') }}）
                     </span>
                   </div>
                 </div>
@@ -89,14 +93,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { gameService } from '@/services/gameService'
+import {ref, watch} from 'vue'
+import {gameService} from '@/services/gameService'
 import type {
   ActionLogEntry,
-  NightDeathPayload,
-  VoteResultPayload,
   HunterShotPayload,
   IdiotRevealPayload,
+  NightDeathPayload,
+  VoteResultPayload,
 } from '@/types'
 
 const props = defineProps<{ gameId: number; open: boolean }>()

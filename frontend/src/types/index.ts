@@ -179,7 +179,7 @@ export interface GameActionResponse {
 
 // ── Sheriff Election ──────────────────────────────────────────────────────────
 
-export type SheriffSubPhase = 'SIGNUP' | 'SPEECH' | 'DAY_VOTING' | 'RESULT' | 'TIED'
+export type SheriffSubPhase = 'SIGNUP' | 'SPEECH' | 'VOTING' | 'RESULT' | 'TIED'
 
 export interface SheriffCandidate {
   userId: string
@@ -254,7 +254,7 @@ export interface DayPhaseState {
 // ── Voting Phase ──────────────────────────────────────────────────────────────
 
 export type VotingSubPhase =
-  | 'DAY_VOTING'
+  | 'VOTING'
   | 'RE_VOTING'
   | 'VOTE_RESULT'
   | 'HUNTER_SHOOT'
@@ -358,7 +358,7 @@ export interface NightPhaseState {
 export interface ActionLogEntry {
   id: number
   eventType: 'NIGHT_DEATH' | 'VOTE_RESULT' | 'HUNTER_SHOT' | 'IDIOT_REVEAL'
-  message: string  // raw JSON — parse per eventType
+  message: string // raw JSON — parse per eventType
   targetUserId: string | null
   createdAt: string | null
 }

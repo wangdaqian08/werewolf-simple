@@ -443,14 +443,14 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/userStore'
-import { useGameStore } from '@/stores/gameStore'
-import { useRoomStore } from '@/stores/roomStore'
-import { gameService } from '@/services/gameService'
-import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import {ElMessage} from 'element-plus'
+import {useRoute, useRouter} from 'vue-router'
+import {useUserStore} from '@/stores/userStore'
+import {useGameStore} from '@/stores/gameStore'
+import {useRoomStore} from '@/stores/roomStore'
+import {gameService} from '@/services/gameService'
+import {createStompClient, disconnectStomp, subscribeToTopic} from '@/services/stompClient'
 import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
@@ -458,9 +458,9 @@ import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
 import VotingPhase from '@/components/VotingPhase.vue'
-import { useNavigationGuard } from '@/composables/useNavigationGuard'
-import { useAudioService } from '@/composables/useAudioService'
-import type { GamePlayer } from '@/types'
+import {useNavigationGuard} from '@/composables/useNavigationGuard'
+import {useAudioService} from '@/composables/useAudioService'
+import type {GamePlayer} from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -854,7 +854,7 @@ onMounted(async () => {
         if (data.type === 'PhaseChanged') {
           // Normalize phase name for backward compatibility
           const normalizedPhase = normalizePhaseName(data.phase)
-          
+
           // Preserve current audioSequence to prevent it from being lost
           const currentAudio = gameStore.state?.audioSequence
           // Small delay to ensure backend transaction has committed before we read state
@@ -962,28 +962,6 @@ onUnmounted(() => {
   disconnectStomp()
 })
 
-// ── Audio file helpers for new event-driven approach ─────────────────────────────
-function getOpenEyesAudioFile(role: string): string {
-  const audioMap: Record<string, string> = {
-    'WEREWOLF': 'wolf_open_eyes.mp3',
-    'SEER': 'seer_open_eyes.mp3',
-    'WITCH': 'witch_open_eyes.mp3',
-    'GUARD': 'guard_open_eyes.mp3'
-  }
-  return audioMap[role] || ''
-}
-
-function getCloseEyesAudioFile(role: string): string {
-  const audioMap: Record<string, string> = {
-    'WEREWOLF': 'wolf_close_eyes.mp3',
-    'SEER': 'seer_close_eyes.mp3',
-    'SEER_RESULT': 'seer_close_eyes.mp3',
-    'WITCH': 'witch_close_eyes.mp3',
-    'GUARD': 'guard_close_eyes.mp3'
-  }
-  return audioMap[role] || ''
-}
-
 // ── Backward compatibility helpers ────────────────────────────────────────────────
 /**
  * Map old phase names to new ones for backward compatibility
@@ -991,8 +969,8 @@ function getCloseEyesAudioFile(role: string): string {
 function normalizePhaseName(phase: string | undefined): string {
   if (!phase) return phase || ''
   const phaseMap: Record<string, string> = {
-    'DAY_DISCUSSION': 'DAY_DISCUSSION',
-    'DAY_VOTING': 'DAY_VOTING'
+    DAY_DISCUSSION: 'DAY_DISCUSSION',
+    DAY_VOTING: 'DAY_VOTING',
   }
   return phaseMap[phase] || phase
 }

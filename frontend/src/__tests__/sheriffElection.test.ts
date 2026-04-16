@@ -6,12 +6,11 @@
  * (e.g. ElectionSubPhase.VOTING → "VOTING") diverges from a frontend
  * string literal (e.g. 'DAY_VOTING'), causing a blank screen.
  */
-import { describe, it, expect, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import {beforeEach, describe, expect, it} from 'vitest'
+import {mount} from '@vue/test-utils'
+import {createPinia, setActivePinia} from 'pinia'
 import SheriffElection from '@/components/SheriffElection.vue'
-import type { SheriffElectionState } from '@/types'
+import type {SheriffElectionState} from '@/types'
 
 const CANDIDATES = [
   { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' as const },
@@ -125,7 +124,7 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
     const rows = wrapper.findAll('.vote-row')
     expect(rows.length).toBeGreaterThan(0)
     expect(rows[0]).toBeDefined()
-    await rows[0]!!.trigger('click')
+    await rows[0]!.trigger('click')
     // After clicking, the row should be selected (not error out)
     expect(wrapper.find('.vote-row-selected').exists()).toBe(true)
   })
@@ -141,7 +140,7 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
     })
     // 2 RUNNING candidates (Alice + Bob) → 2 vote-rows
     expect(wrapper.findAll('.vote-row')).toHaveLength(2)
-    await wrapper.findAll('.vote-row')!![0]!!.trigger('click')
+    await wrapper.findAll('.vote-row')![0]!.trigger('click')
     expect(wrapper.find('[data-testid="sheriff-vote"]').exists()).toBe(true)
   })
 
