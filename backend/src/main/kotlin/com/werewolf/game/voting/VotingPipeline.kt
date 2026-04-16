@@ -12,6 +12,7 @@ import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.VoteRepository
+import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
 import org.springframework.stereotype.Service
@@ -30,6 +31,7 @@ class VotingPipeline(
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
     private val nightOrchestrator: NightOrchestrator,
+    private val actionLogService: ActionLogService,
 ) {
     @Transactional
     fun submitVote(request: GameActionRequest, context: GameContext): GameActionResult {
@@ -112,6 +114,15 @@ class VotingPipeline(
         eventsToSend.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name))
         eventsToSend.add(DomainEvent.VoteTally(context.gameId, eliminated, tally))
 
+        // Record vote result in action log
+        val eliminatedRole = eliminated?.let {
+            gamePlayerRepository.findByGameIdAndUserId(context.gameId, it).orElse(null)?.role
+        }
+        actionLogService.recordVoteResult(
+            context.gameId, context.game.dayNumber, votes, tally,
+            context.game.sheriffUserId, eliminated, eliminatedRole
+        )
+
         // Collect events from elimination process
         if (eliminated != null) {
             collectEliminationEvents(context, eliminated, eventsToSend)
@@ -171,6 +182,7 @@ class VotingPipeline(
 
                 targetPlayer.alive = false
                 gamePlayerRepository.save(targetPlayer)
+                actionLogService.recordHunterShot(context.gameId, context.game.dayNumber, actor.userId, target)
 
                 // Record in elimination history
                 eliminationHistoryRepository.findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
@@ -373,6 +385,7 @@ class VotingPipeline(
             player.canVote = false
             player.idiotRevealed = true
             gamePlayerRepository.save(player)
+            actionLogService.recordIdiotReveal(context.gameId, context.game.dayNumber, targetId)
             events.add(DomainEvent.IdiotRevealed(context.gameId, targetId))
             // After elimination: check win condition
             val updatedContext = contextLoader.load(context.gameId)

@@ -52,6 +52,7 @@ class VotingPipelineTest {
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
+        actionLogService = mock(),
     )
 
     private val gameId = 1
@@ -702,5 +703,81 @@ class VotingPipelineTest {
 
         val result = checker.check(listOf(wolf1, wolf2), WinConditionMode.HARD_MODE)
         assertThat(result).isEqualTo(WinnerSide.WEREWOLF)
+    }
+
+    // ── Action log recording ─────────────────────────────────────────────────
+
+    @Mock lateinit var actionLogService: com.werewolf.service.ActionLogService
+
+    private fun makeVotingPipelineWithLog(handlers: List<RoleHandler> = emptyList()) = VotingPipeline(
+        handlers = handlers,
+        voteRepository = voteRepository,
+        gameRepository = gameRepository,
+        gamePlayerRepository = gamePlayerRepository,
+        eliminationHistoryRepository = eliminationHistoryRepository,
+        winConditionChecker = winConditionChecker,
+        stompPublisher = stompPublisher,
+        contextLoader = contextLoader,
+        nightOrchestrator = nightOrchestrator,
+        actionLogService = actionLogService,
+    )
+
+    @Test
+    fun `revealTally - records VOTE_RESULT when a player is eliminated`() {
+        val target = player("u1", 1, PlayerRole.VILLAGER)
+        val context = GameContext(game(VotingSubPhase.VOTING.name), room(), listOf(player(hostId, 0), target))
+        val votes = listOf(vote("u2", "u1"), vote("u3", "u1"))
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(votes)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(eliminationHistoryRepository.save(any<EliminationHistory>())).thenAnswer { it.arguments[0] }
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+
+        makeVotingPipelineWithLog().revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        verify(actionLogService).recordVoteResult(
+            eq(gameId), eq(1), any(), any(), isNull(), eq("u1"), eq(PlayerRole.VILLAGER)
+        )
+    }
+
+    @Test
+    fun `handleHunterShoot - records HUNTER_SHOT when hunter shoots`() {
+        val hunter = player("hunter1", 1, PlayerRole.HUNTER).also { it.alive = false }
+        val target = player("u1", 2, PlayerRole.VILLAGER)
+        val context = GameContext(
+            game(VotingSubPhase.HUNTER_SHOOT.name), room(), listOf(player(hostId, 0), hunter, target)
+        )
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1))
+            .thenReturn(java.util.Optional.empty())
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+
+        val req = GameActionRequest(gameId = gameId, actorUserId = "hunter1", actionType = ActionType.HUNTER_SHOOT, targetUserId = "u1")
+        makeVotingPipelineWithLog().handleHunterShoot(req, context)
+
+        verify(actionLogService).recordHunterShot(gameId, 1, "hunter1", "u1")
+    }
+
+    @Test
+    fun `revealTally - records IDIOT_REVEAL when idiot survives first elimination`() {
+        val idiot = player("u1", 1, PlayerRole.IDIOT)
+        val context = GameContext(game(VotingSubPhase.VOTING.name), room(), listOf(player(hostId, 0), idiot))
+        val votes = listOf(vote("u2", "u1"), vote("u3", "u1"))
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(votes)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(idiot))
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+
+        makeVotingPipelineWithLog().revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        verify(actionLogService).recordIdiotReveal(gameId, 1, "u1")
     }
 }

@@ -53,6 +53,7 @@ class VotingPipelineSheriffWeightTest {
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
+        actionLogService = mock(),
     )
 
     private val gameId = 1

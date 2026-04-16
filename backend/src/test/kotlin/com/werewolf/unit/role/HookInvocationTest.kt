@@ -111,6 +111,7 @@ class HookInvocationTest {
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
+        actionLogService = mock(),
     )
 
     // ── onDayEnter ───────────────────────────────────────────────────────────
