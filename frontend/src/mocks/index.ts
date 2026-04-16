@@ -7,6 +7,7 @@ import {
   makeNightScenario,
   makeRoleRevealState,
   makeVotingScenario,
+  MOCK_ACTION_LOG,
   MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
   MOCK_DAY_SCENARIO_ALIVE_REVEALED,
   MOCK_DAY_SCENARIO_DEAD,
@@ -83,7 +84,8 @@ function phaseAudio(newPhase: GamePhase, subPhase?: string | null): AudioSequenc
 
 function nightSubPhaseAudio(oldSubPhase: string | null, newSubPhase: string): AudioSequence {
   const files: string[] = []
-  if (oldSubPhase && oldSubPhase !== 'WAITING' && CLOSE_EYES[oldSubPhase]) {
+  // Skip close-eyes when entering SEER_RESULT (seer still awake viewing result)
+  if (oldSubPhase && oldSubPhase !== 'WAITING' && newSubPhase !== 'SEER_RESULT' && CLOSE_EYES[oldSubPhase]) {
     files.push(CLOSE_EYES[oldSubPhase])
   }
   if (OPEN_EYES[newSubPhase]) {
@@ -473,6 +475,7 @@ export function setupMocks() {
   // ── Game ──────────────────────────────────────────────────────────────────────
   mock.onGet(/\/game\/[^/]+\/state/).reply(() => [200, mockGameState])
   mock.onGet(/\/game\/result/).reply((_config) => [200, MOCK_GAME_RESULT])
+  mock.onGet(/\/game\/[^/]+\/events/).reply(() => [200, MOCK_ACTION_LOG])
   mock.onPost('/game/action').reply((config) => {
     const { actionType, targetId, payload } = JSON.parse(config.data ?? '{}')
     if (mockGameState.phase === 'ROLE_REVEAL') {
@@ -601,7 +604,7 @@ export function setupMocks() {
         if (nextIdx >= order.length) {
           mockGameState = {
             ...mockGameState,
-            sheriffElection: { ...e, subPhase: 'DAY_VOTING', currentSpeakerId: undefined },
+            sheriffElection: { ...e, subPhase: 'VOTING', currentSpeakerId: undefined },
           }
         } else {
           mockGameState = {
