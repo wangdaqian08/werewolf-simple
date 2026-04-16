@@ -98,6 +98,7 @@ class HookInvocationTest {
         nightWaitingScheduler = nightWaitingScheduler,
         audioService = audioService,
         coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
+        actionLogService = mock(),
     )
 
     private fun makeVotingPipeline(handlers: List<RoleHandler>) = VotingPipeline(

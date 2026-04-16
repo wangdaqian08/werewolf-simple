@@ -40,6 +40,7 @@ class NightOrchestrator(
     @Lazy private val nightWaitingScheduler: NightWaitingScheduler,
     private val audioService: com.werewolf.service.AudioService,
     private val coroutineScope: CoroutineScope, // 新增：协程作用域
+    private val actionLogService: com.werewolf.service.ActionLogService,
 ) {
     private val log = LoggerFactory.getLogger(NightOrchestrator::class.java)
 
@@ -365,6 +366,9 @@ class NightOrchestrator(
                 gamePlayerRepository.save(player)
             }
         }
+
+        // Record public action log (cause intentionally omitted — no wolf/witch attribution)
+        actionLogService.recordNightDeaths(gameId, nightPhase.dayNumber, kills.distinct())
 
         nightPhase.subPhase = NightSubPhase.COMPLETE
         nightPhaseRepository.save(nightPhase)

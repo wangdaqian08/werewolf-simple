@@ -39,6 +39,7 @@ class NightOrchestratorTest {
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var nightWaitingScheduler: NightWaitingScheduler
     @Mock lateinit var audioService: com.werewolf.service.AudioService
+    @Mock lateinit var actionLogService: com.werewolf.service.ActionLogService
 
     private lateinit var nightOrchestrator: NightOrchestrator
 
@@ -75,6 +76,7 @@ class NightOrchestratorTest {
         nightWaitingScheduler = nightWaitingScheduler,
         audioService = audioService,
         coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
+        actionLogService = actionLogService,
     )
 
 private fun mockAudioServiceForDayTransition(r: Room) {
@@ -1349,5 +1351,37 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         verify(stompPublisher).broadcastGame(eq(gameId), argThat { event ->
             event is DomainEvent.NightSubPhaseChanged && event.subPhase == NightSubPhase.GUARD_PICK
         })
+    }
+
+    // ── Action log recording ─────────────────────────────────────────────────
+
+    @Test
+    fun `resolveNightKills - records NIGHT_DEATH events for each killed player`() {
+        val wolf = GamePlayer(gameId = gameId, userId = "wolf1", seatIndex = 1, role = PlayerRole.WEREWOLF)
+        val villager = GamePlayer(gameId = gameId, userId = "vil1", seatIndex = 2, role = PlayerRole.VILLAGER)
+        val game = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.NIGHT
+            it.dayNumber = 1
+        }
+        val room = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6)
+        val nightPhase = NightPhase(gameId = gameId, dayNumber = 1, subPhase = NightSubPhase.COMPLETE).also {
+            it.wolfTargetUserId = "vil1"
+        }
+        val ctx = GameContext(game, room, listOf(wolf, villager), nightPhase)
+        val updatedCtx = GameContext(game, room, listOf(wolf, villager.also { it.alive = false }), nightPhase)
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "vil1"))
+            .thenReturn(Optional.of(villager))
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(contextLoader.load(gameId)).thenReturn(updatedCtx)
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        mockAudioServiceForDayTransition(room)
+
+        nightOrchestrator.resolveNightKills(ctx, nightPhase)
+
+        verify(actionLogService).recordNightDeaths(gameId, 1, listOf("vil1"))
     }
 }
