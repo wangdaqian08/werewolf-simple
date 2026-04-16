@@ -12,3 +12,11 @@ data class GameActionRequestDto(
     val targetUserId: String? = null,
     val payload: Map<String, Any?>? = null,
 )
+
+data class ActionLogEntryDto(
+    val id: Int,
+    val eventType: String,
+    val message: String,
+    val targetUserId: String?,
+    val createdAt: String?,
+)
