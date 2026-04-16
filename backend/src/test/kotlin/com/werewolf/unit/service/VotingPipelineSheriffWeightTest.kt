@@ -372,7 +372,7 @@ class VotingPipelineSheriffWeightTest {
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
 
         // Verify night orchestrator was called
-        verify(nightOrchestrator).startNightPhase(eq(gameId), eq(2), anyOrNull(), eq(false))
+        verify(nightOrchestrator).initNight(eq(gameId), eq(2), anyOrNull(), eq(false))
     }
 
     // ── Test Case 9: Sheriff votes for dead player (should be rejected) ────────

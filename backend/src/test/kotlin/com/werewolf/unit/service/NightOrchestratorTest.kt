@@ -442,7 +442,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
     }
 
     @Test
-    fun `resolveNightKills - no kills, transitions to DAY phase`() {
+    fun `resolveNightKills - no kills, transitions to DAY_DISCUSSION phase`() {
         val wolf = player("u1", 1, PlayerRole.WEREWOLF)
         val v1 = player("u2", 2)
         val v2 = player("u3", 3)
@@ -1363,7 +1363,8 @@ private fun mockAudioServiceForDayTransition(r: Room) {
             it.dayNumber = 1
         }
         val room = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6)
-        val nightPhase = NightPhase(gameId = gameId, dayNumber = 1, subPhase = NightSubPhase.COMPLETE).also {
+        // Use GUARD_PICK (not COMPLETE) — resolveNightKills is called on an in-progress phase
+        val nightPhase = NightPhase(gameId = gameId, dayNumber = 1, subPhase = NightSubPhase.GUARD_PICK).also {
             it.wolfTargetUserId = "vil1"
         }
         val ctx = GameContext(game, room, listOf(wolf, villager), nightPhase)
@@ -1381,5 +1382,42 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         nightOrchestrator.resolveNightKills(ctx, nightPhase)
 
         verify(actionLogService).recordNightDeaths(gameId, 1, listOf("vil1"))
+    }
+
+    @Test
+    fun `resolveNightKills - is a no-op if night phase is already COMPLETE (prevents third-round automatic bug)`() {
+        // Regression test: the coroutine path used to call resolveNightKills AFTER the event-driven
+        // path had already called it (timeout-based auto-advance). The COMPLETE guard prevents
+        // double-resolution which caused automatic day transitions on round 3+.
+        val np = nightPhase().also { it.subPhase = NightSubPhase.COMPLETE }
+        val ctx = ctx(player("u1", 1, PlayerRole.WEREWOLF))
+
+        nightOrchestrator.resolveNightKills(ctx, np)
+
+        // Nothing should happen: no kills applied, no game state saved, no events broadcast
+        verify(gameRepository, never()).save(any())
+        verify(gamePlayerRepository, never()).save(any())
+        verify(stompPublisher, never()).broadcastGame(any(), any())
+    }
+
+    @Test
+    fun `initNight - does NOT broadcast OpenEyes or CloseEyes events`() {
+        // Regression test: the coroutine path (startNightPhase) used to broadcast OpenEyes/CloseEyes
+        // domain events which the frontend mapped to audio, duplicating the AudioSequence events.
+        // initNight must never broadcast these events.
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val r = room().also { it.config = GameConfig.createDefault() }
+        val context = GameContext(game(), r, listOf(wolf))
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+
+        nightOrchestrator.initNight(gameId, newDayNumber = 1)
+
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
+        assertThat(captor.allValues).noneMatch { it is DomainEvent.OpenEyes }
+        assertThat(captor.allValues).noneMatch { it is DomainEvent.CloseEyes }
     }
 }

@@ -134,8 +134,8 @@ class VotingPipelineTest {
 
         // No re-vote deletion should happen
         verify(voteRepository, never()).deleteAll(any<Collection<Vote>>())
-        // startNightPhase called (goToNight path)
-        verify(nightOrchestrator).startNightPhase(any(), any(), anyOrNull(), any())
+        // initNight called (goToNight path)
+        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
     }
 
     // ── revealTally — elimination ─────────────────────────────────────────────
@@ -217,7 +217,7 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(target.alive).isFalse()
-        verify(nightOrchestrator).startNightPhase(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -235,7 +235,7 @@ class VotingPipelineTest {
         val captor = argumentCaptor<Game>()
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -255,7 +255,7 @@ class VotingPipelineTest {
 
         votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SHOOT, "wolf"), context)
 
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
         val captor = argumentCaptor<Game>()
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.phase).isEqualTo(GamePhase.GAME_OVER)
@@ -280,7 +280,7 @@ class VotingPipelineTest {
 
         votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
         val captor = argumentCaptor<Game>()
         verify(gameRepository, atLeastOnce()).save(captor.capture())
         assertThat(captor.allValues).anyMatch { it.phase == GamePhase.GAME_OVER }
@@ -298,7 +298,7 @@ class VotingPipelineTest {
         val result = votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        verify(nightOrchestrator).startNightPhase(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -312,7 +312,7 @@ class VotingPipelineTest {
         val captor = argumentCaptor<Game>()
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
+        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
     }
 
     // ── handleBadge ───────────────────────────────────────────────────────────
@@ -657,7 +657,7 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         // dayNumber is 1, so next night should be day 2
-        verify(nightOrchestrator).startNightPhase(eq(gameId), eq(2), anyOrNull(), any())
+        verify(nightOrchestrator).initNight(eq(gameId), eq(2), anyOrNull(), any())
     }
 
     // ── WinConditionMode ──────────────────────────────────────────────────────

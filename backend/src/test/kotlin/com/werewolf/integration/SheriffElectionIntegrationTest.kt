@@ -254,18 +254,17 @@ class SheriffElectionIntegrationTest {
         assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
 
-        // No-candidate shortcut: SHERIFF_START_SPEECH triggers startNightPhase via runBlocking,
-        // which blocks until the entire night coroutine completes (all role timeouts expire).
-        // By the time the HTTP response returns, the game has resolved night and is in DAY.
+        // No-candidate shortcut: SHERIFF_START_SPEECH calls initNight(withWaiting=true).
+        // Night starts immediately (WAITING sub-phase) without blocking — roles advance via player actions.
         assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
 
-        // Game has progressed past SHERIFF_ELECTION (through NIGHT to DAY)
+        // Game has transitioned from SHERIFF_ELECTION to NIGHT
         val savedGame = gameRepository.findById(gameId).orElseThrow()
-        assertThat(savedGame.phase).isNotEqualTo(GamePhase.SHERIFF_ELECTION)
+        assertThat(savedGame.phase).isEqualTo(GamePhase.NIGHT)
 
-        // A night phase record was created (proving night occurred)
+        // Night phase record was created in WAITING sub-phase (ready for first role to act)
         val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, savedGame.dayNumber).orElseThrow()
-        assertThat(nightPhase.subPhase).isEqualTo(NightSubPhase.COMPLETE)
+        assertThat(nightPhase.subPhase).isEqualTo(NightSubPhase.WAITING)
 
         // No sheriff was elected
         assertThat(savedGame.sheriffUserId).isNull()
