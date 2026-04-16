@@ -139,7 +139,8 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
         isHost: false, // regular alive player
       },
     })
-    expect(wrapper.findAll('.vote-row')).toHaveLength(1)
+    // 2 RUNNING candidates (Alice + Bob) → 2 vote-rows
+    expect(wrapper.findAll('.vote-row')).toHaveLength(2)
     await wrapper.findAll('.vote-row')!![0]!!.trigger('click')
     expect(wrapper.find('[data-testid="sheriff-vote"]').exists()).toBe(true)
   })

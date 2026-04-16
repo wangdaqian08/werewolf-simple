@@ -86,8 +86,13 @@
       </PlayerSlot>
     </section>
 
-    <!-- Floating action log button -->
-    <button class="log-fab" aria-label="游戏记录" @click="showLog = true">📋</button>
+    <!-- Floating action log button: hidden until host reveals result to prevent spoilers -->
+    <button
+      v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
+      class="log-fab"
+      aria-label="游戏记录"
+      @click="showLog = true"
+    >📋</button>
 
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />

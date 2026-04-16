@@ -896,55 +896,11 @@ onMounted(async () => {
             })
           }
         }
-        // New event-driven approach: OpenEyes event
-        if (data.type === 'OpenEyes') {
-          // Play open eyes audio for the role
-          const state = gameStore.state
-          if (state) {
-            // Create audio sequence for open eyes
-            const audioFile = getOpenEyesAudioFile(data.role)
-            if (audioFile) {
-              const audioSequence = {
-                id: `open-eyes-${data.role}-${Date.now()}`,
-                phase: data.phase,
-                subPhase: data.role,
-                audioFiles: [audioFile],
-                priority: 10,
-                timestamp: Date.now()
-              }
-              gameStore.setState({
-                ...state,
-                audioSequence,
-              })
-            } else {
-              console.warn(`No audio file found for role: ${data.role}`)
-            }
-          }
-        }
-        // New event-driven approach: CloseEyes event
-        if (data.type === 'CloseEyes') {
-          // Play close eyes audio for the role
-          const state = gameStore.state
-          if (state) {
-            // Create audio sequence for close eyes
-            const audioFile = getCloseEyesAudioFile(data.role)
-            if (audioFile) {
-              const audioSequence = {
-                id: `close-eyes-${data.role}-${Date.now()}`,
-                phase: data.phase,
-                subPhase: data.role,
-                audioFiles: [audioFile],
-                priority: 10,
-                timestamp: Date.now()
-              }
-              gameStore.setState({
-                ...state,
-                audioSequence,
-              })
-            } else {
-              console.warn(`No audio file found for role: ${data.role}`)
-            }
-          }
+        // OpenEyes / CloseEyes are informational events from the night orchestrator.
+        // Audio is driven exclusively by AudioSequence events (backend-calculated).
+        // Handling audio here would duplicate what AudioSequence already plays.
+        if (data.type === 'OpenEyes' || data.type === 'CloseEyes') {
+          console.log(`[night] ${data.type} for role ${data.role}`)
         }
         // New event-driven approach: RoleAction event
         if (data.type === 'RoleAction') {
