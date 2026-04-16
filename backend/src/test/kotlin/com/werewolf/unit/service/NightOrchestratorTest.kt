@@ -1175,9 +1175,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
         // Setup audio calculations for SEER_PICK to SEER_RESULT transition
-        // SEER_PICK -> SEER_RESULT: close eyes audio from SEER_PICK, no open eyes for SEER_RESULT
-        whenever(audioService.calculateCloseEyesAudio(NightSubPhase.SEER_PICK))
-            .thenReturn("seer_close_eyes.mp3")
+        // SEER_PICK -> SEER_RESULT: NO close eyes (seer is still awake viewing result); no open eyes for SEER_RESULT
         whenever(audioService.calculateOpenEyesAudio(NightSubPhase.SEER_RESULT))
             .thenReturn(null) // SEER_RESULT has no open eyes audio
 
@@ -1185,11 +1183,11 @@ private fun mockAudioServiceForDayTransition(r: Room) {
 
         // Verify NightSubPhaseChanged event was broadcast
         verify(stompPublisher).broadcastGame(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
-        
-        // Verify scheduler was called to schedule the audio transition with gap
+
+        // Verify scheduler was called with null close-eyes: seer stays awake until SEER_RESULT is done
         verify(nightWaitingScheduler).scheduleAliveRoleTransition(
             eq(gameId),
-            eq("seer_close_eyes.mp3"),
+            eq(null),
             eq(null),
             any()
         )
