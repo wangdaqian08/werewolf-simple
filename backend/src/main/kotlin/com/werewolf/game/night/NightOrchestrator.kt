@@ -675,11 +675,11 @@ class NightOrchestrator(
             log.info("[executeNightSequence] Completed sub-phase $subPhase for role $role")
         }
         
-        // 解析夜阶段结果
-        val nightPhase = context.nightPhase
-        if (nightPhase != null) {
-            log.info("[executeNightSequence] Resolving night kills for game $gameId")
-            resolveNightKills(context, nightPhase)
+        // 解析夜阶段结果 — reload fresh to pick up wolf/witch/guard actions set during this night
+        val freshNightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, newDayNumber).orElse(null)
+        if (freshNightPhase != null) {
+            log.info("[executeNightSequence] Resolving night kills for game $gameId (wolfTarget=${freshNightPhase.wolfTargetUserId})")
+            resolveNightKills(context, freshNightPhase)
         }
     }
 
