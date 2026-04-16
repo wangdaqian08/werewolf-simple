@@ -145,8 +145,8 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
-import type {DayPhaseState, GamePlayer} from '@/types'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import type { DayPhaseState, GamePlayer } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'

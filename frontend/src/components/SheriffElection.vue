@@ -476,8 +476,8 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, ref} from 'vue'
-import type {SheriffCandidate, SheriffElectionState} from '@/types'
+import { computed, ref } from 'vue'
+import type { SheriffCandidate, SheriffElectionState } from '@/types'
 
 const props = defineProps<{
   election: SheriffElectionState

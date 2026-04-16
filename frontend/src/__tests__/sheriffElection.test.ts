@@ -6,11 +6,11 @@
  * (e.g. ElectionSubPhase.VOTING → "VOTING") diverges from a frontend
  * string literal (e.g. 'DAY_VOTING'), causing a blank screen.
  */
-import {beforeEach, describe, expect, it} from 'vitest'
-import {mount} from '@vue/test-utils'
-import {createPinia, setActivePinia} from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import SheriffElection from '@/components/SheriffElection.vue'
-import type {SheriffElectionState} from '@/types'
+import type { SheriffElectionState } from '@/types'
 
 const CANDIDATES = [
   { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' as const },

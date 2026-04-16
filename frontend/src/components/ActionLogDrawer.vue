@@ -93,8 +93,8 @@
 </template>
 
 <script setup lang="ts">
-import {ref, watch} from 'vue'
-import {gameService} from '@/services/gameService'
+import { ref, watch } from 'vue'
+import { gameService } from '@/services/gameService'
 import type {
   ActionLogEntry,
   HunterShotPayload,
