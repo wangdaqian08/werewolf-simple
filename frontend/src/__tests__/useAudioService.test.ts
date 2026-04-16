@@ -250,17 +250,17 @@ describe('useAudioService', () => {
     expect(mockPlaySequential).toHaveBeenCalledWith(['guard_close_eyes.mp3'])
   })
 
-  it('DAY phase: backend sends day_time', async () => {
+  it('DAY phase: backend sends rooster_crowing and day_time', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['day_time.mp3'], 'day-enter')
+    const seq = makeSequence(['rooster_crowing.mp3', 'day_time.mp3'], 'day-enter')
     seq.phase = 'DAY_DISCUSSION'
     seq.subPhase = null
     gameStore.setState(makeState({ phase: 'DAY_DISCUSSION', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['day_time.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['rooster_crowing.mp3', 'day_time.mp3'])
   })
 
   it('ROLE_REVEAL / VOTING / GAME_OVER: no audio', async () => {
@@ -349,11 +349,11 @@ describe('useAudioService', () => {
     gameStore.setState(
       makeState({
         phase: 'DAY_DISCUSSION',
-        audioSequence: makeSequence(['day_time.mp3'], 'day'),
+        audioSequence: makeSequence(['rooster_crowing.mp3', 'day_time.mp3'], 'day'),
       }),
     )
     await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith(['day_time.mp3'])
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['rooster_crowing.mp3', 'day_time.mp3'])
 
     // Total: 7 sequence plays
     expect(mockPlaySequential).toHaveBeenCalledTimes(7)

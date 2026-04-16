@@ -47,7 +47,7 @@ class AudioSequenceBroadcastTest {
      * 4. SEER_PICK → SEER_RESULT: (empty - viewing result)
      * 5. SEER_RESULT → WITCH_ACT: seer_close_eyes.mp3, [gap], witch_open_eyes.mp3
      * 6. WITCH_ACT → GUARD_PICK: witch_close_eyes.mp3, [gap], guard_open_eyes.mp3
-     * 7. GUARD_PICK → DAY: guard_close_eyes.mp3, day_time.mp3, rooster_crowing.mp3
+     * 7. GUARD_PICK → DAY: guard_close_eyes.mp3, [then] rooster_crowing.mp3, day_time.mp3
      */
     @Test
     fun `full night flow - all roles alive - complete audio sequence`() {
@@ -110,8 +110,8 @@ class AudioSequenceBroadcastTest {
             room = room,
         )
         assertThat(dayEntry.audioFiles).containsExactly(
-            "day_time.mp3",
-            "rooster_crowing.mp3"
+            "rooster_crowing.mp3",
+            "day_time.mp3"
         )
     }
 
@@ -226,8 +226,8 @@ class AudioSequenceBroadcastTest {
             room = room,
         )
         assertThat(dayEntry.audioFiles).containsExactly(
-            "day_time.mp3",
-            "rooster_crowing.mp3"
+            "rooster_crowing.mp3",
+            "day_time.mp3"
         )
     }
 

@@ -245,7 +245,7 @@ class SeerAudioBugTest {
         )
 
         // Then: Should contain "day_time.mp3"
-        assertThat(audioSequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
         println("NIGHT -> DAY: ${audioSequence.audioFiles}")
     }
 }

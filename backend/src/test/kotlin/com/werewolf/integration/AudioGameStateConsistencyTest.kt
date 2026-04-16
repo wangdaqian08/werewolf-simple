@@ -120,7 +120,7 @@ class AudioGameStateConsistencyTest {
         assertThat(audioSequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
         
         // Verify: Audio files are appropriate for DAY phase
-        assertThat(audioSequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
     }
 
     @Test
@@ -280,7 +280,7 @@ class AudioGameStateConsistencyTest {
         // Verify: Audio sequence matches new game state
         assertThat(nightToDaySequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
         assertThat(nightToDaySequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
-        assertThat(nightToDaySequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        assertThat(nightToDaySequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
     }
 
     // ── Audio Sequence Timing Consistency Tests ────────────────────────────────

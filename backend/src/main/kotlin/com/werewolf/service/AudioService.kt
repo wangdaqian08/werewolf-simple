@@ -58,9 +58,9 @@ class AudioService {
                 }
 
                 GamePhase.DAY_DISCUSSION -> {
-                    // Entering day phase
-                    audioFiles.add("day_time.mp3")
+                    // Entering day phase - rooster crows first to signal dawn, then day_time plays
                     audioFiles.add("rooster_crowing.mp3")
+                    audioFiles.add("day_time.mp3")
                 }
 
                 GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.DAY_VOTING, GamePhase.GAME_OVER, GamePhase.WAITING, GamePhase.DAY_PENDING -> {

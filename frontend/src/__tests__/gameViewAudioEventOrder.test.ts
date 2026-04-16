@@ -286,7 +286,7 @@ describe('GameView Audio Event Order Bug', () => {
     expect(mockPlaySequential).toHaveBeenCalledWith(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'])
   })
 
-  it('GUARD_PICK to DAY transition - plays day_time.mp3', async () => {
+  it('GUARD_PICK to DAY transition - plays rooster_crowing.mp3 and day_time.mp3', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
@@ -323,7 +323,7 @@ describe('GameView Audio Event Order Bug', () => {
     await nextTick()
 
     // AudioSequence
-    const newSeq = makeSequence(['day_time.mp3'], 'seq-night-to-day')
+    const newSeq = makeSequence(['rooster_crowing.mp3', 'day_time.mp3'], 'seq-night-to-day')
     gameStore.setState(
       makeState({
         phase: 'DAY_DISCUSSION',
@@ -339,8 +339,8 @@ describe('GameView Audio Event Order Bug', () => {
     )
     await nextTick()
 
-    // Should play day_time.mp3
-    expect(mockPlaySequential).toHaveBeenCalledWith(['day_time.mp3'])
+    // Should play rooster_crowing.mp3 then day_time.mp3
+    expect(mockPlaySequential).toHaveBeenCalledWith(['rooster_crowing.mp3', 'day_time.mp3'])
   })
 
   it('Multiple rapid audio sequence changes - each plays with queue clearing', async () => {

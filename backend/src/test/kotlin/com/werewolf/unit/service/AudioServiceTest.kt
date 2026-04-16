@@ -53,7 +53,7 @@ class AudioServiceTest {
     }
 
     @Test
-    fun `calculatePhaseTransition - NIGHT to DAY returns day_time mp3`() {
+    fun `calculatePhaseTransition - NIGHT to DAY returns rooster_crowing then day_time mp3`() {
         val room = room()
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
@@ -66,7 +66,8 @@ class AudioServiceTest {
 
         assertThat(sequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
         assertThat(sequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
-        assertThat(sequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        // Rooster crows first to signal dawn, then day_time plays
+        assertThat(sequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
         assertThat(sequence.priority).isEqualTo(10)
     }
 
@@ -727,7 +728,7 @@ class AudioServiceTest {
     // ─── Additional Edge Cases ───────────────────────────────────────────────
 
     @Test
-    fun `calculatePhaseTransition - DAY to DAY returns day_time mp3`() {
+    fun `calculatePhaseTransition - DAY to DAY returns rooster_crowing then day_time mp3`() {
         val room = room()
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
@@ -739,7 +740,8 @@ class AudioServiceTest {
         )
 
         assertThat(sequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
-        assertThat(sequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        // Rooster crows first to signal dawn, then day_time plays
+        assertThat(sequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
         assertThat(sequence.priority).isEqualTo(10)
     }
 
@@ -882,7 +884,7 @@ class AudioServiceTest {
      * 4. After seer picks (SEER_RESULT): (empty - viewing result)
      * 5. After seer confirms → WITCH_ACT: seer_close_eyes.mp3, [gap], witch_open_eyes.mp3
      * 6. After witch acts → GUARD_PICK: witch_close_eyes.mp3, [gap], guard_open_eyes.mp3
-     * 7. After guard picks → DAY: guard_close_eyes.mp3, day_time.mp3, rooster_crowing.mp3
+     * 7. After guard picks → DAY: guard_close_eyes.mp3, [then] rooster_crowing.mp3, day_time.mp3
      */
 
     @Test
@@ -982,7 +984,7 @@ class AudioServiceTest {
     }
 
     @Test
-    fun `GAME FLOW - NIGHT to DAY plays day_time and rooster_crowing`() {
+    fun `GAME FLOW - NIGHT to DAY plays rooster_crowing then day_time`() {
         val room = room()
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
@@ -993,9 +995,10 @@ class AudioServiceTest {
             room = room,
         )
 
+        // Rooster crows first to signal dawn, then day_time plays
         assertThat(sequence.audioFiles).containsExactly(
-            "day_time.mp3",
-            "rooster_crowing.mp3"
+            "rooster_crowing.mp3",
+            "day_time.mp3"
         )
     }
 

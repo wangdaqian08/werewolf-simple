@@ -101,7 +101,7 @@ class AudioSequenceIntegrationTest {
         // Verify: Audio sequence contains day_time.mp3
         assertThat(audioSequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
         assertThat(audioSequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
-        assertThat(audioSequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
         assertThat(audioSequence.priority).isEqualTo(10)
     }
 
@@ -239,7 +239,7 @@ class AudioSequenceIntegrationTest {
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
         )
-        assertThat(nightToDaySequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        assertThat(nightToDaySequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
     }
 
     @Test

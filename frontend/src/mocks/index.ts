@@ -78,7 +78,10 @@ function makeAudioSequence(
 function phaseAudio(newPhase: GamePhase, subPhase?: string | null): AudioSequence {
   const files: string[] = []
   if (newPhase === 'NIGHT') files.push('goes_dark_close_eyes.mp3')
-  if (newPhase === 'DAY_DISCUSSION') files.push('day_time.mp3')
+  if (newPhase === 'DAY_DISCUSSION') {
+    files.push('rooster_crowing.mp3')
+    files.push('day_time.mp3')
+  }
   return makeAudioSequence(newPhase, subPhase ?? null, files, 10)
 }
 

@@ -69,7 +69,7 @@ class AudioPhaseMappingTest {
             room = room,
         )
 
-        assertThat(sequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        assertThat(sequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
         assertThat(sequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
     }
 
