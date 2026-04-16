@@ -353,6 +353,63 @@ export interface NightPhaseState {
   previousGuardTargetId?: string // cannot protect the same player two nights in a row
 }
 
+// ── Action Log ───────────────────────────────────────────────────────────────
+
+export interface ActionLogEntry {
+  id: number
+  eventType: 'NIGHT_DEATH' | 'VOTE_RESULT' | 'HUNTER_SHOT' | 'IDIOT_REVEAL'
+  message: string  // raw JSON — parse per eventType
+  targetUserId: string | null
+  createdAt: string | null
+}
+
+export interface NightDeathPayload {
+  dayNumber: number
+  userId: string
+  nickname: string
+  seatIndex: number
+}
+
+export interface VoteResultVoter {
+  userId: string
+  nickname: string
+  seatIndex: number
+}
+
+export interface VoteResultTallyEntry {
+  userId: string
+  nickname: string
+  seatIndex: number
+  votes: number
+  voters: VoteResultVoter[]
+}
+
+export interface VoteResultPayload {
+  dayNumber: number
+  tally: VoteResultTallyEntry[]
+  eliminatedUserId: string | null
+  eliminatedNickname: string | null
+  eliminatedSeatIndex: number | null
+  eliminatedRole: string | null
+}
+
+export interface HunterShotPayload {
+  dayNumber: number
+  hunterUserId: string
+  hunterNickname: string
+  hunterSeatIndex: number
+  targetUserId: string
+  targetNickname: string
+  targetSeatIndex: number
+}
+
+export interface IdiotRevealPayload {
+  dayNumber: number
+  userId: string
+  nickname: string
+  seatIndex: number
+}
+
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────
 
 export interface StompMessage<T = unknown> {
