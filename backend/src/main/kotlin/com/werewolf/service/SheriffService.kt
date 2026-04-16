@@ -189,9 +189,7 @@ class SheriffService(
             .filter { it.status == CandidateStatus.RUNNING }
 
         if (candidates.isEmpty()) {
-            runBlocking {
-                nightOrchestrator.startNightPhase(context.gameId, context.game.dayNumber, withWaiting = true).join()
-            }
+            nightOrchestrator.initNight(context.gameId, context.game.dayNumber, withWaiting = true)
             return GameActionResult.Success()
         }
 
@@ -504,9 +502,7 @@ class SheriffService(
         return coroutineScope.launch {
             delay(60_000) // 60 seconds for manual interaction
             log.info("[SheriffService] Auto-advance to night triggered for game $gameId")
-            runBlocking {
-                nightOrchestrator.startNightPhase(gameId, dayNumber, withWaiting = true).join()
-            }
+            nightOrchestrator.initNight(gameId, dayNumber, withWaiting = true)
         }.also { job ->
             scheduledJobs[gameId] = job
         }

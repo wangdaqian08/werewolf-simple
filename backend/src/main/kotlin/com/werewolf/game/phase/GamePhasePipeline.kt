@@ -39,7 +39,7 @@ class GamePhasePipeline(
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can reveal night result")
         if (context.game.phase != GamePhase.DAY_DISCUSSION) {
-            log.info("[revealNightResult] ERROR: Not in DAY phase, actual phase is ${context.game.phase}")
+            log.info("[revealNightResult] ERROR: Not in DAY_DISCUSSION phase, actual phase is ${context.game.phase}")
             return GameActionResult.Rejected("Not in DAY phase")
         }
         if (context.game.subPhase != DaySubPhase.RESULT_HIDDEN.name) {

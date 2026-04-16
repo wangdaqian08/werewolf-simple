@@ -345,6 +345,13 @@ class NightOrchestrator(
     @Transactional
     fun resolveNightKills(context: GameContext, nightPhase: NightPhase) {
         val gameId = context.gameId
+        // Guard against double-resolution: the coroutine path and event-driven path can both
+        // try to call this. If the night phase is already COMPLETE, it means kills were already
+        // applied in a previous call — skip to prevent duplicate kills and phase transitions.
+        if (nightPhase.subPhase == NightSubPhase.COMPLETE) {
+            log.warn("[resolveNightKills] Night phase already COMPLETE for game $gameId, skipping double-resolution")
+            return
+        }
         val kills = mutableListOf<String>()
 
         val wolfTarget = nightPhase.wolfTargetUserId

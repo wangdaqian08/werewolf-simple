@@ -335,7 +335,7 @@ class VotingPipeline(
             ?.guardTargetUserId
 
         val newDayNumber = context.game.dayNumber + 1
-        nightOrchestrator.startNightPhase(context.gameId, newDayNumber, currentGuardTarget)
+        nightOrchestrator.initNight(context.gameId, newDayNumber, currentGuardTarget)
     }
 
     private fun endGame(context: GameContext, winner: WinnerSide, events: MutableList<DomainEvent>? = null) {
@@ -451,8 +451,6 @@ class VotingPipeline(
             ?.guardTargetUserId
 
         val newDayNumber = context.game.dayNumber + 1
-        // nightOrchestrator.startNightPhase handles its own transaction and event broadcasting
-        // We don't need to collect its events here
-        nightOrchestrator.startNightPhase(context.gameId, newDayNumber, currentGuardTarget)
+        nightOrchestrator.initNight(context.gameId, newDayNumber, currentGuardTarget)
     }
 }
