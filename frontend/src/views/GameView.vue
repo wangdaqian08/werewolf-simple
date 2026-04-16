@@ -113,6 +113,7 @@
     <template v-else-if="gameStore.state?.phase === 'DAY_DISCUSSION' && gameStore.state?.dayPhase">
       <DayPhase
         :key="`${gameStore.state.dayPhase.subPhase}-${gameStore.state.dayPhase.dayNumber}`"
+        :game-id="Number(route.params.gameId)"
         :day-phase="gameStore.state.dayPhase"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
