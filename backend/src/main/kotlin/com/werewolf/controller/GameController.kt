@@ -6,6 +6,7 @@ import com.werewolf.game.action.GameActionDispatcher
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -19,6 +20,7 @@ class GameController(
     private val gameService: GameService,
     private val gameActionDispatcher: GameActionDispatcher,
     private val nightOrchestrator: NightOrchestrator,
+    private val actionLogService: ActionLogService,
 ) {
     val log: Logger = LoggerFactory.getLogger(GameController::class.java)
     @PostMapping("/start")
@@ -60,6 +62,12 @@ class GameController(
         val userId = authentication.principal as String
         return ResponseEntity.ok(gameService.getGameState(gameId, userId))
     }
+
+    @GetMapping("/{gameId}/events")
+    fun getActionLog(
+        @PathVariable gameId: Int,
+        authentication: Authentication,
+    ) = ResponseEntity.ok(actionLogService.getLog(gameId))
 
     // DEBUG ONLY: Manually advance night from WAITING to WEREWOLF_PICK
     @PostMapping("/{gameId}/debug/advance-night")
