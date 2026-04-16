@@ -306,7 +306,10 @@ class NightOrchestrator(
                     nightPhaseRepository.save(nightPhase)
                     
                     // Get separate audio for close_eyes and open_eyes
-                    val closeEyesAudio = audioService.calculateCloseEyesAudio(completedSubPhase)
+                    // Skip close-eyes when entering SEER_RESULT: seer is still awake viewing the result.
+                    // Close-eyes plays later when advancing FROM SEER_RESULT to the next role.
+                    val closeEyesAudio = if (nextSubPhase == NightSubPhase.SEER_RESULT) null
+                                         else audioService.calculateCloseEyesAudio(completedSubPhase)
                     val openEyesAudio = audioService.calculateOpenEyesAudio(nextSubPhase)
                     
                     // Send UI update immediately
