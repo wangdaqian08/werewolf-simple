@@ -1165,41 +1165,29 @@ class NightOrchestratorTest {
         )
     }
 
-    // ── Interaction test: submitAction actually unblocks alive roles ──────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // Regression tests — guard against the two P0 bugs
+    // ══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Uses a 10-SECOND timeout per role. A background coroutine calls submitAction()
-     * for each sub-phase after a short delay. If submitAction fails to unblock the
-     * coroutine, the test would take 10s × 5 phases = 50s and fail the 8s assertion.
+     * REGRESSION: Alive role must NEVER auto-advance.
      *
-     * This catches the real production bug: if submitAction doesn't reach the
-     * coroutine's CompletableDeferred, alive roles auto-advance on timeout.
+     * Before the fix, withTimeoutOrNull(actionWindowMs) would auto-advance after 20-30s.
+     * Now alive roles call deferred.await() with no timeout — they block until
+     * submitAction(gameId) is called.
+     *
+     * This test starts a night with one alive wolf, waits 2 seconds (which would be
+     * well past any short timeout), and asserts the coroutine is STILL waiting.
+     * Only after submitAction() does the night complete.
      */
     @Test
-    fun `night flow - alive roles advance via submitAction, not timeout`() {
-        // 10-second timeout — if any phase hits this, the test fails on elapsed time
-        val longCfg = RoleDelayConfig(
-            actionWindowMs = 10_000L,
-            deadRoleDelayMs = 50L,
-            audioWarmupMs = 10L,
-            audioCooldownMs = 10L,
-            interRoleGapMs = 10L,
-        )
-        val orchestrator = makeOrchestrator(allHandlers)
-        val r = Room(
-            roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
-            hasSeer = true, hasWitch = true, hasGuard = true,
-        ).also {
-            it.config = GameConfig(mapOf(
-                PlayerRole.WEREWOLF to longCfg, PlayerRole.SEER to longCfg,
-                PlayerRole.WITCH to longCfg, PlayerRole.GUARD to longCfg,
-            ))
-        }
-        val wolf = player("w1", 1, PlayerRole.WEREWOLF)
-        val seer = player("s1", 2, PlayerRole.SEER)
-        val witch = player("x1", 3, PlayerRole.WITCH)
-        val guard = player("g1", 4, PlayerRole.GUARD)
-        val context = GameContext(game(), r, listOf(wolf, seer, witch, guard))
+    fun `REGRESSION - alive role blocks forever until submitAction is called`() {
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler))
+        val shortCfg = RoleDelayConfig(50L, 50L, 10L, 10L, 10L)
+        val r = room().also { it.config = GameConfig(mapOf(PlayerRole.WEREWOLF to shortCfg)) }
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val context = GameContext(game(), r, listOf(wolf))
         val np = NightPhase(gameId = gameId, dayNumber = 1)
 
         whenever(contextLoader.load(gameId)).thenReturn(context)
@@ -1207,44 +1195,77 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition(r)
+
+        val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
+
+        // Wait 2 seconds — the coroutine must still be blocked at deferred.await()
+        Thread.sleep(2_000)
+        assertThat(job.isActive)
+            .describedAs("Alive wolf must NOT auto-advance — coroutine should still be waiting for submitAction")
+            .isTrue()
+
+        // Now unblock it
+        orchestrator.submitAction(gameId)
+        runBlocking { job.join() }
+        assertThat(job.isCompleted).isTrue()
+    }
+
+    /**
+     * REGRESSION: goes_dark_close_eyes.mp3 must play before wolf_open_eyes.mp3.
+     *
+     * Before the fix, launchRoleLoop started the coroutine immediately after
+     * broadcastNightInit. The coroutine's wolf_open_eyes AudioSequence arrived 69ms
+     * later and replaced the init AudioSequence on the frontend — goes_dark never played.
+     *
+     * The fix adds NIGHT_INIT_AUDIO_DELAY_MS (4s) in launchRoleLoop before nightRoleLoop.
+     * This test uses the production path (initNight → launchRoleLoop) and verifies that
+     * 500ms after initNight, only init audio exists — no role audio yet.
+     */
+    @Test
+    fun `REGRESSION - init audio plays before role audio in production path`() {
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler))
+        val r = room().also { it.config = GameConfig.createDefault() }
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val context = GameContext(game(), r, listOf(wolf))
+
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1))
+            .thenReturn(Optional.of(NightPhase(gameId = gameId, dayNumber = 1)))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(audioService.calculatePhaseTransition(
             eq(gameId), anyOrNull(), eq(GamePhase.NIGHT), anyOrNull(), anyOrNull(), eq(r),
         )).thenReturn(AudioSequence(
-            id = "night", phase = GamePhase.NIGHT, subPhase = NightSubPhase.WEREWOLF_PICK.name,
+            id = "night-init", phase = GamePhase.NIGHT, subPhase = NightSubPhase.WEREWOLF_PICK.name,
             audioFiles = listOf("goes_dark_close_eyes.mp3", "wolf_howl.mp3"),
             priority = 10, timestamp = System.currentTimeMillis(),
         ))
-        whenever(audioService.calculatePhaseTransition(
-            eq(gameId), anyOrNull(), eq(GamePhase.DAY_DISCUSSION), anyOrNull(), anyOrNull(), eq(r),
-        )).thenReturn(AudioSequence(
-            id = "day", phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_HIDDEN.name,
-            audioFiles = listOf("rooster_crowing.mp3", "day_time.mp3"),
-            priority = 10, timestamp = System.currentTimeMillis(),
-        ))
 
-        val startTime = System.currentTimeMillis()
+        // Use initNight (production path). No active transaction → else branch →
+        // broadcastNightInit runs synchronously, then launchRoleLoop starts coroutine
+        // with NIGHT_INIT_AUDIO_DELAY_MS delay before nightRoleLoop.
+        orchestrator.initNight(gameId, newDayNumber = 1)
 
-        runBlocking {
-            val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
+        // After 500ms: init audio should be broadcast, role audio should NOT.
+        // The 4-second delay in launchRoleLoop prevents role audio from starting.
+        Thread.sleep(500)
 
-            // Background: simulate player actions — call submitAction for each sub-phase
-            // 5 alive sub-phases: WEREWOLF_PICK, SEER_PICK, SEER_RESULT, WITCH_ACT, GUARD_PICK
-            launch {
-                repeat(5) {
-                    // Wait for the coroutine to register a deferred
-                    delay(200)
-                    orchestrator.submitAction(gameId)
-                }
-            }
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
+        val allAudio = captor.allValues.filterIsInstance<DomainEvent.AudioSequence>()
+            .flatMap { it.audioSequence.audioFiles }
 
-            job.join()
-        }
+        assertThat(allAudio)
+            .describedAs("Only init audio (goes_dark + wolf_howl) should exist — role audio must not start yet")
+            .containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
+        assertThat(allAudio)
+            .describedAs("wolf_open_eyes must NOT be broadcast yet (4s delay in launchRoleLoop)")
+            .doesNotContain("wolf_open_eyes.mp3")
 
-        val elapsed = System.currentTimeMillis() - startTime
-        // 5 sub-phases × 200ms delay + overhead. Must be WELL under 10s (one timeout).
-        // If submitAction fails, the test takes 50s+ (5 × 10s timeouts).
-        assertThat(elapsed)
-            .describedAs("Night should complete in <8s via submitAction, not 50s via timeout")
-            .isLessThan(8_000)
+        // Cleanup: cancel the night coroutine
+        orchestrator.cancelNightPhase(gameId)
     }
 }
