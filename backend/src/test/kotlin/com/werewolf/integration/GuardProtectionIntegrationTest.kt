@@ -59,7 +59,6 @@ class GuardProtectionIntegrationTest {
             winConditionChecker = winConditionChecker,
             stompPublisher = stompPublisher,
             contextLoader = contextLoader,
-            nightWaitingScheduler = mock(), // Not needed for this test
             audioService = audioService,
             coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
             actionLogService = mock(),

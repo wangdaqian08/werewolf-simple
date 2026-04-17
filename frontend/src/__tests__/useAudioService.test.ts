@@ -371,4 +371,201 @@ describe('useAudioService', () => {
     const { isMuted } = setupComposable()
     expect(isMuted.value).toBe(false)
   })
+
+  // ── Guard Close Eyes Bug Regression Tests ───────────────────────────────
+
+  /**
+   * REGRESSION TEST: guard_close_eyes.mp3 was playing twice
+   *
+   * Bug scenario:
+   * 1. Guard completes - backend sends guard_close_eyes.mp3 audio sequence
+   * 2. PhaseChanged event arrives, handler preserves old audioSequence
+   * 3. AudioSequence event arrives with day audio (rooster_crowing.mp3)
+   * 4. Handler overwrites with stale guard_close_eyes.mp3 → plays again!
+   *
+   * Fix: GameView handlers no longer preserve audioSequence.
+   * This test verifies the useAudioService deduplication handles this correctly.
+   */
+  it('guard close eyes - same sequence ID should not replay (deduplication)', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    // 1. Guard completes - first guard_close_eyes.mp3
+    const guardCloseSeq = makeSequence(['guard_close_eyes.mp3'], 'seq-guard-close-001')
+    gameStore.setState(
+      makeState({
+        phase: 'NIGHT',
+        nightPhase: { subPhase: 'WAITING', dayNumber: 1 },
+        audioSequence: guardCloseSeq,
+      }),
+    )
+    await nextTick()
+    expect(mockPlaySequential).toHaveBeenCalledTimes(1)
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['guard_close_eyes.mp3'])
+
+    mockPlaySequential.mockClear()
+    mockClearQueue.mockClear()
+
+    // 2. Stale state update with SAME sequence ID (simulates race condition)
+    // This would happen if PhaseChanged handler preserved and reapplied old audioSequence
+    gameStore.setState(
+      makeState({
+        phase: 'DAY_DISCUSSION',
+        dayPhase: {
+          subPhase: 'RESULT_HIDDEN',
+          dayNumber: 1,
+          phaseDeadline: 9999999999,
+          phaseStarted: 0,
+          canVote: true,
+        },
+        audioSequence: { ...guardCloseSeq }, // Same ID, different object reference
+      }),
+    )
+    await nextTick()
+
+    // Should NOT play again - same ID is deduplicated
+    expect(mockPlaySequential).not.toHaveBeenCalled()
+
+    // 3. New day audio sequence arrives
+    const daySeq = makeSequence(['rooster_crowing.mp3', 'day_time.mp3'], 'seq-day-002')
+    gameStore.setState(
+      makeState({
+        phase: 'DAY_DISCUSSION',
+        dayPhase: {
+          subPhase: 'RESULT_HIDDEN',
+          dayNumber: 1,
+          phaseDeadline: 9999999999,
+          phaseStarted: 0,
+          canVote: true,
+        },
+        audioSequence: daySeq,
+      }),
+    )
+    await nextTick()
+
+    // Day audio should play
+    expect(mockPlaySequential).toHaveBeenCalledTimes(1)
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['rooster_crowing.mp3', 'day_time.mp3'])
+  })
+
+  it('guard as last role - complete audio sequence verification', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    // Full sequence when guard is last role:
+    // 1. WITCH_ACT → GUARD_PICK: witch_close_eyes.mp3 + guard_open_eyes.mp3
+    // 2. GUARD_PICK completion: guard_close_eyes.mp3 (ONCE)
+    // 3. DAY transition: rooster_crowing.mp3 + day_time.mp3
+
+    // Step 1: Witch to Guard transition
+    const witchToGuardSeq = makeSequence(
+      ['witch_close_eyes.mp3', 'guard_open_eyes.mp3'],
+      'seq-witch-to-guard-001',
+    )
+    gameStore.setState(
+      makeState({
+        phase: 'NIGHT',
+        nightPhase: { subPhase: 'GUARD_PICK', dayNumber: 1 },
+        audioSequence: witchToGuardSeq,
+      }),
+    )
+    await nextTick()
+    expect(mockPlaySequential).toHaveBeenCalledTimes(1)
+    expect(mockPlaySequential).toHaveBeenLastCalledWith([
+      'witch_close_eyes.mp3',
+      'guard_open_eyes.mp3',
+    ])
+
+    mockPlaySequential.mockClear()
+
+    // Step 2: Guard completes - guard_close_eyes.mp3
+    const guardCloseSeq = makeSequence(['guard_close_eyes.mp3'], 'seq-guard-close-002')
+    gameStore.setState(
+      makeState({
+        phase: 'NIGHT',
+        nightPhase: { subPhase: 'WAITING', dayNumber: 1 },
+        audioSequence: guardCloseSeq,
+      }),
+    )
+    await nextTick()
+    expect(mockPlaySequential).toHaveBeenCalledTimes(1)
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['guard_close_eyes.mp3'])
+
+    mockPlaySequential.mockClear()
+
+    // Step 3: Day transition - rooster_crowing.mp3 + day_time.mp3
+    const daySeq = makeSequence(['rooster_crowing.mp3', 'day_time.mp3'], 'seq-day-003')
+    gameStore.setState(
+      makeState({
+        phase: 'DAY_DISCUSSION',
+        dayPhase: {
+          subPhase: 'RESULT_HIDDEN',
+          dayNumber: 1,
+          phaseDeadline: 9999999999,
+          phaseStarted: 0,
+          canVote: true,
+        },
+        audioSequence: daySeq,
+      }),
+    )
+    await nextTick()
+    expect(mockPlaySequential).toHaveBeenCalledTimes(1)
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['rooster_crowing.mp3', 'day_time.mp3'])
+
+    // TOTAL: Exactly 3 audio sequences played
+    // The bug would have resulted in 4 (guard_close_eyes twice)
+  })
+
+  it('state update without audioSequence should not trigger playback', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    // Set initial audio
+    const seq1 = makeSequence(['initial.mp3'], 'seq-initial')
+    gameStore.setState(makeState({ audioSequence: seq1 }))
+    await nextTick()
+    expect(mockPlaySequential).toHaveBeenCalledTimes(1)
+
+    mockPlaySequential.mockClear()
+
+    // State update WITHOUT audioSequence (simulates PhaseChanged handler after fix)
+    gameStore.setState(
+      makeState({
+        phase: 'DAY_DISCUSSION',
+        dayPhase: {
+          subPhase: 'RESULT_HIDDEN',
+          dayNumber: 1,
+          phaseDeadline: 9999999999,
+          phaseStarted: 0,
+          canVote: true,
+        },
+        // No audioSequence - should not trigger any audio
+      }),
+    )
+    await nextTick()
+
+    // No audio should play
+    expect(mockPlaySequential).not.toHaveBeenCalled()
+
+    // Now set new audio
+    const seq2 = makeSequence(['new_audio.mp3'], 'seq-new')
+    gameStore.setState(
+      makeState({
+        phase: 'DAY_DISCUSSION',
+        dayPhase: {
+          subPhase: 'RESULT_HIDDEN',
+          dayNumber: 1,
+          phaseDeadline: 9999999999,
+          phaseStarted: 0,
+          canVote: true,
+        },
+        audioSequence: seq2,
+      }),
+    )
+    await nextTick()
+
+    // New audio should play
+    expect(mockPlaySequential).toHaveBeenCalledTimes(1)
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['new_audio.mp3'])
+  })
 })

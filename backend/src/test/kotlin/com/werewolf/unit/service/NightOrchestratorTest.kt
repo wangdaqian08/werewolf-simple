@@ -5,7 +5,6 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
-import com.werewolf.game.night.NightWaitingScheduler
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
 import com.werewolf.model.*
@@ -15,6 +14,8 @@ import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -37,7 +38,6 @@ class NightOrchestratorTest {
     @Mock lateinit var winConditionChecker: WinConditionChecker
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
-    @Mock lateinit var nightWaitingScheduler: NightWaitingScheduler
     @Mock lateinit var audioService: com.werewolf.service.AudioService
     @Mock lateinit var actionLogService: com.werewolf.service.ActionLogService
 
@@ -73,13 +73,12 @@ class NightOrchestratorTest {
         winConditionChecker = winConditionChecker,
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
-        nightWaitingScheduler = nightWaitingScheduler,
         audioService = audioService,
         coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
         actionLogService = actionLogService,
     )
 
-private fun mockAudioServiceForDayTransition(r: Room) {
+    private fun mockAudioServiceForDayTransition(r: Room) {
         val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-DAY",
             phase = GamePhase.DAY_DISCUSSION,
@@ -115,62 +114,6 @@ private fun mockAudioServiceForDayTransition(r: Room) {
             eq(gameId),
             eq(oldSubPhase),
             eq(newSubPhase)
-        )).thenReturn(audioSequence)
-    }
-
-    private fun mockAudioServiceForDeadRoleTransition(skippedRoles: List<NightSubPhase>, targetSubPhase: NightSubPhase) {
-        val audioFiles = mutableListOf<String>()
-        
-        // Add complete audio sequence for skipped (dead) roles
-        for (skippedRole in skippedRoles) {
-            if (skippedRole != NightSubPhase.WAITING) {
-                val openEyesAudio = when (skippedRole) {
-                    NightSubPhase.WEREWOLF_PICK -> "wolf_open_eyes.mp3"
-                    NightSubPhase.SEER_PICK -> "seer_open_eyes.mp3"
-                    NightSubPhase.SEER_RESULT -> null // SEER_RESULT doesn't have open eyes audio
-                    NightSubPhase.WITCH_ACT -> "witch_open_eyes.mp3"
-                    NightSubPhase.GUARD_PICK -> "guard_open_eyes.mp3"
-                    else -> null
-                }
-                val closeEyesAudio = when (skippedRole) {
-                    NightSubPhase.WEREWOLF_PICK -> "wolf_close_eyes.mp3"
-                    NightSubPhase.SEER_PICK -> null // SEER_PICK does NOT play close eyes - happens at SEER_RESULT
-                    NightSubPhase.SEER_RESULT -> "seer_close_eyes.mp3"
-                    NightSubPhase.WITCH_ACT -> "witch_close_eyes.mp3"
-                    NightSubPhase.GUARD_PICK -> "guard_close_eyes.mp3"
-                    else -> null
-                }
-                if (openEyesAudio != null) audioFiles.add(openEyesAudio)
-                if (closeEyesAudio != null) audioFiles.add(closeEyesAudio)
-            }
-        }
-
-        // Add "open eyes" audio for the target (alive) role
-        if (targetSubPhase != NightSubPhase.WAITING && targetSubPhase != NightSubPhase.COMPLETE) {
-            val openEyesAudio = when (targetSubPhase) {
-                NightSubPhase.WEREWOLF_PICK -> "wolf_open_eyes.mp3"
-                NightSubPhase.SEER_PICK -> "seer_open_eyes.mp3"
-                NightSubPhase.SEER_RESULT -> null // SEER_RESULT doesn't have open eyes audio
-                NightSubPhase.WITCH_ACT -> "witch_open_eyes.mp3"
-                NightSubPhase.GUARD_PICK -> "guard_open_eyes.mp3"
-                else -> null
-            }
-            if (openEyesAudio != null) audioFiles.add(openEyesAudio)
-        }
-
-        val audioSequence = AudioSequence(
-            id = "$gameId-${System.currentTimeMillis()}-DEAD-ROLE-$targetSubPhase",
-            phase = GamePhase.NIGHT,
-            subPhase = targetSubPhase.name,
-            audioFiles = audioFiles,
-            priority = 3,
-            timestamp = System.currentTimeMillis()
-        )
-        
-        whenever(audioService.calculateDeadRoleAudioSequence(
-            eq(gameId),
-            eq(skippedRoles),
-            eq(targetSubPhase)
         )).thenReturn(audioSequence)
     }
 
@@ -219,7 +162,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
 
     private fun ctx(vararg players: GamePlayer, roomOverride: Room? = null) = GameContext(game(), roomOverride ?: room(), players.toList())
 
-    /** Minimal stub handler for advance() sequence testing. */
+    /** Minimal stub handler for night sequence testing. */
     private fun stubHandler(r: PlayerRole, vararg phases: NightSubPhase) = object : RoleHandler {
         override val role = r
         override fun acceptedActions(phase: GamePhase, subPhase: String?) = emptySet<ActionType>()
@@ -327,38 +270,6 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         val captor = argumentCaptor<NightPhase>()
         verify(nightPhaseRepository).save(captor.capture())
         assertThat(captor.firstValue.subPhase).isEqualTo(NightSubPhase.WAITING)
-    }
-
-    @Test
-    fun `startNightPhase with withWaiting=true - schedules automatic advance via scheduler`() {
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val r = room()
-        val context = GameContext(game(), r, listOf(wolf))
-        whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WAITING)
-
-        runBlocking {
-            nightOrchestrator.startNightPhase(gameId, newDayNumber = 1, withWaiting = true).join()
-        }
-
-        verify(nightWaitingScheduler).scheduleAdvance(gameId)
-    }
-
-    @Test
-    fun `startNightPhase with withWaiting=false - does NOT schedule waiting advance`() {
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val r = room()
-        val context = GameContext(game(), r, listOf(wolf))
-        whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
-
-        nightOrchestrator.startNightPhase(gameId, newDayNumber = 1, withWaiting = false)
-
-        verify(nightWaitingScheduler, never()).scheduleAdvance(gameId)
     }
 
     // ── resolveNightKills ────────────────────────────────────────────────────
@@ -501,480 +412,6 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.phase).isEqualTo(GamePhase.GAME_OVER)
         assertThat(captor.firstValue.winner).isEqualTo(WinnerSide.VILLAGER)
-    }
-
-    // ── advance ──────────────────────────────────────────────────────────────
-
-    @Test
-    fun `advance - moves to next sub-phase when sequence has remaining phases`() {
-        // Two-phase sequence: WEREWOLF_PICK → SEER_PICK → SEER_RESULT
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.SEER_PICK
-        }
-        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasSeer = true)
-        val seer = player("u1", 1, PlayerRole.SEER)
-        val ctx = GameContext(game(), r, listOf(seer), nightPhase = np)
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightSubPhaseTransition(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-
-        orchestrator.advance(gameId, NightSubPhase.SEER_PICK)
-
-        assertThat(np.subPhase).isEqualTo(NightSubPhase.SEER_RESULT)
-        verify(nightPhaseRepository).save(np)
-    }
-
-    @Test
-    fun `advance - resolves night kills when last sub-phase completes`() {
-        // Single-phase sequence: WEREWOLF_PICK only
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-        }
-        val r = room()
-        val ctx = GameContext(game(), r, emptyList(), nightPhase = np)
-        // advance() calls contextLoader.load once; resolveNightKills calls it again
-        whenever(contextLoader.load(gameId)).thenReturn(ctx, ctx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
-
-        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
-
-        // Should schedule last special role close eyes audio and advance to day
-        verify(nightWaitingScheduler).scheduleLastSpecialRoleCloseEyesAndAdvanceToDay(
-            eq(gameId),
-            eq(1), // dayNumber
-            eq("wolf_close_eyes.mp3")
-        )
-    }
-
-    // ── advance - skip sub-phases when all role players are dead ─────────────
-
-    @Test
-    fun `advance - enters WITCH_ACT when all witches are dead, plays dead role audio`() {
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
-        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler, guardHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.SEER_RESULT
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val deadWitch = player("u2", 2, PlayerRole.WITCH, alive = false)
-        val seer = player("u3", 3, PlayerRole.SEER)
-        val guard = player("u4", 4, PlayerRole.GUARD)
-        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasSeer = true, hasWitch = true, hasGuard = true)
-        val ctx = GameContext(game(), r, listOf(wolf, deadWitch, seer, guard), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
-        
-        // Capture audioSequence for verification
-        val audioSequenceCaptor = mutableListOf<AudioSequence>()
-        whenever(audioService.calculateDeadRoleAudioSequence(
-            eq(gameId),
-            any(),
-            eq(NightSubPhase.WITCH_ACT)
-        )).thenAnswer {
-            val result = AudioSequence(
-                id = "$gameId-${System.currentTimeMillis()}-DEAD-WITCH",
-                phase = GamePhase.NIGHT,
-                subPhase = NightSubPhase.WITCH_ACT.name,
-                audioFiles = listOf("witch_open_eyes.mp3", "witch_close_eyes.mp3"),
-                priority = 3,
-                timestamp = System.currentTimeMillis()
-            )
-            audioSequenceCaptor.add(result)
-            result
-        }
-
-        orchestrator.advance(gameId, NightSubPhase.SEER_RESULT)
-
-        // Should enter WITCH_ACT phase and play dead role audio
-        verify(nightPhaseRepository).save(argThat<NightPhase> { np -> np.subPhase == NightSubPhase.WITCH_ACT })
-        verify(nightWaitingScheduler).scheduleDeadRoleAudio(
-            eq(gameId),
-            eq(1), // dayNumber
-            eq(audioSequenceCaptor[0]),
-            eq(5000L),
-            eq(NightSubPhase.GUARD_PICK),
-            eq(false) // Not last role
-        )
-    }
-
-    @Test
-    fun `advance - enters SEER_RESULT when all seers are dead, plays dead role audio`() {
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val witch = player("u2", 2, PlayerRole.WITCH)
-        val deadSeer = player("u3", 3, PlayerRole.SEER, alive = false)
-        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasSeer = true, hasWitch = true)
-        val ctx = GameContext(game(), r, listOf(wolf, witch, deadSeer), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        
-        // Capture audioSequence for verification
-        val audioSequenceCaptor = mutableListOf<AudioSequence>()
-        whenever(audioService.calculateDeadRoleAudioSequence(
-            eq(gameId),
-            any(),
-            eq(NightSubPhase.SEER_RESULT)
-        )).thenAnswer {
-            val result = AudioSequence(
-                id = "$gameId-${System.currentTimeMillis()}-DEAD-SEER",
-                phase = GamePhase.NIGHT,
-                subPhase = NightSubPhase.SEER_RESULT.name,
-                audioFiles = listOf("seer_open_eyes.mp3", "seer_close_eyes.mp3"),
-                priority = 3,
-                timestamp = System.currentTimeMillis()
-            )
-            audioSequenceCaptor.add(result)
-            result
-        }
-
-        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
-
-        // Verify: UI should update to SEER_RESULT (seer is dead, skip SEER_PICK)
-        verify(stompPublisher).broadcastGame(eq(gameId), argThat { event ->
-            event is DomainEvent.NightSubPhaseChanged && event.subPhase == NightSubPhase.SEER_RESULT
-        })
-
-        // Verify: Dead role audio should be scheduled
-        verify(nightWaitingScheduler).scheduleDeadRoleAudio(
-            eq(gameId),
-            eq(1), // dayNumber
-            eq(audioSequenceCaptor[0]),
-            eq(5000L),
-            eq(NightSubPhase.WITCH_ACT),
-            eq(false) // Not last role
-        )
-    }
-
-    @Test
-    fun `advance - enters GUARD_PICK when all guards are dead, plays dead role audio`() {
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, guardHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val deadGuard = player("u2", 2, PlayerRole.GUARD, alive = false)
-        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasGuard = true)
-        val ctx = GameContext(game(), r, listOf(wolf, deadGuard), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
-
-        // Capture audioSequence for verification
-        val audioSequenceCaptor = mutableListOf<AudioSequence>()
-        whenever(audioService.calculateDeadRoleAudioSequence(
-            eq(gameId),
-            any(),
-            eq(NightSubPhase.GUARD_PICK)
-        )).thenAnswer {
-            val result = AudioSequence(
-                id = "$gameId-${System.currentTimeMillis()}-DEAD-GUARD",
-                phase = GamePhase.NIGHT,
-                subPhase = NightSubPhase.GUARD_PICK.name,
-                audioFiles = listOf("guard_open_eyes.mp3", "guard_close_eyes.mp3"),
-                priority = 3,
-                timestamp = System.currentTimeMillis()
-            )
-            audioSequenceCaptor.add(result)
-            result
-        }
-
-        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
-
-        // Should enter GUARD_PICK phase and play dead role audio
-        verify(nightPhaseRepository).save(argThat<NightPhase> { np -> np.subPhase == NightSubPhase.GUARD_PICK })
-        verify(nightWaitingScheduler).scheduleDeadRoleAudio(
-            eq(gameId),
-            eq(1), // dayNumber
-            eq(audioSequenceCaptor[0]),
-            eq(5000L),
-            eq(null),
-            eq(true) // Auto advance to day
-        )
-    }
-
-    @Test
-    fun `advance - skips multiple dead roles, continues until next alive role or DAY`() {
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
-        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, witchHandler, seerHandler, guardHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val deadWitch = player("u2", 2, PlayerRole.WITCH, alive = false)
-        val deadSeer = player("u3", 3, PlayerRole.SEER, alive = false)
-        val deadGuard = player("u4", 4, PlayerRole.GUARD, alive = false)
-        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
-            hasSeer = true, hasWitch = true, hasGuard = true)
-        val ctx = GameContext(
-            game(),
-            r,
-            listOf(wolf, deadWitch, deadSeer, deadGuard),
-            nightPhase = np
-        )
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
-        
-        // Mock audio service for dead role transition
-        whenever(audioService.calculateDeadRoleAudioSequence(
-            eq(gameId),
-            any(),
-            any()
-        )).thenReturn(AudioSequence(
-            id = "$gameId-${System.currentTimeMillis()}-DEAD-SEER",
-            phase = GamePhase.NIGHT,
-            subPhase = NightSubPhase.SEER_PICK.name,
-            audioFiles = listOf("seer_open_eyes.mp3", "seer_close_eyes.mp3"),
-            priority = 3,
-            timestamp = System.currentTimeMillis()
-        ))
-        
-        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
-
-        // Verify: Should enter SEER_PICK phase (seer is dead) and schedule dead role audio
-        verify(nightWaitingScheduler).scheduleDeadRoleAudio(
-            eq(gameId),
-            eq(1), // dayNumber
-            any(),
-            eq(5000L),
-            eq(NightSubPhase.SEER_PICK),
-            eq(false) // Not last role
-        )
-    }
-
-    @Test
-    fun `advance - when only werewolves and villagers survive, enters dead role phases sequentially`() {
-        // Scenario: Only wolves and villagers survive (seer, witch, guard all dead)
-        // Test that night phase enters first dead role phase and schedules audio
-        
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
-        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler, guardHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-            it.wolfTargetUserId = "v1" // Wolf targets a villager
-        }
-        
-        // Only wolves alive, all special roles dead
-        val wolf1 = player("w1", 1, PlayerRole.WEREWOLF, alive = true)
-        val wolf2 = player("w2", 2, PlayerRole.WEREWOLF, alive = true)
-        val deadSeer = player("s1", 3, PlayerRole.SEER, alive = false)
-        val deadWitch = player("w1", 4, PlayerRole.WITCH, alive = false)
-        val deadGuard = player("g1", 5, PlayerRole.GUARD, alive = false)
-        val villager1 = player("v1", 6, PlayerRole.VILLAGER, alive = true) // Wolf target
-        val villager2 = player("v2", 7, PlayerRole.VILLAGER, alive = true)
-        
-        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 7,
-            hasSeer = true, hasWitch = true, hasGuard = true)
-        val ctx = GameContext(
-            game(),
-            r,
-            listOf(wolf1, wolf2, deadSeer, deadWitch, deadGuard, villager1, villager2),
-            nightPhase = np
-        )
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null) // No winner yet
-        mockAudioServiceForDayTransition(r)
-        
-        // Capture audioSequence for verification
-        val audioSequenceCaptor = mutableListOf<AudioSequence>()
-        whenever(audioService.calculateDeadRoleAudioSequence(
-            eq(gameId),
-            any(),
-            eq(NightSubPhase.SEER_RESULT)
-        )).thenAnswer {
-            val result = AudioSequence(
-                id = "$gameId-${System.currentTimeMillis()}-DEAD-SEER",
-                phase = GamePhase.NIGHT,
-                subPhase = NightSubPhase.SEER_RESULT.name,
-                audioFiles = listOf("seer_open_eyes.mp3", "seer_close_eyes.mp3"),
-                priority = 3,
-                timestamp = System.currentTimeMillis()
-            )
-            audioSequenceCaptor.add(result)
-            result
-        }
-        
-        // Mock gamePlayerRepository to simulate villager being killed
-        whenever(gamePlayerRepository.findByGameIdAndUserId(eq(gameId), eq("v1")))
-            .thenReturn(Optional.of(villager1))
-
-        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
-
-        // Verify: Should enter SEER_RESULT phase (seer is dead, skip SEER_PICK)
-        verify(stompPublisher).broadcastGame(eq(gameId), argThat { event ->
-            event is DomainEvent.NightSubPhaseChanged && event.subPhase == NightSubPhase.SEER_RESULT
-        })
-        
-        // Verify: Should schedule dead role audio
-        verify(nightWaitingScheduler).scheduleDeadRoleAudio(
-            eq(gameId),
-            eq(1), // dayNumber
-            eq(audioSequenceCaptor[0]),
-            eq(5000L),
-            eq(NightSubPhase.WITCH_ACT),
-            eq(false) // Not last role
-        )
-    }
-
-    @Test
-    fun `advance - when only werewolves and villagers survive, dead role audio sequence is correct`() {
-        // Test that dead role audio sequence is correct: seer_open_eyes, seer_close_eyes, witch_open_eyes, witch_close_eyes, guard_open_eyes, guard_close_eyes
-        
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-        val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
-        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler, guardHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-            it.wolfTargetUserId = "v1"
-        }
-        
-        // Only wolves alive, all special roles dead
-        val wolf1 = player("w1", 1, PlayerRole.WEREWOLF, alive = true)
-        val wolf2 = player("w2", 2, PlayerRole.WEREWOLF, alive = true)
-        val deadSeer = player("s1", 3, PlayerRole.SEER, alive = false)
-        val deadWitch = player("w1", 4, PlayerRole.WITCH, alive = false)
-        val deadGuard = player("g1", 5, PlayerRole.GUARD, alive = false)
-        val villager1 = player("v1", 6, PlayerRole.VILLAGER, alive = true)
-        val villager2 = player("v2", 7, PlayerRole.VILLAGER, alive = true)
-        
-        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 7,
-            hasSeer = true, hasWitch = true, hasGuard = true)
-        val ctx = GameContext(
-            game(),
-            r,
-            listOf(wolf1, wolf2, deadSeer, deadWitch, deadGuard, villager1, villager2),
-            nightPhase = np
-        )
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
-        
-        // Mock audio service to capture the audio sequence
-        val audioSequenceCaptor = mutableListOf<AudioSequence>()
-        whenever(audioService.calculateDeadRoleAudioSequence(
-            eq(gameId),
-            any(),
-            eq(NightSubPhase.SEER_RESULT)
-        )).thenAnswer {
-            AudioSequence(
-                id = "$gameId-${System.currentTimeMillis()}-DEAD-SEER",
-                phase = GamePhase.NIGHT,
-                subPhase = NightSubPhase.SEER_RESULT.name,
-                audioFiles = listOf(
-                    "seer_open_eyes.mp3",
-                    "seer_close_eyes.mp3"
-                ),
-                priority = 3,
-                timestamp = System.currentTimeMillis()
-            ).also { audioSequenceCaptor.add(it) }
-        }
-        
-        whenever(gamePlayerRepository.findByGameIdAndUserId(eq(gameId), eq("v1")))
-            .thenReturn(Optional.of(villager1))
-
-        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
-
-        // Verify: Audio sequence should contain seer dead role audio files
-        assertThat(audioSequenceCaptor).hasSize(1)
-        val audioSequence = audioSequenceCaptor[0]
-        assertThat(audioSequence.audioFiles).containsExactly(
-            "seer_open_eyes.mp3",
-            "seer_close_eyes.mp3"
-        )
-        
-        // Verify: Should enter SEER_RESULT phase (seer is dead, skip SEER_PICK)
-        verify(stompPublisher).broadcastGame(eq(gameId), argThat { event ->
-            event is DomainEvent.NightSubPhaseChanged && event.subPhase == NightSubPhase.SEER_RESULT
-        })
-        
-        // Verify: Should schedule dead role audio for seer
-        verify(nightWaitingScheduler).scheduleDeadRoleAudio(
-            eq(gameId),
-            eq(1), // dayNumber
-            eq(audioSequenceCaptor[0]),
-            eq(5000L),
-            eq(NightSubPhase.WITCH_ACT),
-            eq(false) // Not last role
-        )
-    }
-
-    // ── recoverStuckNightPhase ───────────────────────────────────────────────
-
-    @Test
-    fun `recoverStuckNightPhase - does nothing when game is not in NIGHT phase`() {
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val game = game().also { it.phase = GamePhase.DAY_DISCUSSION }
-        val ctx = GameContext(game, room(), listOf(wolf), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-
-        orchestrator.recoverStuckNightPhase(gameId)
-
-        // Should NOT advance
-        verify(nightWaitingScheduler, never()).scheduleAdvance(any(), any(), any())
-    }
-
-    @Test
-    fun `recoverStuckNightPhase - does nothing when night phase is COMPLETE`() {
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.COMPLETE
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val ctx = GameContext(game(), room(), listOf(wolf), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-
-        orchestrator.recoverStuckNightPhase(gameId)
-
-        // Should NOT advance
-        verify(nightWaitingScheduler, never()).scheduleAdvance(any(), any(), any())
     }
 
     // ── advanceFromWaiting ───────────────────────────────────────────────────
@@ -1127,7 +564,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         // Verify AudioSequence event was broadcast
         val audioEventCaptor = argumentCaptor<DomainEvent>()
         verify(stompPublisher, times(2)).broadcastGame(eq(gameId), audioEventCaptor.capture())
-        
+
         val events = audioEventCaptor.allValues
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
@@ -1152,45 +589,11 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         // Verify AudioSequence event was broadcast
         val audioEventCaptor = argumentCaptor<DomainEvent>()
         verify(stompPublisher, times(2)).broadcastGame(eq(gameId), audioEventCaptor.capture())
-        
+
         val events = audioEventCaptor.allValues
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
         assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles).isEmpty()
-    }
-
-    @Test
-    fun `advance - schedules audio transition when transitioning between night sub-phases`() {
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.SEER_PICK
-        }
-        val room = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasSeer = true)
-        val seer = player("u1", 1, PlayerRole.SEER)
-        val ctx = GameContext(game(), room, listOf(seer), nightPhase = np)
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-
-        // Setup audio calculations for SEER_PICK to SEER_RESULT transition
-        // SEER_PICK -> SEER_RESULT: NO close eyes (seer is still awake viewing result); no open eyes for SEER_RESULT
-        whenever(audioService.calculateOpenEyesAudio(NightSubPhase.SEER_RESULT))
-            .thenReturn(null) // SEER_RESULT has no open eyes audio
-
-        orchestrator.advance(gameId, NightSubPhase.SEER_PICK)
-
-        // Verify NightSubPhaseChanged event was broadcast
-        verify(stompPublisher).broadcastGame(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
-
-        // Verify scheduler was called with null close-eyes: seer stays awake until SEER_RESULT is done
-        verify(nightWaitingScheduler).scheduleAliveRoleTransition(
-            eq(gameId),
-            eq(null),
-            eq(null),
-            any()
-        )
     }
 
     @Test
@@ -1211,7 +614,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         // Verify AudioSequence event was broadcast
         val audioEventCaptor = argumentCaptor<DomainEvent>()
         verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), audioEventCaptor.capture())
-        
+
         val events = audioEventCaptor.allValues
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
@@ -1254,7 +657,7 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         // Verify AudioSequence event was broadcast
         val audioEventCaptor = argumentCaptor<DomainEvent>()
         verify(stompPublisher, times(2)).broadcastGame(eq(gameId), audioEventCaptor.capture())
-        
+
         val events = audioEventCaptor.allValues
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
@@ -1294,61 +697,12 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         // Verify AudioSequence event was broadcast
         val audioEventCaptor = argumentCaptor<DomainEvent>()
         verify(stompPublisher, times(2)).broadcastGame(eq(gameId), audioEventCaptor.capture())
-        
+
         val events = audioEventCaptor.allValues
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
         assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
             .containsExactly("seer_close_eyes.mp3", "witch_open_eyes.mp3")
-    }
-
-    @Test
-    fun `advance - guard as last special role should NOT be skipped when alive`() {
-        // Test case: Guard is the last special role and is alive
-        // This should NOT skip to DAY, but enter GUARD_PICK phase
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, guardHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val guard = player("u2", 2, PlayerRole.GUARD, alive = true) // Guard is alive
-        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasGuard = true)
-        val ctx = GameContext(game(), r, listOf(wolf, guard), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-        
-        // Mock audio service for normal transition
-        whenever(audioService.calculateNightSubPhaseTransition(
-            eq(gameId),
-            eq(NightSubPhase.WEREWOLF_PICK),
-            eq(NightSubPhase.GUARD_PICK)
-        )).thenReturn(AudioSequence(
-            id = "$gameId-${System.currentTimeMillis()}-NIGHT-TRANSITION",
-            phase = GamePhase.NIGHT,
-            subPhase = NightSubPhase.GUARD_PICK.name,
-            audioFiles = listOf("wolf_close_eyes.mp3", "guard_open_eyes.mp3"),
-            priority = 3,
-            timestamp = System.currentTimeMillis()
-        ))
-
-        orchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
-
-        // Verify: Should enter GUARD_PICK phase (guard is alive)
-        verify(nightPhaseRepository).save(argThat<NightPhase> { np -> np.subPhase == NightSubPhase.GUARD_PICK })
-        
-        // Verify: Should NOT resolve night kills
-        verify(stompPublisher, never()).broadcastGame(eq(gameId), argThat { event -> 
-            event is DomainEvent.NightResult || event is DomainEvent.PhaseChanged && (event as DomainEvent.PhaseChanged).phase == GamePhase.DAY_DISCUSSION 
-        })
-        
-        // Verify: Should broadcast GUARD_PICK phase change
-        verify(stompPublisher).broadcastGame(eq(gameId), argThat { event ->
-            event is DomainEvent.NightSubPhaseChanged && event.subPhase == NightSubPhase.GUARD_PICK
-        })
     }
 
     // ── Action log recording ─────────────────────────────────────────────────
@@ -1419,5 +773,478 @@ private fun mockAudioServiceForDayTransition(r: Room) {
         verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
         assertThat(captor.allValues).noneMatch { it is DomainEvent.OpenEyes }
         assertThat(captor.allValues).noneMatch { it is DomainEvent.CloseEyes }
+    }
+
+    // ── nightRoleLoop coroutine tests ────────────────────────────────────────
+
+    /**
+     * Verifies that a dead seer triggers exactly one seer_open_eyes and one seer_close_eyes broadcast,
+     * regardless of how many clients are connected or how many times getGameState is called.
+     * Before the coroutine-first refactor this test would fail because advance() was called N times
+     * (once per client) for each NightSubPhaseChanged event received.
+     */
+    @Test
+    fun `nightRoleLoop - dead seer plays seer_open_eyes once and seer_close_eyes once`() {
+        val shortConfig = RoleDelayConfig(
+            actionWindowMs = 100L,
+            deadRoleDelayMs = 100L,
+            audioWarmupMs = 30L,
+            audioCooldownMs = 30L,
+            interRoleGapMs = 30L,
+        )
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
+        val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, guardHandler))
+
+        val r = room(hasSeer = true, hasGuard = true).also {
+            it.config = GameConfig(mapOf(
+                PlayerRole.WEREWOLF to shortConfig,
+                PlayerRole.SEER to shortConfig,
+                PlayerRole.GUARD to shortConfig,
+            ))
+        }
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val deadSeer = player("u2", 2, PlayerRole.SEER, alive = false)
+        val guard = player("u3", 3, PlayerRole.GUARD)
+        val np = NightPhase(gameId = gameId, dayNumber = 1)
+        val context = GameContext(game(), r, listOf(wolf, deadSeer, guard))
+
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition(r)
+
+        runBlocking {
+            val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
+            launch { while (job.isActive) { delay(50); orchestrator.submitAction(gameId) } }
+            job.join()
+        }
+
+        // Collect all AudioSequence events broadcast to the game channel
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
+        val audioEvents = captor.allValues.filterIsInstance<DomainEvent.AudioSequence>()
+
+        // seer_open_eyes and seer_close_eyes must each appear exactly once
+        val seerOpenCount = audioEvents.count { "seer_open_eyes.mp3" in it.audioSequence.audioFiles }
+        val seerCloseCount = audioEvents.count { "seer_close_eyes.mp3" in it.audioSequence.audioFiles }
+        assertThat(seerOpenCount).isEqualTo(1)
+        assertThat(seerCloseCount).isEqualTo(1)
+    }
+
+    /**
+     * Verifies that calling submitAction twice for the same gameId does not throw and does not
+     * produce a second NightSubPhaseChanged broadcast (the second call is a no-op).
+     */
+    @Test
+    fun `submitAction - second call on same gameId after first already completed is a no-op`() {
+        // Call submitAction twice — first completes nothing (no pending deferred yet), second the same.
+        // Neither call should throw an exception.
+        nightOrchestrator.submitAction(gameId)
+        nightOrchestrator.submitAction(gameId)
+
+        // No sub-phase broadcasts should have happened (no coroutine was running)
+        verify(stompPublisher, never()).broadcastGame(any(), any<DomainEvent.NightSubPhaseChanged>())
+    }
+
+    /**
+     * Regression test for the stale JPA entity bug (Game 5, 2026-04-17).
+     *
+     * The seer has two sub-phases: SEER_PICK and SEER_RESULT. When the seer picks a target,
+     * the SeerHandler saves seerCheckedUserId to the NightPhase record. Then the coroutine
+     * advances to SEER_RESULT and saves the subPhase change. If the coroutine reuses a stale
+     * entity loaded before the handler's save, the seerCheckedUserId is overwritten to null.
+     *
+     * This test simulates the handler's DB modification between sub-phases by making
+     * findByGameIdAndDayNumber return a mutated entity (with seerCheckedUserId set) on
+     * the second call. If the coroutine reloads from DB before each sub-phase save,
+     * seerCheckedUserId is preserved. If it reuses a stale entity, it's overwritten.
+     */
+    @Test
+    fun `nightRoleLoop - seer handler data preserved across SEER_PICK to SEER_RESULT transition`() {
+        val shortConfig = RoleDelayConfig(
+            actionWindowMs = 200L,
+            deadRoleDelayMs = 100L,
+            audioWarmupMs = 30L,
+            audioCooldownMs = 30L,
+            interRoleGapMs = 30L,
+        )
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler))
+
+        val r = room(hasSeer = true).also {
+            it.config = GameConfig(mapOf(
+                PlayerRole.WEREWOLF to shortConfig,
+                PlayerRole.SEER to shortConfig,
+            ))
+        }
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val seer = player("u2", 2, PlayerRole.SEER)
+        val context = GameContext(game(), r, listOf(wolf, seer))
+
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition(r)
+
+        // Track NightPhase saves to simulate handler mutation between sub-phases.
+        // The real NightPhase entity returned by findByGameIdAndDayNumber is shared across calls,
+        // so mutating it simulates the handler's DB update being visible on reload.
+        val sharedNightPhase = NightPhase(gameId = gameId, dayNumber = 1)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1))
+            .thenReturn(Optional.of(sharedNightPhase))
+
+        // Track what gets saved: capture seerCheckedUserId from each save
+        val savedSeerCheckedUserIds = mutableListOf<String?>()
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { invocation ->
+            val saved = invocation.arguments[0] as NightPhase
+            savedSeerCheckedUserIds.add(saved.seerCheckedUserId)
+
+            // Simulate: after SEER_PICK is saved, the handler sets seerCheckedUserId.
+            // Since we return a shared entity, the next findByGameIdAndDayNumber will see this.
+            if (saved.subPhase == NightSubPhase.SEER_PICK) {
+                sharedNightPhase.seerCheckedUserId = "target-user"
+                sharedNightPhase.seerResultIsWerewolf = false
+            }
+            saved
+        }
+
+        runBlocking {
+            val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
+            launch { while (job.isActive) { delay(50); orchestrator.submitAction(gameId) } }
+            job.join()
+        }
+
+        // The critical assertion: the shared NightPhase should still have seerCheckedUserId
+        // after the coroutine completed. If the stale entity bug existed, the coroutine's save
+        // of SEER_RESULT would have overwritten seerCheckedUserId to null.
+        assertThat(sharedNightPhase.seerCheckedUserId)
+            .describedAs("seerCheckedUserId must be preserved after SEER_RESULT sub-phase save (stale entity regression)")
+            .isEqualTo("target-user")
+        assertThat(sharedNightPhase.seerResultIsWerewolf)
+            .describedAs("seerResultIsWerewolf must be preserved after SEER_RESULT sub-phase save")
+            .isEqualTo(false)
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Night flow validation — verify phase transitions + audio for 5 scenarios
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private val allHandlers = listOf(
+        stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK),
+        stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT),
+        stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT),
+        stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK),
+    )
+
+    /**
+     * Run a full night with the given players and collect all broadcast events in order.
+     * A background coroutine polls submitAction() every 50ms to unblock alive roles
+     * (since alive roles now wait indefinitely — no timeout).
+     */
+    private fun runNightAndCollect(players: List<GamePlayer>): List<DomainEvent> {
+        val shortCfg = RoleDelayConfig(50L, 50L, 10L, 10L, 10L)
+        val r = Room(
+            roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
+            hasSeer = true, hasWitch = true, hasGuard = true,
+        ).also {
+            it.config = GameConfig(mapOf(
+                PlayerRole.WEREWOLF to shortCfg, PlayerRole.SEER to shortCfg,
+                PlayerRole.WITCH to shortCfg, PlayerRole.GUARD to shortCfg,
+            ))
+        }
+        val orchestrator = makeOrchestrator(allHandlers)
+        val context = GameContext(game(), r, players)
+        val np = NightPhase(gameId = gameId, dayNumber = 1)
+
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(audioService.calculatePhaseTransition(
+            eq(gameId), anyOrNull(), eq(GamePhase.NIGHT), anyOrNull(), anyOrNull(), eq(r),
+        )).thenReturn(AudioSequence(
+            id = "night", phase = GamePhase.NIGHT, subPhase = NightSubPhase.WEREWOLF_PICK.name,
+            audioFiles = listOf("goes_dark_close_eyes.mp3", "wolf_howl.mp3"),
+            priority = 10, timestamp = System.currentTimeMillis(),
+        ))
+        whenever(audioService.calculatePhaseTransition(
+            eq(gameId), anyOrNull(), eq(GamePhase.DAY_DISCUSSION), anyOrNull(), anyOrNull(), eq(r),
+        )).thenReturn(AudioSequence(
+            id = "day", phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_HIDDEN.name,
+            audioFiles = listOf("rooster_crowing.mp3", "day_time.mp3"),
+            priority = 10, timestamp = System.currentTimeMillis(),
+        ))
+
+        runBlocking {
+            val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
+            // Poll submitAction to unblock alive roles (no timeout means they wait forever)
+            launch {
+                while (job.isActive) {
+                    delay(50)
+                    orchestrator.submitAction(gameId)
+                }
+            }
+            job.join()
+        }
+
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
+        return captor.allValues
+    }
+
+    /** Flatten all AudioSequence events into an ordered list of file names. */
+    private fun audioFiles(events: List<DomainEvent>): List<String> =
+        events.filterIsInstance<DomainEvent.AudioSequence>().flatMap { it.audioSequence.audioFiles }
+
+    /** Extract ordered NightSubPhaseChanged values. */
+    private fun subPhases(events: List<DomainEvent>): List<NightSubPhase> =
+        events.filterIsInstance<DomainEvent.NightSubPhaseChanged>().map { it.subPhase }
+
+    // ── Scenario 1: every role alive ─────────────────────────────────────────
+
+    @Test
+    fun `night flow - all roles alive - correct audio and phases`() {
+        val events = runNightAndCollect(listOf(
+            player("w1", 1, PlayerRole.WEREWOLF),
+            player("s1", 2, PlayerRole.SEER),
+            player("x1", 3, PlayerRole.WITCH),
+            player("g1", 4, PlayerRole.GUARD),
+            player("v1", 5), player("v2", 6),
+        ))
+
+        // Audio: each role plays open + close exactly once
+        assertThat(audioFiles(events)).containsExactly(
+            "goes_dark_close_eyes.mp3", "wolf_howl.mp3",       // night init
+            "wolf_open_eyes.mp3",                                // wolf open
+            "wolf_close_eyes.mp3",                               // wolf close
+            "seer_open_eyes.mp3",                                // seer open
+            "seer_close_eyes.mp3",                               // seer close
+            "witch_open_eyes.mp3",                               // witch open
+            "witch_close_eyes.mp3",                              // witch close
+            "guard_open_eyes.mp3",                               // guard open
+            "guard_close_eyes.mp3",                              // guard close
+            "rooster_crowing.mp3", "day_time.mp3",              // day transition
+        )
+
+        // Phases: alive seer gets both SEER_PICK and SEER_RESULT
+        assertThat(subPhases(events)).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    // ── Scenario 2: only seer dead ───────────────────────────────────────────
+
+    @Test
+    fun `night flow - seer dead - correct audio and phases`() {
+        val events = runNightAndCollect(listOf(
+            player("w1", 1, PlayerRole.WEREWOLF),
+            player("s1", 2, PlayerRole.SEER, alive = false),
+            player("x1", 3, PlayerRole.WITCH),
+            player("g1", 4, PlayerRole.GUARD),
+            player("v1", 5), player("v2", 6),
+        ))
+
+        // Audio: dead seer still plays open + close exactly once
+        assertThat(audioFiles(events)).containsExactly(
+            "goes_dark_close_eyes.mp3", "wolf_howl.mp3",
+            "wolf_open_eyes.mp3", "wolf_close_eyes.mp3",
+            "seer_open_eyes.mp3", "seer_close_eyes.mp3",        // dead seer: still plays
+            "witch_open_eyes.mp3", "witch_close_eyes.mp3",
+            "guard_open_eyes.mp3", "guard_close_eyes.mp3",
+            "rooster_crowing.mp3", "day_time.mp3",
+        )
+
+        // Phases: dead seer only broadcasts SEER_PICK (first sub-phase), NOT SEER_RESULT
+        assertThat(subPhases(events)).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.SEER_PICK,                             // dead: first sub-phase only
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    // ── Scenario 3: seer + witch dead ────────────────────────────────────────
+
+    @Test
+    fun `night flow - seer and witch dead - correct audio and phases`() {
+        val events = runNightAndCollect(listOf(
+            player("w1", 1, PlayerRole.WEREWOLF),
+            player("s1", 2, PlayerRole.SEER, alive = false),
+            player("x1", 3, PlayerRole.WITCH, alive = false),
+            player("g1", 4, PlayerRole.GUARD),
+            player("v1", 5), player("v2", 6),
+        ))
+
+        assertThat(audioFiles(events)).containsExactly(
+            "goes_dark_close_eyes.mp3", "wolf_howl.mp3",
+            "wolf_open_eyes.mp3", "wolf_close_eyes.mp3",
+            "seer_open_eyes.mp3", "seer_close_eyes.mp3",
+            "witch_open_eyes.mp3", "witch_close_eyes.mp3",      // dead witch: still plays
+            "guard_open_eyes.mp3", "guard_close_eyes.mp3",
+            "rooster_crowing.mp3", "day_time.mp3",
+        )
+
+        assertThat(subPhases(events)).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    // ── Scenario 4: seer + witch + guard dead ────────────────────────────────
+
+    @Test
+    fun `night flow - seer witch guard dead - correct audio and phases`() {
+        val events = runNightAndCollect(listOf(
+            player("w1", 1, PlayerRole.WEREWOLF),
+            player("s1", 2, PlayerRole.SEER, alive = false),
+            player("x1", 3, PlayerRole.WITCH, alive = false),
+            player("g1", 4, PlayerRole.GUARD, alive = false),
+            player("v1", 5), player("v2", 6),
+        ))
+
+        assertThat(audioFiles(events)).containsExactly(
+            "goes_dark_close_eyes.mp3", "wolf_howl.mp3",
+            "wolf_open_eyes.mp3", "wolf_close_eyes.mp3",
+            "seer_open_eyes.mp3", "seer_close_eyes.mp3",
+            "witch_open_eyes.mp3", "witch_close_eyes.mp3",
+            "guard_open_eyes.mp3", "guard_close_eyes.mp3",      // dead guard: still plays
+            "rooster_crowing.mp3", "day_time.mp3",
+        )
+
+        assertThat(subPhases(events)).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    // ── Scenario 5: only wolf + 2 villagers (all special roles dead) ─────────
+
+    @Test
+    fun `night flow - only wolf and villagers alive - correct audio and phases`() {
+        val events = runNightAndCollect(listOf(
+            player("w1", 1, PlayerRole.WEREWOLF),
+            player("w2", 2, PlayerRole.WEREWOLF),
+            player("s1", 3, PlayerRole.SEER, alive = false),
+            player("x1", 4, PlayerRole.WITCH, alive = false),
+            player("g1", 5, PlayerRole.GUARD, alive = false),
+            player("v1", 6), player("v2", 7),
+        ))
+
+        // All special roles dead — still play full audio sequence
+        assertThat(audioFiles(events)).containsExactly(
+            "goes_dark_close_eyes.mp3", "wolf_howl.mp3",
+            "wolf_open_eyes.mp3", "wolf_close_eyes.mp3",        // wolf alive
+            "seer_open_eyes.mp3", "seer_close_eyes.mp3",        // seer dead
+            "witch_open_eyes.mp3", "witch_close_eyes.mp3",      // witch dead
+            "guard_open_eyes.mp3", "guard_close_eyes.mp3",      // guard dead
+            "rooster_crowing.mp3", "day_time.mp3",
+        )
+
+        // All dead special roles broadcast only their first sub-phase
+        assertThat(subPhases(events)).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    // ── Interaction test: submitAction actually unblocks alive roles ──────────
+
+    /**
+     * Uses a 10-SECOND timeout per role. A background coroutine calls submitAction()
+     * for each sub-phase after a short delay. If submitAction fails to unblock the
+     * coroutine, the test would take 10s × 5 phases = 50s and fail the 8s assertion.
+     *
+     * This catches the real production bug: if submitAction doesn't reach the
+     * coroutine's CompletableDeferred, alive roles auto-advance on timeout.
+     */
+    @Test
+    fun `night flow - alive roles advance via submitAction, not timeout`() {
+        // 10-second timeout — if any phase hits this, the test fails on elapsed time
+        val longCfg = RoleDelayConfig(
+            actionWindowMs = 10_000L,
+            deadRoleDelayMs = 50L,
+            audioWarmupMs = 10L,
+            audioCooldownMs = 10L,
+            interRoleGapMs = 10L,
+        )
+        val orchestrator = makeOrchestrator(allHandlers)
+        val r = Room(
+            roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
+            hasSeer = true, hasWitch = true, hasGuard = true,
+        ).also {
+            it.config = GameConfig(mapOf(
+                PlayerRole.WEREWOLF to longCfg, PlayerRole.SEER to longCfg,
+                PlayerRole.WITCH to longCfg, PlayerRole.GUARD to longCfg,
+            ))
+        }
+        val wolf = player("w1", 1, PlayerRole.WEREWOLF)
+        val seer = player("s1", 2, PlayerRole.SEER)
+        val witch = player("x1", 3, PlayerRole.WITCH)
+        val guard = player("g1", 4, PlayerRole.GUARD)
+        val context = GameContext(game(), r, listOf(wolf, seer, witch, guard))
+        val np = NightPhase(gameId = gameId, dayNumber = 1)
+
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(audioService.calculatePhaseTransition(
+            eq(gameId), anyOrNull(), eq(GamePhase.NIGHT), anyOrNull(), anyOrNull(), eq(r),
+        )).thenReturn(AudioSequence(
+            id = "night", phase = GamePhase.NIGHT, subPhase = NightSubPhase.WEREWOLF_PICK.name,
+            audioFiles = listOf("goes_dark_close_eyes.mp3", "wolf_howl.mp3"),
+            priority = 10, timestamp = System.currentTimeMillis(),
+        ))
+        whenever(audioService.calculatePhaseTransition(
+            eq(gameId), anyOrNull(), eq(GamePhase.DAY_DISCUSSION), anyOrNull(), anyOrNull(), eq(r),
+        )).thenReturn(AudioSequence(
+            id = "day", phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_HIDDEN.name,
+            audioFiles = listOf("rooster_crowing.mp3", "day_time.mp3"),
+            priority = 10, timestamp = System.currentTimeMillis(),
+        ))
+
+        val startTime = System.currentTimeMillis()
+
+        runBlocking {
+            val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
+
+            // Background: simulate player actions — call submitAction for each sub-phase
+            // 5 alive sub-phases: WEREWOLF_PICK, SEER_PICK, SEER_RESULT, WITCH_ACT, GUARD_PICK
+            launch {
+                repeat(5) {
+                    // Wait for the coroutine to register a deferred
+                    delay(200)
+                    orchestrator.submitAction(gameId)
+                }
+            }
+
+            job.join()
+        }
+
+        val elapsed = System.currentTimeMillis() - startTime
+        // 5 sub-phases × 200ms delay + overhead. Must be WELL under 10s (one timeout).
+        // If submitAction fails, the test takes 50s+ (5 × 10s timeouts).
+        assertThat(elapsed)
+            .describedAs("Night should complete in <8s via submitAction, not 50s via timeout")
+            .isLessThan(8_000)
     }
 }

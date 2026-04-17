@@ -153,7 +153,7 @@ class AudioSequenceIntegrationTest {
 
         // Execute: Advance from WEREWOLF_PICK to SEER_PICK
         val context = gameContextLoader.load(game.gameId!!)
-        nightOrchestrator.advance(game.gameId!!, NightSubPhase.WEREWOLF_PICK)
+        nightOrchestrator.advanceToSubPhase(game.gameId!!, NightSubPhase.SEER_PICK)
 
         // Verify: Night phase was advanced
         val updatedNightPhase = nightPhaseRepository.findByGameIdAndDayNumber(game.gameId!!, game.dayNumber).orElse(null)

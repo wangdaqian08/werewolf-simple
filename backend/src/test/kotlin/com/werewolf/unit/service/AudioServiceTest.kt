@@ -48,7 +48,7 @@ class AudioServiceTest {
 
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
-        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "wolf_open_eyes.mp3")
+        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(sequence.priority).isEqualTo(10)
     }
 
@@ -345,12 +345,13 @@ class AudioServiceTest {
 
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.SEER_PICK.name)
-        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3", "seer_open_eyes.mp3")
+        // wolf_open_eyes is now broadcast by the night coroutine, not by calculatePhaseTransition
+        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(sequence.priority).isEqualTo(10)
     }
 
     @Test
-    fun `calculatePhaseTransition - NIGHT phase with WITCH_ACT adds witch_open_eyes`() {
+    fun `calculatePhaseTransition - NIGHT phase with SEER_PICK does not add role audio`() {
         val room = room(hasWitch = true)
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
@@ -363,12 +364,12 @@ class AudioServiceTest {
 
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.WITCH_ACT.name)
-        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "witch_open_eyes.mp3")
+        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(sequence.priority).isEqualTo(10)
     }
 
     @Test
-    fun `calculatePhaseTransition - NIGHT phase with GUARD_PICK adds guard_open_eyes`() {
+    fun `calculatePhaseTransition - NIGHT phase with GUARD_PICK does not add role audio`() {
         val room = room(hasGuard = true)
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
@@ -381,7 +382,7 @@ class AudioServiceTest {
 
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.GUARD_PICK.name)
-        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "guard_open_eyes.mp3")
+        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(sequence.priority).isEqualTo(10)
     }
 
@@ -432,7 +433,7 @@ class AudioServiceTest {
         )
 
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
-        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "wolf_open_eyes.mp3")
+        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(sequence.priority).isEqualTo(10)
     }
 
@@ -758,7 +759,8 @@ class AudioServiceTest {
         )
 
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
-        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3", "seer_open_eyes.mp3")
+        // Role-specific open_eyes is now handled by the night coroutine
+        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(sequence.priority).isEqualTo(10)
     }
 

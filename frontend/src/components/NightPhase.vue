@@ -333,10 +333,10 @@
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
         <div class="ss-title" data-testid="sleep-screen-title">
-          {{ me && !me.isAlive ? '夜晚即将开始' : '请闭眼' }}
+          {{ me && !me.isAlive ? '夜晚降临' : '请闭眼' }}
         </div>
         <div class="ss-en">
-          {{ me && !me.isAlive ? 'Night is beginning...' : 'Night is in progress...' }}
+          {{ me && !me.isAlive ? 'Night is coming...' : 'Night is in progress...' }}
         </div>
         <div class="ss-sub">
           {{

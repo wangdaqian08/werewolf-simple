@@ -49,9 +49,8 @@ class AudioPhaseMappingTest {
             room = room,
         )
 
-        // Both "goes_dark_close_eyes.mp3" and "wolf_open_eyes.mp3" are included when transitioning to WEREWOLF_PICK
-        assertThat(sequence.audioFiles).contains("goes_dark_close_eyes.mp3")
-        assertThat(sequence.audioFiles).contains("wolf_open_eyes.mp3")
+        // wolf_open_eyes is now broadcast by the night coroutine, not by calculatePhaseTransition
+        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
     }
 

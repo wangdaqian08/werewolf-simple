@@ -16,7 +16,25 @@ data class RoleDelayConfig(
      * 当角色已死亡时，backend 会等待此时间以模拟正常操作
      * 这样可以防止玩家通过时序推断出角色死亡
      */
-    val deadRoleDelayMs: Long = 25000L
+    val deadRoleDelayMs: Long = 25000L,
+
+    /**
+     * 睁眼音频预热时间（毫秒）
+     * 播放 open_eyes 音频后，等待此时间再更新 DB 子阶段
+     */
+    val audioWarmupMs: Long = 1500L,
+
+    /**
+     * 闭眼音频冷却时间（毫秒）
+     * 播放 close_eyes 音频后，等待此时间再继续
+     */
+    val audioCooldownMs: Long = 2000L,
+
+    /**
+     * 角色间隔时间（毫秒）
+     * 一个角色闭眼后，到下一个角色睁眼之前的间隔
+     */
+    val interRoleGapMs: Long = 3000L,
 ) {
     companion object {
         /**

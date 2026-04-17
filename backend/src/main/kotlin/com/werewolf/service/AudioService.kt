@@ -44,17 +44,10 @@ class AudioService {
         try {
             when (newPhase) {
                 GamePhase.NIGHT -> {
-                    // Entering night phase
+                    // Night entry audio: darkness + wolf howl.
+                    // wolf_open_eyes is broadcast by the night coroutine's role loop, not here.
                     audioFiles.add("goes_dark_close_eyes.mp3")
                     audioFiles.add("wolf_howl.mp3")
-
-                    // If transitioning to a specific sub-phase immediately, add role audio
-                    if (newSubPhase != null) {
-                        val subPhaseEnum = runCatching { NightSubPhase.valueOf(newSubPhase) }.onFailure { log.error("Invalid night sub-phase: $newSubPhase", it) }.getOrNull()
-                        if (subPhaseEnum != null && subPhaseEnum != NightSubPhase.WAITING) {
-                            getOpenEyesAudio(subPhaseEnum)?.let { audioFiles.add(it) }
-                        }
-                    }
                 }
 
                 GamePhase.DAY_DISCUSSION -> {

@@ -34,6 +34,11 @@ cp backend/.env.example backend/.env
 ```bash
 cd backend && docker compose up -d
 ```
+**Access database** 
+
+```
+docker exec werewolf-db psql -U werewolf -d werewolf -c
+```
 
 **2. Backend**
 

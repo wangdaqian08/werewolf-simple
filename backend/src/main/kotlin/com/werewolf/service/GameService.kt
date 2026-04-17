@@ -78,15 +78,6 @@ class GameService(
         val players = gamePlayerRepository.findByGameId(gameId)
         val myPlayer = players.firstOrNull { it.userId == requestingUserId }
 
-        // Recover stuck night phases (e.g., after backend restart when a role has no alive players)
-        // Only recover if the night phase is not COMPLETE (to avoid interfering with phase transitions)
-        if (game.phase == GamePhase.NIGHT) {
-            val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
-            if (nightPhase != null && nightPhase.subPhase != NightSubPhase.COMPLETE) {
-                nightOrchestrator.recoverStuckNightPhase(gameId)
-            }
-        }
-
         // Always look up user nicknames — used by players map, roleReveal, nightPhase, votingPhase
         val userLookup = userRepository.findAllById(players.map { it.userId }).associateBy { it.userId }
 

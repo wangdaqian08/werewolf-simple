@@ -5,7 +5,6 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
-import com.werewolf.game.night.NightWaitingScheduler
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.EliminationModifier
 import com.werewolf.game.role.RoleHandler
@@ -33,7 +32,6 @@ class HookInvocationTest {
     @Mock lateinit var winConditionChecker: WinConditionChecker
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
-    @Mock lateinit var nightWaitingScheduler: NightWaitingScheduler
     @Mock lateinit var audioService: com.werewolf.service.AudioService
     @Mock lateinit var nightOrchestrator: NightOrchestrator
 
@@ -95,7 +93,6 @@ class HookInvocationTest {
         winConditionChecker = winConditionChecker,
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
-        nightWaitingScheduler = nightWaitingScheduler,
         audioService = audioService,
         coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
         actionLogService = mock(),

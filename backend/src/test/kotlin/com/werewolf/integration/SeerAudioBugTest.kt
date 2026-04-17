@@ -153,7 +153,7 @@ class SeerAudioBugTest {
 
         // Step 2: Simulate WEREWOLF_PICK -> SEER_PICK
         println("\nStep 2: WEREWOLF_PICK -> SEER_PICK")
-        nightOrchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_PICK)
         val nightPhase2 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("  Sub-phase after WEREWOLF_PICK: ${nightPhase2?.subPhase}")
         assertThat(nightPhase2).isNotNull()
@@ -169,7 +169,7 @@ class SeerAudioBugTest {
 
         // Step 3: Simulate SEER_PICK -> SEER_RESULT (seer checks a player)
         println("\nStep 3: SEER_PICK -> SEER_RESULT (seer checks a player)")
-        nightOrchestrator.advance(gameId, NightSubPhase.SEER_PICK)
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_RESULT)
         val nightPhase3 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("  Sub-phase after SEER_PICK: ${nightPhase3?.subPhase}")
         assertThat(nightPhase3).isNotNull()
@@ -185,7 +185,7 @@ class SeerAudioBugTest {
 
         // Step 4: Simulate SEER_RESULT -> WITCH_ACT (seer confirms and advances)
         println("\nStep 4: SEER_RESULT -> WITCH_ACT (seer confirms and advances)")
-        nightOrchestrator.advance(gameId, NightSubPhase.SEER_RESULT)
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.WITCH_ACT)
         val nightPhase4 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("  Sub-phase after SEER_RESULT: ${nightPhase4?.subPhase}")
         assertThat(nightPhase4).isNotNull()
