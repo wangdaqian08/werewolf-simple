@@ -102,11 +102,13 @@ class AudioService {
   private playNextInQueue(): void {
     if (this.audioQueue.length === 0) {
       this.isPlayingQueue = false
+      console.log('[AudioService] Queue empty, playback complete')
       return
     }
 
     this.isPlayingQueue = true
     const { filename, options } = this.audioQueue.shift()!
+    console.log(`[AudioService] Starting playback: ${filename} (queue remaining: ${this.audioQueue.length})`)
 
     try {
       const audio = this.getAudio(filename)
@@ -127,6 +129,7 @@ class AudioService {
 
       // Play next audio when current finishes
       audio.onended = () => {
+        console.log(`[AudioService] Finished playback: ${filename}`)
         this.playNextInQueue()
       }
 

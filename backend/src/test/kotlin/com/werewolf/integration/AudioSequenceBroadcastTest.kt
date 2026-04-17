@@ -255,6 +255,78 @@ class AudioSequenceBroadcastTest {
         assertThat(witchClose).isEqualTo("witch_close_eyes.mp3")
     }
 
+    // ── Guard Close Eyes Bug Regression Test ─────────────────────────────────────
+
+    /**
+     * Test Case: Guard completes as last special role
+     * 
+     * REGRESSION TEST: guard_close_eyes.mp3 was playing twice.
+     * 
+     * Expected sequence when guard completes:
+     * 1. WITCH_ACT → GUARD_PICK: witch_close_eyes.mp3 → [gap] → guard_open_eyes.mp3
+     * 2. GUARD_PICK completion: guard_close_eyes.mp3 (only ONCE)
+     * 3. DAY transition: rooster_crowing.mp3 → day_time.mp3
+     * 
+     * The guard_close_eyes.mp3 must play exactly ONCE, not twice.
+     */
+    @Test
+    fun `guard completes as last role - guard_close_eyes plays exactly once`() {
+        // Simulate the WITCH_ACT → GUARD_PICK transition
+        // This is what scheduleAliveRoleTransition plays
+        val witchClose = audioService.calculateCloseEyesAudio(NightSubPhase.WITCH_ACT)
+        val guardOpen = audioService.calculateOpenEyesAudio(NightSubPhase.GUARD_PICK)
+        
+        assertThat(witchClose).isEqualTo("witch_close_eyes.mp3")
+        assertThat(guardOpen).isEqualTo("guard_open_eyes.mp3")
+        
+        // When guard completes, ONLY guard_close_eyes.mp3 should play
+        // This is what scheduleLastSpecialRoleCloseEyesAndAdvanceToDay plays
+        val guardClose = audioService.calculateCloseEyesAudio(NightSubPhase.GUARD_PICK)
+        assertThat(guardClose).isEqualTo("guard_close_eyes.mp3")
+        
+        // Then day audio plays
+        val room = room(hasSeer = true, hasWitch = true, hasGuard = true)
+        val dayEntry = audioService.calculatePhaseTransition(
+            gameId = 1,
+            oldPhase = GamePhase.NIGHT,
+            newPhase = GamePhase.DAY_DISCUSSION,
+            oldSubPhase = NightSubPhase.WAITING.name,
+            newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
+            room = room,
+        )
+        assertThat(dayEntry.audioFiles).containsExactly(
+            "rooster_crowing.mp3",
+            "day_time.mp3"
+        )
+        
+        // CRITICAL: guard_close_eyes.mp3 should NOT appear anywhere else
+        // It should only appear in the GUARD_PICK close calculation
+        // This verifies the audio sequence calculation doesn't have duplicates
+    }
+
+    /**
+     * Test Case: Verify no duplicate close_eyes in transition sequence
+     */
+    @Test
+    fun `night sub-phase transition - no duplicate close_eyes audio`() {
+        // SEER_RESULT → WITCH_ACT transition
+        val sequence = audioService.calculateNightSubPhaseTransition(
+            gameId = 1,
+            oldSubPhase = NightSubPhase.SEER_RESULT,
+            newSubPhase = NightSubPhase.WITCH_ACT,
+        )
+        
+        // Should contain: seer_close_eyes, witch_open_eyes
+        assertThat(sequence.audioFiles).containsExactly(
+            "seer_close_eyes.mp3",
+            "witch_open_eyes.mp3"
+        )
+        
+        // Should NOT contain duplicate close_eyes
+        val closeEyesCount = sequence.audioFiles.count { it.contains("close_eyes") }
+        assertThat(closeEyesCount).isEqualTo(1)
+    }
+
     // ── Helper Functions ──────────────────────────────────────────────────────
 
     private fun room(

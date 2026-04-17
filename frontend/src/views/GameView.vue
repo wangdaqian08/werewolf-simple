@@ -855,8 +855,6 @@ onMounted(async () => {
           // Normalize phase name for backward compatibility
           const normalizedPhase = normalizePhaseName(data.phase)
 
-          // Preserve current audioSequence to prevent it from being lost
-          const currentAudio = gameStore.state?.audioSequence
           // Small delay to ensure backend transaction has committed before we read state
           await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
@@ -869,8 +867,8 @@ onMounted(async () => {
           if (state) {
             state.phase = normalizePhaseName(state.phase) as any
           }
-          // Preserve audioSequence - AudioSequence event will update it if needed
-          gameStore.setState({ ...state, audioSequence: currentAudio })
+          // Audio is managed by AudioSequence events - don't touch audioSequence here
+          gameStore.setState(state)
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {
@@ -882,9 +880,8 @@ onMounted(async () => {
             await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
           }
-          // Preserve audioSequence from STOMP events — getState() no longer includes it
-          const currentAudio = gameStore.state?.audioSequence
-          gameStore.setState({ ...state, audioSequence: currentAudio })
+          // Audio is managed by AudioSequence events - don't touch audioSequence here
+          gameStore.setState(state)
         }
         // Real backend: audio sequence from backend
         if (data.type === 'AudioSequence') {
@@ -911,33 +908,28 @@ onMounted(async () => {
         // Real backend: night result (kills) → re-fetch state
         if (data.type === 'NightResult') {
           const state = await gameService.getState(gameId)
-          const currentAudio = gameStore.state?.audioSequence
-          gameStore.setState({ ...state, audioSequence: currentAudio })
+          gameStore.setState(state)
         }
         // Sheriff elected (winner or host appointment) → re-fetch to get updated sheriff state
         if (data.type === 'SheriffElected') {
           const state = await gameService.getState(gameId)
-          const currentAudio = gameStore.state?.audioSequence
-          gameStore.setState({ ...state, audioSequence: currentAudio })
+          gameStore.setState(state)
         }
         // Idiot revealed → re-fetch to get updated canVote/idiotRevealed player state
         if (data.type === 'IdiotRevealed') {
           const state = await gameService.getState(gameId)
-          const currentAudio = gameStore.state?.audioSequence
-          gameStore.setState({ ...state, audioSequence: currentAudio })
+          gameStore.setState(state)
         }
         // Vote cast → re-fetch so votedPlayerIds/votesSubmitted updates for all viewers
         if (data.type === 'VoteSubmitted') {
           const state = await gameService.getState(gameId)
-          const currentAudio = gameStore.state?.audioSequence
-          gameStore.setState({ ...state, audioSequence: currentAudio })
+          gameStore.setState(state)
         }
         // Vote tally revealed → re-fetch to get updated subPhase and tally
         // This is the main event that should trigger UI update; PhaseChanged is also sent but VoteTally is more complete
         if (data.type === 'VoteTally') {
           const state = await gameService.getState(gameId)
-          const currentAudio = gameStore.state?.audioSequence
-          gameStore.setState({ ...state, audioSequence: currentAudio })
+          gameStore.setState(state)
         }
         // Both mock (GAME_OVER) and real backend (GameOver) navigate to result
         if (data.type === 'GAME_OVER' || data.type === 'GameOver') {

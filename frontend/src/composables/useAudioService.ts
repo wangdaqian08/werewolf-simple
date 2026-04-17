@@ -19,19 +19,31 @@ export function useAudioService() {
    */
   watch(
     () => gameStore.state?.audioSequence,
-    (newSequence) => {
+    (newSequence, oldSequence) => {
       if (!newSequence) return
+
+      // Log all audio sequence changes for debugging
+      console.log('[useAudioService] AudioSequence changed:', {
+        oldId: oldSequence?.id,
+        newId: newSequence.id,
+        audioFiles: newSequence.audioFiles,
+        phase: newSequence.phase,
+        subPhase: newSequence.subPhase,
+      })
 
       // Prevent duplicate playback of the same sequence
       if (newSequence.id === lastPlayedSequenceId.value) {
+        console.log('[useAudioService] Skipping duplicate sequence (same ID):', newSequence.id)
         return
       }
 
       // Clear queue to ensure new audio replaces old audio completely
+      console.log('[useAudioService] Clearing queue before playing:', newSequence.audioFiles)
       audioService.clearQueue()
 
       // Play all audio files in sequence
       if (newSequence.audioFiles.length > 0) {
+        console.log('[useAudioService] Playing audio files:', newSequence.audioFiles)
         audioService.playSequential(newSequence.audioFiles)
         lastPlayedSequenceId.value = newSequence.id
       }
