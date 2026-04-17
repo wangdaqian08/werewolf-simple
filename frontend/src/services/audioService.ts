@@ -108,7 +108,9 @@ class AudioService {
 
     this.isPlayingQueue = true
     const { filename, options } = this.audioQueue.shift()!
-    console.log(`[AudioService] Starting playback: ${filename} (queue remaining: ${this.audioQueue.length})`)
+    console.log(
+      `[AudioService] Starting playback: ${filename} (queue remaining: ${this.audioQueue.length})`,
+    )
 
     try {
       const audio = this.getAudio(filename)

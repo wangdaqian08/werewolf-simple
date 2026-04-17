@@ -24,6 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionSynchronization.STATUS_COMMITTED
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 @Service
 class NightOrchestrator(
@@ -59,7 +60,7 @@ class NightOrchestrator(
      * Ordered list of night sub-phases for this game.
      */
     fun nightSequence(context: GameContext): List<NightSubPhase> {
-        val activeRoles = mutableSetOf<PlayerRole>(PlayerRole.WEREWOLF)
+        val activeRoles = mutableSetOf(PlayerRole.WEREWOLF)
         if (context.room.hasSeer) activeRoles.add(PlayerRole.SEER)
         if (context.room.hasWitch) activeRoles.add(PlayerRole.WITCH)
         if (context.room.hasGuard) activeRoles.add(PlayerRole.GUARD)
@@ -96,13 +97,13 @@ class NightOrchestrator(
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
                 override fun afterCommit() {
-                    broadcastNightInit(gameId, newDayNumber, withWaiting)
+                    broadcastNightInit(gameId, withWaiting)
                     launchRoleLoop(gameId, newDayNumber, withWaiting)
                 }
             })
         } else {
             // No transaction (e.g., tests or already in a coroutine context)
-            broadcastNightInit(gameId, newDayNumber, withWaiting)
+            broadcastNightInit(gameId, withWaiting)
             launchRoleLoop(gameId, newDayNumber, withWaiting)
         }
     }
@@ -326,7 +327,7 @@ class NightOrchestrator(
         val job = coroutineScope.launch {
             try {
                 initNightInternal(gameId, newDayNumber, previousGuardTarget, withWaiting)
-                broadcastNightInit(gameId, newDayNumber, withWaiting)
+                broadcastNightInit(gameId, withWaiting)
                 nightRoleLoop(gameId, newDayNumber, withWaiting)
             } catch (e: Exception) {
                 log.error("[startNightPhase] Night phase failed for game $gameId", e)
@@ -362,7 +363,7 @@ class NightOrchestrator(
                 // Wait for night init audio (goes_dark_close_eyes + wolf_howl) to finish
                 // before role audio starts. Without this, wolf_open_eyes AudioSequence arrives
                 // immediately and overrides the init AudioSequence on the frontend.
-                delay(NIGHT_INIT_AUDIO_DELAY_MS)
+                delay(NIGHT_INIT_AUDIO_DELAY_MS.milliseconds)
                 nightRoleLoop(gameId, dayNumber, withWaiting)
             } catch (e: Exception) {
                 log.error("[nightRoleLoop] Night phase failed for game $gameId", e)
@@ -392,7 +393,7 @@ class NightOrchestrator(
         // When the game starts in WAITING (sheriff-election night), pause before wolves open eyes.
         if (withWaiting) {
             log.info("[nightRoleLoop] game=$gameId: waiting ${WAITING_DELAY_MS}ms before night sequence starts")
-            delay(WAITING_DELAY_MS)
+            delay(WAITING_DELAY_MS.milliseconds)
         }
 
         val context = contextLoader.load(gameId)
@@ -419,7 +420,7 @@ class NightOrchestrator(
 
             // 1. Open eyes
             RoleRegistry.getOpenEyesAudio(role)?.let { broadcastAudio(gameId, it) }
-            delay(config.audioWarmupMs)
+            delay(config.audioWarmupMs.milliseconds)
 
             if (isAlive) {
                 // Alive role: iterate each sub-phase, await player action for each.
@@ -451,16 +452,16 @@ class NightOrchestrator(
                     nightPhaseRepository.save(nightPhase)
                     stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstSubPhase))
                 }
-                delay(config.deadRoleDelayMs)
+                delay(config.deadRoleDelayMs.milliseconds)
             }
 
             // 3. Close eyes
             RoleRegistry.getCloseEyesAudio(role)?.let { broadcastAudio(gameId, it) }
-            delay(config.audioCooldownMs)
+            delay(config.audioCooldownMs.milliseconds)
 
             // 4. Inter-role gap (not after the last role)
             if (!isLastRole) {
-                delay(config.interRoleGapMs)
+                delay(config.interRoleGapMs.milliseconds)
             }
         }
 
@@ -502,7 +503,7 @@ class NightOrchestrator(
      * Must be called AFTER the transaction that created the NightPhase has committed,
      * so the frontend's getGameState sees consistent DB state.
      */
-    private fun broadcastNightInit(gameId: Int, newDayNumber: Int, withWaiting: Boolean) {
+    private fun broadcastNightInit(gameId: Int, withWaiting: Boolean) {
         val context = contextLoader.load(gameId)
         val initialSubPhase = if (withWaiting) NightSubPhase.WAITING else firstSubPhase(context)
 
