@@ -44,8 +44,8 @@ class NightOrchestrator(
     companion object {
         /** Time in WAITING sub-phase before wolves open eyes (sheriff badge-handover window). */
         private const val WAITING_DELAY_MS = 5_000L
-        /** Time for night init audio (goes_dark_close_eyes + wolf_howl) to play before role audio starts. */
-        private const val NIGHT_INIT_AUDIO_DELAY_MS = 4_000L
+        /** Time for night init audio (goes_dark_close_eyes ~2s + wolf_howl ~5s) to play before role audio starts. */
+        private const val NIGHT_INIT_AUDIO_DELAY_MS = 8_000L
     }
 
     // One active night coroutine per game.
