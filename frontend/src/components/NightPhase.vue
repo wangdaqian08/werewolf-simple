@@ -371,9 +371,9 @@
 </template>
 
 <script lang="ts" setup>
-import {computed, ref, watch} from 'vue'
+import { computed, ref, watch } from 'vue'
 
-import type {GamePlayer, NightPhaseState, PlayerRole} from '@/types'
+import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import {
   guardVariant,
