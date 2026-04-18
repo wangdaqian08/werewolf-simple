@@ -18,3 +18,17 @@ app:
   jwt:
     secret: e2e-secret-key-for-testing-must-be-32-chars-ok
     expiration-hours: 1
+
+# Shrunk night-phase timings so real-backend Playwright runs finish in minutes
+# instead of tens of minutes. Relative ordering (gap > cooldown > warmup) and
+# the non-zero values are preserved so sequential / non-overlapping audio still
+# holds. Prod `application.yml` has no werewolf.timing block → uses the
+# RoleDelayConfig / NightOrchestrator compile-time defaults.
+werewolf:
+  timing:
+    dead-role-delay-ms: 500
+    audio-warmup-ms: 100
+    audio-cooldown-ms: 200
+    inter-role-gap-ms: 500
+    night-init-audio-delay-ms: 1000
+    waiting-delay-ms: 500

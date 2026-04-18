@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type {Page} from '@playwright/test'
+import {expect, test} from '@playwright/test'
 
 async function goToGame(page: Page) {
   await page.goto('/')
@@ -64,12 +64,16 @@ test('host Reveal button is disabled while votes are still coming in', async ({ 
   await expect(page.getByRole('button', { name: /公布结果.*Reveal/i })).toBeDisabled()
 })
 
-test('host sees countdown timer after reveal', async ({ page }) => {
+test('host sees Continue button after reveal — no auto-advance countdown', async ({ page }) => {
+  // The invisible setTimeout that used to auto-fire VOTING_CONTINUE after 30s
+  // was deleted because it kept firing during HUNTER_SHOOT sub-phases and
+  // caused 400s on the backend. The visible "Auto in Xs" UI went with it.
+  // The host now has exactly one path forward: click Continue manually.
   await goToGame(page)
   await loadDayScenario(page, 'Host·Hidden')
   await loadVotingScenario(page, 'Revealed')
 
-  await expect(page.locator('.reveal-countdown')).toBeVisible()
+  await expect(page.locator('.reveal-countdown')).toHaveCount(0)
   await expect(page.getByRole('button', { name: /继续.*Continue/i })).toBeVisible()
 })
 

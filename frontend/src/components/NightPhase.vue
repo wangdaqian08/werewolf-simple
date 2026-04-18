@@ -36,7 +36,9 @@
     </div>
 
     <!-- ── WEREWOLF_PICK ──────────────────────────────────────────────── -->
-    <template v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF' && me?.isAlive">
+    <template
+      v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF' && me?.isAlive && !hasActed"
+    >
       <div v-if="nightPhase.teammates?.length" class="team-row">
         <span class="tr-label">队友：</span>
         <span v-for="(t, i) in nightPhase.teammates" :key="t" class="tr-name">
@@ -69,7 +71,7 @@
           class="btn btn-danger nf-btn"
           data-testid="wolf-confirm-kill"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
-          @click="emit('confirm', localSelected)"
+          @click="confirmWolfKill"
         >
           确认袭击 Confirm
         </button>
@@ -114,7 +116,11 @@
     <!-- ── SEER_RESULT ────────────────────────────────────────────────── -->
     <template
       v-else-if="
-        subPhase === 'SEER_RESULT' && myRole === 'SEER' && nightPhase.seerResult && me?.isAlive
+        subPhase === 'SEER_RESULT' &&
+        myRole === 'SEER' &&
+        nightPhase.seerResult &&
+        me?.isAlive &&
+        !hasActed
       "
     >
       <div class="sr-wrap">
@@ -153,7 +159,7 @@
             class="btn btn-secondary nf-btn"
             data-testid="seer-done"
             :disabled="actionPending"
-            @click="emit('confirm')"
+            @click="confirmSeerDone"
           >
             查验完毕 · Done
           </button>
@@ -162,7 +168,9 @@
     </template>
 
     <!-- ── WITCH_ACT ───────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'WITCH_ACT' && myRole === 'WITCH' && me?.isAlive">
+    <template
+      v-else-if="subPhase === 'WITCH_ACT' && myRole === 'WITCH' && me?.isAlive && !hasActed"
+    >
       <!-- Antidote — always visible when witch has it; grayed out after decision -->
       <div
         v-if="nightPhase.hasAntidote"
@@ -277,7 +285,7 @@
             class="btn btn-primary ws-btn"
             data-testid="witch-skip"
             :disabled="actionPending"
-            @click="emit('witchSkip')"
+            @click="confirmWitchSkip"
           >
             完成操作 · Done
           </button>
@@ -286,7 +294,9 @@
     </template>
 
     <!-- ── GUARD_PICK ──────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD' && me?.isAlive">
+    <template
+      v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD' && me?.isAlive && !hasActed"
+    >
       <div class="pick-hint">
         选择守护目标 · Protect a player:
         <span v-if="nightPhase.previousGuardTargetId" class="guard-note">
@@ -321,7 +331,7 @@
           class="btn btn-danger nf-btn"
           data-testid="guard-confirm-protect"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
-          @click="emit('confirm', localSelected)"
+          @click="confirmGuardProtect"
         >
           确认保护 Confirm
         </button>
@@ -396,6 +406,35 @@ const emit = defineEmits<{
 
 const subPhase = computed(() => props.nightPhase.subPhase)
 const poisonMode = ref(false)
+
+// ── Optimistic "I've acted" flag ───────────────────────────────────────────
+// When the current player clicks their final night-action button (confirm kill,
+// confirm seer result, confirm guard, confirm skip), flip this to true so the
+// role-specific template hides itself and the sleep-screen fallback renders
+// immediately — no need to wait for the backend's NightSubPhaseChanged
+// round-trip. The component remounts on the next sub-phase (the `:key` in
+// GameView.vue includes subPhase + dayNumber), so hasActed resets naturally.
+// Intentionally NOT applied to SEER_PICK (the click advances to SEER_RESULT,
+// which is a different screen on the same component — showing sleep in between
+// would flash for the seer).
+const hasActed = ref(false)
+
+function confirmWolfKill() {
+  hasActed.value = true
+  emit('confirm', localSelected.value)
+}
+function confirmSeerDone() {
+  hasActed.value = true
+  emit('confirm')
+}
+function confirmGuardProtect() {
+  hasActed.value = true
+  emit('confirm', localSelected.value)
+}
+function confirmWitchSkip() {
+  hasActed.value = true
+  emit('witchSkip')
+}
 
 // Current player (me)
 const me = computed(() => props.players.find((p) => p.userId === props.myUserId))

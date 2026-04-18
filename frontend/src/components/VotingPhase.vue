@@ -118,13 +118,12 @@
 
       <!-- Footer -->
       <footer class="voting-footer">
-        <!-- After reveal: host has countdown + continue; others wait -->
+        <!-- After reveal: host must click Continue; others wait. No auto-advance
+             on the frontend — the server is authoritative, and an invisible
+             client-side timer previously fired VOTING_CONTINUE against
+             HUNTER_SHOOT sub-phases and produced 400s. -->
         <template v-if="isRevealed">
           <template v-if="isHost">
-            <div class="reveal-countdown">
-              <span class="reveal-countdown-label">自动继续 · Auto in</span>
-              <span class="reveal-countdown-time">{{ formattedRevealTime }}</span>
-            </div>
             <div class="vote-actions">
               <button
                 class="btn btn-primary vote-btn"
@@ -514,8 +513,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { GamePlayer, PlayerRole, VoteRoundHistory, VotingState } from '@/types'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import type {GamePlayer, PlayerRole, VoteRoundHistory, VotingState} from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 
@@ -658,11 +657,16 @@ function selectPlayer(userId: string) {
 }
 
 // ── Timer ─────────────────────────────────────────────────────────────────────
+// `now` drives the still-live phase-deadline display (formattedTime) when the
+// server publishes a phaseDeadline. There is deliberately no client-side
+// auto-continue timer anymore: an invisible setTimeout that emitted
+// 'continueVoting' previously fired against HUNTER_SHOOT sub-phases (when a
+// voted-out hunter triggered the shoot flow but tallyRevealed stayed true)
+// and produced 400s on the backend. The host is now the only trigger for
+// VOTING_CONTINUE — matching the same "no invisible frontend timers" rule
+// that removed the seer countdown.
 const now = ref(Date.now())
 let intervalId = 0
-const AUTO_CONTINUE_SECS = 30
-const revealedAt = ref<number | null>(null)
-let autoContinueTimer = 0
 
 onMounted(() => {
   intervalId = window.setInterval(() => {
@@ -672,49 +676,14 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(intervalId)
-  clearTimeout(autoContinueTimer)
   document.body.style.overflow = ''
 })
-
-// When tally is revealed and no server deadline, run a local 30s auto-continue
-watch(
-  () => props.votingPhase.tallyRevealed,
-  (revealed) => {
-    if (revealed && !props.votingPhase.revealDeadline) {
-      revealedAt.value = Date.now()
-      autoContinueTimer = window.setTimeout(() => {
-        if (props.isHost) emit('continueVoting')
-      }, AUTO_CONTINUE_SECS * 1000)
-    } else {
-      revealedAt.value = null
-      clearTimeout(autoContinueTimer)
-    }
-  },
-  { immediate: true },
-)
 
 const formattedTime = computed(() => {
   const remaining = Math.max(0, props.votingPhase.phaseDeadline - now.value) / 1000
   const m = Math.floor(remaining / 60)
   const s = Math.floor(remaining % 60)
   return `${m}:${String(s).padStart(2, '0')}`
-})
-
-const formattedRevealTime = computed(() => {
-  if (props.votingPhase.revealDeadline) {
-    const remaining = Math.max(0, props.votingPhase.revealDeadline - now.value) / 1000
-    const m = Math.floor(remaining / 60)
-    const s = Math.floor(remaining % 60)
-    return `${m}:${String(s).padStart(2, '0')}`
-  }
-  if (revealedAt.value) {
-    const elapsed = Math.floor((now.value - revealedAt.value) / 1000)
-    const remaining = Math.max(0, AUTO_CONTINUE_SECS - elapsed)
-    const m = Math.floor(remaining / 60)
-    const s = remaining % 60
-    return `${m}:${String(s).padStart(2, '0')}`
-  }
-  return `0:${String(AUTO_CONTINUE_SECS).padStart(2, '0')}`
 })
 
 // ── Sorted tally ──────────────────────────────────────────────────────────────
@@ -990,26 +959,6 @@ function onBadgeTap(player: GamePlayer) {
 }
 
 /* Footer — shared styles in game.css */
-/* Reveal countdown */
-.reveal-countdown {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
-}
-
-.reveal-countdown-label {
-  font-size: 1rem;
-  color: var(--muted);
-}
-
-.reveal-countdown-time {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--gold);
-}
 
 /* Role + history row */
 .role-history-row {
