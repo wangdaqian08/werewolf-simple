@@ -443,7 +443,7 @@ watch(
       clearInterval(seerTimerId)
       seerTimerId = null
     }
-    if (phase === 'SEER_RESULT') {
+    if (phase === 'SEER_RESULT' && props.myRole === 'SEER') {
       seerCountdown.value = 30
       seerTimerId = setInterval(() => {
         seerCountdown.value--
