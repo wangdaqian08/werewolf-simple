@@ -361,9 +361,9 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onUnmounted, ref, watch } from 'vue'
+import {computed, ref, watch} from 'vue'
 
-import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
+import type {GamePlayer, NightPhaseState, PlayerRole} from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import {
   guardVariant,
@@ -431,38 +431,6 @@ function selectPlayer(userId: string) {
   localSelected.value = userId
   emit('selectPlayer', userId)
 }
-
-// ── Seer auto-advance timer ───────────────────────────────────────────────────
-const seerCountdown = ref(30)
-let seerTimerId: ReturnType<typeof setInterval> | null = null
-
-watch(
-  () => props.nightPhase.subPhase,
-  (phase) => {
-    if (seerTimerId) {
-      clearInterval(seerTimerId)
-      seerTimerId = null
-    }
-    if (phase === 'SEER_RESULT' && props.myRole === 'SEER') {
-      seerCountdown.value = 30
-      seerTimerId = setInterval(() => {
-        seerCountdown.value--
-        if (seerCountdown.value <= 0) {
-          clearInterval(seerTimerId!)
-          seerTimerId = null
-          emit('confirm') // auto-advance to WAITING
-        }
-      }, 1000)
-    } else {
-      seerCountdown.value = 30
-    }
-  },
-  { immediate: true },
-)
-
-onUnmounted(() => {
-  if (seerTimerId) clearInterval(seerTimerId)
-})
 
 // ── Role metadata ─────────────────────────────────────────────────────────────
 

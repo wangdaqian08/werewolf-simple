@@ -126,8 +126,60 @@ class NightOrchestrator(
      * Signal that the current night action for [gameId] is complete.
      * Unblocks the awaiting coroutine so it advances to the next sub-phase.
      * Safe to call multiple times — extra calls are no-ops.
+     *
+     * CRITICAL: the actual release of the coroutine is deferred to the caller's
+     * `afterCommit` hook. Callers (e.g. GameActionDispatcher.SEER_CHECK handler)
+     * run inside an @Transactional that writes role-specific state like
+     * seerCheckedUserId / witchPoisonTargetUserId. The role-loop coroutine runs
+     * on a separate thread and, as soon as it wakes, re-reads NightPhase from a
+     * new transaction and calls save() with the whole entity — a JPA MERGE.
+     *
+     * If the coroutine wakes before the caller's tx has committed, its read
+     * returns the pre-commit state (role-action fields null), and its save
+     * writes that back — wiping the field just written by the caller. Surface
+     * symptom: SEER_CHECK completes, sub-phase advances to SEER_RESULT, but
+     * seerCheckedUserId is silently null on the next getGameState call, so the
+     * frontend can't render the result UI and the game hangs. Deferring the
+     * completion to afterCommit guarantees the coroutine's next read sees the
+     * just-committed state.
      */
     fun submitAction(gameId: Int) {
+        val thread = Thread.currentThread().name
+        val txActive = TransactionSynchronizationManager.isActualTransactionActive()
+        // [race] Two critical facts for diagnosing the NightPhase-field-wipe race:
+        //   1. Which thread called submitAction — almost always the HTTP worker
+        //      (e.g. `nio-8080-exec-*`). Compare with the coroutine thread
+        //      (`*-dispatcher-worker-*`) on the matching `[race] read` log below.
+        //   2. Whether the caller is inside an @Transactional. If yes, we MUST
+        //      defer to afterCommit; releasing now would wake the coroutine
+        //      before the handler's write (seerCheckedUserId, wolfTargetUserId,
+        //      witchPoisonTargetUserId, guardTargetUserId) is visible to other
+        //      sessions, and the coroutine's subsequent merge/save can stomp it.
+        if (txActive) {
+            log.info("[race] submitAction game=$gameId thread=$thread txActive=true → deferring release to afterCommit")
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() {
+                    log.info("[race] afterCommit fired game=$gameId thread=${Thread.currentThread().name} → releasing coroutine (HTTP tx fully committed; field writes are now visible)")
+                    releaseActionSignal(gameId)
+                }
+
+                override fun afterCompletion(status: Int) {
+                    // Log rollback / mixed completion so we can tell a hang apart from a
+                    // silent tx failure (e.g. constraint violation inside the handler).
+                    if (status != STATUS_COMMITTED) {
+                        log.warn("[race] afterCompletion game=$gameId status=$status (NOT committed) — coroutine will NOT be released from this submitAction call; game may hang unless another action is retried")
+                    }
+                }
+            })
+        } else {
+            // No active transaction (tests, coroutine-internal callers, bot scripts).
+            // Safe to release immediately because there's no pending write to wait for.
+            log.info("[race] submitAction game=$gameId thread=$thread txActive=false → releasing immediately (no write-visibility barrier needed)")
+            releaseActionSignal(gameId)
+        }
+    }
+
+    private fun releaseActionSignal(gameId: Int) {
         val deferred = pendingActions[gameId]
         if (deferred != null) {
             log.info("[submitAction] Completing pending action for game $gameId")
@@ -457,9 +509,20 @@ class NightOrchestrator(
                 // (e.g. SeerHandler) modify the same DB record via a different JPA entity.
                 // Reusing a stale entity would overwrite their changes (e.g. seerCheckedUserId).
                 for (subPhase in handler.nightSubPhases()) {
+                    // [race] READ — if the race is live, this read happens before the
+                    // handler's HTTP tx commits and the role-action fields read as null.
+                    // On the fixed path (submitAction defers to afterCommit), the read
+                    // always happens AFTER commit so the fields are visible here.
                     val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, dayNumber)
                         .orElseThrow { IllegalStateException("[nightRoleLoop] NightPhase not found for game $gameId, day $dayNumber") }
+                    logNightPhaseFields("read-before-save", gameId, dayNumber, subPhase, nightPhase)
+
                     nightPhase.subPhase = subPhase
+                    // [race] SAVE — if the read above returned null for a role-action
+                    // field that should be populated, the subsequent merge stomps the
+                    // DB row back to null. The "save-about-to-merge" log pairs with the
+                    // preceding "read-before-save" to prove stomp vs preserve.
+                    logNightPhaseFields("save-about-to-merge", gameId, dayNumber, subPhase, nightPhase)
                     nightPhaseRepository.save(nightPhase)
                     stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, subPhase))
 
@@ -482,7 +545,9 @@ class NightOrchestrator(
                 if (firstSubPhase != null) {
                     val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, dayNumber)
                         .orElseThrow { IllegalStateException("[nightRoleLoop] NightPhase not found for game $gameId, day $dayNumber") }
+                    logNightPhaseFields("read-dead-role", gameId, dayNumber, firstSubPhase, nightPhase)
                     nightPhase.subPhase = firstSubPhase
+                    logNightPhaseFields("save-dead-role", gameId, dayNumber, firstSubPhase, nightPhase)
                     nightPhaseRepository.save(nightPhase)
                     stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstSubPhase))
                 }
@@ -557,6 +622,50 @@ class NightOrchestrator(
     /**
      * Broadcast a single audio file as an AudioSequence event.
      */
+    /**
+     * [race] Dump every role-action field on a NightPhase at a critical point in the
+     * role loop (immediately after a read, and immediately before the merge/save).
+     *
+     * How to read these logs to diagnose the wipe-on-merge race:
+     *
+     *   • `read-before-save`  → values the coroutine sees on the fresh fetch. If a
+     *     field expected to be populated (because a handler just wrote it) shows
+     *     `null`, the handler's tx had NOT yet committed when the coroutine fetched
+     *     — the race is LIVE.
+     *
+     *   • `save-about-to-merge` → values on the detached entity the coroutine is
+     *     about to hand to `save()` (JPA MERGE copies these fields onto the managed
+     *     entity, overwriting committed state). Identical to the read-log unless
+     *     the coroutine itself mutated a field in between.
+     *
+     * On the fixed path (submitAction defers to afterCommit), `read-before-save`
+     * on the sub-phase that follows a handler write (e.g. SEER_RESULT right after
+     * SEER_CHECK) MUST show the written field non-null. If it ever shows null, the
+     * afterCommit hook isn't actually holding the coroutine back for this path.
+     */
+    private fun logNightPhaseFields(
+        tag: String,
+        gameId: Int,
+        dayNumber: Int,
+        subPhase: NightSubPhase,
+        np: NightPhase,
+    ) {
+        log.info(
+            "[race] {} game={} day={} subPhase={} thread={} -> wolfTarget={} seerChecked={} seerIsWolf={} witchAntidoteUsed={} witchPoisonTarget={} guardTarget={}",
+            tag,
+            gameId,
+            dayNumber,
+            subPhase,
+            Thread.currentThread().name,
+            np.wolfTargetUserId,
+            np.seerCheckedUserId,
+            np.seerResultIsWerewolf,
+            np.witchAntidoteUsed,
+            np.witchPoisonTargetUserId,
+            np.guardTargetUserId,
+        )
+    }
+
     private fun broadcastAudio(gameId: Int, audioFile: String) {
         val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-$audioFile",
