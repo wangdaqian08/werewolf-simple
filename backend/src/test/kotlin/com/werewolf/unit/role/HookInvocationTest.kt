@@ -90,12 +90,14 @@ class HookInvocationTest {
         gameRepository = gameRepository,
         gamePlayerRepository = gamePlayerRepository,
         nightPhaseRepository = nightPhaseRepository,
+        eliminationHistoryRepository = eliminationHistoryRepository,
         winConditionChecker = winConditionChecker,
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
         audioService = audioService,
         coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
         actionLogService = mock(),
+        timing = com.werewolf.config.GameTimingProperties(),
     )
 
     private fun makeVotingPipeline(handlers: List<RoleHandler>) = VotingPipeline(
@@ -125,7 +127,7 @@ class HookInvocationTest {
         val orchestrator = makeOrchestrator(listOf(wolfHandler, villagerHandler))
 
         whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
         // Mock audioService to avoid NullPointerException
@@ -168,7 +170,7 @@ class HookInvocationTest {
         val orchestrator = makeOrchestrator(listOf(wolfHandler))
 
         whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(WinnerSide.WEREWOLF)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
         orchestrator.resolveNightKills(initialCtx, np)
@@ -201,7 +203,7 @@ class HookInvocationTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
         // contextLoader needed for afterElimination after hook cancels
         whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         pipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
@@ -238,7 +240,7 @@ class HookInvocationTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
         whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         pipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 

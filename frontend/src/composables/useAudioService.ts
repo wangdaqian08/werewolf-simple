@@ -37,11 +37,27 @@ export function useAudioService() {
         return
       }
 
-      // Clear queue to ensure new audio replaces old audio completely
-      console.log('[useAudioService] Clearing queue before playing:', newSequence.audioFiles)
-      audioService.clearQueue()
+      // Phase-level audio (priority >= 10) replaces the queue — e.g. DAY→NIGHT rooster
+      // must interrupt any lingering night audio. Lower-priority sequences (role open/
+      // close eyes, dead-role sim) APPEND to the queue so they play sequentially after
+      // whatever is currently playing. This is what guarantees wolf_open_eyes.mp3
+      // never overlaps with goes_dark_close_eyes.mp3 or wolf_howl.mp3, even if the
+      // backend's NIGHT_INIT_AUDIO_DELAY_MS timing underestimates the combined duration.
+      const isHighPriority = (newSequence.priority ?? 0) >= 10
+      if (isHighPriority) {
+        console.log(
+          '[useAudioService] High-priority sequence — clearing queue:',
+          newSequence.audioFiles,
+        )
+        audioService.clearQueue()
+      } else {
+        console.log(
+          '[useAudioService] Low-priority sequence — appending to queue:',
+          newSequence.audioFiles,
+        )
+      }
 
-      // Play all audio files in sequence
+      // Play (or append) all audio files in sequence
       if (newSequence.audioFiles.length > 0) {
         console.log('[useAudioService] Playing audio files:', newSequence.audioFiles)
         audioService.playSequential(newSequence.audioFiles)

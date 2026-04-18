@@ -4,6 +4,8 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.HardModeCounterplay
+import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
 import com.werewolf.game.voting.VotingPipeline
@@ -153,7 +155,7 @@ class VotingPipelineTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(victim))
         stubLoader(wolf) // after kill: only wolf alive
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
@@ -211,7 +213,7 @@ class VotingPipelineTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(target))
         whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.empty())
         stubLoader(hunter) // after shot
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         val result = votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SHOOT, "u2"), context)
 
@@ -250,7 +252,7 @@ class VotingPipelineTest {
         // Since alivePlayers is computed dynamically, afterCtx will correctly exclude wolf at that point.
         val afterCtx = ctx(game(), hunter, wolf)
         whenever(contextLoader.load(gameId)).thenReturn(afterCtx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(WinnerSide.VILLAGER)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
         votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SHOOT, "wolf"), context)
@@ -276,7 +278,7 @@ class VotingPipelineTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wolf")).thenReturn(Optional.of(lastWolf))
         // After wolf elimination: only host and villager alive
         stubLoader(host, villager)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(WinnerSide.VILLAGER)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
 
         votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
@@ -293,7 +295,7 @@ class VotingPipelineTest {
         val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter)
 
         stubLoader(hunter)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         val result = votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context)
 
@@ -327,7 +329,7 @@ class VotingPipelineTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, hostId)).thenReturn(Optional.of(sheriff))
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(newSheriff))
         stubLoader(sheriff, newSheriff)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         val result = votingPipeline.handleBadge(req(hostId, ActionType.BADGE_PASS, "u2"), context)
 
@@ -347,7 +349,7 @@ class VotingPipelineTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, hostId)).thenReturn(Optional.of(sheriff))
         stubLoader(sheriff)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         val result = votingPipeline.handleBadge(req(hostId, ActionType.BADGE_DESTROY), context)
 
@@ -374,7 +376,7 @@ class VotingPipelineTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(idiot))
         stubLoader(host, idiot, wolf) // everyone still alive (idiot survives)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
@@ -396,7 +398,7 @@ class VotingPipelineTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(idiot))
         stubLoader(host) // after kill: only host alive
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
@@ -429,7 +431,7 @@ class VotingPipelineTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(idiot))
         stubLoader(host, idiot, wolf) // everyone still alive (idiot survives)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
@@ -464,7 +466,7 @@ class VotingPipelineTest {
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(host, idiot, target)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         val result = votingPipeline.handleBadge(req, context)
 
@@ -669,39 +671,78 @@ class VotingPipelineTest {
         val wolf2 = player("w2", 2, PlayerRole.WEREWOLF)
         val villager = player("v1", 3)
 
-        val result = checker.check(listOf(wolf1, wolf2, villager), WinConditionMode.CLASSIC)
+        val result = checker.check(
+            alivePlayers = listOf(wolf1, wolf2, villager),
+            mode = WinConditionMode.CLASSIC,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = HardModeCounterplay(false, false, false),
+        )
         assertThat(result).isEqualTo(WinnerSide.WEREWOLF)
     }
 
     @Test
-    fun `WinConditionChecker CLASSIC - wolves do not win when wolves equal others`() {
+    fun `WinConditionChecker CLASSIC - wolves do not win when outnumbered by others`() {
         val checker = WinConditionChecker()
         val wolf = player("w1", 1, PlayerRole.WEREWOLF)
         val v1 = player("v1", 2)
         val v2 = player("v2", 3)
 
-        val result = checker.check(listOf(wolf, v1, v2), WinConditionMode.CLASSIC)
+        val result = checker.check(
+            alivePlayers = listOf(wolf, v1, v2),
+            mode = WinConditionMode.CLASSIC,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = HardModeCounterplay(false, false, false),
+        )
         assertThat(result).isNull()
     }
 
     @Test
-    fun `WinConditionChecker HARD_MODE - wolves do NOT win when non-wolves still alive`() {
+    fun `WinConditionChecker HARD_MODE POST_NIGHT - logical branch suppressed while humans remain`() {
+        // Post-night the logical branch never fires, so a state that would win post-vote
+        // stays at null post-night. This invariant protects mid-game night transitions.
         val checker = WinConditionChecker()
         val wolf1 = player("w1", 1, PlayerRole.WEREWOLF)
         val wolf2 = player("w2", 2, PlayerRole.WEREWOLF)
         val villager = player("v1", 3)
 
-        val result = checker.check(listOf(wolf1, wolf2, villager), WinConditionMode.HARD_MODE)
-        assertThat(result).isNull() // not yet won in HARD_MODE
+        val result = checker.check(
+            alivePlayers = listOf(wolf1, wolf2, villager),
+            mode = WinConditionMode.HARD_MODE,
+            trigger = WinCheckTrigger.POST_NIGHT,
+            counterplay = HardModeCounterplay(false, false, false),
+        )
+        assertThat(result).isNull()
     }
 
     @Test
-    fun `WinConditionChecker HARD_MODE - wolves win only when all non-wolves eliminated`() {
+    fun `WinConditionChecker HARD_MODE POST_VOTE - logical branch fires at parity with no counterplay`() {
+        // Same 2W+1V board as above but POST_VOTE — logical win should fire.
+        val checker = WinConditionChecker()
+        val wolf1 = player("w1", 1, PlayerRole.WEREWOLF)
+        val wolf2 = player("w2", 2, PlayerRole.WEREWOLF)
+        val villager = player("v1", 3)
+
+        val result = checker.check(
+            alivePlayers = listOf(wolf1, wolf2, villager),
+            mode = WinConditionMode.HARD_MODE,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = HardModeCounterplay(false, false, false),
+        )
+        assertThat(result).isEqualTo(WinnerSide.WEREWOLF)
+    }
+
+    @Test
+    fun `WinConditionChecker HARD_MODE - literal win when all non-wolves eliminated`() {
         val checker = WinConditionChecker()
         val wolf1 = player("w1", 1, PlayerRole.WEREWOLF)
         val wolf2 = player("w2", 2, PlayerRole.WEREWOLF)
 
-        val result = checker.check(listOf(wolf1, wolf2), WinConditionMode.HARD_MODE)
+        val result = checker.check(
+            alivePlayers = listOf(wolf1, wolf2),
+            mode = WinConditionMode.HARD_MODE,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = HardModeCounterplay(false, false, false),
+        )
         assertThat(result).isEqualTo(WinnerSide.WEREWOLF)
     }
 
@@ -734,7 +775,7 @@ class VotingPipelineTest {
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
         whenever(eliminationHistoryRepository.save(any<EliminationHistory>())).thenAnswer { it.arguments[0] }
         whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         makeVotingPipelineWithLog().revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
@@ -755,7 +796,7 @@ class VotingPipelineTest {
         whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1))
             .thenReturn(java.util.Optional.empty())
         whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         val req = GameActionRequest(gameId = gameId, actorUserId = "hunter1", actionType = ActionType.HUNTER_SHOOT, targetUserId = "u1")
         makeVotingPipelineWithLog().handleHunterShoot(req, context)
@@ -774,7 +815,7 @@ class VotingPipelineTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(idiot))
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
         whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         makeVotingPipelineWithLog().revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 

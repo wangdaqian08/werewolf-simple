@@ -8,7 +8,6 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Timeout
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
@@ -93,9 +92,11 @@ class AudioGameStateConsistencyTest {
         assertThat(audioSequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(audioSequence.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
         
-        // Verify: Audio files are appropriate for NIGHT phase
-        // When transitioning directly to WEREWOLF_PICK, both "goes_dark_close_eyes.mp3" and "wolf_open_eyes.mp3" are played
-        assertThat(audioSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "wolf_open_eyes.mp3")
+        // Verify: phase-transition sequence carries ONLY the phase-level ambience.
+        // Role-owned audio (wolf_open_eyes.mp3) is broadcast independently by the
+        // night role loop — see NightOrchestrator.nightRoleLoop. This decoupling
+        // means swapping any role's audio never touches phase-transition logic.
+        assertThat(audioSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
     }
 
     @Test
@@ -192,11 +193,11 @@ class AudioGameStateConsistencyTest {
             room = room,
         )
         
-        // Verify: Audio sequence matches new game state
+        // Verify: phase-level ambience only; wolf_open_eyes comes separately
+        // from the role loop so each role's audio remains independently swappable.
         assertThat(dayToNightSequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(dayToNightSequence.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
-        // When transitioning directly to WEREWOLF_PICK, both "goes_dark_close_eyes.mp3" and "wolf_open_eyes.mp3" are played
-        assertThat(dayToNightSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "wolf_open_eyes.mp3")
+        assertThat(dayToNightSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
 
         // Step 2: WAITING -> WEREWOLF_PICK
         val waitingToWerewolf = audioService.calculateNightSubPhaseTransition(

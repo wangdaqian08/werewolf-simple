@@ -23,11 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
 import org.springframework.boot.test.web.client.TestRestTemplate
-import org.springframework.http.HttpEntity
-import org.springframework.http.HttpHeaders
-import org.springframework.http.HttpMethod
-import org.springframework.http.HttpStatus
-import org.springframework.http.MediaType
+import org.springframework.http.*
 import org.springframework.test.context.ActiveProfiles
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
@@ -147,6 +143,41 @@ class NightPhaseDeadRoleIntegrationTest {
         }.key
     }
 
+    /**
+     * Wait until the night coroutine has reached the deferred-await for the given
+     * sub-phase on the given day. The role loop only honors submitAction after it
+     * has created pendingActions[gameId] and called deferred.await(); an action
+     * submitted earlier is silently dropped. The loop writes the sub-phase to the
+     * NightPhase record immediately before creating the deferred, so polling that
+     * record plus a short grace window is a reliable readiness signal.
+     */
+    private fun waitForNightSubPhaseReady(
+        gameId: Int,
+        dayNumber: Int,
+        targetSubPhase: NightSubPhase,
+        // Dead-role simulation can add 15–20s per skipped role under prod timings.
+        // Under the test profile's shrunk values each dead-role pass is sub-second.
+        timeoutMs: Long = 30_000L,
+    ) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var lastObservedSubPhase: NightSubPhase? = null
+        var lastObservedGamePhase: com.werewolf.model.GamePhase? = null
+        while (System.currentTimeMillis() < deadline) {
+            val np = nightPhaseRepository.findByGameIdAndDayNumber(gameId, dayNumber).orElse(null)
+            lastObservedSubPhase = np?.subPhase
+            lastObservedGamePhase = gameRepository.findById(gameId).orElse(null)?.phase
+            if (np?.subPhase == targetSubPhase) {
+                Thread.sleep(200)
+                return
+            }
+            Thread.sleep(100)
+        }
+        error(
+            "Night role loop did not reach $targetSubPhase on day $dayNumber within ${timeoutMs}ms " +
+                "— last observed: game.phase=$lastObservedGamePhase, nightPhase.subPhase=$lastObservedSubPhase"
+        )
+    }
+
     // ── Case 2: Dead seer triggers correct phase transition on night 2 ────────
 
     @Test
@@ -172,21 +203,24 @@ class NightPhaseDeadRoleIntegrationTest {
             .first { it.role == PlayerRole.VILLAGER }.userId
 
         // ── Night 1: Wolf kills seer, all roles act ──
+        // Each action must wait for the coroutine to reach the relevant sub-phase's
+        // deferred-await; submitting earlier silently drops the action.
         nightOrchestrator.initNight(gameId, 1, withWaiting = true)
-        nightOrchestrator.advanceFromWaiting(gameId)
 
-        // Wolf kills seer
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WEREWOLF_PICK)
         assertThat(action(wolfToken, gameId, "WOLF_KILL", seerUserId).statusCode).isEqualTo(HttpStatus.OK)
 
-        // Seer checks a villager + confirms
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_PICK)
         assertThat(action(seerToken, gameId, "SEER_CHECK", villagerUserId).statusCode).isEqualTo(HttpStatus.OK)
+
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_RESULT)
         assertThat(action(seerToken, gameId, "SEER_CONFIRM").statusCode).isEqualTo(HttpStatus.OK)
 
-        // Witch poisons the 2nd wolf (needed: with 2 wolves, if both survive,
-        // night 2 kill would make wolves >= others → GAME_OVER)
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WITCH_ACT)
+        // Witch poisons wolf2 so that at N1 resolve: seer dies (wolf kill) + wolf2 dies (poison).
         assertThat(action(witchToken, gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false, "poisonTargetUserId" to wolf2UserId)).statusCode).isEqualTo(HttpStatus.OK)
 
-        // Guard skips
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.GUARD_PICK)
         assertThat(action(guardToken, gameId, "GUARD_SKIP").statusCode).isEqualTo(HttpStatus.OK)
 
         // Wait for night resolution (last role close eyes audio + resolveNightKills)
@@ -208,26 +242,20 @@ class NightPhaseDeadRoleIntegrationTest {
         val night2Target = alivePlayers.first { it.role == PlayerRole.VILLAGER }
 
         nightOrchestrator.initNight(gameId, 2)
-        nightOrchestrator.advanceFromWaiting(gameId)
 
         // Verify night phase was created with correct dayNumber
         val nightPhase2 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2).orElseThrow()
         assertThat(nightPhase2.dayNumber).isEqualTo(2)
 
-        // Wolf kills villager → advance(WEREWOLF_PICK) → detects dead seer → schedules audio
+        waitForNightSubPhaseReady(gameId, 2, NightSubPhase.WEREWOLF_PICK)
         assertThat(action(wolfToken, gameId, "WOLF_KILL", night2Target.userId).statusCode).isEqualTo(HttpStatus.OK)
 
-        // Wait for dead seer audio chain (2s open + 5s pause + 2s close + 5s inter-role gap = 14s)
-        Thread.sleep(16000)
-
-        // After dead seer audio, advance chain should have moved to WITCH_ACT
-        val nightPhaseAfterSeer = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2).orElseThrow()
-        assertThat(nightPhaseAfterSeer.subPhase).isIn(NightSubPhase.WITCH_ACT, NightSubPhase.GUARD_PICK)
-
-        // Witch passes (poison already used in night 1)
+        // With seer dead, the role loop plays the dead-role audio chain and advances
+        // directly through SEER_PICK / SEER_RESULT to the next live role (witch).
+        waitForNightSubPhaseReady(gameId, 2, NightSubPhase.WITCH_ACT)
         assertThat(action(witchToken, gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false)).statusCode).isEqualTo(HttpStatus.OK)
 
-        // Guard protects someone
+        waitForNightSubPhaseReady(gameId, 2, NightSubPhase.GUARD_PICK)
         assertThat(action(guardToken, gameId, "GUARD_SKIP").statusCode).isEqualTo(HttpStatus.OK)
 
         // Wait for night resolution
@@ -278,13 +306,23 @@ class NightPhaseDeadRoleIntegrationTest {
             .first { it.role == PlayerRole.VILLAGER }.userId
 
         // ── Night 1: Wolf kills seer, witch poisons wolf2 ──
+        // Each action must wait for the coroutine to reach the relevant sub-phase's
+        // deferred-await; submitting earlier silently drops the action.
         nightOrchestrator.initNight(gameId, 1, withWaiting = true)
-        nightOrchestrator.advanceFromWaiting(gameId)
 
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WEREWOLF_PICK)
         assertThat(action(wolfToken, gameId, "WOLF_KILL", seerUserId).statusCode).isEqualTo(HttpStatus.OK)
+
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_PICK)
         assertThat(action(seerToken, gameId, "SEER_CHECK", villagerUserId).statusCode).isEqualTo(HttpStatus.OK)
+
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_RESULT)
         assertThat(action(seerToken, gameId, "SEER_CONFIRM").statusCode).isEqualTo(HttpStatus.OK)
+
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WITCH_ACT)
         assertThat(action(witchToken, gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false, "poisonTargetUserId" to wolf2UserId)).statusCode).isEqualTo(HttpStatus.OK)
+
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.GUARD_PICK)
         assertThat(action(guardToken, gameId, "GUARD_SKIP").statusCode).isEqualTo(HttpStatus.OK)
 
         // Wait for night 1 resolution
@@ -304,13 +342,19 @@ class NightPhaseDeadRoleIntegrationTest {
 
         // ── Night 2: All special roles dead, wolf kills villager → GAME_OVER ──
         nightOrchestrator.initNight(gameId, 2)
-        nightOrchestrator.advanceFromWaiting(gameId)
 
+        waitForNightSubPhaseReady(gameId, 2, NightSubPhase.WEREWOLF_PICK)
         assertThat(action(wolfToken, gameId, "WOLF_KILL", villagerUserId).statusCode).isEqualTo(HttpStatus.OK)
 
-        // Wait for dead role audio chain: seer(14s) + witch(14s) + guard(9s) + resolveNightKills = 37s
-        // Per role with gap: 2s open_eyes + 5s pause + 2s close_eyes + 5s inter-role gap = 14s (last role: 9s)
-        Thread.sleep(45000)
+        // Poll for GAME_OVER. Under the test profile's shrunk timings each dead-role
+        // iteration is sub-second, so the chain completes in ~5s; we allow 60s as a
+        // very generous cap to accommodate CI jitter.
+        val deadline = System.currentTimeMillis() + 60_000L
+        while (System.currentTimeMillis() < deadline) {
+            val g = gameRepository.findById(gameId).orElseThrow()
+            if (g.phase == GamePhase.GAME_OVER) break
+            Thread.sleep(250)
+        }
 
         // Verify game ended with WEREWOLF win
         val endGame = gameRepository.findById(gameId).orElseThrow()

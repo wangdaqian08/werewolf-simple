@@ -4,6 +4,8 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
+import com.werewolf.game.phase.HardModeCounterplay
+import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.IdiotHandler
 import com.werewolf.model.*
@@ -135,7 +137,12 @@ class IdiotHandlerTest {
         val villager = player("v1", 3, PlayerRole.VILLAGER)
 
         // wolves(1) < others(2 = idiot + villager) → no win yet
-        val result = checker.check(listOf(wolf, idiot, villager), WinConditionMode.CLASSIC)
+        val result = checker.check(
+            alivePlayers = listOf(wolf, idiot, villager),
+            mode = WinConditionMode.CLASSIC,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = HardModeCounterplay(false, false, false),
+        )
         assertThat(result).isNull()
     }
 
@@ -147,7 +154,12 @@ class IdiotHandlerTest {
         val idiot = player("u1", 3, PlayerRole.IDIOT).also { it.canVote = false; it.idiotRevealed = true }
 
         // wolves(2) > others(1 = idiot) → WEREWOLF wins
-        val result = checker.check(listOf(wolf1, wolf2, idiot), WinConditionMode.CLASSIC)
+        val result = checker.check(
+            alivePlayers = listOf(wolf1, wolf2, idiot),
+            mode = WinConditionMode.CLASSIC,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = HardModeCounterplay(false, false, false),
+        )
         assertThat(result).isEqualTo(WinnerSide.WEREWOLF)
     }
 

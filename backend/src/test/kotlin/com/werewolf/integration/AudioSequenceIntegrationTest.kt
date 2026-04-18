@@ -60,12 +60,18 @@ class AudioSequenceIntegrationTest {
     // ── Integration Tests ─────────────────────────────────────────────────────
 
     @Test
-    fun `DAY to NIGHT transition - generates correct audio sequence`() {
-        // Setup: Create a room and game in DAY phase
+    fun `DAY to NIGHT transition - emits only phase-level ambience, role audio is decoupled`() {
+        // The night-entry phase transition must emit only phase-level audio
+        // (goes_dark_close_eyes + wolf_howl). The first role's open-eyes audio
+        // (wolf_open_eyes.mp3) is owned by the WerewolfAudioConfig and broadcast
+        // separately by the night role loop. This decoupling lets us swap any
+        // single role's audio without touching phase-transition logic.
+        //
+        // Player experience: they hear all three files in order, delivered via
+        // two broadcasts timed by NIGHT_INIT_AUDIO_DELAY_MS.
         val room = createRoom()
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY_DISCUSSION, dayNumber = 1)
 
-        // Execute: Calculate audio sequence for DAY to NIGHT transition
         val audioSequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
             oldPhase = GamePhase.DAY_DISCUSSION,
@@ -75,11 +81,20 @@ class AudioSequenceIntegrationTest {
             room = room,
         )
 
-        // Verify: Audio sequence contains goes_dark_close_eyes.mp3
         assertThat(audioSequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(audioSequence.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
-        assertThat(audioSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "wolf_open_eyes.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(audioSequence.priority).isEqualTo(10)
+    }
+
+    @Test
+    fun `Wolf open-eyes audio is owned by WerewolfAudioConfig and queried separately`() {
+        // Decoupling check: the first role's open-eyes audio is NOT embedded in
+        // calculatePhaseTransition. It is retrieved via calculateOpenEyesAudio,
+        // which reads from the role's own audio config. Swapping WerewolfAudioConfig
+        // should change wolf_open_eyes without affecting the DAY→NIGHT phase audio above.
+        val wolfOpenEyes = audioService.calculateOpenEyesAudio(NightSubPhase.WEREWOLF_PICK)
+        assertThat(wolfOpenEyes).isEqualTo("wolf_open_eyes.mp3")
     }
 
     @Test
@@ -179,7 +194,8 @@ class AudioSequenceIntegrationTest {
         // Simulate a complete night cycle
         val dayNumber = 1
 
-        // DAY -> NIGHT transition
+        // DAY -> NIGHT transition: phase ambience only (wolf_open_eyes is owned
+        // by WerewolfAudioConfig and broadcast by the role loop — decoupled design).
         val dayToNightSequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
             oldPhase = GamePhase.DAY_DISCUSSION,
@@ -188,7 +204,7 @@ class AudioSequenceIntegrationTest {
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
             room = room,
         )
-        assertThat(dayToNightSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3","wolf_open_eyes.mp3")
+        assertThat(dayToNightSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
 
         // WAITING -> WEREWOLF_PICK
         val waitingToWerewolf = audioService.calculateNightSubPhaseTransition(

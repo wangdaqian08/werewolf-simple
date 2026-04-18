@@ -1,27 +1,27 @@
 package com.werewolf.game.night
 
 import com.werewolf.audio.RoleRegistry
+import com.werewolf.config.GameTimingProperties
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
+import com.werewolf.game.phase.HardModeCounterplay
+import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
 import com.werewolf.model.*
+import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionSynchronization.STATUS_COMMITTED
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
@@ -32,27 +32,41 @@ class NightOrchestrator(
     private val gameRepository: GameRepository,
     private val gamePlayerRepository: GamePlayerRepository,
     private val nightPhaseRepository: NightPhaseRepository,
+    private val eliminationHistoryRepository: EliminationHistoryRepository,
     private val winConditionChecker: WinConditionChecker,
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
     private val audioService: com.werewolf.service.AudioService,
     private val coroutineScope: CoroutineScope,
     private val actionLogService: com.werewolf.service.ActionLogService,
+    private val timing: GameTimingProperties,
 ) {
     private val log = LoggerFactory.getLogger(NightOrchestrator::class.java)
 
     companion object {
-        /** Time in WAITING sub-phase before wolves open eyes (sheriff badge-handover window). */
-        private const val WAITING_DELAY_MS = 5_000L
-        /** Time for night init audio (goes_dark_close_eyes ~2s + wolf_howl ~5s) to play before role audio starts. */
-        private const val NIGHT_INIT_AUDIO_DELAY_MS = 8_000L
+        /** Default time in WAITING sub-phase before wolves open eyes (sheriff badge-handover window).
+         *  Overridable via `werewolf.timing.waiting-delay-ms`. */
+        private const val DEFAULT_WAITING_DELAY_MS = 5_000L
+        /** Default time for night init audio (goes_dark_close_eyes ~2s + wolf_howl ~5s) to play before
+         *  role audio starts. Overridable via `werewolf.timing.night-init-audio-delay-ms`. */
+        private const val DEFAULT_NIGHT_INIT_AUDIO_DELAY_MS = 8_000L
     }
+
+    private val waitingDelayMs: Long get() = timing.waitingDelayMs ?: DEFAULT_WAITING_DELAY_MS
+    private val nightInitAudioDelayMs: Long get() = timing.nightInitAudioDelayMs ?: DEFAULT_NIGHT_INIT_AUDIO_DELAY_MS
 
     // One active night coroutine per game.
     private val activeNightJobs = ConcurrentHashMap<Int, Job>()
 
     // One pending action deferred per game — unblocked by submitAction(gameId).
     private val pendingActions = ConcurrentHashMap<Int, CompletableDeferred<Unit>>()
+
+    // If submitAction fires before the coroutine has created the next deferred (race
+    // between the action arriving and the role loop reaching its await), stash the
+    // signal here. The next deferred created for this gameId consumes it and
+    // completes immediately instead of waiting. Without this, the race would drop
+    // the action and the night would hang forever.
+    private val queuedActionSignals = ConcurrentHashMap<Int, Boolean>()
 
     // ── Public API ──────────────────────────────────────────────────────────
 
@@ -119,7 +133,12 @@ class NightOrchestrator(
             log.info("[submitAction] Completing pending action for game $gameId")
             deferred.complete(Unit)
         } else {
-            log.warn("[submitAction] No pending action for game $gameId (already completed or not started)")
+            // The role loop has not yet reached its deferred.await (happens when an
+            // action arrives during the brief window between subphase DB-write and
+            // deferred creation, or during the initial audio-warmup delay). Queue
+            // the signal so the next deferred-await for this game consumes it.
+            log.info("[submitAction] No pending action for game $gameId — queuing signal for next await")
+            queuedActionSignals[gameId] = true
         }
     }
 
@@ -209,7 +228,12 @@ class NightOrchestrator(
         nightPhaseRepository.save(nightPhase)
 
         val updatedContext = contextLoader.load(gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+        val winner = winConditionChecker.check(
+            alivePlayers = updatedContext.alivePlayers,
+            mode = updatedContext.room.winCondition,
+            trigger = WinCheckTrigger.POST_NIGHT,
+            counterplay = buildCounterplay(updatedContext),
+        )
 
         if (winner != null) {
             context.game.apply {
@@ -349,6 +373,7 @@ class NightOrchestrator(
         activeNightJobs[gameId]?.cancel()
         activeNightJobs.remove(gameId)
         pendingActions.remove(gameId)
+        queuedActionSignals.remove(gameId)
     }
 
     // ── Internal helpers ────────────────────────────────────────────────────
@@ -363,7 +388,7 @@ class NightOrchestrator(
                 // Wait for night init audio (goes_dark_close_eyes + wolf_howl) to finish
                 // before role audio starts. Without this, wolf_open_eyes AudioSequence arrives
                 // immediately and overrides the init AudioSequence on the frontend.
-                delay(NIGHT_INIT_AUDIO_DELAY_MS.milliseconds)
+                delay(nightInitAudioDelayMs.milliseconds)
                 nightRoleLoop(gameId, dayNumber, withWaiting)
             } catch (e: Exception) {
                 log.error("[nightRoleLoop] Night phase failed for game $gameId", e)
@@ -392,8 +417,8 @@ class NightOrchestrator(
     private suspend fun nightRoleLoop(gameId: Int, dayNumber: Int, withWaiting: Boolean) {
         // When the game starts in WAITING (sheriff-election night), pause before wolves open eyes.
         if (withWaiting) {
-            log.info("[nightRoleLoop] game=$gameId: waiting ${WAITING_DELAY_MS}ms before night sequence starts")
-            delay(WAITING_DELAY_MS.milliseconds)
+            log.info("[nightRoleLoop] game=$gameId: waiting ${waitingDelayMs}ms before night sequence starts")
+            delay(waitingDelayMs.milliseconds)
         }
 
         val context = contextLoader.load(gameId)
@@ -418,7 +443,10 @@ class NightOrchestrator(
 
             log.info("[nightRoleLoop] game=$gameId: role=$role alive=$isAlive")
 
-            // 1. Open eyes
+            // 1. Open eyes — each role owns its own audio (decoupled from phase-transition
+            // audio). The NIGHT_INIT_AUDIO_DELAY_MS delay above ensures the night-entry
+            // sequence (goes_dark_close_eyes + wolf_howl) has finished playing client-side
+            // before this role's open-eyes sequence arrives and the frontend queue resets.
             RoleRegistry.getOpenEyesAudio(role)?.let { broadcastAudio(gameId, it) }
             delay(config.audioWarmupMs.milliseconds)
 
@@ -437,6 +465,12 @@ class NightOrchestrator(
 
                     val deferred = CompletableDeferred<Unit>()
                     pendingActions[gameId] = deferred
+                    // Honor any signal that arrived while the coroutine was still
+                    // setting up — without this, an action submitted between
+                    // nightPhaseRepository.save and pendingActions.put would hang.
+                    if (queuedActionSignals.remove(gameId) == true) {
+                        deferred.complete(Unit)
+                    }
                     deferred.await()
                     pendingActions.remove(gameId)
 
@@ -533,5 +567,33 @@ class NightOrchestrator(
             timestamp = System.currentTimeMillis(),
         )
         stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+    }
+
+    /**
+     * Computes HARD_MODE counterplay flags from the just-loaded GameContext.
+     * Read-your-writes on EliminationHistory is guaranteed because callers run inside
+     * the same @Transactional where any hunter-shot row was just saved — JPA auto-flushes
+     * before the query.
+     */
+    private fun buildCounterplay(context: GameContext): HardModeCounterplay {
+        val alive = context.alivePlayers
+        val hasGuard = alive.any { it.role == PlayerRole.GUARD }
+
+        val hasWitchWithPotions = run {
+            if (alive.none { it.role == PlayerRole.WITCH }) return@run false
+            val antidoteUnused = context.allNightPhases.none { it.witchAntidoteUsed }
+            val poisonUnused = context.allNightPhases.none { it.witchPoisonTargetUserId != null }
+            antidoteUnused || poisonUnused
+        }
+
+        val hasHunterWithBullet = run {
+            if (alive.none { it.role == PlayerRole.HUNTER }) return@run false
+            val hunterHasShot = eliminationHistoryRepository
+                .findByGameId(context.gameId)
+                .any { it.hunterShotUserId != null }
+            !hunterHasShot
+        }
+
+        return HardModeCounterplay(hasGuard, hasWitchWithPotions, hasHunterWithBullet)
     }
 }

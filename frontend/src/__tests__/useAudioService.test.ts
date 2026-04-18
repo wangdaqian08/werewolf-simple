@@ -83,7 +83,6 @@ describe('useAudioService', () => {
     gameStore.setState(makeState({ audioSequence: seq }))
     await nextTick()
 
-    expect(mockClearQueue).toHaveBeenCalled()
     expect(mockPlaySequential).toHaveBeenCalledWith([
       'goes_dark_close_eyes.mp3',
       'wolf_open_eyes.mp3',
@@ -147,22 +146,107 @@ describe('useAudioService', () => {
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['wolf_open_eyes.mp3'])
   })
 
-  // ── Queue clearing on new sequence ──────────────────────────────────────
+  // ── Queue behavior: priority-aware to guarantee sequential, non-overlapping playback ─
 
-  it('clears queue before playing new sequence', async () => {
+  it('high-priority sequence (>=10) clears the queue so it plays immediately', async () => {
+    // Phase-boundary audio (DAY→NIGHT, NIGHT→DAY) must interrupt any lingering audio
+    // so the new phase's ambience plays promptly.
     const gameStore = useGameStore()
     setupComposable()
 
-    gameStore.setState(makeState({ audioSequence: makeSequence(['a.mp3'], 'seq-1') }))
+    gameStore.setState(
+      makeState({ audioSequence: { ...makeSequence(['a.mp3'], 'seq-1'), priority: 10 } }),
+    )
     await nextTick()
 
     mockClearQueue.mockClear()
 
-    gameStore.setState(makeState({ audioSequence: makeSequence(['b.mp3'], 'seq-2') }))
+    gameStore.setState(
+      makeState({ audioSequence: { ...makeSequence(['b.mp3'], 'seq-2'), priority: 10 } }),
+    )
     await nextTick()
 
     expect(mockClearQueue).toHaveBeenCalled()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['b.mp3'])
+  })
+
+  it('DAY → WEREWOLF_PICK: player hears goes_dark_close_eyes → wolf_howl → wolf_open_eyes in order across two broadcasts', async () => {
+    // This is the canonical "player experience" check the decoupled architecture
+    // must guarantee. The backend emits the audio in two AudioSequence broadcasts:
+    //
+    //   Broadcast #1 (priority 10, from calculatePhaseTransition):
+    //     [goes_dark_close_eyes.mp3, wolf_howl.mp3]
+    //   Broadcast #2 (priority 5, from NightOrchestrator.nightRoleLoop):
+    //     [wolf_open_eyes.mp3]
+    //
+    // The first one clears the queue and begins playback. The second one arrives
+    // while the first may still be playing — it MUST append rather than truncate.
+    // Collecting the full flat ordered list of files passed to playSequential gives
+    // us the exact order the audioService.ts queue will play them back to the user.
+    const gameStore = useGameStore()
+    setupComposable()
+
+    // ── Broadcast #1: DAY → NIGHT phase transition (goes_dark + wolf_howl) ──
+    const phaseSeq = makeSequence(
+      ['goes_dark_close_eyes.mp3', 'wolf_howl.mp3'],
+      'phase-transition-day-to-night',
+    )
+    phaseSeq.priority = 10
+    phaseSeq.phase = 'NIGHT'
+    phaseSeq.subPhase = 'WEREWOLF_PICK'
+    gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: phaseSeq }))
+    await nextTick()
+
+    // ── Broadcast #2: WEREWOLF_PICK role-loop open eyes (wolf_open_eyes) ──
+    const wolfOpenSeq = makeSequence(['wolf_open_eyes.mp3'], 'role-loop-wolf-open-eyes')
+    wolfOpenSeq.priority = 5
+    wolfOpenSeq.phase = 'NIGHT'
+    wolfOpenSeq.subPhase = 'WEREWOLF_PICK'
+    gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: wolfOpenSeq }))
+    await nextTick()
+
+    // Broadcast #1 cleared; broadcast #2 appended (did NOT clear).
+    expect(mockClearQueue).toHaveBeenCalledTimes(1)
+
+    // Flat the files from each playSequential call in call order to reconstruct
+    // the exact ordered sequence the player's audio queue will play.
+    const orderedFiles = mockPlaySequential.mock.calls.flatMap((args) => args[0] as string[])
+    expect(orderedFiles).toEqual([
+      'goes_dark_close_eyes.mp3',
+      'wolf_howl.mp3',
+      'wolf_open_eyes.mp3',
+    ])
+  })
+
+  it('low-priority sequence (<10) appends to the queue so files never overlap', async () => {
+    // Role-owned audio (wolf_open_eyes after the DAY→NIGHT ambience) must wait for
+    // whatever is currently playing to finish. Calling clearQueue here would
+    // truncate the previous file mid-playback. This test locks in the contract
+    // that guarantees the user hears goes_dark_close_eyes → wolf_howl → wolf_open_eyes
+    // in order, regardless of how quickly the role-loop broadcast arrives.
+    const gameStore = useGameStore()
+    setupComposable()
+
+    gameStore.setState(
+      makeState({
+        audioSequence: {
+          ...makeSequence(['goes_dark_close_eyes.mp3', 'wolf_howl.mp3'], 'phase-seq'),
+          priority: 10,
+        },
+      }),
+    )
+    await nextTick()
+    mockClearQueue.mockClear()
+
+    gameStore.setState(
+      makeState({
+        audioSequence: { ...makeSequence(['wolf_open_eyes.mp3'], 'role-seq'), priority: 5 },
+      }),
+    )
+    await nextTick()
+
+    expect(mockClearQueue).not.toHaveBeenCalled()
+    expect(mockPlaySequential).toHaveBeenLastCalledWith(['wolf_open_eyes.mp3'])
   })
 
   // ── Phase-specific audio sequences (backend contract) ───────────────────

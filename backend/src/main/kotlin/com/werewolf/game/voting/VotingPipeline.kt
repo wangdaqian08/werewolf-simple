@@ -5,6 +5,8 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.HardModeCounterplay
+import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
 import com.werewolf.model.*
@@ -311,7 +313,12 @@ class VotingPipeline(
     /** Check win condition; if no winner, stay in VOTE_RESULT for host to proceed to night. */
     private fun afterElimination(context: GameContext) {
         val updatedContext = contextLoader.load(context.gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+        val winner = winConditionChecker.check(
+            alivePlayers = updatedContext.alivePlayers,
+            mode = updatedContext.room.winCondition,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = buildCounterplay(updatedContext),
+        )
         if (winner != null) {
             endGame(updatedContext, winner)
         }
@@ -321,7 +328,12 @@ class VotingPipeline(
     /** After hunter acts (no badge needed): check win, then go directly to night. */
     private fun afterHunterAct(context: GameContext) {
         val updatedContext = contextLoader.load(context.gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+        val winner = winConditionChecker.check(
+            alivePlayers = updatedContext.alivePlayers,
+            mode = updatedContext.room.winCondition,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = buildCounterplay(updatedContext),
+        )
         if (winner != null) {
             endGame(updatedContext, winner)
         } else {
@@ -373,7 +385,12 @@ class VotingPipeline(
             modifier.extraEvents.forEach { events.add(it) }
             // After elimination: check win condition
             val updatedContext = contextLoader.load(context.gameId)
-            val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+            val winner = winConditionChecker.check(
+                alivePlayers = updatedContext.alivePlayers,
+                mode = updatedContext.room.winCondition,
+                trigger = WinCheckTrigger.POST_VOTE,
+                counterplay = buildCounterplay(updatedContext),
+            )
             if (winner != null) {
                 endGame(updatedContext, winner, events)
             }
@@ -389,7 +406,12 @@ class VotingPipeline(
             events.add(DomainEvent.IdiotRevealed(context.gameId, targetId))
             // After elimination: check win condition
             val updatedContext = contextLoader.load(context.gameId)
-            val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+            val winner = winConditionChecker.check(
+                alivePlayers = updatedContext.alivePlayers,
+                mode = updatedContext.room.winCondition,
+                trigger = WinCheckTrigger.POST_VOTE,
+                counterplay = buildCounterplay(updatedContext),
+            )
             if (winner != null) {
                 endGame(updatedContext, winner, events)
             }
@@ -428,7 +450,12 @@ class VotingPipeline(
 
         // After elimination: check win condition
         val updatedContext = contextLoader.load(context.gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+        val winner = winConditionChecker.check(
+            alivePlayers = updatedContext.alivePlayers,
+            mode = updatedContext.room.winCondition,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = buildCounterplay(updatedContext),
+        )
         if (winner != null) {
             endGame(updatedContext, winner, events)
         }
@@ -452,5 +479,33 @@ class VotingPipeline(
 
         val newDayNumber = context.game.dayNumber + 1
         nightOrchestrator.initNight(context.gameId, newDayNumber, currentGuardTarget)
+    }
+
+    /**
+     * Computes HARD_MODE counterplay flags from the just-loaded GameContext.
+     * Read-your-writes on EliminationHistory is guaranteed because callers run inside
+     * the same @Transactional where any hunter-shot row was just saved — JPA auto-flushes
+     * before the query.
+     */
+    private fun buildCounterplay(context: GameContext): HardModeCounterplay {
+        val alive = context.alivePlayers
+        val hasGuard = alive.any { it.role == PlayerRole.GUARD }
+
+        val hasWitchWithPotions = run {
+            if (alive.none { it.role == PlayerRole.WITCH }) return@run false
+            val antidoteUnused = context.allNightPhases.none { it.witchAntidoteUsed }
+            val poisonUnused = context.allNightPhases.none { it.witchPoisonTargetUserId != null }
+            antidoteUnused || poisonUnused
+        }
+
+        val hasHunterWithBullet = run {
+            if (alive.none { it.role == PlayerRole.HUNTER }) return@run false
+            val hunterHasShot = eliminationHistoryRepository
+                .findByGameId(context.gameId)
+                .any { it.hunterShotUserId != null }
+            !hunterHasShot
+        }
+
+        return HardModeCounterplay(hasGuard, hasWitchWithPotions, hasHunterWithBullet)
     }
 }

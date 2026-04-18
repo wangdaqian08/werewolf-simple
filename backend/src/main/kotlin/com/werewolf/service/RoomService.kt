@@ -1,6 +1,7 @@
 package com.werewolf.service
 
 import com.werewolf.auth.AuthService
+import com.werewolf.config.GameTimingProperties
 import com.werewolf.dto.RoomConfigDto
 import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.dto.RoomDto
@@ -19,6 +20,7 @@ class RoomService(
     private val userRepository: UserRepository,
     private val authService: AuthService,
     private val stompPublisher: StompPublisher,
+    private val timing: GameTimingProperties,
 ) {
     @Transactional
     fun createRoom(userId: String, nickname: String, avatarUrl: String?, cfg: RoomConfigRequest): RoomDto {
@@ -36,7 +38,7 @@ class RoomService(
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
-                config = GameConfig.createDefault()
+                config = buildGameConfig(),
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")
@@ -144,6 +146,20 @@ class RoomService(
         val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         return (1..4).map { chars.random() }.joinToString("")
     }
+
+    /**
+     * Build the per-room GameConfig, folding in any werewolf.timing.* property
+     * overrides. Production leaves the properties unset and gets the compile-time
+     * role defaults; the test profile sets small values so CI completes quickly.
+     */
+    private fun buildGameConfig(): GameConfig = GameConfig(
+        roleDelays = mapOf(
+            PlayerRole.WEREWOLF to timing.applyTo(PlayerRole.WEREWOLF),
+            PlayerRole.SEER to timing.applyTo(PlayerRole.SEER),
+            PlayerRole.WITCH to timing.applyTo(PlayerRole.WITCH),
+            PlayerRole.GUARD to timing.applyTo(PlayerRole.GUARD),
+        )
+    )
 }
 
 class RoomNotFoundException(message: String) : RuntimeException(message)

@@ -141,9 +141,10 @@ describe('GameView Audio Event Order Bug', () => {
     )
     await nextTick()
 
-    // With the bug fix, both audio files should play
-    // With the bug, only the first file (seer_close_eyes.mp3) would play
-    expect(mockClearQueue).toHaveBeenCalled()
+    // With the bug fix, both audio files play. The queue behaviour depends on
+    // priority: sub-phase sequences are low-priority and append (non-overlapping)
+    // so no clearQueue call is expected here. The critical assertion is that
+    // the new sequence is actually played — the original bug dropped it entirely.
     expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'])
   })
 
@@ -343,43 +344,73 @@ describe('GameView Audio Event Order Bug', () => {
     expect(mockPlaySequential).toHaveBeenCalledWith(['rooster_crowing.mp3', 'day_time.mp3'])
   })
 
-  it('Multiple rapid audio sequence changes - each plays with queue clearing', async () => {
+  it('Multiple rapid high-priority sequences - each clears and plays', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    // Simulate rapid phase changes (could happen with fast user actions or network)
+    // High-priority (>=10) phase-boundary sequences replace the queue so each one
+    // starts playback immediately. Rapid succession simulates fast phase flips
+    // (e.g. day result flurry) where older audio must be cut off.
     mockPlaySequential.mockClear()
     mockClearQueue.mockClear()
 
-    // First sequence
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['file1.mp3'], 'seq-1'),
+        audioSequence: { ...makeSequence(['file1.mp3'], 'seq-1'), priority: 10 },
       }),
     )
     await nextTick()
 
-    // Second sequence (replaces first)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['file2.mp3', 'file3.mp3'], 'seq-2'),
+        audioSequence: { ...makeSequence(['file2.mp3', 'file3.mp3'], 'seq-2'), priority: 10 },
       }),
     )
     await nextTick()
 
-    // Third sequence (replaces second)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['file4.mp3'], 'seq-3'),
+        audioSequence: { ...makeSequence(['file4.mp3'], 'seq-3'), priority: 10 },
       }),
     )
     await nextTick()
 
-    // Each sequence with a different ID will play
-    // Queue is cleared before each new sequence
     expect(mockClearQueue).toHaveBeenCalledTimes(3)
     expect(mockPlaySequential).toHaveBeenCalledTimes(3)
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['file4.mp3'])
+  })
+
+  it('Multiple rapid low-priority sequences - all append, queue is never cleared', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    // Low-priority role-owned sequences (e.g. open/close eyes) must append so the
+    // player hears each file play to completion without truncation. This is the
+    // property that guarantees sequential, non-overlapping audio.
+    mockPlaySequential.mockClear()
+    mockClearQueue.mockClear()
+
+    gameStore.setState(
+      makeState({ audioSequence: { ...makeSequence(['a.mp3'], 'seq-1'), priority: 5 } }),
+    )
+    await nextTick()
+    gameStore.setState(
+      makeState({ audioSequence: { ...makeSequence(['b.mp3'], 'seq-2'), priority: 5 } }),
+    )
+    await nextTick()
+    gameStore.setState(
+      makeState({ audioSequence: { ...makeSequence(['c.mp3'], 'seq-3'), priority: 5 } }),
+    )
+    await nextTick()
+
+    expect(mockClearQueue).not.toHaveBeenCalled()
+    expect(mockPlaySequential).toHaveBeenCalledTimes(3)
+
+    // Reconstruct the ordered queue from the append sequence.
+    const playedFiles = mockPlaySequential.mock.calls.flatMap(
+      (args: unknown[]) => args[0] as string[],
+    )
+    expect(playedFiles).toEqual(['a.mp3', 'b.mp3', 'c.mp3'])
   })
 
   /**

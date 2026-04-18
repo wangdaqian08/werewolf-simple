@@ -32,6 +32,7 @@ class GuardProtectionIntegrationTest {
     @Mock lateinit var gameRepository: GameRepository
     @Mock lateinit var gamePlayerRepository: GamePlayerRepository
     @Mock lateinit var nightPhaseRepository: NightPhaseRepository
+    @Mock lateinit var eliminationHistoryRepository: com.werewolf.repository.EliminationHistoryRepository
     @Mock lateinit var winConditionChecker: com.werewolf.game.phase.WinConditionChecker
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
@@ -56,12 +57,14 @@ class GuardProtectionIntegrationTest {
             gameRepository = gameRepository,
             gamePlayerRepository = gamePlayerRepository,
             nightPhaseRepository = nightPhaseRepository,
+            eliminationHistoryRepository = eliminationHistoryRepository,
             winConditionChecker = winConditionChecker,
             stompPublisher = stompPublisher,
             contextLoader = contextLoader,
             audioService = audioService,
             coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
             actionLogService = mock(),
+            timing = com.werewolf.config.GameTimingProperties(),
         )
     }
 
@@ -165,7 +168,7 @@ class GuardProtectionIntegrationTest {
         // Step 3: Resolve night kills
         whenever(contextLoader.load(gameId))
             .thenReturn(ctx(wolf, guard, victim))
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
         mockAudioSequenceForDayTransition()
 
         nightOrchestrator.resolveNightKills(guardCtx, np)
@@ -219,7 +222,7 @@ class GuardProtectionIntegrationTest {
             .thenReturn(Optional.of(victim))
         whenever(contextLoader.load(gameId))
             .thenReturn(ctx(wolf, guard, victim, otherPlayer))
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
         mockAudioSequenceForDayTransition()
 
         nightOrchestrator.resolveNightKills(wolfCtx, np)

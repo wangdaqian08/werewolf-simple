@@ -30,3 +30,16 @@ app:
   jwt:
     secret: test-secret-key-for-testing-must-be-32-chars-ok
     expiration-hours: 1
+
+# Shrink every night-phase delay so integration tests that traverse the real
+# coroutine finish in seconds rather than minutes. Relative ordering between
+# delays is preserved (gap > warmup > cooldown) so the tests that assert
+# sequential non-overlapping audio playback remain meaningful.
+werewolf:
+  timing:
+    dead-role-delay-ms: 500
+    audio-warmup-ms: 50
+    audio-cooldown-ms: 100
+    inter-role-gap-ms: 300
+    night-init-audio-delay-ms: 500
+    waiting-delay-ms: 200

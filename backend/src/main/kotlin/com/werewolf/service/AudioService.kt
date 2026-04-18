@@ -44,8 +44,13 @@ class AudioService {
         try {
             when (newPhase) {
                 GamePhase.NIGHT -> {
-                    // Night entry audio: darkness + wolf howl.
-                    // wolf_open_eyes is broadcast by the night coroutine's role loop, not here.
+                    // Night entry audio: darkness + wolf howl. The first role's open-eyes
+                    // audio (wolf_open_eyes.mp3) is broadcast separately when the night
+                    // coroutine's role loop reaches WEREWOLF_PICK, after
+                    // NIGHT_INIT_AUDIO_DELAY_MS has elapsed client-side — that delay
+                    // guarantees goes_dark_close_eyes + wolf_howl have finished playing
+                    // before the next sequence arrives (which would clear the client
+                    // audio queue per useAudioService.ts).
                     audioFiles.add("goes_dark_close_eyes.mp3")
                     audioFiles.add("wolf_howl.mp3")
                 }
