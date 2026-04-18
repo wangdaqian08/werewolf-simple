@@ -191,7 +191,7 @@
             class="btn btn-primary ws-btn"
             data-testid="witch-antidote"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
-            @click="emit('witchAntidote')"
+            @click="confirmWitchAntidote"
           >
             使用解药
           </button>
@@ -199,7 +199,7 @@
             class="btn btn-secondary ws-btn"
             data-testid="switch-pass-antidote"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
-            @click="emit('witchPassAntidote')"
+            @click="confirmWitchPassAntidote"
           >
             放弃
           </button>
@@ -241,7 +241,7 @@
               class="btn btn-primary ws-btn"
               data-testid="witch-poison-confirm"
               :disabled="!effectivePhase.selectedTargetId || actionPending"
-              @click="emit('witchPoison', effectivePhase.selectedTargetId!)"
+              @click="confirmWitchPoison(effectivePhase.selectedTargetId!)"
             >
               确认毒杀 Confirm
             </button>
@@ -267,7 +267,7 @@
             class="btn btn-secondary ws-btn"
             data-testid="switch-pass-poison"
             :disabled="!!nightPhase.poisonDecided || actionPending"
-            @click="emit('witchPassPoison')"
+            @click="confirmWitchPassPoison"
           >
             不用
           </button>
@@ -434,6 +434,37 @@ function confirmGuardProtect() {
 function confirmWitchSkip() {
   hasActed.value = true
   emit('witchSkip')
+}
+
+// Witch has up to two potions and can decide each independently. Flip hasActed
+// only when the current click resolves the witch's FINAL pending decision —
+// otherwise the other potion panel would disappear behind the sleep screen.
+function witchActionIsFinal(otherPotionHeld: boolean, otherDecided: boolean) {
+  return !otherPotionHeld || otherDecided
+}
+function confirmWitchAntidote() {
+  if (witchActionIsFinal(!!props.nightPhase.hasPoison, !!props.nightPhase.poisonDecided)) {
+    hasActed.value = true
+  }
+  emit('witchAntidote')
+}
+function confirmWitchPassAntidote() {
+  if (witchActionIsFinal(!!props.nightPhase.hasPoison, !!props.nightPhase.poisonDecided)) {
+    hasActed.value = true
+  }
+  emit('witchPassAntidote')
+}
+function confirmWitchPoison(targetId: string) {
+  if (witchActionIsFinal(!!props.nightPhase.hasAntidote, !!props.nightPhase.antidoteDecided)) {
+    hasActed.value = true
+  }
+  emit('witchPoison', targetId)
+}
+function confirmWitchPassPoison() {
+  if (witchActionIsFinal(!!props.nightPhase.hasAntidote, !!props.nightPhase.antidoteDecided)) {
+    hasActed.value = true
+  }
+  emit('witchPassPoison')
 }
 
 // Current player (me)
