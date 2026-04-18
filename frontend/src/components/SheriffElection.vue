@@ -560,7 +560,7 @@ const phaseChipLabel = computed(() => {
       return '👮‍♂️ 竞选警长'
     case 'SPEECH':
       return '👮‍♂️ 竞选演讲'
-    case 'DAY_VOTING':
+    case 'VOTING':
       return '👮‍ 投票选警长'
     case 'RESULT':
       return '👮‍ 警长产生'
