@@ -84,7 +84,14 @@ describe('SheriffElection — sub-phase rendering', () => {
       props: {
         election: makeElection({
           subPhase: 'RESULT',
-          result: { sheriffId: 'u2', sheriffNickname: 'Alice', sheriffAvatar: '😊' },
+          result: {
+            sheriffId: 'u2',
+            sheriffNickname: 'Alice',
+            sheriffAvatar: '😊',
+            tally: [],
+            abstainCount: 0,
+            abstainVoters: [],
+          },
         }),
         ...DEFAULT_PROPS,
       },
@@ -98,7 +105,14 @@ describe('SheriffElection — sub-phase rendering', () => {
       props: {
         election: makeElection({
           subPhase: 'TIED',
-          result: { sheriffId: 'u2', sheriffNickname: 'Alice', sheriffAvatar: '😊' },
+          result: {
+            sheriffId: 'u2',
+            sheriffNickname: 'Alice',
+            sheriffAvatar: '😊',
+            tally: [],
+            abstainCount: 0,
+            abstainVoters: [],
+          },
         }),
         ...DEFAULT_PROPS,
       },
