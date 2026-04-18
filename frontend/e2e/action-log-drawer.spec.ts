@@ -14,7 +14,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-async function goToDayScenario(page: Page, scenario: 'HOST_HIDDEN' | 'HOST_REVEALED' | 'ALIVE_HIDDEN') {
+async function goToDayScenario(page: Page, scenario: 'HOST_HIDDEN' | 'HOST_REVEALED' | 'ALIVE_HIDDEN' | 'ALIVE_REVEALED') {
   await page.goto('/')
   await page.evaluate(() => {
     localStorage.setItem('jwt', 'mock-jwt-token-abc123')
@@ -28,6 +28,7 @@ async function goToDayScenario(page: Page, scenario: 'HOST_HIDDEN' | 'HOST_REVEA
     HOST_HIDDEN: 'debug-scenario-host-hidden',
     HOST_REVEALED: 'debug-scenario-host-revealed',
     ALIVE_HIDDEN: 'debug-scenario-alive-hidden',
+    ALIVE_REVEALED: 'debug-scenario-alive-revealed',
   }
   await page.locator(`[data-testid="${testIdMap[scenario]}"]`).click()
   // Wait for the DayPhase component to render
@@ -44,7 +45,9 @@ test('📋 FAB is visible in day phase', async ({ page }) => {
 })
 
 test('📋 FAB is visible for non-host alive player', async ({ page }) => {
-  await goToDayScenario(page, 'ALIVE_HIDDEN')
+  // FAB is hidden during RESULT_HIDDEN to prevent spoilers (see DayPhase.vue),
+  // so assert visibility after the host has revealed the night result.
+  await goToDayScenario(page, 'ALIVE_REVEALED')
   await expect(page.locator('button.log-fab')).toBeVisible()
 })
 
