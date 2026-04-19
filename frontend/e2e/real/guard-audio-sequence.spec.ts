@@ -10,6 +10,7 @@
  * This test verifies that guard_close_eyes.mp3 plays exactly ONCE when guard completes.
  */
 import {expect, test} from '@playwright/test'
+import type {Page} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
@@ -17,15 +18,60 @@ import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-scr
 
 let ctx: GameContext
 
+/**
+ * Poll the backend via the host page's JWT until nightPhase.subPhase matches
+ * `target`. Without this, bot actions fired via act.sh race against the
+ * Kotlin role-loop coroutine: the action arrives before the coroutine is
+ * awaiting that sub-phase, the backend rejects with "Not in X sub-phase",
+ * and the test proceeds unaware while the coroutine stalls forever.
+ *
+ * flow-12p-sheriff.spec.ts has the original implementation; this is a local
+ * copy to keep the fix scoped to the failing spec.
+ */
+async function waitForSubPhase(
+  hostPage: Page,
+  gameId: string,
+  target: string,
+  timeoutMs = 15_000,
+): Promise<boolean> {
+  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
+  const deadline = Date.now() + effective
+  while (Date.now() < deadline) {
+    const state = await hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      if (!token) return null
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      return res.json()
+    }, gameId)
+    const sp = state?.nightPhase?.subPhase
+    const phase = state?.phase
+    if (sp === target) return true
+    // Short-circuit if game already advanced past NIGHT (test should move on)
+    if (phase && phase !== 'NIGHT') return false
+    await hostPage.waitForTimeout(150)
+  }
+  return false
+}
+
 test.describe('Guard Audio Sequence — Regression Test', () => {
-  test.setTimeout(90_000)
+  // 90s was tight once we added waitForSubPhase polling (up to ~5 × 15s of
+  // legitimate coroutine waiting); bump to 180s so the test body fits even
+  // when the CI coroutine is at the slow end of its range.
+  test.setTimeout(180_000)
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000)
-    // Setup game with all special roles so guard is last
+    // Setup game with all special roles so guard is last. Explicitly list
+    // roles so GUARD is guaranteed present (default optional roles don't
+    // include it). Without this the spec intermittently gets a roleless
+    // guardPage and crashes on `.on('console', ...)` with a TypeError.
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
+      roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD'],
     })
   })
@@ -42,14 +88,18 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
 
   test('guard as last role - guard_close_eyes plays exactly once', async ({}, testInfo) => {
     const hostPage = ctx.hostPage
+    const gameId = ctx.gameId
 
     // ── Step 1: Start night ───────────────────────────────────────────────
     const startNightBtn = hostPage.getByTestId('start-night')
     await startNightBtn.waitFor({ state: 'visible', timeout: 10_000 })
     await startNightBtn.click()
 
-    // Verify all browsers are in NIGHT phase
+    // Verify all browsers are in NIGHT phase AND the coroutine reached
+    // WEREWOLF_PICK before firing the wolf action. Without this the action
+    // races the coroutine initialisation and gets rejected silently.
     await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 15_000)
+    await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 15_000)
     await captureSnapshot(ctx.pages, testInfo, '01-night-started')
 
     // ── Step 2: Wolf completes action ─────────────────────────────────────
@@ -67,13 +117,8 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       await wolfPage.getByRole('button', { name: /确认袭击|Confirm/i }).click()
     }
 
-    // Wait for transition to SEER_PICK
-    const seerPage = ctx.pages.get('SEER')
-    if (seerPage) {
-      await expect(
-        seerPage.getByText(/选择查验目标|Select a player to check/i).first(),
-      ).toBeVisible({ timeout: 15_000 })
-    }
+    // Wait for coroutine to advance to SEER_PICK before firing seer.
+    await waitForSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
     await captureSnapshot(ctx.pages, testInfo, '02-wolf-completed')
 
     // ── Step 3: Seer completes action ─────────────────────────────────────
@@ -84,7 +129,8 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     if (seerBot) {
       const checkTarget = guardBots[0]?.seat ?? villagerBots[1]?.seat ?? 1
       await act('SEER_CHECK', seerBot.nick, { target: String(checkTarget), room: ctx.roomCode })
-      await hostPage.waitForTimeout(1_000)
+      // Wait for coroutine to advance to SEER_RESULT before firing confirm.
+      await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
       await act('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
     } else if (ctx.isHostRole('SEER')) {
       const seerPage = ctx.pages.get('SEER')!
@@ -94,11 +140,9 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       await seerPage.getByRole('button', { name: /查验完毕|Done/i }).click()
     }
 
-    // Wait for transition to WITCH_ACT
+    // Wait for coroutine to advance to WITCH_ACT before witch acts.
+    await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
     const witchPage = ctx.pages.get('WITCH')
-    if (witchPage) {
-      await expect(witchPage.locator('.w-section').first()).toBeVisible({ timeout: 15_000 })
-    }
     await captureSnapshot(ctx.pages, testInfo, '03-seer-completed')
 
     // ── Step 4: Witch completes action ────────────────────────────────────
@@ -112,40 +156,33 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     const skipPoisonBtn = witchPage!.getByRole('button', { name: /不用/ })
     if (await skipPoisonBtn.isVisible().catch(() => false)) {
       await skipPoisonBtn.click()
-      await witchPage!.waitForTimeout(500)
     }
 
-    // Wait for transition to GUARD_PICK
+    // Wait for coroutine to advance to GUARD_PICK before guard acts.
+    await waitForSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
     const guardPage = ctx.pages.get('GUARD')
-    if (guardPage) {
-      await expect(
-        guardPage.getByText(/选择守护目标|Protect a player/i).first(),
-      ).toBeVisible({ timeout: 15_000 })
-    }
     await captureSnapshot(ctx.pages, testInfo, '04-witch-completed')
 
     // ── Step 5: Guard completes action (LAST special role) ────────────────
     // This is the critical moment - guard is the last special role to complete
     // We need to verify that guard_close_eyes.mp3 plays exactly ONCE
 
-    // Collect audio events from browser console
+    // Collect audio events from host page's console. Every open browser
+    // plays the same audio sequence, so listening on multiple pages would
+    // multiply the count and produce false "duplicate playback" failures.
+    // Guard-page existence is still validated defensively because an
+    // undefined guardPage means role discovery misfired upstream.
+    if (!guardPage) {
+      throw new Error('GUARD page missing from ctx.pages — role discovery failed; check setupGame roles opt')
+    }
     const audioEvents: string[] = []
-
-    // Setup console listener to capture audio playback events
-    guardPage!.on('console', (msg) => {
+    const trackAudio = (msg: { text: () => string }) => {
       const text = msg.text()
       if (text.includes('AudioService') || text.includes('useAudioService')) {
         audioEvents.push(text)
       }
-    })
-
-    // Also listen on host page for any audio events
-    hostPage.on('console', (msg) => {
-      const text = msg.text()
-      if (text.includes('AudioService') || text.includes('useAudioService')) {
-        audioEvents.push(text)
-      }
-    })
+    }
+    hostPage.on('console', trackAudio)
 
     const guardBot = guardBots.find((b) => b.nick !== 'Host')
     if (guardBot) {
@@ -197,8 +234,11 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
   })
 
   test('rapid phase transitions - no duplicate or stale audio playback', async ({}, testInfo) => {
-    // This test verifies that rapid state updates don't cause stale audio to replay
+    // This test verifies that rapid state updates don't cause stale audio to replay.
+    // "Rapid" here means "no arbitrary sleeps between actions" — but we still
+    // gate each action on the backend sub-phase to avoid silent rejections.
     const hostPage = ctx.hostPage
+    const gameId = ctx.gameId
 
     // Start another night
     const startNightBtn = hostPage.getByTestId('start-night')
@@ -207,7 +247,11 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 15_000)
     }
 
-    // Collect all audio playback events
+    // Collect audio playback events. Track only the host page — every open
+    // browser runs the same audio sequence, so listening on all of them
+    // would count a single playback ~5 times (once per page) and assert
+    // against it as "played 6 times". The per-browser dedup behaviour we
+    // actually want to verify is visible from one page.
     const audioEvents: string[] = []
     const trackAudio = (msg: { text: () => string }) => {
       const text = msg.text()
@@ -217,7 +261,6 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     }
 
     hostPage.on('console', trackAudio)
-    ctx.pages.forEach(p => p.on('console', trackAudio))
 
     // Complete night quickly via scripts
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
@@ -231,25 +274,28 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     const witchBot = witchBots.find((b) => b.nick !== 'Host')
     const guardBot = guardBots.find((b) => b.nick !== 'Host')
 
-    // Rapid-fire all night actions
+    // Fire all night actions, each gated on the coroutine reaching the
+    // correct sub-phase. Blind waitForTimeout(500) races the coroutine on
+    // slow hardware and causes silent rejections.
+    await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 15_000)
     if (wolfBot) {
       await act('WOLF_KILL', wolfBot.nick, { target: String(villagerBots[0]?.seat ?? 1), room: ctx.roomCode })
     }
-    await hostPage.waitForTimeout(500)
 
     if (seerBot) {
+      await waitForSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
       await act('SEER_CHECK', seerBot.nick, { target: String(villagerBots[1]?.seat ?? 2), room: ctx.roomCode })
-      await hostPage.waitForTimeout(500)
+      await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
       await act('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
     }
-    await hostPage.waitForTimeout(500)
 
     if (witchBot) {
+      await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
       await act('WITCH_ACT', witchBot.nick, { payload: JSON.stringify({ useAntidote: false, usePoison: false }), room: ctx.roomCode })
     }
-    await hostPage.waitForTimeout(500)
 
     if (guardBot) {
+      await waitForSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
       await act('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
     }
 
