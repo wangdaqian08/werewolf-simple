@@ -385,7 +385,11 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
     // Wolves will be voted out every day. No village player dies at night if
     // we can avoid it — wolves hit a villager target we'll vote no-one for.
     // Alive wolves-to-eliminate order: all wolves, one per day.
-    const wolvesToEliminate = (ctx.roleMap.WEREWOLF ?? []).slice()
+    // Exclude the host even if the host is a wolf — the host drives UI clicks
+    // for the rest of the flow, so voting them out stalls the spec. (Host-wolf
+    // still dies in the last round when it's the only wolf left; in a 12p
+    // classic game there are 4 wolves, so excluding one is safe.)
+    const wolvesToEliminate = (ctx.roleMap.WEREWOLF ?? []).filter((b) => b.nick !== 'Host')
 
     const villagerBots = ctx.roleMap.VILLAGER ?? []
     // Do NOT target the host even if the host's role is VILLAGER — the spec
