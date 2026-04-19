@@ -90,6 +90,20 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     const hostPage = ctx.hostPage
     const gameId = ctx.gameId
 
+    // Attach the audio listener BEFORE we click start-night. Playwright's
+    // page.on('console') only captures events that fire after subscription —
+    // attaching mid-test risks missing the AudioSequence watcher fire on
+    // the DAY→NIGHT transition, and subsequent guard_close_eyes events can
+    // also be lost if the browser buffers/batches log delivery.
+    const audioEvents: string[] = []
+    const trackAudio = (msg: { text: () => string }) => {
+      const text = msg.text()
+      if (text.includes('AudioService') || text.includes('useAudioService')) {
+        audioEvents.push(text)
+      }
+    }
+    hostPage.on('console', trackAudio)
+
     // ── Step 1: Start night ───────────────────────────────────────────────
     const startNightBtn = hostPage.getByTestId('start-night')
     await startNightBtn.waitFor({ state: 'visible', timeout: 10_000 })
@@ -167,22 +181,12 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     // This is the critical moment - guard is the last special role to complete
     // We need to verify that guard_close_eyes.mp3 plays exactly ONCE
 
-    // Collect audio events from host page's console. Every open browser
-    // plays the same audio sequence, so listening on multiple pages would
-    // multiply the count and produce false "duplicate playback" failures.
-    // Guard-page existence is still validated defensively because an
-    // undefined guardPage means role discovery misfired upstream.
+    // Guard-page existence is validated defensively — an undefined guardPage
+    // would mean role discovery misfired upstream. The audio listener was
+    // already attached at the top of the test.
     if (!guardPage) {
       throw new Error('GUARD page missing from ctx.pages — role discovery failed; check setupGame roles opt')
     }
-    const audioEvents: string[] = []
-    const trackAudio = (msg: { text: () => string }) => {
-      const text = msg.text()
-      if (text.includes('AudioService') || text.includes('useAudioService')) {
-        audioEvents.push(text)
-      }
-    }
-    hostPage.on('console', trackAudio)
 
     const guardBot = guardBots.find((b) => b.nick !== 'Host')
     if (guardBot) {
@@ -210,11 +214,15 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     )
 
     // CRITICAL ASSERTION: guard_close_eyes.mp3 should play exactly ONCE
-    // If it plays twice, the bug is present
+    // If it plays twice, the bug is present. On failure we dump the full
+    // audioEvents buffer (not just the filtered match) so the next run
+    // tells us whether the listener captured nothing vs captured plenty
+    // of other audio but nothing for guard_close_eyes.
     expect(
       guardCloseEyesEvents.length,
-      `guard_close_eyes.mp3 played ${guardCloseEyesEvents.length} times, expected 1. ` +
-        `Audio events: ${JSON.stringify(guardCloseEyesEvents, null, 2)}`,
+      `guard_close_eyes.mp3 played ${guardCloseEyesEvents.length} times, expected 1.\n` +
+        `Filtered events: ${JSON.stringify(guardCloseEyesEvents, null, 2)}\n` +
+        `All audioEvents (${audioEvents.length}): ${JSON.stringify(audioEvents, null, 2)}`,
     ).toBe(1)
 
     // Also verify that day audio (rooster_crowing.mp3) played
