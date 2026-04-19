@@ -45,7 +45,9 @@ async function waitForSubPhase(
   target: string,
   timeoutMs = 30_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
+  // Same CI scaling rationale as assertions.ts: slow GH runners need more slack.
+  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
+  const deadline = Date.now() + effective
   while (Date.now() < deadline) {
     const state = await hostPage.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
@@ -339,7 +341,9 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
   let ctx: GameContext
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(180_000)
+    // CI scales ~2× slower; 180s is tight for a 12p 6-round classic game on
+    // ubuntu-latest. Bump to 360s under CI only.
+    testInfo.setTimeout(process.env.CI ? 360_000 : 180_000)
     ctx = await setupGame(browser, {
       totalPlayers: 12,
       hasSheriff: true,
@@ -452,7 +456,9 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
   let ctx: GameContext
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(180_000)
+    // CI scales ~2× slower; 180s is tight for a 12p 6-round classic game on
+    // ubuntu-latest. Bump to 360s under CI only.
+    testInfo.setTimeout(process.env.CI ? 360_000 : 180_000)
     ctx = await setupGame(browser, {
       totalPlayers: 12,
       hasSheriff: true,

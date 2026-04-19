@@ -8,6 +8,13 @@
  */
 import {expect, type Page} from '@playwright/test'
 
+// Phase transitions occasionally take 2-3× longer on GH ubuntu-latest runners
+// than on local dev hardware. Rather than hard-code larger waits at every call
+// site, scale caller-supplied timeouts up when running under CI. Local runs
+// keep the original tight budgets so genuine regressions still surface fast.
+const TIMEOUT_SCALE = process.env.CI ? 2 : 1
+const scale = (ms: number) => Math.round(ms * TIMEOUT_SCALE)
+
 // ── Phase selectors (derived from actual component root classes) ─────────────
 
 export const PHASE_SELECTORS: Record<string, string> = {
@@ -31,7 +38,7 @@ export async function waitForPhase(
 ): Promise<void> {
   const selector = PHASE_SELECTORS[phase]
   if (!selector) throw new Error(`Unknown phase: ${phase}`)
-  await page.locator(selector).first().waitFor({ state: 'visible', timeout })
+  await page.locator(selector).first().waitFor({ state: 'visible', timeout: scale(timeout) })
 }
 
 /**
@@ -89,11 +96,12 @@ export async function verifyAllBrowsersPhase(
 ): Promise<void> {
   const selector = PHASE_SELECTORS[phase]
   if (!selector) throw new Error(`Unknown phase: ${phase}`)
+  const effective = scale(timeout)
 
   const results = await Promise.allSettled(
     Array.from(pages.entries()).map(async ([role, page]) => {
       try {
-        await page.locator(selector).first().waitFor({ state: 'visible', timeout })
+        await page.locator(selector).first().waitFor({ state: 'visible', timeout: effective })
       } catch {
         // Get current page state for better error reporting
         const currentPhase = await page.evaluate(() => {
@@ -120,7 +128,7 @@ export async function verifyAllBrowsersPhase(
         
         throw new Error(
           `P0: Browser [${role}] stuck — expected phase ${phase} (selector: ${selector}) ` +
-          `but not visible after ${timeout}ms. Current state: ${JSON.stringify(currentPhase)}`
+          `but not visible after ${effective}ms. Current state: ${JSON.stringify(currentPhase)}`
         )
       }
     }),
