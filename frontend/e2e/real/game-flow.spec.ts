@@ -385,8 +385,17 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       try {
         const output = act(...args)
         // Script exits 0 even on rejection — check output for "rejected"
-        return !output.includes('rejected')
-      } catch { return false }
+        const rejected = output.includes('rejected')
+        if (rejected) {
+          // eslint-disable-next-line no-console
+          console.warn(`[tryAct rejected] args=${JSON.stringify(args)} output=\n${output}`)
+        }
+        return !rejected
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn(`[tryAct threw] args=${JSON.stringify(args)} err=${(e as Error).message}`)
+        return false
+      }
     }
 
     const wolfBots = ctx.roleMap.WEREWOLF ?? []

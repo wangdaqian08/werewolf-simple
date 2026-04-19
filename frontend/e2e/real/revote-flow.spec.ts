@@ -40,8 +40,15 @@ test.describe('Voting tie → revote → game proceeds', () => {
   function tryAct(...args: Parameters<typeof act>): boolean {
     try {
       const output = act(...args)
-      return !output.includes('rejected') && !output.includes('fail')
-    } catch {
+      const rejected = output.includes('rejected') || output.includes('fail')
+      if (rejected) {
+        // eslint-disable-next-line no-console
+        console.warn(`[tryAct rejected] args=${JSON.stringify(args)} output=\n${output}`)
+      }
+      return !rejected
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[tryAct threw] args=${JSON.stringify(args)} err=${(e as Error).message}`)
       return false
     }
   }

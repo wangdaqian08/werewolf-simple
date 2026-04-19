@@ -89,6 +89,46 @@ export async function clickAndVerify(
  * Verify ALL open browser pages transition to the expected phase.
  * Any browser that doesn't transition within timeout is a P0 bug.
  */
+/**
+ * Ask the backend for the current game state via /api/game/{id}/state, using
+ * the host page's JWT. Used for diagnostics when a phase transition stalls —
+ * knowing whether the backend is already in the expected phase tells us if
+ * the stall is a broadcast/UI bug (backend advanced, frontend didn't receive)
+ * vs. a coroutine/rejection bug (backend never advanced).
+ */
+async function snapshotBackendState(page: Page): Promise<Record<string, unknown> | null> {
+  const gameIdMatch = page.url().match(/\/game\/(\d+)/)
+  if (!gameIdMatch) return null
+  const gameId = gameIdMatch[1]
+  try {
+    return await page.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      if (!token) return { error: 'no jwt in localStorage' }
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return { error: `state fetch ${res.status}`, body: await res.text() }
+      const body = (await res.json()) as Record<string, unknown>
+      // Trim big arrays so the error log stays readable
+      const trimmed: Record<string, unknown> = {
+        phase: body.phase,
+        subPhase: body.subPhase,
+        dayNumber: body.dayNumber,
+        aliveCount: Array.isArray(body.players)
+          ? (body.players as { isAlive?: boolean }[]).filter((p) => p.isAlive).length
+          : undefined,
+        totalPlayers: Array.isArray(body.players) ? (body.players as unknown[]).length : undefined,
+        nightPhase: body.nightPhase,
+        dayPhase: body.dayPhase,
+        votingPhase: body.votingPhase,
+      }
+      return trimmed
+    }, gameId)
+  } catch (e) {
+    return { error: `snapshotBackendState threw: ${(e as Error).message}` }
+  }
+}
+
 export async function verifyAllBrowsersPhase(
   pages: Map<string, Page>,
   phase: string,
@@ -137,7 +177,18 @@ export async function verifyAllBrowsersPhase(
   const failures = results.filter((r) => r.status === 'rejected')
   if (failures.length > 0) {
     const msgs = failures.map((r) => (r as PromiseRejectedResult).reason.message)
-    throw new Error(msgs.join('\n'))
+    // On stall, dump backend's own view of the game state using the first
+    // available page's JWT. If the backend thinks it's already in DAY while
+    // every browser is stuck on NIGHT, the bug is in broadcast/UI. If the
+    // backend is still on NIGHT too, the coroutine is waiting for an action
+    // that was rejected or never sent.
+    const anyPage = pages.values().next().value as Page | undefined
+    let backendNote = ''
+    if (anyPage) {
+      const backend = await snapshotBackendState(anyPage)
+      backendNote = `\nBackend /state snapshot: ${JSON.stringify(backend)}`
+    }
+    throw new Error(msgs.join('\n') + backendNote)
   }
 }
 /**

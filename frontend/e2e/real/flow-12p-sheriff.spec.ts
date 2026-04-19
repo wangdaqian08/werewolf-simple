@@ -26,8 +26,17 @@ const BROWSER_ROLES: RoleName[] = ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAG
 function tryAct(...args: Parameters<typeof act>): boolean {
   try {
     const out = act(...args)
-    return !out.includes('rejected') && !out.includes('fail')
-  } catch {
+    const rejected = out.includes('rejected') || out.includes('fail')
+    if (rejected) {
+      // Silent rejections are the #1 cause of coroutine stalls. Surface them
+      // in CI logs so the next failing run points straight at the culprit.
+      // eslint-disable-next-line no-console
+      console.warn(`[tryAct rejected] args=${JSON.stringify(args)} output=\n${out}`)
+    }
+    return !rejected
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn(`[tryAct threw] args=${JSON.stringify(args)} err=${(e as Error).message}`)
     return false
   }
 }
