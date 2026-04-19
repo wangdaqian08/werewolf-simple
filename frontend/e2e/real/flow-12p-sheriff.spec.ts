@@ -82,51 +82,258 @@ async function waitForSubPhase(
  * votes, reveal. Returns the role the bots voted for (so callers know who holds
  * the badge once the badge-award sub-phase completes).
  */
+/**
+ * Poll the backend for a sheriff sub-phase transition. Unlike waitForSubPhase,
+ * which reads `nightPhase.subPhase`, sheriff state lives at
+ * `state.sheriffElection.subPhase` (confirmed: scripts/act.sh:357,
+ * SheriffService.kt transitions SIGNUP→SPEECH→VOTING→RESULT/TIED).
+ */
+async function waitForSheriffSubPhase(
+  hostPage: Page,
+  gameId: string,
+  target: string,
+  timeoutMs = 15_000,
+): Promise<boolean> {
+  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
+  const deadline = Date.now() + effective
+  while (Date.now() < deadline) {
+    const sub = await hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      if (!token) return null
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      const state = await res.json()
+      return state?.sheriffElection?.subPhase ?? null
+    }, gameId)
+    if (sub === target) return true
+    await hostPage.waitForTimeout(200)
+  }
+  return false
+}
+
+/**
+ * Host drives all sheriff speeches via a single UI button click per speaker.
+ * The `sheriff-advance-speech` button is rendered ONLY when
+ * `election.subPhase === 'SPEECH'` (SheriffElection.vue:115,128,182); it is
+ * not in the DOM once SheriffService.kt auto-transitions SPEECH→VOTING after
+ * the last speaker. Loop exit condition therefore reads both the backend
+ * sub-phase (/state) AND the button's DOM presence — either signals done.
+ *
+ * Replaces the prior `for (12) { act('SHERIFF_ADVANCE_SPEECH') }` loop, which
+ * (a) iterated more times than needed and (b) through `act.sh`'s default
+ * PLAYER_SEL="all" fanned each call out to 11 non-host bots, producing 1,500+
+ * "Only host can advance speeches" rejections per CI run (see
+ * docs/ci-tests-issues.md for the pre-fix rejection breakdown).
+ */
+async function advanceAllSheriffSpeeches(hostPage: Page, gameId: string): Promise<void> {
+  // Safety cap — 12p games have at most 12 speakers. Real exit condition is
+  // the sub-phase leaving SPEECH (backend auto-advances after last speaker).
+  const maxIterations = 20
+  for (let i = 0; i < maxIterations; i++) {
+    const sub = await hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      if (!token) return null
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      const state = await res.json()
+      return state?.sheriffElection?.subPhase ?? null
+    }, gameId)
+    if (sub !== 'SPEECH') return
+
+    const advanceBtn = hostPage.getByTestId('sheriff-advance-speech')
+    // Wait (don't just probe) for the button to be visible. During speaker
+    // transitions Vue re-renders the SheriffElection component and the
+    // button is briefly detached; `isVisible()` returns false for that tick
+    // and would incorrectly bail. `waitFor({state: 'visible'})` waits up to
+    // the timeout for it to settle.
+    const appeared = await advanceBtn
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (!appeared) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[sheriff] advance button did not reappear after 5s (iter ${i}, subPhase=${sub}) — will re-poll`,
+      )
+      // Don't early-return; if sub is still SPEECH on the next iteration,
+      // try once more. Only exit the whole helper if iterations run out.
+      continue
+    }
+
+    await advanceBtn.click()
+    // Small settle so the next state poll observes the post-click state.
+    await hostPage.waitForTimeout(400)
+  }
+  // eslint-disable-next-line no-console
+  console.warn('[sheriff] advanceAllSpeeches hit maxIterations — check backend speaker count')
+}
+
+async function readSheriffSubPhase(hostPage: Page, gameId: string): Promise<string | null> {
+  return hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return null
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const state = await res.json()
+    return state?.sheriffElection?.subPhase ?? null
+  }, gameId)
+}
+
 async function runSheriffElection(ctx: GameContext, pickNickCampaign: string[]): Promise<void> {
-  // Host's role-reveal still has to be confirmed via UI if it's still showing.
   const hostPage = ctx.hostPage
+  const gameId = ctx.gameId
   await verifyAllBrowsersPhase(ctx.pages, 'SHERIFF_ELECTION', 20_000)
 
-  // Campaign
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] entered runSheriffElection — candidates=${JSON.stringify(pickNickCampaign)} ` +
+      `initial subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
+
+  // Campaign: legitimate per-candidate fan-out; stays as script calls.
   for (const nick of pickNickCampaign) {
     try {
       sheriff('campaign', { player: nick, room: ctx.roomCode })
-    } catch {
-      // already campaigning or phase moved on — ignore
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[sheriff] campaign ${nick} threw: ${(e as Error).message}`)
     }
   }
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] after campaign scripts — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`)
 
-  // Speeches — host advances
-  try {
-    act('SHERIFF_START_SPEECH', undefined, { room: ctx.roomCode })
-  } catch {
-    // already in speech
-  }
-  for (let i = 0; i < 12; i++) {
-    try {
-      act('SHERIFF_ADVANCE_SPEECH', undefined, { room: ctx.roomCode })
-      await hostPage.waitForTimeout(150)
-    } catch {
-      break
-    }
+  // Host UI click: SIGNUP → SPEECH via `sheriff-start-campaign`. The button
+  // is disabled while `runningCandidates.length === 0` (SheriffElection.vue:64)
+  // so poll briefly for enabled state to let the campaign scripts' STOMP
+  // events land on the host page.
+  const startBtn = hostPage.getByTestId('sheriff-start-campaign')
+  const startVisible = await startBtn
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  const startEnabled = await expect(startBtn)
+    .toBeEnabled({ timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] sheriff-start-campaign: visible=${startVisible} enabled=${startEnabled}`)
+  if (startVisible && startEnabled) {
+    await startBtn.click()
+    // eslint-disable-next-line no-console
+    console.warn('[sheriff] clicked sheriff-start-campaign')
   }
 
-  // Voting — everyone votes for the first campaigner
+  // Wait for backend to register the SIGNUP→SPEECH transition.
+  const reachedSpeech = await waitForSheriffSubPhase(hostPage, gameId, 'SPEECH', 15_000)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] reachedSpeech=${reachedSpeech} current=${await readSheriffSubPhase(hostPage, gameId)}`)
+  await advanceAllSheriffSpeeches(hostPage, gameId)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] advanceAllSpeeches done — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`)
+
+  const reachedVoting = await waitForSheriffSubPhase(hostPage, gameId, 'VOTING', 15_000)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] reachedVoting=${reachedVoting}`)
+
+  // Voting: bots vote for the first campaigner via sheriff.sh (legitimate
+  // per-voter fan-out). Host doesn't vote through the script (the script
+  // iterates bots only, not the host's browser-owned session), so the
+  // frontend's `election.allVoted` stays false (SheriffElection.vue:279)
+  // and sheriff-reveal-result remains disabled. Host must also register
+  // a vote/abstain for allVoted to flip true.
+  //
+  // Note: the backend's revealResult() actually only requires subPhase=VOTING
+  // (SheriffService.kt:247-252). The old test bypassed this via act('SHERIFF_
+  // REVEAL_RESULT') hitting the REST API directly with the host token. The
+  // UI-click path respects the stricter frontend allVoted gate, which also
+  // more accurately models real-user behavior.
   if (pickNickCampaign.length > 0) {
     try {
       sheriff('vote', { target: pickNickCampaign[0], room: ctx.roomCode })
-    } catch {
-      // some may reject — keep going
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[sheriff] vote threw: ${(e as Error).message}`)
+    }
+    // Backend rejects self-votes (SheriffService.kt:385-386 "Cannot vote for
+    // yourself"). When a candidate is the target of the fan-out sheriff.sh
+    // vote, they can't vote for themselves — so they must abstain instead
+    // or `allVoted` never reaches true. Run abstain for every candidate in
+    // the election so the denominator is satisfied regardless of which bots
+    // campaigned.
+    for (const candidateNick of pickNickCampaign) {
+      try {
+        sheriff('abstain', { player: candidateNick, room: ctx.roomCode })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn(`[sheriff] candidate-abstain ${candidateNick} threw: ${(e as Error).message}`)
+      }
     }
   }
 
-  // Reveal
-  try {
-    act('SHERIFF_REVEAL_RESULT', undefined, { room: ctx.roomCode })
-  } catch {
-    // may already be revealed
+  // Host abstains via UI so allVoted becomes true. (Host is never a
+  // candidate in this test — pickNickCampaign filters out the host.)
+  const abstainBtn = hostPage.getByTestId('sheriff-abstain')
+  const abstainAppeared = await abstainBtn
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] sheriff-abstain: visible=${abstainAppeared}`)
+  if (abstainAppeared) {
+    await abstainBtn.click()
+    // eslint-disable-next-line no-console
+    console.warn('[sheriff] clicked sheriff-abstain')
+  }
+
+  // Diagnostic: read voteProgress so we see the actual vote count vs the
+  // eligible-voter denominator. If submitted < total we know bots' script
+  // votes didn't all land (retry / candidate filtering bug), not a bug in
+  // the host-abstain click.
+  const progressAfter = await hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const state = await res.json()
+    return {
+      voteProgress: state?.sheriffElection?.voteProgress,
+      allVoted: state?.sheriffElection?.allVoted,
+      candidates: state?.sheriffElection?.candidates,
+    }
+  }, gameId)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] voteProgress=${JSON.stringify(progressAfter)}`)
+
+  // Host UI click: VOTING → RESULT/TIED via `sheriff-reveal-result`.
+  const revealBtn = hostPage.getByTestId('sheriff-reveal-result')
+  const revealVisible = await revealBtn
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  const revealEnabled = await expect(revealBtn)
+    .toBeEnabled({ timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false)
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] sheriff-reveal-result: visible=${revealVisible} enabled=${revealEnabled} ` +
+      `subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
+  if (revealVisible && revealEnabled) {
+    await revealBtn.click()
+    // eslint-disable-next-line no-console
+    console.warn('[sheriff] clicked sheriff-reveal-result')
   }
   await hostPage.waitForTimeout(1_500)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] leaving runSheriffElection — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`)
 }
 
 /**
@@ -371,23 +578,13 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
     }
   })
 
-  // SKIPPED: flaky across runs with multiple independent failure modes that
-  // all predate this session's work:
-  //   1. host-rolls-WEREWOLF: my wolvesToEliminate.filter(!Host) leaves the
-  //      host-wolf alive forever; wolves reach parity → wolf_win assertion
-  //      fails.
-  //   2. random wolf-win even when host isn't wolf: the 6-round maxRounds
-  //      cap combined with real-world voting dynamics occasionally produces
-  //      wolf_win.
-  //   3. The spec lacks the waitForSubPhase coverage the guard-audio fix
-  //      introduced; slow CI produces silent action rejections that don't
-  //      surface as test failures, just games that drift from the intended
-  //      outcome.
-  //
-  // Each retry adds 600s of CI wait time. Quarantine until the spec is
-  // rewritten end-to-end (separate PR) rather than keep patching. The
-  // HARD_MODE sibling below is also skipped for similar page-close /
-  // timeout flakes.
+  // SKIPPED: sheriff-flow rewrite in this change (runSheriffElection + helpers)
+  // is proven locally, but the rest of this test still depends on the
+  // `completeDay` vote loop which iterates all alive voters with retries and
+  // stalls under the same constraints documented in the HARD_MODE sibling
+  // below. Until the `completeDay` rewrite lands (Option B — see
+  // docs/ci-tests-issues.md), both tests stay skipped at the describe level
+  // so CI is not flipped red on every run.
   test.skip('phase: role-reveal + sheriff election + village votes out wolves', async ({}, testInfo) => {
     await captureSnapshot(ctx.pages, testInfo, 'classic-01-role-reveal-or-election-start')
 
@@ -516,14 +713,11 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     }
   })
 
-  // SKIPPED alongside the CLASSIC sibling above. This test's observed
-  // failure ("Target page, context or browser has been closed during
-  // waitForTimeout, 600000ms exceeded") is a distinct symptom but shares
-  // the same root: the 12p multi-browser full-flow spec has complex
-  // timing-sensitive sections without sub-phase gating, and one stall
-  // cascades into a total test timeout. Rewriting both tests to use
-  // waitForSubPhase throughout is the proper fix; until that lands,
-  // keep them quarantined so shard 1 doesn't eat 40 min on retry cycles.
+  // SKIPPED: same reason as CLASSIC sibling above. Sheriff flow works
+  // locally after Option A, but completeDay's vote loop stalls the test at
+  // the 600s test-timeout (observed locally: 5 rounds of abstain-voting with
+  // no game termination). Un-skip after Option B (completeDay rewrite with
+  // /state-based eligibility filtering) lands.
   test.skip('phase: role-reveal + sheriff-elect (seer) + D1 vote out sheriff → badge passover → wolves win', async ({}, testInfo) => {
     await captureSnapshot(ctx.pages, testInfo, 'hard-01-role-reveal-or-election-start')
 
