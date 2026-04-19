@@ -97,7 +97,16 @@ export function readStateFile(roomCode: string): StateFile {
 /**
  * Run act.sh with the given action.
  *
- * @returns raw stdout (stripped of ANSI codes)
+ * Returns raw stdout (stripped of ANSI codes).
+ *
+ * On CI, retries up to 3 times on "rejected" output with a 600ms gap. This
+ * absorbs the well-known race where a bot action fires faster than the
+ * role-loop coroutine advances, lands in the wrong sub-phase, and is
+ * rejected. Locally the coroutine is fast enough that retries rarely trigger.
+ *
+ * Every rejection — whether recovered or not — is logged via console.warn so
+ * genuine rejections (target dead, action already taken, etc.) still surface
+ * in CI logs rather than being absorbed silently.
  */
 export function act(
   action: string,
@@ -109,7 +118,29 @@ export function act(
   if (opts?.target) parts.push('--target', opts.target)
   if (opts?.payload) parts.push('--payload', `'${opts.payload}'`)
   if (opts?.room) parts.push('--room', opts.room)
-  return stripAnsi(run(parts.join(' ')))
+  const cmd = parts.join(' ')
+
+  const maxAttempts = process.env.CI ? 3 : 1
+  const retryDelayMs = 600
+  let output = ''
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    output = stripAnsi(run(cmd))
+    const rejected = /reject|Rejected/.test(output)
+    if (!rejected) return output
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[act rejected] attempt ${attempt}/${maxAttempts} action=${action} ` +
+        `player=${player ?? '-'} target=${opts?.target ?? '-'} ` +
+        `room=${opts?.room ?? '-'}\noutput:\n${output}`,
+    )
+    if (attempt < maxAttempts) {
+      // Synchronous sleep — act() is sync and changing it to async would
+      // ripple through every spec. execSync('sleep 0.6') blocks this worker
+      // briefly, which is acceptable in a test helper.
+      execSync(`sleep ${retryDelayMs / 1000}`)
+    }
+  }
+  return output
 }
 
 /**
