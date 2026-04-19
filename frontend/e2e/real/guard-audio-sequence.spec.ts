@@ -201,9 +201,12 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     // Wait a bit for any delayed audio events
     await hostPage.waitForTimeout(3_000)
 
-    // Check console logs for duplicate guard_close_eyes playback
-    const guardCloseEyesEvents = audioEvents.filter(e =>
-      e.includes('guard_close_eyes.mp3') && e.includes('Starting playback')
+    // useAudioService emits `[useAudioService] Playing audio files: [...]`
+    // per sequence — each occurrence counts as one playback.
+    const isPlayback = (e: string) =>
+      e.includes('Playing audio files') || e.includes('appending to queue')
+    const guardCloseEyesEvents = audioEvents.filter(
+      (e) => isPlayback(e) && e.includes('guard_close_eyes.mp3'),
     )
 
     // CRITICAL ASSERTION: guard_close_eyes.mp3 should play exactly ONCE
@@ -211,21 +214,21 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     expect(
       guardCloseEyesEvents.length,
       `guard_close_eyes.mp3 played ${guardCloseEyesEvents.length} times, expected 1. ` +
-      `Audio events: ${JSON.stringify(guardCloseEyesEvents, null, 2)}`
+        `Audio events: ${JSON.stringify(guardCloseEyesEvents, null, 2)}`,
     ).toBe(1)
 
     // Also verify that day audio (rooster_crowing.mp3) played
-    const dayAudioEvents = audioEvents.filter(e =>
-      e.includes('rooster_crowing.mp3') && e.includes('Starting playback')
+    const dayAudioEvents = audioEvents.filter(
+      (e) => isPlayback(e) && e.includes('rooster_crowing.mp3'),
     )
     expect(dayAudioEvents.length).toBeGreaterThanOrEqual(1)
 
     // Verify the sequence order: guard_close_eyes before rooster_crowing
-    const guardCloseIndex = audioEvents.findIndex(e =>
-      e.includes('guard_close_eyes.mp3') && e.includes('Starting playback')
+    const guardCloseIndex = audioEvents.findIndex(
+      (e) => isPlayback(e) && e.includes('guard_close_eyes.mp3'),
     )
-    const roosterIndex = audioEvents.findIndex(e =>
-      e.includes('rooster_crowing.mp3') && e.includes('Starting playback')
+    const roosterIndex = audioEvents.findIndex(
+      (e) => isPlayback(e) && e.includes('rooster_crowing.mp3'),
     )
 
     expect(guardCloseIndex).toBeGreaterThanOrEqual(0)
@@ -255,7 +258,11 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     const audioEvents: string[] = []
     const trackAudio = (msg: { text: () => string }) => {
       const text = msg.text()
-      if (text.includes('Starting playback') || text.includes('Skipping duplicate')) {
+      if (
+        text.includes('Playing audio files') ||
+        text.includes('Skipping duplicate') ||
+        text.includes('appending to queue')
+      ) {
         audioEvents.push(text)
       }
     }
@@ -305,17 +312,20 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
 
     await captureSnapshot(ctx.pages, testInfo, 'rapid-transitions-complete')
 
-    // Analyze audio events for duplicates
-    const playbackEvents = audioEvents.filter(e => e.includes('Starting playback'))
-    const filenames = playbackEvents.map(e => {
-      const match = e.match(/Starting playback: ([\w_]+\.mp3)/)
-      return match ? match[1] : null
-    }).filter(Boolean)
+    // Analyze audio events for duplicates. useAudioService emits one log
+    // line per sequence: `[useAudioService] Playing audio files: [ 'x.mp3' ]`.
+    // Each .mp3 listed counts as one playback.
+    const playbackEvents = audioEvents.filter((e) => e.includes('Playing audio files'))
+    const filenames: string[] = []
+    for (const e of playbackEvents) {
+      const matches = e.match(/[\w_]+\.mp3/g)
+      if (matches) filenames.push(...matches)
+    }
 
     // Count occurrences of each audio file
     const counts = new Map<string, number>()
     for (const filename of filenames) {
-      counts.set(filename!, (counts.get(filename!) || 0) + 1)
+      counts.set(filename, (counts.get(filename) || 0) + 1)
     }
 
     // No audio file should play more than once (except day_time which might repeat between rounds)
