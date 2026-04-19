@@ -47,12 +47,12 @@ class VillagerHandlerTest {
 
     @Test
     fun `acceptedActions is always empty during DAY phase`() {
-        assertThat(handler.acceptedActions(GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)).isEmpty()
+        assertThat(handler.acceptedActions(GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name)).isEmpty()
     }
 
     @Test
     fun `acceptedActions is always empty during VOTING phase`() {
-        assertThat(handler.acceptedActions(GamePhase.VOTING, VotingSubPhase.VOTING.name)).isEmpty()
+        assertThat(handler.acceptedActions(GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)).isEmpty()
     }
 
     @Test

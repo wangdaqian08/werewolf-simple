@@ -25,7 +25,7 @@ class HunterHandlerTest {
     private val gameId = 1
     private val hostId = "host:001"
 
-    private fun game(phase: GamePhase = GamePhase.VOTING, subPhase: String = VotingSubPhase.HUNTER_SHOOT.name) =
+    private fun game(phase: GamePhase = GamePhase.DAY_VOTING, subPhase: String = VotingSubPhase.HUNTER_SHOOT.name) =
         Game(roomId = 1, hostUserId = hostId).also {
             val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
             it.phase = phase
@@ -37,7 +37,7 @@ class HunterHandlerTest {
     private fun req(actionType: ActionType, target: String? = null) =
         GameActionRequest(gameId = gameId, actorUserId = "hunter", actionType = actionType, targetUserId = target)
 
-    private fun ctx(phase: GamePhase = GamePhase.VOTING, subPhase: String = VotingSubPhase.HUNTER_SHOOT.name) =
+    private fun ctx(phase: GamePhase = GamePhase.DAY_VOTING, subPhase: String = VotingSubPhase.HUNTER_SHOOT.name) =
         GameContext(game(phase, subPhase), room(), emptyList())
 
     // ── acceptedActions ───────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ class HunterHandlerTest {
 
         @Test
         fun `returns HUNTER_SHOOT and HUNTER_PASS during VOTING HUNTER_SHOOT sub-phase`() {
-            val actions = handler.acceptedActions(GamePhase.VOTING, VotingSubPhase.HUNTER_SHOOT.name)
+            val actions = handler.acceptedActions(GamePhase.DAY_VOTING, VotingSubPhase.HUNTER_SHOOT.name)
             assertThat(actions).containsExactlyInAnyOrder(ActionType.HUNTER_SHOOT, ActionType.HUNTER_PASS)
         }
 
@@ -59,19 +59,19 @@ class HunterHandlerTest {
 
         @Test
         fun `returns empty set during DAY phase`() {
-            val actions = handler.acceptedActions(GamePhase.DAY, DaySubPhase.RESULT_HIDDEN.name)
+            val actions = handler.acceptedActions(GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name)
             assertThat(actions).isEmpty()
         }
 
         @Test
         fun `returns empty set during VOTING VOTING sub-phase (not HUNTER_SHOOT)`() {
-            val actions = handler.acceptedActions(GamePhase.VOTING, VotingSubPhase.VOTING.name)
+            val actions = handler.acceptedActions(GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
             assertThat(actions).isEmpty()
         }
 
         @Test
         fun `returns empty set during VOTING RE_VOTING sub-phase`() {
-            val actions = handler.acceptedActions(GamePhase.VOTING, VotingSubPhase.RE_VOTING.name)
+            val actions = handler.acceptedActions(GamePhase.DAY_VOTING, VotingSubPhase.RE_VOTING.name)
             assertThat(actions).isEmpty()
         }
 

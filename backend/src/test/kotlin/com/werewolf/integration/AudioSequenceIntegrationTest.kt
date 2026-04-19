@@ -60,26 +60,41 @@ class AudioSequenceIntegrationTest {
     // ── Integration Tests ─────────────────────────────────────────────────────
 
     @Test
-    fun `DAY to NIGHT transition - generates correct audio sequence`() {
-        // Setup: Create a room and game in DAY phase
+    fun `DAY to NIGHT transition - emits only phase-level ambience, role audio is decoupled`() {
+        // The night-entry phase transition must emit only phase-level audio
+        // (goes_dark_close_eyes + wolf_howl). The first role's open-eyes audio
+        // (wolf_open_eyes.mp3) is owned by the WerewolfAudioConfig and broadcast
+        // separately by the night role loop. This decoupling lets us swap any
+        // single role's audio without touching phase-transition logic.
+        //
+        // Player experience: they hear all three files in order, delivered via
+        // two broadcasts timed by NIGHT_INIT_AUDIO_DELAY_MS.
         val room = createRoom()
-        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY, dayNumber = 1)
+        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY_DISCUSSION, dayNumber = 1)
 
-        // Execute: Calculate audio sequence for DAY to NIGHT transition
         val audioSequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
-            oldPhase = GamePhase.DAY,
+            oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
             room = room,
         )
 
-        // Verify: Audio sequence contains goes_dark_close_eyes.mp3
         assertThat(audioSequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(audioSequence.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
-        assertThat(audioSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3","wolf_howl.mp3", "wolf_open_eyes.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(audioSequence.priority).isEqualTo(10)
+    }
+
+    @Test
+    fun `Wolf open-eyes audio is owned by WerewolfAudioConfig and queried separately`() {
+        // Decoupling check: the first role's open-eyes audio is NOT embedded in
+        // calculatePhaseTransition. It is retrieved via calculateOpenEyesAudio,
+        // which reads from the role's own audio config. Swapping WerewolfAudioConfig
+        // should change wolf_open_eyes without affecting the DAY→NIGHT phase audio above.
+        val wolfOpenEyes = audioService.calculateOpenEyesAudio(NightSubPhase.WEREWOLF_PICK)
+        assertThat(wolfOpenEyes).isEqualTo("wolf_open_eyes.mp3")
     }
 
     @Test
@@ -92,16 +107,16 @@ class AudioSequenceIntegrationTest {
         val audioSequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
         )
 
         // Verify: Audio sequence contains day_time.mp3
-        assertThat(audioSequence.phase).isEqualTo(GamePhase.DAY)
+        assertThat(audioSequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
         assertThat(audioSequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
-        assertThat(audioSequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
         assertThat(audioSequence.priority).isEqualTo(10)
     }
 
@@ -111,7 +126,7 @@ class AudioSequenceIntegrationTest {
         val transitions = listOf(
             Triple(NightSubPhase.WAITING, NightSubPhase.WEREWOLF_PICK, listOf("wolf_open_eyes.mp3")),
             Triple(NightSubPhase.WEREWOLF_PICK, NightSubPhase.SEER_PICK, listOf("wolf_close_eyes.mp3", "seer_open_eyes.mp3")),
-            Triple(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT, listOf("seer_close_eyes.mp3")),
+            Triple(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT, emptyList()),
             Triple(NightSubPhase.SEER_RESULT, NightSubPhase.WITCH_ACT, listOf("seer_close_eyes.mp3", "witch_open_eyes.mp3")),
             Triple(NightSubPhase.WITCH_ACT, NightSubPhase.GUARD_PICK, listOf("witch_close_eyes.mp3", "guard_open_eyes.mp3")),
         )
@@ -138,14 +153,14 @@ class AudioSequenceIntegrationTest {
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
         assertThat(gameRepository.findById(game.gameId!!)).isPresent
 
-        val players = createPlayers(game.gameId!!, room.totalPlayers)
+        createPlayers(game.gameId!!, room.totalPlayers)
 
         // Verify the game has correct roomId
         val loadedGame = gameRepository.findById(game.gameId!!).orElseThrow()
         assertThat(loadedGame.roomId).isEqualTo(room.roomId!!)
 
         // Initialize night phase
-        nightOrchestrator.initNight(game.gameId!!, newDayNumber = game.dayNumber, withWaiting = false)
+        nightOrchestrator.startNightPhase(game.gameId!!, newDayNumber = game.dayNumber, withWaiting = false)
 
         // Get the created night phase
         val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(game.gameId!!, game.dayNumber)
@@ -153,7 +168,7 @@ class AudioSequenceIntegrationTest {
 
         // Execute: Advance from WEREWOLF_PICK to SEER_PICK
         val context = gameContextLoader.load(game.gameId!!)
-        nightOrchestrator.advance(game.gameId!!, NightSubPhase.WEREWOLF_PICK)
+        nightOrchestrator.advanceToSubPhase(game.gameId!!, NightSubPhase.SEER_PICK)
 
         // Verify: Night phase was advanced
         val updatedNightPhase = nightPhaseRepository.findByGameIdAndDayNumber(game.gameId!!, game.dayNumber).orElse(null)
@@ -173,22 +188,23 @@ class AudioSequenceIntegrationTest {
     fun `Complete night cycle - generates correct audio sequences for all transitions`() {
         // Setup: Create a complete game setup with all roles
         val room = createRoom(hasSeer = true, hasWitch = true, hasGuard = true)
-        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY, dayNumber = 0)
+        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY_DISCUSSION, dayNumber = 0)
         val players = createPlayers(game.gameId!!, room.totalPlayers)
 
         // Simulate a complete night cycle
         val dayNumber = 1
 
-        // DAY -> NIGHT transition
+        // DAY -> NIGHT transition: phase ambience only (wolf_open_eyes is owned
+        // by WerewolfAudioConfig and broadcast by the role loop — decoupled design).
         val dayToNightSequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
-            oldPhase = GamePhase.DAY,
+            oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
             room = room,
         )
-        assertThat(dayToNightSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3","wolf_open_eyes.mp3")
+        assertThat(dayToNightSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
 
         // WAITING -> WEREWOLF_PICK
         val waitingToWerewolf = audioService.calculateNightSubPhaseTransition(
@@ -212,7 +228,7 @@ class AudioSequenceIntegrationTest {
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
-        assertThat(seerToResult.audioFiles).containsExactly("seer_close_eyes.mp3")
+        assertThat(seerToResult.audioFiles).isEmpty()
 
         // SEER_RESULT -> WITCH_ACT
         val resultToWitch = audioService.calculateNightSubPhaseTransition(
@@ -234,23 +250,23 @@ class AudioSequenceIntegrationTest {
         val nightToDaySequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
         )
-        assertThat(nightToDaySequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        assertThat(nightToDaySequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
     }
 
     @Test
     fun `AudioSequence IDs are unique across multiple transitions`() {
         val room = createRoom()
-        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY, dayNumber = 1)
+        val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY_DISCUSSION, dayNumber = 1)
 
         // Generate multiple audio sequences
         val sequence1 = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
-            oldPhase = GamePhase.DAY,
+            oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
@@ -266,7 +282,7 @@ class AudioSequenceIntegrationTest {
         val sequence3 = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,

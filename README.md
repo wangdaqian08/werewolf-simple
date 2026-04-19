@@ -34,6 +34,11 @@ cp backend/.env.example backend/.env
 ```bash
 cd backend && docker compose up -d
 ```
+**Access database** 
+
+```
+docker exec werewolf-db psql -U werewolf -d werewolf -c
+```
 
 **2. Backend**
 
@@ -184,7 +189,29 @@ WHERE game_id = 1;
 
 ## E2E tests
 
-at `werewolf-simple/frontend` folder 
+### Full 12-player regression (one command)
+
+Regression harness for the complete game flow — 12 players, sheriff
+election, badge award, nights + days + revotes + GAME_OVER — for both
+CLASSIC and HARD_MODE. Run this before shipping any change to the night
+coroutine, voting pipeline, audio service, or room/game REST contracts:
+
+```bash
+./scripts/run-e2e-full-flow.sh
+# --only-classic / --only-hard  to run one scenario
+# --keep-report                  to open the HTML report at the end
+```
+
+Full documentation + regression-check reference:
+[`docs/e2e-evidence/README.md`](docs/e2e-evidence/README.md).
+
+Each run drops timestamped screenshots under
+`docs/e2e-evidence/run-<date_time>/` so you can diff two runs or share a
+specific run as evidence.
+
+### Individual real-backend specs
+
+at `werewolf-simple/frontend` folder
 
 - Single file
 

@@ -1,28 +1,35 @@
 package com.werewolf.unit.service
 
+import com.werewolf.audio.RoleRegistry
+import com.werewolf.audio.impl.*
 import com.werewolf.model.DaySubPhase
 import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
+import com.werewolf.model.PlayerRole
 import com.werewolf.model.Room
-import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.service.AudioService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.Mock
-import org.mockito.junit.jupiter.MockitoExtension
 
-@ExtendWith(MockitoExtension::class)
 class AudioPhaseMappingTest {
-
-    @Mock lateinit var nightPhaseRepository: NightPhaseRepository
 
     private lateinit var audioService: AudioService
 
     @BeforeEach
     fun setUp() {
-        audioService = AudioService(nightPhaseRepository)
+        // Manually register role audio configs for testing
+        RoleRegistry.registerAll(listOf(
+            WerewolfAudioConfig(),
+            SeerAudioConfig(),
+            WitchAudioConfig(),
+            GuardAudioConfig(),
+            HunterAudioConfig(),
+            IdiotAudioConfig(),
+            VillagerAudioConfig()
+        ))
+        
+        audioService = AudioService()
     }
 
     // ── Audio File to Phase Mapping Tests ─────────────────────────────────────
@@ -35,16 +42,15 @@ class AudioPhaseMappingTest {
         // When transitioning directly to WEREWOLF_PICK, it also includes role audio
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
-            oldPhase = GamePhase.DAY,
+            oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
             room = room,
         )
 
-        // Both "goes_dark_close_eyes.mp3" and "wolf_open_eyes.mp3" are included when transitioning to WEREWOLF_PICK
-        assertThat(sequence.audioFiles).contains("goes_dark_close_eyes.mp3")
-        assertThat(sequence.audioFiles).contains("wolf_open_eyes.mp3")
+        // wolf_open_eyes is now broadcast by the night coroutine, not by calculatePhaseTransition
+        assertThat(sequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
         assertThat(sequence.phase).isEqualTo(GamePhase.NIGHT)
     }
 
@@ -56,14 +62,14 @@ class AudioPhaseMappingTest {
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
         )
 
-        assertThat(sequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
-        assertThat(sequence.phase).isEqualTo(GamePhase.DAY)
+        assertThat(sequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
+        assertThat(sequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
     }
 
     @Test
@@ -106,16 +112,16 @@ class AudioPhaseMappingTest {
     }
 
     @Test
-    fun `Audio file mapping - seer_close_eyes mp3 must be used for both SEER_PICK and SEER_RESULT exits`() {
-        // Test: seer_close_eyes.mp3 should appear when leaving SEER_PICK
+    fun `Audio file mapping - seer_close_eyes mp3 must only be used when leaving SEER_RESULT`() {
+        // Test: seer_close_eyes.mp3 should NOT appear when leaving SEER_PICK
         val sequence1 = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
-        assertThat(sequence1.audioFiles).containsExactly("seer_close_eyes.mp3")
+        assertThat(sequence1.audioFiles).isEmpty()
 
-        // Test: seer_close_eyes.mp3 should also appear when leaving SEER_RESULT
+        // Test: seer_close_eyes.mp3 should appear when leaving SEER_RESULT
         val sequence2 = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_RESULT,
@@ -169,7 +175,7 @@ class AudioPhaseMappingTest {
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
@@ -230,7 +236,7 @@ class AudioPhaseMappingTest {
         // Test: Main phase transitions should have higher priority
         val dayToNightSequence = audioService.calculatePhaseTransition(
             gameId = 1,
-            oldPhase = GamePhase.DAY,
+            oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
@@ -273,7 +279,7 @@ class AudioPhaseMappingTest {
         // Test NIGHT phase
         val nightSequence = audioService.calculatePhaseTransition(
             gameId = 1,
-            oldPhase = GamePhase.DAY,
+            oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
             oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
@@ -285,12 +291,12 @@ class AudioPhaseMappingTest {
         val daySequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
         )
-        assertThat(daySequence.phase).isEqualTo(GamePhase.DAY)
+        assertThat(daySequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
 
         // Test non-audio phase
         val nonAudioSequence = audioService.calculatePhaseTransition(
@@ -335,7 +341,7 @@ class AudioPhaseMappingTest {
         val daySequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = room,
@@ -361,11 +367,11 @@ class AudioPhaseMappingTest {
         val allSequences = listOf(
             // Main phase transitions
             audioService.calculatePhaseTransition(
-                gameId = 1, oldPhase = GamePhase.DAY, newPhase = GamePhase.NIGHT,
+                gameId = 1, oldPhase = GamePhase.DAY_DISCUSSION, newPhase = GamePhase.NIGHT,
                 oldSubPhase = null, newSubPhase = NightSubPhase.WEREWOLF_PICK.name, room = room(),
             ),
             audioService.calculatePhaseTransition(
-                gameId = 1, oldPhase = GamePhase.NIGHT, newPhase = GamePhase.DAY,
+                gameId = 1, oldPhase = GamePhase.NIGHT, newPhase = GamePhase.DAY_DISCUSSION,
                 oldSubPhase = NightSubPhase.GUARD_PICK.name, newSubPhase = DaySubPhase.RESULT_HIDDEN.name, room = room(),
             ),
             // Night sub-phase transitions

@@ -17,7 +17,7 @@ class HunterHandler : RoleHandler {
     override val role = PlayerRole.HUNTER
 
     override fun acceptedActions(phase: GamePhase, subPhase: String?): Set<ActionType> =
-        if (phase == GamePhase.VOTING && subPhase == VotingSubPhase.HUNTER_SHOOT.name)
+        if (phase == GamePhase.DAY_VOTING && subPhase == VotingSubPhase.HUNTER_SHOOT.name)
             setOf(ActionType.HUNTER_SHOOT, ActionType.HUNTER_PASS)
         else emptySet()
 

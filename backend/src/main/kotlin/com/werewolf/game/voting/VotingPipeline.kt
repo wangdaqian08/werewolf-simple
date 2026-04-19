@@ -5,6 +5,8 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.HardModeCounterplay
+import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
 import com.werewolf.model.*
@@ -12,6 +14,7 @@ import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.VoteRepository
+import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
 import org.springframework.stereotype.Service
@@ -30,10 +33,11 @@ class VotingPipeline(
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
     private val nightOrchestrator: NightOrchestrator,
+    private val actionLogService: ActionLogService,
 ) {
     @Transactional
     fun submitVote(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.VOTING)
+        if (context.game.phase != GamePhase.DAY_VOTING)
             return GameActionResult.Rejected("Not in voting phase")
         if (context.game.subPhase !in setOf(VotingSubPhase.VOTING.name, VotingSubPhase.RE_VOTING.name))
             return GameActionResult.Rejected("Voting is not open")
@@ -68,7 +72,7 @@ class VotingPipeline(
 
     @Transactional
     fun unvote(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.VOTING)
+        if (context.game.phase != GamePhase.DAY_VOTING)
             return GameActionResult.Rejected("Not in voting phase")
         if (context.game.subPhase !in setOf(VotingSubPhase.VOTING.name, VotingSubPhase.RE_VOTING.name))
             return GameActionResult.Rejected("Voting is not open")
@@ -88,7 +92,7 @@ class VotingPipeline(
     fun revealTally(request: GameActionRequest, context: GameContext): GameActionResult {
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can reveal tally")
-        if (context.game.phase != GamePhase.VOTING)
+        if (context.game.phase != GamePhase.DAY_VOTING)
             return GameActionResult.Rejected("Not in voting phase")
         if (context.game.subPhase !in setOf(VotingSubPhase.VOTING.name, VotingSubPhase.RE_VOTING.name))
             return GameActionResult.Rejected("Not in a voting sub-phase")
@@ -109,8 +113,17 @@ class VotingPipeline(
 
         // Prepare events to send after transaction commit
         val eventsToSend = mutableListOf<DomainEvent>()
-        eventsToSend.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTE_RESULT.name))
+        eventsToSend.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name))
         eventsToSend.add(DomainEvent.VoteTally(context.gameId, eliminated, tally))
+
+        // Record vote result in action log
+        val eliminatedRole = eliminated?.let {
+            gamePlayerRepository.findByGameIdAndUserId(context.gameId, it).orElse(null)?.role
+        }
+        actionLogService.recordVoteResult(
+            context.gameId, context.game.dayNumber, votes, tally,
+            context.game.sheriffUserId, eliminated, eliminatedRole
+        )
 
         // Collect events from elimination process
         if (eliminated != null) {
@@ -141,7 +154,7 @@ class VotingPipeline(
     fun continueToNight(request: GameActionRequest, context: GameContext): GameActionResult {
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can advance")
-        if (context.game.phase != GamePhase.VOTING)
+        if (context.game.phase != GamePhase.DAY_VOTING)
             return GameActionResult.Rejected("Not in voting phase")
         if (context.game.subPhase != VotingSubPhase.VOTE_RESULT.name)
             return GameActionResult.Rejected("Not in VOTE_RESULT sub-phase")
@@ -151,7 +164,7 @@ class VotingPipeline(
 
     @Transactional
     fun handleHunterShoot(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.VOTING)
+        if (context.game.phase != GamePhase.DAY_VOTING)
             return GameActionResult.Rejected("Not in voting phase")
         if (context.game.subPhase != VotingSubPhase.HUNTER_SHOOT.name)
             return GameActionResult.Rejected("Not in HUNTER_SHOOT sub-phase")
@@ -171,6 +184,7 @@ class VotingPipeline(
 
                 targetPlayer.alive = false
                 gamePlayerRepository.save(targetPlayer)
+                actionLogService.recordHunterShot(context.gameId, context.game.dayNumber, actor.userId, target)
 
                 // Record in elimination history
                 eliminationHistoryRepository.findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
@@ -195,7 +209,7 @@ class VotingPipeline(
                     gameRepository.save(context.game)
                     stompPublisher.broadcastGame(
                         context.gameId,
-                        DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.BADGE_HANDOVER.name)
+                        DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.BADGE_HANDOVER.name)
                     )
                     return GameActionResult.Success()
                 }
@@ -211,7 +225,7 @@ class VotingPipeline(
                     gameRepository.save(context.game)
                     stompPublisher.broadcastGame(
                         context.gameId,
-                        DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.BADGE_HANDOVER.name)
+                        DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.BADGE_HANDOVER.name)
                     )
                     return GameActionResult.Success()
                 }
@@ -225,7 +239,7 @@ class VotingPipeline(
 
     @Transactional
     fun handleBadge(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.VOTING)
+        if (context.game.phase != GamePhase.DAY_VOTING)
             return GameActionResult.Rejected("Not in voting phase")
         if (context.game.subPhase != VotingSubPhase.BADGE_HANDOVER.name)
             return GameActionResult.Rejected("Not in BADGE_HANDOVER sub-phase")
@@ -260,7 +274,7 @@ class VotingPipeline(
                 )
                 stompPublisher.broadcastGame(
                     context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTE_RESULT.name)
+                    DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
                 )
             }
 
@@ -278,7 +292,7 @@ class VotingPipeline(
                 )
                 stompPublisher.broadcastGame(
                     context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTE_RESULT.name)
+                    DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
                 )
             }
 
@@ -299,7 +313,12 @@ class VotingPipeline(
     /** Check win condition; if no winner, stay in VOTE_RESULT for host to proceed to night. */
     private fun afterElimination(context: GameContext) {
         val updatedContext = contextLoader.load(context.gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+        val winner = winConditionChecker.check(
+            alivePlayers = updatedContext.alivePlayers,
+            mode = updatedContext.room.winCondition,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = buildCounterplay(updatedContext),
+        )
         if (winner != null) {
             endGame(updatedContext, winner)
         }
@@ -309,7 +328,12 @@ class VotingPipeline(
     /** After hunter acts (no badge needed): check win, then go directly to night. */
     private fun afterHunterAct(context: GameContext) {
         val updatedContext = contextLoader.load(context.gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+        val winner = winConditionChecker.check(
+            alivePlayers = updatedContext.alivePlayers,
+            mode = updatedContext.room.winCondition,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = buildCounterplay(updatedContext),
+        )
         if (winner != null) {
             endGame(updatedContext, winner)
         } else {
@@ -361,7 +385,12 @@ class VotingPipeline(
             modifier.extraEvents.forEach { events.add(it) }
             // After elimination: check win condition
             val updatedContext = contextLoader.load(context.gameId)
-            val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+            val winner = winConditionChecker.check(
+                alivePlayers = updatedContext.alivePlayers,
+                mode = updatedContext.room.winCondition,
+                trigger = WinCheckTrigger.POST_VOTE,
+                counterplay = buildCounterplay(updatedContext),
+            )
             if (winner != null) {
                 endGame(updatedContext, winner, events)
             }
@@ -373,10 +402,16 @@ class VotingPipeline(
             player.canVote = false
             player.idiotRevealed = true
             gamePlayerRepository.save(player)
+            actionLogService.recordIdiotReveal(context.gameId, context.game.dayNumber, targetId)
             events.add(DomainEvent.IdiotRevealed(context.gameId, targetId))
             // After elimination: check win condition
             val updatedContext = contextLoader.load(context.gameId)
-            val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+            val winner = winConditionChecker.check(
+                alivePlayers = updatedContext.alivePlayers,
+                mode = updatedContext.room.winCondition,
+                trigger = WinCheckTrigger.POST_VOTE,
+                counterplay = buildCounterplay(updatedContext),
+            )
             if (winner != null) {
                 endGame(updatedContext, winner, events)
             }
@@ -401,7 +436,7 @@ class VotingPipeline(
         if (player.role == PlayerRole.HUNTER) {
             context.game.subPhase = VotingSubPhase.HUNTER_SHOOT.name
             gameRepository.save(context.game)
-            events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.HUNTER_SHOOT.name))
+            events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.HUNTER_SHOOT.name))
             return
         }
 
@@ -409,13 +444,18 @@ class VotingPipeline(
         if (targetId == context.game.sheriffUserId) {
             context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
             gameRepository.save(context.game)
-            events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.BADGE_HANDOVER.name))
+            events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.BADGE_HANDOVER.name))
             return
         }
 
         // After elimination: check win condition
         val updatedContext = contextLoader.load(context.gameId)
-        val winner = winConditionChecker.check(updatedContext.alivePlayers, updatedContext.room.winCondition)
+        val winner = winConditionChecker.check(
+            alivePlayers = updatedContext.alivePlayers,
+            mode = updatedContext.room.winCondition,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = buildCounterplay(updatedContext),
+        )
         if (winner != null) {
             endGame(updatedContext, winner, events)
         }
@@ -429,7 +469,7 @@ class VotingPipeline(
 
         context.game.subPhase = VotingSubPhase.RE_VOTING.name
         gameRepository.save(context.game)
-        events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.RE_VOTING.name))
+        events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.RE_VOTING.name))
     }
 
     private fun processGoToNightWithEventCollection(context: GameContext, events: MutableList<DomainEvent>) {
@@ -438,8 +478,34 @@ class VotingPipeline(
             ?.guardTargetUserId
 
         val newDayNumber = context.game.dayNumber + 1
-        // nightOrchestrator.initNight handles its own transaction and event broadcasting
-        // We don't need to collect its events here
         nightOrchestrator.initNight(context.gameId, newDayNumber, currentGuardTarget)
+    }
+
+    /**
+     * Computes HARD_MODE counterplay flags from the just-loaded GameContext.
+     * Read-your-writes on EliminationHistory is guaranteed because callers run inside
+     * the same @Transactional where any hunter-shot row was just saved — JPA auto-flushes
+     * before the query.
+     */
+    private fun buildCounterplay(context: GameContext): HardModeCounterplay {
+        val alive = context.alivePlayers
+        val hasGuard = alive.any { it.role == PlayerRole.GUARD }
+
+        val hasWitchWithPotions = run {
+            if (alive.none { it.role == PlayerRole.WITCH }) return@run false
+            val antidoteUnused = context.allNightPhases.none { it.witchAntidoteUsed }
+            val poisonUnused = context.allNightPhases.none { it.witchPoisonTargetUserId != null }
+            antidoteUnused || poisonUnused
+        }
+
+        val hasHunterWithBullet = run {
+            if (alive.none { it.role == PlayerRole.HUNTER }) return@run false
+            val hunterHasShot = eliminationHistoryRepository
+                .findByGameId(context.gameId)
+                .any { it.hunterShotUserId != null }
+            !hunterHasShot
+        }
+
+        return HardModeCounterplay(hasGuard, hasWitchWithPotions, hasHunterWithBullet)
     }
 }

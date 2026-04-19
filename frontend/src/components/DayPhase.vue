@@ -86,12 +86,26 @@
       </PlayerSlot>
     </section>
 
+    <!-- Floating action log button: hidden until host reveals result to prevent spoilers -->
+    <button
+      v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
+      class="log-fab"
+      aria-label="游戏记录"
+      @click="showLog = true"
+    >
+      📋
+    </button>
+
+    <!-- Action log drawer -->
+    <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
+
     <!-- Footer -->
     <footer class="day-footer">
       <template v-if="viewRole === 'HOST'">
         <div v-if="dayPhase.subPhase === 'RESULT_HIDDEN'" class="vote-actions">
           <button
             class="btn btn-primary vote-btn"
+            data-testid="day-reveal-result"
             :disabled="actionPending"
             @click="emit('revealResult')"
           >
@@ -101,6 +115,7 @@
         <div v-else-if="dayPhase.subPhase === 'RESULT_REVEALED'" class="vote-actions">
           <button
             class="btn btn-gold vote-btn"
+            data-testid="day-start-vote"
             :disabled="actionPending"
             @click="emit('startVote')"
           >
@@ -134,14 +149,18 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { DayPhaseState, GamePlayer } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
+import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 
 const props = defineProps<{
+  gameId: number
   dayPhase: DayPhaseState
   players: GamePlayer[]
   myUserId: string
   isHost: boolean
   actionPending?: boolean
 }>()
+
+const showLog = ref(false)
 
 const emit = defineEmits<{
   revealResult: []
@@ -279,5 +298,23 @@ function onTap(player: GamePlayer) {
   grid-template-columns: repeat(4, 1fr);
   gap: 0.5rem;
   padding: 0 1rem 1rem;
+}
+
+.log-fab {
+  position: fixed;
+  bottom: 88px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--paper, #f5f0e8);
+  border: 1px solid var(--border, #ccc2b0);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 </style>

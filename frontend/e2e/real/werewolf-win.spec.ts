@@ -20,7 +20,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
   test.setTimeout(180_000)
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(30_000)
+    testInfo.setTimeout(120_000)
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
@@ -83,7 +83,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       if (await slot.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await slot.click()
         await wolfPage.waitForTimeout(500)
-        await wolfPage.getByRole('button', { name: /确认袭击|Confirm/i }).click()
+        await wolfPage.getByTestId('wolf-confirm-kill').click()
       }
     }
 
@@ -126,9 +126,9 @@ test.describe('Werewolf win — result screen shows all roles', () => {
           .catch(() => false)
       ) {
         await seerPage.locator('.player-grid .slot-alive').first().click()
-        await seerPage.getByRole('button', { name: /查验|Check/i }).click()
+        await seerPage.getByTestId('seer-check').click()
         await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-        await seerPage.getByRole('button', { name: /查验完毕|Done/i }).click()
+        await seerPage.getByTestId('seer-done').click()
       }
     }
 
@@ -152,13 +152,11 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
     if (!witchDone && witchPage) {
       if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
-        const passBtn = witchPage.getByRole('button', { name: /放弃/ })
+        const passBtn = witchPage.getByTestId('switch-pass-antidote')
         if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
         await witchPage.waitForTimeout(500)
-        const skipBtn = witchPage.getByRole('button', { name: /不用/ })
+        const skipBtn = witchPage.getByTestId('witch-skip')
         if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
-        const doneBtn = witchPage.getByRole('button', { name: /完成操作|Done/i })
-        if (await doneBtn.isVisible().catch(() => false)) await doneBtn.click()
       }
     }
 
@@ -187,7 +185,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       ) {
         // Pick LAST alive player to avoid protecting the wolf's target (which is first)
         await guardPage.locator('.player-grid .slot-alive').last().click()
-        await guardPage.getByRole('button', { name: /确认保护|Confirm/i }).click()
+        await guardPage.getByTestId('guard-confirm-protect').click()
       }
     }
   }
@@ -197,14 +195,14 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     const hostPage = ctx.hostPage
 
     // Host reveals night result
-    const revealBtn = hostPage.getByRole('button', { name: /显示结果|Result/i })
+    const revealBtn = hostPage.getByTestId('day-reveal-result')
     if (await revealBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
       await revealBtn.click()
       await hostPage.waitForTimeout(1_000)
     }
 
     // Host starts vote
-    const startVoteBtn = hostPage.getByRole('button', { name: /开始投票|Start Vote/i })
+    const startVoteBtn = hostPage.getByTestId('day-start-vote')
     if (await startVoteBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
       await startVoteBtn.click()
       await hostPage.waitForTimeout(1_000)
@@ -235,7 +233,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
 
   test('1. Start night — all browsers transition', async ({}, testInfo) => {
     const hostPage = ctx.hostPage
-    const startNightBtn = hostPage.getByRole('button', { name: /开始夜晚|Start Night/i })
+    const startNightBtn = hostPage.getByTestId('start-night')
     if (!(await startNightBtn.isVisible().catch(() => false))) {
       await startNightBtn.waitFor({ state: 'visible', timeout: 10_000 })
     }

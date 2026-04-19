@@ -15,6 +15,16 @@ frontend/.vite/
 frontend/playwright-report/
 frontend/test-results/
 frontend/*.iml
+frontend/*.tsbuildinfo
+
+# ─── Root-level scratch / build artifacts (nothing at repo root should be tracked) ─
+/node_modules/
+/test-results/
+/backend_log.md
+/console_log.md
+/simple-game-flow.md
+/minor-changes/
+/.claude/
 
 # ─── IDE ───────────────────────────────────────────────────────────────────────
 .idea/

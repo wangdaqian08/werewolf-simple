@@ -53,6 +53,7 @@ class VotingPipelineSheriffWeightTest {
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
+        actionLogService = mock(),
     )
 
     private val gameId = 1
@@ -64,7 +65,7 @@ class VotingPipelineSheriffWeightTest {
     private fun game(subPhase: String = VotingSubPhase.VOTING.name, sheriff: String? = sheriffId) =
         Game(roomId = 1, hostUserId = hostId).also {
             val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
-            it.phase = GamePhase.VOTING
+            it.phase = GamePhase.DAY_VOTING
             it.subPhase = subPhase
             it.dayNumber = 1
             it.sheriffUserId = sheriff
@@ -123,7 +124,7 @@ class VotingPipelineSheriffWeightTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(sheriff, playerA, playerB, playerC)
         stubGamePlayerRepository(sheriff, playerA, playerB, playerC)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         // Execute: Host reveals tally
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
@@ -157,7 +158,7 @@ class VotingPipelineSheriffWeightTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(sheriff, playerA, playerB, playerC)
         stubGamePlayerRepository(sheriff, playerA, playerB, playerC)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         // Execute: Host reveals tally
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
@@ -190,7 +191,7 @@ class VotingPipelineSheriffWeightTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(sheriff, playerA, playerB)
         stubGamePlayerRepository(sheriff, playerA, playerB)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         // Execute
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
@@ -221,7 +222,7 @@ class VotingPipelineSheriffWeightTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(sheriff, playerA, playerB)
         stubGamePlayerRepository(sheriff, playerA, playerB)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         // Execute
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
@@ -258,7 +259,7 @@ class VotingPipelineSheriffWeightTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(sheriff, playerA, playerB)
         stubGamePlayerRepository(sheriff, playerA, playerB)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         // Execute
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
@@ -287,7 +288,7 @@ class VotingPipelineSheriffWeightTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(sheriff, playerA)
         stubGamePlayerRepository(sheriff, playerA)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         // Execute
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
@@ -328,7 +329,7 @@ class VotingPipelineSheriffWeightTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(sheriff, playerA, playerB, playerC)
         stubGamePlayerRepository(sheriff, playerA, playerB, playerC)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         // Execute
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
@@ -362,7 +363,7 @@ class VotingPipelineSheriffWeightTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(sheriff, playerA, playerB)
         stubGamePlayerRepository(sheriff, playerA, playerB)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         // Execute
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
@@ -415,7 +416,7 @@ class VotingPipelineSheriffWeightTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         stubLoader(sheriff1, sheriff2, playerA)
         stubGamePlayerRepository(sheriff1, sheriff2, playerA)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         // Execute
         val result = votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)

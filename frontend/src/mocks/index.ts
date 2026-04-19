@@ -7,6 +7,7 @@ import {
   makeNightScenario,
   makeRoleRevealState,
   makeVotingScenario,
+  MOCK_ACTION_LOG,
   MOCK_DAY_SCENARIO_ALIVE_HIDDEN,
   MOCK_DAY_SCENARIO_ALIVE_REVEALED,
   MOCK_DAY_SCENARIO_DEAD,
@@ -77,13 +78,22 @@ function makeAudioSequence(
 function phaseAudio(newPhase: GamePhase, subPhase?: string | null): AudioSequence {
   const files: string[] = []
   if (newPhase === 'NIGHT') files.push('goes_dark_close_eyes.mp3')
-  if (newPhase === 'DAY') files.push('day_time.mp3')
+  if (newPhase === 'DAY_DISCUSSION') {
+    files.push('rooster_crowing.mp3')
+    files.push('day_time.mp3')
+  }
   return makeAudioSequence(newPhase, subPhase ?? null, files, 10)
 }
 
 function nightSubPhaseAudio(oldSubPhase: string | null, newSubPhase: string): AudioSequence {
   const files: string[] = []
-  if (oldSubPhase && oldSubPhase !== 'WAITING' && CLOSE_EYES[oldSubPhase]) {
+  // Skip close-eyes when entering SEER_RESULT (seer still awake viewing result)
+  if (
+    oldSubPhase &&
+    oldSubPhase !== 'WAITING' &&
+    newSubPhase !== 'SEER_RESULT' &&
+    CLOSE_EYES[oldSubPhase]
+  ) {
     files.push(CLOSE_EYES[oldSubPhase])
   }
   if (OPEN_EYES[newSubPhase]) {
@@ -304,7 +314,7 @@ export function setupMocks() {
   mock.onPost('/debug/sheriff/exit').reply(() => {
     mockGameState = {
       ...mockGameState,
-      phase: 'DAY',
+      phase: 'DAY_DISCUSSION',
       sheriffElection: undefined,
       dayPhase: makeDayHidden(),
     }
@@ -341,7 +351,7 @@ export function setupMocks() {
     const { preset } = JSON.parse(config.data ?? '{}')
     const factory = DAY_PRESET_FACTORIES[preset]
     if (!factory) return [400, { error: 'Unknown preset' }]
-    mockGameState = { ...mockGameState, phase: 'DAY', dayPhase: factory() }
+    mockGameState = { ...mockGameState, phase: 'DAY_DISCUSSION', dayPhase: factory() }
     pushGameStateUpdate()
     return [200]
   })
@@ -350,7 +360,7 @@ export function setupMocks() {
   mock.onPost('/debug/day/reveal').reply(() => {
     mockGameState = {
       ...mockGameState,
-      phase: 'DAY',
+      phase: 'DAY_DISCUSSION',
       dayPhase: makeDayRevealed(),
     }
     pushGameStateUpdate()
@@ -378,11 +388,11 @@ export function setupMocks() {
     const nextDay = (mockGameState.dayNumber ?? 1) + 1
     mockGameState = {
       ...mockGameState,
-      phase: 'DAY',
+      phase: 'DAY_DISCUSSION',
       dayNumber: nextDay,
       nightPhase: undefined,
       dayPhase: makeDayHidden(),
-      audioSequence: phaseAudio('DAY'),
+      audioSequence: phaseAudio('DAY_DISCUSSION'),
     }
     pushGameStateUpdate()
     return [200]
@@ -473,6 +483,7 @@ export function setupMocks() {
   // ── Game ──────────────────────────────────────────────────────────────────────
   mock.onGet(/\/game\/[^/]+\/state/).reply(() => [200, mockGameState])
   mock.onGet(/\/game\/result/).reply((_config) => [200, MOCK_GAME_RESULT])
+  mock.onGet(/\/game\/[^/]+\/events/).reply(() => [200, MOCK_ACTION_LOG])
   mock.onPost('/game/action').reply((config) => {
     const { actionType, targetId, payload } = JSON.parse(config.data ?? '{}')
     if (mockGameState.phase === 'ROLE_REVEAL') {
@@ -821,7 +832,7 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       }
-    } else if (mockGameState.phase === 'DAY') {
+    } else if (mockGameState.phase === 'DAY_DISCUSSION') {
       if (actionType === 'REVEAL_NIGHT_RESULT') {
         mockGameState = {
           ...mockGameState,
@@ -837,7 +848,7 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'DAY_ADVANCE') {
-        const voting = makeVotingScenario('VOTING')
+        const voting = makeVotingScenario('DAY_VOTING')
         mockGameState = {
           ...voting,
           hostId: mockGameState.hostId,
@@ -845,7 +856,7 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       }
-    } else if (mockGameState.phase === 'VOTING' && mockGameState.votingPhase) {
+    } else if (mockGameState.phase === 'DAY_VOTING' && mockGameState.votingPhase) {
       const vp = mockGameState.votingPhase
       if (actionType === 'VOTING_SELECT') {
         mockGameState = {

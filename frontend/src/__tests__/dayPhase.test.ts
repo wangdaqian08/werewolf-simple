@@ -1,0 +1,55 @@
+/**
+ * DayPhase component tests.
+ *
+ * Key regression: the game log (📋) button must be hidden during RESULT_HIDDEN
+ * to prevent players from reading elimination history before the host reveals it.
+ */
+import { describe, it, expect, beforeEach } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import DayPhase from '@/components/DayPhase.vue'
+import type { DayPhaseState, GamePlayer } from '@/types'
+
+const PLAYERS: GamePlayer[] = [
+  { userId: 'u1', nickname: 'Alice', seatIndex: 1, isAlive: true, isSheriff: false },
+  { userId: 'u2', nickname: 'Bob', seatIndex: 2, isAlive: false, isSheriff: false },
+]
+
+function makeDay(subPhase: 'RESULT_HIDDEN' | 'RESULT_REVEALED'): DayPhaseState {
+  return {
+    subPhase,
+    dayNumber: 2,
+    phaseDeadline: Date.now() + 60000,
+    phaseStarted: Date.now() - 5000,
+    canVote: true,
+    nightResult: { killedPlayers: [] },
+  }
+}
+
+const BASE_PROPS = {
+  gameId: 1,
+  players: PLAYERS,
+  myUserId: 'u1',
+  isHost: false,
+  actionPending: false,
+}
+
+describe('DayPhase — game log button visibility', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('RESULT_HIDDEN: log button is NOT rendered (prevents spoiling night result)', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_HIDDEN') },
+    })
+    expect(wrapper.find('.log-fab').exists()).toBe(false)
+  })
+
+  it('RESULT_REVEALED: log button IS rendered', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_REVEALED') },
+    })
+    expect(wrapper.find('.log-fab').exists()).toBe(true)
+  })
+})

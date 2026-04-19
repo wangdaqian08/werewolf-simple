@@ -1,7 +1,11 @@
 package com.werewolf.model
 
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.persistence.*
 import org.hibernate.annotations.CreationTimestamp
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.LocalDateTime
 
 @Entity
@@ -42,6 +46,10 @@ class Room(
 
     @Column(name = "has_sheriff", nullable = false)
     val hasSheriff: Boolean = true,
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "config")
+    var config: GameConfig? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(name = "win_condition", nullable = false, length = 20)

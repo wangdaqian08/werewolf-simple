@@ -9,12 +9,16 @@ import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.repository.NightPhaseRepository
+import org.slf4j.LoggerFactory
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Order(2)
 @Component
 class SeerHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
+
+    private val log = LoggerFactory.getLogger(SeerHandler::class.java)
 
     override val role = PlayerRole.SEER
 
@@ -52,6 +56,20 @@ class SeerHandler(private val nightPhaseRepository: NightPhaseRepository) : Role
                 nightPhase.seerCheckedUserId = target
                 nightPhase.seerResultIsWerewolf = isWerewolf
                 nightPhaseRepository.save(nightPhase)
+                // [race] The HTTP write timestamp: this log line is the anchor for the
+                // NightOrchestrator's [race] read/save logs. If a coroutine's
+                // `read-before-save` for day N sub-phase SEER_RESULT logs seerChecked=null
+                // AFTER this line logged seerChecked=<target>, the afterCommit barrier
+                // failed to hold (either not installed, or @Transactional missing upstream).
+                log.info(
+                    "[race] SEER_CHECK wrote game={} day={} thread={} txActive={} seerChecked={} seerIsWolf={} (tx has NOT committed yet — afterCommit is what the coroutine must wait for)",
+                    context.gameId,
+                    nightPhase.dayNumber,
+                    Thread.currentThread().name,
+                    TransactionSynchronizationManager.isActualTransactionActive(),
+                    target,
+                    isWerewolf,
+                )
 
                 // Result is returned as an event — caller (NightOrchestrator) sends it privately
                 GameActionResult.Success(

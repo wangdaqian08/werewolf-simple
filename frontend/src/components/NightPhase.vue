@@ -36,7 +36,9 @@
     </div>
 
     <!-- ── WEREWOLF_PICK ──────────────────────────────────────────────── -->
-    <template v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF' && me?.isAlive">
+    <template
+      v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF' && me?.isAlive && !hasActed"
+    >
       <div v-if="nightPhase.teammates?.length" class="team-row">
         <span class="tr-label">队友：</span>
         <span v-for="(t, i) in nightPhase.teammates" :key="t" class="tr-name">
@@ -67,8 +69,9 @@
       <footer class="nf">
         <button
           class="btn btn-danger nf-btn"
+          data-testid="wolf-confirm-kill"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
-          @click="emit('confirm', localSelected)"
+          @click="confirmWolfKill"
         >
           确认袭击 Confirm
         </button>
@@ -101,6 +104,7 @@
       <footer class="nf">
         <button
           class="btn btn-danger nf-btn"
+          data-testid="seer-check"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="emit('confirm', localSelected)"
         >
@@ -112,7 +116,11 @@
     <!-- ── SEER_RESULT ────────────────────────────────────────────────── -->
     <template
       v-else-if="
-        subPhase === 'SEER_RESULT' && myRole === 'SEER' && nightPhase.seerResult && me?.isAlive
+        subPhase === 'SEER_RESULT' &&
+        myRole === 'SEER' &&
+        nightPhase.seerResult &&
+        me?.isAlive &&
+        !hasActed
       "
     >
       <div class="sr-wrap">
@@ -149,8 +157,9 @@
         <footer class="nf" style="margin-top: auto">
           <button
             class="btn btn-secondary nf-btn"
+            data-testid="seer-done"
             :disabled="actionPending"
-            @click="emit('confirm')"
+            @click="confirmSeerDone"
           >
             查验完毕 · Done
           </button>
@@ -159,7 +168,9 @@
     </template>
 
     <!-- ── WITCH_ACT ───────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'WITCH_ACT' && myRole === 'WITCH' && me?.isAlive">
+    <template
+      v-else-if="subPhase === 'WITCH_ACT' && myRole === 'WITCH' && me?.isAlive && !hasActed"
+    >
       <!-- Antidote — always visible when witch has it; grayed out after decision -->
       <div
         v-if="nightPhase.hasAntidote"
@@ -177,16 +188,18 @@
         </p>
         <div class="ws-row">
           <button
-            class="btn btn-success ws-btn"
+            class="btn btn-primary ws-btn"
+            data-testid="witch-antidote"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
-            @click="emit('witchAntidote')"
+            @click="confirmWitchAntidote"
           >
             使用解药
           </button>
           <button
             class="btn btn-secondary ws-btn"
+            data-testid="switch-pass-antidote"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
-            @click="emit('witchPassAntidote')"
+            @click="confirmWitchPassAntidote"
           >
             放弃
           </button>
@@ -225,18 +238,26 @@
           </section>
           <div class="ws-row">
             <button
-              class="btn btn-danger ws-btn"
+              class="btn btn-primary ws-btn"
+              data-testid="witch-poison-confirm"
               :disabled="!effectivePhase.selectedTargetId || actionPending"
-              @click="emit('witchPoison', effectivePhase.selectedTargetId!)"
+              @click="confirmWitchPoison(effectivePhase.selectedTargetId!)"
             >
               确认毒杀 Confirm
             </button>
-            <button class="btn btn-secondary ws-btn" @click="poisonMode = false">取消</button>
+            <button
+              class="btn btn-secondary ws-btn"
+              data-testid="poison-mode-cancel"
+              @click="poisonMode = false"
+            >
+              取消
+            </button>
           </div>
         </template>
         <div v-else class="ws-row">
           <button
             class="btn btn-danger ws-btn"
+            data-testid="use-poison"
             :disabled="!!nightPhase.poisonDecided || actionPending"
             @click="poisonMode = true"
           >
@@ -244,8 +265,9 @@
           </button>
           <button
             class="btn btn-secondary ws-btn"
+            data-testid="switch-pass-poison"
             :disabled="!!nightPhase.poisonDecided || actionPending"
-            @click="emit('witchPassPoison')"
+            @click="confirmWitchPassPoison"
           >
             不用
           </button>
@@ -261,8 +283,9 @@
         <div class="ws-row">
           <button
             class="btn btn-primary ws-btn"
+            data-testid="witch-skip"
             :disabled="actionPending"
-            @click="emit('witchSkip')"
+            @click="confirmWitchSkip"
           >
             完成操作 · Done
           </button>
@@ -271,7 +294,9 @@
     </template>
 
     <!-- ── GUARD_PICK ──────────────────────────────────────────────────── -->
-    <template v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD' && me?.isAlive">
+    <template
+      v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD' && me?.isAlive && !hasActed"
+    >
       <div class="pick-hint">
         选择守护目标 · Protect a player:
         <span v-if="nightPhase.previousGuardTargetId" class="guard-note">
@@ -304,8 +329,9 @@
         <!-- Guard confirm is RED per design -->
         <button
           class="btn btn-danger nf-btn"
+          data-testid="guard-confirm-protect"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
-          @click="emit('confirm', localSelected)"
+          @click="confirmGuardProtect"
         >
           确认保护 Confirm
         </button>
@@ -316,9 +342,19 @@
     <template v-else-if="subPhase !== 'WAITING'">
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
-        <div class="ss-title">请闭眼</div>
-        <div class="ss-en">Night is in progress...</div>
-        <div class="ss-sub">等待其他玩家行动 / Waiting for others</div>
+        <div class="ss-title" data-testid="sleep-screen-title">
+          {{ me && !me.isAlive ? '夜晚降临' : '请闭眼' }}
+        </div>
+        <div class="ss-en">
+          {{ me && !me.isAlive ? 'Night is coming...' : 'Night is in progress...' }}
+        </div>
+        <div class="ss-sub">
+          {{
+            me && !me.isAlive
+              ? '所有人请闭眼 / Everyone please close your eyes'
+              : '等待其他玩家行动 / Waiting for others'
+          }}
+        </div>
       </div>
     </template>
 
@@ -326,7 +362,7 @@
     <template v-else-if="subPhase === 'WAITING'">
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
-        <div class="ss-title">夜晚即将开始</div>
+        <div class="ss-title" data-testid="sleep-screen-title">夜晚即将开始</div>
         <div class="ss-en">Night is beginning...</div>
         <div class="ss-sub">所有人请闭眼 / Everyone please close your eyes</div>
       </div>
@@ -335,7 +371,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
@@ -371,6 +407,66 @@ const emit = defineEmits<{
 const subPhase = computed(() => props.nightPhase.subPhase)
 const poisonMode = ref(false)
 
+// ── Optimistic "I've acted" flag ───────────────────────────────────────────
+// When the current player clicks their final night-action button (confirm kill,
+// confirm seer result, confirm guard, confirm skip), flip this to true so the
+// role-specific template hides itself and the sleep-screen fallback renders
+// immediately — no need to wait for the backend's NightSubPhaseChanged
+// round-trip. The component remounts on the next sub-phase (the `:key` in
+// GameView.vue includes subPhase + dayNumber), so hasActed resets naturally.
+// Intentionally NOT applied to SEER_PICK (the click advances to SEER_RESULT,
+// which is a different screen on the same component — showing sleep in between
+// would flash for the seer).
+const hasActed = ref(false)
+
+function confirmWolfKill() {
+  hasActed.value = true
+  emit('confirm', localSelected.value)
+}
+function confirmSeerDone() {
+  hasActed.value = true
+  emit('confirm')
+}
+function confirmGuardProtect() {
+  hasActed.value = true
+  emit('confirm', localSelected.value)
+}
+function confirmWitchSkip() {
+  hasActed.value = true
+  emit('witchSkip')
+}
+
+// Witch has up to two potions and can decide each independently. Flip hasActed
+// only when the current click resolves the witch's FINAL pending decision —
+// otherwise the other potion panel would disappear behind the sleep screen.
+function witchActionIsFinal(otherPotionHeld: boolean, otherDecided: boolean) {
+  return !otherPotionHeld || otherDecided
+}
+function confirmWitchAntidote() {
+  if (witchActionIsFinal(!!props.nightPhase.hasPoison, !!props.nightPhase.poisonDecided)) {
+    hasActed.value = true
+  }
+  emit('witchAntidote')
+}
+function confirmWitchPassAntidote() {
+  if (witchActionIsFinal(!!props.nightPhase.hasPoison, !!props.nightPhase.poisonDecided)) {
+    hasActed.value = true
+  }
+  emit('witchPassAntidote')
+}
+function confirmWitchPoison(targetId: string) {
+  if (witchActionIsFinal(!!props.nightPhase.hasAntidote, !!props.nightPhase.antidoteDecided)) {
+    hasActed.value = true
+  }
+  emit('witchPoison', targetId)
+}
+function confirmWitchPassPoison() {
+  if (witchActionIsFinal(!!props.nightPhase.hasAntidote, !!props.nightPhase.antidoteDecided)) {
+    hasActed.value = true
+  }
+  emit('witchPassPoison')
+}
+
 // Current player (me)
 const me = computed(() => props.players.find((p) => p.userId === props.myUserId))
 
@@ -405,38 +501,6 @@ function selectPlayer(userId: string) {
   localSelected.value = userId
   emit('selectPlayer', userId)
 }
-
-// ── Seer auto-advance timer ───────────────────────────────────────────────────
-const seerCountdown = ref(30)
-let seerTimerId: ReturnType<typeof setInterval> | null = null
-
-watch(
-  () => props.nightPhase.subPhase,
-  (phase) => {
-    if (seerTimerId) {
-      clearInterval(seerTimerId)
-      seerTimerId = null
-    }
-    if (phase === 'SEER_RESULT') {
-      seerCountdown.value = 30
-      seerTimerId = setInterval(() => {
-        seerCountdown.value--
-        if (seerCountdown.value <= 0) {
-          clearInterval(seerTimerId!)
-          seerTimerId = null
-          emit('confirm') // auto-advance to WAITING
-        }
-      }, 1000)
-    } else {
-      seerCountdown.value = 30
-    }
-  },
-  { immediate: true },
-)
-
-onUnmounted(() => {
-  if (seerTimerId) clearInterval(seerTimerId)
-})
 
 // ── Role metadata ─────────────────────────────────────────────────────────────
 

@@ -20,7 +20,7 @@ class IdiotHandler(
     override val role = PlayerRole.IDIOT
 
     override fun acceptedActions(phase: GamePhase, subPhase: String?): Set<ActionType> =
-        if (phase == GamePhase.VOTING && subPhase == VotingSubPhase.VOTE_RESULT.name)
+        if (phase == GamePhase.DAY_VOTING && subPhase == VotingSubPhase.VOTE_RESULT.name)
             setOf(ActionType.IDIOT_REVEAL)
         else
             emptySet()

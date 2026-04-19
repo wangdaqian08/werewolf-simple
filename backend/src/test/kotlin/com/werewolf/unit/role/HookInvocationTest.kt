@@ -5,7 +5,6 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
-import com.werewolf.game.night.NightWaitingScheduler
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.EliminationModifier
 import com.werewolf.game.role.RoleHandler
@@ -33,7 +32,6 @@ class HookInvocationTest {
     @Mock lateinit var winConditionChecker: WinConditionChecker
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
-    @Mock lateinit var nightWaitingScheduler: NightWaitingScheduler
     @Mock lateinit var audioService: com.werewolf.service.AudioService
     @Mock lateinit var nightOrchestrator: NightOrchestrator
 
@@ -72,7 +70,7 @@ class HookInvocationTest {
         override fun acceptedActions(phase: GamePhase, subPhase: String?) = emptySet<ActionType>()
         override fun handle(action: GameActionRequest, context: GameContext) = GameActionResult.Success()
         override fun onDayEnter(context: GameContext) =
-            listOf(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY, "HOOK_FIRED_$role"))
+            listOf(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, "HOOK_FIRED_$role"))
     }
 
     /** Stub handler whose onEliminationPending cancels elimination with an extra event. */
@@ -83,7 +81,7 @@ class HookInvocationTest {
         override fun onEliminationPending(context: GameContext, targetId: String) =
             EliminationModifier(
                 cancelled = true,
-                extraEvents = listOf(DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, "VETO_$role"))
+                extraEvents = listOf(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, "VETO_$role"))
             )
     }
 
@@ -92,11 +90,14 @@ class HookInvocationTest {
         gameRepository = gameRepository,
         gamePlayerRepository = gamePlayerRepository,
         nightPhaseRepository = nightPhaseRepository,
+        eliminationHistoryRepository = eliminationHistoryRepository,
         winConditionChecker = winConditionChecker,
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
-        nightWaitingScheduler = nightWaitingScheduler,
         audioService = audioService,
+        coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
+        actionLogService = mock(),
+        timing = com.werewolf.config.GameTimingProperties(),
     )
 
     private fun makeVotingPipeline(handlers: List<RoleHandler>) = VotingPipeline(
@@ -109,6 +110,7 @@ class HookInvocationTest {
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
+        actionLogService = mock(),
     )
 
     // ── onDayEnter ───────────────────────────────────────────────────────────
@@ -125,13 +127,13 @@ class HookInvocationTest {
         val orchestrator = makeOrchestrator(listOf(wolfHandler, villagerHandler))
 
         whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
         // Mock audioService to avoid NullPointerException
         val mockAudioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-DAY",
-            phase = GamePhase.DAY,
+            phase = GamePhase.DAY_DISCUSSION,
             subPhase = DaySubPhase.RESULT_HIDDEN.name,
             audioFiles = listOf("day_time.mp3"),
             priority = 10,
@@ -140,7 +142,7 @@ class HookInvocationTest {
         whenever(audioService.calculatePhaseTransition(
             eq(gameId),
             eq(GamePhase.NIGHT),
-            eq(GamePhase.DAY),
+            eq(GamePhase.DAY_DISCUSSION),
             eq(null),
             eq(DaySubPhase.RESULT_HIDDEN.name),
             eq(initialCtx.room)
@@ -168,7 +170,7 @@ class HookInvocationTest {
         val orchestrator = makeOrchestrator(listOf(wolfHandler))
 
         whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(WinnerSide.WEREWOLF)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
         orchestrator.resolveNightKills(initialCtx, np)
@@ -188,7 +190,7 @@ class HookInvocationTest {
         val host = player(hostId, 0)
         val target = player("u1", 1, PlayerRole.VILLAGER)
         val context = GameContext(
-            game(GamePhase.VOTING, VotingSubPhase.VOTING.name), room(), listOf(host, target)
+            game(GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name), room(), listOf(host, target)
         )
 
         val cancellingHandler = cancellingEliminationHandler(PlayerRole.VILLAGER)
@@ -201,7 +203,7 @@ class HookInvocationTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
         // contextLoader needed for afterElimination after hook cancels
         whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         pipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
@@ -220,7 +222,7 @@ class HookInvocationTest {
         val host = player(hostId, 0)
         val target = player("u1", 1, PlayerRole.VILLAGER)
         val context = GameContext(
-            game(GamePhase.VOTING, VotingSubPhase.VOTING.name), room(), listOf(host, target)
+            game(GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name), room(), listOf(host, target)
         )
 
         // A handler that does NOT cancel
@@ -238,7 +240,7 @@ class HookInvocationTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
         whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(winConditionChecker.check(any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 
         pipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 

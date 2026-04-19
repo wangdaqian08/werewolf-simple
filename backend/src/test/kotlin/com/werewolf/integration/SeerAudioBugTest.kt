@@ -24,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Transactional
 class SeerAudioBugTest {
 
     @Autowired
@@ -98,8 +97,8 @@ class SeerAudioBugTest {
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
 
-        // Then: Should only contain "seer_close_eyes.mp3"
-        assertThat(audioSequence.audioFiles).containsExactly("seer_close_eyes.mp3")
+        // Then: Should be empty (seer_close_eyes.mp3 is only played when leaving SEER_RESULT)
+        assertThat(audioSequence.audioFiles).isEmpty()
         println("SEER_PICK -> SEER_RESULT: ${audioSequence.audioFiles}")
     }
 
@@ -117,6 +116,7 @@ class SeerAudioBugTest {
         println("SEER_RESULT -> WITCH_ACT: ${audioSequence.audioFiles}")
     }
 
+    // TODO unable to pass
     @Test
     fun `Complete seer workflow - verifies audio sequences for all transitions`() {
         println("\n=== Complete Seer Workflow Test ===")
@@ -129,13 +129,14 @@ class SeerAudioBugTest {
             hasSeer = true,
             hasWitch = true,
             hasGuard = true,
+            config = GameConfig.createDefault(),
         )
         val savedRoom = roomRepository.save(room)
         val game = Game(
             roomId = savedRoom.roomId!!,
             hostUserId = hostId,
         )
-        game.phase = GamePhase.DAY
+        game.phase = GamePhase.DAY_DISCUSSION
         game.dayNumber = 1
         val savedGame = gameRepository.save(game)
         val gameId = requireNotNull(savedGame.gameId) { "Game ID should not be null after save" }
@@ -152,7 +153,7 @@ class SeerAudioBugTest {
 
         // Step 2: Simulate WEREWOLF_PICK -> SEER_PICK
         println("\nStep 2: WEREWOLF_PICK -> SEER_PICK")
-        nightOrchestrator.advance(gameId, NightSubPhase.WEREWOLF_PICK)
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_PICK)
         val nightPhase2 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("  Sub-phase after WEREWOLF_PICK: ${nightPhase2?.subPhase}")
         assertThat(nightPhase2).isNotNull()
@@ -168,7 +169,7 @@ class SeerAudioBugTest {
 
         // Step 3: Simulate SEER_PICK -> SEER_RESULT (seer checks a player)
         println("\nStep 3: SEER_PICK -> SEER_RESULT (seer checks a player)")
-        nightOrchestrator.advance(gameId, NightSubPhase.SEER_PICK)
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_RESULT)
         val nightPhase3 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("  Sub-phase after SEER_PICK: ${nightPhase3?.subPhase}")
         assertThat(nightPhase3).isNotNull()
@@ -180,11 +181,11 @@ class SeerAudioBugTest {
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
         println("  Audio: ${audio2.audioFiles}")
-        assertThat(audio2.audioFiles).containsExactly("seer_close_eyes.mp3")
+        assertThat(audio2.audioFiles).isEmpty()
 
         // Step 4: Simulate SEER_RESULT -> WITCH_ACT (seer confirms and advances)
         println("\nStep 4: SEER_RESULT -> WITCH_ACT (seer confirms and advances)")
-        nightOrchestrator.advance(gameId, NightSubPhase.SEER_RESULT)
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.WITCH_ACT)
         val nightPhase4 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("  Sub-phase after SEER_RESULT: ${nightPhase4?.subPhase}")
         assertThat(nightPhase4).isNotNull()
@@ -237,14 +238,14 @@ class SeerAudioBugTest {
         val audioSequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
-            newPhase = GamePhase.DAY,
+            newPhase = GamePhase.DAY_DISCUSSION,
             oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             room = savedRoom,
         )
 
         // Then: Should contain "day_time.mp3"
-        assertThat(audioSequence.audioFiles).containsExactly("day_time.mp3","rooster_crowing.mp3")
+        assertThat(audioSequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
         println("NIGHT -> DAY: ${audioSequence.audioFiles}")
     }
 }

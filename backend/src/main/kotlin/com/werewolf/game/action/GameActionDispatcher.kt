@@ -5,7 +5,6 @@ import com.werewolf.game.phase.GamePhasePipeline
 import com.werewolf.game.role.RoleHandler
 import com.werewolf.game.voting.VotingPipeline
 import com.werewolf.model.ActionType
-import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
@@ -47,10 +46,7 @@ class GameActionDispatcher(
             // ── Night: werewolf ───────────────────────────────────────────────
             ActionType.WOLF_KILL -> {
                 val result = handlers.first { it.role == PlayerRole.WEREWOLF }.handle(request, context)
-                if (result is GameActionResult.Success) nightOrchestrator.advance(
-                    request.gameId,
-                    NightSubPhase.WEREWOLF_PICK
-                )
+                if (result is GameActionResult.Success) nightOrchestrator.submitAction(request.gameId)
                 result
             }
 
@@ -70,40 +66,30 @@ class GameActionDispatcher(
             ActionType.SEER_CHECK -> {
                 val result = handlers.first { it.role == PlayerRole.SEER }.handle(request, context)
                 if (result is GameActionResult.Success) {
-                    // Send seer result privately before advancing
+                    // Send seer result privately before signalling the coroutine
                     result.events.forEach { stompPublisher.sendPrivate(request.actorUserId, it) }
-                    nightOrchestrator.advance(request.gameId, NightSubPhase.SEER_PICK)
+                    nightOrchestrator.submitAction(request.gameId)
                 }
                 result
             }
 
             ActionType.SEER_CONFIRM -> {
                 val result = handlers.first { it.role == PlayerRole.SEER }.handle(request, context)
-                if (result is GameActionResult.Success) nightOrchestrator.advance(
-                    request.gameId,
-                    NightSubPhase.SEER_RESULT
-                )
+                if (result is GameActionResult.Success) nightOrchestrator.submitAction(request.gameId)
                 result
             }
 
             // Night: witch ──────────────────────────────────────────────────
             ActionType.WITCH_ACT -> {
                 val result = handlers.first { it.role == PlayerRole.WITCH }.handle(request, context)
-                if (result is GameActionResult.Success) {
-                    // Witch actions are now immediate - advance as soon as any decision is made
-                    // Antidote and poison are mutually exclusive
-                    nightOrchestrator.advance(request.gameId, NightSubPhase.WITCH_ACT)
-                }
+                if (result is GameActionResult.Success) nightOrchestrator.submitAction(request.gameId)
                 result
             }
 
             // ── Night: guard ──────────────────────────────────────────────────
             ActionType.GUARD_PROTECT, ActionType.GUARD_SKIP -> {
                 val result = handlers.first { it.role == PlayerRole.GUARD }.handle(request, context)
-                if (result is GameActionResult.Success) nightOrchestrator.advance(
-                    request.gameId,
-                    NightSubPhase.GUARD_PICK
-                )
+                if (result is GameActionResult.Success) nightOrchestrator.submitAction(request.gameId)
                 result
             }
             // ── Idiot reveal (day) ────────────────────────────────────────────

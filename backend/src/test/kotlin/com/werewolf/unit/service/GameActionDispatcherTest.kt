@@ -80,7 +80,7 @@ class GameActionDispatcherTest {
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_KILL, "u2"))
 
-            verify(nightOrchestrator).advance(gameId, NightSubPhase.WEREWOLF_PICK)
+            verify(nightOrchestrator).submitAction(gameId)
         }
 
         @Test
@@ -91,7 +91,7 @@ class GameActionDispatcherTest {
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_KILL, "u2"))
 
-            verify(nightOrchestrator, never()).advance(any(), any())
+            verify(nightOrchestrator, never()).submitAction(any())
         }
     }
 
@@ -142,7 +142,7 @@ class GameActionDispatcherTest {
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
-            verify(nightOrchestrator, never()).advance(any(), any())
+            verify(nightOrchestrator, never()).submitAction(any())
         }
 
         @Test
@@ -186,7 +186,7 @@ class GameActionDispatcherTest {
             makeDispatcher(listOf(seerHandler)).dispatch(req(seerActorId, ActionType.SEER_CHECK, "u2"))
 
             verify(stompPublisher).sendPrivate(seerActorId, seerResultEvent)
-            verify(nightOrchestrator).advance(gameId, NightSubPhase.SEER_PICK)
+            verify(nightOrchestrator).submitAction(gameId)
         }
 
         @Test
@@ -197,7 +197,7 @@ class GameActionDispatcherTest {
 
             makeDispatcher(listOf(seerHandler)).dispatch(req(seerActorId, ActionType.SEER_CHECK, "u2"))
 
-            verify(nightOrchestrator, never()).advance(any(), any())
+            verify(nightOrchestrator, never()).submitAction(any())
             verify(stompPublisher, never()).sendPrivate(any(), any())
         }
     }
@@ -212,7 +212,7 @@ class GameActionDispatcherTest {
 
         makeDispatcher(listOf(seerHandler)).dispatch(req(seerActorId, ActionType.SEER_CONFIRM))
 
-        verify(nightOrchestrator).advance(gameId, NightSubPhase.SEER_RESULT)
+        verify(nightOrchestrator).submitAction(gameId)
     }
 
     // ── WITCH_ACT routing ─────────────────────────────────────────────────────
@@ -225,7 +225,7 @@ class GameActionDispatcherTest {
 
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
-        verify(nightOrchestrator, never()).advance(any(), any())
+        verify(nightOrchestrator, never()).submitAction(any())
     }
 
     // ── GUARD routing ─────────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ class GameActionDispatcherTest {
 
         makeDispatcher(listOf(guardHandler)).dispatch(req("guard:001", ActionType.GUARD_PROTECT, "u2"))
 
-        verify(nightOrchestrator).advance(gameId, NightSubPhase.GUARD_PICK)
+        verify(nightOrchestrator).submitAction(gameId)
     }
 
     @Test
@@ -249,7 +249,7 @@ class GameActionDispatcherTest {
 
         makeDispatcher(listOf(guardHandler)).dispatch(req("guard:001", ActionType.GUARD_SKIP))
 
-        verify(nightOrchestrator).advance(gameId, NightSubPhase.GUARD_PICK)
+        verify(nightOrchestrator).submitAction(gameId)
     }
 
     @Test
@@ -260,7 +260,7 @@ class GameActionDispatcherTest {
 
         makeDispatcher(listOf(guardHandler)).dispatch(req("guard:001", ActionType.GUARD_PROTECT, "u2"))
 
-        verify(nightOrchestrator, never()).advance(any(), any())
+        verify(nightOrchestrator, never()).submitAction(any())
     }
 
     // ── WITCH_ACT auto-advance logic ─────────────────────────────────────────
@@ -292,7 +292,7 @@ class GameActionDispatcherTest {
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
         // 应该自动推进
-        verify(nightOrchestrator).advance(gameId, NightSubPhase.WITCH_ACT)
+        verify(nightOrchestrator).submitAction(gameId)
     }
 
     @Test
@@ -321,7 +321,7 @@ class GameActionDispatcherTest {
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
         // 应该推进
-        verify(nightOrchestrator).advance(gameId, NightSubPhase.WITCH_ACT)
+        verify(nightOrchestrator).submitAction(gameId)
     }
 
     @Test
@@ -351,7 +351,7 @@ class GameActionDispatcherTest {
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
         // 应该推进
-        verify(nightOrchestrator).advance(gameId, NightSubPhase.WITCH_ACT)
+        verify(nightOrchestrator).submitAction(gameId)
     }
 
     @Test
@@ -380,6 +380,6 @@ class GameActionDispatcherTest {
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
         // 应该推进
-        verify(nightOrchestrator).advance(gameId, NightSubPhase.WITCH_ACT)
+        verify(nightOrchestrator).submitAction(gameId)
     }
 }

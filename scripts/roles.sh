@@ -55,22 +55,57 @@ else
 fi
 
 BOTS_JSON=$(python3 -c "import json; print(json.dumps(json.load(open('$STATE_FILE'))['bots']))")
-# ALL_PLAYERS = bots + manually-logged-in users (added via: dev-login.sh <nick> --room <code>)
-ALL_PLAYERS_JSON=$(python3 -c "
-import json
-state = json.load(open('$STATE_FILE'))
-bots  = state['bots']
-users = state.get('users', [])
-for u in users:
-    u.setdefault('seat', 0)
-print(json.dumps(bots + users))
-")
 FIRST_TOKEN=$(echo "$BOTS_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['token'])")
 BOT_USER_IDS=$(echo "$BOTS_JSON" | python3 -c "
 import json,sys
 bots=json.load(sys.stdin)
 print(','.join(b['userId'] for b in bots))
 ")
+
+# ALL_PLAYERS = bots + manually-logged-in users (added via: dev-login.sh <nick> --room <code>)
+# Filter users to only those actually in the game (have valid seat from API)
+ALL_PLAYERS_JSON=$(python3 - "$STATE_FILE" "$FIRST_TOKEN" << 'PYEOF'
+import json, urllib.request, sys, base64
+
+path = sys.argv[1]
+token = sys.argv[2]
+
+state = json.load(open(path))
+bots = state['bots']
+users = state.get('users', [])
+
+# Get actual game players from API to validate users
+valid_user_ids = set()
+try:
+    # Find game ID by checking bots
+    bot_ids = {b['userId'] for b in bots}
+    for gid in range(1, 10000):
+        try:
+            req = urllib.request.Request(
+                f"http://localhost:8080/api/game/{gid}/state",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            with urllib.request.urlopen(req) as r:
+                game = json.loads(r.read())
+                if "phase" in game:
+                    game_player_ids = {p["userId"] for p in game.get("players", [])}
+                    if bot_ids.issubset(game_player_ids):
+                        valid_user_ids = game_player_ids
+                        break
+        except:
+            continue
+except:
+    pass
+
+# Filter users to only those actually in the game
+valid_users = [u for u in users if u.get('userId') in valid_user_ids]
+
+# Do NOT default null seats to 0 - only include users with valid seats
+valid_users = [u for u in valid_users if u.get('seat') is not None]
+
+print(json.dumps(bots + valid_users))
+PYEOF
+)
 
 info "Discovering game ID …"
 GAME_ID=$(python3 << PYEOF
@@ -93,7 +128,7 @@ def get(gid):
 
 last_match = None
 misses = 0
-for gid in range(1, 500):
+for gid in range(1, 10000):
     d = get(gid)
     if "phase" not in d:
         misses += 1

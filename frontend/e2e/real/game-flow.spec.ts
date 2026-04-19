@@ -21,7 +21,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
   test.setTimeout(60_000) // 3 minutes for the full flow
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(30_000) // setup can take a while with shell scripts
+    testInfo.setTimeout(120_000) // setup can take a while with shell scripts
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
@@ -54,12 +54,12 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       const revealWrap = page.locator('.reveal-wrap')
       const revealVisible = await revealWrap.isVisible().catch(() => false)
       if (revealVisible) {
-        const revealBtn = page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i  })
+        const revealBtn = page.getByTestId('reveal-role-btn')
         const revealBtnVisible = await revealBtn.isVisible().catch(() => false)
         expect(revealBtnVisible).toBe(true)
         await revealBtn.click()
         await page.waitForTimeout(300)
-        const gotItBtn = page.getByRole('button', { name: /知道了 \/ Got it/i })
+        const gotItBtn = page.getByTestId('confirm-role-btn')
         await gotItBtn.waitFor({ state: 'visible', timeout: 2_000 })
         await gotItBtn.click()
       }
@@ -77,7 +77,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const hostPage = ctx.hostPage
 
     // Host should see "Start Night" button (all confirmed, no sheriff)
-    const startNightBtn = hostPage.getByRole('button', { name: /开始夜晚|Start Night/i })
+    const startNightBtn = hostPage.getByTestId('start-night')
 
     // If button not visible yet, wait a bit for all confirmations to propagate
     if (!(await startNightBtn.isVisible().catch(() => false))) {
@@ -385,8 +385,17 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       try {
         const output = act(...args)
         // Script exits 0 even on rejection — check output for "rejected"
-        return !output.includes('rejected')
-      } catch { return false }
+        const rejected = output.includes('rejected')
+        if (rejected) {
+          // eslint-disable-next-line no-console
+          console.warn(`[tryAct rejected] args=${JSON.stringify(args)} output=\n${output}`)
+        }
+        return !rejected
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn(`[tryAct threw] args=${JSON.stringify(args)} err=${(e as Error).message}`)
+        return false
+      }
     }
 
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
@@ -407,6 +416,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       for (const tgt of allTargets) {
         if (tryAct('WOLF_KILL', wb.nick, { target: String(tgt.seat), room: ctx.roomCode })) {
           wolfDone = true
+          // Wait for wolf action to be processed
+          await ctx.hostPage.waitForTimeout(1_000)
           break
         }
       }
@@ -431,6 +442,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       for (const tgt of allTargets) {
         if (tryAct('SEER_CHECK', seerBot.nick, { target: String(tgt.seat), room: ctx.roomCode })) {
           seerDone = true
+          // Wait for SEER result to be displayed before confirming
+          await ctx.hostPage.waitForTimeout(2_000)
           tryAct('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
           break
         }
@@ -451,6 +464,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     let witchDone = false
     if (witchBot) {
       witchDone = tryAct('WITCH_ACT', witchBot.nick, { payload: '{"useAntidote":false}', room: ctx.roomCode })
+      // Wait for Witch action to be submitted
+      await ctx.hostPage.waitForTimeout(1_000)
     }
     if (!witchDone && ctx.isHostRole('WITCH')) {
       const witchPage = ctx.pages.get('WITCH')!
@@ -470,6 +485,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     let guardDone = false
     if (guardBot) {
       guardDone = tryAct('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
+      // Wait for guard action to be submitted
+      await ctx.hostPage.waitForTimeout(1_000)
     }
     if (!guardDone && ctx.isHostRole('GUARD')) {
       const guardPage = ctx.pages.get('GUARD')!
@@ -480,7 +497,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // After night, should transition to DAY (or GAME_OVER)
-    await ctx.hostPage.waitForTimeout(5_000)
+    // Wait longer for backend to process all actions and trigger phase transition
+    await ctx.hostPage.waitForTimeout(10_000)
 
     const isOver = ctx.hostPage.url().includes('/result/')
     if (!isOver) {

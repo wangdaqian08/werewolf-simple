@@ -45,4 +45,33 @@ sealed class DomainEvent {
         val gameId: Int,
         val audioSequence: com.werewolf.model.AudioSequence
     ) : DomainEvent()
+
+    // Night phase events (ADR-010 compliant)
+    @JsonTypeName("OpenEyes")
+    data class OpenEyes(
+        val gameId: Int,
+        val role: PlayerRole,
+        val phase: GamePhase,
+        val nightNumber: Int
+    ) : DomainEvent()
+
+    @JsonTypeName("CloseEyes")
+    data class CloseEyes(
+        val gameId: Int,
+        val role: PlayerRole,
+        val phase: GamePhase,
+        val nightNumber: Int
+    ) : DomainEvent()
+
+    @JsonTypeName("RoleAction")
+    data class RoleAction(
+        val gameId: Int,
+        val userId: String,
+        val role: PlayerRole,
+        val actionType: String,
+        val targets: List<String>,
+        val canHeal: Boolean? = null,
+        val canPoison: Boolean? = null,
+        val timeoutMs: Long
+    ) : DomainEvent()
 }

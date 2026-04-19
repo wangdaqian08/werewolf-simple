@@ -38,8 +38,8 @@ class GamePhasePipeline(
         
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can reveal night result")
-        if (context.game.phase != GamePhase.DAY) {
-            log.info("[revealNightResult] ERROR: Not in DAY phase, actual phase is ${context.game.phase}")
+        if (context.game.phase != GamePhase.DAY_DISCUSSION) {
+            log.info("[revealNightResult] ERROR: Not in DAY_DISCUSSION phase, actual phase is ${context.game.phase}")
             return GameActionResult.Rejected("Not in DAY phase")
         }
         if (context.game.subPhase != DaySubPhase.RESULT_HIDDEN.name) {
@@ -53,7 +53,7 @@ class GamePhasePipeline(
         log.info("[revealNightResult] Successfully revealed night result")
         stompPublisher.broadcastGame(
             context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY, DaySubPhase.RESULT_REVEALED.name)
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
         )
         return GameActionResult.Success()
     }
@@ -66,7 +66,7 @@ class GamePhasePipeline(
         
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can start the vote")
-        if (context.game.phase != GamePhase.DAY) {
+        if (context.game.phase != GamePhase.DAY_DISCUSSION) {
             log.info("[dayAdvance] ERROR: Not in DAY phase, actual phase is ${context.game.phase}")
             return GameActionResult.Rejected("Not in DAY phase")
         }
@@ -75,14 +75,14 @@ class GamePhasePipeline(
             return GameActionResult.Rejected("Reveal the night result before starting the vote")
         }
 
-        context.game.phase = GamePhase.VOTING
+        context.game.phase = GamePhase.DAY_VOTING
         context.game.subPhase = VotingSubPhase.VOTING.name
         gameRepository.save(context.game)
         
         log.info("[dayAdvance] Successfully advanced to VOTING phase")
         stompPublisher.broadcastGame(
             context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.VOTING, VotingSubPhase.VOTING.name)
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
         )
         return GameActionResult.Success()
     }
@@ -137,6 +137,8 @@ class GamePhasePipeline(
             if (!allPlayers.all { it.confirmedRole })
                 return GameActionResult.Rejected("Not all players have confirmed their role")
         }
+        // Cancel any scheduled auto-advance jobs
+        sheriffService.cancelScheduledJob(context.gameId)
         nightOrchestrator.initNight(context.gameId, context.game.dayNumber, withWaiting = true)
         return GameActionResult.Success()
     }

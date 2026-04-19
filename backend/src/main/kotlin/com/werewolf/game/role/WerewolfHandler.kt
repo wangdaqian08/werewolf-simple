@@ -1,5 +1,6 @@
 package com.werewolf.game.role
 
+import com.werewolf.audio.RoleRegistry
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
@@ -8,13 +9,17 @@ import com.werewolf.model.ActionType
 import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
+import com.werewolf.model.RoleDelayConfig
 import com.werewolf.repository.NightPhaseRepository
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
 @Order(1)
 @Component
-class WerewolfHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
+class WerewolfHandler(
+    private val nightPhaseRepository: NightPhaseRepository,
+    private val audioService: com.werewolf.service.AudioService
+) : RoleHandler {
 
     override val role = PlayerRole.WEREWOLF
 
@@ -51,5 +56,27 @@ class WerewolfHandler(private val nightPhaseRepository: NightPhaseRepository) : 
             GameActionResult.Success(events = listOf(DomainEvent.WolfSelectionChanged(context.gameId, target)))
         else
             GameActionResult.Success()
+    }
+
+    override fun onEliminationPending(context: GameContext, targetId: String): EliminationModifier? = null
+
+    /**
+     * Get audio configuration for this role
+     * Allows handlers to access role-specific audio settings
+     */
+    fun getAudioConfig() = RoleRegistry.getAudioConfig(role)
+
+    /**
+     * Get default delay time for dead role simulation
+     */
+    fun getDefaultDelayMs() = RoleRegistry.getDefaultDelayMs(role) ?: 5000L
+
+    /**
+     * 获取角色的延迟配置
+     * 从 Room.config 中读取配置化延迟
+     */
+    fun getDelayConfig(context: GameContext): RoleDelayConfig {
+        val gameConfig = context.room.config ?: return RoleDelayConfig.getDefaultForRole(role)
+        return gameConfig.getDelayForRole(role)
     }
 }

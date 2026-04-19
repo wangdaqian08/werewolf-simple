@@ -10,10 +10,12 @@ import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.GamePhase
+import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinnerSide
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
+import com.werewolf.repository.NightPhaseRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -33,6 +35,7 @@ class FullGameCycleTest {
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var gameRepository: GameRepository
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
+    @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
     @Autowired lateinit var nightOrchestrator: NightOrchestrator
 
     companion object {
@@ -130,6 +133,51 @@ class FullGameCycleTest {
         }.value
     }
 
+    /**
+     * Block until the night coroutine has reached its first deferred-await — i.e. the
+     * role loop has set up the WEREWOLF_PICK pendingAction and is ready to accept a
+     * WOLF_KILL action. A wolf-kill submitted before this point lands in
+     * NightOrchestrator.submitAction when pendingActions is still empty and is
+     * silently dropped, leaving the coroutine to await forever.
+     *
+     * The coroutine's pre-await cost is ~8s (NIGHT_INIT_AUDIO_DELAY_MS) + 5s
+     * (WAITING_DELAY_MS, for no-sheriff first-night path) + a small audioWarmup
+     * delay. We poll the NightPhase sub-phase rather than Thread.sleep a fixed 14s:
+     * cheaper when the coroutine is faster, still correct when it's slower.
+     */
+    private fun waitForNightRoleLoopReady(gameId: Int, timeoutMs: Long = 20_000L) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val np = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
+            // The role loop writes WEREWOLF_PICK via its own save after the initial
+            // delays, just before creating the deferred. Once we see that write *and*
+            // give it a short grace window, the deferred is guaranteed to be live.
+            if (np?.subPhase == NightSubPhase.WEREWOLF_PICK) {
+                Thread.sleep(500)
+                return
+            }
+            Thread.sleep(250)
+        }
+        error("Night role loop did not reach WEREWOLF_PICK within ${timeoutMs}ms")
+    }
+
+    /**
+     * Poll the game's phase until it leaves NIGHT (or the timeout elapses). Called
+     * after WOLF_KILL is submitted to the ready coroutine; the role loop will
+     * complete, fire resolveNightKills, and transition to DAY_DISCUSSION or
+     * GAME_OVER depending on the win-condition outcome.
+     */
+    private fun waitForNightToResolve(gameId: Int, timeoutMs: Long = 10_000L): GamePhase {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var phase: GamePhase
+        do {
+            phase = gameRepository.findById(gameId).orElseThrow().phase
+            if (phase != GamePhase.NIGHT) return phase
+            Thread.sleep(250)
+        } while (System.currentTimeMillis() < deadline)
+        return phase
+    }
+
     // ── Tests ─────────────────────────────────────────────────────────────────
 
     /**
@@ -152,18 +200,25 @@ class FullGameCycleTest {
             assertThat(action(token, gameId, "CONFIRM_ROLE").statusCode).isEqualTo(HttpStatus.OK)
         }
 
-        // Host starts night → WAITING, then advance past it
+        // Host starts night → WAITING. The night coroutine will advance to WEREWOLF_PICK
+        // on its own after NIGHT_INIT_AUDIO_DELAY_MS + WAITING_DELAY_MS (~13s). Wait for
+        // the coroutine to reach the deferred-await state so WOLF_KILL is observed.
         assertThat(action(hostToken, gameId, "START_NIGHT").statusCode).isEqualTo(HttpStatus.OK)
-        nightOrchestrator.advanceFromWaiting(gameId)
+        waitForNightRoleLoopReady(gameId)
 
         // Find a wolf's token and a villager's userId
         val wolfToken = findRoleToken(gameId, tokenByUserId, PlayerRole.WEREWOLF)
         val villagerTarget = gamePlayerRepository.findByGameId(gameId).first { it.role != PlayerRole.WEREWOLF }
 
-        // Wolf kills the villager — triggers night resolution
+        // Wolf kills the villager — unblocks the role loop, which then resolves the night.
         assertThat(action(wolfToken, gameId, "WOLF_KILL", villagerTarget.userId).statusCode).isEqualTo(HttpStatus.OK)
 
-        // With 4 players: 2 wolves vs 1 remaining villager → CLASSIC wolves(2) >= others(1) → WEREWOLF wins
+        val resolvedPhase = waitForNightToResolve(gameId)
+
+        // With 4 players: 2 wolves vs 1 remaining villager → CLASSIC wolves(2) >= others(1) → WEREWOLF wins.
+        // Win fires from NightOrchestrator's POST_NIGHT check: CLASSIC ignores trigger,
+        // so wolves ≥ humans immediately ⇒ GAME_OVER.
+        assertThat(resolvedPhase).isEqualTo(GamePhase.GAME_OVER)
         val finalGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(finalGame.phase).isEqualTo(GamePhase.GAME_OVER)
         assertThat(finalGame.winner).isEqualTo(WinnerSide.WEREWOLF)
@@ -172,7 +227,8 @@ class FullGameCycleTest {
     /**
      * HARD_MODE: wolves must eliminate ALL non-wolves.
      * 4 players (2 wolves + 2 villagers). Night 1: 1 villager killed → 1 villager still alive.
-     * HARD_MODE: game should NOT end — proceeds to DAY.
+     * HARD_MODE POST_NIGHT: literal branch requires humans==0 (not met), logical branch
+     * deferred to post-vote. Game should NOT end — proceeds to DAY_DISCUSSION.
      */
     @Test
     fun `HARD_MODE - game does NOT end when one villager still alive`() {
@@ -185,16 +241,20 @@ class FullGameCycleTest {
 
         tokenByUserId.values.forEach { token -> action(token, gameId, "CONFIRM_ROLE") }
         action(hostToken, gameId, "START_NIGHT")
-        nightOrchestrator.advanceFromWaiting(gameId)
+        waitForNightRoleLoopReady(gameId)
 
         val wolfToken = findRoleToken(gameId, tokenByUserId, PlayerRole.WEREWOLF)
         val villagerTarget = gamePlayerRepository.findByGameId(gameId).first { it.role != PlayerRole.WEREWOLF }
 
         action(wolfToken, gameId, "WOLF_KILL", villagerTarget.userId)
 
-        // In HARD_MODE: 2 wolves vs 1 villager — not all non-wolves eliminated → no win yet
-            val finalGame = gameRepository.findById(gameId).orElseThrow()
-            assertThat(finalGame.phase).isEqualTo(GamePhase.DAY)
-            assertThat(finalGame.winner).isNull()
-        }
-        }
+        val resolvedPhase = waitForNightToResolve(gameId)
+
+        // HARD_MODE POST_NIGHT: 2W vs 1V with humans>0 and POST_NIGHT shields the
+        // logical branch → checker returns null → night transitions to DAY_DISCUSSION.
+        assertThat(resolvedPhase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        val finalGame = gameRepository.findById(gameId).orElseThrow()
+        assertThat(finalGame.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(finalGame.winner).isNull()
+    }
+}

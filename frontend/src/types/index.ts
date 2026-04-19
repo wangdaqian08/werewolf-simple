@@ -66,9 +66,11 @@ export interface AudioSequence {
 export type GamePhase =
   | 'ROLE_REVEAL'
   | 'SHERIFF_ELECTION'
-  | 'DAY'
-  | 'VOTING'
+  | 'WAITING'
   | 'NIGHT'
+  | 'DAY_PENDING'
+  | 'DAY_DISCUSSION'
+  | 'DAY_VOTING'
   | 'GAME_OVER'
 
 export type PlayerRole = 'WEREWOLF' | 'VILLAGER' | 'SEER' | 'WITCH' | 'HUNTER' | 'GUARD' | 'IDIOT'
@@ -131,6 +133,35 @@ export interface GameEvent {
   message: string
   timestamp: number
   targetId?: string
+}
+
+// ── New event-driven night phase events ──────────────────────────────────────
+export interface OpenEyesEvent {
+  type: 'OpenEyes'
+  gameId: number
+  role: string
+  phase: string
+  nightNumber: number
+}
+
+export interface CloseEyesEvent {
+  type: 'CloseEyes'
+  gameId: number
+  role: string
+  phase: string
+  nightNumber: number
+}
+
+export interface RoleActionEvent {
+  type: 'RoleAction'
+  gameId: number
+  userId: string
+  role: string
+  actionType: string
+  targets: string[]
+  canHeal?: boolean
+  canPoison?: boolean
+  timeoutMs: number
 }
 
 export interface GameActionRequest {
@@ -320,6 +351,63 @@ export interface NightPhaseState {
   poisonUsed?: boolean // true if she actually used it
   // Guard
   previousGuardTargetId?: string // cannot protect the same player two nights in a row
+}
+
+// ── Action Log ───────────────────────────────────────────────────────────────
+
+export interface ActionLogEntry {
+  id: number
+  eventType: 'NIGHT_DEATH' | 'VOTE_RESULT' | 'HUNTER_SHOT' | 'IDIOT_REVEAL'
+  message: string // raw JSON — parse per eventType
+  targetUserId: string | null
+  createdAt: string | null
+}
+
+export interface NightDeathPayload {
+  dayNumber: number
+  userId: string
+  nickname: string
+  seatIndex: number
+}
+
+export interface VoteResultVoter {
+  userId: string
+  nickname: string
+  seatIndex: number
+}
+
+export interface VoteResultTallyEntry {
+  userId: string
+  nickname: string
+  seatIndex: number
+  votes: number
+  voters: VoteResultVoter[]
+}
+
+export interface VoteResultPayload {
+  dayNumber: number
+  tally: VoteResultTallyEntry[]
+  eliminatedUserId: string | null
+  eliminatedNickname: string | null
+  eliminatedSeatIndex: number | null
+  eliminatedRole: string | null
+}
+
+export interface HunterShotPayload {
+  dayNumber: number
+  hunterUserId: string
+  hunterNickname: string
+  hunterSeatIndex: number
+  targetUserId: string
+  targetNickname: string
+  targetSeatIndex: number
+}
+
+export interface IdiotRevealPayload {
+  dayNumber: number
+  userId: string
+  nickname: string
+  seatIndex: number
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

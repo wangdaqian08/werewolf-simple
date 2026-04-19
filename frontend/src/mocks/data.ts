@@ -8,6 +8,7 @@
  */
 
 import type {
+  ActionLogEntry,
   DayPhaseState,
   GameState,
   LoginResponse,
@@ -118,7 +119,7 @@ export const MOCK_ROOM_AS_GUEST: Room = {
 
 export const MOCK_GAME_STATE: GameState = {
   gameId: 'game-001',
-  phase: 'DAY',
+  phase: 'DAY_DISCUSSION',
   dayNumber: 1,
   myRole: 'SEER',
   sheriff: 'u2',
@@ -262,14 +263,14 @@ export function makeDayScenario(
 ): GameState {
   switch (variant) {
     case 'HOST_HIDDEN':
-      return { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase: makeDayHidden() }
+      return { ...MOCK_GAME_STATE, phase: 'DAY_DISCUSSION', dayPhase: makeDayHidden() }
     case 'HOST_REVEALED':
-      return { ...MOCK_GAME_STATE, phase: 'DAY', dayPhase: makeDayRevealed() }
+      return { ...MOCK_GAME_STATE, phase: 'DAY_DISCUSSION', dayPhase: makeDayRevealed() }
     case 'DEAD':
       return {
         ...MOCK_GAME_STATE,
         hostId: 'u2',
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         players: PLAYERS_AS_DEAD,
         dayPhase: makeDayRevealed(),
       }
@@ -277,7 +278,7 @@ export function makeDayScenario(
       return {
         ...MOCK_GAME_STATE,
         hostId: 'u2',
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         players: PLAYERS_AS_ALIVE,
         dayPhase: makeDayHidden(),
       }
@@ -285,7 +286,7 @@ export function makeDayScenario(
       return {
         ...MOCK_GAME_STATE,
         hostId: 'u2',
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         players: PLAYERS_AS_ALIVE,
         dayPhase: makeDayRevealed(),
       }
@@ -293,7 +294,7 @@ export function makeDayScenario(
       return {
         ...MOCK_GAME_STATE,
         hostId: 'u2',
-        phase: 'DAY',
+        phase: 'DAY_DISCUSSION',
         players: PLAYERS_AS_GUEST,
         dayPhase: makeDayHidden(),
       }
@@ -816,7 +817,7 @@ const MOCK_VOTE_TALLY: VoteTally[] = [
 
 export function makeVotingScenario(
   scenario:
-    | 'VOTING'
+    | 'DAY_VOTING'
     | 'VOTING_VOTED'
     | 'VOTING_REVEALED'
     | 'HUNTER_SHOOT'
@@ -831,7 +832,7 @@ export function makeVotingScenario(
   const now = Date.now()
   const base: GameState = {
     ...MOCK_GAME_STATE,
-    phase: 'VOTING',
+    phase: 'DAY_VOTING',
     dayNumber: 2,
     dayPhase: undefined,
     voteHistory: MOCK_VOTE_HISTORY,
@@ -849,7 +850,7 @@ export function makeVotingScenario(
     phaseStarted: now,
   }
   switch (scenario) {
-    case 'VOTING':
+    case 'DAY_VOTING':
       return {
         ...base,
         votingPhase: {
@@ -1064,3 +1065,41 @@ export const MOCK_STOMP_EVENTS = {
     },
   },
 }
+
+// ── Action Log ────────────────────────────────────────────────────────────────
+
+export const MOCK_ACTION_LOG: ActionLogEntry[] = [
+  {
+    id: 1,
+    eventType: 'NIGHT_DEATH',
+    message: JSON.stringify({ dayNumber: 1, userId: 'u3', nickname: 'Charlie', seatIndex: 3 }),
+    targetUserId: 'u3',
+    createdAt: '2024-01-01T00:00:00Z',
+  },
+  {
+    id: 2,
+    eventType: 'VOTE_RESULT',
+    message: JSON.stringify({
+      dayNumber: 1,
+      tally: [
+        {
+          userId: 'u5',
+          nickname: 'Eve',
+          seatIndex: 5,
+          votes: 3,
+          voters: [
+            { userId: 'u1', nickname: 'You', seatIndex: 1 },
+            { userId: 'u2', nickname: 'Bob', seatIndex: 2 },
+            { userId: 'u4', nickname: 'Dave', seatIndex: 4 },
+          ],
+        },
+      ],
+      eliminatedUserId: 'u5',
+      eliminatedNickname: 'Eve',
+      eliminatedSeatIndex: 5,
+      eliminatedRole: 'VILLAGER',
+    }),
+    targetUserId: 'u5',
+    createdAt: '2024-01-01T12:00:00Z',
+  },
+]

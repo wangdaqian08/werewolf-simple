@@ -78,14 +78,14 @@ test('no-sheriff: Start Night button appears after all players confirm', async (
   await page.waitForTimeout(100)
 
   // Not all confirmed yet — button should not be visible
-  await expect(page.getByRole('button', { name: /开始夜晚 \/ Start Night/i })).not.toBeVisible()
+  await expect(page.getByTestId('start-night')).not.toBeVisible()
 
   // Simulate all players confirming via debug button
   await page.getByRole('button', { name: /All Confirmed/i }).click()
   await page.waitForTimeout(100)
 
   // Now "Start Night" button should be visible for the host
-  await expect(page.getByRole('button', { name: /开始夜晚 \/ Start Night/i })).toBeVisible()
+  await expect(page.getByTestId('start-night')).toBeVisible()
 })
 
 test('no-sheriff: host clicks Start Night shows WAITING screen then advances to active night phase', async ({ page }) => {
@@ -98,7 +98,7 @@ test('no-sheriff: host clicks Start Night shows WAITING screen then advances to 
   await page.waitForTimeout(100)
 
   // Click "Start Night"
-  await page.getByRole('button', { name: /开始夜晚 \/ Start Night/i }).click()
+  await page.getByTestId('start-night').click()
   await page.waitForTimeout(200)
 
   // Should show WAITING screen (night is beginning)

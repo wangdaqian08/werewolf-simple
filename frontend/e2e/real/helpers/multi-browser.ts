@@ -14,14 +14,14 @@ import {readFileSync, writeFileSync} from 'fs'
 import path from 'path'
 import {type Browser, type BrowserContext, expect, type Page} from '@playwright/test'
 import {
-  act,
-  type BotInfo,
-  getConsoleLogin,
-  getRoles,
-  joinBots,
-  readStateFile,
-  type RoleMap,
-  type RoleName,
+    act,
+    type BotInfo,
+    getConsoleLogin,
+    getRoles,
+    joinBots,
+    readStateFile,
+    type RoleMap,
+    type RoleName,
 } from './shell-runner'
 
 const BASE_URL = 'http://localhost:5174'
@@ -67,7 +67,7 @@ export interface GameSetupOptions {
  * 2. Bots join + ready via shell scripts
  * 3. Host clicks "Start Game"
  * 4. All bots confirm roles via shell scripts
- * 5. Host confirms role in browser
+ * 5. Wait for STMP synchronization
  * 6. Discovers roles via roles.sh
  * 7. Opens a browser context per desired role
  */
@@ -214,29 +214,48 @@ export async function setupGame(
 
   // ── Step 5: All bots confirm roles ─────────────────────────────────────
   // Note: this confirms ALL users in the state file, including the host.
-  // So the host's role is confirmed via script — the browser confirm below
-  // may already be past the reveal screen (especially with hasSheriff).
+  // The game logic relies on STMP synchronization to handle state transitions.
 
   act('CONFIRM_ROLE', undefined, { room: roomCode })
 
   // ── Step 6: Host confirms role in browser (if still on reveal screen) ──
+  // The script confirms roles via API, but we need to ensure the browser state
+  // is synchronized. For hosts with hasSheriff=false, the browser should show
+  // the role reveal screen until all players are confirmed.
 
-  // The script may have already confirmed for the host, causing the game
-  // to auto-advance (e.g., to SHERIFF_ELECTION). Only click if visible.
+  await hostPage.waitForTimeout(1_000)
+
+  // Check if we're still on the role reveal screen
   const revealWrap = hostPage.locator('.reveal-wrap')
   const revealVisible = await revealWrap.isVisible().catch(() => false)
+  
   if (revealVisible) {
-    const revealBtn = hostPage.getByRole('button', { name: /揭示我的身份|Reveal Role/i })
-    if ((await revealBtn.count()) > 0 && (await revealBtn.isVisible())) {
-      await revealBtn.click()
-      await hostPage.waitForTimeout(300)
-      const confirmBtn = hostPage.getByRole('button', { name: /知道了|Got it/i })
-      await confirmBtn.waitFor({ state: 'visible', timeout: 5_000 })
-      await confirmBtn.click()
+    // Still on role reveal screen - need to complete the browser confirm flow
+    const revealBtn = hostPage.getByTestId('reveal-role-btn')
+    const revealBtnCount = await revealBtn.count()
+    
+    if (revealBtnCount > 0) {
+      const revealBtnVisible = await revealBtn.isVisible().catch(() => false)
+      
+      if (revealBtnVisible) {
+        // Click reveal button
+        await revealBtn.click()
+        await hostPage.waitForTimeout(300)
+        
+        // Click confirm button
+        const confirmBtn = hostPage.getByTestId('confirm-role-btn')
+        try {
+          await confirmBtn.waitFor({ state: 'visible', timeout: 2_000 })
+          await confirmBtn.click()
+        } catch {
+          // Confirm button not found - page likely transitioned, which is acceptable
+          console.log('Confirm button not found (page may have transitioned), continuing...')
+        }
+      }
     }
   }
-
-  // Wait for confirmations / phase transition to complete
+  
+  // Additional wait to ensure all STMP events are processed
   await hostPage.waitForTimeout(2_000)
 
   // ── Step 7: Discover roles ─────────────────────────────────────────────

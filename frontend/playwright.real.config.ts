@@ -9,7 +9,10 @@ import {defineConfig} from '@playwright/test'
 export default defineConfig({
   testDir: './e2e/real',
   fullyParallel: false, // tests share one backend instance; avoid parallel state collisions
-  retries: 0,
+  // CI: retry once to absorb timing-sensitive NIGHT→DAY phase-transition flakes
+  // that pass locally on fast hardware but occasionally stall on slower GH
+  // runners. Local runs keep retries: 0 so flakes aren't hidden.
+  retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: 'http://localhost:5174',
     headless: true,

@@ -10,6 +10,7 @@ import com.werewolf.game.role.WerewolfHandler
 import com.werewolf.game.role.WitchHandler
 import com.werewolf.model.*
 import com.werewolf.repository.NightPhaseRepository
+import com.werewolf.service.AudioService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -23,6 +24,9 @@ import org.mockito.kotlin.*
 class RoleHandlerTest {
 
     @Mock lateinit var nightPhaseRepository: NightPhaseRepository
+
+    @Mock
+    private lateinit var audioService: AudioService
 
     private val gameId = 1
     private val hostId = "host:001"
@@ -59,7 +63,7 @@ class RoleHandlerTest {
 
         @BeforeEach
         fun setUp() {
-            handler = WerewolfHandler(nightPhaseRepository)
+            handler = WerewolfHandler(nightPhaseRepository, audioService)
         }
 
         private fun wolfCtx(wolfAlive: Boolean = true, targetAlive: Boolean = true): GameContext {
