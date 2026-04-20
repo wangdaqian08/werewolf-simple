@@ -457,6 +457,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
       const target = aliveWolves[0] ?? alive[0]
       const decisive = alive.find((p) => p.nickname !== target?.nickname)
 
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[revote] submitVotes: aliveNonHost=${alive.length} aliveWolves=${aliveWolves.length} ` +
+          `target=${target?.nickname ?? 'none'} decisive=${decisive?.nickname ?? 'none'}`,
+      )
+
       if (target && decisive) {
         tryAct('SUBMIT_VOTE', decisive.nickname, {
           target: String(target.seat),
@@ -506,24 +512,64 @@ test.describe('Voting tie → revote → game proceeds', () => {
      * the game reaches GAME_OVER within ~9 rounds for a 9-player game. The
      * testInfo.setTimeout(600_000) serves as the safety ceiling.
      */
+    let iteration = 0
+    const loopStart = Date.now()
     while (!ctx.hostPage.url().includes('/result/')) {
+      iteration += 1
+      const elapsedSec = Math.round((Date.now() - loopStart) / 1000)
+
       // VOTING first — if we landed here mid-vote, resolve it.
       const isVoting = await ctx.hostPage
         .locator('.voting-wrap')
         .first()
         .isVisible()
         .catch(() => false)
-      if (isVoting) {
-        await completeVote()
-        continue
-      }
-
-      // DAY: reveal night result, open voting, complete.
       const isDay = await ctx.hostPage
         .locator('.day-wrap')
         .first()
         .isVisible()
         .catch(() => false)
+      const isNight = await ctx.hostPage
+        .locator('.game-wrap.night-mode')
+        .first()
+        .isVisible()
+        .catch(() => false)
+
+      // Also read backend state so we can see if UI is lagging. If this
+      // disagrees with the DOM probes above, we've identified the stall.
+      const backendState = await ctx.hostPage
+        .evaluate(async (id: string) => {
+          const token = localStorage.getItem('jwt')
+          if (!token) return null
+          const res = await fetch(`/api/game/${id}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!res.ok) return null
+          const s = await res.json()
+          return {
+            phase: s?.phase,
+            nightSub: s?.nightPhase?.subPhase,
+            votingSub: s?.votingPhase?.subPhase,
+            daySub: s?.dayPhase?.subPhase,
+            aliveCount: Array.isArray(s?.players)
+              ? s.players.filter((p: { isAlive?: boolean }) => p.isAlive).length
+              : null,
+          }
+        }, ctx.gameId)
+        .catch(() => null)
+
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[revote] iter=${iteration} elapsed=${elapsedSec}s ` +
+          `ui={voting=${isVoting},day=${isDay},night=${isNight}} ` +
+          `backend=${JSON.stringify(backendState)}`,
+      )
+
+      if (isVoting) {
+        await completeVote()
+        continue
+      }
+
       if (isDay) {
         const revealBtn = ctx.hostPage.getByTestId('day-reveal-result')
         if (await revealBtn.isVisible().catch(() => false)) {
@@ -539,14 +585,6 @@ test.describe('Voting tie → revote → game proceeds', () => {
         continue
       }
 
-      // NIGHT: complete role actions, then wait for DAY to actually arrive
-      // (replaces a fixed waitForTimeout(5_000) that was blind to actual
-      // phase transition timing).
-      const isNight = await ctx.hostPage
-        .locator('.game-wrap.night-mode')
-        .first()
-        .isVisible()
-        .catch(() => false)
       if (isNight) {
         await completeNight()
         await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000).catch(() => {})
