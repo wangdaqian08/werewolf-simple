@@ -30,6 +30,11 @@ app:
   jwt:
     secret: test-secret-key-for-testing-must-be-32-chars-ok
     expiration-hours: 1
+  cors:
+    allowed-origins: "*"
+
+websocket:
+  allowed-origins: "*"
 
 # Shrink every night-phase delay so integration tests that traverse the real
 # coroutine finish in seconds rather than minutes. Relative ordering between

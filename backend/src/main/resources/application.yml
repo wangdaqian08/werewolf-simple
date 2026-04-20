@@ -36,6 +36,8 @@ app:
     wechat:
       app-id: ${WECHAT_APP_ID:}
       app-secret: ${WECHAT_APP_SECRET:}
+  cors:
+    allowed-origins: "*"
 
 server:
   port: 8080

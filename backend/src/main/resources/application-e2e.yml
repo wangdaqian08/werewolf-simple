@@ -18,6 +18,11 @@ app:
   jwt:
     secret: e2e-secret-key-for-testing-must-be-32-chars-ok
     expiration-hours: 1
+  cors:
+    allowed-origins: "*"
+
+websocket:
+  allowed-origins: "*"
 
 # Shrunk night-phase timings so real-backend Playwright runs finish in minutes
 # instead of tens of minutes. Relative ordering (gap > cooldown > warmup) and
