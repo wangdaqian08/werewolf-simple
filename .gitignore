@@ -24,7 +24,9 @@ frontend/*.tsbuildinfo
 /console_log.md
 /simple-game-flow.md
 /minor-changes/
-/.claude/
+/.claude/*
+!/.claude/skills/
+!/.claude/skills/**
 
 # ─── IDE ───────────────────────────────────────────────────────────────────────
 .idea/
