@@ -8,12 +8,90 @@
  *   - Complete the revote, then continue the game to verify it doesn't get stuck
  */
 import {expect, test} from '@playwright/test'
+import type {Page} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 
 let ctx: GameContext
+
+/**
+ * Read alive non-host players from /api/game/{id}/state. Used to pick a
+ * decisive voter + target each vote cycle so rounds always eliminate
+ * someone and the test makes forward progress (no stuck-on-tie).
+ */
+async function readAlivePlayersNonHost(
+  hostPage: Page,
+  gameId: string,
+): Promise<Array<{nickname: string; seat: number}>> {
+  return hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return []
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return []
+    const state = await res.json()
+    return ((state?.players ?? []) as Array<{
+      isAlive: boolean
+      nickname: string
+      seatIndex: number
+    }>)
+      .filter((p) => p.isAlive && p.nickname !== 'Host')
+      .map((p) => ({ nickname: p.nickname, seat: p.seatIndex }))
+  }, gameId)
+}
+
+/** Read state.votingPhase?.subPhase (VOTING | RE_VOTING | VOTE_RESULT | …). */
+async function readVotingSubPhase(hostPage: Page, gameId: string): Promise<string | null> {
+  return hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return null
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const state = await res.json()
+    return state?.votingPhase?.subPhase ?? null
+  }, gameId)
+}
+
+/**
+ * Poll state.nightPhase?.subPhase until it matches `target`. Without this,
+ * bot actions fired via act.sh race the Kotlin role-loop coroutine and land
+ * in the wrong sub-phase — backend rejects with "Not in X sub-phase", act()
+ * retries 3× with 600ms gap on CI, each night wastes ~10s+ on race-rejection
+ * churn (log diagnostic: 90 "Not in SEER_PICK sub-phase" + 18 WITCH + 18 GUARD
+ * rejections per night on a stalled run). Mirrors the helper already in
+ * flow-12p-sheriff.spec.ts; inlined here to keep this fix file-scoped.
+ */
+async function waitForNightSubPhase(
+  hostPage: Page,
+  gameId: string,
+  target: string,
+  timeoutMs = 15_000,
+): Promise<boolean> {
+  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
+  const deadline = Date.now() + effective
+  while (Date.now() < deadline) {
+    const state = await hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      if (!token) return null
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      return res.json()
+    }, gameId)
+    const sp = state?.nightPhase?.subPhase
+    const phase = state?.phase
+    if (sp === target) return true
+    if (phase && phase !== 'NIGHT' && target !== phase) return false
+    await hostPage.waitForTimeout(300)
+  }
+  return false
+}
 
 test.describe('Voting tie → revote → game proceeds', () => {
   test.setTimeout(180_000)
@@ -23,6 +101,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
+      // Explicit roles: deliberately exclude HUNTER so HUNTER_SHOOT sub-phase
+      // can't fire between day-vote and the next night — that sub-phase makes
+      // the outer round loop's DAY/NIGHT/VOTING state probes ambiguous. Also
+      // keeps the roleMap aligned with browserRoles below (setup's default
+      // optional roles don't include GUARD, which this test needs).
+      roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
     })
   })
@@ -82,6 +166,8 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const seerPage = ctx.pages.get('SEER')
     const witchPage = ctx.pages.get('WITCH')
     const guardPage = ctx.pages.get('GUARD')
+    const hostPage = ctx.hostPage
+    const gameId = ctx.gameId
 
     // Pick a non-wolf target
     const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots].filter(
@@ -90,7 +176,10 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const target = allTargets[0]
 
     // ── Wolf kill ──
-    // Wait for wolf browser page to show pick grid
+    // Wait for the coroutine to reach WEREWOLF_PICK before firing the action.
+    // Without this gate, act() retries waste ~10s+ per night on "Not in X
+    // sub-phase" rejections.
+    await waitForNightSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 15_000)
     if (wolfPage) {
       await wolfPage
         .locator('.player-grid')
@@ -116,7 +205,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
 
     // ── Seer ──
-    if (seerPage) {
+    // Gate on SEER_PICK before iterating — same race-rejection rationale as
+    // the wolf gate above. If the seer is dead / skipped, waitForNightSubPhase
+    // short-circuits when phase leaves NIGHT or times out; either way we move
+    // on without the 90-rejection churn observed previously.
+    const reachedSeerPick = await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 10_000)
+    if (reachedSeerPick && seerPage) {
       await seerPage
         .getByText(/选择查验目标|Select a player to check/i)
         .first()
@@ -124,23 +218,21 @@ test.describe('Voting tie → revote → game proceeds', () => {
         .catch(() => {})
     }
     let seerDone = false
-    for (const sb of seerBots.filter((b) => b.nick !== 'Host')) {
-      const seats = allTargets.map((t) => t.seat)
-      for (const seat of seats) {
-        if (tryAct('SEER_CHECK', sb.nick, { target: String(seat), room: ctx.roomCode })) {
-          seerDone = true
-          if (seerPage) {
-            await seerPage
-              .locator('.sr-wrap')
-              .first()
-              .waitFor({ state: 'visible', timeout: 8_000 })
-              .catch(() => {})
+    if (reachedSeerPick) {
+      for (const sb of seerBots.filter((b) => b.nick !== 'Host')) {
+        const seats = allTargets.map((t) => t.seat)
+        for (const seat of seats) {
+          if (tryAct('SEER_CHECK', sb.nick, { target: String(seat), room: ctx.roomCode })) {
+            seerDone = true
+            // Gate on SEER_RESULT before SEER_CONFIRM so the confirm lands
+            // in the right sub-phase.
+            await waitForNightSubPhase(hostPage, gameId, 'SEER_RESULT', 8_000)
+            tryAct('SEER_CONFIRM', sb.nick, { room: ctx.roomCode })
+            break
           }
-          tryAct('SEER_CONFIRM', sb.nick, { room: ctx.roomCode })
-          break
         }
+        if (seerDone) break
       }
-      if (seerDone) break
     }
     if (!seerDone && seerPage) {
       if (
@@ -158,7 +250,8 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
 
     // ── Witch ──
-    if (witchPage) {
+    const reachedWitch = await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 10_000)
+    if (reachedWitch && witchPage) {
       await witchPage
         .locator('.w-section')
         .first()
@@ -169,9 +262,11 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const antidotePayload = opts.witchUseAntidote
       ? '{"useAntidote":true}'
       : '{"useAntidote":false}'
-    for (const wb of witchBots.filter((b) => b.nick !== 'Host')) {
-      witchDone = tryAct('WITCH_ACT', wb.nick, { payload: antidotePayload, room: ctx.roomCode })
-      if (witchDone) break
+    if (reachedWitch) {
+      for (const wb of witchBots.filter((b) => b.nick !== 'Host')) {
+        witchDone = tryAct('WITCH_ACT', wb.nick, { payload: antidotePayload, room: ctx.roomCode })
+        if (witchDone) break
+      }
     }
     if (!witchDone && witchPage) {
       if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
@@ -192,29 +287,32 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
 
     // ── Guard ──
-    if (guardPage) {
+    const reachedGuard = await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 10_000)
+    if (reachedGuard && guardPage) {
       await guardPage
         .getByText(/选择守护目标|Protect a player/i)
         .first()
         .waitFor({ state: 'visible', timeout: 10_000 })
         .catch(() => {})
     }
-     let guardDone = false
-    for (const gb of guardBots.filter((b) => b.nick !== 'Host')) {
-      guardDone = tryAct('GUARD_SKIP', gb.nick, { room: ctx.roomCode })
-      break
-    }
-    if (!guardDone && guardPage) {
-      if (
-        await guardPage
-          .getByText(/选择守护目标|Protect a player/i)
-          .first()
-          .isVisible()
-          .catch(() => false)
-      ) {
-        // Pick LAST alive player to avoid protecting the wolf's target (which is first)
-        await guardPage.locator('.player-grid .slot-alive').last().click()
-        await guardPage.getByTestId('guard-confirm-protect').click()
+    let guardDone = false
+    if (reachedGuard) {
+      for (const gb of guardBots.filter((b) => b.nick !== 'Host')) {
+        guardDone = tryAct('GUARD_SKIP', gb.nick, { room: ctx.roomCode })
+        break
+      }
+      if (!guardDone && guardPage) {
+        if (
+          await guardPage
+            .getByText(/选择守护目标|Protect a player/i)
+            .first()
+            .isVisible()
+            .catch(() => false)
+        ) {
+          // Pick LAST alive player to avoid protecting the wolf's target (which is first)
+          await guardPage.locator('.player-grid .slot-alive').last().click()
+          await guardPage.getByTestId('guard-confirm-protect').click()
+        }
       }
     }
   }
@@ -322,98 +420,111 @@ test.describe('Voting tie → revote → game proceeds', () => {
   // ── Test 4: Complete the game after revote ───────────────────────────
 
   test('4. Game proceeds to completion after revote', async ({}, testInfo) => {
-    testInfo.setTimeout(300_000) // Increase timeout to 5 minutes
-    const maxRounds = 15
+    // 600s gives headroom for an uncapped round loop under shrunk e2e timings.
+    // The prior 300s + 15-round cap hit both limits simultaneously on CI.
+    testInfo.setTimeout(600_000)
 
-    // Start night phase if in ROLE_REVEAL state
+    // Start night phase if we're still in a waiting/role-reveal state.
     const startNightBtn = ctx.hostPage.getByTestId('start-night')
     if (await startNightBtn.isVisible().catch(() => false)) {
-      testInfo.attach('triggering-night-start', { body: 'Clicking start night button' })
       await startNightBtn.click()
       await ctx.hostPage.waitForTimeout(2_000)
     }
 
-    // Check initial game state
-    const initialPhase = await ctx.hostPage.evaluate(() => {
-      const dayWrap = document.querySelector('.day-wrap')
-      const nightWrap = document.querySelector('.night-wrap')
-      const votingWrap = document.querySelector('.voting-wrap')
-      const waitingScreen = document.querySelector('.waiting-screen')
-      return {
-        hasDayWrap: !!dayWrap,
-        hasNightWrap: !!nightWrap,
-        hasVotingWrap: !!votingWrap,
-        hasWaitingScreen: !!waitingScreen,
-        url: window.location.href
-      }
-    })
-    testInfo.attach('initial-game-state', { body: JSON.stringify(initialPhase, null, 2) })
+    /**
+     * Submit votes with one decisive voter + fan-out abstain for everyone else.
+     *
+     * Target-selection strategy: prefer an alive wolf as the target so every
+     * successful day-vote shrinks the wolf side. With 2 wolves in a 9-player
+     * game, the villagers reach GAME_OVER in ~2-3 day cycles. Targeting an
+     * arbitrary alive player instead (the naive strategy) kills villagers
+     * too and the game drags past the test timeout.
+     *
+     * Decisive voter: any alive non-host player who isn't the target.
+     * The act.sh fan-out abstain then fires for all bots (the decisive
+     * voter's second call is a terminal "Already voted" — ignored per the
+     * backend validation rules, VotingPipeline.kt:47-53).
+     *
+     * If fewer than 2 non-host players are alive, skip the decisive vote —
+     * the game is effectively over and the outer loop will exit on /result/.
+     */
+    async function submitVotesWithDecisive() {
+      const alive = await readAlivePlayersNonHost(ctx.hostPage, ctx.gameId)
 
-    /** Complete a vote cycle: abstain → reveal → continue. Handles revotes. */
-    async function completeVote() {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const abstainBtn = ctx.hostPage.locator('.skip-btn').first()
-        if (await abstainBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-          await abstainBtn.click()
-          await ctx.hostPage.waitForTimeout(500)
-        }
-        tryAct('SUBMIT_VOTE', undefined, { room: ctx.roomCode })
-        await ctx.hostPage.waitForTimeout(2_000)
-        tryAct('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })
-        await ctx.hostPage.waitForTimeout(2_000)
-        tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
-        await ctx.hostPage.waitForTimeout(3_000)
-        const stillVoting = await ctx.hostPage.locator('.skip-btn').first().isVisible().catch(() => false)
-        if (!stillVoting) break
+      const wolfNicks = new Set((ctx.roleMap.WEREWOLF ?? []).map((b) => b.nick))
+      const aliveWolves = alive.filter((p) => wolfNicks.has(p.nickname))
+      // Prefer wolf target; fall back to first alive if wolves all eliminated.
+      const target = aliveWolves[0] ?? alive[0]
+      const decisive = alive.find((p) => p.nickname !== target?.nickname)
+
+      if (target && decisive) {
+        tryAct('SUBMIT_VOTE', decisive.nickname, {
+          target: String(target.seat),
+          room: ctx.roomCode,
+        })
+      }
+      // Fan-out abstain; "Already voted" / "Dead players cannot vote" here
+      // are terminal rejections and expected noise per the backend rules.
+      tryAct('SUBMIT_VOTE', undefined, { room: ctx.roomCode })
+      // Host abstains via the skip-btn click so the host's vote counts toward
+      // allVoted (voting-reveal button is disabled until allVoted=true).
+      const abstainBtn = ctx.hostPage.locator('.skip-btn').first()
+      if (await abstainBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await abstainBtn.click()
       }
     }
 
-    for (let round = 0; round < maxRounds; round++) {
-      // Check if game is over at the start of each round
-      if (ctx.hostPage.url().includes('/result/')) {
-        testInfo.attach('game-over-detected', { body: `Game over detected at round ${round}` })
-        break
+    /** Host reveals tally then clicks continue. */
+    async function revealAndContinue() {
+      const revealBtn = ctx.hostPage.getByTestId('voting-reveal')
+      await revealBtn.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
+      await expect(revealBtn).toBeEnabled({ timeout: 15_000 }).catch(() => {})
+      tryAct('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })
+      await ctx.hostPage.waitForTimeout(1_500)
+      tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+      await ctx.hostPage.waitForTimeout(1_500)
+    }
+
+    /**
+     * Complete a vote cycle. If the backend enters RE_VOTING after the first
+     * tally (tie carried over from Test 3 or any new tie), the same
+     * strategy runs once more with a fresh /state read so the revote picks
+     * up the right target-and-voter pair.
+     */
+    async function completeVote() {
+      await submitVotesWithDecisive()
+      await revealAndContinue()
+      const sub = await readVotingSubPhase(ctx.hostPage, ctx.gameId)
+      if (sub === 'RE_VOTING') {
+        await submitVotesWithDecisive()
+        await revealAndContinue()
       }
+    }
 
-      // Check current game state
-      const currentState = await ctx.hostPage.evaluate((roundNum) => {
-        const dayWrap = document.querySelector('.day-wrap')
-        const nightWrap = document.querySelector('.night-wrap')
-        const votingWrap = document.querySelector('.voting-wrap')
-        const waitingScreen = document.querySelector('.waiting-screen')
-        const resultWrap = document.querySelector('.result-wrap')
-        const bodyText = document.body.textContent?.substring(0, 200)
-        return {
-          round: roundNum,
-          hasDayWrap: !!dayWrap,
-          hasNightWrap: !!nightWrap,
-          hasVotingWrap: !!votingWrap,
-          hasWaitingScreen: !!waitingScreen,
-          hasResultWrap: !!resultWrap,
-          bodyText,
-          url: window.location.href
-        }
-      }, round)
-      testInfo.attach(`game-state-round-${round}`, { body: JSON.stringify(currentState, null, 2) })
-
-      // If game is over, break
-      if (currentState.hasResultWrap || currentState.url.includes('/result/')) {
-        testInfo.attach('game-over-detected', { body: `Game over detected at round ${round}` })
-        break
-      }
-
-      // If in VOTING phase, resolve it
-      const isVoting = await ctx.hostPage.locator('.voting-wrap').first().isVisible().catch(() => false)
+    /**
+     * Main loop: no hard round cap — elimination per vote cycle guarantees
+     * the game reaches GAME_OVER within ~9 rounds for a 9-player game. The
+     * testInfo.setTimeout(600_000) serves as the safety ceiling.
+     */
+    while (!ctx.hostPage.url().includes('/result/')) {
+      // VOTING first — if we landed here mid-vote, resolve it.
+      const isVoting = await ctx.hostPage
+        .locator('.voting-wrap')
+        .first()
+        .isVisible()
+        .catch(() => false)
       if (isVoting) {
-        testInfo.attach(`round-${round}-action`, { body: 'In VOTING phase, completing vote' })
         await completeVote()
         continue
       }
 
-      // If in DAY, complete day phase
-      const isDay = await ctx.hostPage.locator('.day-wrap').first().isVisible().catch(() => false)
+      // DAY: reveal night result, open voting, complete.
+      const isDay = await ctx.hostPage
+        .locator('.day-wrap')
+        .first()
+        .isVisible()
+        .catch(() => false)
       if (isDay) {
-        testInfo.attach(`round-${round}-action`, { body: 'In DAY phase, completing day' })
         const revealBtn = ctx.hostPage.getByTestId('day-reveal-result')
         if (await revealBtn.isVisible().catch(() => false)) {
           await revealBtn.click()
@@ -428,39 +539,27 @@ test.describe('Voting tie → revote → game proceeds', () => {
         continue
       }
 
-      // If in NIGHT, complete night phase using shared helper
-      const isNight = await ctx.hostPage.locator('.game-wrap.night-mode').first().isVisible().catch(() => false)
+      // NIGHT: complete role actions, then wait for DAY to actually arrive
+      // (replaces a fixed waitForTimeout(5_000) that was blind to actual
+      // phase transition timing).
+      const isNight = await ctx.hostPage
+        .locator('.game-wrap.night-mode')
+        .first()
+        .isVisible()
+        .catch(() => false)
       if (isNight) {
         await completeNight()
-        await ctx.hostPage.waitForTimeout(5_000)
+        await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000).catch(() => {})
         continue
       }
 
-      // Unknown state — wait and retry
-      testInfo.attach(`round-${round}-unknown-state`, { body: 'Unknown state, checking game status' })
-      
-      // Handle waiting screen by checking for and clicking available buttons
-      const waitingScreen = await ctx.hostPage.locator('.waiting-screen').first().isVisible().catch(() => false)
-      if (waitingScreen) {
-        const allButtons = await ctx.hostPage.locator('button').all()
-        for (const btn of allButtons) {
-          const text = await btn.textContent()
-          const isVisible = await btn.isVisible().catch(() => false)
-          const isDisabled = await btn.isDisabled().catch(() => false)
-          if (isVisible && !isDisabled && text) {
-            testInfo.attach(`found-button-in-waiting-screen`, { body: `Found clickable button: ${text.trim()}` })
-            await btn.click()
-            await ctx.hostPage.waitForTimeout(2_000)
-            break
-          }
-        }
-      }
-
-      // Wait and retry
-      await ctx.hostPage.waitForTimeout(3_000)
+      // Unknown state (waiting screen, sub-phase transition in progress) —
+      // small wait and re-probe. Hunter / idiot sub-phases fall here; the
+      // next iteration's DAY/VOTING branch picks up once they resolve.
+      await ctx.hostPage.waitForTimeout(1_500)
     }
 
-    // Game should be over
+    // Game should be over.
     await ctx.hostPage.waitForURL(/\/result\//, { timeout: 30_000 })
 
     // Verify result screen
