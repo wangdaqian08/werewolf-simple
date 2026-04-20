@@ -147,9 +147,13 @@ All endpoints require `Authorization: Bearer <token>` except `/api/auth/dev`.
 - `/topic/game/{gameId}` — public events
 - `/user/queue/private` — your private events (role, seer result)
 
-**Key action types:** `CONFIRM_ROLE`, `WOLF_KILL`, `SEER_CHECK`, `SEER_CONFIRM`, `WITCH_ACT`, `GUARD_PROTECT`,
-`GUARD_SKIP`, `REVEAL_NIGHT_RESULT`, `DAY_ADVANCE`, `SUBMIT_VOTE`, `VOTING_REVEAL_TALLY`, `VOTING_CONTINUE`,
-`HUNTER_SHOOT`, `HUNTER_SKIP`, `BADGE_PASS`, `BADGE_DESTROY`
+**Key action types:** `CONFIRM_ROLE`, `START_NIGHT`, `WOLF_SELECT`, `WOLF_KILL`, `SEER_CHECK`, `SEER_CONFIRM`,
+`WITCH_ACT`, `GUARD_PROTECT`, `GUARD_SKIP`, `REVEAL_NIGHT_RESULT`, `DAY_ADVANCE`, `SUBMIT_VOTE`, `VOTING_UNVOTE`,
+`VOTING_REVEAL_TALLY`, `VOTING_CONTINUE`, `HUNTER_SHOOT`, `HUNTER_PASS`, `IDIOT_REVEAL`, `BADGE_PASS`, `BADGE_DESTROY`,
+`SHERIFF_CAMPAIGN`, `SHERIFF_QUIT_CAMPAIGN`, `SHERIFF_START_SPEECH`, `SHERIFF_ADVANCE_SPEECH`, `SHERIFF_VOTE`,
+`SHERIFF_ABSTAIN`, `SHERIFF_REVEAL_RESULT`, `SHERIFF_APPOINT`
+
+Full enum: `backend/src/main/kotlin/com/werewolf/model/Enums.kt`.
 
 ---
 

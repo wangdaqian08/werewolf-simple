@@ -1,7 +1,8 @@
 # Werewolf Game — Scenario Documentation Index
 
-This directory is the **single source of truth** for implementing backend integration tests (Spring + STOMP) and
-frontend visual E2E tests (Playwright). Every assertion a test makes should be derivable from these documents.
+This directory is the **single source of truth** for the design intent of each scenario, and for the assertions
+made by Playwright real-backend E2E tests (`frontend/e2e/real/`) and frontend unit tests. Every assertion a test
+makes should be derivable from these documents.
 
 ---
 
@@ -13,9 +14,11 @@ frontend visual E2E tests (Playwright). Every assertion a test makes should be d
 | 02 | [scenario-02-standard-six-villagers-win.md](scenario-02-standard-six-villagers-win.md) | 6 (W×2, S, Wi, H, V)    | Villagers win Day 2   | Seer leads to wolf elimination, villager win path       |
 | 03 | [scenario-03-minimal-four-player.md](scenario-03-minimal-four-player.md)               | 4 (W×2, V×2)            | Wolves win Night 1    | Minimal flow, immediate win condition, no special roles |
 | 04 | [scenario-04-witch-poison-path.md](scenario-04-witch-poison-path.md)                   | 6 (W×2, S, Wi, H, V)    | Villagers win Night 2 | Witch poison mechanic, dual-death night resolve         |
-| 05 | [scenario-05-hunter-shoots-after-vote.md](scenario-05-hunter-shoots-after-vote.md)     | 6 (W×2, S, Wi, H, V)    | Villagers win Day 2   | Hunter shoot on elimination, HUNTER_SKIP variant        |
+| 05 | [scenario-05-hunter-shoots-after-vote.md](scenario-05-hunter-shoots-after-vote.md)     | 6 (W×2, S, Wi, H, V)    | Villagers win Day 2   | Hunter shoot on elimination, HUNTER_PASS variant        |
 | 06 | [scenario-06-tie-vote.md](scenario-06-tie-vote.md)                                     | 6 (W×2, S, Wi, H, V)    | Villagers win Day 3   | Tie vote → no elimination, VOTING_CONTINUE              |
 | 07 | [scenario-07-with-guard.md](scenario-07-with-guard.md)                                 | 7 (W×2, S, Wi, H, G, V) | TBD (mid-game)        | Guard protect, same-player repeat rejection             |
+| 08 | [scenario-08-with-idiot.md](scenario-08-with-idiot.md)                                 | 6 (W×2, S, I, H, V)     | Mid-game (see doc)    | Idiot reveal on vote, loses vote right, stays alive     |
+| 09 | [scenario-09-e2e.md](scenario-09-e2e.md)                                               | 12 (hard mode)          | see doc               | HARD_MODE win condition, full 12-player regression      |
 
 > **Role abbreviations used throughout:** W = WEREWOLF, S = SEER, Wi = WITCH, H = HUNTER, G = GUARD, V = VILLAGER
 

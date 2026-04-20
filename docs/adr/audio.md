@@ -1,29 +1,34 @@
-音频映射
+# Audio
 
+Audio files are served by the backend from `backend/src/main/resources/static/audio/`
+(accessible as `/audio/<filename>.mp3`). The frontend triggers playback based on STOMP
+events; volume is controllable via `useAudioService()`.
 
-┌─────────────────────┬──────────────────┐
-│ 游戏阶段/子阶段     │ 音频文件         │
-├─────────────────────┼──────────────────┤
-│ NIGHT 阶段开始      │ goes_dark_close_eyes.mp3   │
-│ DAY 阶段开始        │ day_time.mp3       │
-│ NIGHT.WEREWOLF_PICK │ wolf_open_eyes.mp3   │
-│ 狼人行动结束        │ wolf_close_eyes.mp3   │
-│ NIGHT.SEER_PICK     │ seer_open_eyes.mp3 │
-│ 预言家行动结束      │ seer_close_eyes.mp3 │
-│ NIGHT.WITCH_ACT     │ witch_open_eyes.mp3   │
-│ 女巫行动结束        │ witch_close_eyes.mp3   │
-│ NIGHT.GUARD_PICK    │ guard_open_eyes.mp3   │
-│ 守卫行动结束        │ guard_close_eyes.mp3   │
-└─────────────────────┴──────────────────┘
+## Trigger Map
 
-使用方式
+| Event / sub-phase                     | File                        |
+|---------------------------------------|-----------------------------|
+| `NIGHT` enter                         | `goes_dark_close_eyes.mp3`  |
+| Night atmosphere (loop)               | `crow_night.mp3`            |
+| `NIGHT / WEREWOLF_PICK` enter         | `wolf_howl.mp3` → `wolf_open_eyes.mp3` |
+| Werewolf phase close                  | `wolf_close_eyes.mp3`       |
+| `NIGHT / SEER_PICK` enter             | `seer_open_eyes.mp3`        |
+| Seer phase close                      | `seer_close_eyes.mp3`       |
+| `NIGHT / WITCH_ACT` enter             | `witch_open_eyes.mp3`       |
+| Witch phase close                     | `witch_close_eyes.mp3`      |
+| `NIGHT / GUARD_PICK` enter            | `guard_open_eyes.mp3`       |
+| Guard phase close                     | `guard_close_eyes.mp3`      |
+| Dawn / `DAY_PENDING`                  | `rooster_crowing.mp3`       |
+| `DAY_DISCUSSION` / `DAY_VOTING` enter | `day_time.mp3`              |
 
-音频会自动根据游戏阶段播放，无需手动调用。如果需要控制音量：
+Dead roles still receive the same open-eyes → delay → close-eyes sequence (see
+ADR-010 Dead-Role Information Hiding). Audio is identical whether the role player is
+alive or dead.
 
+## Frontend usage
+
+```ts
 const { setVolume, getVolume } = useAudioService()
-
-// 设置音量（0-1）
-setVolume(0.5)
-
-// 获取当前音量
+setVolume(0.5)         // 0–1
 const volume = getVolume()
+```

@@ -1,243 +1,86 @@
-# ADR-007 — E2E Testing Strategy
-
-**Date:** 2026-03-20
-**Status:** Accepted
-
+---
+id: ADR-007
+title: E2E Testing Strategy
+status: accepted
 ---
 
 ## Context
 
-As the Werewolf game grows in complexity (multi-phase game loop, per-role private events, action gating), we need a
-testing strategy that:
+Werewolf has many phase transitions, per-role private events and action-gating rules. We need
+automated coverage at three levels:
 
-1. **Correctness** — each phase transition fires only when the right actions complete; wrong phases reject actions
-2. **Role visibility** — each player receives exactly the private info their role entitles them to (no role leaks)
-3. **Action gating** — roles can only execute their allowed actions; others are rejected
-4. **Design fidelity** — what each player sees in the browser matches the design spec per phase
-
-Manual testing with multiple browser windows does not scale. We need automated, reproducible coverage at each layer.
-
----
+1. **Rule correctness** — actions accepted or rejected in the right sub-phase.
+2. **Role isolation** — each player receives only the private info their role entitles them to.
+3. **UI correctness** — the right screen is rendered for each phase and role.
 
 ## Decision
 
-We adopt a **three-layer testing architecture** unified by a shared **Scenario Fixture** format.
+Two test layers, both in the frontend (`frontend/`), plus backend JUnit unit tests on the Kotlin
+side. Intentionally no bespoke Spring "scenario fixture" layer — the real-backend Playwright
+suite gives us integration-level coverage while exercising the same code paths real clients use.
 
-```
-┌─────────────────────────────────────────────────────┐
-│  Game Scenario (Kotlin data class or YAML fixture)  │
-│  • player count, role assignments                   │
-│  • action sequence (who does what, when)            │
-│  • expected events per player per phase             │
-└────────────────┬────────────────┬───────────────────┘
-                 │                │
-    ┌────────────▼──────┐  ┌──────▼──────────────────┐
-    │ Spring Integration│  │ Playwright Multi-Context │
-    │    Tests (B)      │  │     Visual E2E (C)       │
-    │                   │  │                          │
-    │ - Real Spring ctx │  │ - N browser contexts     │
-    │ - Real DB         │  │ - Real backend           │
-    │ - STOMP clients   │  │ - Screenshot each phase  │
-    │ - Assert events   │  │ - HTML visual report     │
-    └───────────────────┘  └──────────────────────────┘
-```
+### Layer 1 — Backend unit tests (Kotlin, JUnit 5)
 
----
+Location: `backend/src/test/kotlin/com/werewolf/unit/`.
 
-## Layer 1 — Scenario Fixtures
+Covers role handlers, voting pipeline, tally calculator, night orchestrator helpers, and the
+action dispatcher in isolation. Focus is on acceptance/rejection rules per sub-phase and on
+state transitions, with mocked repositories.
 
-**File:** `backend/src/test/kotlin/com/werewolf/test/scenarios/GameScenario.kt`
+Run: `cd backend && ./gradlew test`.
 
-```kotlin
-data class GameScenario(
-    val name: String,
-    val players: List<PlayerSpec>,           // nickname + role
-    val roomConfig: RoomConfig,              // hasSeer, hasWitch, etc.
-    val steps: List<ScenarioStep>,           // ordered action sequence
-)
+### Layer 2 — Frontend unit / component tests (Vitest)
 
-data class PlayerSpec(val nickname: String, val role: PlayerRole)
+Location: `frontend/src/__tests__/` and co-located `*.test.ts` files.
 
-data class ScenarioStep(
-    val description: String,
-    val actions: List<PlayerAction>,         // what each player does this step
-    val expectBroadcast: List<EventMatcher>, // /topic/game/{id} assertions
-    val expectPrivate: Map<String, List<EventMatcher>>, // /user/queue/private per nickname
-    val expectPhase: PhaseAssertion?,        // phase + subPhase after step
-    val expectRejected: List<RejectionSpec>? = null, // actions that must fail
-)
-```
+Covers Pinia stores, action dispatch wiring, and component rendering with mocked services.
 
-### Built-in Scenarios
+Run: `cd frontend && npx vitest run`.
 
-| Scenario                 | Players | Roles                                    | Notes                                  |
-|--------------------------|---------|------------------------------------------|----------------------------------------|
-| `StandardSixPlayer`      | 6       | 2W, Seer, Witch, Hunter, Villager        | Full happy path, wolves win            |
-| `StandardSixVillagerWin` | 6       | 2W, Seer, Witch, Hunter, Villager        | Villagers win by day 2                 |
-| `MinimalFourPlayer`      | 4       | 2W, 2 Villager                           | No special roles                       |
-| `WithGuard`              | 7       | 2W, Seer, Witch, Hunter, Guard, Villager | Guard saves wolf target                |
-| `WitchPoisonPath`        | 6       | 2W, Seer, Witch, Hunter, Villager        | Witch uses poison not antidote         |
-| `HunterShootsAfterVote`  | 6       | 2W, Seer, Witch, Hunter, Villager        | Hunter eliminated by vote, shoots back |
-| `TieVote`                | 6       | 2W, Seer, Witch, Hunter, Villager        | Vote ties, no elimination              |
-| `SheriffElectionPath`    | 6       | 2W, Seer, Witch, Hunter, Villager        | Election enabled                       |
+### Layer 3 — UI E2E with mocked backend (Playwright)
 
----
+Config: `frontend/playwright.config.ts`. Specs: `frontend/e2e/*.spec.ts` (top level).
 
-## Layer 2 — Spring Integration Tests
+Uses the axios mock adapter in `frontend/src/mocks/` to simulate the backend. Covers view-layer
+flows without requiring a running backend. Fast and deterministic.
 
-**Location:** `backend/src/test/kotlin/com/werewolf/test/integration/`
+Run: `cd frontend && npx playwright test`.
 
-### Setup
+### Layer 4 — Real-backend E2E (Playwright, multi-browser)
 
-```kotlin
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class GameFlowIntegrationTest {
+Config: `frontend/playwright.real.config.ts`. Specs: `frontend/e2e/real/*.spec.ts`.
 
-    // One WebSocketStompClient per player
-    // Connected via ws://localhost:{port}/ws
-    // Each has own JWT (from POST /api/auth/dev)
-    // Each subscribes to /topic/game/{gameId} + /user/queue/private
+Each player runs in its own `BrowserContext` with its own STOMP connection. Tests drive bots via
+shell helpers (`scripts/join-room.sh`, `scripts/act.sh`) and verify UI state, phase transitions,
+and per-role private events end-to-end. This is the layer that catches backend/frontend
+integration regressions.
 
-    // Message collection: CopyOnWriteArrayList<> per player
-    // Assertions: Awaitility.await().atMost(5, SECONDS).until { ... }
-}
-```
+Helpers live in `frontend/e2e/real/helpers/`:
+- `assertions.ts` — backend-state snapshots + cross-browser phase assertions (with a CI timeout
+  scale).
+- `multi-browser.ts` — spawns N `BrowserContext`s and wires them to one room.
+- `shell-runner.ts` — wraps `act.sh` with retry/logging for race-prone actions.
+- `composite-screenshot.ts` — arranges per-player screenshots into a single image for regression
+  review.
 
-### What each test verifies per ScenarioStep
+Key specs: `game-flow`, `flow-12p-sheriff`, `sheriff-flow`, `revote-flow`, `idiot-flow`,
+`guard-audio-sequence`, `dead-role-audio`, `werewolf-win`.
 
-1. **Phase transition** — `game.phase` + `game.subPhase` match `expectPhase` after step actions
-2. **Broadcast events** — `/topic/game/{gameId}` messages match `expectBroadcast` (type + key fields)
-3. **Private events** — each player's `/user/queue/private` inbox matches `expectPrivate[nickname]`
-4. **Role info isolation** — WEREWOLF players get teammate list; SEER gets check result; others do not
-5. **Action gating** — actions in `expectRejected` return `GameActionResult.Rejected` (not accepted)
+Run: `cd frontend && npx playwright test --config=playwright.real.config.ts`.
+Full regression (boots backend + DB + both CLASSIC and HARD_MODE):
+`./scripts/run-e2e-full-flow.sh`.
 
-### Key files
+CI runs Layer 4 as a 3-way sharded matrix — see `.github/workflows/ci.yml`.
 
-| File                         | Purpose                                               |
-|------------------------------|-------------------------------------------------------|
-| `GameFlowIntegrationTest.kt` | Main test class, scenario runner                      |
-| `StompTestClient.kt`         | Wraps `WebSocketStompClient`, collects messages       |
-| `ScenarioRunner.kt`          | Drives a `GameScenario` through HTTP + STOMP          |
-| `EventMatcher.kt`            | Flexible assertion on `DomainEvent` fields            |
-| `application-test.yml`       | Test profile: H2 in-memory or Testcontainers Postgres |
+## Scenario documentation
 
-### Dependencies to add to `build.gradle.kts`
-
-```kotlin
-testImplementation("org.awaitility:awaitility-kotlin:4.2.1")
-testImplementation("org.springframework.boot:spring-boot-starter-websocket")
-// For Testcontainers (optional, alternative to H2):
-testImplementation("org.testcontainers:postgresql:1.19.3")
-testImplementation("org.testcontainers:junit-jupiter:1.19.3")
-```
-
----
-
-## Layer 3 — Playwright Visual E2E
-
-**Location:** `frontend/e2e/full-flow/`
-
-### Setup
-
-Each player = separate `BrowserContext` (own cookies, own localStorage, own WebSocket connection).
-
-```typescript
-// e2e/full-flow/standard-six-player.spec.ts
-test('6-player standard game — wolves win', async ({browser}) => {
-    const players = await createPlayerContexts(browser, 6)
-    // players[0] = host (Alice), players[1..5] = guests
-
-    // Step 1: All join room
-    // Step 2: Host starts game
-    // Step 3: All confirm roles → screenshot each player's role reveal
-    // Step 4: Night phase — wolves pick, seer checks, witch acts
-    // Step 5: Day phase → screenshot each player's day view
-    // Step 6: Vote → screenshot tally
-    // Step 7: Repeat until game over → screenshot result screen
-})
-```
-
-### Screenshot Strategy
-
-At each phase transition, capture all N player views into a named directory:
-
-```
-playwright-report/
-  visual/
-    standard-6-player/
-      step-01-role-reveal/
-        alice-WEREWOLF.png
-        bob-WEREWOLF.png
-        carol-SEER.png
-        dave-WITCH.png
-        eve-HUNTER.png
-        frank-VILLAGER.png
-      step-02-night-werewolf-pick/
-        alice-WEREWOLF.png    ← sees wolf UI (targeting)
-        carol-SEER.png        ← sees waiting UI
-      step-03-day-result-hidden/
-        ...
-```
-
-### What each screenshot verifies
-
-- **Role reveal**: correct role name, correct teammate display (wolves see each other, others don't)
-- **Night pick**: only the active role sees targeting UI; others see "waiting" screen
-- **Day**: all see same killed player list
-- **Voting**: all see same tally; eliminated player's role revealed
-- **Game over**: winner banner, all roles revealed
-
-### Helper utilities
-
-| File                                     | Purpose                                                 |
-|------------------------------------------|---------------------------------------------------------|
-| `e2e/full-flow/helpers/playerContext.ts` | `createPlayerContexts(browser, n)` — auth, join room    |
-| `e2e/full-flow/helpers/gameDriver.ts`    | `advancePhase(players, step)` — drives scenario step    |
-| `e2e/full-flow/helpers/screenshotAll.ts` | `screenshotAll(players, stepName)` — captures all views |
-| `e2e/full-flow/scenarios/standardSix.ts` | Scenario data (mirrors backend `StandardSixPlayer`)     |
-
----
-
-## Test Profile Config
-
-**`backend/src/test/resources/application-test.yml`**
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:h2:mem:testdb;MODE=PostgreSQL
-    driver-class-name: org.h2.Driver
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-  flyway:
-    enabled: false   # Let Hibernate manage schema in tests
-```
-
-*(Alternative: Testcontainers Postgres for closer-to-prod fidelity)*
-
----
+Scenarios in `docs/scenarios/` are the source of truth for what a given flow should do. Assertions
+in the real-backend specs should be derivable from those docs.
 
 ## Consequences
 
-**Positive:**
-
-- Scenario fixtures serve as living documentation of game rules
-- Integration tests catch backend regressions without browser overhead
-- Visual E2E screenshots catch UI regressions and role-visibility bugs simultaneously
-- A single scenario description drives both backend and frontend tests
-
-**Negative:**
-
-- Multi-context Playwright tests are slower (~30–60 s per scenario)
-- Maintaining scenario fixtures requires updating when game rules change
-- H2 in-memory DB may diverge from production Postgres behavior (mitigated by Testcontainers option)
-
----
-
-## Alternatives Considered
-
-- **Unit tests only**: Too granular to catch integration bugs (STOMP event routing, phase gating)
-- **Single-browser E2E**: Cannot test per-player role isolation (the key correctness concern)
-- **Cypress**: Less suitable for multi-context; Playwright's `BrowserContext` model is the right fit
+- No separate "scenario fixture" DSL to maintain — assertions live next to the Playwright specs.
+- CI wall-clock is dominated by Layer 4 (real-backend) due to STOMP timing and multi-browser
+  coordination; sharding mitigates.
+- Local-vs-CI env differences are real and sometimes subtle — see
+  `memory/feedback_e2e_ci_vs_local.md`.

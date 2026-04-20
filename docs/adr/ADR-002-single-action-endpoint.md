@@ -6,7 +6,7 @@ status: accepted
 
 ## Context
 
-The game has ~20 distinct player actions spread across multiple phases (role reveal, sheriff election, day, voting,
+The game has ~28 distinct player actions spread across multiple phases (role reveal, sheriff election, day, voting,
 night). We needed to decide whether to expose a REST endpoint per action or one unified endpoint.
 
 ## Decision
@@ -18,19 +18,20 @@ POST /api/game/action
 { gameId, actionType: ActionType, targetUserId?, payload? }
 ```
 
-`ActionType` is a Kotlin enum (`model/Enums.kt`) covering all 21 action types:
+`ActionType` is a Kotlin enum in `backend/src/main/kotlin/com/werewolf/model/Enums.kt` — that file is the source of truth. The groups below are provided for orientation.
 
-| Group            | Actions                                                                                                       |
-|------------------|---------------------------------------------------------------------------------------------------------------|
-| Role reveal      | `CONFIRM_ROLE`                                                                                                |
-| Day              | `REVEAL_NIGHT_RESULT`, `DAY_ADVANCE`                                                                          |
-| Voting           | `SUBMIT_VOTE`, `VOTING_REVEAL_TALLY`, `VOTING_CONTINUE`                                                       |
-| Post-elimination | `HUNTER_SHOOT`, `HUNTER_SKIP`, `BADGE_PASS`, `BADGE_DESTROY`                                                  |
-| Night: wolf      | `WOLF_KILL`                                                                                                   |
-| Night: seer      | `SEER_CHECK`, `SEER_CONFIRM`                                                                                  |
-| Night: witch     | `WITCH_ACT`                                                                                                   |
-| Night: guard     | `GUARD_PROTECT`, `GUARD_SKIP`                                                                                 |
-| Sheriff election | `SHERIFF_CAMPAIGN`, `SHERIFF_QUIT`, `SHERIFF_START_SPEECH`, `SHERIFF_ADVANCE_SPEECH`, `SHERIFF_REVEAL_RESULT` |
+| Group            | Actions                                                                                                                                                  |
+|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Role reveal      | `CONFIRM_ROLE`, `START_NIGHT`                                                                                                                            |
+| Day              | `REVEAL_NIGHT_RESULT`, `DAY_ADVANCE`                                                                                                                     |
+| Voting           | `SUBMIT_VOTE`, `VOTING_UNVOTE`, `VOTING_REVEAL_TALLY`, `VOTING_CONTINUE`                                                                                 |
+| Post-elimination | `HUNTER_SHOOT`, `HUNTER_PASS`, `BADGE_PASS`, `BADGE_DESTROY`                                                                                             |
+| Night: wolf      | `WOLF_SELECT`, `WOLF_KILL`                                                                                                                               |
+| Night: seer      | `SEER_CHECK`, `SEER_CONFIRM`                                                                                                                             |
+| Night: witch     | `WITCH_ACT`                                                                                                                                              |
+| Night: guard     | `GUARD_PROTECT`, `GUARD_SKIP`                                                                                                                            |
+| Idiot            | `IDIOT_REVEAL`                                                                                                                                           |
+| Sheriff election | `SHERIFF_CAMPAIGN`, `SHERIFF_QUIT`, `SHERIFF_QUIT_CAMPAIGN`, `SHERIFF_PASS`, `SHERIFF_START_SPEECH`, `SHERIFF_ADVANCE_SPEECH`, `SHERIFF_VOTE`, `SHERIFF_CONFIRM_VOTE`, `SHERIFF_ABSTAIN`, `SHERIFF_REVEAL_RESULT`, `SHERIFF_APPOINT` |
 
 `GameActionDispatcher` routes each `ActionType` to the appropriate pipeline or role handler. Jackson deserializes the
 string from JSON to the enum automatically.

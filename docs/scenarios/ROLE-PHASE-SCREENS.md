@@ -318,7 +318,7 @@ spec for each role's view at each phase/subphase.
     - List of all alive players
 - **Actions:**
     - Tap player → `HUNTER_SHOOT(targetUserId)`
-    - `[放弃技能]` → `HUNTER_SKIP`
+    - `[放弃技能]` → `HUNTER_PASS`
 - **Constraint:** Cannot shoot self (already eliminated); backend rejects self-target
 
 ---

@@ -31,7 +31,7 @@
 #     IDIOT_REVEAL      idiot reveals identity when voted out (first time only, stays alive)
 #   Hunter / Badge:
 #     HUNTER_SHOOT      hunter shoots a target               (requires --target)
-#     HUNTER_SKIP       hunter skips shooting
+#     HUNTER_PASS       hunter skips shooting                (HUNTER_SKIP kept as legacy alias)
 #     BADGE_PASS        sheriff passes badge to target       (requires --target)
 #     BADGE_DESTROY     sheriff destroys the badge
 #   Sheriff election (also in sheriff.sh):
@@ -99,7 +99,7 @@
 #   ./scripts/act.sh VOTING_REVEAL_TALLY                          # host reveals tally
 #   ./scripts/act.sh VOTING_CONTINUE                              # host continues after result
 #   ./scripts/act.sh HUNTER_SHOOT --target 4                      # hunter shoots seat 4
-#   ./scripts/act.sh HUNTER_SKIP                                  # hunter skips
+#   ./scripts/act.sh HUNTER_PASS                                  # hunter skips
 #   ./scripts/act.sh BADGE_PASS --target 3                        # sheriff passes badge to seat 3
 #   ./scripts/act.sh BADGE_DESTROY                                # sheriff destroys badge
 #   ./scripts/act.sh SHERIFF_QUIT <nick>                          # candidate drops out (SIGNUP)
@@ -129,7 +129,7 @@ Usage: $0 <ACTION_TYPE> [PLAYER] [--target PLAYER] [--payload JSON] [--room CODE
   Actions : WOLF_SELECT WOLF_KILL SEER_CHECK SEER_CONFIRM WITCH_ACT GUARD_PROTECT GUARD_SKIP
             CONFIRM_ROLE START_NIGHT REVEAL_NIGHT_RESULT DAY_ADVANCE
             SUBMIT_VOTE VOTING_UNVOTE VOTING_REVEAL_TALLY VOTING_CONTINUE IDIOT_REVEAL
-            HUNTER_SHOOT HUNTER_SKIP BADGE_PASS BADGE_DESTROY
+            HUNTER_SHOOT HUNTER_PASS BADGE_PASS BADGE_DESTROY
             SHERIFF_CAMPAIGN SHERIFF_PASS SHERIFF_QUIT SHERIFF_QUIT_CAMPAIGN
             SHERIFF_VOTE SHERIFF_ABSTAIN SHERIFF_CONFIRM_VOTE
             SHERIFF_START_SPEECH SHERIFF_ADVANCE_SPEECH SHERIFF_REVEAL_RESULT SHERIFF_APPOINT
@@ -179,13 +179,18 @@ done
 
 [ -z "$ACTION_TYPE" ] && usage
 
+# Legacy aliases → rewrite to backend action name
+case "$ACTION_TYPE" in
+  HUNTER_SKIP) ACTION_TYPE="HUNTER_PASS" ;;
+esac
+
 # Validate ACTION_TYPE
 case "$ACTION_TYPE" in
   STATUS|CONSOLE_LOGIN) ;;  # pseudo-action handled below
   WOLF_SELECT|WOLF_KILL|SEER_CHECK|SEER_CONFIRM|WITCH_ACT|GUARD_PROTECT|GUARD_SKIP| \
   CONFIRM_ROLE|START_NIGHT|REVEAL_NIGHT_RESULT|DAY_ADVANCE| \
   SUBMIT_VOTE|VOTING_UNVOTE|VOTING_REVEAL_TALLY|VOTING_CONTINUE|IDIOT_REVEAL| \
-  HUNTER_SHOOT|HUNTER_SKIP|BADGE_PASS|BADGE_DESTROY| \
+  HUNTER_SHOOT|HUNTER_PASS|BADGE_PASS|BADGE_DESTROY| \
   SHERIFF_CAMPAIGN|SHERIFF_PASS|SHERIFF_QUIT|SHERIFF_QUIT_CAMPAIGN| \
   SHERIFF_VOTE|SHERIFF_ABSTAIN|SHERIFF_CONFIRM_VOTE| \
   SHERIFF_START_SPEECH|SHERIFF_ADVANCE_SPEECH|SHERIFF_REVEAL_RESULT|SHERIFF_APPOINT) ;;
