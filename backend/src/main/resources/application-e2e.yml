@@ -18,6 +18,11 @@ app:
   jwt:
     secret: e2e-secret-key-for-testing-must-be-32-chars-ok
     expiration-hours: 1
+  oauth:
+    google:
+      # OAuth2 auto-config is excluded above; this default exists only so base
+      # application.yml's ${GOOGLE_REDIRECT_URI} placeholder resolves during e2e.
+      redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:5173/auth/callback/google}
   cors:
     allowed-origins: "*"
 

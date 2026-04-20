@@ -1,93 +1,105 @@
-# Werewolf Backend — Production Deployment
+# Werewolf — Production Deployment
 
-Minimal runbook for deploying the Spring Boot backend to a GCP free-tier VM
-(Ubuntu 22.04, 1 GB RAM, Docker-based Postgres on `127.0.0.1:5432`).
+Single-command container deployment. Host Nginx terminates TLS and reverse-proxies
+to a docker-compose stack (backend, frontend, Postgres) bound to `127.0.0.1`.
 
-## One-time host setup
+## One-time host setup (GCP free-tier Ubuntu 22.04)
 
 ```bash
-# 1. Install Java 17 + Docker (Postgres will run as a container)
+# 1. Docker + Nginx
 sudo apt update
-sudo apt install -y openjdk-17-jre-headless docker.io docker-compose-plugin
+sudo apt install -y docker.io docker-compose-plugin nginx
+sudo systemctl enable --now docker nginx
 
-# 2. Create service user and directories
-sudo useradd --system --home /opt/werewolf --shell /usr/sbin/nologin werewolf
-sudo mkdir -p /opt/werewolf /etc/werewolf /var/log/werewolf
-sudo chown werewolf:werewolf /opt/werewolf /var/log/werewolf
-sudo chmod 750 /etc/werewolf
+# 2. Allow yourself to run docker without sudo (optional)
+sudo usermod -aG docker "$USER"
+# log out / back in for the group change to take effect
 
-# 3. Install the env file (chmod 640 — contains secrets)
-sudo cp backend/.env.prod.example /etc/werewolf/env
-sudo chown root:werewolf /etc/werewolf/env
-sudo chmod 640 /etc/werewolf/env
-sudo -e /etc/werewolf/env   # edit and fill in real values
+# 3. Clone the repo (any location; these docs assume /opt/werewolf-simple)
+sudo git clone https://github.com/<your>/werewolf-simple.git /opt/werewolf-simple
+sudo chown -R "$USER":"$USER" /opt/werewolf-simple
+cd /opt/werewolf-simple
 
-# 4. Install the systemd unit
-sudo cp backend/deploy/werewolf-backend.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable werewolf-backend
+# 4. Install the host Nginx site (edit server_name to your domain first)
+sudo cp deploy/nginx-site.conf /etc/nginx/sites-available/werewolf
+sudo ln -sf /etc/nginx/sites-available/werewolf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+# 5. TLS via Let's Encrypt (required — mobile Safari blocks ws://)
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d werewolf.example.com
 ```
 
-## Build and deploy
+## Deploy (single command)
 
 ```bash
-# Locally: build the fat jar
-cd backend
-./gradlew bootJar
+cd /opt/werewolf-simple
+cp .env.prod.example .env.prod
+# edit .env.prod — fill in JWT_SECRET, POSTGRES_PASSWORD, GOOGLE_*, FRONTEND_ORIGIN
+docker compose up -d --build
+```
+
+Everything needed (Postgres, backend jar build, frontend Vite build, Nginx
+container) is produced by this single command. No local Java / Node install
+required on the VM.
+
+### Updates
+
+```bash
+cd /opt/werewolf-simple
+git pull
+docker compose up -d --build
+```
+
+## Verify
+
+```bash
+# Should return {"status":"UP"}
+curl -sf http://127.0.0.1:8080/api/health
+
+# Via host Nginx (HTTPS after certbot)
+curl -sf https://werewolf.example.com/api/health
+```
+
+## Required env vars
+
+See `/Users/dq/workspace/werewolf-simple/.env.prod.example` at the repo root
+for the full annotated list. The backend refuses to start if any of these are
+unset:
+
+`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_SECRET`,
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`,
+`FRONTEND_ORIGIN`.
+
+## Lifecycle
+
+```bash
+docker compose ps                       # status
+docker compose logs -f backend          # live logs
+docker compose logs -f frontend
+docker compose restart backend          # restart one service
+docker compose down                     # stop (keeps volumes / data)
+docker compose down -v                  # stop AND wipe postgres data
+```
+
+## Legacy: systemd + plain jar
+
+The `werewolf-backend.service` unit and scp-based jar deploy flow are retained
+for users who prefer a non-container install. For container deploys (recommended)
+use the `docker compose` flow above.
+
+```bash
+# Locally build the fat jar
+cd backend && ./gradlew bootJar
 
 # Copy to VM
 scp build/libs/werewolf-*-SNAPSHOT.jar vm:/tmp/werewolf-backend.jar
 ssh vm sudo install -o werewolf -g werewolf -m 640 \
     /tmp/werewolf-backend.jar /opt/werewolf/werewolf-backend.jar
-```
 
-## Start / stop / logs
-
-```bash
-sudo systemctl start werewolf-backend
-sudo systemctl stop werewolf-backend
 sudo systemctl restart werewolf-backend
-sudo systemctl status werewolf-backend
-
-# Live logs
 sudo journalctl -u werewolf-backend -f
-
-# Rotated file logs (written by logback)
-tail -f /var/log/werewolf/backend.log
 ```
 
-## Required env vars
-
-See `backend/.env.prod.example` for the full list with comments.
-
-The backend will refuse to start if any of these are unset:
-`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_SECRET`,
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`,
-`FRONTEND_ORIGIN`.
-
-## Nginx reverse proxy
-
-The backend expects `X-Forwarded-Proto` and `X-Forwarded-For` headers
-(`server.forward-headers-strategy: native`). A minimal Nginx snippet:
-
-```nginx
-location /api/ {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-
-location /ws/ {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 3600s;
-}
-```
-
-Mobile Safari blocks `ws://`, so SSL (Let's Encrypt) is required.
+See `werewolf-backend.service` for the systemd unit. You must still provision
+Postgres separately in that flow (the docker-compose stack handles it for you).

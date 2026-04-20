@@ -20,6 +20,13 @@ websocket:
   allowed-origins: "*"
 
 app:
+  # Dev-only defaults. Base application.yml intentionally has no defaults for these —
+  # prod must supply real values via env or it will fail-fast at startup.
+  jwt:
+    secret: ${JWT_SECRET:dev-secret-change-in-production-must-be-32-chars-min}
+  oauth:
+    google:
+      redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:5173/auth/callback/google}
   cors:
     allowed-origins: "http://localhost:5173,http://localhost:3000"
 
