@@ -339,7 +339,7 @@ curl -s -X POST http://localhost:8080/api/game/action \
 # ────────────────────────────────────────────────────────────────────
 ./scripts/act.sh HUNTER_SHOOT $HUNTER_NICK --target <seat>
 # OR hunter passes:
-./scripts/act.sh HUNTER_SKIP $HUNTER_NICK
+./scripts/act.sh HUNTER_PASS $HUNTER_NICK
 
 # If hunter's target was NOT the sheriff → goes to night
 # If hunter's target WAS the sheriff → subPhase = BADGE_HANDOVER (see Case C)

@@ -22,7 +22,7 @@ frontend) and **Spring Boot 3** (backend). The design resolution is 417x614 (por
 ### Backend
 
 - **Spring Boot 3 (Java 17+)** — REST + WebSocket (STOMP)
-- **Spring Data JPA + MySQL/PostgreSQL** — persistence
+- **Spring Data JPA + PostgreSQL** — persistence (Flyway migrations)
 - **Spring Security + JWT** — stateless auth (nickname-based for MVP)
 - **spring-boot-starter-websocket** — built-in STOMP broker
 

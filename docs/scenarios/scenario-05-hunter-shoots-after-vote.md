@@ -201,14 +201,14 @@ PhaseChanged(NIGHT, WEREWOLF_PICK)
 
 ---
 
-### Variant: Hunter Skips (HUNTER_SKIP Path)
+### Variant: Hunter Skips (HUNTER_PASS Path)
 
-This variant shows the `HUNTER_SKIP` action. Instead of shooting Bob, Eve skips.
+This variant shows the `HUNTER_PASS` action. Instead of shooting Bob, Eve skips.
 
 **Eve's action:**
 
 ```
-HUNTER_SKIP
+HUNTER_PASS
 ```
 
 **Events:**
@@ -234,8 +234,8 @@ GameOver(winner: WEREWOLF)
 
 This variant is useful for testing that:
 
-1. `HUNTER_SKIP` is a valid action and accepted by backend
-2. Win condition is checked immediately after HUNTER_SHOOT/SKIP completes, before moving to next phase
+1. `HUNTER_PASS` is a valid action and accepted by backend
+2. Win condition is checked immediately after HUNTER_SHOOT/HUNTER_PASS completes, before moving to next phase
 
 ---
 
