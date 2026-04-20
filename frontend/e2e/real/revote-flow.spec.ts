@@ -169,11 +169,15 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const hostPage = ctx.hostPage
     const gameId = ctx.gameId
 
-    // Pick a non-wolf target
-    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots].filter(
-      (b) => b.nick !== 'Host',
-    )
-    const target = allTargets[0]
+    // Pick an alive non-wolf target from live DB state, not from the
+    // start-of-game roleMap. Using roleMap[0] causes infinite WEREWOLF_PICK
+    // loops once the first villager dies — every subsequent WOLF_KILL hits a
+    // "target is dead" rejection for ~500+s (observed in CI run 24649855990
+    // shard 2 attempt 1).
+    const alivePlayers = await readAlivePlayersNonHost(ctx.hostPage, ctx.gameId)
+    const wolfNicks = new Set((ctx.roleMap.WEREWOLF ?? []).map((b) => b.nick))
+    const aliveNonWolf = alivePlayers.filter((p) => !wolfNicks.has(p.nickname))
+    const target = aliveNonWolf[0]
 
     // ── Wolf kill ──
     // Wait for the coroutine to reach WEREWOLF_PICK before firing the action.
@@ -220,7 +224,8 @@ test.describe('Voting tie → revote → game proceeds', () => {
     let seerDone = false
     if (reachedSeerPick) {
       for (const sb of seerBots.filter((b) => b.nick !== 'Host')) {
-        const seats = allTargets.map((t) => t.seat)
+        // Use live alive seats; exclude the seer's own seat (self-check rejects).
+        const seats = alivePlayers.filter((p) => p.nickname !== sb.nick).map((p) => p.seat)
         for (const seat of seats) {
           if (tryAct('SEER_CHECK', sb.nick, { target: String(seat), room: ctx.roomCode })) {
             seerDone = true
