@@ -24,7 +24,9 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:dev-secret-change-in-production-must-be-32-chars-min}
+    # No default — MUST be provided via env. Dev/e2e profiles supply their own.
+    # Fail-fast on missing secret prevents accidental use of a hardcoded key in prod.
+    secret: ${JWT_SECRET}
     expiration-hours: 24
   oauth:
     google:
@@ -32,10 +34,13 @@ app:
       client-secret: ${GOOGLE_CLIENT_SECRET:}
       token-uri: https://oauth2.googleapis.com/token
       userinfo-uri: https://www.googleapis.com/oauth2/v3/userinfo
-      redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:5173/auth/callback/google}
+      # No localhost default — prod must set this explicitly. Dev profile supplies a localhost default.
+      redirect-uri: ${GOOGLE_REDIRECT_URI}
     wechat:
       app-id: ${WECHAT_APP_ID:}
       app-secret: ${WECHAT_APP_SECRET:}
+  cors:
+    allowed-origins: "*"
 
 server:
   port: 8080

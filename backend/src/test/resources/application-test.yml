@@ -30,6 +30,16 @@ app:
   jwt:
     secret: test-secret-key-for-testing-must-be-32-chars-ok
     expiration-hours: 1
+  oauth:
+    google:
+      # OAuth2 auto-config is excluded above; this default exists only so base
+      # application.yml's ${GOOGLE_REDIRECT_URI} placeholder resolves in tests.
+      redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:5173/auth/callback/google}
+  cors:
+    allowed-origins: "*"
+
+websocket:
+  allowed-origins: "*"
 
 # Shrink every night-phase delay so integration tests that traverse the real
 # coroutine finish in seconds rather than minutes. Relative ordering between

@@ -7,5 +7,5 @@ import org.springframework.web.bind.annotation.RestController
 class HealthController {
 
     @GetMapping("/api/health")
-    fun health() = mapOf("status" to "ok")
+    fun health() = mapOf("status" to "UP")
 }

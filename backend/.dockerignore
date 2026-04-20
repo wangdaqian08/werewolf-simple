@@ -1,0 +1,27 @@
+# Build outputs
+build/
+.gradle/
+out/
+
+# IDE / OS noise
+.idea/
+*.iml
+.DS_Store
+
+# Tests and coverage
+**/test-results/
+**/reports/
+
+# Deploy artefacts that the build stage doesn't need
+deploy/
+docker/
+docker-compose.yml
+.env.prod
+.env.prod.example
+
+# Docker files themselves (not needed inside the image)
+Dockerfile
+.dockerignore
+
+# Logs
+*.log

@@ -1,0 +1,33 @@
+# Dependencies reinstalled inside the build stage
+node_modules/
+
+# Build output — Docker stage will produce fresh dist/
+dist/
+
+# Test artefacts
+test-results/
+playwright-report/
+**/*.tsbuildinfo
+
+# e2e tests aren't needed for the production image but ARE referenced by
+# tsconfig.json — if you want to strip them, also drop tsconfig.e2e.json
+# from the project references. Keeping them is cheap; only the built dist/
+# ships in the final stage.
+
+# IDE / OS noise
+.idea/
+*.iml
+.DS_Store
+.vscode/
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+
+# Logs
+*.log

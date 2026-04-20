@@ -1,5 +1,6 @@
 package com.werewolf.config
 
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Configuration
 import org.springframework.messaging.simp.config.MessageBrokerRegistry
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker
@@ -8,12 +9,15 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 
 @Configuration
 @EnableWebSocketMessageBroker
-class WebSocketConfig : WebSocketMessageBrokerConfigurer {
+class WebSocketConfig(
+    @Value("\${websocket.allowed-origins}") private val allowedOrigins: String,
+) : WebSocketMessageBrokerConfigurer {
 
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
+        val origins = allowedOrigins.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         registry.addEndpoint("/ws")
-            .setAllowedOriginPatterns("*")
-            .withSockJS() // Enable SockJS fallback for better connectivity
+            .setAllowedOriginPatterns(*origins.toTypedArray())
+            .withSockJS()
     }
 
     override fun configureMessageBroker(registry: MessageBrokerRegistry) {
