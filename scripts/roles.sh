@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-BASE="http://localhost:8080/api"
+BASE="${BACKEND_BASE:-http://localhost:8080/api}"
 STATE_DIR="/tmp"
 
 CYAN='\033[0;36m'; RED='\033[0;31m'; RESET='\033[0m'
@@ -82,7 +82,7 @@ try:
     for gid in range(1, 10000):
         try:
             req = urllib.request.Request(
-                f"http://localhost:8080/api/game/{gid}/state",
+                f"{BASE}/game/{gid}/state",
                 headers={"Authorization": f"Bearer {token}"}
             )
             with urllib.request.urlopen(req) as r:
