@@ -4,6 +4,110 @@ Vue 3 + Spring Boot + PostgreSQL multiplayer game.
 
 ---
 
+## Gameplay Demo
+
+A full 12-player game session — sheriff election, night actions, day voting, hunter abilities, and final victory.
+
+<details>
+<summary><b>Sheriff Election</b> — candidates campaign and players vote</summary>
+
+#### Candidates Campaign
+
+Players sign up as sheriff candidates. Sheriff gets 1.5x voting power at elimination.
+
+![Sheriff Campaign](docs/demo/01-sheriff-campaign.gif)
+
+#### Sheriff Vote
+
+Speeches done — all players vote for their preferred sheriff.
+
+![Sheriff Vote](docs/demo/02-sheriff-vote.gif)
+
+</details>
+
+<details>
+<summary><b>Night Phase</b> — werewolves hunt, special roles act</summary>
+
+#### First Night
+
+Night falls — werewolves select a target, seer checks a player, witch decides on potions.
+
+![First Night](docs/demo/03-first-night.gif)
+
+#### Day Results
+
+Dawn breaks — night results are revealed, players see who was eliminated.
+
+![Day Phase](docs/demo/04-day-phase.gif)
+
+#### Second Night
+
+Another night begins — roles act again under cover of darkness.
+
+![Second Night](docs/demo/05-second-night.gif)
+
+</details>
+
+<details>
+<summary><b>Day Discussion & Voting</b> — players debate and vote to eliminate</summary>
+
+#### Discussion Phase
+
+Surviving players discuss suspicions. The timer counts down for each speaker.
+
+![Day Vote 1](docs/demo/06a-day-vote-1.gif)
+
+#### Vote Round
+
+Players cast their votes to eliminate a suspected werewolf.
+
+![Day Vote 2](docs/demo/06b-day-vote-2.gif)
+
+#### Vote Results
+
+Votes are tallied and the result is revealed.
+
+![Day Vote 3](docs/demo/06c-day-vote-3.gif)
+
+</details>
+
+<details>
+<summary><b>Late Game</b> — night actions, hunter ability, tie votes, victory</summary>
+
+#### Third Night Begins
+
+Night falls again — fewer players remain, tensions rise.
+
+![Third Night Start](docs/demo/07-third-night-start.gif)
+
+#### Night Actions Complete
+
+All night roles finish their actions, dawn approaches.
+
+![Third Night Finish](docs/demo/08-third-night-finish.gif)
+
+#### Hunter Eliminated
+
+The hunter is eliminated and uses their special ability — taking someone down with them.
+
+![Hunter Shot](docs/demo/09-hunter-shot.gif)
+
+#### Tie Vote
+
+A tied vote forces a revote or special resolution.
+
+![Tie Vote](docs/demo/10-tie-vote.gif)
+
+#### Victory
+
+The game ends — the winning team is revealed and all roles are shown.
+
+![Victory](docs/demo/11-victory.gif)
+
+</details>
+
+---
+
 ## Prerequisites
 
 | Tool           | Version | Install                                                       |
