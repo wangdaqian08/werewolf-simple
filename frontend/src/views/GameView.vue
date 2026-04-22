@@ -857,7 +857,11 @@ onMounted(async () => {
         // events broadcast during the disconnect window. Resync once on
         // every reconnect so the UI catches up to whatever the player
         // missed (sub-phase advances, deaths, sheriff handover, etc.).
-        try { await refreshState() } catch { /* user can still recover via refresh */ }
+        try {
+          await refreshState()
+        } catch {
+          /* user can still recover via refresh */
+        }
       }
 
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
