@@ -9,18 +9,20 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.util.UUID
 
 /**
  * Guest login — no OAuth required.
  *
  * POST /api/user/login  { "nickname": "Alice" }
  *
- * Creates a new guest user in the database on every call (userId = "guest:{uuid}").
- * Returns a JWT the client uses for all subsequent authenticated requests.
+ * The userId is derived deterministically from the (lowercased, trimmed) nickname
+ * — `guest:alice` for any "Alice" / "alice" / "  ALICE  ". Logging in again with
+ * the same nickname returns the SAME userId, so a player who lost their JWT (new
+ * browser, cleared cache, dropped connection) can rejoin a room/game by simply
+ * re-entering their nickname. Trade-off: anyone who knows your nickname can
+ * become you. Acceptable for the small-group, host-vetted-lobby use case.
  *
- * Authorization note: in production this endpoint can be gated behind an invitation
- * check or OAuth. For the current MVP it is open to any player with a valid room code.
+ * Returns a JWT the client uses for all subsequent authenticated requests.
  */
 @RestController
 @RequestMapping("/api/user")
@@ -28,8 +30,9 @@ class UserController(private val authService: AuthService) {
 
     @PostMapping("/login")
     fun login(@Valid @RequestBody request: UserLoginRequest): ResponseEntity<AuthResponse> {
-        val userId = "guest:${UUID.randomUUID()}"
-        val response = authService.loginOrRegister(userId, request.nickname.trim(), null)
+        val nickname = request.nickname.trim()
+        val userId = "guest:${nickname.lowercase().replace(" ", "-")}"
+        val response = authService.loginOrRegister(userId, nickname, null)
         return ResponseEntity.ok(response)
     }
 }

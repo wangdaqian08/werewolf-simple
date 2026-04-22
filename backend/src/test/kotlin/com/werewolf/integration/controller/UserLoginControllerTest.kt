@@ -127,7 +127,7 @@ class UserLoginControllerTest {
     }
 
     @Test
-    fun `each login call creates a distinct guest user`() {
+    fun `repeat login with same nickname returns the same userId (idempotent rejoin)`() {
         val r1 = restTemplate.postForEntity(LOGIN_URL, mapOf(FIELD_NICKNAME to "Dave"), Map::class.java)
         val r2 = restTemplate.postForEntity(LOGIN_URL, mapOf(FIELD_NICKNAME to "Dave"), Map::class.java)
 
@@ -136,6 +136,34 @@ class UserLoginControllerTest {
         @Suppress("UNCHECKED_CAST")
         val u2 = (r2.body!![FIELD_USER] as Map<String, Any?>)[FIELD_USER_ID] as String
 
-        assertThat(u1).isNotEqualTo(u2)
+        assertThat(u1).isEqualTo(u2)
+        assertThat(u1).isEqualTo("guest:dave")
+    }
+
+    @Test
+    fun `login normalises nickname case and whitespace into a stable userId`() {
+        val cases = listOf("Frank", "frank", "FRANK", "  Frank  ", "fRaNk")
+        val userIds = cases.map { input ->
+            val resp = restTemplate.postForEntity(LOGIN_URL, mapOf(FIELD_NICKNAME to input), Map::class.java)
+            @Suppress("UNCHECKED_CAST")
+            (resp.body!![FIELD_USER] as Map<String, Any?>)[FIELD_USER_ID] as String
+        }
+
+        assertThat(userIds.toSet()).hasSize(1)
+        assertThat(userIds.first()).isEqualTo("guest:frank")
+    }
+
+    @Test
+    fun `login with spaced nickname produces hyphenated userId`() {
+        val resp = restTemplate.postForEntity(
+            LOGIN_URL,
+            mapOf(FIELD_NICKNAME to "Player One"),
+            Map::class.java,
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val user = resp.body!![FIELD_USER] as Map<String, Any?>
+        assertThat(user[FIELD_USER_ID]).isEqualTo("guest:player-one")
+        assertThat(user[FIELD_NICKNAME]).isEqualTo("Player One")
     }
 }
