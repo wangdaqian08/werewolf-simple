@@ -826,17 +826,40 @@ function onPlayerTap(player: GamePlayer) {
 
 onMounted(async () => {
   const gameId = route.params.gameId as string
-  try {
+
+  async function refreshState(): Promise<void> {
     const state = await gameService.getState(gameId)
     gameStore.setState(state)
+  }
+
+  try {
+    await refreshState()
   } catch {
     router.push({ name: 'lobby' })
     return
   }
 
+  // If the game ended before we mounted (or the player reloaded after GameOver),
+  // jump to the result screen instead of rendering the blank fallback view.
+  if (gameStore.state?.phase === 'GAME_OVER') {
+    router.push({ name: 'result', params: { gameId } })
+    return
+  }
+
   if (userStore.token) {
     const client = createStompClient(userStore.token)
-    client.onConnect = () => {
+    let isFirstConnect = true
+    client.onConnect = async () => {
+      if (isFirstConnect) {
+        isFirstConnect = false
+      } else {
+        // STOMP auto-reconnects after ~3s but the broker does not replay
+        // events broadcast during the disconnect window. Resync once on
+        // every reconnect so the UI catches up to whatever the player
+        // missed (sub-phase advances, deaths, sheriff handover, etc.).
+        try { await refreshState() } catch { /* user can still recover via refresh */ }
+      }
+
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
         // Mock sends full state snapshots; real backend sends typed domain events
@@ -907,29 +930,36 @@ onMounted(async () => {
         }
         // Real backend: night result (kills) → re-fetch state
         if (data.type === 'NightResult') {
-          const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          await refreshState()
+        }
+        // A player died (vote / hunter / poison / etc.) → re-fetch so isAlive flips
+        if (data.type === 'PlayerEliminated') {
+          await refreshState()
+        }
+        // Hunter fired → target death + chain reactions land in state
+        if (data.type === 'HunterShot') {
+          await refreshState()
+        }
+        // Sheriff badge transferred or destroyed → re-fetch updated sheriff state
+        if (data.type === 'BadgeHandover') {
+          await refreshState()
         }
         // Sheriff elected (winner or host appointment) → re-fetch to get updated sheriff state
         if (data.type === 'SheriffElected') {
-          const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          await refreshState()
         }
         // Idiot revealed → re-fetch to get updated canVote/idiotRevealed player state
         if (data.type === 'IdiotRevealed') {
-          const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          await refreshState()
         }
         // Vote cast → re-fetch so votedPlayerIds/votesSubmitted updates for all viewers
         if (data.type === 'VoteSubmitted') {
-          const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          await refreshState()
         }
         // Vote tally revealed → re-fetch to get updated subPhase and tally
         // This is the main event that should trigger UI update; PhaseChanged is also sent but VoteTally is more complete
         if (data.type === 'VoteTally') {
-          const state = await gameService.getState(gameId)
-          gameStore.setState(state)
+          await refreshState()
         }
         // Both mock (GAME_OVER) and real backend (GameOver) navigate to result
         if (data.type === 'GAME_OVER' || data.type === 'GameOver') {
@@ -937,10 +967,13 @@ onMounted(async () => {
         }
       })
       // Private channel for role-specific info (night actions, etc.)
-      subscribeToTopic('/user/queue/private', (msg: { body: string }) => {
+      subscribeToTopic('/user/queue/private', async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
         if (data.type === 'WolfSelectionChanged') {
           gameStore.updateNightPhaseSelection(data.selectedTargetUserId)
+        } else if (data.type === 'SeerResult') {
+          // Refetch picks up nightPhase.seerCheckedUserId + seerResultIsWerewolf
+          await refreshState()
         } else {
           gameStore.addEvent(data)
         }
