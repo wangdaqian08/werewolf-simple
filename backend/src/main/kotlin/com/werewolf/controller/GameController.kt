@@ -30,8 +30,14 @@ class GameController(
     ): ResponseEntity<Map<String, Any?>> {
         val userId = authentication.principal as String
         return when (val result = gameService.startGame(userId, body.roomId)) {
-            is GameActionResult.Success -> ResponseEntity.ok(mapOf("success" to true))
-            is GameActionResult.Rejected -> ResponseEntity.badRequest().body(mapOf("success" to false, "error" to result.reason))
+            is GameActionResult.Success -> {
+                log.info("action.startGame user={} room={} -> SUCCESS", userId, body.roomId)
+                ResponseEntity.ok(mapOf("success" to true))
+            }
+            is GameActionResult.Rejected -> {
+                log.warn("action.startGame user={} room={} -> REJECTED reason=\"{}\"", userId, body.roomId, result.reason)
+                ResponseEntity.badRequest().body(mapOf("success" to false, "error" to result.reason))
+            }
         }
     }
 
@@ -49,8 +55,20 @@ class GameController(
             payload = body.payload ?: emptyMap(),
         )
         return when (val result = gameActionDispatcher.dispatch(request)) {
-            is GameActionResult.Success -> ResponseEntity.ok(mapOf("success" to true))
-            is GameActionResult.Rejected -> ResponseEntity.badRequest().body(mapOf("success" to false, "error" to result.reason))
+            is GameActionResult.Success -> {
+                log.info(
+                    "action.submit user={} game={} type={} target={} payload={} -> SUCCESS",
+                    userId, body.gameId, body.actionType, body.targetUserId, body.payload,
+                )
+                ResponseEntity.ok(mapOf("success" to true))
+            }
+            is GameActionResult.Rejected -> {
+                log.warn(
+                    "action.submit user={} game={} type={} target={} payload={} -> REJECTED reason=\"{}\"",
+                    userId, body.gameId, body.actionType, body.targetUserId, body.payload, result.reason,
+                )
+                ResponseEntity.badRequest().body(mapOf("success" to false, "error" to result.reason))
+            }
         }
     }
 
