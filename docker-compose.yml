@@ -7,7 +7,9 @@
 # Usage:
 #   cp .env.prod.example .env.prod
 #   # edit .env.prod and fill in real secrets
-#   docker compose up -d --build
+#   docker compose --env-file .env.prod up -d --build
+#
+# The --env-file flag is required: compose only auto-loads ".env", not ".env.prod".
 
 services:
   postgres:

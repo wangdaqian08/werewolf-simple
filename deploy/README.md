@@ -38,7 +38,7 @@ sudo certbot --nginx -d werewolf.example.com
 cd /opt/werewolf-simple
 cp .env.prod.example .env.prod
 # edit .env.prod — fill in JWT_SECRET, POSTGRES_PASSWORD, GOOGLE_*, FRONTEND_ORIGIN
-docker compose up -d --build
+docker compose --env-file .env.prod up -d --build
 ```
 
 Everything needed (Postgres, backend jar build, frontend Vite build) is produced
@@ -49,7 +49,7 @@ by this single command. No local Java / Node install required on the VM.
 ```bash
 cd /opt/werewolf-simple
 git pull
-docker compose up -d --build
+docker compose --env-file .env.prod up -d --build
 ```
 
 ## Verify
