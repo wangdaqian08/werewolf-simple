@@ -13,7 +13,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {waitForNightSubPhase} from './helpers/state-polling'
+import {readAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -62,6 +62,15 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     const witchPage = ctx.pages.get('WITCH')
     const guardPage = ctx.pages.get('GUARD')
 
+    // Pre-filter role-bot lists to alive players only. roleMap is populated
+    // once at game start and never updates — without this, each round re-tries
+    // the full original list and wastes retries on "Actor is dead" rejections.
+    const aliveUserIds = await readAlivePlayerIds(ctx.hostPage, ctx.gameId)
+    const aliveWolfBots = wolfBots.filter((b) => b.nick !== 'Host' && aliveUserIds.has(b.userId))
+    const aliveSeerBots = seerBots.filter((b) => b.nick !== 'Host' && aliveUserIds.has(b.userId))
+    const aliveWitchBots = witchBots.filter((b) => b.nick !== 'Host' && aliveUserIds.has(b.userId))
+    const aliveGuardBots = guardBots.filter((b) => b.nick !== 'Host' && aliveUserIds.has(b.userId))
+
     // ── Wolf kill ──
     // Gate on backend sub-phase BEFORE firing the act(). Without this, act.sh
     // exits 0 even on rejection ("Not in WEREWOLF_PICK"), the coroutine stalls
@@ -69,7 +78,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // e2e-ci-vs-local-env-differences item 1. We also bail entirely if the
     // gate returns false (backend already past WEREWOLF_PICK — e.g. all wolves
     // dead, coroutine skipped the sub-phase) so we don't spam rejected actions.
-    const reachedWolf = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000)
+    const reachedWolf = aliveWolfBots.length > 0 && await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000)
     const wolfPage = ctx.pages.get('WEREWOLF')
     if (reachedWolf && wolfPage) {
       await wolfPage
@@ -80,7 +89,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
     let wolfDone = false
     if (reachedWolf) {
-      for (const wb of wolfBots.filter((b) => b.nick !== 'Host')) {
+      for (const wb of aliveWolfBots) {
         if (tryAct('WOLF_KILL', wb.nick, { target: String(targetSeat), room: ctx.roomCode })) {
           wolfDone = true
           break
@@ -110,10 +119,10 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // Gate on SEER_PICK before CHECK, SEER_RESULT before CONFIRM. Short-circuit
     // via waitForNightSubPhase returning false if the seer is dead and the
     // coroutine skipped the sub-phase.
-    const reachedSeerPick = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 10_000)
+    const reachedSeerPick = aliveSeerBots.length > 0 && await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 10_000)
     let seerDone = false
     if (reachedSeerPick) {
-      for (const sb of seerBots.filter((b) => b.nick !== 'Host')) {
+      for (const sb of aliveSeerBots) {
         const allSeats = [targetSeat, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         for (const seat of allSeats) {
           if (tryAct('SEER_CHECK', sb.nick, { target: String(seat), room: ctx.roomCode })) {
@@ -159,10 +168,10 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
 
     // ── Witch ── (may be dead in later rounds)
-    const reachedWitch = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 10_000)
+    const reachedWitch = aliveWitchBots.length > 0 && await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 10_000)
     let witchDone = false
     if (reachedWitch) {
-      for (const wb of witchBots.filter((b) => b.nick !== 'Host')) {
+      for (const wb of aliveWitchBots) {
         witchDone = tryAct('WITCH_ACT', wb.nick, {
           payload: '{"useAntidote":false}',
           room: ctx.roomCode,
@@ -190,12 +199,16 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
 
     // ── Guard ── (may be dead in later rounds)
-    const reachedGuard = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 10_000)
+    const reachedGuard = aliveGuardBots.length > 0 && await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 10_000)
     let guardDone = false
     if (reachedGuard) {
-      for (const gb of guardBots.filter((b) => b.nick !== 'Host')) {
-        guardDone = tryAct('GUARD_SKIP', gb.nick, { room: ctx.roomCode })
-        break
+      // Try each alive guard — drop the pre-existing unconditional break,
+      // which failed the whole block if guard[0] happened to be dead.
+      for (const gb of aliveGuardBots) {
+        if (tryAct('GUARD_SKIP', gb.nick, { room: ctx.roomCode })) {
+          guardDone = true
+          break
+        }
       }
     }
     if (!guardDone && guardPage) {

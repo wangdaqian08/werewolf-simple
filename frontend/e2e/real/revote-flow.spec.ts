@@ -13,7 +13,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {waitForNightSubPhase} from './helpers/state-polling'
+import {readAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -144,6 +144,17 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const aliveNonWolf = alivePlayers.filter((p) => !wolfNicks.has(p.nickname))
     const target = aliveNonWolf[0]
 
+    // Pre-filter role-bot lists to alive players only. roleMap is populated
+    // once at game start and never updates — without this, each completeNight
+    // re-iterates the full original list and wastes retries on "Actor is dead"
+    // rejections (observed: a single alive wolf in a mid-game loop gets logged
+    // repeatedly even though the loop should've skipped its dead peer).
+    const aliveUserIds = await readAlivePlayerIds(ctx.hostPage, ctx.gameId)
+    const aliveWolves = wolfBots.filter((b) => b.nick !== 'Host' && aliveUserIds.has(b.userId))
+    const aliveSeers = seerBots.filter((b) => b.nick !== 'Host' && aliveUserIds.has(b.userId))
+    const aliveWitches = witchBots.filter((b) => b.nick !== 'Host' && aliveUserIds.has(b.userId))
+    const aliveGuards = guardBots.filter((b) => b.nick !== 'Host' && aliveUserIds.has(b.userId))
+
     // ── Wolf kill ──
     // Wait for the coroutine to reach WEREWOLF_PICK before firing the action.
     // Without this gate, act() retries waste ~10s+ per night on "Not in X
@@ -151,7 +162,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     // (backend already past WEREWOLF_PICK, e.g. coroutine skipped because
     // all wolves are dead), skip the whole wolf block rather than firing an
     // action that'll be rejected anyway and spam the log.
-    const reachedWolf = await waitForNightSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 15_000)
+    const reachedWolf = aliveWolves.length > 0 && await waitForNightSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 15_000)
     if (reachedWolf && wolfPage) {
       await wolfPage
         .locator('.player-grid')
@@ -161,7 +172,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
     let wolfDone = false
     if (reachedWolf) {
-      for (const wb of wolfBots.filter((b) => b.nick !== 'Host')) {
+      for (const wb of aliveWolves) {
         if (tryAct('WOLF_KILL', wb.nick, { target: String(target?.seat ?? 1), room: ctx.roomCode })) {
           wolfDone = true
           break
@@ -183,7 +194,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     // the wolf gate above. If the seer is dead / skipped, waitForNightSubPhase
     // short-circuits when phase leaves NIGHT or times out; either way we move
     // on without the 90-rejection churn observed previously.
-    const reachedSeerPick = await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 10_000)
+    const reachedSeerPick = aliveSeers.length > 0 && await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 10_000)
     if (reachedSeerPick && seerPage) {
       await seerPage
         .getByText(/选择查验目标|Select a player to check/i)
@@ -193,7 +204,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
     let seerDone = false
     if (reachedSeerPick) {
-      for (const sb of seerBots.filter((b) => b.nick !== 'Host')) {
+      for (const sb of aliveSeers) {
         // Use live alive seats; exclude the seer's own seat (self-check rejects).
         const seats = alivePlayers.filter((p) => p.nickname !== sb.nick).map((p) => p.seat)
         for (const seat of seats) {
@@ -225,7 +236,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
 
     // ── Witch ──
-    const reachedWitch = await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 10_000)
+    const reachedWitch = aliveWitches.length > 0 && await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 10_000)
     if (reachedWitch && witchPage) {
       await witchPage
         .locator('.w-section')
@@ -238,7 +249,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
       ? '{"useAntidote":true}'
       : '{"useAntidote":false}'
     if (reachedWitch) {
-      for (const wb of witchBots.filter((b) => b.nick !== 'Host')) {
+      for (const wb of aliveWitches) {
         witchDone = tryAct('WITCH_ACT', wb.nick, { payload: antidotePayload, room: ctx.roomCode })
         if (witchDone) break
       }
@@ -262,7 +273,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
 
     // ── Guard ──
-    const reachedGuard = await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 10_000)
+    const reachedGuard = aliveGuards.length > 0 && await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 10_000)
     if (reachedGuard && guardPage) {
       await guardPage
         .getByText(/选择守护目标|Protect a player/i)
@@ -272,9 +283,14 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
     let guardDone = false
     if (reachedGuard) {
-      for (const gb of guardBots.filter((b) => b.nick !== 'Host')) {
-        guardDone = tryAct('GUARD_SKIP', gb.nick, { room: ctx.roomCode })
-        break
+      // Try each alive guard — don't break on rejection (important: the
+      // pre-existing code had `break` after the first iteration regardless
+      // of tryAct's return, so a single dead guard-bot killed the whole block).
+      for (const gb of aliveGuards) {
+        if (tryAct('GUARD_SKIP', gb.nick, { room: ctx.roomCode })) {
+          guardDone = true
+          break
+        }
       }
       if (!guardDone && guardPage) {
         if (

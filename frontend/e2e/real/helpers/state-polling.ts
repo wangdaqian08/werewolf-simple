@@ -104,3 +104,31 @@ export async function waitForVotingSubPhase(
   }
   return false
 }
+
+/**
+ * Return the userIds of all currently-alive players in the game.
+ *
+ * Use this to pre-filter role bots BEFORE firing `act()`: a dead bot returns
+ * `rejected: Actor is dead` and the for-loop wastes time iterating through
+ * known-dead entries. `roleMap` is populated at game start and never updates
+ * when players die, so without this filter every night re-tries the full
+ * original role-bot list.
+ */
+export async function readAlivePlayerIds(
+  hostPage: Page,
+  gameId: string,
+): Promise<Set<string>> {
+  const ids = await hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return [] as string[]
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return [] as string[]
+    const state = await res.json()
+    return ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
+      .filter((p) => p.isAlive)
+      .map((p) => p.userId)
+  }, gameId)
+  return new Set(ids)
+}
