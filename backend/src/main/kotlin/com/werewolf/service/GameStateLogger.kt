@@ -3,6 +3,7 @@ package com.werewolf.service
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 
 /**
@@ -15,7 +16,8 @@ import org.springframework.stereotype.Service
  * GameController, the log alone answers "what was done" and "where it's stuck".
  *
  * Triggered automatically from StompPublisher whenever a state-change DomainEvent
- * is broadcast (one site for the whole codebase).
+ * is broadcast (one site for the whole codebase). Runs on the shared `taskExecutor`
+ * (see AsyncConfig) so the extra DB reads never delay the STOMP broadcast path.
  */
 @Service
 class GameStateLogger(
@@ -30,7 +32,13 @@ class GameStateLogger(
     /**
      * Emit a snapshot. `context` is a short label describing what just changed
      * (e.g. "PHASE=NIGHT/-", "NIGHT_SUBPHASE=WITCH_ACT", "GAME_OVER winner=VILLAGER").
+     *
+     * `@Async` — the game-logic thread fires-and-forgets; all DB reads below run
+     * on the async executor. Reorders in the log are possible if multiple snapshots
+     * queue for the same game, but sub-second-scale log reordering is acceptable
+     * for debugging (each line still carries its context label).
      */
+    @Async
     fun logSnapshot(gameId: Int, context: String) {
         try {
             val game = gameRepository.findById(gameId).orElse(null)

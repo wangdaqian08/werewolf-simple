@@ -13,8 +13,9 @@ class StompPublisher(
     /** Broadcast a public game event to all subscribers of this game. */
     fun broadcastGame(gameId: Int, event: Any) {
         template.convertAndSend("/topic/game/$gameId", event)
-        // After every state-change broadcast, emit a one-line state snapshot for
-        // server-side debugging. See GameStateLogger for the format.
+        // After every state-change broadcast, fire-and-forget a one-line state
+        // snapshot for server-side debugging. logSnapshot is @Async so its DB
+        // reads cannot delay the broadcast path. See GameStateLogger.
         stateChangeContext(event)?.let { ctx -> gameStateLogger.logSnapshot(gameId, ctx) }
     }
 
