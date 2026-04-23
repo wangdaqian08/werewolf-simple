@@ -18,7 +18,12 @@ import {readAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
 let ctx: GameContext
 
 test.describe('Werewolf win — result screen shows all roles', () => {
-  test.setTimeout(180_000)
+  // 300s (up from 180s): the per-role sub-phase gates added for Category A
+  // can each cost up to ~15s × CI-2× = 30s when a role's bot is dead (gate
+  // waits full timeout before returning false). Across 6 rounds × 4 roles
+  // that's ~720s worst case, but typical runs finish in ~180-240s. The old
+  // budget was right at the edge and occasionally tipped over.
+  test.setTimeout(300_000)
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000)
