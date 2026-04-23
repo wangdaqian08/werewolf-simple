@@ -13,6 +13,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import {waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -62,8 +63,15 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     const guardPage = ctx.pages.get('GUARD')
 
     // ── Wolf kill ──
+    // Gate on backend sub-phase BEFORE firing the act(). Without this, act.sh
+    // exits 0 even on rejection ("Not in WEREWOLF_PICK"), the coroutine stalls
+    // waiting for the action that was silently dropped. See memory:
+    // e2e-ci-vs-local-env-differences item 1. We also bail entirely if the
+    // gate returns false (backend already past WEREWOLF_PICK — e.g. all wolves
+    // dead, coroutine skipped the sub-phase) so we don't spam rejected actions.
+    const reachedWolf = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000)
     const wolfPage = ctx.pages.get('WEREWOLF')
-    if (wolfPage) {
+    if (reachedWolf && wolfPage) {
       await wolfPage
         .locator('.player-grid')
         .first()
@@ -71,14 +79,16 @@ test.describe('Werewolf win — result screen shows all roles', () => {
         .catch(() => {})
     }
     let wolfDone = false
-    for (const wb of wolfBots.filter((b) => b.nick !== 'Host')) {
-      if (tryAct('WOLF_KILL', wb.nick, { target: String(targetSeat), room: ctx.roomCode })) {
-        wolfDone = true
-        break
+    if (reachedWolf) {
+      for (const wb of wolfBots.filter((b) => b.nick !== 'Host')) {
+        if (tryAct('WOLF_KILL', wb.nick, { target: String(targetSeat), room: ctx.roomCode })) {
+          wolfDone = true
+          break
+        }
       }
     }
     // Browser fallback: use wolf browser page (works whether host is wolf or not)
-    if (!wolfDone && wolfPage) {
+    if (reachedWolf && !wolfDone && wolfPage) {
       const slot = wolfPage.locator('.player-grid .slot-alive').first()
       if (await slot.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await slot.click()
@@ -97,25 +107,32 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
 
     // ── Seer ── (may be dead in later rounds)
+    // Gate on SEER_PICK before CHECK, SEER_RESULT before CONFIRM. Short-circuit
+    // via waitForNightSubPhase returning false if the seer is dead and the
+    // coroutine skipped the sub-phase.
+    const reachedSeerPick = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 10_000)
     let seerDone = false
-    for (const sb of seerBots.filter((b) => b.nick !== 'Host')) {
-      const allSeats = [targetSeat, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-      for (const seat of allSeats) {
-        if (tryAct('SEER_CHECK', sb.nick, { target: String(seat), room: ctx.roomCode })) {
-          seerDone = true
-          // Wait for seer result before confirming
-          if (seerPage) {
-            await seerPage
-              .locator('.sr-wrap')
-              .first()
-              .waitFor({ state: 'visible', timeout: 8_000 })
-              .catch(() => {})
+    if (reachedSeerPick) {
+      for (const sb of seerBots.filter((b) => b.nick !== 'Host')) {
+        const allSeats = [targetSeat, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        for (const seat of allSeats) {
+          if (tryAct('SEER_CHECK', sb.nick, { target: String(seat), room: ctx.roomCode })) {
+            seerDone = true
+            await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 8_000)
+            // Wait for seer result before confirming
+            if (seerPage) {
+              await seerPage
+                .locator('.sr-wrap')
+                .first()
+                .waitFor({ state: 'visible', timeout: 8_000 })
+                .catch(() => {})
+            }
+            tryAct('SEER_CONFIRM', sb.nick, { room: ctx.roomCode })
+            break
           }
-          tryAct('SEER_CONFIRM', sb.nick, { room: ctx.roomCode })
-          break
         }
+        if (seerDone) break
       }
-      if (seerDone) break
     }
     if (!seerDone && seerPage) {
       if (
@@ -142,13 +159,16 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
 
     // ── Witch ── (may be dead in later rounds)
+    const reachedWitch = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 10_000)
     let witchDone = false
-    for (const wb of witchBots.filter((b) => b.nick !== 'Host')) {
-      witchDone = tryAct('WITCH_ACT', wb.nick, {
-        payload: '{"useAntidote":false}',
-        room: ctx.roomCode,
-      })
-      if (witchDone) break
+    if (reachedWitch) {
+      for (const wb of witchBots.filter((b) => b.nick !== 'Host')) {
+        witchDone = tryAct('WITCH_ACT', wb.nick, {
+          payload: '{"useAntidote":false}',
+          room: ctx.roomCode,
+        })
+        if (witchDone) break
+      }
     }
     if (!witchDone && witchPage) {
       if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
@@ -170,10 +190,13 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
 
     // ── Guard ── (may be dead in later rounds)
+    const reachedGuard = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 10_000)
     let guardDone = false
-    for (const gb of guardBots.filter((b) => b.nick !== 'Host')) {
-      guardDone = tryAct('GUARD_SKIP', gb.nick, { room: ctx.roomCode })
-      break
+    if (reachedGuard) {
+      for (const gb of guardBots.filter((b) => b.nick !== 'Host')) {
+        guardDone = tryAct('GUARD_SKIP', gb.nick, { room: ctx.roomCode })
+        break
+      }
     }
     if (!guardDone && guardPage) {
       if (

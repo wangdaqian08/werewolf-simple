@@ -13,6 +13,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import {waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -55,42 +56,6 @@ async function readVotingSubPhase(hostPage: Page, gameId: string): Promise<strin
     const state = await res.json()
     return state?.votingPhase?.subPhase ?? null
   }, gameId)
-}
-
-/**
- * Poll state.nightPhase?.subPhase until it matches `target`. Without this,
- * bot actions fired via act.sh race the Kotlin role-loop coroutine and land
- * in the wrong sub-phase — backend rejects with "Not in X sub-phase", act()
- * retries 3× with 600ms gap on CI, each night wastes ~10s+ on race-rejection
- * churn (log diagnostic: 90 "Not in SEER_PICK sub-phase" + 18 WITCH + 18 GUARD
- * rejections per night on a stalled run). Mirrors the helper already in
- * flow-12p-sheriff.spec.ts; inlined here to keep this fix file-scoped.
- */
-async function waitForNightSubPhase(
-  hostPage: Page,
-  gameId: string,
-  target: string,
-  timeoutMs = 15_000,
-): Promise<boolean> {
-  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
-  const deadline = Date.now() + effective
-  while (Date.now() < deadline) {
-    const state = await hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      if (!token) return null
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return null
-      return res.json()
-    }, gameId)
-    const sp = state?.nightPhase?.subPhase
-    const phase = state?.phase
-    if (sp === target) return true
-    if (phase && phase !== 'NIGHT' && target !== phase) return false
-    await hostPage.waitForTimeout(300)
-  }
-  return false
 }
 
 test.describe('Voting tie → revote → game proceeds', () => {
@@ -182,9 +147,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
     // ── Wolf kill ──
     // Wait for the coroutine to reach WEREWOLF_PICK before firing the action.
     // Without this gate, act() retries waste ~10s+ per night on "Not in X
-    // sub-phase" rejections.
-    await waitForNightSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 15_000)
-    if (wolfPage) {
+    // sub-phase" rejections. Also guard on the return — if the gate expires
+    // (backend already past WEREWOLF_PICK, e.g. coroutine skipped because
+    // all wolves are dead), skip the whole wolf block rather than firing an
+    // action that'll be rejected anyway and spam the log.
+    const reachedWolf = await waitForNightSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 15_000)
+    if (reachedWolf && wolfPage) {
       await wolfPage
         .locator('.player-grid')
         .first()
@@ -192,14 +160,16 @@ test.describe('Voting tie → revote → game proceeds', () => {
         .catch(() => {})
     }
     let wolfDone = false
-    for (const wb of wolfBots.filter((b) => b.nick !== 'Host')) {
-      if (tryAct('WOLF_KILL', wb.nick, { target: String(target?.seat ?? 1), room: ctx.roomCode })) {
-        wolfDone = true
-        break
+    if (reachedWolf) {
+      for (const wb of wolfBots.filter((b) => b.nick !== 'Host')) {
+        if (tryAct('WOLF_KILL', wb.nick, { target: String(target?.seat ?? 1), room: ctx.roomCode })) {
+          wolfDone = true
+          break
+        }
       }
     }
     // Browser fallback: use ANY wolf browser page (not just host)
-    if (!wolfDone && wolfPage) {
+    if (reachedWolf && !wolfDone && wolfPage) {
       const slot = wolfPage.locator('.player-grid .slot-alive').first()
       if (await slot.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await slot.click()

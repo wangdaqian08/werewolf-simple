@@ -16,6 +16,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {captureSnapshot} from './helpers/composite-screenshot'
+import {waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -152,41 +153,51 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       const wolfBots = localCtx.roleMap.WEREWOLF ?? []
       const seerBots = localCtx.roleMap.SEER ?? []
       const witchBots = localCtx.roleMap.WITCH ?? []
-      
-      // Wolf attacks someone (not idiot to ensure idiot survives)
+
+      // Wolf attacks someone (not idiot to ensure idiot survives).
+      // Gate on WEREWOLF_PICK so the action lands in the correct sub-phase —
+      // without this, act() fires while the Kotlin role-loop is still in a
+      // prior sub-phase and the action is silently rejected (act.sh exits 0
+      // on rejection). See e2e-ci-vs-local-env-differences memory item 1.
+      // If the gate returns false (coroutine skipped the sub-phase), skip
+      // the block rather than firing actions that'll be rejected.
       if (wolfBots.length > 0) {
         const wolfBot = wolfBots.find((b) => b.nick !== 'Host') ?? wolfBots[0]
         const idiotBots = localCtx.roleMap['IDIOT'] ?? []
-        // Pick a target that's not the idiot
-        const targetBot = localCtx.allBots.find(b => 
-          b.userId !== wolfBot.userId && 
+        const targetBot = localCtx.allBots.find(b =>
+          b.userId !== wolfBot.userId &&
           !(idiotBots.some(i => i.userId === b.userId))
         )
-        if (targetBot) {
+        if (targetBot && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000))) {
           act('WOLF_SELECT', wolfBot.nick, { target: String(targetBot.seat), room: localCtx.roomCode })
           act('WOLF_KILL', wolfBot.nick, { target: String(targetBot.seat), room: localCtx.roomCode })
           testInfo.attach('wolf-action', { body: `Wolf ${wolfBot.nick} attacks ${targetBot.nick} at seat ${targetBot.seat}` })
         }
       }
-      
-      // Seer checks someone
+
+      // Seer checks someone. Gate on SEER_PICK before the CHECK, then on
+      // SEER_RESULT before the CONFIRM so each lands in its expected sub-phase.
       if (seerBots.length > 0) {
         const seerBot = seerBots.find((b) => b.nick !== 'Host') ?? seerBots[0]
         const checkTarget = localCtx.allBots.find(b => b.userId !== seerBot.userId)
-        if (checkTarget) {
+        if (checkTarget && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000))) {
           act('SEER_CHECK', seerBot.nick, { target: String(checkTarget.seat), room: localCtx.roomCode })
-          act('SEER_CONFIRM', seerBot.nick, { room: localCtx.roomCode })
+          if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)) {
+            act('SEER_CONFIRM', seerBot.nick, { room: localCtx.roomCode })
+          }
           testInfo.attach('seer-action', { body: `Seer ${seerBot.nick} checks ${checkTarget.nick}` })
         }
       }
-      
-      // Witch uses no potion
+
+      // Witch uses no potion — gate on WITCH_ACT sub-phase first.
       if (witchBots.length > 0) {
         const witchBot = witchBots.find((b) => b.nick !== 'Host') ?? witchBots[0]
-        act('WITCH_ACT', witchBot.nick, { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
-        testInfo.attach('witch-action', { body: `Witch ${witchBot.nick} uses no potion` })
+        if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)) {
+          act('WITCH_ACT', witchBot.nick, { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
+          testInfo.attach('witch-action', { body: `Witch ${witchBot.nick} uses no potion` })
+        }
       }
-      
+
       // Wait for night to complete and transition to DAY
       testInfo.attach('waiting-for-night-to-day', { body: 'Waiting for night to complete and transition to DAY' })
       
@@ -349,38 +360,42 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
         testInfo.attach('night-start-failed', { body: `Failed to start night: ${error}` })
       }
       
-      // ── Phase 1: Complete Night Phase ──
+      // ── Phase 1: Complete Night Phase (sub-phase-gated — see Test 2 rationale) ──
       const wolfBots = localCtx.roleMap.WEREWOLF ?? []
       const seerBots = localCtx.roleMap.SEER ?? []
       const witchBots = localCtx.roleMap.WITCH ?? []
-      
+
       if (wolfBots.length > 0) {
         const wolfBot = wolfBots.find((b) => b.nick !== 'Host') ?? wolfBots[0]
         const idiotBots = localCtx.roleMap['IDIOT'] ?? []
-        const targetBot = localCtx.allBots.find(b => 
-          b.userId !== wolfBot.userId && 
+        const targetBot = localCtx.allBots.find(b =>
+          b.userId !== wolfBot.userId &&
           !(idiotBots.some(i => i.userId === b.userId))
         )
-        if (targetBot) {
+        if (targetBot && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000))) {
           act('WOLF_SELECT', wolfBot.nick, { target: String(targetBot.seat), room: localCtx.roomCode })
           act('WOLF_KILL', wolfBot.nick, { target: String(targetBot.seat), room: localCtx.roomCode })
         }
       }
-      
+
       if (seerBots.length > 0) {
         const seerBot = seerBots.find((b) => b.nick !== 'Host') ?? seerBots[0]
         const checkTarget = localCtx.allBots.find(b => b.userId !== seerBot.userId)
-        if (checkTarget) {
+        if (checkTarget && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000))) {
           act('SEER_CHECK', seerBot.nick, { target: String(checkTarget.seat), room: localCtx.roomCode })
-          act('SEER_CONFIRM', seerBot.nick, { room: localCtx.roomCode })
+          if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)) {
+            act('SEER_CONFIRM', seerBot.nick, { room: localCtx.roomCode })
+          }
         }
       }
-      
+
       if (witchBots.length > 0) {
         const witchBot = witchBots.find((b) => b.nick !== 'Host') ?? witchBots[0]
-        act('WITCH_ACT', witchBot.nick, { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
+        if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)) {
+          act('WITCH_ACT', witchBot.nick, { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
+        }
       }
-      
+
       await hostPage.waitForTimeout(5_000)
       
       // Use smart wait strategy for day phase
