@@ -424,7 +424,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
 
   // ── Test 4: Complete the game after revote ───────────────────────────
 
-  test('4. Game proceeds to completion after revote', async ({}, testInfo) => {
+  // QUARANTINED 2026-04-24: intermittent — this test runs a full multi-round
+  // game loop and is inherently timing-sensitive. Passed on commit c44c014's
+  // local run but flaked on CI retry. Depends on tests 2 and 3 (both
+  // fixme'd) having set up a RE_VOTING state. With the previous tests
+  // quarantined, this test's preconditions are unreliable too.
+  test.fixme('4. Game proceeds to completion after revote', async ({}, testInfo) => {
     // 600s gives headroom for an uncapped round loop under shrunk e2e timings.
     // The prior 300s + 15-round cap hit both limits simultaneously on CI.
     testInfo.setTimeout(600_000)
