@@ -14,6 +14,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import {waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -115,7 +116,9 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const wolfBot = wolfBots.find((b) => b.nick !== 'Host')
 
     if (wolfBot) {
-      // Wolf is a bot — use script
+      // Wolf is a bot — use script. Gate on WEREWOLF_PICK so the act lands
+      // in the right sub-phase (Category A race guard).
+      await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000)
       act('WOLF_KILL', wolfBot.nick, { target: String(target), room: ctx.roomCode })
     } else {
       // Wolf is the host — use browser clicks
@@ -144,10 +147,14 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const villagerBots = ctx.roleMap.VILLAGER ?? []
 
     // ── Seer ──
+    // Gate on SEER_PICK before firing the bot-script action — without this,
+    // act.sh races the Kotlin role-loop coroutine. See memory item 1 of
+    // e2e-ci-vs-local-env-differences.
     const seerBot = seerBots.find((b) => b.nick !== 'Host')
     if (seerBot) {
       // Seer is a bot — use script
       const checkTarget = guardBots[0]?.seat ?? villagerBots[1]?.seat ?? 1
+      await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 15_000)
       act('SEER_CHECK', seerBot.nick, { target: String(checkTarget), room: ctx.roomCode })
 
       const seerPage = ctx.pages.get('SEER')
@@ -157,6 +164,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
       }
 
+      await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 10_000)
       act('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
     } else if (ctx.isHostRole('SEER')) {
       // Seer is the host — use browser clicks
@@ -238,6 +246,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // ── Guard ──
+    // Same Category A gate as seer above — wait for backend to reach GUARD_PICK
+    // before firing the bot action.
     const guardBot = guardBots.find((b) => b.nick !== 'Host')
     if (guardBot) {
       // Guard is a bot — use script
@@ -247,6 +257,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         await expect(guardPage.getByText(/选择守护目标|Protect a player/i).first()).toBeVisible({ timeout: 10_000 })
         await captureSnapshot(ctx.pages, testInfo, '04-guard-ui')
       }
+      await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 15_000)
       act('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
     } else if (ctx.isHostRole('GUARD')) {
       // Guard is the host — use browser clicks to protect someone

@@ -24,14 +24,18 @@ test('login with valid nickname stores JWT in localStorage', async ({ page }) =>
   expect(nickname).toBe('Alice')
 })
 
-test('each login creates a distinct guest userId', async ({ browser }) => {
+test('repeat login with same nickname returns the same userId (idempotent rejoin)', async ({ browser }) => {
   const ctx1 = await browser.newContext()
   const ctx2 = await browser.newContext()
 
   const id1 = await loginAndGetUserId(ctx1, 'Dave')
   const id2 = await loginAndGetUserId(ctx2, 'Dave')
 
-  expect(id1).not.toBe(id2)
+  // Backend change: /api/user/login is idempotent per-nickname — same nick
+  // maps to the same guest userId so a player who loses their JWT can rejoin
+  // their ongoing game by re-entering their nickname. Matches the backend
+  // integration test `POST user-login with same nickname returns same userId`.
+  expect(id1).toBe(id2)
   expect(id1).toMatch(/^guest:/)
   expect(id2).toMatch(/^guest:/)
 
