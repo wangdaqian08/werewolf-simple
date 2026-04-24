@@ -355,17 +355,40 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   const hostPage = ctx.hostPage
   const gameId = ctx.gameId
 
-  const wolfNick = wolfBots.find((b) => b.nick !== 'Host')?.nick
-  const seerNick = seerBots.find((b) => b.nick !== 'Host')?.nick
-  const witchNick = witchBots.find((b) => b.nick !== 'Host')?.nick
-  const guardNick = guardBots.find((b) => b.nick !== 'Host')?.nick
+  // Fetch live roster so role actors reflect prior-day eliminations. roleMap
+  // is populated once at game start and never updates when players die —
+  // without this filter, picking `wolfBots[0]` on night 2+ would hand us a
+  // dead wolf (e.g. the one the village voted out on D1), the action rejects
+  // silently, and the role-loop coroutine stalls forever waiting for an
+  // action that was never dispatched. Same risk for seer/witch/guard.
+  //
+  // readAlivePlayerIds also underpins the target-alive precondition: if the
+  // caller's `targetSeat` refers to a player already killed on a prior
+  // night, WOLF_KILL rejects with "Target not alive" — we fall back to any
+  // alive non-wolf seat to keep the night progressing.
+  const aliveIds = await readAlivePlayerIds(hostPage, gameId)
+  const isAlive = (uid: string): boolean => aliveIds.size === 0 || aliveIds.has(uid)
+
+  const wolfBot = wolfBots.find((b) => b.nick !== 'Host' && isAlive(b.userId))
+  const seerBot = seerBots.find((b) => b.nick !== 'Host' && isAlive(b.userId))
+  const witchBot = witchBots.find((b) => b.nick !== 'Host' && isAlive(b.userId))
+  const guardBot = guardBots.find((b) => b.nick !== 'Host' && isAlive(b.userId))
+
+  // Verify WOLF_KILL target is alive; if not, re-target any alive non-wolf
+  // non-host seat. Avoids the "villagerSeats rotation hands wolves an already
+  // dead seat on a later round" stall documented in the 2026-04-24 walkthrough.
+  const wolfSeats = new Set(wolfBots.map((b) => b.seat))
+  const targetBot = ctx.allBots.find((b) => b.seat === targetSeat && isAlive(b.userId))
+  const resolvedTargetSeat = targetBot
+    ? targetSeat
+    : ctx.allBots.find((b) => b.nick !== 'Host' && !wolfSeats.has(b.seat) && isAlive(b.userId))?.seat ?? targetSeat
 
   // ── WEREWOLF_PICK ──
   await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 20_000)
-  if (wolfNick) {
-    tryAct('WOLF_KILL', wolfNick, { target: String(targetSeat), room: ctx.roomCode })
+  if (wolfBot) {
+    tryAct('WOLF_KILL', wolfBot.nick, { target: String(resolvedTargetSeat), room: ctx.roomCode })
   } else {
-    // host is the wolf — drive via host UI
+    // host is the sole alive wolf — drive via host UI
     await hostPage.locator('.player-grid .slot-alive').first().click().catch(() => {})
     await hostPage.getByTestId('wolf-confirm-kill').click().catch(() => {})
   }
@@ -373,24 +396,27 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   // ── SEER_PICK ──
   if (seerBots.length > 0) {
     const reached = await waitForSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
-    if (reached) {
-      const checkSeat = seerCheckSeat ?? 1
-      if (seerNick) {
-        tryAct('SEER_CHECK', seerNick, { target: String(checkSeat), room: ctx.roomCode })
-      }
+    if (reached && seerBot) {
+      // If the caller's seerCheckSeat is dead (or not provided), probe any
+      // alive non-seer seat. The seer's own identity is handled below via
+      // the self-check prohibition (game-rules memory).
+      const candidateSeat = seerCheckSeat ?? 1
+      const candidateBot = ctx.allBots.find((b) => b.seat === candidateSeat && isAlive(b.userId))
+      const checkSeat = candidateBot && candidateBot.userId !== seerBot.userId
+        ? candidateSeat
+        : ctx.allBots.find((b) => b.userId !== seerBot.userId && b.nick !== 'Host' && isAlive(b.userId))?.seat ?? candidateSeat
+      tryAct('SEER_CHECK', seerBot.nick, { target: String(checkSeat), room: ctx.roomCode })
       // SEER_RESULT next
       await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
-      if (seerNick) {
-        tryAct('SEER_CONFIRM', seerNick, { room: ctx.roomCode })
-      }
+      tryAct('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
     }
   }
 
   // ── WITCH_ACT ──
   if (witchBots.length > 0) {
     const reached = await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
-    if (reached && witchNick) {
-      tryAct('WITCH_ACT', witchNick, {
+    if (reached && witchBot) {
+      tryAct('WITCH_ACT', witchBot.nick, {
         payload: '{"useAntidote":false}',
         room: ctx.roomCode,
       })
@@ -400,8 +426,8 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   // ── GUARD_PICK ──
   if (guardBots.length > 0) {
     const reached = await waitForSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
-    if (reached && guardNick) {
-      tryAct('GUARD_SKIP', guardNick, { room: ctx.roomCode })
+    if (reached && guardBot) {
+      tryAct('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
     }
   }
 }
