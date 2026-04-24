@@ -322,11 +322,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
 
   // ── Test 3: Create a tied vote ───────────────────────────────────────
 
-  // QUARANTINED 2026-04-24: depends on state set up by test 2 (which is
-  // also fixme'd). If test 2 is restored, re-enable this. The failure we
-  // see here is a cascade — `revealBtn.waitFor` times out because the game
-  // is still on NIGHT from test 2's stall.
-  test.fixme('3. Tied vote triggers RE_VOTING', async ({}, testInfo) => {
+  test('3. Tied vote triggers RE_VOTING', async ({}, testInfo) => {
     const hostPage = ctx.hostPage
 
     // Host reveals night result
@@ -418,12 +414,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
 
   // ── Test 4: Complete the game after revote ───────────────────────────
 
-  // QUARANTINED 2026-04-24: intermittent — this test runs a full multi-round
-  // game loop and is inherently timing-sensitive. Passed on commit c44c014's
-  // local run but flaked on CI retry. Depends on tests 2 and 3 (both
-  // fixme'd) having set up a RE_VOTING state. With the previous tests
-  // quarantined, this test's preconditions are unreliable too.
-  test.fixme('4. Game proceeds to completion after revote', async ({}, testInfo) => {
+  test('4. Game proceeds to completion after revote', async ({}, testInfo) => {
     // 600s gives headroom for an uncapped round loop under shrunk e2e timings.
     // The prior 300s + 15-round cap hit both limits simultaneously on CI.
     testInfo.setTimeout(600_000)
