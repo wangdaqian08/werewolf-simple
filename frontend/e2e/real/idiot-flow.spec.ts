@@ -25,12 +25,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
 
   // ── Test 1: Setup verification ──────────────────────────────────────────────
 
-  // QUARANTINED 2026-04-24: same random-role-assignment issue as tests 2 and 3.
-  // `expect(idiotBots).toBeDefined()` fails when the backend's random role
-  // assignment lands IDIOT on the host seat (so roleMap.IDIOT is empty).
-  // Memory e2e-ci-vs-local-env-differences item 4. Fix = branch on
-  // ctx.hostRole and either skip or route the check through the host.
-  test.fixme('1. Setup — idiot role assigned correctly', async ({ browser }, testInfo) => {
+  test('1. Setup — idiot role assigned correctly', async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
@@ -40,17 +35,26 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
     })
 
     try {
-      // Verify that IDIOT role is assigned
-      const idiotBots = localCtx.roleMap['IDIOT']
-      expect(idiotBots).toBeDefined()
-      expect(idiotBots?.length).toBeGreaterThan(0)
-      
-      // Verify that IDIOT browser page exists
+      // Verify that IDIOT is assigned. roleMap only tracks non-host bots, so
+      // when the backend's random role-assignment lands IDIOT on the host
+      // seat `roleMap.IDIOT` is empty and the verification has to go through
+      // localCtx.hostRole instead.
+      if (localCtx.isHostRole('IDIOT')) {
+        expect(localCtx.hostRole).toBe('IDIOT')
+      } else {
+        const idiotBots = localCtx.roleMap['IDIOT']
+        expect(idiotBots).toBeDefined()
+        expect(idiotBots?.length).toBeGreaterThan(0)
+      }
+
+      // IDIOT browser page exists either way — setupGame maps the host's page
+      // under hostRole's key when hostRole is one of the browserRoles.
       const idiotPage = localCtx.pages.get('IDIOT')
       expect(idiotPage).toBeDefined()
-      
+
       testInfo.attach('idiot-info', { body: JSON.stringify({
-        idiotBots: idiotBots,
+        hostRole: localCtx.hostRole,
+        idiotBots: localCtx.roleMap['IDIOT'],
         hasIdiotPage: !!idiotPage,
         totalBots: localCtx.allBots.length
       }, null, 2) })
@@ -61,13 +65,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
 
   // ── Test 2: Night → Day → Voting → Idiot Reveal ─────────────────────────────────
 
-  // QUARANTINED 2026-04-24: Same random-role-assignment issue as test 3 —
-  // "IDIOT bots not found" when backend assigns IDIOT to the host seat, then
-  // `localCtx.roleMap.IDIOT` is empty. Memory: e2e-ci-vs-local-env-differences
-  // item 4. Also exposes the NIGHT→DAY phase-transition stall from revote-
-  // flow test 2. Fix needs both a host-as-IDIOT branch + the UI-reactivity
-  // fix for the phase transition.
-  test.fixme('2. Idiot reveal — all browsers show idiot reveal banner', async ({ browser }, testInfo) => {
+  test('2. Idiot reveal — all browsers show idiot reveal banner', async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
@@ -77,6 +75,17 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
     })
 
     try {
+      // When random role assignment lands IDIOT on the host seat, the existing
+      // "all bots vote for idiot" path via act.sh doesn't apply — the host
+      // isn't in the bot state file. Test 1 still covers this case via its
+      // isHostRole('IDIOT') branch; skip here with a clear rationale.
+      // Memory: e2e-ci-vs-local-env-differences item 4.
+      if (localCtx.isHostRole('IDIOT')) {
+        testInfo.attach('skip-reason', { body: 'Host rolled IDIOT — idiot-reveal voting flow requires a bot IDIOT. Test 1 covers host-as-IDIOT.' })
+        test.skip(true, 'Host rolled IDIOT — covered by test 1')
+        return
+      }
+
       const hostPage = localCtx.hostPage
 
       // Check initial game state after setup
@@ -344,14 +353,9 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
     }
   })
 
-  // ── Test 2: Phase Transition after Idiot Reveal ──────────────────────────────
+  // ── Test 3: Phase Transition after Idiot Reveal ──────────────────────────────
 
-  // QUARANTINED 2026-04-24: "IDIOT bots not found" when the random role
-  // assignment puts IDIOT on the host (seat 9). Memory: e2e-ci-vs-local-env-
-  // differences item 4 ("Random role assignment breaks spec assumptions").
-  // Fix is either test.skip(ctx.hostRole === 'IDIOT') at the top of the test
-  // OR route the idiot-reveal through the host browser when host is the idiot.
-  test.fixme('3. Phase transition — VOTE_RESULT to NIGHT', async ({ browser }, testInfo) => {
+  test('3. Phase transition — VOTE_RESULT to NIGHT', async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
@@ -361,6 +365,15 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
     })
 
     try {
+      // Same host-as-IDIOT skip as test 2 — the idiot-reveal voting path
+      // requires a bot IDIOT so act.sh can drive it. Memory:
+      // e2e-ci-vs-local-env-differences item 4.
+      if (localCtx.isHostRole('IDIOT')) {
+        testInfo.attach('skip-reason', { body: 'Host rolled IDIOT — VOTE_RESULT→NIGHT path needs a bot IDIOT.' })
+        test.skip(true, 'Host rolled IDIOT — covered by test 1')
+        return
+      }
+
       const hostPage = localCtx.hostPage
 
       // ── Phase 0: Start Night Phase ──
