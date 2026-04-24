@@ -18,6 +18,12 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName, sheriff} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import {
+  readAlivePlayerIds,
+  readHostUserId,
+  readUnvotedAlivePlayerIds,
+  waitForVotingSubPhase,
+} from './helpers/state-polling'
 
 const BROWSER_ROLES: RoleName[] = ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER']
 
@@ -413,6 +419,7 @@ async function completeDay(
   evidenceLabel: string,
 ): Promise<void> {
   const hostPage = ctx.hostPage
+  const gameId = ctx.gameId
 
   // Wait for night to resolve → day-reveal-result becomes visible. Night role
   // loop takes ~10-15s under test timings (wolf+seer+seer_result+witch+guard,
@@ -429,90 +436,70 @@ async function completeDay(
   const startVoteBtn = hostPage.getByTestId('day-start-vote')
   if (await startVoteBtn.isVisible({ timeout: 8_000 }).catch(() => false)) {
     await startVoteBtn.click()
-    await hostPage.waitForTimeout(800)
   }
   await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-day-voting-opened`)
 
-  // Every alive voter must submit for `allVotesIn` → reveal button becomes
-  // enabled. That includes the host AND the target themselves (players can
-  // vote for themselves; skipping them is why we previously stalled at
-  // 10/11 voted). Pull the alive roster from /state so dead players are
-  // excluded (backend rejects their votes and allVotesIn drops them from the
-  // denominator automatically — but skipping them keeps the logs cleaner).
-  const liveState = await hostPage.evaluate(async () => {
-    const token = localStorage.getItem('jwt')
-    const res = await fetch(`/api/game/${location.pathname.split('/').pop()}/state`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    return res.ok ? res.json() : null
-  })
-  const alivePlayers: Array<{ nickname: string; seat: number; isAlive: boolean }> =
-    liveState?.players?.filter((p: { isAlive: boolean }) => p.isAlive) ?? []
+  // Resolve target (if any) from the current alive roster. Unresolved target
+  // → everyone abstains.
+  const aliveIds = await readAlivePlayerIds(hostPage, gameId)
+  const targetBot = targetSeat >= 0
+    ? ctx.allBots.find((b) => b.seat === targetSeat && aliveIds.has(b.userId))
+    : undefined
 
-  const targetNick = alivePlayers.find((p) => p.seat === targetSeat)?.nickname
-  if (targetNick) {
-    for (const voter of alivePlayers) {
-      tryAct('SUBMIT_VOTE', voter.nickname, { target: String(targetSeat), room: ctx.roomCode })
-    }
-  } else {
-    // targetSeat not resolvable (e.g., -1 sentinel) → every alive player abstains.
-    for (const voter of alivePlayers) {
-      tryAct('SUBMIT_VOTE', voter.nickname, { room: ctx.roomCode })
-    }
-  }
-  await hostPage.waitForTimeout(1_500)
-
-  // Reveal tally. If the vote ties, the backend moves the sub-phase to
-  // RE_VOTING and requires another round of votes. Loop up to 3 rounds before
-  // giving up — the elimination CAN finish in one round but doesn't have to.
-  async function freshAlivePlayers(): Promise<
-    Array<{ nickname: string; seat: number; isAlive: boolean }>
-  > {
-    const s = await hostPage.evaluate(async () => {
-      const t = localStorage.getItem('jwt')
-      const r = await fetch(`/api/game/${location.pathname.split('/').pop()}/state`, {
-        headers: { Authorization: `Bearer ${t}` },
-      })
-      return r.ok ? r.json() : null
-    })
-    return s?.players?.filter((p: { isAlive: boolean }) => p.isAlive) ?? []
-  }
-  async function freshSubPhase(): Promise<string> {
-    const s = await hostPage.evaluate(async () => {
-      const t = localStorage.getItem('jwt')
-      const r = await fetch(`/api/game/${location.pathname.split('/').pop()}/state`, {
-        headers: { Authorization: `Bearer ${t}` },
-      })
-      return r.ok ? r.json() : null
-    })
-    return s?.votingPhase?.subPhase ?? s?.game?.subPhase ?? ''
-  }
-
+  // Vote cycle — up to 3 rounds (initial + 2 revotes).
+  //
+  // For each round:
+  //   1. Gate on the backend sub-phase before firing any SUBMIT_VOTE. Previous
+  //      implementation fanned out to every alive voter with 3× retries per
+  //      call, which stalled the spec — a 12-player game revoting 3 times
+  //      could burn ~100s on rejected votes alone. The gate skips that.
+  //   2. Fan out only to non-host, alive, UNVOTED players via
+  //      readUnvotedAlivePlayerIds. The helper now returns empty outside
+  //      VOTING/RE_VOTING, so if the backend isn't in a voting sub-phase the
+  //      fan-out is skipped entirely.
+  //   3. Host votes via act('Host', ...) — setupGame saves a hostToken in the
+  //      shell state file, so act.sh can use it the same way it uses bot
+  //      tokens.
+  //   4. Reveal tally via the host browser button. Break out once the backend
+  //      leaves VOTING/RE_VOTING (i.e. landed on VOTE_RESULT / BADGE_HANDOVER
+  //      / HUNTER_SHOOT / post-elimination GAME_OVER).
   for (let attempt = 0; attempt < 3; attempt++) {
+    const expected = attempt === 0 ? 'VOTING' : 'RE_VOTING'
+    const reached = await waitForVotingSubPhase(hostPage, gameId, expected, 15_000)
+    if (!reached) break
+
+    const unvoted = await readUnvotedAlivePlayerIds(hostPage, gameId)
+    const hostId = await readHostUserId(hostPage)
+    const voteOpts: { target?: string; room: string } = targetBot
+      ? { target: String(targetSeat), room: ctx.roomCode }
+      : { room: ctx.roomCode }
+
+    if (hostId && unvoted.has(hostId)) {
+      tryAct('SUBMIT_VOTE', 'Host', voteOpts)
+    }
+    for (const bot of ctx.allBots) {
+      if (bot.nick === 'Host' || bot.userId === hostId) continue
+      if (!unvoted.has(bot.userId)) continue
+      tryAct('SUBMIT_VOTE', bot.nick, voteOpts)
+    }
+    await hostPage.waitForTimeout(1_500)
+
     const revealTallyBtn = hostPage.getByTestId('voting-reveal')
     await revealTallyBtn.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {})
     await expect(revealTallyBtn).toBeEnabled({ timeout: 15_000 }).catch(() => {})
     if (await revealTallyBtn.isVisible().catch(() => false)) {
       await revealTallyBtn.click()
       await hostPage.waitForTimeout(1_500)
+    } else {
+      tryAct('VOTING_REVEAL_TALLY', 'Host', { room: ctx.roomCode })
+      await hostPage.waitForTimeout(1_500)
     }
     await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-day-tally-revealed-r${attempt + 1}`)
 
-    const sub = await freshSubPhase()
-    if (sub !== 'RE_VOTING' && sub !== 'VOTING') break
-
-    // Still in voting → re-submit every alive voter (including target & host).
-    const survivors = await freshAlivePlayers()
-    if (targetNick) {
-      for (const voter of survivors) {
-        tryAct('SUBMIT_VOTE', voter.nickname, { target: String(targetSeat), room: ctx.roomCode })
-      }
-    } else {
-      for (const voter of survivors) {
-        tryAct('SUBMIT_VOTE', voter.nickname, { room: ctx.roomCode })
-      }
-    }
-    await hostPage.waitForTimeout(1_500)
+    // If the backend has left voting (VOTE_RESULT / BADGE_HANDOVER /
+    // HUNTER_SHOOT) or the top-level phase changed (e.g. GAME_OVER), stop.
+    const leftVoting = await waitForVotingSubPhase(hostPage, gameId, 'VOTE_RESULT', 5_000)
+    if (leftVoting) break
   }
 
   // Did BADGE_HANDOVER fire? If yes, capture + pass the badge to seat 1 (or destroy).
@@ -520,11 +507,12 @@ async function completeDay(
   const badgeVisible = await badgeSection.first().isVisible({ timeout: 2_000 }).catch(() => false)
   if (badgeVisible) {
     await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-badge-handover-triggered`)
-    const badgeHolders = await freshAlivePlayers()
+    const survivorIds = await readAlivePlayerIds(hostPage, gameId)
     let passed = false
-    for (const b of badgeHolders) {
+    for (const b of ctx.allBots) {
+      if (!survivorIds.has(b.userId)) continue
       if (b.seat === targetSeat) continue
-      if (tryAct('BADGE_PASS', b.nickname, { target: '1', room: ctx.roomCode })) {
+      if (tryAct('BADGE_PASS', b.nick, { target: '1', room: ctx.roomCode })) {
         passed = true
         break
       }
@@ -578,14 +566,7 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
     }
   })
 
-  // SKIPPED: sheriff-flow rewrite in this change (runSheriffElection + helpers)
-  // is proven locally, but the rest of this test still depends on the
-  // `completeDay` vote loop which iterates all alive voters with retries and
-  // stalls under the same constraints documented in the HARD_MODE sibling
-  // below. Until the `completeDay` rewrite lands (Option B — see
-  // docs/ci-tests-issues.md), both tests stay skipped at the describe level
-  // so CI is not flipped red on every run.
-  test.skip('phase: role-reveal + sheriff election + village votes out wolves', async ({}, testInfo) => {
+  test('phase: role-reveal + sheriff election + village votes out wolves', async ({}, testInfo) => {
     await captureSnapshot(ctx.pages, testInfo, 'classic-01-role-reveal-or-election-start')
 
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
@@ -713,12 +694,7 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     }
   })
 
-  // SKIPPED: same reason as CLASSIC sibling above. Sheriff flow works
-  // locally after Option A, but completeDay's vote loop stalls the test at
-  // the 600s test-timeout (observed locally: 5 rounds of abstain-voting with
-  // no game termination). Un-skip after Option B (completeDay rewrite with
-  // /state-based eligibility filtering) lands.
-  test.skip('phase: role-reveal + sheriff-elect (seer) + D1 vote out sheriff → badge passover → wolves win', async ({}, testInfo) => {
+  test('phase: role-reveal + sheriff-elect (seer) + D1 vote out sheriff → badge passover → wolves win', async ({}, testInfo) => {
     await captureSnapshot(ctx.pages, testInfo, 'hard-01-role-reveal-or-election-start')
 
     const seerBots = ctx.roleMap.SEER ?? []
