@@ -4,12 +4,22 @@
 # responsible for exposing the app to the public internet. See
 # deploy/nginx-site.conf for the matching reverse-proxy config.
 #
-# Usage:
+# Usage (prod — pull pre-built image, fast):
 #   cp .env.prod.example .env.prod
-#   # edit .env.prod and fill in real secrets
+#   # edit .env.prod and set WEREWOLF_VERSION=v0.2.0 (or latest tag)
+#   docker compose --env-file .env.prod pull
+#   docker compose --env-file .env.prod up -d
+#
+# Usage (dev — build locally, slow first time):
 #   docker compose --env-file .env.prod up -d --build
 #
 # The --env-file flag is required: compose only auto-loads ".env", not ".env.prod".
+#
+# Backend/frontend specify BOTH `image:` (ghcr.io tag that CI pushes on every
+# tag + main commit) AND `build:` (the local Dockerfile). With both, `--build`
+# re-builds locally; `pull` fetches the remote image; and `up` without either
+# flag uses whatever's already on disk. Lets prod skip the 30-min VM build
+# entirely while local dev keeps working unchanged.
 
 services:
   postgres:
@@ -30,6 +40,7 @@ services:
       retries: 10
 
   backend:
+    image: ghcr.io/wangdaqian08/werewolf-simple-backend:${WEREWOLF_VERSION:-latest}
     build:
       context: ./backend
     restart: unless-stopped
@@ -51,6 +62,7 @@ services:
       start_period: 40s
 
   frontend:
+    image: ghcr.io/wangdaqian08/werewolf-simple-frontend:${WEREWOLF_VERSION:-latest}
     build:
       context: ./frontend
     restart: unless-stopped

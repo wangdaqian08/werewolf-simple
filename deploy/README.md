@@ -32,25 +32,49 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d werewolf.example.com
 ```
 
-## Deploy (single command)
+## Deploy
+
+Images are pre-built by GitHub Actions and published to `ghcr.io` on every
+release tag. The prod VM only pulls and starts — no Gradle/Vite build on the
+VM, so deploys are ~1 min instead of ~30 min.
+
+### First-time install
 
 ```bash
 cd /opt/werewolf-simple
 cp .env.prod.example .env.prod
 # edit .env.prod — fill in JWT_SECRET, POSTGRES_PASSWORD, GOOGLE_*, FRONTEND_ORIGIN
-docker compose --env-file .env.prod up -d --build
+# set WEREWOLF_VERSION=v0.2.0 (or whichever release tag you want to pin)
+docker compose --env-file .env.prod pull
+docker compose --env-file .env.prod up -d
 ```
 
-Everything needed (Postgres, backend jar build, frontend Vite build) is produced
-by this single command. No local Java / Node install required on the VM.
+### Release a new version
 
-### Updates
+1. On the repo: tag main with `vX.Y.Z` and push. GitHub Actions builds + pushes
+   `ghcr.io/.../werewolf-simple-{backend,frontend}:vX.Y.Z` + `:latest`.
+2. On the VM:
+   ```bash
+   cd /opt/werewolf-simple
+   sed -i 's/^WEREWOLF_VERSION=.*$/WEREWOLF_VERSION=vX.Y.Z/' .env.prod
+   docker compose --env-file .env.prod pull
+   docker compose --env-file .env.prod up -d
+   ```
+   `up -d` detects the image reference changed and recreates the container; no
+   `--force-recreate` needed.
+
+### Emergency rebuild on the VM (fallback)
+
+If ghcr.io is unreachable or you need to patch without a release:
 
 ```bash
 cd /opt/werewolf-simple
 git pull
 docker compose --env-file .env.prod up -d --build
 ```
+
+`build:` is still in `docker-compose.yml` as a fallback — this takes ~30 min
+on a 2-vCPU VM.
 
 ## Verify
 
