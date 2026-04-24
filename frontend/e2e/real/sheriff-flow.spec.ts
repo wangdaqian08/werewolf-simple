@@ -60,13 +60,13 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     }
 
     // Click "Run for Sheriff" button
-    const runBtn = seerPage.getByRole('button', { name: /参选|Run for Sheriff/i })
+    const runBtn = seerPage.getByTestId('sheriff-run')
     if (await runBtn.isVisible().catch(() => false)) {
       await runBtn.click()
 
       // Verify: button should change to "Withdraw"
       await expect(
-        seerPage.getByRole('button', { name: /撤回|Withdraw/i }),
+        seerPage.getByTestId('sheriff-withdraw'),
       ).toBeVisible({ timeout: 5_000 })
     }
 

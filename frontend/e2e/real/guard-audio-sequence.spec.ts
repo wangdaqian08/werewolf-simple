@@ -143,7 +143,7 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     } else {
       const wolfPage = ctx.pages.get('WEREWOLF')!
       await wolfPage.locator(`.player-grid .slot-alive`).first().click()
-      await wolfPage.getByRole('button', { name: /确认袭击|Confirm/i }).click()
+      await wolfPage.getByTestId('wolf-confirm-kill').click()
     }
 
     // Wait for coroutine to advance to SEER_PICK before firing seer.
@@ -164,9 +164,9 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     } else if (ctx.isHostRole('SEER')) {
       const seerPage = ctx.pages.get('SEER')!
       await seerPage.locator('.player-grid .slot-alive').first().click()
-      await seerPage.getByRole('button', { name: /查验|Check/i }).click()
+      await seerPage.getByTestId('seer-check').click()
       await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-      await seerPage.getByRole('button', { name: /查验完毕|Done/i }).click()
+      await seerPage.getByTestId('seer-done').click()
     }
 
     // Wait for coroutine to advance to WITCH_ACT before witch acts.
@@ -186,13 +186,14 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
         room: ctx.roomCode,
       })
     } else if (witchPage) {
-      // Host is the witch, or some layout quirk — use browser clicks.
-      const passAntidoteBtn = witchPage.getByRole('button', { name: /放弃/ })
+      // Host is the witch, or some layout quirk — use browser clicks via
+      // data-testid (stable across translations + refactors, unlike text).
+      const passAntidoteBtn = witchPage.getByTestId('switch-pass-antidote')
       if (await passAntidoteBtn.isVisible().catch(() => false)) {
         await passAntidoteBtn.click()
         await witchPage.waitForTimeout(500)
       }
-      const skipPoisonBtn = witchPage.getByRole('button', { name: /不用/ })
+      const skipPoisonBtn = witchPage.getByTestId('switch-pass-poison')
       if (await skipPoisonBtn.isVisible().catch(() => false)) {
         await skipPoisonBtn.click()
       }
@@ -221,7 +222,7 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       await act('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
     } else if (ctx.isHostRole('GUARD')) {
       await guardPage!.locator('.player-grid .slot-alive').first().click()
-      await guardPage!.getByRole('button', { name: /确认保护|Confirm/i }).click()
+      await guardPage!.getByTestId('guard-confirm-protect').click()
     }
 
     // Wait for night to complete and day to start
