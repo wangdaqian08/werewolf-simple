@@ -231,18 +231,33 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     await captureSnapshot(ctx.pages, testInfo, '05-guard-completed-day-started')
 
     // ── Step 6: Verify audio sequence integrity ───────────────────────────
-    // Wait a bit for any delayed audio events
-    await hostPage.waitForTimeout(3_000)
-
+    // Poll for guard_close_eyes.mp3's "Starting playback" log to appear.
+    // The DAY phase shows on screen as soon as the backend's PhaseChanged
+    // event arrives, but with the waitForIdle fix in useAudioService the
+    // role audio drains AFTER the phase changes — so queued role clips may
+    // not have logged "Starting playback" yet at the instant of DAY. Poll
+    // up to 15s (covers 4 role close_eyes × ~3s each, worst case).
+    //
     // Two audio log sources:
     //   audioService.ts:    `[AudioService] Starting playback: ${filename}` — template literal, filename inline
     //   useAudioService.ts: `console.log('... Playing audio files:', array)` — array arg serialized as JSHandle,
     //                         Playwright's msg.text() drops the filename
-    // We must filter on audioService's inline-filename logs; the useAudioService
+    // We filter on audioService's inline-filename logs; the useAudioService
     // logs look right to a human reader but are unreliable through the CDP channel.
-    const guardCloseEyesEvents = audioEvents.filter(
-      (e) => e.includes('Starting playback') && e.includes('guard_close_eyes.mp3'),
-    )
+    const pollForGuardClose = async (timeoutMs: number) => {
+      const deadline = Date.now() + timeoutMs
+      while (Date.now() < deadline) {
+        const matches = audioEvents.filter(
+          (e) => e.includes('Starting playback') && e.includes('guard_close_eyes.mp3'),
+        )
+        if (matches.length >= 1) return matches
+        await hostPage.waitForTimeout(500)
+      }
+      return audioEvents.filter(
+        (e) => e.includes('Starting playback') && e.includes('guard_close_eyes.mp3'),
+      )
+    }
+    const guardCloseEyesEvents = await pollForGuardClose(15_000)
 
     // CRITICAL ASSERTION: guard_close_eyes.mp3 should play exactly ONCE
     // If it plays twice, the bug is present. On failure we dump the full
