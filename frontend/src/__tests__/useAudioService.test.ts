@@ -15,8 +15,6 @@ const mockClearQueue = vi.fn()
 const mockStopAll = vi.fn()
 const mockIsMuted = vi.fn().mockReturnValue(false)
 const mockToggleMute = vi.fn()
-const mockWaitForIdle = vi.fn().mockResolvedValue(undefined)
-let mockIsActive = false
 
 vi.mock('@/services/audioService', () => ({
   audioService: {
@@ -27,10 +25,6 @@ vi.mock('@/services/audioService', () => ({
     toggleMute: () => mockToggleMute(),
     setGlobalVolume: vi.fn(),
     getGlobalVolume: vi.fn().mockReturnValue(1),
-    get isActive() {
-      return mockIsActive
-    },
-    waitForIdle: (ms: number) => mockWaitForIdle(ms),
   },
 }))
 
@@ -75,7 +69,6 @@ describe('useAudioService', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    mockIsActive = false
     cleanup?.()
     cleanup = null
   })
@@ -155,39 +148,25 @@ describe('useAudioService', () => {
 
   // ── Queue behavior: priority-aware to guarantee sequential, non-overlapping playback ─
 
-  it('high-priority sequence (>=10) waits for the queue to drain before appending', async () => {
-    // Phase-boundary audio (DAY→NIGHT, NIGHT→DAY) historically called
-    // clearQueue() to preempt any lingering audio, but that deterministically
-    // dropped the last role's close_eyes clip when night audio spilled past
-    // the coroutine's DAY transition (the guard_close_eyes regression). New
-    // contract: if the queue is still active, await audioService.waitForIdle
-    // (bounded), then append — the previous role audio finishes, and the
-    // new phase audio plays cleanly after.
+  it('high-priority sequence (>=10) clears the queue so it plays immediately', async () => {
+    // Phase-boundary audio (DAY→NIGHT, NIGHT→DAY) must interrupt any lingering audio
+    // so the new phase's ambience plays promptly.
     const gameStore = useGameStore()
     setupComposable()
-
-    // Simulate the queue still playing when the new high-priority sequence
-    // arrives (e.g. guard_close_eyes hasn't finished when DAY fires).
-    mockIsActive = true
 
     gameStore.setState(
       makeState({ audioSequence: { ...makeSequence(['a.mp3'], 'seq-1'), priority: 10 } }),
     )
     await nextTick()
 
-    mockWaitForIdle.mockClear()
-    mockPlaySequential.mockClear()
+    mockClearQueue.mockClear()
 
     gameStore.setState(
       makeState({ audioSequence: { ...makeSequence(['b.mp3'], 'seq-2'), priority: 10 } }),
     )
     await nextTick()
-    // Wait for the awaited waitForIdle to resolve
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await nextTick()
 
-    expect(mockWaitForIdle).toHaveBeenCalled()
-    expect(mockClearQueue).not.toHaveBeenCalled()
+    expect(mockClearQueue).toHaveBeenCalled()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['b.mp3'])
   })
 
@@ -226,9 +205,8 @@ describe('useAudioService', () => {
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: wolfOpenSeq }))
     await nextTick()
 
-    // Under the new contract: high-priority broadcast #1 appends (no clear).
-    // Broadcast #2 (priority 5) also appends. clearQueue is no longer used.
-    expect(mockClearQueue).not.toHaveBeenCalled()
+    // Broadcast #1 cleared; broadcast #2 appended (did NOT clear).
+    expect(mockClearQueue).toHaveBeenCalledTimes(1)
 
     // Flat the files from each playSequential call in call order to reconstruct
     // the exact ordered sequence the player's audio queue will play.
