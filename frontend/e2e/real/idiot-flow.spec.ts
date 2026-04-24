@@ -16,7 +16,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {captureSnapshot} from './helpers/composite-screenshot'
-import {waitForNightSubPhase} from './helpers/state-polling'
+import {readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -132,7 +132,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
         
         // Try to use script to start night phase
         try {
-          act('START_NIGHT', undefined, { room: localCtx.roomCode })
+          act('START_NIGHT', 'Host', { room: localCtx.roomCode })
           testInfo.attach('night-start-triggered', { body: 'Start night action triggered' })
           await hostPage.waitForTimeout(5_000)
         } catch (error) {
@@ -309,10 +309,19 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       
       const idiotBot = idiotBots[0]
       testInfo.attach('idiot-info', { body: JSON.stringify(idiotBot, null, 2) })
-      
-      // All players vote for the idiot to trigger idiot reveal
-      act('SUBMIT_VOTE', undefined, { target: String(idiotBot.seat), room: localCtx.roomCode })
-      testInfo.attach('votes-submitted', { body: `All players voted for idiot at seat ${idiotBot.seat}` })
+
+      // Fan-out vote only to alive, non-host, unvoted bots — skips
+      // already-voted and dead players to avoid act.sh's 3× retry cascade.
+      {
+        const unvoted = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
+        const hostId = await readHostUserId(hostPage)
+        for (const bot of localCtx.allBots) {
+          if (bot.nick === 'Host' || bot.userId === hostId) continue
+          if (!unvoted.has(bot.userId)) continue
+          act('SUBMIT_VOTE', bot.nick, { target: String(idiotBot.seat), room: localCtx.roomCode })
+        }
+        testInfo.attach('votes-submitted', { body: `Fan-out vote for idiot at seat ${idiotBot.seat}` })
+      }
       
       // Wait for all votes to register
       await hostPage.waitForTimeout(2_000)
@@ -382,7 +391,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       
       // Use script to start night phase
       try {
-        act('START_NIGHT', undefined, { room: localCtx.roomCode })
+        act('START_NIGHT', 'Host', { room: localCtx.roomCode })
         testInfo.attach('night-start-triggered', { body: 'Start night action triggered' })
         await hostPage.waitForTimeout(5_000)
       } catch (error) {
@@ -513,7 +522,17 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       }
       
       const idiotBot = idiotBots[0]
-      act('SUBMIT_VOTE', undefined, { target: String(idiotBot.seat), room: localCtx.roomCode })
+      // Fan-out vote only to alive, non-host, unvoted bots (same rationale
+      // as test 2's vote step).
+      {
+        const unvoted = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
+        const hostId = await readHostUserId(hostPage)
+        for (const bot of localCtx.allBots) {
+          if (bot.nick === 'Host' || bot.userId === hostId) continue
+          if (!unvoted.has(bot.userId)) continue
+          act('SUBMIT_VOTE', bot.nick, { target: String(idiotBot.seat), room: localCtx.roomCode })
+        }
+      }
       await hostPage.waitForTimeout(2_000)
       act('VOTING_REVEAL_TALLY', 'HOST', { room: localCtx.roomCode })
       await hostPage.waitForTimeout(3_000)

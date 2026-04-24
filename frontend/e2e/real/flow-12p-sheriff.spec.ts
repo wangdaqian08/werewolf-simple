@@ -604,7 +604,7 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
       await startBtn.click()
     } else {
       // sheriff flow sometimes auto-transitions; try scripted fallback
-      tryAct('START_NIGHT', undefined, { room: ctx.roomCode })
+      tryAct('START_NIGHT', 'Host', { room: ctx.roomCode })
     }
     await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 20_000)
     await captureSnapshot(ctx.pages, testInfo, 'classic-03-night-1-entered')
@@ -735,7 +735,7 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     if (await startBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
       await startBtn.click()
     } else {
-      tryAct('START_NIGHT', undefined, { room: ctx.roomCode })
+      tryAct('START_NIGHT', 'Host', { room: ctx.roomCode })
     }
     await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 20_000)
     await captureSnapshot(ctx.pages, testInfo, 'hard-03-night-1-entered')

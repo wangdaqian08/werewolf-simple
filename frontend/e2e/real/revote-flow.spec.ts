@@ -13,7 +13,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {readAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
+import {readAlivePlayerIds, readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -464,9 +464,18 @@ test.describe('Voting tie → revote → game proceeds', () => {
           room: ctx.roomCode,
         })
       }
-      // Fan-out abstain; "Already voted" / "Dead players cannot vote" here
-      // are terminal rejections and expected noise per the backend rules.
-      tryAct('SUBMIT_VOTE', undefined, { room: ctx.roomCode })
+      // Fan-out abstain — only to bots that are alive, not host, and haven't
+      // voted yet. Replaces the old `act('SUBMIT_VOTE', undefined)` call which
+      // iterated every bot (including the already-voted decisive and dead
+      // bots), producing "Already voted" / "Dead players cannot vote"
+      // rejections that tripped act.sh's 3× retry and wasted ~6s per call.
+      const unvoted = await readUnvotedAlivePlayerIds(ctx.hostPage, ctx.gameId)
+      const hostId = await readHostUserId(ctx.hostPage)
+      for (const bot of ctx.allBots) {
+        if (bot.nick === 'Host' || bot.userId === hostId) continue
+        if (!unvoted.has(bot.userId)) continue
+        tryAct('SUBMIT_VOTE', bot.nick, { room: ctx.roomCode })
+      }
       // Host abstains via the skip-btn click so the host's vote counts toward
       // allVoted (voting-reveal button is disabled until allVoted=true).
       const abstainBtn = ctx.hostPage.locator('.skip-btn').first()

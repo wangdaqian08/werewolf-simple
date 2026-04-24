@@ -14,7 +14,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {waitForNightSubPhase} from './helpers/state-polling'
+import {readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -339,12 +339,20 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
     const wolfTarget = wolfBots.find((b) => b.nick !== 'Host')
 
-    if (wolfTarget) {
-      // All bots vote for the wolf (host's duplicate vote will be rejected harmlessly)
-      act('SUBMIT_VOTE', undefined, { target: String(wolfTarget.seat), room: ctx.roomCode })
-    } else {
-      // All bots abstain
-      act('SUBMIT_VOTE', undefined, { room: ctx.roomCode })
+    // Fan-out the vote only to bots that are alive, not host, and haven't
+    // voted yet — the host already clicked abstain above so their userId is
+    // in state.votingPhase.votedPlayerIds. Without the filter, act.sh would
+    // iterate every bot (plus host) and the redundant attempts on the
+    // already-voted host would burn act.sh's 3× retry quota on rejection.
+    const unvoted = await readUnvotedAlivePlayerIds(ctx.hostPage, ctx.gameId)
+    const hostId = await readHostUserId(ctx.hostPage)
+    const voteOpts: { target?: string; room: string } = wolfTarget
+      ? { target: String(wolfTarget.seat), room: ctx.roomCode }
+      : { room: ctx.roomCode }
+    for (const bot of ctx.allBots) {
+      if (bot.nick === 'Host' || bot.userId === hostId) continue
+      if (!unvoted.has(bot.userId)) continue
+      act('SUBMIT_VOTE', bot.nick, voteOpts)
     }
 
     // Wait for all votes to register
