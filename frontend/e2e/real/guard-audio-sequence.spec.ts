@@ -271,10 +271,24 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
         `All audioEvents (${audioEvents.length}): ${JSON.stringify(audioEvents, null, 2)}`,
     ).toBe(1)
 
-    // Also verify that day audio (rooster_crowing.mp3) played
-    const dayAudioEvents = audioEvents.filter(
-      (e) => e.includes('Starting playback') && e.includes('rooster_crowing.mp3'),
-    )
+    // Also verify that day audio (rooster_crowing.mp3) played. With the new
+    // waitForIdle-based scheduler, rooster is appended AFTER guard_close_eyes
+    // finishes playing — so it may not have logged yet at the instant the
+    // guard_close poll succeeded. Poll for it separately.
+    const pollForRooster = async (timeoutMs: number) => {
+      const deadline = Date.now() + timeoutMs
+      while (Date.now() < deadline) {
+        const matches = audioEvents.filter(
+          (e) => e.includes('Starting playback') && e.includes('rooster_crowing.mp3'),
+        )
+        if (matches.length >= 1) return matches
+        await hostPage.waitForTimeout(500)
+      }
+      return audioEvents.filter(
+        (e) => e.includes('Starting playback') && e.includes('rooster_crowing.mp3'),
+      )
+    }
+    const dayAudioEvents = await pollForRooster(15_000)
     expect(dayAudioEvents.length).toBeGreaterThanOrEqual(1)
 
     // Verify the sequence order: guard_close_eyes before rooster_crowing
