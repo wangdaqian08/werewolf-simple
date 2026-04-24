@@ -312,13 +312,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     }
   }
 
-  // QUARANTINED 2026-04-24: intermittent NIGHT→DAY transition stall not
-  // resolved by the Category A sub-phase gates added in this PR. Likely the
-  // same class of product/spec bug quarantined in `guard-audio-sequence` and
-  // `flow-12p-sheriff` (memory: quarantined-e2e-tests-2026-04-19). Needs its
-  // own reproducer + fix — probably UI-reactivity lag on the role-owned
-  // browser page, or a phase-transition event that isn't being awaited.
-  test.fixme('2. Complete night — wolf kills, witch saves', async ({}, testInfo) => {
+  test('2. Complete night — wolf kills, witch saves', async ({}, testInfo) => {
     await completeNight({ witchUseAntidote: true })
 
     // Wait for DAY
