@@ -132,3 +132,50 @@ export async function readAlivePlayerIds(
   }, gameId)
   return new Set(ids)
 }
+
+/**
+ * Return the userIds of alive players who have NOT yet voted in the current
+ * voting round. Combines `state.players[*].isAlive` with
+ * `state.votingPhase.votedPlayerIds` (the backend's per-round voter set).
+ *
+ * Use this to pre-filter bots BEFORE firing `act('SUBMIT_VOTE', ...)`: without
+ * this filter, the retry loop inside `act()` sees the fan-out call's mixed
+ * rejection output ("Already voted this round" / "Dead players cannot vote")
+ * and retries all players up to 3 times — wasting ~6s per redundant call.
+ *
+ * Returns an empty Set when no voting round is active (phase ≠ DAY_VOTING
+ * or state fetch failed) — callers should interpret that as "no candidate
+ * voters" and skip the fan-out entirely.
+ */
+export async function readUnvotedAlivePlayerIds(
+  hostPage: Page,
+  gameId: string,
+): Promise<Set<string>> {
+  const ids = await hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return [] as string[]
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return [] as string[]
+    const state = await res.json()
+    const voted = new Set<string>(state?.votingPhase?.votedPlayerIds ?? [])
+    return ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
+      .filter((p) => p.isAlive && !voted.has(p.userId))
+      .map((p) => p.userId)
+  }, gameId)
+  return new Set(ids)
+}
+
+/**
+ * Return the host's userId — read from localStorage on the host page. Use
+ * this together with `readAlivePlayerIds` / `readUnvotedAlivePlayerIds` to
+ * exclude the host from bulk bot-action fan-outs, since the host's JWT is
+ * stored in the browser (not the shell state file) and host-only actions
+ * (START_NIGHT, DAY_ADVANCE, VOTING_REVEAL_TALLY, VOTING_CONTINUE) must be
+ * driven either through the UI or via a dedicated host-token `act.sh` call
+ * rather than through the default "all bots" fan-out.
+ */
+export async function readHostUserId(hostPage: Page): Promise<string | null> {
+  return hostPage.evaluate(() => localStorage.getItem('userId'))
+}

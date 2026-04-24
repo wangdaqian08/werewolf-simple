@@ -13,7 +13,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {readAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
+import {readAlivePlayerIds, readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -260,7 +260,17 @@ test.describe('Werewolf win — result screen shows all roles', () => {
         await hostPage.waitForTimeout(500)
       }
 
-      tryAct('SUBMIT_VOTE', undefined, { room: ctx.roomCode })
+      // Fan-out abstain to alive, non-host, unvoted bots only. Avoids the
+      // "Already voted" / "Dead players cannot vote" retry cascade in
+      // act.sh when some bots have already abstained via the host-browser
+      // click above.
+      const unvoted = await readUnvotedAlivePlayerIds(ctx.hostPage, ctx.gameId)
+      const hostId = await readHostUserId(ctx.hostPage)
+      for (const bot of ctx.allBots) {
+        if (bot.nick === 'Host' || bot.userId === hostId) continue
+        if (!unvoted.has(bot.userId)) continue
+        tryAct('SUBMIT_VOTE', bot.nick, { room: ctx.roomCode })
+      }
       await hostPage.waitForTimeout(2_000)
 
       tryAct('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })

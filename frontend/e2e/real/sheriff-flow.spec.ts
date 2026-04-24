@@ -170,7 +170,7 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     } else {
       // Use script
       try {
-        act('START_NIGHT', undefined, { room: ctx.roomCode })
+        act('START_NIGHT', 'Host', { room: ctx.roomCode })
       } catch {
         // Might auto-advance
       }
