@@ -124,7 +124,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       // Wolf is the host — use browser clicks
       const targetSlot = wolfPage.locator(`.player-grid .slot-alive`).first()
       await targetSlot.click()
-      const confirmBtn = wolfPage.getByRole('button', { name: /确认袭击|Confirm/i })
+      const confirmBtn = wolfPage.getByTestId('wolf-confirm-kill')
       await confirmBtn.click()
     }
 
@@ -173,12 +173,12 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       const targetSlot = seerPage.locator('.player-grid .slot-alive').first()
       await targetSlot.waitFor({ state: 'visible', timeout: 5_000 })
       await targetSlot.click()
-      await seerPage.getByRole('button', { name: /查验 · Check/i }).click()
+      await seerPage.getByTestId('seer-check').click()
       // Wait for result and confirm
       await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
       // Screenshot: seer sees check result
       await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
-      await seerPage.getByRole('button', { name: /查验完毕|Done/i }).click()
+      await seerPage.getByTestId('seer-done').click()
     }
 
     // ── Witch (always via browser to capture UI at each step) ──
@@ -191,7 +191,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     await captureSnapshot(ctx.pages, testInfo, '04-witch-before-action')
 
     // -- Poison: enter target selection mode --
-    const usePoisonBtn = witchPage.getByRole('button', { name: /使用毒药/ })
+    const usePoisonBtn = witchPage.getByTestId('use-poison')
     if (await usePoisonBtn.isVisible().catch(() => false)) {
       await usePoisonBtn.click()
       await witchPage.waitForTimeout(500)
@@ -209,14 +209,14 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         await captureSnapshot(ctx.pages, testInfo, '04-witch-poison-selected')
 
         // Cancel — we don't actually want to poison in round 1
-        const cancelBtn = witchPage.getByRole('button', { name: /取消/ })
+        const cancelBtn = witchPage.getByTestId('poison-mode-cancel')
         await cancelBtn.click()
         await witchPage.waitForTimeout(300)
       }
     }
 
     // -- Antidote decision --
-    const useAntidoteBtn = witchPage.getByRole('button', { name: /使用解药/ })
+    const useAntidoteBtn = witchPage.getByTestId('witch-antidote')
     if (await useAntidoteBtn.isVisible().catch(() => false)) {
       // Screenshot: antidote choice visible
       await captureSnapshot(ctx.pages, testInfo, '04-witch-antidote-choice')
@@ -230,7 +230,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // -- Skip poison (if still available after antidote) --
-    const skipPoisonBtn = witchPage.getByRole('button', { name: /不用/ })
+    const skipPoisonBtn = witchPage.getByTestId('switch-pass-poison')
     if (await skipPoisonBtn.isVisible().catch(() => false)) {
       await skipPoisonBtn.click()
       await witchPage.waitForTimeout(500)
@@ -240,7 +240,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // If no items at all, click done
-    const doneBtn = witchPage.getByRole('button', { name: /完成操作|Done/i })
+    const doneBtn = witchPage.getByTestId('witch-skip')
     if (await doneBtn.isVisible().catch(() => false)) {
       await doneBtn.click()
     }
@@ -268,7 +268,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       const targetSlot = guardPage.locator('.player-grid .slot-alive').first()
       await targetSlot.waitFor({ state: 'visible', timeout: 5_000 })
       await targetSlot.click()
-      await guardPage.getByRole('button', { name: /确认保护|Confirm/i }).click()
+      await guardPage.getByTestId('guard-confirm-protect').click()
     }
 
     // STOMP verify: ALL browsers should transition to DAY phase
@@ -283,7 +283,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const hostPage = ctx.hostPage
 
     // Host should see "显示结果 · Result" button
-    const revealBtn = hostPage.getByRole('button', { name: /显示结果|Result/i })
+    const revealBtn = hostPage.getByTestId('day-reveal-result')
     await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
 
     // Click reveal — verify all browsers see the kill banner
@@ -312,7 +312,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const hostPage = ctx.hostPage
 
     // Host clicks "Start Vote"
-    const startVoteBtn = hostPage.getByRole('button', { name: /开始投票|Start Vote/i })
+    const startVoteBtn = hostPage.getByTestId('day-start-vote')
     await startVoteBtn.waitFor({ state: 'visible', timeout: 10_000 })
 
     await startVoteBtn.click()
@@ -449,7 +449,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       if (await playerGrid.first().isVisible({ timeout: 10_000 }).catch(() => false)) {
         const targetSlot = wolfPage.locator('.player-grid .slot-alive').first()
         await targetSlot.click()
-        await wolfPage.getByRole('button', { name: /确认袭击|Confirm/i }).click()
+        await wolfPage.getByTestId('wolf-confirm-kill').click()
       }
     }
 
@@ -472,9 +472,9 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       const seerPage = ctx.pages.get('SEER')!
       if (await seerPage.getByText(/选择查验目标|Select a player to check/i).first().isVisible({ timeout: 10_000 }).catch(() => false)) {
         await seerPage.locator('.player-grid .slot-alive').first().click()
-        await seerPage.getByRole('button', { name: /查验|Check/i }).click()
+        await seerPage.getByTestId('seer-check').click()
         await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-        await seerPage.getByRole('button', { name: /查验完毕|Done/i }).click()
+        await seerPage.getByTestId('seer-done').click()
       }
     }
 
@@ -489,12 +489,12 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     if (!witchDone && ctx.isHostRole('WITCH')) {
       const witchPage = ctx.pages.get('WITCH')!
       if (await witchPage.locator('.w-section').first().isVisible({ timeout: 10_000 }).catch(() => false)) {
-        const passBtn = witchPage.getByRole('button', { name: /放弃/ })
+        const passBtn = witchPage.getByTestId('switch-pass-antidote')
         if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
         await witchPage.waitForTimeout(500)
-        const skipBtn = witchPage.getByRole('button', { name: /不用/ })
+        const skipBtn = witchPage.getByTestId('switch-pass-poison')
         if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
-        const doneBtn = witchPage.getByRole('button', { name: /完成操作|Done/i })
+        const doneBtn = witchPage.getByTestId('witch-skip')
         if (await doneBtn.isVisible().catch(() => false)) await doneBtn.click()
       }
     }
@@ -511,7 +511,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       const guardPage = ctx.pages.get('GUARD')!
       if (await guardPage.getByText(/选择守护目标|Protect a player/i).first().isVisible({ timeout: 10_000 }).catch(() => false)) {
         await guardPage.locator('.player-grid .slot-alive').first().click()
-        await guardPage.getByRole('button', { name: /确认保护|Confirm/i }).click()
+        await guardPage.getByTestId('guard-confirm-protect').click()
       }
     }
 

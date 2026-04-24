@@ -143,7 +143,7 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     } else {
       const wolfPage = ctx.pages.get('WEREWOLF')!
       await wolfPage.locator(`.player-grid .slot-alive`).first().click()
-      await wolfPage.getByRole('button', { name: /确认袭击|Confirm/i }).click()
+      await wolfPage.getByTestId('wolf-confirm-kill').click()
     }
 
     // Wait for coroutine to advance to SEER_PICK before firing seer.
@@ -164,9 +164,9 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     } else if (ctx.isHostRole('SEER')) {
       const seerPage = ctx.pages.get('SEER')!
       await seerPage.locator('.player-grid .slot-alive').first().click()
-      await seerPage.getByRole('button', { name: /查验|Check/i }).click()
+      await seerPage.getByTestId('seer-check').click()
       await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-      await seerPage.getByRole('button', { name: /查验完毕|Done/i }).click()
+      await seerPage.getByTestId('seer-done').click()
     }
 
     // Wait for coroutine to advance to WITCH_ACT before witch acts.
@@ -175,17 +175,31 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     await captureSnapshot(ctx.pages, testInfo, '03-seer-completed')
 
     // ── Step 4: Witch completes action ────────────────────────────────────
-    // Pass both antidote and poison to move quickly to guard
-    const passAntidoteBtn = witchPage!.getByRole('button', { name: /放弃/ })
-    if (await passAntidoteBtn.isVisible().catch(() => false)) {
-      await passAntidoteBtn.click()
-      await witchPage!.waitForTimeout(500)
+    // Prefer the bot-script path (reliable regardless of browser render
+    // timing). Only fall back to browser clicks when the host is the witch
+    // OR when no bot has the WITCH role and a dedicated witch page exists.
+    const witchBots = ctx.roleMap.WITCH ?? []
+    const witchBot = witchBots.find((b) => b.nick !== 'Host')
+    if (witchBot) {
+      await act('WITCH_ACT', witchBot.nick, {
+        payload: '{"useAntidote":false}',
+        room: ctx.roomCode,
+      })
+    } else if (witchPage) {
+      // Host is the witch, or some layout quirk — use browser clicks via
+      // data-testid (stable across translations + refactors, unlike text).
+      const passAntidoteBtn = witchPage.getByTestId('switch-pass-antidote')
+      if (await passAntidoteBtn.isVisible().catch(() => false)) {
+        await passAntidoteBtn.click()
+        await witchPage.waitForTimeout(500)
+      }
+      const skipPoisonBtn = witchPage.getByTestId('switch-pass-poison')
+      if (await skipPoisonBtn.isVisible().catch(() => false)) {
+        await skipPoisonBtn.click()
+      }
     }
-
-    const skipPoisonBtn = witchPage!.getByRole('button', { name: /不用/ })
-    if (await skipPoisonBtn.isVisible().catch(() => false)) {
-      await skipPoisonBtn.click()
-    }
+    // else: no witch in this game — coroutine will time out and auto-
+    // advance. Not an error the test should block on.
 
     // Wait for coroutine to advance to GUARD_PICK before guard acts.
     await waitForSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
@@ -208,7 +222,7 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       await act('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
     } else if (ctx.isHostRole('GUARD')) {
       await guardPage!.locator('.player-grid .slot-alive').first().click()
-      await guardPage!.getByRole('button', { name: /确认保护|Confirm/i }).click()
+      await guardPage!.getByTestId('guard-confirm-protect').click()
     }
 
     // Wait for night to complete and day to start

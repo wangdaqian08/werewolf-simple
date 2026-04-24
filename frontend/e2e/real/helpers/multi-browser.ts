@@ -92,7 +92,12 @@ export async function setupGame(
   // Login
   await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
   await hostPage.getByRole('button', { name: /Create Room/i }).first().click()
-  await hostPage.waitForURL(/\/create-room/, { timeout: 10_000 })
+  // Bump from 10s → 30s: CI-3 flaked repeatedly here on 2026-04-24 /
+  // 2026-04-25 because the initial '/' → '/create-room' navigation after a
+  // cold Vite start plus Spring Tomcat warmup sometimes exceeds 10 s. The
+  // sibling /game/ and /room/ waits are 15 s; the FIRST post-click wait is
+  // the warm-up-sensitive one, so give it the most slack.
+  await hostPage.waitForURL(/\/create-room/, { timeout: 30_000 })
 
   // Configure room: set player count
   // The stepper shows the current total. Default is 9.
@@ -155,7 +160,10 @@ export async function setupGame(
 
   // Create the room
   await hostPage.getByRole('button', { name: /Create Room/i }).click()
-  await hostPage.waitForURL(/\/room\//, { timeout: 10_000 })
+  // Bump from 10s → 15s: matches the other setup navigation waits in this
+  // helper (game-view redirect is 15s on line 209). POST /api/room/create
+  // hits the DB; under heavy CI load the initial insert can block briefly.
+  await hostPage.waitForURL(/\/room\//, { timeout: 15_000 })
 
   // Get room code
   const roomCode = (await hostPage.locator('[data-testid="room-code"]').textContent()) ?? ''
