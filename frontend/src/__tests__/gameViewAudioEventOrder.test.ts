@@ -344,13 +344,14 @@ describe('GameView Audio Event Order Bug', () => {
     expect(mockPlaySequential).toHaveBeenCalledWith(['rooster_crowing.mp3', 'day_time.mp3'])
   })
 
-  it('Multiple rapid high-priority sequences - each clears and plays', async () => {
+  it('Multiple rapid high-priority sequences - each appends to the queue (no more clearQueue)', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    // High-priority (>=10) phase-boundary sequences replace the queue so each one
-    // starts playback immediately. Rapid succession simulates fast phase flips
-    // (e.g. day result flurry) where older audio must be cut off.
+    // New contract (post guard-audio-sequence fix): high-priority sequences
+    // NO LONGER clear the queue. Each appends in order, so rapid phase flips
+    // produce the union of all audio in arrival order — no audio is lost.
+    // See useAudioService.ts and audioService.waitForIdle for rationale.
     mockPlaySequential.mockClear()
     mockClearQueue.mockClear()
 
@@ -375,7 +376,7 @@ describe('GameView Audio Event Order Bug', () => {
     )
     await nextTick()
 
-    expect(mockClearQueue).toHaveBeenCalledTimes(3)
+    expect(mockClearQueue).not.toHaveBeenCalled()
     expect(mockPlaySequential).toHaveBeenCalledTimes(3)
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['file4.mp3'])
   })

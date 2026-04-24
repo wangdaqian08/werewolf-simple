@@ -101,7 +101,7 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
   // Real fix (product-side, separate PR): either make NIGHT→DAY audio append
   // rather than clearQueue, or wait for the queue to drain before firing the
   // DAY high-priority sequence. Re-enable this test once that lands.
-  test.skip('guard as last role - guard_close_eyes plays exactly once', async ({}, testInfo) => {
+  test('guard as last role - guard_close_eyes plays exactly once', async ({}, testInfo) => {
     const hostPage = ctx.hostPage
     const gameId = ctx.gameId
 
@@ -268,7 +268,7 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
   // than keep a vacuous pass alive that masks the product bug the other test
   // names, skip both together; the whole file can re-enable when the audio
   // clearQueue() behavior is addressed.
-  test.skip('rapid phase transitions - no duplicate or stale audio playback', async ({}, testInfo) => {
+  test('rapid phase transitions - no duplicate or stale audio playback', async ({}, testInfo) => {
     // This test verifies that rapid state updates don't cause stale audio to replay.
     // "Rapid" here means "no arbitrary sleeps between actions" — but we still
     // gate each action on the backend sub-phase to avoid silent rejections.

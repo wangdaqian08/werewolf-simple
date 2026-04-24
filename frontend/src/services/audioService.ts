@@ -318,6 +318,31 @@ class AudioService {
     this.stopAll()
     this.isPlayingQueue = false
   }
+
+  /**
+   * True if a clip is currently playing or the queue has pending items.
+   * Used by useAudioService to decide whether to delay a new high-priority
+   * sequence rather than wipe queued role-owned audio.
+   */
+  get isActive(): boolean {
+    return this.isPlayingQueue || this.audioQueue.length > 0
+  }
+
+  /**
+   * Wait until the queue drains (current clip finishes + queue empties),
+   * bounded by `timeoutMs`. Resolves immediately if already idle.
+   *
+   * Used to sequence a high-priority AudioSequence AFTER any still-playing
+   * low-priority role audio — without this, the old clearQueue() path
+   * wiped things like `guard_close_eyes.mp3` when the DAY transition's
+   * rooster sequence arrived before the last role's close_eyes finished.
+   */
+  async waitForIdle(timeoutMs = 5_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs
+    while (this.isActive && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  }
 }
 
 // Export singleton instance

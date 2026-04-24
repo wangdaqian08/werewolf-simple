@@ -15,11 +15,26 @@ export function useAudioService() {
   const lastPlayedSequenceId = ref<string | null>(null)
 
   /**
-   * Watch audio sequence changes from backend
+   * Watch audio sequence changes from backend.
+   *
+   * Priority semantics:
+   * - Phase-level audio (priority ≥ 10, e.g. DAY→rooster, NIGHT→goes_dark)
+   *   is the "start of a new phase" cue. Historically this called
+   *   audioService.clearQueue() to preempt any lingering audio, but that
+   *   deterministically dropped the last role's close_eyes clip when night
+   *   audio spilled past the coroutine's DAY transition (observed in the
+   *   guard-audio-sequence quarantine — `guard_close_eyes.mp3` never logged
+   *   "Starting playback" because clearQueue fired first).
+   * - The new behaviour: wait (bounded) for the in-flight queue to drain,
+   *   then append. This plays every role's close_eyes in order, and the
+   *   rooster follows cleanly. A 5 s cap prevents indefinite waiting if the
+   *   queue ever has runaway content.
+   * - Low-priority sequences (role open/close eyes, dead-role sim) APPEND
+   *   as before — they're meant to play sequentially after current audio.
    */
   watch(
     () => gameStore.state?.audioSequence,
-    (newSequence, oldSequence) => {
+    async (newSequence, oldSequence) => {
       if (!newSequence) return
 
       // Log all audio sequence changes for debugging
@@ -37,22 +52,16 @@ export function useAudioService() {
         return
       }
 
-      // Phase-level audio (priority >= 10) replaces the queue — e.g. DAY→NIGHT rooster
-      // must interrupt any lingering night audio. Lower-priority sequences (role open/
-      // close eyes, dead-role sim) APPEND to the queue so they play sequentially after
-      // whatever is currently playing. This is what guarantees wolf_open_eyes.mp3
-      // never overlaps with goes_dark_close_eyes.mp3 or wolf_howl.mp3, even if the
-      // backend's NIGHT_INIT_AUDIO_DELAY_MS timing underestimates the combined duration.
       const isHighPriority = (newSequence.priority ?? 0) >= 10
-      if (isHighPriority) {
+      if (isHighPriority && audioService.isActive) {
         console.log(
-          '[useAudioService] High-priority sequence — clearing queue:',
+          '[useAudioService] High-priority sequence — waiting for queue to drain before append:',
           newSequence.audioFiles,
         )
-        audioService.clearQueue()
+        await audioService.waitForIdle(5_000)
       } else {
         console.log(
-          '[useAudioService] Low-priority sequence — appending to queue:',
+          `[useAudioService] ${isHighPriority ? 'High' : 'Low'}-priority sequence — appending to queue:`,
           newSequence.audioFiles,
         )
       }
