@@ -116,27 +116,28 @@ export async function setupGame(
     const requiredRoles = ['WEREWOLF', 'VILLAGER']
     const allOptionalRoles = ['SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT']
     
-    // For each optional role, toggle to match desired state
+    // For each optional role, toggle to match desired state. Retry up to
+    // 3 times if the click didn't register — on slow CI the first click
+    // is occasionally swallowed and the role ends up in the wrong state,
+    // which then causes the backend to skip that role during game-start
+    // assignment (observed failure: "IDIOT bots not found" across all
+    // idiot-flow tests when the IDIOT toggle stayed off).
     for (const role of allOptionalRoles) {
       const shouldBeEnabled = opts.roles.includes(<"WEREWOLF" | "SEER" | "WITCH" | "GUARD" | "HUNTER" | "IDIOT" | "VILLAGER">role)
-      
-      // Find the role row
+
       const roleRow = hostPage.locator('.role-row').filter({ hasText: new RegExp(role, 'i') })
-      
-      // Check current state - if has toggle-on, it's enabled; toggle-off means disabled
-      const toggleOn = roleRow.locator('.toggle-on')
-      const toggleOff = roleRow.locator('.toggle-off')
-      
-      const isCurrentlyEnabled = (await toggleOn.count()) > 0
-      
-      // Toggle if state doesn't match
-      if (isCurrentlyEnabled !== shouldBeEnabled) {
-        // Click the appropriate toggle
-        const toggleToClick = isCurrentlyEnabled ? toggleOn : toggleOff
-        if ((await toggleToClick.count()) > 0) {
-          await toggleToClick.click()
-          await hostPage.waitForTimeout(300)
-        }
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const isEnabled = (await roleRow.locator('.toggle-on').count()) > 0
+        if (isEnabled === shouldBeEnabled) break
+
+        const toggle = isEnabled
+          ? roleRow.locator('.toggle-on')
+          : roleRow.locator('.toggle-off')
+        if ((await toggle.count()) === 0) break
+
+        await toggle.click()
+        await hostPage.waitForTimeout(300)
       }
     }
   }
