@@ -939,7 +939,9 @@ onMounted(async () => {
       // Private channel for role-specific info (night actions, etc.)
       subscribeToTopic('/user/queue/private', (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
-        if (data.type === 'WolfSelectionChanged') {
+        if (data.type === 'RoleAssigned') {
+          gameStore.setMyRole(data.role)
+        } else if (data.type === 'WolfSelectionChanged') {
           gameStore.updateNightPhaseSelection(data.selectedTargetUserId)
         } else {
           gameStore.addEvent(data)

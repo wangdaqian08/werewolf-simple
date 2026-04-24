@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { GameEvent, GameState } from '@/types'
+import type { GameEvent, GameState, PlayerRole } from '@/types'
 
 export const useGameStore = defineStore('game', () => {
   const state = ref<GameState | null>(null)
@@ -31,6 +31,11 @@ export const useGameStore = defineStore('game', () => {
     state.value.nightPhase = { ...state.value.nightPhase, selectedTargetId }
   }
 
+  function setMyRole(role: PlayerRole) {
+    if (!state.value) return
+    state.value = { ...state.value, myRole: role }
+  }
+
   return {
     state,
     setState,
@@ -38,5 +43,6 @@ export const useGameStore = defineStore('game', () => {
     incrementConfirmedCount,
     clearGame,
     updateNightPhaseSelection,
+    setMyRole,
   }
 })
