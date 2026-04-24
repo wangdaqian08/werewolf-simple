@@ -260,7 +260,20 @@ export async function setupGame(
 
   // ── Step 7: Discover roles ─────────────────────────────────────────────
 
-  const roleMap = getRoles(roomCode)
+  // Role assignment is async on the backend — on loaded CI runners the
+  // 2s wait above is sometimes not enough and roles.sh returns an empty
+  // or partial mapping. Poll up to 8 extra seconds; exit early on the
+  // first non-empty result. Fixes observed flake where roleMap.IDIOT was
+  // undefined even though IDIOT was in the requested roles list.
+  let roleMap = getRoles(roomCode)
+  const expectedRoles = (opts.roles ?? []) as RoleName[]
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const haveAllRequested = expectedRoles.length === 0
+      || expectedRoles.every((r) => (roleMap[r]?.length ?? 0) > 0)
+    if (Object.keys(roleMap).length > 0 && haveAllRequested) break
+    await hostPage.waitForTimeout(1_000)
+    roleMap = getRoles(roomCode)
+  }
   const state = readStateFile(roomCode)
 
   // Detect the host's role from the roleMap
