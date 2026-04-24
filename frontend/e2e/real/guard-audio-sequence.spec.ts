@@ -175,17 +175,30 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     await captureSnapshot(ctx.pages, testInfo, '03-seer-completed')
 
     // ── Step 4: Witch completes action ────────────────────────────────────
-    // Pass both antidote and poison to move quickly to guard
-    const passAntidoteBtn = witchPage!.getByRole('button', { name: /放弃/ })
-    if (await passAntidoteBtn.isVisible().catch(() => false)) {
-      await passAntidoteBtn.click()
-      await witchPage!.waitForTimeout(500)
+    // Prefer the bot-script path (reliable regardless of browser render
+    // timing). Only fall back to browser clicks when the host is the witch
+    // OR when no bot has the WITCH role and a dedicated witch page exists.
+    const witchBots = ctx.roleMap.WITCH ?? []
+    const witchBot = witchBots.find((b) => b.nick !== 'Host')
+    if (witchBot) {
+      await act('WITCH_ACT', witchBot.nick, {
+        payload: '{"useAntidote":false}',
+        room: ctx.roomCode,
+      })
+    } else if (witchPage) {
+      // Host is the witch, or some layout quirk — use browser clicks.
+      const passAntidoteBtn = witchPage.getByRole('button', { name: /放弃/ })
+      if (await passAntidoteBtn.isVisible().catch(() => false)) {
+        await passAntidoteBtn.click()
+        await witchPage.waitForTimeout(500)
+      }
+      const skipPoisonBtn = witchPage.getByRole('button', { name: /不用/ })
+      if (await skipPoisonBtn.isVisible().catch(() => false)) {
+        await skipPoisonBtn.click()
+      }
     }
-
-    const skipPoisonBtn = witchPage!.getByRole('button', { name: /不用/ })
-    if (await skipPoisonBtn.isVisible().catch(() => false)) {
-      await skipPoisonBtn.click()
-    }
+    // else: no witch in this game — coroutine will time out and auto-
+    // advance. Not an error the test should block on.
 
     // Wait for coroutine to advance to GUARD_PICK before guard acts.
     await waitForSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
