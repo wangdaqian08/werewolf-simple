@@ -159,6 +159,12 @@ export async function readUnvotedAlivePlayerIds(
     })
     if (!res.ok) return [] as string[]
     const state = await res.json()
+    // Only return candidates when a voting round is actually open. Outside
+    // DAY_VOTING the backend rejects SUBMIT_VOTE with "Not in voting phase";
+    // returning alive players here would feed the fan-out and burn retries.
+    if (state?.phase !== 'DAY_VOTING') return [] as string[]
+    const subPhase = state?.votingPhase?.subPhase
+    if (subPhase !== 'VOTING' && subPhase !== 'RE_VOTING') return [] as string[]
     const voted = new Set<string>(state?.votingPhase?.votedPlayerIds ?? [])
     return ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
       .filter((p) => p.isAlive && !voted.has(p.userId))

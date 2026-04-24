@@ -13,7 +13,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {readAlivePlayerIds, readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
+import {readAlivePlayerIds, readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase, waitForVotingSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -249,11 +249,18 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     const startVoteBtn = hostPage.getByTestId('day-start-vote')
     if (await startVoteBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
       await startVoteBtn.click()
-      await hostPage.waitForTimeout(1_000)
     }
 
     // Vote cycle — repeat if revote triggered (tie)
     for (let attempt = 0; attempt < 3; attempt++) {
+      // Wait for backend to be in VOTING / RE_VOTING before firing any vote action.
+      // Without this gate, SUBMIT_VOTE bots fan out while backend is still in
+      // DAY_DISCUSSION (or in VOTE_RESULT between revote rounds) and get rejected
+      // with "Not in voting phase", stalling the whole day cycle.
+      const target = attempt === 0 ? 'VOTING' : 'RE_VOTING'
+      const reachedVoting = await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, target, 15_000)
+      if (!reachedVoting) break
+
       const abstainBtn = hostPage.locator('.skip-btn').first()
       if (await abstainBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
         await abstainBtn.click()
