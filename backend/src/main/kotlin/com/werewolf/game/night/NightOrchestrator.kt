@@ -8,6 +8,7 @@ import com.werewolf.game.phase.HardModeCounterplay
 import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.role.WerewolfHandler
 import com.werewolf.model.*
 import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
@@ -426,6 +427,7 @@ class NightOrchestrator(
         activeNightJobs.remove(gameId)
         pendingActions.remove(gameId)
         queuedActionSignals.remove(gameId)
+        (handlers.firstOrNull { it.role == PlayerRole.WEREWOLF } as? WerewolfHandler)?.resetKillLock(gameId)
     }
 
     // ── Internal helpers ────────────────────────────────────────────────────
@@ -579,6 +581,9 @@ class NightOrchestrator(
      * Called synchronously by [initNight] and inside the coroutine by [startNightPhase].
      */
     private fun initNightInternal(gameId: Int, newDayNumber: Int, previousGuardTarget: String? = null, withWaiting: Boolean = false) {
+        // Clear per-night locks so each new night starts fresh.
+        (handlers.firstOrNull { it.role == PlayerRole.WEREWOLF } as? WerewolfHandler)?.resetKillLock(gameId)
+
         val context = contextLoader.load(gameId)
         val initialSubPhase = if (withWaiting) NightSubPhase.WAITING else firstSubPhase(context)
 

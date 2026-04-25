@@ -8,8 +8,16 @@ export const gameService = {
   },
 
   async submitAction(req: GameActionRequest): Promise<GameActionResponse> {
-    const { data } = await http.post<GameActionResponse>('/game/action', req)
-    return data
+    try {
+      const { data } = await http.post<GameActionResponse>('/game/action', req)
+      return data
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { success?: boolean; error?: string } } }
+      if (axiosErr.response?.status === 400 && axiosErr.response.data) {
+        return { success: false, message: axiosErr.response.data.error }
+      }
+      throw err
+    }
   },
 
   async startGame(roomId: number): Promise<void> {
