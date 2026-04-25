@@ -25,9 +25,17 @@ export default defineConfig({
     : [['html', { open: 'never' }]],
   webServer: [
     {
-      // Spring Boot with H2 in-memory via e2e profile
+      // Spring Boot with H2 in-memory via e2e profile.
+      //
+      // `tee` mirrors backend stdout to /tmp/werewolf-e2e-backend.log so the
+      // afterEach hook in helpers/composite-screenshot.ts can attach the
+      // tail of the log to any failed test in the Playwright HTML report.
+      // Without this, CI failures like "stuck on NIGHT/WEREWOLF_PICK"
+      // surface only the frontend assertion — no visibility into what the
+      // backend coroutine actually did, which actions it accepted or
+      // rejected, or where it got stuck.
       command:
-        'cd ../backend && SPRING_PROFILES_ACTIVE=e2e ./gradlew bootRun -q --console=plain',
+        "bash -c 'cd ../backend && SPRING_PROFILES_ACTIVE=e2e ./gradlew bootRun -q --console=plain 2>&1 | tee /tmp/werewolf-e2e-backend.log'",
       url: 'http://localhost:8080/api/health',
       timeout: 120_000,
       reuseExistingServer: true,

@@ -7,6 +7,7 @@
  * then captures that page. No external image libraries needed.
  */
 import type {Page, TestInfo} from '@playwright/test'
+import {attachBackendLogOnFailure} from './backend-log'
 
 /**
  * Capture a composite screenshot tiling all provided pages into one image.
@@ -91,6 +92,11 @@ export async function attachCompositeOnFailure(
   testInfo: TestInfo,
   label = 'composite-all-players',
 ): Promise<void> {
+  // Always attach the backend log on failure — this is the single most useful
+  // diagnostic for "stuck on phase X" failures, where the assertion message
+  // tells us nothing about what the backend coroutine actually did.
+  await attachBackendLogOnFailure(testInfo)
+
   if (pages.size === 0) return
 
   const outputPath = testInfo.outputPath(`${label}.png`)
