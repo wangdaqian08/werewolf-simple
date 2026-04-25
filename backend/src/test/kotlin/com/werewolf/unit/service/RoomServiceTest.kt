@@ -3,6 +3,7 @@ package com.werewolf.unit.service
 import com.werewolf.auth.AuthService
 import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.model.*
+import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
@@ -23,6 +24,7 @@ class RoomServiceTest {
     @Mock lateinit var roomRepository: RoomRepository
     @Mock lateinit var roomPlayerRepository: RoomPlayerRepository
     @Mock lateinit var userRepository: UserRepository
+    @Mock lateinit var gameRepository: GameRepository
     @Mock lateinit var authService: AuthService
     @Mock lateinit var stompPublisher: StompPublisher
     @org.mockito.Spy val timing: com.werewolf.config.GameTimingProperties = com.werewolf.config.GameTimingProperties()
