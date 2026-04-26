@@ -10,7 +10,7 @@
 import {expect, test} from '@playwright/test'
 import type {Page} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act, type RoleName} from './helpers/shell-runner'
+import {act, actName, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 import {readAlivePlayerIds, readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
@@ -154,10 +154,10 @@ test.describe('Voting tie → revote → game proceeds', () => {
     // everyone — the backend will still reject dead actors individually.
     const aliveUserIds = await readAlivePlayerIds(ctx.hostPage, ctx.gameId)
     const isAlive = (uid: string) => aliveUserIds.size === 0 || aliveUserIds.has(uid)
-    const aliveWolves = wolfBots.filter((b) => b.nick !== 'Host' && isAlive(b.userId))
-    const aliveSeers = seerBots.filter((b) => b.nick !== 'Host' && isAlive(b.userId))
-    const aliveWitches = witchBots.filter((b) => b.nick !== 'Host' && isAlive(b.userId))
-    const aliveGuards = guardBots.filter((b) => b.nick !== 'Host' && isAlive(b.userId))
+    const aliveWolves = wolfBots.filter((b) => isAlive(b.userId))
+    const aliveSeers = seerBots.filter((b) => isAlive(b.userId))
+    const aliveWitches = witchBots.filter((b) => isAlive(b.userId))
+    const aliveGuards = guardBots.filter((b) => isAlive(b.userId))
 
     // ── Wolf kill ──
     // Wait for the coroutine to reach WEREWOLF_PICK before firing the action.
@@ -177,7 +177,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     let wolfDone = false
     if (reachedWolf) {
       for (const wb of aliveWolves) {
-        if (tryAct('WOLF_KILL', wb.nick, { target: String(target?.seat ?? 1), room: ctx.roomCode })) {
+        if (tryAct('WOLF_KILL', actName(wb), { target: String(target?.seat ?? 1), room: ctx.roomCode })) {
           wolfDone = true
           break
         }
@@ -212,12 +212,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
         // Use live alive seats; exclude the seer's own seat (self-check rejects).
         const seats = alivePlayers.filter((p) => p.nickname !== sb.nick).map((p) => p.seat)
         for (const seat of seats) {
-          if (tryAct('SEER_CHECK', sb.nick, { target: String(seat), room: ctx.roomCode })) {
+          if (tryAct('SEER_CHECK', actName(sb), { target: String(seat), room: ctx.roomCode })) {
             seerDone = true
             // Gate on SEER_RESULT before SEER_CONFIRM so the confirm lands
             // in the right sub-phase.
             await waitForNightSubPhase(hostPage, gameId, 'SEER_RESULT', 8_000)
-            tryAct('SEER_CONFIRM', sb.nick, { room: ctx.roomCode })
+            tryAct('SEER_CONFIRM', actName(sb), { room: ctx.roomCode })
             break
           }
         }
@@ -254,7 +254,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
       : '{"useAntidote":false}'
     if (reachedWitch) {
       for (const wb of aliveWitches) {
-        witchDone = tryAct('WITCH_ACT', wb.nick, { payload: antidotePayload, room: ctx.roomCode })
+        witchDone = tryAct('WITCH_ACT', actName(wb), { payload: antidotePayload, room: ctx.roomCode })
         if (witchDone) break
       }
     }
@@ -291,7 +291,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
       // pre-existing code had `break` after the first iteration regardless
       // of tryAct's return, so a single dead guard-bot killed the whole block).
       for (const gb of aliveGuards) {
-        if (tryAct('GUARD_SKIP', gb.nick, { room: ctx.roomCode })) {
+        if (tryAct('GUARD_SKIP', actName(gb), { room: ctx.roomCode })) {
           guardDone = true
           break
         }

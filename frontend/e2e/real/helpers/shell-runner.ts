@@ -25,6 +25,13 @@ export interface BotInfo {
   userId: string
 }
 
+/**
+ * Resolve the act.sh player name for a bot. When the bot IS the host,
+ * act.sh needs the special 'HOST' selector (uppercase) to use the stored
+ * hostToken. Regular bots use their nick directly.
+ */
+export const actName = (bot: BotInfo): string => (bot.nick === 'Host' ? 'HOST' : bot.nick)
+
 export interface StateFile {
   roomCode: string
   roomId: number

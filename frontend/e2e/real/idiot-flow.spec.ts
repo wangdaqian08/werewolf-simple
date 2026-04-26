@@ -13,7 +13,7 @@
  */
 import {expect, test} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act, type RoleName} from './helpers/shell-runner'
+import {act, actName, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {captureSnapshot} from './helpers/composite-screenshot'
 import {attachBackendLogOnFailure} from './helpers/backend-log'
@@ -191,15 +191,15 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       // If the gate returns false (coroutine skipped the sub-phase), skip
       // the block rather than firing actions that'll be rejected.
       if (wolfBots.length > 0) {
-        const wolfBot = wolfBots.find((b) => b.nick !== 'Host') ?? wolfBots[0]
+        const wolfBot = wolfBots[0]
         const idiotBots = localCtx.roleMap['IDIOT'] ?? []
         const targetBot = localCtx.allBots.find(b =>
           b.userId !== wolfBot.userId &&
           !(idiotBots.some(i => i.userId === b.userId))
         )
         if (targetBot && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000))) {
-          act('WOLF_SELECT', wolfBot.nick, { target: String(targetBot.seat), room: localCtx.roomCode })
-          act('WOLF_KILL', wolfBot.nick, { target: String(targetBot.seat), room: localCtx.roomCode })
+          act('WOLF_SELECT', actName(wolfBot), { target: String(targetBot.seat), room: localCtx.roomCode })
+          act('WOLF_KILL', actName(wolfBot), { target: String(targetBot.seat), room: localCtx.roomCode })
           testInfo.attach('wolf-action', { body: `Wolf ${wolfBot.nick} attacks ${targetBot.nick} at seat ${targetBot.seat}` })
         }
       }
@@ -207,12 +207,12 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       // Seer checks someone. Gate on SEER_PICK before the CHECK, then on
       // SEER_RESULT before the CONFIRM so each lands in its expected sub-phase.
       if (seerBots.length > 0) {
-        const seerBot = seerBots.find((b) => b.nick !== 'Host') ?? seerBots[0]
+        const seerBot = seerBots[0]
         const checkTarget = localCtx.allBots.find(b => b.userId !== seerBot.userId)
         if (checkTarget && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000))) {
-          act('SEER_CHECK', seerBot.nick, { target: String(checkTarget.seat), room: localCtx.roomCode })
+          act('SEER_CHECK', actName(seerBot), { target: String(checkTarget.seat), room: localCtx.roomCode })
           if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)) {
-            act('SEER_CONFIRM', seerBot.nick, { room: localCtx.roomCode })
+            act('SEER_CONFIRM', actName(seerBot), { room: localCtx.roomCode })
           }
           testInfo.attach('seer-action', { body: `Seer ${seerBot.nick} checks ${checkTarget.nick}` })
         }
@@ -220,9 +220,9 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
 
       // Witch uses no potion — gate on WITCH_ACT sub-phase first.
       if (witchBots.length > 0) {
-        const witchBot = witchBots.find((b) => b.nick !== 'Host') ?? witchBots[0]
+        const witchBot = witchBots[0]
         if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)) {
-          act('WITCH_ACT', witchBot.nick, { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
+          act('WITCH_ACT', actName(witchBot), { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
           testInfo.attach('witch-action', { body: `Witch ${witchBot.nick} uses no potion` })
         }
       }
@@ -413,33 +413,33 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       const witchBots = localCtx.roleMap.WITCH ?? []
 
       if (wolfBots.length > 0) {
-        const wolfBot = wolfBots.find((b) => b.nick !== 'Host') ?? wolfBots[0]
+        const wolfBot = wolfBots[0]
         const idiotBots = localCtx.roleMap['IDIOT'] ?? []
         const targetBot = localCtx.allBots.find(b =>
           b.userId !== wolfBot.userId &&
           !(idiotBots.some(i => i.userId === b.userId))
         )
         if (targetBot && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000))) {
-          act('WOLF_SELECT', wolfBot.nick, { target: String(targetBot.seat), room: localCtx.roomCode })
-          act('WOLF_KILL', wolfBot.nick, { target: String(targetBot.seat), room: localCtx.roomCode })
+          act('WOLF_SELECT', actName(wolfBot), { target: String(targetBot.seat), room: localCtx.roomCode })
+          act('WOLF_KILL', actName(wolfBot), { target: String(targetBot.seat), room: localCtx.roomCode })
         }
       }
 
       if (seerBots.length > 0) {
-        const seerBot = seerBots.find((b) => b.nick !== 'Host') ?? seerBots[0]
+        const seerBot = seerBots[0]
         const checkTarget = localCtx.allBots.find(b => b.userId !== seerBot.userId)
         if (checkTarget && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000))) {
-          act('SEER_CHECK', seerBot.nick, { target: String(checkTarget.seat), room: localCtx.roomCode })
+          act('SEER_CHECK', actName(seerBot), { target: String(checkTarget.seat), room: localCtx.roomCode })
           if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)) {
-            act('SEER_CONFIRM', seerBot.nick, { room: localCtx.roomCode })
+            act('SEER_CONFIRM', actName(seerBot), { room: localCtx.roomCode })
           }
         }
       }
 
       if (witchBots.length > 0) {
-        const witchBot = witchBots.find((b) => b.nick !== 'Host') ?? witchBots[0]
+        const witchBot = witchBots[0]
         if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)) {
-          act('WITCH_ACT', witchBot.nick, { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
+          act('WITCH_ACT', actName(witchBot), { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
         }
       }
 
