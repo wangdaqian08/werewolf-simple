@@ -596,6 +596,27 @@ watch(
   },
 )
 
+// Reactive redirect to /result when the game ends. There's already a STOMP
+// listener in onMounted that catches `GameOver` events, but that path is
+// event-only — if the event is delayed, dropped, or arrives during a state
+// fetch race, the user (and our E2E tests) can be left on the previous
+// NIGHT/VOTE_RESULT screen indefinitely. A reactive watch on phase=GAME_OVER
+// is the safety net: any source that updates state.phase (STOMP event,
+// initial state fetch on reconnect, refreshState() after VoteTally, etc.)
+// triggers the redirect.
+watch(
+  () => gameStore.state?.phase,
+  (phase) => {
+    if (phase === 'GAME_OVER') {
+      const gameId = route.params.gameId as string
+      // Avoid double-pushing if we're already on /result/<id>
+      if (!route.path.startsWith('/result/')) {
+        router.push({ name: 'result', params: { gameId } })
+      }
+    }
+  },
+)
+
 async function handleSheriffRun() {
   await action({ actionType: 'SHERIFF_CAMPAIGN' })
 }
