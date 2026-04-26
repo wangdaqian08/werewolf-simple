@@ -21,6 +21,7 @@
       <!-- Actions -->
       <div class="actions">
         <button
+          :class="{ 'is-loading': loading }"
           :disabled="loading || !nickname.trim()"
           class="btn btn-primary"
           @click="handleCreateRoom"
@@ -37,6 +38,7 @@
             type="text"
           />
           <button
+            :class="{ 'is-loading': loading }"
             :disabled="loading || !nickname.trim() || !roomCode.trim()"
             class="btn btn-secondary join-btn"
             @click="handleJoinRoom"
