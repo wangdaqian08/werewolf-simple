@@ -1,5 +1,26 @@
 <template>
-  <div :class="{ 'night-mode': isNight }" class="game-wrap">
+  <!-- E2E observability: data-phase / data-phase-sub / data-day-number
+       expose authoritative state so cross-browser tests can assert
+       phase delivery via testid-style attributes instead of inferring
+       phase from per-component CSS classes (which only cover the rough
+       grouping NIGHT/DAY/VOTING). -->
+  <div
+    :class="{ 'night-mode': isNight }"
+    class="game-wrap"
+    :data-phase="gameStore.state?.phase ?? ''"
+    :data-phase-sub="
+      gameStore.state?.nightPhase?.subPhase ??
+      gameStore.state?.votingPhase?.subPhase ??
+      gameStore.state?.dayPhase?.subPhase ??
+      gameStore.state?.sheriffElection?.subPhase ??
+      ''
+    "
+    :data-day-number="
+      gameStore.state?.nightPhase?.dayNumber ??
+      gameStore.state?.dayPhase?.dayNumber ??
+      ''
+    "
+  >
     <!-- Mute/unmute floating button -->
     <button class="audio-mute-btn" :title="isMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
       {{ isMuted ? '🔇' : '🔊' }}
