@@ -6,12 +6,12 @@
       <p class="subtitle">Browser not supported</p>
 
       <p class="body">
-        这个游戏需要使用 <strong>Chrome 浏览器</strong>（或其他基于 Chromium 的浏览器，例如 Edge、Brave）。
-        iPhone / iPad 用户也可以使用 Safari。
+        这个游戏需要使用 <strong>Chrome 浏览器</strong>（或其他基于 Chromium 的浏览器，例如
+        Edge、Brave）。 iPhone / iPad 用户也可以使用 Safari。
       </p>
       <p class="body en">
-        This game runs on <strong>Chrome</strong> or other Chromium-based browsers
-        (Edge, Brave). iOS Safari is also supported.
+        This game runs on <strong>Chrome</strong> or other Chromium-based browsers (Edge, Brave).
+        iOS Safari is also supported.
       </p>
 
       <div class="hint">
@@ -27,9 +27,7 @@
 import { computed } from 'vue'
 
 // Show the user the URL they should re-open in Chrome.
-const currentUrl = computed(() =>
-  typeof window === 'undefined' ? '' : window.location.href,
-)
+const currentUrl = computed(() => (typeof window === 'undefined' ? '' : window.location.href))
 </script>
 
 <style scoped>

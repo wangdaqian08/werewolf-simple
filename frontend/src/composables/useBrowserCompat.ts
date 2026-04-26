@@ -38,9 +38,7 @@ export function isSupportedBrowser(): boolean {
   // 1. UA Client Hints — present on modern Chromium, absent on Firefox/Safari.
   const uaData = (navigator as { userAgentData?: UserAgentData }).userAgentData
   if (uaData?.brands && uaData.brands.length > 0) {
-    const brandStr = uaData.brands
-      .map((b) => String(b.brand ?? '').toLowerCase())
-      .join('|')
+    const brandStr = uaData.brands.map((b) => String(b.brand ?? '').toLowerCase()).join('|')
     return /chromium|chrome|edge|brave|opera/.test(brandStr)
   }
 
