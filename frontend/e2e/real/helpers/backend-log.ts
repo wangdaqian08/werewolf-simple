@@ -91,10 +91,7 @@ export function readBackendLogLineCount(logPath = DEFAULT_LOG_PATH): number {
 }
 
 /** Read the lines of the backend log written since `startLine`. */
-export function readBackendLogSince(
-  startLine: number,
-  logPath = DEFAULT_LOG_PATH,
-): string[] {
+export function readBackendLogSince(startLine: number, logPath = DEFAULT_LOG_PATH): string[] {
   if (!existsSync(logPath)) return []
   try {
     const all = readFileSync(logPath, 'utf-8').split('\n')
@@ -109,10 +106,7 @@ export function readBackendLogSince(
  * matched by any allow-list pattern. Exposed for unit testing and for
  * specs that want to inspect the same set the assertion would fail on.
  */
-export function findBackendErrorLines(
-  lines: string[],
-  allowPatterns: RegExp[] = [],
-): string[] {
+export function findBackendErrorLines(lines: string[], allowPatterns: RegExp[] = []): string[] {
   return lines.filter((line) => {
     if (!ERROR_LINE_PATTERNS.some((p) => p.test(line))) return false
     if (allowPatterns.some((p) => p.test(line))) return false

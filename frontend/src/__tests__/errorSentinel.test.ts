@@ -31,18 +31,16 @@ describe('error-sentinel', () => {
   it('passes silently when the buffer is empty', async () => {
     const errors: BrowserError[] = []
     const info = mkTestInfo()
-    await expect(
-      assertNoBrowserErrors(errors, info as never),
-    ).resolves.toBeUndefined()
+    await expect(assertNoBrowserErrors(errors, info as never)).resolves.toBeUndefined()
     expect(info.attach).not.toHaveBeenCalled()
   })
 
   it('throws and attaches when any pageerror is recorded', async () => {
     const errors: BrowserError[] = [mkErr({ message: 'TypeError: x is undefined' })]
     const info = mkTestInfo()
-    await expect(
-      assertNoBrowserErrors(errors, info as never),
-    ).rejects.toThrow(/TypeError: x is undefined/)
+    await expect(assertNoBrowserErrors(errors, info as never)).rejects.toThrow(
+      /TypeError: x is undefined/,
+    )
     expect(info.attach).toHaveBeenCalledTimes(1)
     const attachArg = info.attach.mock.calls[0][1]
     expect(String(attachArg.body)).toContain('pageerror')
@@ -59,9 +57,7 @@ describe('error-sentinel', () => {
       }),
     ]
     const info = mkTestInfo()
-    await expect(
-      assertNoBrowserErrors(errors, info as never),
-    ).rejects.toThrow(/503/)
+    await expect(assertNoBrowserErrors(errors, info as never)).rejects.toThrow(/503/)
     expect(info.attach).toHaveBeenCalledTimes(1)
   })
 
@@ -110,9 +106,7 @@ describe('error-sentinel', () => {
       mkErr({ role: 'SEER', message: 'second' }),
     ]
     const info = mkTestInfo()
-    await expect(
-      assertNoBrowserErrors(errors, info as never),
-    ).rejects.toThrow()
+    await expect(assertNoBrowserErrors(errors, info as never)).rejects.toThrow()
     const body = String(info.attach.mock.calls[0][1].body)
     expect(body).toContain('[WEREWOLF]')
     expect(body).toContain('first')

@@ -27,12 +27,8 @@ describe('computePhaseRank', () => {
   it('orders within a single round', () => {
     expect(computePhaseRank('ROLE_REVEAL', 1)).toBeLessThan(computePhaseRank('NIGHT', 1))
     expect(computePhaseRank('NIGHT', 1)).toBeLessThan(computePhaseRank('DAY_PENDING', 1))
-    expect(computePhaseRank('DAY_PENDING', 1)).toBeLessThan(
-      computePhaseRank('DAY_DISCUSSION', 1),
-    )
-    expect(computePhaseRank('DAY_DISCUSSION', 1)).toBeLessThan(
-      computePhaseRank('DAY_VOTING', 1),
-    )
+    expect(computePhaseRank('DAY_PENDING', 1)).toBeLessThan(computePhaseRank('DAY_DISCUSSION', 1))
+    expect(computePhaseRank('DAY_DISCUSSION', 1)).toBeLessThan(computePhaseRank('DAY_VOTING', 1))
   })
 
   it('day 2 NIGHT > day 1 DAY_VOTING', () => {
@@ -60,7 +56,11 @@ describe('assertGameInvariantsOnState — happy path', () => {
     let s = newInvariantState()
     s = assertGameInvariantsOnState(baseState(), s, 'night')
     s = assertGameInvariantsOnState(
-      baseState({ phase: 'DAY_PENDING', nightPhase: null, dayPhase: { subPhase: 'RESULT_HIDDEN', dayNumber: 1 } }),
+      baseState({
+        phase: 'DAY_PENDING',
+        nightPhase: null,
+        dayPhase: { subPhase: 'RESULT_HIDDEN', dayNumber: 1 },
+      }),
       s,
       'pending',
     )

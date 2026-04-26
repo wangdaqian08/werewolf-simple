@@ -16,9 +16,7 @@
       ''
     "
     :data-day-number="
-      gameStore.state?.nightPhase?.dayNumber ??
-      gameStore.state?.dayPhase?.dayNumber ??
-      ''
+      gameStore.state?.nightPhase?.dayNumber ?? gameStore.state?.dayPhase?.dayNumber ?? ''
     "
   >
     <!-- Mute/unmute floating button -->

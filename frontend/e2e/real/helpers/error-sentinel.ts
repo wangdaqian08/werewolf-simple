@@ -36,11 +36,7 @@ export interface BrowserError {
  * lifetime of the page; the shared `errors` array is mutated in place.
  * Caller resets the array between tests.
  */
-export function attachErrorListeners(
-  role: string,
-  page: Page,
-  errors: BrowserError[],
-): void {
+export function attachErrorListeners(role: string, page: Page, errors: BrowserError[]): void {
   page.on('pageerror', (err) => {
     errors.push({
       role,

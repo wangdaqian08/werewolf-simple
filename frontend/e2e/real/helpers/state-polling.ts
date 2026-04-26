@@ -114,10 +114,7 @@ export async function waitForVotingSubPhase(
  * when players die, so without this filter every night re-tries the full
  * original role-bot list.
  */
-export async function readAlivePlayerIds(
-  hostPage: Page,
-  gameId: string,
-): Promise<Set<string>> {
+export async function readAlivePlayerIds(hostPage: Page, gameId: string): Promise<Set<string>> {
   const ids = await hostPage.evaluate(async (id: string) => {
     const token = localStorage.getItem('jwt')
     if (!token) return [] as string[]

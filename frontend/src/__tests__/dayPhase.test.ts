@@ -80,9 +80,7 @@ describe('DayPhase — observability testids (action-observability sentinel)', (
     const dayWithKill: DayPhaseState = {
       ...peacefulDay,
       nightResult: {
-        killedPlayers: [
-          { killedPlayerId: 'u-killed', killedSeatIndex: 5, killedNickname: 'Eve' },
-        ],
+        killedPlayers: [{ killedPlayerId: 'u-killed', killedSeatIndex: 5, killedNickname: 'Eve' }],
       },
     }
     const wrapper = mount(DayPhase, {

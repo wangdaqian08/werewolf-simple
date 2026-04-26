@@ -83,10 +83,7 @@ describe('GameView template binds data-phase / data-phase-sub / data-day-number'
   // assert the static template includes the bindings — a regex over the
   // file content is enough to catch "binding was renamed/removed and
   // verifyAllBrowsersPhase silently switched to its CSS-class fallback".
-  const template = readFileSync(
-    join(__dirname, '..', 'views', 'GameView.vue'),
-    'utf-8',
-  )
+  const template = readFileSync(join(__dirname, '..', 'views', 'GameView.vue'), 'utf-8')
 
   it('binds :data-phase from gameStore.state?.phase', () => {
     expect(template).toMatch(/:data-phase="\s*gameStore\.state\?\.phase\s*\?\?/)

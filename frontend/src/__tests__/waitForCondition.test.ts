@@ -13,9 +13,7 @@ import { waitForCondition } from '../../e2e/real/helpers/state-polling'
 describe('waitForCondition', () => {
   it('resolves immediately when the predicate returns true on first call', async () => {
     const predicate = vi.fn().mockResolvedValue(true)
-    await expect(
-      waitForCondition(predicate, 'first-call true', 1_000, 50),
-    ).resolves.toBeUndefined()
+    await expect(waitForCondition(predicate, 'first-call true', 1_000, 50)).resolves.toBeUndefined()
     expect(predicate).toHaveBeenCalledTimes(1)
   })
 
@@ -33,18 +31,18 @@ describe('waitForCondition', () => {
 
   it('throws with the description when the predicate stays false past the deadline', async () => {
     const predicate = vi.fn().mockResolvedValue(false)
-    await expect(
-      waitForCondition(predicate, 'never-true predicate', 200, 50),
-    ).rejects.toThrow(/never-true predicate/)
+    await expect(waitForCondition(predicate, 'never-true predicate', 200, 50)).rejects.toThrow(
+      /never-true predicate/,
+    )
     // We polled at least once
     expect(predicate.mock.calls.length).toBeGreaterThanOrEqual(1)
   })
 
   it('includes the last predicate error in the timeout message', async () => {
     const predicate = vi.fn().mockRejectedValue(new Error('backend offline'))
-    await expect(
-      waitForCondition(predicate, 'predicate keeps throwing', 200, 50),
-    ).rejects.toThrow(/backend offline/)
+    await expect(waitForCondition(predicate, 'predicate keeps throwing', 200, 50)).rejects.toThrow(
+      /backend offline/,
+    )
   })
 
   it('does not abort the poll when the predicate occasionally throws', async () => {

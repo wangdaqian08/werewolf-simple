@@ -23,7 +23,8 @@ const SAMPLE_OK_LINES = [
   '2026-04-26 10:00:00.456  WARN 12345 --- [   ws-1] c.w.WsHandler: heartbeat slow (200ms)',
 ]
 
-const SAMPLE_ERROR = '2026-04-26 10:00:00.789 ERROR 12345 --- [scheduler] c.w.GameService: nightmare'
+const SAMPLE_ERROR =
+  '2026-04-26 10:00:00.789 ERROR 12345 --- [scheduler] c.w.GameService: nightmare'
 const SAMPLE_FATAL = '2026-04-26 10:00:00.999 FATAL 12345 --- [    main] c.w.Boot: kernel panic'
 const SAMPLE_STACK_FRAME = '\tat com.werewolf.GameService.handleAction(GameService.kt:123)'
 const SAMPLE_CAUSED_BY = 'Caused by: java.lang.RuntimeException: nightmare'
@@ -76,8 +77,7 @@ describe('findBackendErrorLines', () => {
   it('respects the allowPatterns filter', () => {
     const allowed =
       '2026-04-26 10:00:01.000 ERROR 12345 --- [scheduler] c.w.NoiseSource: known-flake xyz'
-    const real =
-      '2026-04-26 10:00:02.000 ERROR 12345 --- [scheduler] c.w.GameService: real bug'
+    const real = '2026-04-26 10:00:02.000 ERROR 12345 --- [scheduler] c.w.GameService: real bug'
     const matches = findBackendErrorLines([allowed, real], [/known-flake/])
     expect(matches).toHaveLength(1)
     expect(matches[0]).toBe(real)
@@ -99,10 +99,7 @@ describe('readBackendLogLineCount + readBackendLogSince', () => {
   it('returns only lines added since startLine', () => {
     writeFileSync(logPath, SAMPLE_OK_LINES.join('\n'))
     const before = readBackendLogLineCount(logPath)
-    writeFileSync(
-      logPath,
-      [...SAMPLE_OK_LINES, SAMPLE_ERROR, SAMPLE_STACK_FRAME].join('\n'),
-    )
+    writeFileSync(logPath, [...SAMPLE_OK_LINES, SAMPLE_ERROR, SAMPLE_STACK_FRAME].join('\n'))
     const tail = readBackendLogSince(before, logPath)
     expect(tail).toContain(SAMPLE_ERROR)
     // SAMPLE_OK_LINES already existed before, so they should NOT appear
@@ -114,21 +111,16 @@ describe('assertNoBackendErrorsSince', () => {
   it('passes silently on a clean window', async () => {
     writeFileSync(logPath, SAMPLE_OK_LINES.join('\n'))
     const info = mkTestInfo()
-    await expect(
-      assertNoBackendErrorsSince(0, info as never, { logPath }),
-    ).resolves.toBeUndefined()
+    await expect(assertNoBackendErrorsSince(0, info as never, { logPath })).resolves.toBeUndefined()
     expect(info.attach).not.toHaveBeenCalled()
   })
 
   it('throws and attaches when an ERROR appears in the window', async () => {
-    writeFileSync(
-      logPath,
-      [...SAMPLE_OK_LINES, SAMPLE_ERROR, SAMPLE_STACK_FRAME].join('\n'),
-    )
+    writeFileSync(logPath, [...SAMPLE_OK_LINES, SAMPLE_ERROR, SAMPLE_STACK_FRAME].join('\n'))
     const info = mkTestInfo()
-    await expect(
-      assertNoBackendErrorsSince(0, info as never, { logPath }),
-    ).rejects.toThrow(/ERROR\/FATAL/)
+    await expect(assertNoBackendErrorsSince(0, info as never, { logPath })).rejects.toThrow(
+      /ERROR\/FATAL/,
+    )
     expect(info.attach).toHaveBeenCalledTimes(1)
     const body = String(info.attach.mock.calls[0][1].body)
     expect(body).toContain('nightmare')
@@ -141,10 +133,7 @@ describe('assertNoBackendErrorsSince', () => {
     writeFileSync(logPath, [SAMPLE_ERROR, SAMPLE_STACK_FRAME].join('\n'))
     const startLine = readBackendLogLineCount(logPath)
     // Then the current test logs only OK lines.
-    writeFileSync(
-      logPath,
-      [SAMPLE_ERROR, SAMPLE_STACK_FRAME, ...SAMPLE_OK_LINES].join('\n'),
-    )
+    writeFileSync(logPath, [SAMPLE_ERROR, SAMPLE_STACK_FRAME, ...SAMPLE_OK_LINES].join('\n'))
     const info = mkTestInfo()
     await expect(
       assertNoBackendErrorsSince(startLine, info as never, { logPath }),
@@ -154,10 +143,7 @@ describe('assertNoBackendErrorsSince', () => {
   it('detects a NEW error after the snapshot even if older errors exist', async () => {
     writeFileSync(logPath, [SAMPLE_ERROR].join('\n'))
     const startLine = readBackendLogLineCount(logPath)
-    writeFileSync(
-      logPath,
-      [SAMPLE_ERROR, SAMPLE_FATAL, SAMPLE_STACK_FRAME].join('\n'),
-    )
+    writeFileSync(logPath, [SAMPLE_ERROR, SAMPLE_FATAL, SAMPLE_STACK_FRAME].join('\n'))
     const info = mkTestInfo()
     await expect(
       assertNoBackendErrorsSince(startLine, info as never, { logPath }),

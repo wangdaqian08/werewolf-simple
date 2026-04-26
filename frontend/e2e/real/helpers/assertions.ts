@@ -6,7 +6,7 @@
  *   - STOMP event sent but UI not updated
  *   - Phase transition not reflected in a browser
  */
-import {expect, type Page} from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 // Phase transitions occasionally take 2-3× longer on GH ubuntu-latest runners
 // than on local dev hardware. Rather than hard-code larger waits at every call
@@ -59,14 +59,13 @@ export const PHASE_DATA_VALUES: Readonly<Record<string, readonly string[]>> = Ob
  * Wait until a page shows the expected game phase.
  * Throws (P0) if the phase doesn't appear within timeout.
  */
-export async function waitForPhase(
-  page: Page,
-  phase: string,
-  timeout = 15_000,
-): Promise<void> {
+export async function waitForPhase(page: Page, phase: string, timeout = 15_000): Promise<void> {
   const selector = PHASE_SELECTORS[phase]
   if (!selector) throw new Error(`Unknown phase: ${phase}`)
-  await page.locator(selector).first().waitFor({ state: 'visible', timeout: scale(timeout) })
+  await page
+    .locator(selector)
+    .first()
+    .waitFor({ state: 'visible', timeout: scale(timeout) })
 }
 
 /**
@@ -172,9 +171,7 @@ export async function verifyAllBrowsersPhase(
   // same field every other component reads — so a STOMP delivery
   // regression to a single browser fails this assertion immediately
   // even if the legacy component-class selector would still match.
-  const selector = dataValues
-    .map((v) => `.game-wrap[data-phase="${v}"]`)
-    .join(', ')
+  const selector = dataValues.map((v) => `.game-wrap[data-phase="${v}"]`).join(', ')
 
   const results = await Promise.allSettled(
     Array.from(pages.entries()).map(async ([role, page]) => {

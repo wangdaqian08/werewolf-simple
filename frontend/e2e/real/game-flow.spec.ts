@@ -98,12 +98,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // monotonic, alive count never grows, sub-phase belongs to parent,
     // sheriff alive (or in BADGE_HANDOVER / GAME_OVER). The returned
     // state threads into the next test step.
-    invariants = await assertGameInvariants(
-      ctx.hostPage,
-      ctx.gameId,
-      invariants,
-      testInfo.title,
-    )
+    invariants = await assertGameInvariants(ctx.hostPage, ctx.gameId, invariants, testInfo.title)
   })
 
   // ── Test 1: Role reveal ──────────────────────────────────────────────
@@ -186,10 +181,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // banner is consistent with this target (witch-saved → peaceful).
     const wolfSeatAttr = await wolfTargetSlot.getAttribute('data-seat')
     nightOneOutcome.wolfTargetSeat = wolfSeatAttr ? Number(wolfSeatAttr) : null
-    expect(
-      nightOneOutcome.wolfTargetSeat,
-      'wolf target slot must expose data-seat',
-    ).not.toBeNull()
+    expect(nightOneOutcome.wolfTargetSeat, 'wolf target slot must expose data-seat').not.toBeNull()
     await wolfTargetSlot.click()
     await wolfPage.getByTestId('wolf-confirm-kill').click()
 
@@ -220,10 +212,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // so we can verify the result card shows the correct alignment for
     // that seat's actual role (cross-referenced via ctx.roleMap).
     const seerCheckedSeatAttr = await seerTargetSlot.getAttribute('data-seat')
-    expect(
-      seerCheckedSeatAttr,
-      'seer target slot must expose data-seat',
-    ).not.toBeNull()
+    expect(seerCheckedSeatAttr, 'seer target slot must expose data-seat').not.toBeNull()
     const seerCheckedSeat = Number(seerCheckedSeatAttr)
     await seerTargetSlot.click()
     await seerCheckBtn.click()
@@ -297,9 +286,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       // skip-poison or witch-skip button should surface as the next
       // decision. Wait for either rather than for a fixed 500ms.
       await expect(
-        witchPage.locator(
-          '[data-testid="switch-pass-poison"], [data-testid="witch-skip"]',
-        ),
+        witchPage.locator('[data-testid="switch-pass-poison"], [data-testid="witch-skip"]'),
       ).toBeVisible({ timeout: 5_000 })
 
       await captureSnapshot(ctx.pages, testInfo, '04-witch-after-antidote')
@@ -375,15 +362,13 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
           if (wolfTarget !== null) {
             // Even though the kill banner shouldn't be present, double-check
             // the wolf's saved target is NOT listed as killed anywhere.
-            await expect(
-              page.getByTestId(`day-killed-seat-${wolfTarget}`),
-            ).toHaveCount(0)
+            await expect(page.getByTestId(`day-killed-seat-${wolfTarget}`)).toHaveCount(0)
           }
         } else if (wolfTarget !== null) {
           // No witch save → the wolf's target should appear in the kill list.
-          await expect(
-            page.getByTestId(`day-killed-seat-${wolfTarget}`),
-          ).toBeVisible({ timeout: 10_000 })
+          await expect(page.getByTestId(`day-killed-seat-${wolfTarget}`)).toBeVisible({
+            timeout: 10_000,
+          })
         } else {
           await expect(page.locator('.day-wrap .banner').first()).toBeVisible({
             timeout: 10_000,
