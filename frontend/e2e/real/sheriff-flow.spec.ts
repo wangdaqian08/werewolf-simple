@@ -89,9 +89,14 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
   // ── Test 3: Speeches — host advances, speaker shown ────────────────────
 
   test('3. Sheriff speeches — host advances, current speaker updates', async ({}, testInfo) => {
-    // Host starts speeches
+    // Host starts speeches. Pass 'Host' explicitly: SHERIFF_START_SPEECH and
+    // SHERIFF_ADVANCE_SPEECH are host-only — without a player arg, act.sh
+    // fans out across every bot, each call rejected with "Only host can
+    // start speeches", and the test burns ~30 s of REJECTED rows in the
+    // backend log before the catch{} short-circuits. Passing 'Host'
+    // routes the action through the cached host token in one call.
     try {
-      act('SHERIFF_START_SPEECH', undefined, { room: ctx.roomCode })
+      act('SHERIFF_START_SPEECH', 'Host', { room: ctx.roomCode })
     } catch {
       // May already be in speech phase
     }
@@ -108,7 +113,7 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     let advances = 0
     while (advances < 10) {
       try {
-        act('SHERIFF_ADVANCE_SPEECH', undefined, { room: ctx.roomCode })
+        act('SHERIFF_ADVANCE_SPEECH', 'Host', { room: ctx.roomCode })
         advances++
         await ctx.hostPage.waitForTimeout(500)
       } catch {
@@ -141,9 +146,12 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // Wait for all votes
     await ctx.hostPage.waitForTimeout(2_000)
 
-    // Host reveals result
+    // Host reveals result. SHERIFF_REVEAL_RESULT is host-only — pass 'Host'
+    // explicitly so act.sh uses the cached host token (otherwise it fans
+    // out across bots, each rejected as "Only host can reveal sheriff
+    // result").
     try {
-      act('SHERIFF_REVEAL_RESULT', undefined, { room: ctx.roomCode })
+      act('SHERIFF_REVEAL_RESULT', 'Host', { room: ctx.roomCode })
     } catch {
       // May fail if tied — try appoint instead
     }
