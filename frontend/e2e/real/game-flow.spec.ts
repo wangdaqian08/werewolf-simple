@@ -9,12 +9,16 @@
  *   - STOMP event sent → UI not updated in other browsers
  *   - Phase transition → browser stuck on old phase
  */
-import {expect, test} from '@playwright/test'
-import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act, actName, type RoleName} from './helpers/shell-runner'
-import {verifyAllBrowsersPhase,} from './helpers/assertions'
-import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
+import { expect, test } from '@playwright/test'
+import { type GameContext, setupGame } from './helpers/multi-browser'
+import { act, actName, type RoleName } from './helpers/shell-runner'
+import { verifyAllBrowsersPhase } from './helpers/assertions'
+import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-screenshot'
+import {
+  readHostUserId,
+  readUnvotedAlivePlayerIds,
+  waitForNightSubPhase,
+} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -108,32 +112,22 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       await expect(page.locator('.game-wrap.night-mode')).toBeVisible({ timeout: 10_000 })
     }
 
-    // Wolf kill via script — target first villager (non-host)
-    const villagerBots = ctx.roleMap.VILLAGER ?? []
-    const nonHostVillager = villagerBots.find((b) => b.nick !== 'Host') ?? villagerBots[0]
-    const target = nonHostVillager?.seat ?? 1
-    const wolfBots = ctx.roleMap.WEREWOLF ?? []
-    const wolfBot = wolfBots[0]
-
-    if (wolfBot) {
-      // Wolf is a bot — use script. Gate on WEREWOLF_PICK so the act lands
-      // in the right sub-phase (Category A race guard).
-      await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000)
-      act('WOLF_KILL', actName(wolfBot), { target: String(target), room: ctx.roomCode })
-    } else {
-      // Wolf is the host — use browser clicks
-      const targetSlot = wolfPage.locator(`.player-grid .slot-alive`).first()
-      await targetSlot.click()
-      const confirmBtn = wolfPage.getByTestId('wolf-confirm-kill')
-      await confirmBtn.click()
-    }
+    // Wolf kill — DOM-driven via the wolf's browser regardless of whether
+    // the wolf is a bot or the host. This catches UI/STOMP bugs the API
+    // path would mask (button render, click handler wiring, target-grid
+    // filter). Gate on WEREWOLF_PICK so the click lands in the right
+    // sub-phase (Category A race guard).
+    await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000)
+    const wolfTargetSlot = wolfPage.locator('.player-grid .slot-alive').first()
+    await wolfTargetSlot.waitFor({ state: 'visible', timeout: 10_000 })
+    await wolfTargetSlot.click()
+    await wolfPage.getByTestId('wolf-confirm-kill').click()
 
     // STOMP verify: seer browser should transition to SEER_PICK
+    // (seer-check button is rendered inside the SEER_PICK template)
     const seerPage = ctx.pages.get('SEER')
     if (seerPage && seerPage !== wolfPage) {
-      await expect(
-        seerPage.getByText(/选择查验目标|Select a player to check/i).first(),
-      ).toBeVisible({ timeout: 15_000 })
+      await expect(seerPage.getByTestId('seer-check')).toBeVisible({ timeout: 15_000 })
     }
 
     await captureSnapshot(ctx.pages, testInfo, '03-wolf-kill')
@@ -142,44 +136,23 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
   // ── Test 4: Complete night via scripts, verify DAY transition ─────────
 
   test('4. Night — seer/witch/guard complete night, all browsers show DAY', async ({}, testInfo) => {
-    const seerBots = ctx.roleMap.SEER ?? []
-    const guardBots = ctx.roleMap.GUARD ?? []
-    const villagerBots = ctx.roleMap.VILLAGER ?? []
+    // ── Seer ── DOM-driven via seer's browser regardless of bot vs host.
+    // Gate on SEER_PICK before clicking — without this we race the Kotlin
+    // role-loop coroutine (memory: e2e-ci-vs-local-env-differences item 1).
+    const seerPage = ctx.pages.get('SEER')!
+    await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 15_000)
+    const seerCheckBtn = seerPage.getByTestId('seer-check')
+    await expect(seerCheckBtn).toBeVisible({ timeout: 10_000 })
 
-    // ── Seer ──
-    // Gate on SEER_PICK before firing the bot-script action — without this,
-    // act.sh races the Kotlin role-loop coroutine. See memory item 1 of
-    // e2e-ci-vs-local-env-differences.
-    const seerBot = seerBots[0]
-    if (seerBot) {
-      // Seer is a bot — use script
-      const checkTarget = guardBots[0]?.seat ?? villagerBots[1]?.seat ?? 1
-      await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 15_000)
-      act('SEER_CHECK', actName(seerBot), { target: String(checkTarget), room: ctx.roomCode })
+    const seerTargetSlot = seerPage.locator('.player-grid .slot-alive').first()
+    await seerTargetSlot.waitFor({ state: 'visible', timeout: 5_000 })
+    await seerTargetSlot.click()
+    await seerCheckBtn.click()
 
-      const seerPage = ctx.pages.get('SEER')
-      if (seerPage) {
-        await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-        // Screenshot: seer sees check result
-        await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
-      }
-
-      await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 10_000)
-      act('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
-    } else if (ctx.isHostRole('SEER')) {
-      // Seer is the host — use browser clicks
-      const seerPage = ctx.pages.get('SEER')!
-      await expect(seerPage.getByText(/选择查验目标 · Select a player to check:/i).first()).toBeVisible({ timeout: 10_000 })
-      const targetSlot = seerPage.locator('.player-grid .slot-alive').first()
-      await targetSlot.waitFor({ state: 'visible', timeout: 5_000 })
-      await targetSlot.click()
-      await seerPage.getByTestId('seer-check').click()
-      // Wait for result and confirm
-      await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-      // Screenshot: seer sees check result
-      await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
-      await seerPage.getByTestId('seer-done').click()
-    }
+    // Result screen appears, then confirm
+    await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
+    await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
+    await seerPage.getByTestId('seer-done').click()
 
     // ── Witch (always via browser to capture UI at each step) ──
     // Both antidote and poison sections are visible simultaneously.
@@ -245,31 +218,19 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       await doneBtn.click()
     }
 
-    // ── Guard ──
-    // Same Category A gate as seer above — wait for backend to reach GUARD_PICK
-    // before firing the bot action.
-    const guardBot = guardBots[0]
-    if (guardBot) {
-      // Guard is a bot — use script
-      const guardPage = ctx.pages.get('GUARD')
-      if (guardPage) {
-        // Screenshot: guard UI is shown before action
-        await expect(guardPage.getByText(/选择守护目标|Protect a player/i).first()).toBeVisible({ timeout: 10_000 })
-        await captureSnapshot(ctx.pages, testInfo, '04-guard-ui')
-      }
-      await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 15_000)
-      act('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
-    } else if (ctx.isHostRole('GUARD')) {
-      // Guard is the host — use browser clicks to protect someone
-      const guardPage = ctx.pages.get('GUARD')!
-      await expect(guardPage.getByText(/选择守护目标|Protect a player/i).first()).toBeVisible({ timeout: 10_000 })
-      // Screenshot: guard UI is shown
-      await captureSnapshot(ctx.pages, testInfo, '04-guard-ui')
-      const targetSlot = guardPage.locator('.player-grid .slot-alive').first()
-      await targetSlot.waitFor({ state: 'visible', timeout: 5_000 })
-      await targetSlot.click()
-      await guardPage.getByTestId('guard-confirm-protect').click()
-    }
+    // ── Guard ── DOM-driven via guard's browser. The UI has no "skip" button
+    // (memory: game-rules-clarifications — guard self-protect is allowed),
+    // so we always pick a target and confirm. Gate on GUARD_PICK first.
+    const guardPage = ctx.pages.get('GUARD')!
+    await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 15_000)
+    const guardConfirmBtn = guardPage.getByTestId('guard-confirm-protect')
+    await expect(guardConfirmBtn).toBeVisible({ timeout: 10_000 })
+    await captureSnapshot(ctx.pages, testInfo, '04-guard-ui')
+
+    const guardTargetSlot = guardPage.locator('.player-grid .slot-alive').first()
+    await guardTargetSlot.waitFor({ state: 'visible', timeout: 5_000 })
+    await guardTargetSlot.click()
+    await guardConfirmBtn.click()
 
     // STOMP verify: ALL browsers should transition to DAY phase
     await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000)
@@ -358,8 +319,11 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // Wait for all votes to register
     await hostPage.waitForTimeout(2_000)
 
-    // Host reveals tally via script
-    act('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })
+    // Host reveals tally via DOM — exercises the host's reveal button
+    // wiring + STOMP fan-out, not just the API path.
+    const revealTallyBtn = hostPage.getByTestId('voting-reveal')
+    await revealTallyBtn.waitFor({ state: 'visible', timeout: 10_000 })
+    await revealTallyBtn.click()
 
     // Wait for the UI to update — could be "继续", "进入夜晚", or a hunter/badge action
     // The reveal may transition through multiple sub-phases
@@ -367,11 +331,11 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
 
     await captureSnapshot(ctx.pages, testInfo, '07-vote-tally')
 
-    // Try continuing via script (may fail if already auto-advanced)
-    try {
-      act('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
-    } catch {
-      // May already have auto-continued or transitioned
+    // Host continues via DOM (auto-advance may have already fired the
+    // transition — only click if the button is still present).
+    const continueBtn = hostPage.getByTestId('voting-continue')
+    if (await continueBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await continueBtn.click()
     }
 
     // Should transition to NIGHT for next round (or GAME_OVER)
@@ -395,15 +359,15 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       return
     }
 
-    // Night 2: some players may be dead from previous rounds.
-    // Use browser clicks for roles where the host has the role,
-    // and try scripts with fallback for bots (which may be dead).
+    // Night 2: some browser-bound role bots may have been voted out on
+    // Day 1. Each role tries DOM-first via its browser; if that browser's
+    // bot is dead (no actor UI), fall back to the API on remaining alive
+    // bots of the same role.
 
     // Helper: try script, return false if rejected (dead player, etc.)
     const tryAct = (...args: Parameters<typeof act>): boolean => {
       try {
         const output = act(...args)
-        // Script exits 0 even on rejection — check output for "rejected"
         const rejected = output.includes('rejected')
         if (rejected) {
           // eslint-disable-next-line no-console
@@ -423,95 +387,129 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const guardBots = ctx.roleMap.GUARD ?? []
     const villagerBots = ctx.roleMap.VILLAGER ?? []
 
-    // ── Wolf kill — try each alive wolf bot with each alive non-wolf target ──
+    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots].filter(
+      (b) => b.nick !== 'Host',
+    )
+
+    // ── Wolf kill — DOM-first via wolf browser ──
     const wolfPage = ctx.pages.get('WEREWOLF')
     let wolfDone = false
-
-    // Collect all non-wolf potential targets
-    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots]
-      .filter((b) => b.nick !== 'Host')
-
-    for (const wb of wolfBots) {
-      for (const tgt of allTargets) {
-        if (tryAct('WOLF_KILL', actName(wb), { target: String(tgt.seat), room: ctx.roomCode })) {
+    if (wolfPage) {
+      const wolfConfirm = wolfPage.getByTestId('wolf-confirm-kill')
+      if (await wolfConfirm.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        const targetSlot = wolfPage.locator('.player-grid .slot-alive').first()
+        if (await targetSlot.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await targetSlot.click()
+          await wolfConfirm.click()
           wolfDone = true
-          // Wait for wolf action to be processed
+          await ctx.hostPage.waitForTimeout(1_000)
+        }
+      }
+    }
+    if (!wolfDone) {
+      // Browser-wolf is dead or UI didn't render. Try API on remaining wolf bots.
+      for (const wb of wolfBots) {
+        for (const tgt of allTargets) {
+          if (tryAct('WOLF_KILL', actName(wb), { target: String(tgt.seat), room: ctx.roomCode })) {
+            wolfDone = true
+            await ctx.hostPage.waitForTimeout(1_000)
+            break
+          }
+        }
+        if (wolfDone) break
+      }
+    }
+
+    // ── Seer — DOM-first via seer browser ──
+    const seerPage = ctx.pages.get('SEER')
+    let seerDone = false
+    if (seerPage) {
+      const seerCheck = seerPage.getByTestId('seer-check')
+      if (await seerCheck.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        const targetSlot = seerPage.locator('.player-grid .slot-alive').first()
+        if (await targetSlot.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await targetSlot.click()
+          await seerCheck.click()
+          await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
+          await seerPage.getByTestId('seer-done').click()
+          seerDone = true
+        }
+      }
+    }
+    if (!seerDone) {
+      // Browser-seer is dead. Try API on remaining seer bots.
+      for (const sb of seerBots) {
+        for (const tgt of allTargets) {
+          if (tryAct('SEER_CHECK', actName(sb), { target: String(tgt.seat), room: ctx.roomCode })) {
+            await ctx.hostPage.waitForTimeout(2_000)
+            tryAct('SEER_CONFIRM', actName(sb), { room: ctx.roomCode })
+            seerDone = true
+            break
+          }
+        }
+        if (seerDone) break
+      }
+    }
+
+    // ── Witch — DOM-first via witch browser (pass on both items) ──
+    const witchPage = ctx.pages.get('WITCH')
+    let witchDone = false
+    if (witchPage) {
+      const witchSection = witchPage.locator('.w-section').first()
+      if (await witchSection.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        const passAntidote = witchPage.getByTestId('switch-pass-antidote')
+        if (await passAntidote.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await passAntidote.click()
+          await witchPage.waitForTimeout(500)
+        }
+        const passPoison = witchPage.getByTestId('switch-pass-poison')
+        if (await passPoison.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await passPoison.click()
+        }
+        const witchSkip = witchPage.getByTestId('witch-skip')
+        if (await witchSkip.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await witchSkip.click()
+        }
+        witchDone = true
+        await ctx.hostPage.waitForTimeout(1_000)
+      }
+    }
+    if (!witchDone) {
+      // Browser-witch is dead. Try API on remaining witch bots.
+      for (const wb of witchBots) {
+        if (
+          tryAct('WITCH_ACT', actName(wb), { payload: '{"useAntidote":false}', room: ctx.roomCode })
+        ) {
+          witchDone = true
           await ctx.hostPage.waitForTimeout(1_000)
           break
         }
       }
-      if (wolfDone) break
     }
 
-    // Fall back to browser clicks if no bot succeeded (host is wolf or all wolf bots dead)
-    if (!wolfDone && wolfPage) {
-      const playerGrid = wolfPage.locator('.player-grid')
-      if (await playerGrid.first().isVisible({ timeout: 10_000 }).catch(() => false)) {
-        const targetSlot = wolfPage.locator('.player-grid .slot-alive').first()
-        await targetSlot.click()
-        await wolfPage.getByTestId('wolf-confirm-kill').click()
-      }
-    }
-
-    // ── Seer ──
-    const seerBot = seerBots[0]
-    let seerDone = false
-    if (seerBot) {
-      // Try multiple targets in case some are dead
-      for (const tgt of allTargets) {
-        if (tryAct('SEER_CHECK', actName(seerBot), { target: String(tgt.seat), room: ctx.roomCode })) {
-          seerDone = true
-          // Wait for SEER result to be displayed before confirming
-          await ctx.hostPage.waitForTimeout(2_000)
-          tryAct('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
-          break
+    // ── Guard — DOM-first via guard browser ──
+    const guardPage = ctx.pages.get('GUARD')
+    let guardDone = false
+    if (guardPage) {
+      const guardConfirm = guardPage.getByTestId('guard-confirm-protect')
+      if (await guardConfirm.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        const targetSlot = guardPage.locator('.player-grid .slot-alive').first()
+        if (await targetSlot.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await targetSlot.click()
+          await guardConfirm.click()
+          guardDone = true
+          await ctx.hostPage.waitForTimeout(1_000)
         }
       }
     }
-    if (!seerDone && ctx.isHostRole('SEER')) {
-      const seerPage = ctx.pages.get('SEER')!
-      if (await seerPage.getByText(/选择查验目标|Select a player to check/i).first().isVisible({ timeout: 10_000 }).catch(() => false)) {
-        await seerPage.locator('.player-grid .slot-alive').first().click()
-        await seerPage.getByTestId('seer-check').click()
-        await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-        await seerPage.getByTestId('seer-done').click()
-      }
-    }
-
-    // ── Witch ──
-    const witchBot = witchBots[0]
-    let witchDone = false
-    if (witchBot) {
-      witchDone = tryAct('WITCH_ACT', actName(witchBot), { payload: '{"useAntidote":false}', room: ctx.roomCode })
-      // Wait for Witch action to be submitted
-      await ctx.hostPage.waitForTimeout(1_000)
-    }
-    if (!witchDone && ctx.isHostRole('WITCH')) {
-      const witchPage = ctx.pages.get('WITCH')!
-      if (await witchPage.locator('.w-section').first().isVisible({ timeout: 10_000 }).catch(() => false)) {
-        const passBtn = witchPage.getByTestId('switch-pass-antidote')
-        if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
-        await witchPage.waitForTimeout(500)
-        const skipBtn = witchPage.getByTestId('switch-pass-poison')
-        if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
-        const doneBtn = witchPage.getByTestId('witch-skip')
-        if (await doneBtn.isVisible().catch(() => false)) await doneBtn.click()
-      }
-    }
-
-    // ── Guard ──
-    const guardBot = guardBots[0]
-    let guardDone = false
-    if (guardBot) {
-      guardDone = tryAct('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
-      // Wait for guard action to be submitted
-      await ctx.hostPage.waitForTimeout(1_000)
-    }
-    if (!guardDone && ctx.isHostRole('GUARD')) {
-      const guardPage = ctx.pages.get('GUARD')!
-      if (await guardPage.getByText(/选择守护目标|Protect a player/i).first().isVisible({ timeout: 10_000 }).catch(() => false)) {
-        await guardPage.locator('.player-grid .slot-alive').first().click()
-        await guardPage.getByTestId('guard-confirm-protect').click()
+    if (!guardDone) {
+      // Browser-guard is dead. Try API on remaining guard bots (skip protect).
+      for (const gb of guardBots) {
+        if (tryAct('GUARD_SKIP', actName(gb), { room: ctx.roomCode })) {
+          guardDone = true
+          await ctx.hostPage.waitForTimeout(1_000)
+          break
+        }
       }
     }
 
