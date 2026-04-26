@@ -106,6 +106,7 @@
           <button
             class="btn btn-primary vote-btn"
             data-testid="day-reveal-result"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('revealResult')"
           >
@@ -116,6 +117,7 @@
           <button
             class="btn btn-gold vote-btn"
             data-testid="day-start-vote"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('startVote')"
           >

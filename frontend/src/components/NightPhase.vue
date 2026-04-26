@@ -70,6 +70,7 @@
         <button
           class="btn btn-danger nf-btn"
           data-testid="wolf-confirm-kill"
+          :class="{ 'is-loading': actionPending }"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="confirmWolfKill"
         >
@@ -105,6 +106,7 @@
         <button
           class="btn btn-danger nf-btn"
           data-testid="seer-check"
+          :class="{ 'is-loading': actionPending }"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="emit('confirm', localSelected)"
         >
@@ -158,6 +160,7 @@
           <button
             class="btn btn-secondary nf-btn"
             data-testid="seer-done"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="confirmSeerDone"
           >
@@ -190,6 +193,7 @@
           <button
             class="btn btn-primary ws-btn"
             data-testid="witch-antidote"
+            :class="{ 'is-loading': actionPending }"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
             @click="confirmWitchAntidote"
           >
@@ -198,6 +202,7 @@
           <button
             class="btn btn-secondary ws-btn"
             data-testid="switch-pass-antidote"
+            :class="{ 'is-loading': actionPending }"
             :disabled="!!nightPhase.antidoteDecided || actionPending"
             @click="confirmWitchPassAntidote"
           >
@@ -240,6 +245,7 @@
             <button
               class="btn btn-primary ws-btn"
               data-testid="witch-poison-confirm"
+              :class="{ 'is-loading': actionPending }"
               :disabled="!effectivePhase.selectedTargetId || actionPending"
               @click="confirmWitchPoison(effectivePhase.selectedTargetId!)"
             >
@@ -258,6 +264,7 @@
           <button
             class="btn btn-danger ws-btn"
             data-testid="use-poison"
+            :class="{ 'is-loading': actionPending }"
             :disabled="!!nightPhase.poisonDecided || actionPending"
             @click="poisonMode = true"
           >
@@ -266,6 +273,7 @@
           <button
             class="btn btn-secondary ws-btn"
             data-testid="switch-pass-poison"
+            :class="{ 'is-loading': actionPending }"
             :disabled="!!nightPhase.poisonDecided || actionPending"
             @click="confirmWitchPassPoison"
           >
@@ -284,6 +292,7 @@
           <button
             class="btn btn-primary ws-btn"
             data-testid="witch-skip"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="confirmWitchSkip"
           >
@@ -330,6 +339,7 @@
         <button
           class="btn btn-danger nf-btn"
           data-testid="guard-confirm-protect"
+          :class="{ 'is-loading': actionPending }"
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="confirmGuardProtect"
         >

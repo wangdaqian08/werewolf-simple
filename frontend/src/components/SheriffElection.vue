@@ -31,6 +31,7 @@
           <button
             class="btn btn-danger-outline"
             data-testid="sheriff-withdraw"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('withdraw')"
           >
@@ -41,6 +42,7 @@
           <button
             class="btn btn-gold"
             data-testid="sheriff-run"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('run')"
           >
@@ -50,6 +52,7 @@
             v-if="!election.hasPassed"
             class="btn btn-outline"
             data-testid="sheriff-pass"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('pass')"
           >
@@ -61,6 +64,7 @@
           <button
             class="btn btn-primary"
             data-testid="sheriff-start-campaign"
+            :class="{ 'is-loading': actionPending }"
             :disabled="runningCandidates.length === 0 || actionPending"
             @click="emit('startCampaign')"
           >
@@ -103,6 +107,7 @@
           <button
             class="btn btn-danger-outline"
             data-testid="sheriff-quit"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('quit')"
           >
@@ -113,6 +118,7 @@
             <button
               class="btn btn-primary"
               data-testid="sheriff-advance-speech"
+              :class="{ 'is-loading': actionPending }"
               :disabled="actionPending"
               @click="emit('advanceSpeech')"
             >
@@ -126,6 +132,7 @@
           <button
             class="btn btn-primary"
             data-testid="sheriff-advance-speech"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('advanceSpeech')"
           >
@@ -168,6 +175,7 @@
           <button
             class="btn btn-danger-outline"
             data-testid="sheriff-quit"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('quit')"
           >
@@ -180,6 +188,7 @@
           <button
             class="btn btn-primary"
             data-testid="sheriff-advance-speech"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('advanceSpeech')"
           >
@@ -251,6 +260,7 @@
           <button
             class="btn btn-gold"
             data-testid="sheriff-vote"
+            :class="{ 'is-loading': actionPending }"
             :disabled="!selectedId || actionPending"
             @click="selectedId && emit('vote', selectedId)"
           >
@@ -259,6 +269,7 @@
           <button
             class="btn btn-outline"
             data-testid="sheriff-abstain"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             @click="emit('abstain')"
           >
@@ -276,6 +287,7 @@
           <button
             class="btn btn-primary"
             data-testid="sheriff-reveal-result"
+            :class="{ 'is-loading': actionPending }"
             :disabled="!election.allVoted || actionPending"
             @click="emit('revealResult')"
           >
@@ -371,6 +383,7 @@
           <button
             class="btn btn-primary"
             data-testid="sheriff-appoint"
+            :class="{ 'is-loading': actionPending }"
             :disabled="!appointTarget || actionPending"
             @click="emit('appoint', appointTarget!)"
           >
@@ -463,6 +476,7 @@
         <div class="action-footer">
           <button
             class="btn btn-primary"
+            :class="{ 'is-loading': actionPending }"
             :disabled="actionPending"
             data-testid="start-night"
             @click="emit('startNight')"

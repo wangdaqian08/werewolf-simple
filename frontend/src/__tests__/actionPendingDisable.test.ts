@@ -74,28 +74,31 @@ describe('actionPending disables all confirm buttons', () => {
     })
   }
 
-  it('werewolf confirm button disabled when actionPending=true', () => {
+  it('werewolf confirm button disabled + has is-loading when actionPending=true', () => {
     const w = mountNight('WEREWOLF_PICK', 'wolf1', 'WEREWOLF', true)
     const btn = w.find('button.btn-danger')
     expect(btn.exists()).toBe(true)
     expect(btn.attributes('disabled')).toBeDefined()
+    expect(btn.classes()).toContain('is-loading')
   })
 
-  it('werewolf confirm button enabled when actionPending=false and target selected', () => {
+  it('werewolf confirm button enabled + no is-loading when actionPending=false', () => {
     const w = mountNight('WEREWOLF_PICK', 'wolf1', 'WEREWOLF', false)
     const btn = w.find('button.btn-danger')
     expect(btn.exists()).toBe(true)
     expect(btn.attributes('disabled')).toBeUndefined()
+    expect(btn.classes()).not.toContain('is-loading')
   })
 
-  it('seer check button disabled when actionPending=true', () => {
+  it('seer check button disabled + has is-loading when actionPending=true', () => {
     const w = mountNight('SEER_PICK', 'seer1', 'SEER', true)
     const btn = w.find('button.btn-danger')
     expect(btn.exists()).toBe(true)
     expect(btn.attributes('disabled')).toBeDefined()
+    expect(btn.classes()).toContain('is-loading')
   })
 
-  it('seer done button disabled when actionPending=true', () => {
+  it('seer done button disabled + has is-loading when actionPending=true', () => {
     const w = mountNight('SEER_RESULT', 'seer1', 'SEER', true, {
       seerResult: {
         checkedPlayerId: 'villager1',
@@ -108,16 +111,18 @@ describe('actionPending disables all confirm buttons', () => {
     const btn = w.find('button.btn-secondary')
     expect(btn.exists()).toBe(true)
     expect(btn.attributes('disabled')).toBeDefined()
+    expect(btn.classes()).toContain('is-loading')
   })
 
-  it('guard confirm button disabled when actionPending=true', () => {
+  it('guard confirm button disabled + has is-loading when actionPending=true', () => {
     const w = mountNight('GUARD_PICK', 'guard1', 'GUARD', true)
     const btn = w.find('button.btn-danger')
     expect(btn.exists()).toBe(true)
     expect(btn.attributes('disabled')).toBeDefined()
+    expect(btn.classes()).toContain('is-loading')
   })
 
-  it('witch antidote/pass buttons disabled when actionPending=true', () => {
+  it('witch antidote/pass buttons disabled + have is-loading when actionPending=true', () => {
     mountNight('WITCH_ACT', 'witch1', 'WITCH', true, {
       hasAntidote: true,
       attackedPlayerId: 'villager1',
@@ -160,6 +165,7 @@ describe('actionPending disables all confirm buttons', () => {
     expect(buttons.length).toBeGreaterThanOrEqual(2)
     buttons.forEach((btn) => {
       expect(btn.attributes('disabled')).toBeDefined()
+      expect(btn.classes()).toContain('is-loading')
     })
   })
 })

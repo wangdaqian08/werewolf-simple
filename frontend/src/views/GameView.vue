@@ -33,6 +33,7 @@
           "
           class="btn btn-primary"
           style="margin-top: 1.5rem"
+          :class="{ 'is-loading': actionPending }"
           :disabled="actionPending"
           data-testid="start-night"
           @click="handleStartNight"

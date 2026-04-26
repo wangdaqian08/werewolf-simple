@@ -152,6 +152,7 @@
                 <button
                   class="btn btn-secondary"
                   data-testid="voting-unvote"
+                  :class="{ 'is-loading': actionPending }"
                   :disabled="actionPending"
                   @click="emit('unvote')"
                 >
@@ -163,6 +164,7 @@
                   <button
                     class="btn btn-primary vote-btn"
                     data-testid="voting-vote"
+                    :class="{ 'is-loading': actionPending }"
                     :disabled="!effectiveSelected || actionPending"
                     @click="effectiveSelected && emit('vote', effectiveSelected)"
                   >
@@ -171,6 +173,7 @@
                   <button
                     class="btn btn-secondary skip-btn"
                     data-testid="voting-skip"
+                    :class="{ 'is-loading': actionPending }"
                     :disabled="actionPending"
                     @click="emit('skip')"
                   >
@@ -184,6 +187,7 @@
               v-if="votingPhase.subPhase === 'VOTING' || votingPhase.subPhase === 'RE_VOTING'"
               class="btn btn-gold"
               data-testid="voting-reveal"
+              :class="{ 'is-loading': actionPending }"
               :disabled="!allVotesIn || actionPending"
               @click="emit('revealVoting')"
             >
@@ -205,6 +209,7 @@
               <button
                 class="btn btn-secondary"
                 data-testid="voting-unvote"
+                :class="{ 'is-loading': actionPending }"
                 :disabled="actionPending"
                 @click="emit('unvote')"
               >
@@ -216,6 +221,7 @@
                 <button
                   class="btn btn-primary vote-btn"
                   data-testid="voting-vote"
+                  :class="{ 'is-loading': actionPending }"
                   :disabled="!effectiveSelected || actionPending"
                   @click="effectiveSelected && emit('vote', effectiveSelected)"
                 >
@@ -224,6 +230,7 @@
                 <button
                   class="btn btn-secondary skip-btn"
                   data-testid="voting-skip"
+                  :class="{ 'is-loading': actionPending }"
                   :disabled="actionPending"
                   @click="emit('skip')"
                 >
@@ -383,6 +390,7 @@
           <div class="vote-actions">
             <button
               class="btn btn-danger vote-btn"
+              :class="{ 'is-loading': actionPending }"
               :disabled="!effectiveSelected || actionPending"
               @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
             >
@@ -390,6 +398,7 @@
             </button>
             <button
               class="btn btn-secondary skip-btn"
+              :class="{ 'is-loading': actionPending }"
               :disabled="actionPending"
               @click="emit('hunterPass')"
             >
@@ -472,6 +481,7 @@
             <div class="vote-actions">
               <button
                 class="btn btn-primary vote-btn"
+                :class="{ 'is-loading': actionPending }"
                 :disabled="actionPending"
                 @click="emit('continueVoting')"
               >
@@ -489,6 +499,7 @@
             <div class="vote-actions">
               <button
                 class="btn btn-gold vote-btn"
+                :class="{ 'is-loading': actionPending }"
                 :disabled="!effectiveSelected || actionPending"
                 @click="effectiveSelected && emit('passBadge', effectiveSelected)"
               >
@@ -496,6 +507,7 @@
               </button>
               <button
                 class="btn btn-secondary skip-btn"
+                :class="{ 'is-loading': actionPending }"
                 :disabled="actionPending"
                 @click="emit('destroyBadge')"
               >

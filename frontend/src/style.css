@@ -71,6 +71,47 @@ h3,
   cursor: not-allowed;
 }
 
+/* Loading state — applied alongside :disabled while a backend action is in
+ * flight. The disabled attribute already prevents re-clicks; this class adds
+ * a visual cue (spinner overlay + dim) so players see "click registered,
+ * waiting on backend" instead of looking identical to "not yet clickable".
+ *
+ * The label is hidden via visibility (not display: none) so the button keeps
+ * its width and the spinner stays centered. Outline-style buttons get a
+ * darker spinner so it's visible against light backgrounds.
+ */
+.btn.is-loading {
+  position: relative;
+  opacity: 0.85 !important;
+  cursor: wait !important;
+  pointer-events: none;
+}
+.btn.is-loading > * {
+  visibility: hidden;
+}
+.btn.is-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  animation: btn-spin 0.6s linear infinite;
+}
+.btn-secondary.is-loading::after,
+.btn-outline.is-loading::after {
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: rgba(0, 0, 0, 0.7);
+}
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .btn-primary {
   background: var(--red);
   color: #fff;
