@@ -483,8 +483,15 @@ async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) 
     const gameId = Number(route.params.gameId)
     const res = await gameService.submitAction({ ...req, gameId })
     if (res && !res.success && res.message) {
-      console.error('[GameView] Action failed:', res.message)
-      ElMessage({ message: res.message, type: 'error', duration: 3000 })
+      // Silently swallow harmless concurrent-action rejections (e.g. teammate
+      // already confirmed the wolf kill). The UI is already correct.
+      const harmless = res.message.includes('already confirmed')
+      if (harmless) {
+        console.info('[GameView] Action silently rejected:', res.message)
+      } else {
+        console.error('[GameView] Action failed:', res.message)
+        ElMessage({ message: res.message, type: 'error', duration: 3000 })
+      }
       // If the action failed due to phase mismatch, refresh the state
       if (res.message.includes('phase') || res.message.includes('Phase')) {
         const state = await gameService.getState(gameId.toString())

@@ -115,6 +115,44 @@ class RoleHandlerTest {
         }
 
         @Test
+        fun `wolf kill - second wolf kill rejected after first confirmed`() {
+            val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
+            val wolf1 = player("wolf1", 1, PlayerRole.WEREWOLF)
+            val wolf2 = player("wolf2", 2, PlayerRole.WEREWOLF)
+            val target = player("u3", 3, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(wolf1, wolf2, target), nightPhase = np)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            // First wolf kill succeeds
+            val result1 = handler.handle(req("wolf1", ActionType.WOLF_KILL, "u3"), ctx)
+            assertThat(result1).isInstanceOf(GameActionResult.Success::class.java)
+
+            // Second wolf kill is rejected
+            val result2 = handler.handle(req("wolf2", ActionType.WOLF_KILL, "u3"), ctx)
+            assertThat(result2).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((result2 as GameActionResult.Rejected).reason).contains("already confirmed")
+        }
+
+        @Test
+        fun `wolf kill - lock resets for new night`() {
+            val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
+            val wolf1 = player("wolf1", 1, PlayerRole.WEREWOLF)
+            val target = player("u3", 3, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(wolf1, target), nightPhase = np)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            // First kill succeeds
+            handler.handle(req("wolf1", ActionType.WOLF_KILL, "u3"), ctx)
+
+            // Reset lock (as NightOrchestrator would at start of new night)
+            handler.resetKillLock(gameId)
+
+            // Kill succeeds again after reset
+            val result = handler.handle(req("wolf1", ActionType.WOLF_KILL, "u3"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        }
+
+        @Test
         fun `wolf select - sets wolfTargetUserId and returns WolfSelectionChanged event`() {
             val ctx = wolfCtx()
             whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }

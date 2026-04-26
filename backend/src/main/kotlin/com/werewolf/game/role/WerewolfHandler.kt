@@ -13,6 +13,7 @@ import com.werewolf.model.RoleDelayConfig
 import com.werewolf.repository.NightPhaseRepository
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
+import java.util.concurrent.ConcurrentHashMap
 
 @Order(1)
 @Component
@@ -22,6 +23,19 @@ class WerewolfHandler(
 ) : RoleHandler {
 
     override val role = PlayerRole.WEREWOLF
+
+    /**
+     * Tracks which games have already had a WOLF_KILL confirmed this night.
+     * First WOLF_KILL wins; subsequent attempts from teammates are rejected
+     * so that only one submitAction fires per WEREWOLF_PICK sub-phase.
+     * Cleared by [resetKillLock] at the start of each new night.
+     */
+    private val killConfirmed = ConcurrentHashMap<Int, Boolean>()
+
+    /** Clear the kill lock for [gameId] so the next night allows a fresh WOLF_KILL. */
+    fun resetKillLock(gameId: Int) {
+        killConfirmed.remove(gameId)
+    }
 
     override fun acceptedActions(phase: GamePhase, subPhase: String?): Set<ActionType> =
         if (phase == GamePhase.NIGHT && subPhase == NightSubPhase.WEREWOLF_PICK.name)
@@ -43,6 +57,14 @@ class WerewolfHandler(
             ?: return GameActionResult.Rejected("No active night phase")
         if (nightPhase.subPhase != NightSubPhase.WEREWOLF_PICK)
             return GameActionResult.Rejected("Not in WEREWOLF_PICK sub-phase")
+
+        // Only the first WOLF_KILL per night advances the phase.
+        // Reject duplicates so submitAction is called exactly once.
+        if (action.actionType == ActionType.WOLF_KILL) {
+            if (killConfirmed.putIfAbsent(action.gameId, true) != null) {
+                return GameActionResult.Rejected("Kill already confirmed by teammate")
+            }
+        }
 
         val target = action.targetUserId
             ?: return GameActionResult.Rejected("Target required")

@@ -119,9 +119,13 @@ class FullGameCycleTest {
         return Triple(hostToken, roomId, tokenByUserId)
     }
 
-    /** Find the token of the wolf among all players using game state API. */
-    private fun findRoleToken(gameId: Int, tokenByUserId: Map<String, String>, role: PlayerRole): String {
-        return tokenByUserId.entries.first { (_, token) ->
+    /** Find the token of the first player with [role] using the game state API. */
+    private fun findRoleToken(gameId: Int, tokenByUserId: Map<String, String>, role: PlayerRole): String =
+        findAllRoleTokens(gameId, tokenByUserId, role).first()
+
+    /** Find tokens of ALL players with [role]. */
+    private fun findAllRoleTokens(gameId: Int, tokenByUserId: Map<String, String>, role: PlayerRole): List<String> =
+        tokenByUserId.entries.filter { (_, token) ->
             @Suppress("UNCHECKED_CAST")
             val state = restTemplate.exchange(
                 "/api/game/$gameId/state",
@@ -130,8 +134,7 @@ class FullGameCycleTest {
                 Map::class.java
             ).body
             state?.get("myRole") as? String == role.name
-        }.value
-    }
+        }.map { it.value }
 
     /**
      * Block until the night coroutine has reached its first deferred-await — i.e. the
@@ -256,5 +259,42 @@ class FullGameCycleTest {
         val finalGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(finalGame.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
         assertThat(finalGame.winner).isNull()
+    }
+
+    /**
+     * Regression: two wolves both send WOLF_KILL for the same target.
+     * First WOLF_KILL succeeds (200), second is rejected (400).
+     * Night still resolves correctly — no stale queuedActionSignal leaks
+     * into the next sub-phase.
+     */
+    @Test
+    fun `duplicate WOLF_KILL from second wolf is rejected and night still resolves`() {
+        val (hostToken, roomId, tokenByUserId) = setupRoom("DK1")
+
+        restTemplate.postForEntity(START_URL, HttpEntity(mapOf("roomId" to roomId), headers(hostToken)), Map::class.java)
+
+        val game = gameRepository.findAll().first { it.roomId == roomId }
+        val gameId = game.gameId!!
+
+        tokenByUserId.values.forEach { token -> action(token, gameId, "CONFIRM_ROLE") }
+        action(hostToken, gameId, "START_NIGHT")
+        waitForNightRoleLoopReady(gameId)
+
+        val wolfTokens = findAllRoleTokens(gameId, tokenByUserId, PlayerRole.WEREWOLF)
+        assertThat(wolfTokens).hasSizeGreaterThanOrEqualTo(2)
+
+        val villagerTarget = gamePlayerRepository.findByGameId(gameId).first { it.role != PlayerRole.WEREWOLF }
+
+        // First wolf kill → 200 OK
+        val resp1 = action(wolfTokens[0], gameId, "WOLF_KILL", villagerTarget.userId)
+        assertThat(resp1.statusCode).isEqualTo(HttpStatus.OK)
+
+        // Second wolf kill → 400 rejected
+        val resp2 = action(wolfTokens[1], gameId, "WOLF_KILL", villagerTarget.userId)
+        assertThat(resp2.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+
+        // Night still resolves (no stale signal poisoning the next sub-phase)
+        val resolvedPhase = waitForNightToResolve(gameId)
+        assertThat(resolvedPhase).isEqualTo(GamePhase.GAME_OVER)
     }
 }
