@@ -140,9 +140,10 @@ export async function assertNoBackendErrorsSince(
   // we don't re-grep the whole file.
   const blocks: string[] = []
   for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? ''
     if (
-      ERROR_LINE_PATTERNS.some((p) => p.test(lines[i])) &&
-      !allowPatterns.some((p) => p.test(lines[i]))
+      ERROR_LINE_PATTERNS.some((p) => p.test(line)) &&
+      !allowPatterns.some((p) => p.test(line))
     ) {
       const trace = lines.slice(i, Math.min(i + 9, lines.length)).join('\n')
       blocks.push(trace)
@@ -157,8 +158,9 @@ export async function assertNoBackendErrorsSince(
     contentType: 'text/plain',
   })
 
+  const firstError = errorLines[0] ?? '(no preview)'
   throw new Error(
     `Backend log: ${errorLines.length} ERROR/FATAL line(s) during test — see backend-errors attachment. ` +
-      `First: ${errorLines[0].slice(0, 200)}`,
+      `First: ${firstError.slice(0, 200)}`,
   )
 }

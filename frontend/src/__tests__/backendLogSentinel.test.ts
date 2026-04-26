@@ -122,7 +122,7 @@ describe('assertNoBackendErrorsSince', () => {
       /ERROR\/FATAL/,
     )
     expect(info.attach).toHaveBeenCalledTimes(1)
-    const body = String(info.attach.mock.calls[0][1].body)
+    const body = String(info.attach.mock.calls[0]?.[1]?.body)
     expect(body).toContain('nightmare')
     // Stack frame block is included as context
     expect(body).toContain('GameService.kt:123')

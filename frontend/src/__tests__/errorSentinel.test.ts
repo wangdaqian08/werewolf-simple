@@ -42,9 +42,9 @@ describe('error-sentinel', () => {
       /TypeError: x is undefined/,
     )
     expect(info.attach).toHaveBeenCalledTimes(1)
-    const attachArg = info.attach.mock.calls[0][1]
-    expect(String(attachArg.body)).toContain('pageerror')
-    expect(String(attachArg.body)).toContain('TypeError: x is undefined')
+    const attachArg = info.attach.mock.calls[0]?.[1]
+    expect(String(attachArg?.body)).toContain('pageerror')
+    expect(String(attachArg?.body)).toContain('TypeError: x is undefined')
   })
 
   it('throws on a 5xx response', async () => {
@@ -107,7 +107,7 @@ describe('error-sentinel', () => {
     ]
     const info = mkTestInfo()
     await expect(assertNoBrowserErrors(errors, info as never)).rejects.toThrow()
-    const body = String(info.attach.mock.calls[0][1].body)
+    const body = String(info.attach.mock.calls[0]?.[1]?.body)
     expect(body).toContain('[WEREWOLF]')
     expect(body).toContain('first')
     expect(body).toContain('[SEER]')

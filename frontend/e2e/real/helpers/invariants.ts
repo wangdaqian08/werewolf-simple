@@ -39,7 +39,7 @@ import type { Page } from '@playwright/test'
  * strictly greater than day-1-DAY_VOTING (1000+60=1060). GAME_OVER is
  * a terminal marker; rank is meaningless once reached.
  */
-export const PHASE_RANK: Readonly<Record<string, number>> = Object.freeze({
+export const PHASE_RANK: Record<string, number> = Object.freeze({
   ROLE_REVEAL: 0,
   WAITING: 10,
   SHERIFF_ELECTION: 20,
@@ -49,6 +49,9 @@ export const PHASE_RANK: Readonly<Record<string, number>> = Object.freeze({
   DAY_VOTING: 60,
   GAME_OVER: 9999,
 })
+
+/** Standalone constant so direct access avoids noUncheckedIndexedAccess. */
+const GAME_OVER_RANK = 9999
 
 const NIGHT_SUBS = new Set([
   'WAITING',
@@ -103,7 +106,7 @@ export function computePhaseRank(phase: string, dayNumber: number): number {
   if (base === undefined) {
     throw new Error(`computePhaseRank: unknown phase "${phase}"`)
   }
-  if (phase === 'GAME_OVER') return PHASE_RANK.GAME_OVER
+  if (phase === 'GAME_OVER') return GAME_OVER_RANK
   return base + dayNumber * 1000
 }
 

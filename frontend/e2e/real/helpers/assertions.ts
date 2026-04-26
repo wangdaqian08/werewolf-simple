@@ -125,8 +125,8 @@ export async function clickAndVerify(
  */
 async function snapshotBackendState(page: Page): Promise<Record<string, unknown> | null> {
   const gameIdMatch = page.url().match(/\/game\/(\d+)/)
-  if (!gameIdMatch) return null
-  const gameId = gameIdMatch[1]
+  const gameId = gameIdMatch?.[1]
+  if (!gameId) return null
   try {
     return await page.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')

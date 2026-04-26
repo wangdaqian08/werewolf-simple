@@ -102,9 +102,14 @@ export async function assertNoBrowserErrors(
     contentType: 'text/plain',
   })
 
+  // filtered.length > 0 has been checked above, so [0] is defined; use a
+  // local to keep TS strict-null-check happy without `!`.
+  const first = filtered[0]
   throw new Error(
     `Browser sentinel: ${filtered.length} JS / 5xx error(s) recorded — see browser-errors attachment. ` +
-      `First: [${filtered[0].role}] ${filtered[0].message.slice(0, 200)}`,
+      (first
+        ? `First: [${first.role}] ${first.message.slice(0, 200)}`
+        : ''),
   )
 }
 
