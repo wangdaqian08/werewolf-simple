@@ -40,6 +40,7 @@ export interface Room {
   status: RoomStatus
   players: RoomPlayer[]
   config: RoomConfig
+  activeGameId?: number
 }
 
 export interface CreateRoomRequest {

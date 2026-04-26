@@ -35,4 +35,5 @@ data class RoomDto(
     val status: String,
     val players: List<RoomPlayerDto>,
     val config: RoomConfigDto,
+    val activeGameId: Int? = null,
 )

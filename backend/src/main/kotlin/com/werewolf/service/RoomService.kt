@@ -7,6 +7,7 @@ import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.dto.RoomDto
 import com.werewolf.dto.RoomPlayerDto
 import com.werewolf.model.*
+import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
@@ -18,6 +19,7 @@ class RoomService(
     private val roomRepository: RoomRepository,
     private val roomPlayerRepository: RoomPlayerRepository,
     private val userRepository: UserRepository,
+    private val gameRepository: GameRepository,
     private val authService: AuthService,
     private val stompPublisher: StompPublisher,
     private val timing: GameTimingProperties,
@@ -132,6 +134,10 @@ class RoomService(
             if (room.hasIdiot) add(PlayerRole.IDIOT)
         }
 
+        val activeGameId = if (room.status == RoomStatus.IN_GAME) {
+            gameRepository.findByRoomIdAndEndedAtIsNull(room.roomId!!).map { it.gameId }.orElse(null)
+        } else null
+
         return RoomDto(
             roomId = room.roomId.toString(),
             roomCode = room.roomCode,
@@ -139,6 +145,7 @@ class RoomService(
             status = room.status.name,
             players = playerDtos,
             config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition),
+            activeGameId = activeGameId,
         )
     }
 

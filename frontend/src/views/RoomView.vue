@@ -210,6 +210,27 @@ async function handleStartGame() {
   await gameService.startGame(Number(roomStore.room.roomId))
 }
 
+// Re-fetch room status and redirect if a game is already in progress.
+// Does NOT update the room store — avoids resetting local UI state
+// (selected seat, pending ready toggle, etc.).
+async function checkActiveGame() {
+  if (!roomStore.room) return
+  try {
+    const room = await roomService.getRoom(roomStore.room.roomId)
+    if (room.status === 'IN_GAME' && room.activeGameId) {
+      router.push({ name: 'game', params: { gameId: room.activeGameId } })
+    }
+  } catch {
+    /* room may have been deleted — ignore, user can still leave manually */
+  }
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    checkActiveGame()
+  }
+}
+
 onMounted(async () => {
   const roomId = route.params.roomId as string
   if (!roomStore.room) {
@@ -223,9 +244,28 @@ onMounted(async () => {
   }
   loading.value = false
 
+  // Trigger 1 — on mount: if the room already has an active game (page refresh
+  // after missing the GAME_STARTED event), redirect immediately.
+  if (roomStore.room?.status === 'IN_GAME' && roomStore.room.activeGameId) {
+    router.push({ name: 'game', params: { gameId: roomStore.room.activeGameId } })
+    return
+  }
+
+  // Trigger 3 — visibility change: Safari suspends background tabs, killing the
+  // WebSocket. When the tab returns to foreground, re-check room status.
+  document.addEventListener('visibilitychange', onVisibilityChange)
+
   if (userStore.token && roomStore.room) {
     const client = createStompClient(userStore.token)
+    let isFirstConnect = true
     client.onConnect = () => {
+      // Trigger 2 — STOMP reconnect: broker does not replay missed events.
+      // Re-check room status on every reconnect to catch a GAME_STARTED we missed.
+      if (!isFirstConnect) {
+        checkActiveGame()
+      }
+      isFirstConnect = false
+
       subscribeToTopic(`/topic/room/${roomStore.room!.roomId}`, (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
         if (data.type === 'ROOM_UPDATE') {
@@ -241,6 +281,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   disconnectStomp()
 })
 </script>
