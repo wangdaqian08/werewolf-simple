@@ -12,7 +12,7 @@
     <!-- Fixed-height banner area — always rendered so grid position stays consistent -->
     <div class="banner-area">
       <template v-if="viewRole === 'DEAD'">
-        <div class="banner banner-info">
+        <div class="banner banner-info" data-testid="day-banner-self-eliminated">
           <span class="banner-icon">☑</span>
           <div>
             <div class="banner-title">你在上一晚被淘汰</div>
@@ -22,13 +22,16 @@
         <div
           v-if="dayPhase.subPhase === 'RESULT_REVEALED' && killedPlayers.length > 0"
           class="banner banner-kill"
+          data-testid="day-banner-kill"
         >
           <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
             <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
               <span v-if="idx > 0" class="banner-kill-muted">、</span>
-              <span class="banner-kill-red"
+              <span
+                class="banner-kill-red"
+                :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
                 >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
               >
             </template>
@@ -42,20 +45,26 @@
           (viewRole === 'ALIVE' || viewRole === 'HOST') && dayPhase.subPhase === 'RESULT_REVEALED'
         "
       >
-        <div v-if="killedPlayers.length > 0" class="banner banner-kill">
+        <div
+          v-if="killedPlayers.length > 0"
+          class="banner banner-kill"
+          data-testid="day-banner-kill"
+        >
           <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
             <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
               <span v-if="idx > 0" class="banner-kill-muted">、</span>
-              <span class="banner-kill-red"
+              <span
+                class="banner-kill-red"
+                :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
                 >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
               >
             </template>
             <span class="banner-kill-muted">出局了</span>
           </div>
         </div>
-        <div v-else class="banner banner-info">
+        <div v-else class="banner banner-info" data-testid="day-banner-peaceful">
           <span class="banner-icon">❤️</span>
           <div>
             <div class="banner-title">昨晚平安夜</div>

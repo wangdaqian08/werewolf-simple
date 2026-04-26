@@ -6,7 +6,7 @@
  *   - STOMP event sent but UI not updated
  *   - Phase transition not reflected in a browser
  */
-import {expect, type Page} from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 // Phase transitions occasionally take 2-3× longer on GH ubuntu-latest runners
 // than on local dev hardware. Rather than hard-code larger waits at every call
@@ -17,6 +17,11 @@ const scale = (ms: number) => Math.round(ms * TIMEOUT_SCALE)
 
 // ── Phase selectors (derived from actual component root classes) ─────────────
 
+/**
+ * Pre-#1 selectors: inferred phase from per-component CSS classes. Kept
+ * as a documented fallback for waitForPhase (single-page helper) since
+ * some specs use it before GameView mounts (e.g. waiting-screen).
+ */
 export const PHASE_SELECTORS: Record<string, string> = {
   ROLE_REVEAL: '.reveal-wrap, .waiting-screen',
   SHERIFF_ELECTION: '.sheriff-wrap',
@@ -25,20 +30,42 @@ export const PHASE_SELECTORS: Record<string, string> = {
   VOTING: '.voting-wrap',
 }
 
+/**
+ * Post-#1 mapping: spec-friendly phase label → set of authoritative
+ * `data-phase` values that GameView writes onto its root element.
+ *
+ * Multiple values map to one label because the spec abstracts day/night
+ * cycle states the way humans do (DAY = "discussion-or-pending"), while
+ * the backend distinguishes DAY_PENDING / DAY_DISCUSSION precisely.
+ *
+ * Used by verifyAllBrowsersPhase below — the data-attribute selector
+ * makes phase delivery testable cross-browser without inferring from
+ * CSS classes (which would mask, e.g., a spec calling 'NIGHT' on a
+ * browser whose store is still on DAY but whose body has the night
+ * class from a stale render).
+ */
+export const PHASE_DATA_VALUES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  ROLE_REVEAL: ['ROLE_REVEAL', 'WAITING'],
+  SHERIFF_ELECTION: ['SHERIFF_ELECTION'],
+  NIGHT: ['NIGHT'],
+  DAY: ['DAY_PENDING', 'DAY_DISCUSSION'],
+  VOTING: ['DAY_VOTING'],
+  GAME_OVER: ['GAME_OVER'],
+})
+
 // ── Single-page helpers ──────────────────────────────────────────────────────
 
 /**
  * Wait until a page shows the expected game phase.
  * Throws (P0) if the phase doesn't appear within timeout.
  */
-export async function waitForPhase(
-  page: Page,
-  phase: string,
-  timeout = 15_000,
-): Promise<void> {
+export async function waitForPhase(page: Page, phase: string, timeout = 15_000): Promise<void> {
   const selector = PHASE_SELECTORS[phase]
   if (!selector) throw new Error(`Unknown phase: ${phase}`)
-  await page.locator(selector).first().waitFor({ state: 'visible', timeout: scale(timeout) })
+  await page
+    .locator(selector)
+    .first()
+    .waitFor({ state: 'visible', timeout: scale(timeout) })
 }
 
 /**
@@ -98,8 +125,8 @@ export async function clickAndVerify(
  */
 async function snapshotBackendState(page: Page): Promise<Record<string, unknown> | null> {
   const gameIdMatch = page.url().match(/\/game\/(\d+)/)
-  if (!gameIdMatch) return null
-  const gameId = gameIdMatch[1]
+  const gameId = gameIdMatch?.[1]
+  if (!gameId) return null
   try {
     return await page.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
@@ -134,41 +161,48 @@ export async function verifyAllBrowsersPhase(
   phase: string,
   timeout = 30_000, // Increased from 15s to 30s to accommodate audio processing delays
 ): Promise<void> {
-  const selector = PHASE_SELECTORS[phase]
-  if (!selector) throw new Error(`Unknown phase: ${phase}`)
+  const dataValues = PHASE_DATA_VALUES[phase]
+  if (!dataValues) throw new Error(`Unknown phase: ${phase}`)
   const effective = scale(timeout)
+
+  // Build a CSS selector that matches the .game-wrap root only when its
+  // data-phase is one of the expected backend values. This is the
+  // authoritative phase source — backed by gameStore.state.phase, the
+  // same field every other component reads — so a STOMP delivery
+  // regression to a single browser fails this assertion immediately
+  // even if the legacy component-class selector would still match.
+  const selector = dataValues.map((v) => `.game-wrap[data-phase="${v}"]`).join(', ')
 
   const results = await Promise.allSettled(
     Array.from(pages.entries()).map(async ([role, page]) => {
       try {
         await page.locator(selector).first().waitFor({ state: 'visible', timeout: effective })
       } catch {
-        // Get current page state for better error reporting
+        // Diagnostic: read the actual data-phase / data-phase-sub the
+        // browser is showing so the failure message says exactly what
+        // value was observed instead of a CSS-class inference.
         const currentPhase = await page.evaluate(() => {
-          const body = document.body
-          const hasNightWrap = !!document.querySelector('.game-wrap.night-mode')
-          const hasDayWrap = !!document.querySelector('.day-wrap')
-          const hasVotingWrap = !!document.querySelector('.voting-wrap')
-          const hasSheriffWrap = !!document.querySelector('.sheriff-wrap')
-          const hasRevealWrap = !!document.querySelector('.reveal-wrap')
-          
-          let detectedPhase = 'UNKNOWN'
-          if (hasNightWrap) detectedPhase = 'NIGHT'
-          else if (hasDayWrap) detectedPhase = 'DAY'
-          else if (hasVotingWrap) detectedPhase = 'VOTING'
-          else if (hasSheriffWrap) detectedPhase = 'SHERIFF_ELECTION'
-          else if (hasRevealWrap) detectedPhase = 'ROLE_REVEAL'
-          
+          const wrap = document.querySelector('.game-wrap') as HTMLElement | null
           return {
-            detectedPhase,
-            bodyClasses: body.className,
-            url: window.location.href
+            dataPhase: wrap?.dataset.phase ?? null,
+            dataPhaseSub: wrap?.dataset.phaseSub ?? null,
+            dataDayNumber: wrap?.dataset.dayNumber ?? null,
+            // CSS-class fallback for diagnostics only — if data-phase is
+            // empty (component hasn't mounted yet, store not populated),
+            // these still tell us how far the page got.
+            hasNightWrap: !!document.querySelector('.game-wrap.night-mode'),
+            hasDayWrap: !!document.querySelector('.day-wrap'),
+            hasVotingWrap: !!document.querySelector('.voting-wrap'),
+            hasSheriffWrap: !!document.querySelector('.sheriff-wrap'),
+            hasRevealWrap: !!document.querySelector('.reveal-wrap'),
+            url: window.location.href,
           }
         })
-        
+
         throw new Error(
-          `P0: Browser [${role}] stuck — expected phase ${phase} (selector: ${selector}) ` +
-          `but not visible after ${effective}ms. Current state: ${JSON.stringify(currentPhase)}`
+          `P0: Browser [${role}] stuck — expected phase ${phase} ` +
+            `(data-phase ∈ {${dataValues.join(',')}}) ` +
+            `but not visible after ${effective}ms. Current state: ${JSON.stringify(currentPhase)}`,
         )
       }
     }),

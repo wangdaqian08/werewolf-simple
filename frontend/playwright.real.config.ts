@@ -9,6 +9,20 @@ import {defineConfig} from '@playwright/test'
 export default defineConfig({
   testDir: './e2e/real',
   fullyParallel: false, // tests share one backend instance; avoid parallel state collisions
+  // workers: 1 is REQUIRED — fullyParallel:false alone only serializes
+  // tests WITHIN a spec file. Without workers:1, multiple spec files run
+  // concurrently within a shard. Each spec's setupGame POSTs
+  // /api/user/login {nickname:"Host"} → userId="guest:host". Two
+  // simultaneous requests both pass findById (race window before either
+  // commits), both INSERT, second one fails with H2 unique-constraint
+  // violation → 500. The frontend's handleCreateRoom catches the error,
+  // sets `error.value` ("Request failed with status code 500"), and
+  // does NOT call router.push('/create-room'). The test's
+  // `await waitForURL(/\/create-room/, { timeout: 30_000 })` then sits
+  // for 30 s and times out. Verified by adding INFO logging to
+  // AuthService.loginOrRegister and observing two concurrent calls in
+  // the same millisecond on different exec threads.
+  workers: 1,
   // CI: retry once to absorb timing-sensitive NIGHT→DAY phase-transition flakes
   // that pass locally on fast hardware but occasionally stall on slower GH
   // runners. Local runs keep retries: 0 so flakes aren't hidden.

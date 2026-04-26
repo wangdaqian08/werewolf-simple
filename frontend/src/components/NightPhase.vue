@@ -126,7 +126,12 @@
       "
     >
       <div class="sr-wrap">
-        <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
+        <div
+          :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']"
+          data-testid="seer-result-card"
+          :data-alignment="nightPhase.seerResult.isWerewolf ? 'wolf' : 'village'"
+          :data-checked-seat="nightPhase.seerResult.checkedSeatIndex"
+        >
           <div class="sr-player">
             {{ nightPhase.seerResult.checkedSeatIndex }}号 ·
             {{ nightPhase.seerResult.checkedNickname }}
@@ -446,34 +451,27 @@ function confirmWitchSkip() {
   emit('witchSkip')
 }
 
-// Witch has up to two potions and can decide each independently. Flip hasActed
-// only when the current click resolves the witch's FINAL pending decision —
-// otherwise the other potion panel would disappear behind the sleep screen.
-function witchActionIsFinal(otherPotionHeld: boolean, otherDecided: boolean) {
-  return !otherPotionHeld || otherDecided
-}
+// Each witch button click submits a COMPLETE WITCH_ACT (the GameView
+// handlers fix the other potion to "not used" when one is chosen — see
+// handleWitchAntidote / handleWitchPassAntidote / handleWitchPoison /
+// handleWitchPassPoison in GameView.vue). The witch's turn ends in one
+// click, same as wolf / seer / guard / hunter. Hide the UI immediately
+// to prevent a second click from racing the night-loop with a stale
+// WITCH_ACT during the inter-role-gap window.
 function confirmWitchAntidote() {
-  if (witchActionIsFinal(!!props.nightPhase.hasPoison, !!props.nightPhase.poisonDecided)) {
-    hasActed.value = true
-  }
+  hasActed.value = true
   emit('witchAntidote')
 }
 function confirmWitchPassAntidote() {
-  if (witchActionIsFinal(!!props.nightPhase.hasPoison, !!props.nightPhase.poisonDecided)) {
-    hasActed.value = true
-  }
+  hasActed.value = true
   emit('witchPassAntidote')
 }
 function confirmWitchPoison(targetId: string) {
-  if (witchActionIsFinal(!!props.nightPhase.hasAntidote, !!props.nightPhase.antidoteDecided)) {
-    hasActed.value = true
-  }
+  hasActed.value = true
   emit('witchPoison', targetId)
 }
 function confirmWitchPassPoison() {
-  if (witchActionIsFinal(!!props.nightPhase.hasAntidote, !!props.nightPhase.antidoteDecided)) {
-    hasActed.value = true
-  }
+  hasActed.value = true
   emit('witchPassPoison')
 }
 

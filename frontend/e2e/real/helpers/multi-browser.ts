@@ -10,19 +10,27 @@
  *   // ctx.pages.get('SEER')     — seer's browser page
  *   // ctx.hostPage              — host's browser page
  */
-import {readFileSync, writeFileSync} from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import path from 'path'
-import {type Browser, type BrowserContext, expect, type Page} from '@playwright/test'
 import {
-    act,
-    type BotInfo,
-    getConsoleLogin,
-    getRoles,
-    joinBots,
-    readStateFile,
-    type RoleMap,
-    type RoleName,
+  type Browser,
+  type BrowserContext,
+  expect,
+  type Page,
+  type TestInfo,
+} from '@playwright/test'
+import {
+  act,
+  type BotInfo,
+  getConsoleLogin,
+  getRoles,
+  joinBots,
+  readStateFile,
+  type RoleMap,
+  type RoleName,
 } from './shell-runner'
+import { attachErrorListeners, type BrowserError, resetBrowserErrors } from './error-sentinel'
+import { assertNoBackendErrorsSince, readBackendLogLineCount } from './backend-log'
 
 const BASE_URL = 'http://localhost:5174'
 
@@ -45,6 +53,26 @@ export interface GameContext {
   hostRole: RoleName | null
   /** Roles where the host IS the player (use browser, not scripts) */
   isHostRole: (role: RoleName) => boolean
+  /**
+   * Per-test browser-error buffer. Populated by the page sentinels on
+   * `pageerror` and `response` (5xx). Reset between tests via `resetErrors()`;
+   * asserted in afterEach via `assertNoBrowserErrors()`.
+   */
+  errors: BrowserError[]
+  /** Clear the errors buffer; call in beforeEach for a clean test window. */
+  resetErrors: () => void
+  /**
+   * Snapshot the current backend-log line count so the next
+   * `assertNoBackendErrors` call only inspects lines added during the
+   * test. Call in beforeEach.
+   */
+  markBackendLogPosition: () => void
+  /**
+   * Fail the test if any ERROR/FATAL line appeared in the backend log
+   * since the most recent `markBackendLogPosition`. Call in afterEach
+   * after any failure-only attachments.
+   */
+  assertNoBackendErrors: (testInfo: TestInfo) => Promise<void>
   /** Clean up all browser contexts */
   cleanup: () => Promise<void>
 }
@@ -81,9 +109,12 @@ export async function setupGame(
 
   // ── Step 1: Host logs in and creates room ──────────────────────────────
 
+  const errors: BrowserError[] = []
+
   const hostContext = await browser.newContext()
   contexts.push(hostContext)
   const hostPage = await hostContext.newPage()
+  attachErrorListeners('HOST', hostPage, errors)
 
   await hostPage.goto(`${BASE_URL}/`)
   await hostPage.evaluate(() => localStorage.clear())
@@ -91,7 +122,10 @@ export async function setupGame(
 
   // Login
   await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
-  await hostPage.getByRole('button', { name: /Create Room/i }).first().click()
+  await hostPage
+    .getByRole('button', { name: /Create Room/i })
+    .first()
+    .click()
   // Bump from 10s → 30s: CI-3 flaked repeatedly here on 2026-04-24 /
   // 2026-04-25 because the initial '/' → '/create-room' navigation after a
   // cold Vite start plus Spring Tomcat warmup sometimes exceeds 10 s. The
@@ -120,7 +154,7 @@ export async function setupGame(
     const defaultOptional = ['SEER', 'WITCH', 'HUNTER']
     const requiredRoles = ['WEREWOLF', 'VILLAGER']
     const allOptionalRoles = ['SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT']
-    
+
     // For each optional role, toggle to match desired state. Retry up to
     // 3 times if the click didn't register — on slow CI the first click
     // is occasionally swallowed and the role ends up in the wrong state,
@@ -128,7 +162,9 @@ export async function setupGame(
     // assignment (observed failure: "IDIOT bots not found" across all
     // idiot-flow tests when the IDIOT toggle stayed off).
     for (const role of allOptionalRoles) {
-      const shouldBeEnabled = opts.roles.includes(<"WEREWOLF" | "SEER" | "WITCH" | "GUARD" | "HUNTER" | "IDIOT" | "VILLAGER">role)
+      const shouldBeEnabled = opts.roles.includes(
+        <'WEREWOLF' | 'SEER' | 'WITCH' | 'GUARD' | 'HUNTER' | 'IDIOT' | 'VILLAGER'>role,
+      )
 
       const roleRow = hostPage.locator('.role-row').filter({ hasText: new RegExp(role, 'i') })
 
@@ -136,9 +172,7 @@ export async function setupGame(
         const isEnabled = (await roleRow.locator('.toggle-on').count()) > 0
         if (isEnabled === shouldBeEnabled) break
 
-        const toggle = isEnabled
-          ? roleRow.locator('.toggle-on')
-          : roleRow.locator('.toggle-off')
+        const toggle = isEnabled ? roleRow.locator('.toggle-on') : roleRow.locator('.toggle-off')
         if ((await toggle.count()) === 0) break
 
         await toggle.click()
@@ -237,20 +271,20 @@ export async function setupGame(
   // Check if we're still on the role reveal screen
   const revealWrap = hostPage.locator('.reveal-wrap')
   const revealVisible = await revealWrap.isVisible().catch(() => false)
-  
+
   if (revealVisible) {
     // Still on role reveal screen - need to complete the browser confirm flow
     const revealBtn = hostPage.getByTestId('reveal-role-btn')
     const revealBtnCount = await revealBtn.count()
-    
+
     if (revealBtnCount > 0) {
       const revealBtnVisible = await revealBtn.isVisible().catch(() => false)
-      
+
       if (revealBtnVisible) {
         // Click reveal button
         await revealBtn.click()
         await hostPage.waitForTimeout(300)
-        
+
         // Click confirm button
         const confirmBtn = hostPage.getByTestId('confirm-role-btn')
         try {
@@ -263,7 +297,7 @@ export async function setupGame(
       }
     }
   }
-  
+
   // Additional wait to ensure all STMP events are processed
   await hostPage.waitForTimeout(2_000)
 
@@ -277,8 +311,8 @@ export async function setupGame(
   let roleMap = getRoles(roomCode)
   const expectedRoles = (opts.roles ?? []) as RoleName[]
   for (let attempt = 0; attempt < 8; attempt++) {
-    const haveAllRequested = expectedRoles.length === 0
-      || expectedRoles.every((r) => (roleMap[r]?.length ?? 0) > 0)
+    const haveAllRequested =
+      expectedRoles.length === 0 || expectedRoles.every((r) => (roleMap[r]?.length ?? 0) > 0)
     if (Object.keys(roleMap).length > 0 && haveAllRequested) break
     await hostPage.waitForTimeout(1_000)
     roleMap = getRoles(roomCode)
@@ -299,8 +333,7 @@ export async function setupGame(
 
   // Determine which roles to open browsers for
   const desiredRoles =
-    opts.browserRoles ??
-    (['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[])
+    opts.browserRoles ?? (['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[])
 
   const pages = new Map<string, Page>()
   const botsByRole = new Map<string, BotInfo>()
@@ -329,6 +362,7 @@ export async function setupGame(
     const ctx = await browser.newContext()
     contexts.push(ctx)
     const page = await ctx.newPage()
+    attachErrorListeners(role, page, errors)
 
     // Login by setting localStorage directly
     await page.goto(`${BASE_URL}/`)
@@ -353,6 +387,8 @@ export async function setupGame(
 
   const isHostRole = (role: RoleName) => hostRole === role
 
+  let backendLogStartLine = readBackendLogLineCount()
+
   return {
     roomCode,
     gameId,
@@ -364,6 +400,12 @@ export async function setupGame(
     roleMap,
     hostRole,
     isHostRole,
+    errors,
+    resetErrors: () => resetBrowserErrors(errors),
+    markBackendLogPosition: () => {
+      backendLogStartLine = readBackendLogLineCount()
+    },
+    assertNoBackendErrors: (testInfo) => assertNoBackendErrorsSince(backendLogStartLine, testInfo),
     cleanup: async () => {
       for (const ctx of contexts) {
         try {
