@@ -26,8 +26,17 @@ import {
   waitForVotingSubPhase,
 } from './helpers/state-polling'
 import { assertNoBrowserErrors } from './helpers/error-sentinel'
+import {
+  assertGameInvariants,
+  type GameInvariantState,
+  newInvariantState,
+} from './helpers/invariants'
 
 let ctx: GameContext
+// Shared across the describe block — assertGameInvariants returns the
+// updated snapshot after each call so we can compare every step's
+// state to the previous step's. Initialized in beforeAll.
+let invariants: GameInvariantState = newInvariantState()
 
 test.describe('Game flow — multi-browser STOMP verification', () => {
   test.setTimeout(60_000) // 3 minutes for the full flow
@@ -39,6 +48,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       hasSheriff: false,
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
     })
+    invariants = newInvariantState()
   })
 
   test.afterAll(async () => {
@@ -64,6 +74,16 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // fails the test. Catches backend bugs that retried/recovered and were
     // therefore invisible to the frontend.
     await ctx.assertNoBackendErrors(testInfo)
+    // Invariant guard #4: cheap state read after every step — phase rank
+    // monotonic, alive count never grows, sub-phase belongs to parent,
+    // sheriff alive (or in BADGE_HANDOVER / GAME_OVER). The returned
+    // state threads into the next test step.
+    invariants = await assertGameInvariants(
+      ctx.hostPage,
+      ctx.gameId,
+      invariants,
+      testInfo.title,
+    )
   })
 
   // ── Test 1: Role reveal ──────────────────────────────────────────────
