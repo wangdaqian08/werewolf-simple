@@ -11,7 +11,7 @@
  */
 import {expect, test} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act, type RoleName} from './helpers/shell-runner'
+import {act, actName, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 import {readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
@@ -113,13 +113,13 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const nonHostVillager = villagerBots.find((b) => b.nick !== 'Host') ?? villagerBots[0]
     const target = nonHostVillager?.seat ?? 1
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
-    const wolfBot = wolfBots.find((b) => b.nick !== 'Host')
+    const wolfBot = wolfBots[0]
 
     if (wolfBot) {
       // Wolf is a bot — use script. Gate on WEREWOLF_PICK so the act lands
       // in the right sub-phase (Category A race guard).
       await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000)
-      act('WOLF_KILL', wolfBot.nick, { target: String(target), room: ctx.roomCode })
+      act('WOLF_KILL', actName(wolfBot), { target: String(target), room: ctx.roomCode })
     } else {
       // Wolf is the host — use browser clicks
       const targetSlot = wolfPage.locator(`.player-grid .slot-alive`).first()
@@ -150,12 +150,12 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // Gate on SEER_PICK before firing the bot-script action — without this,
     // act.sh races the Kotlin role-loop coroutine. See memory item 1 of
     // e2e-ci-vs-local-env-differences.
-    const seerBot = seerBots.find((b) => b.nick !== 'Host')
+    const seerBot = seerBots[0]
     if (seerBot) {
       // Seer is a bot — use script
       const checkTarget = guardBots[0]?.seat ?? villagerBots[1]?.seat ?? 1
       await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 15_000)
-      act('SEER_CHECK', seerBot.nick, { target: String(checkTarget), room: ctx.roomCode })
+      act('SEER_CHECK', actName(seerBot), { target: String(checkTarget), room: ctx.roomCode })
 
       const seerPage = ctx.pages.get('SEER')
       if (seerPage) {
@@ -165,7 +165,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
 
       await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 10_000)
-      act('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
+      act('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
     } else if (ctx.isHostRole('SEER')) {
       // Seer is the host — use browser clicks
       const seerPage = ctx.pages.get('SEER')!
@@ -248,7 +248,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // ── Guard ──
     // Same Category A gate as seer above — wait for backend to reach GUARD_PICK
     // before firing the bot action.
-    const guardBot = guardBots.find((b) => b.nick !== 'Host')
+    const guardBot = guardBots[0]
     if (guardBot) {
       // Guard is a bot — use script
       const guardPage = ctx.pages.get('GUARD')
@@ -258,7 +258,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         await captureSnapshot(ctx.pages, testInfo, '04-guard-ui')
       }
       await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 15_000)
-      act('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
+      act('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
     } else if (ctx.isHostRole('GUARD')) {
       // Guard is the host — use browser clicks to protect someone
       const guardPage = ctx.pages.get('GUARD')!
@@ -431,9 +431,9 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots]
       .filter((b) => b.nick !== 'Host')
 
-    for (const wb of wolfBots.filter((b) => b.nick !== 'Host')) {
+    for (const wb of wolfBots) {
       for (const tgt of allTargets) {
-        if (tryAct('WOLF_KILL', wb.nick, { target: String(tgt.seat), room: ctx.roomCode })) {
+        if (tryAct('WOLF_KILL', actName(wb), { target: String(tgt.seat), room: ctx.roomCode })) {
           wolfDone = true
           // Wait for wolf action to be processed
           await ctx.hostPage.waitForTimeout(1_000)
@@ -454,16 +454,16 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // ── Seer ──
-    const seerBot = seerBots.find((b) => b.nick !== 'Host')
+    const seerBot = seerBots[0]
     let seerDone = false
     if (seerBot) {
       // Try multiple targets in case some are dead
       for (const tgt of allTargets) {
-        if (tryAct('SEER_CHECK', seerBot.nick, { target: String(tgt.seat), room: ctx.roomCode })) {
+        if (tryAct('SEER_CHECK', actName(seerBot), { target: String(tgt.seat), room: ctx.roomCode })) {
           seerDone = true
           // Wait for SEER result to be displayed before confirming
           await ctx.hostPage.waitForTimeout(2_000)
-          tryAct('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
+          tryAct('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
           break
         }
       }
@@ -479,10 +479,10 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // ── Witch ──
-    const witchBot = witchBots.find((b) => b.nick !== 'Host')
+    const witchBot = witchBots[0]
     let witchDone = false
     if (witchBot) {
-      witchDone = tryAct('WITCH_ACT', witchBot.nick, { payload: '{"useAntidote":false}', room: ctx.roomCode })
+      witchDone = tryAct('WITCH_ACT', actName(witchBot), { payload: '{"useAntidote":false}', room: ctx.roomCode })
       // Wait for Witch action to be submitted
       await ctx.hostPage.waitForTimeout(1_000)
     }
@@ -500,10 +500,10 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // ── Guard ──
-    const guardBot = guardBots.find((b) => b.nick !== 'Host')
+    const guardBot = guardBots[0]
     let guardDone = false
     if (guardBot) {
-      guardDone = tryAct('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
+      guardDone = tryAct('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
       // Wait for guard action to be submitted
       await ctx.hostPage.waitForTimeout(1_000)
     }

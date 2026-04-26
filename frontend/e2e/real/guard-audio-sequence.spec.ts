@@ -12,7 +12,7 @@
 import {expect, test} from '@playwright/test'
 import type {Page} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act} from './helpers/shell-runner'
+import {act, actName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 
@@ -136,10 +136,10 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     const villagerBots = ctx.roleMap.VILLAGER ?? []
     const nonHostVillager = villagerBots.find((b) => b.nick !== 'Host') ?? villagerBots[0]
     const target = nonHostVillager?.seat ?? 1
-    const wolfBot = wolfBots.find((b) => b.nick !== 'Host')
+    const wolfBot = wolfBots[0]
 
     if (wolfBot) {
-      await act('WOLF_KILL', wolfBot.nick, { target: String(target), room: ctx.roomCode })
+      await act('WOLF_KILL', actName(wolfBot), { target: String(target), room: ctx.roomCode })
     } else {
       const wolfPage = ctx.pages.get('WEREWOLF')!
       await wolfPage.locator(`.player-grid .slot-alive`).first().click()
@@ -153,14 +153,14 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     // ── Step 3: Seer completes action ─────────────────────────────────────
     const seerBots = ctx.roleMap.SEER ?? []
     const guardBots = ctx.roleMap.GUARD ?? []
-    const seerBot = seerBots.find((b) => b.nick !== 'Host')
+    const seerBot = seerBots[0]
 
     if (seerBot) {
       const checkTarget = guardBots[0]?.seat ?? villagerBots[1]?.seat ?? 1
-      await act('SEER_CHECK', seerBot.nick, { target: String(checkTarget), room: ctx.roomCode })
+      await act('SEER_CHECK', actName(seerBot), { target: String(checkTarget), room: ctx.roomCode })
       // Wait for coroutine to advance to SEER_RESULT before firing confirm.
       await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
-      await act('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
+      await act('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
     } else if (ctx.isHostRole('SEER')) {
       const seerPage = ctx.pages.get('SEER')!
       await seerPage.locator('.player-grid .slot-alive').first().click()
@@ -179,9 +179,9 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     // timing). Only fall back to browser clicks when the host is the witch
     // OR when no bot has the WITCH role and a dedicated witch page exists.
     const witchBots = ctx.roleMap.WITCH ?? []
-    const witchBot = witchBots.find((b) => b.nick !== 'Host')
+    const witchBot = witchBots[0]
     if (witchBot) {
-      await act('WITCH_ACT', witchBot.nick, {
+      await act('WITCH_ACT', actName(witchBot), {
         payload: '{"useAntidote":false}',
         room: ctx.roomCode,
       })
@@ -217,9 +217,9 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       throw new Error('GUARD page missing from ctx.pages — role discovery failed; check setupGame roles opt')
     }
 
-    const guardBot = guardBots.find((b) => b.nick !== 'Host')
+    const guardBot = guardBots[0]
     if (guardBot) {
-      await act('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
+      await act('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
     } else if (ctx.isHostRole('GUARD')) {
       await guardPage!.locator('.player-grid .slot-alive').first().click()
       await guardPage!.getByTestId('guard-confirm-protect').click()
@@ -321,34 +321,34 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     const guardBots = ctx.roleMap.GUARD ?? []
     const villagerBots = ctx.roleMap.VILLAGER ?? []
 
-    const wolfBot = wolfBots.find((b) => b.nick !== 'Host')
-    const seerBot = seerBots.find((b) => b.nick !== 'Host')
-    const witchBot = witchBots.find((b) => b.nick !== 'Host')
-    const guardBot = guardBots.find((b) => b.nick !== 'Host')
+    const wolfBot = wolfBots[0]
+    const seerBot = seerBots[0]
+    const witchBot = witchBots[0]
+    const guardBot = guardBots[0]
 
     // Fire all night actions, each gated on the coroutine reaching the
     // correct sub-phase. Blind waitForTimeout(500) races the coroutine on
     // slow hardware and causes silent rejections.
     await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 15_000)
     if (wolfBot) {
-      await act('WOLF_KILL', wolfBot.nick, { target: String(villagerBots[0]?.seat ?? 1), room: ctx.roomCode })
+      await act('WOLF_KILL', actName(wolfBot), { target: String(villagerBots[0]?.seat ?? 1), room: ctx.roomCode })
     }
 
     if (seerBot) {
       await waitForSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
-      await act('SEER_CHECK', seerBot.nick, { target: String(villagerBots[1]?.seat ?? 2), room: ctx.roomCode })
+      await act('SEER_CHECK', actName(seerBot), { target: String(villagerBots[1]?.seat ?? 2), room: ctx.roomCode })
       await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
-      await act('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
+      await act('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
     }
 
     if (witchBot) {
       await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
-      await act('WITCH_ACT', witchBot.nick, { payload: JSON.stringify({ useAntidote: false, usePoison: false }), room: ctx.roomCode })
+      await act('WITCH_ACT', actName(witchBot), { payload: JSON.stringify({ useAntidote: false, usePoison: false }), room: ctx.roomCode })
     }
 
     if (guardBot) {
       await waitForSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
-      await act('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
+      await act('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
     }
 
     // Wait for day transition

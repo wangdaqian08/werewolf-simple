@@ -3,7 +3,7 @@
  */
 import {test} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act} from './helpers/shell-runner'
+import {act, actName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 
@@ -47,11 +47,11 @@ test.describe('Dead Role Audio Flow', () => {
     const nonHostVillager = villagerBots.find((b) => b.nick !== 'Host') ?? villagerBots[0]
     const target = nonHostVillager?.seat ?? 1
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
-    const wolfBot = wolfBots.find((b) => b.nick !== 'Host')
+    const wolfBot = wolfBots[0]
 
     if (wolfBot) {
-      // Wolf is a bot — use script
-      await act('WOLF_KILL', wolfBot.nick, { target: String(target), room: ctx.roomCode })
+      // Wolf is a bot or host — use script (actName maps Host → 'HOST' for act.sh)
+      await act('WOLF_KILL', actName(wolfBot), { target: String(target), room: ctx.roomCode })
     } else {
       // Wolf is the host — use browser clicks
       const wolfPage = ctx.pages.get('WEREWOLF')

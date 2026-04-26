@@ -15,7 +15,7 @@
  */
 import {expect, type Page, test} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act, type RoleName, sheriff} from './helpers/shell-runner'
+import {act, actName, type RoleName, sheriff} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 import {
@@ -369,10 +369,10 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   const aliveIds = await readAlivePlayerIds(hostPage, gameId)
   const isAlive = (uid: string): boolean => aliveIds.size === 0 || aliveIds.has(uid)
 
-  const wolfBot = wolfBots.find((b) => b.nick !== 'Host' && isAlive(b.userId))
-  const seerBot = seerBots.find((b) => b.nick !== 'Host' && isAlive(b.userId))
-  const witchBot = witchBots.find((b) => b.nick !== 'Host' && isAlive(b.userId))
-  const guardBot = guardBots.find((b) => b.nick !== 'Host' && isAlive(b.userId))
+  const wolfBot = wolfBots.find((b) => isAlive(b.userId))
+  const seerBot = seerBots.find((b) => isAlive(b.userId))
+  const witchBot = witchBots.find((b) => isAlive(b.userId))
+  const guardBot = guardBots.find((b) => isAlive(b.userId))
 
   // Verify WOLF_KILL target is alive; if not, re-target any alive non-wolf
   // non-host seat. Avoids the "villagerSeats rotation hands wolves an already
@@ -386,7 +386,7 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   // ── WEREWOLF_PICK ──
   await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 20_000)
   if (wolfBot) {
-    tryAct('WOLF_KILL', wolfBot.nick, { target: String(resolvedTargetSeat), room: ctx.roomCode })
+    tryAct('WOLF_KILL', actName(wolfBot), { target: String(resolvedTargetSeat), room: ctx.roomCode })
   } else {
     // host is the sole alive wolf — drive via host UI
     await hostPage.locator('.player-grid .slot-alive').first().click().catch(() => {})
@@ -405,10 +405,10 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
       const checkSeat = candidateBot && candidateBot.userId !== seerBot.userId
         ? candidateSeat
         : ctx.allBots.find((b) => b.userId !== seerBot.userId && b.nick !== 'Host' && isAlive(b.userId))?.seat ?? candidateSeat
-      tryAct('SEER_CHECK', seerBot.nick, { target: String(checkSeat), room: ctx.roomCode })
+      tryAct('SEER_CHECK', actName(seerBot), { target: String(checkSeat), room: ctx.roomCode })
       // SEER_RESULT next
       await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
-      tryAct('SEER_CONFIRM', seerBot.nick, { room: ctx.roomCode })
+      tryAct('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
     }
   }
 
@@ -416,7 +416,7 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   if (witchBots.length > 0) {
     const reached = await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
     if (reached && witchBot) {
-      tryAct('WITCH_ACT', witchBot.nick, {
+      tryAct('WITCH_ACT', actName(witchBot), {
         payload: '{"useAntidote":false}',
         room: ctx.roomCode,
       })
@@ -427,7 +427,7 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   if (guardBots.length > 0) {
     const reached = await waitForSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
     if (reached && guardBot) {
-      tryAct('GUARD_SKIP', guardBot.nick, { room: ctx.roomCode })
+      tryAct('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
     }
   }
 }
