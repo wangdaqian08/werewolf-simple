@@ -16,6 +16,8 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 class GamePhasePipeline(
@@ -78,12 +80,33 @@ class GamePhasePipeline(
         context.game.phase = GamePhase.DAY_VOTING
         context.game.subPhase = VotingSubPhase.VOTING.name
         gameRepository.save(context.game)
-        
-        log.info("[dayAdvance] Successfully advanced to VOTING phase")
-        stompPublisher.broadcastGame(
-            context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
-        )
+
+        log.info("[dayAdvance] Successfully advanced to VOTING phase (in-memory; not yet committed)")
+
+        // Defer the STOMP broadcast to afterCommit so the frontend doesn't
+        // observe phase=DAY_VOTING and fire a follow-up SUBMIT_VOTE before
+        // the dayAdvance UPDATE has actually committed. Without this, on a
+        // slow CI runner the host's SUBMIT_VOTE arrives at the backend
+        // BEFORE the dayAdvance commit hits the DB; submitVote's freshly
+        // loaded GameContext still sees phase=DAY_DISCUSSION and rejects
+        // with "Not in voting phase" — the exact failure mode reproduced
+        // in CI run 24961013601, shard 1, game-flow test 7.
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() {
+                    log.info("[dayAdvance] afterCommit fired game=${context.gameId} → broadcasting PhaseChanged")
+                    stompPublisher.broadcastGame(
+                        context.gameId,
+                        DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
+                    )
+                }
+            })
+        } else {
+            stompPublisher.broadcastGame(
+                context.gameId,
+                DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
+            )
+        }
         return GameActionResult.Success()
     }
 

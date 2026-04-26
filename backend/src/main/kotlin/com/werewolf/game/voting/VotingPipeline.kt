@@ -17,6 +17,7 @@ import com.werewolf.repository.VoteRepository
 import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronizationManager
@@ -35,10 +36,21 @@ class VotingPipeline(
     private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: ActionLogService,
 ) {
+    private val log = LoggerFactory.getLogger(VotingPipeline::class.java)
+
     @Transactional
     fun submitVote(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.DAY_VOTING)
+        if (context.game.phase != GamePhase.DAY_VOTING) {
+            // DIAGNOSTIC: compare ctx vs fresh DB read to expose stale-context vs uncommitted-tx
+            val freshGame = gameRepository.findById(context.gameId).orElse(null)
+            log.warn(
+                "[submitVote] phase mismatch: ctx.phase={} ctx.subPhase={} freshDb.phase={} freshDb.subPhase={} actor={} game={}",
+                context.game.phase, context.game.subPhase,
+                freshGame?.phase, freshGame?.subPhase,
+                request.actorUserId, context.gameId,
+            )
             return GameActionResult.Rejected("Not in voting phase")
+        }
         if (context.game.subPhase !in setOf(VotingSubPhase.VOTING.name, VotingSubPhase.RE_VOTING.name))
             return GameActionResult.Rejected("Voting is not open")
 
