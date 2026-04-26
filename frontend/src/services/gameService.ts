@@ -12,7 +12,9 @@ export const gameService = {
       const { data } = await http.post<GameActionResponse>('/game/action', req)
       return data
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { status?: number; data?: { success?: boolean; error?: string } } }
+      const axiosErr = err as {
+        response?: { status?: number; data?: { success?: boolean; error?: string } }
+      }
       if (axiosErr.response?.status === 400 && axiosErr.response.data) {
         return { success: false, message: axiosErr.response.data.error }
       }
