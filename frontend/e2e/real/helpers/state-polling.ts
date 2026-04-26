@@ -185,3 +185,116 @@ export async function readUnvotedAlivePlayerIds(
 export async function readHostUserId(hostPage: Page): Promise<string | null> {
   return hostPage.evaluate(() => localStorage.getItem('userId'))
 }
+
+/**
+ * Generic effect-poll helper. Calls `predicate()` every `pollMs` until it
+ * resolves true OR the deadline expires. Throws on timeout with the
+ * supplied `description` so the failure log says what we were waiting on.
+ *
+ * Use this in place of `page.waitForTimeout(N)` whenever the wait is for
+ * a backend-state effect that has no DOM-locator equivalent — e.g.
+ * "until userId X is in votedPlayerIds", "until the action_log row for
+ * SEER_CHECK has been written".
+ *
+ * `timeoutMs` is scaled 2× automatically on CI.
+ */
+export async function waitForCondition(
+  predicate: () => Promise<boolean>,
+  description: string,
+  timeoutMs = 10_000,
+  pollMs = 200,
+): Promise<void> {
+  const deadline = Date.now() + scale(timeoutMs)
+  let lastErr: unknown = undefined
+  while (Date.now() < deadline) {
+    try {
+      if (await predicate()) return
+    } catch (e) {
+      lastErr = e
+    }
+    await new Promise((r) => setTimeout(r, pollMs))
+  }
+  const tail = lastErr ? ` (last predicate error: ${(lastErr as Error).message})` : ''
+  throw new Error(`waitForCondition timed out after ${scale(timeoutMs)}ms: ${description}${tail}`)
+}
+
+/**
+ * Block until userId `userId` has registered a vote in the current voting
+ * round. Used after a single-player vote click to confirm the backend
+ * received it before the next action fires. Fails after `timeoutMs`.
+ */
+export async function waitForVoteRegistered(
+  hostPage: Page,
+  gameId: string,
+  userId: string,
+  timeoutMs = 5_000,
+): Promise<void> {
+  await waitForCondition(
+    async () => {
+      const unvoted = await readUnvotedAlivePlayerIds(hostPage, gameId)
+      // userId not in `unvoted` ⇒ they have voted (or are not eligible)
+      return !unvoted.has(userId)
+    },
+    `vote registered for userId=${userId}`,
+    timeoutMs,
+  )
+}
+
+/**
+ * Block until every userId in `expectedVoters` has registered a vote.
+ * Used after a SUBMIT_VOTE fan-out so the test does not race the
+ * voting-reveal step.
+ */
+export async function waitForAllVotesRegistered(
+  hostPage: Page,
+  gameId: string,
+  expectedVoters: string[],
+  timeoutMs = 10_000,
+): Promise<void> {
+  const expected = new Set(expectedVoters)
+  await waitForCondition(
+    async () => {
+      const unvoted = await readUnvotedAlivePlayerIds(hostPage, gameId)
+      for (const id of expected) {
+        if (unvoted.has(id)) return false
+      }
+      return true
+    },
+    `all ${expectedVoters.length} expected voters have voted`,
+    timeoutMs,
+  )
+}
+
+/**
+ * Block until the night sub-phase is anything OTHER than `fromSubPhase`
+ * (or the game has left NIGHT entirely). Use after firing a role-action
+ * to confirm the role-loop coroutine advanced. Returns the new sub-phase
+ * (or `null` if the phase changed).
+ */
+export async function waitForNightSubPhaseChange(
+  hostPage: Page,
+  gameId: string,
+  fromSubPhase: string,
+  timeoutMs = 8_000,
+): Promise<string | null> {
+  let result: string | null = null
+  await waitForCondition(
+    async () => {
+      const state = await fetchGameState(hostPage, gameId)
+      if (!state) return false
+      if (state.phase !== 'NIGHT') {
+        result = null
+        return true
+      }
+      const sp = state.nightPhase?.subPhase ?? ''
+      if (sp && sp !== fromSubPhase) {
+        result = sp
+        return true
+      }
+      return false
+    },
+    `night sub-phase to advance past ${fromSubPhase}`,
+    timeoutMs,
+  )
+  return result
+}

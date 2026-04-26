@@ -9,7 +9,7 @@
  *   - STOMP event sent → UI not updated in other browsers
  *   - Phase transition → browser stuck on old phase
  */
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 import { type GameContext, setupGame } from './helpers/multi-browser'
 import { act, actName, type RoleName } from './helpers/shell-runner'
 import { verifyAllBrowsersPhase } from './helpers/assertions'
@@ -17,7 +17,13 @@ import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-s
 import {
   readHostUserId,
   readUnvotedAlivePlayerIds,
+  waitForAllVotesRegistered,
+  waitForCondition,
   waitForNightSubPhase,
+  waitForNightSubPhaseChange,
+  waitForPhase,
+  waitForVoteRegistered,
+  waitForVotingSubPhase,
 } from './helpers/state-polling'
 import { assertNoBrowserErrors } from './helpers/error-sentinel'
 
@@ -79,7 +85,6 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         const revealBtnVisible = await revealBtn.isVisible().catch(() => false)
         expect(revealBtnVisible).toBe(true)
         await revealBtn.click()
-        await page.waitForTimeout(300)
         const gotItBtn = page.getByTestId('confirm-role-btn')
         await gotItBtn.waitFor({ state: 'visible', timeout: 2_000 })
         await gotItBtn.click()
@@ -183,38 +188,46 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const usePoisonBtn = witchPage.getByTestId('use-poison')
     if (await usePoisonBtn.isVisible().catch(() => false)) {
       await usePoisonBtn.click()
-      await witchPage.waitForTimeout(500)
+      // Wait for the poison grid to render — use-poison click should
+      // surface poison-mode-cancel and the small target grid.
+      const cancelBtn = witchPage.getByTestId('poison-mode-cancel')
+      await expect(cancelBtn).toBeVisible({ timeout: 5_000 })
 
-      // Screenshot: poison target selection grid shown
       await captureSnapshot(ctx.pages, testInfo, '04-witch-poison-select')
 
-      // Select a target — poison grid uses 'alive' variant (slot-alive class)
       const poisonTarget = witchPage.locator('.player-grid-sm .slot-alive').first()
       if (await poisonTarget.isVisible().catch(() => false)) {
         await poisonTarget.click()
-        await witchPage.waitForTimeout(300)
+        // Confirm button only enables after a target is selected — its
+        // enabled state proves the click was registered.
+        await expect(witchPage.getByTestId('witch-poison-confirm')).toBeEnabled({
+          timeout: 5_000,
+        })
 
-        // Screenshot: poison target selected (before confirm)
         await captureSnapshot(ctx.pages, testInfo, '04-witch-poison-selected')
 
-        // Cancel — we don't actually want to poison in round 1
-        const cancelBtn = witchPage.getByTestId('poison-mode-cancel')
+        // Cancel — we don't actually want to poison in round 1.
         await cancelBtn.click()
-        await witchPage.waitForTimeout(300)
+        // Cancelling exits poison mode — use-poison button reappears.
+        await expect(usePoisonBtn).toBeVisible({ timeout: 5_000 })
       }
     }
 
     // -- Antidote decision --
     const useAntidoteBtn = witchPage.getByTestId('witch-antidote')
     if (await useAntidoteBtn.isVisible().catch(() => false)) {
-      // Screenshot: antidote choice visible
       await captureSnapshot(ctx.pages, testInfo, '04-witch-antidote-choice')
 
-      // Use antidote to save the attacked player
       await useAntidoteBtn.click()
-      await witchPage.waitForTimeout(500)
+      // After antidote click, the antidote section is consumed — the
+      // skip-poison or witch-skip button should surface as the next
+      // decision. Wait for either rather than for a fixed 500ms.
+      await expect(
+        witchPage.locator(
+          '[data-testid="switch-pass-poison"], [data-testid="witch-skip"]',
+        ),
+      ).toBeVisible({ timeout: 5_000 })
 
-      // Screenshot: after using antidote
       await captureSnapshot(ctx.pages, testInfo, '04-witch-after-antidote')
     }
 
@@ -222,16 +235,19 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const skipPoisonBtn = witchPage.getByTestId('switch-pass-poison')
     if (await skipPoisonBtn.isVisible().catch(() => false)) {
       await skipPoisonBtn.click()
-      await witchPage.waitForTimeout(500)
-
-      // Screenshot: after skipping poison (witch turn complete)
+      // Skipping poison ends the witch turn — wait for the night
+      // sub-phase to advance past WITCH_ACT (proves the backend
+      // received the action) before continuing.
+      await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
       await captureSnapshot(ctx.pages, testInfo, '04-witch-after-action')
     }
 
-    // If no items at all, click done
+    // If no items at all (rare: both antidote+poison already consumed
+    // in earlier rounds), click the done button.
     const doneBtn = witchPage.getByTestId('witch-skip')
     if (await doneBtn.isVisible().catch(() => false)) {
       await doneBtn.click()
+      await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
     }
 
     // ── Guard ── DOM-driven via guard's browser. The UI has no "skip" button
@@ -266,19 +282,17 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // Click reveal — verify all browsers see the kill banner
     await revealBtn.click()
 
-    // All browsers should see the result (kill banner or "peaceful night")
-    for (const [_, page] of Array.from(ctx.pages.entries())) {
-      // Wait for the button to change or kill info to appear
-      await page.waitForTimeout(2_000)
-      // After reveal, the sub-phase changes to RESULT_REVEALED
-      // Either a kill banner or "平安夜 / Peaceful night" should be visible
-      const hasContent = await page
-        .locator('.day-wrap')
-        .first()
-        .isVisible()
-        .catch(() => false)
-      expect(hasContent).toBe(true)
-    }
+    // All browsers should see a result banner (.banner is the parent class
+    // shared by the kill banner and the peaceful-night banner; both only
+    // render after dayPhase.subPhase becomes RESULT_REVEALED). Wait in
+    // parallel so a single laggy STOMP delivery does not serialize.
+    await Promise.all(
+      Array.from(ctx.pages.values()).map((page) =>
+        expect(page.locator('.day-wrap .banner').first()).toBeVisible({
+          timeout: 10_000,
+        }),
+      ),
+    )
 
     await captureSnapshot(ctx.pages, testInfo, '05-day-reveal')
   })
@@ -304,13 +318,19 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
 
   test('7. Voting — players vote, tally revealed, continue to night', async ({}, testInfo) => {
     const hostPage = ctx.hostPage
+    const hostId = await readHostUserId(ctx.hostPage)
 
     // Host votes FIRST via browser — abstain
     // (Must do this BEFORE bot votes, since act() now includes host in "all" players)
     const abstainBtn = hostPage.locator('.skip-btn').first()
     await abstainBtn.waitFor({ state: 'visible', timeout: 10_000 })
     await abstainBtn.click()
-    await hostPage.waitForTimeout(500)
+    // Confirm the abstain registered before bots fan out — otherwise the
+    // backend may still see the host as "unvoted" and accept the bot
+    // SUBMIT_VOTE that act.sh fans out on the host's behalf.
+    if (hostId) {
+      await waitForVoteRegistered(ctx.hostPage, ctx.gameId, hostId, 5_000)
+    }
 
     // Find a wolf target to vote for (use the first alive wolf bot)
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
@@ -322,18 +342,23 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // iterate every bot (plus host) and the redundant attempts on the
     // already-voted host would burn act.sh's 3× retry quota on rejection.
     const unvoted = await readUnvotedAlivePlayerIds(ctx.hostPage, ctx.gameId)
-    const hostId = await readHostUserId(ctx.hostPage)
     const voteOpts: { target?: string; room: string } = wolfTarget
       ? { target: String(wolfTarget.seat), room: ctx.roomCode }
       : { room: ctx.roomCode }
+    const expectedVoterIds: string[] = []
     for (const bot of ctx.allBots) {
       if (bot.nick === 'Host' || bot.userId === hostId) continue
       if (!unvoted.has(bot.userId)) continue
       act('SUBMIT_VOTE', bot.nick, voteOpts)
+      expectedVoterIds.push(bot.userId)
     }
 
-    // Wait for all votes to register
-    await hostPage.waitForTimeout(2_000)
+    // Wait until every fan-out vote is registered before revealing the
+    // tally — without this, the reveal can race the last vote and produce
+    // an inconsistent count.
+    if (expectedVoterIds.length > 0) {
+      await waitForAllVotesRegistered(ctx.hostPage, ctx.gameId, expectedVoterIds, 10_000)
+    }
 
     // Host reveals tally via DOM — exercises the host's reveal button
     // wiring + STOMP fan-out, not just the API path.
@@ -341,22 +366,27 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     await revealTallyBtn.waitFor({ state: 'visible', timeout: 10_000 })
     await revealTallyBtn.click()
 
-    // Wait for the UI to update — could be "继续", "进入夜晚", or a hunter/badge action
-    // The reveal may transition through multiple sub-phases
-    await hostPage.waitForTimeout(3_000)
+    // The reveal click should advance the voting sub-phase to VOTE_RESULT
+    // (or HUNTER_SHOOT / BADGE_HANDOVER if the eliminated player triggers
+    // those). Either way, the sub-phase changes from VOTING.
+    await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, 'VOTE_RESULT', 6_000)
 
     await captureSnapshot(ctx.pages, testInfo, '07-vote-tally')
 
     // Host continues via DOM (auto-advance may have already fired the
     // transition — only click if the button is still present).
     const continueBtn = hostPage.getByTestId('voting-continue')
-    if (await continueBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    const continueVisible = await continueBtn
+      .waitFor({ state: 'visible', timeout: 2_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (continueVisible) {
       await continueBtn.click()
     }
 
-    // Should transition to NIGHT for next round (or GAME_OVER)
-    await hostPage.waitForTimeout(3_000)
-
+    // Should transition to NIGHT for next round (or GAME_OVER). The
+    // verifyAllBrowsersPhase below has its own internal wait — no
+    // separate buffer needed here.
     const isGameOver = hostPage.url().includes('/result/')
     if (!isGameOver) {
       await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 15_000)
@@ -407,19 +437,32 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       (b) => b.nick !== 'Host',
     )
 
+    // Locator visibility helper — Playwright's isVisible() does NOT retry,
+    // so wrapping waitFor lets us return a boolean after a real wait.
+    const isVisibleSoon = async (page: Page, testId: string, timeoutMs = 5_000) =>
+      page
+        .getByTestId(testId)
+        .waitFor({ state: 'visible', timeout: timeoutMs })
+        .then(() => true)
+        .catch(() => false)
+
     // ── Wolf kill — DOM-first via wolf browser ──
     const wolfPage = ctx.pages.get('WEREWOLF')
     let wolfDone = false
-    if (wolfPage) {
-      const wolfConfirm = wolfPage.getByTestId('wolf-confirm-kill')
-      if (await wolfConfirm.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        const targetSlot = wolfPage.locator('.player-grid .slot-alive').first()
-        if (await targetSlot.isVisible({ timeout: 2_000 }).catch(() => false)) {
-          await targetSlot.click()
-          await wolfConfirm.click()
-          wolfDone = true
-          await ctx.hostPage.waitForTimeout(1_000)
-        }
+    if (wolfPage && (await isVisibleSoon(wolfPage, 'wolf-confirm-kill'))) {
+      const targetSlot = wolfPage.locator('.player-grid .slot-alive').first()
+      const slotReady = await targetSlot
+        .waitFor({ state: 'visible', timeout: 2_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (slotReady) {
+        await targetSlot.click()
+        await wolfPage.getByTestId('wolf-confirm-kill').click()
+        wolfDone = true
+        // Confirm backend processed the kill before moving to seer/witch
+        // — otherwise the sub-phase polling for the next role can race
+        // against the wolf's coroutine commit.
+        await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 8_000)
       }
     }
     if (!wolfDone) {
@@ -428,7 +471,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         for (const tgt of allTargets) {
           if (tryAct('WOLF_KILL', actName(wb), { target: String(tgt.seat), room: ctx.roomCode })) {
             wolfDone = true
-            await ctx.hostPage.waitForTimeout(1_000)
+            await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 8_000)
             break
           }
         }
@@ -439,17 +482,20 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // ── Seer — DOM-first via seer browser ──
     const seerPage = ctx.pages.get('SEER')
     let seerDone = false
-    if (seerPage) {
-      const seerCheck = seerPage.getByTestId('seer-check')
-      if (await seerCheck.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        const targetSlot = seerPage.locator('.player-grid .slot-alive').first()
-        if (await targetSlot.isVisible({ timeout: 2_000 }).catch(() => false)) {
-          await targetSlot.click()
-          await seerCheck.click()
-          await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-          await seerPage.getByTestId('seer-done').click()
-          seerDone = true
-        }
+    if (seerPage && (await isVisibleSoon(seerPage, 'seer-check'))) {
+      const targetSlot = seerPage.locator('.player-grid .slot-alive').first()
+      const slotReady = await targetSlot
+        .waitFor({ state: 'visible', timeout: 2_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (slotReady) {
+        await targetSlot.click()
+        await seerPage.getByTestId('seer-check').click()
+        await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
+        await seerPage.getByTestId('seer-done').click()
+        // Seer-done advances backend from SEER_RESULT to next role.
+        await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 8_000)
+        seerDone = true
       }
     }
     if (!seerDone) {
@@ -457,8 +503,11 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       for (const sb of seerBots) {
         for (const tgt of allTargets) {
           if (tryAct('SEER_CHECK', actName(sb), { target: String(tgt.seat), room: ctx.roomCode })) {
-            await ctx.hostPage.waitForTimeout(2_000)
+            // Backend transitions SEER_PICK → SEER_RESULT after CHECK,
+            // then SEER_RESULT → next sub-phase after CONFIRM.
+            await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 5_000)
             tryAct('SEER_CONFIRM', actName(sb), { room: ctx.roomCode })
+            await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 8_000)
             seerDone = true
             break
           }
@@ -471,23 +520,42 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const witchPage = ctx.pages.get('WITCH')
     let witchDone = false
     if (witchPage) {
-      const witchSection = witchPage.locator('.w-section').first()
-      if (await witchSection.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      const sectionReady = await witchPage
+        .locator('.w-section')
+        .first()
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (sectionReady) {
         const passAntidote = witchPage.getByTestId('switch-pass-antidote')
-        if (await passAntidote.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        if (
+          await passAntidote
+            .waitFor({ state: 'visible', timeout: 2_000 })
+            .then(() => true)
+            .catch(() => false)
+        ) {
           await passAntidote.click()
-          await witchPage.waitForTimeout(500)
         }
         const passPoison = witchPage.getByTestId('switch-pass-poison')
-        if (await passPoison.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        if (
+          await passPoison
+            .waitFor({ state: 'visible', timeout: 2_000 })
+            .then(() => true)
+            .catch(() => false)
+        ) {
           await passPoison.click()
         }
         const witchSkip = witchPage.getByTestId('witch-skip')
-        if (await witchSkip.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        if (
+          await witchSkip
+            .waitFor({ state: 'visible', timeout: 2_000 })
+            .then(() => true)
+            .catch(() => false)
+        ) {
           await witchSkip.click()
         }
+        await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
         witchDone = true
-        await ctx.hostPage.waitForTimeout(1_000)
       }
     }
     if (!witchDone) {
@@ -496,8 +564,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         if (
           tryAct('WITCH_ACT', actName(wb), { payload: '{"useAntidote":false}', room: ctx.roomCode })
         ) {
+          await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
           witchDone = true
-          await ctx.hostPage.waitForTimeout(1_000)
           break
         }
       }
@@ -506,35 +574,36 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // ── Guard — DOM-first via guard browser ──
     const guardPage = ctx.pages.get('GUARD')
     let guardDone = false
-    if (guardPage) {
-      const guardConfirm = guardPage.getByTestId('guard-confirm-protect')
-      if (await guardConfirm.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        const targetSlot = guardPage.locator('.player-grid .slot-alive').first()
-        if (await targetSlot.isVisible({ timeout: 2_000 }).catch(() => false)) {
-          await targetSlot.click()
-          await guardConfirm.click()
-          guardDone = true
-          await ctx.hostPage.waitForTimeout(1_000)
-        }
+    if (guardPage && (await isVisibleSoon(guardPage, 'guard-confirm-protect'))) {
+      const targetSlot = guardPage.locator('.player-grid .slot-alive').first()
+      const slotReady = await targetSlot
+        .waitFor({ state: 'visible', timeout: 2_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (slotReady) {
+        await targetSlot.click()
+        await guardPage.getByTestId('guard-confirm-protect').click()
+        await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 8_000)
+        guardDone = true
       }
     }
     if (!guardDone) {
       // Browser-guard is dead. Try API on remaining guard bots (skip protect).
       for (const gb of guardBots) {
         if (tryAct('GUARD_SKIP', actName(gb), { room: ctx.roomCode })) {
+          await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 8_000)
           guardDone = true
-          await ctx.hostPage.waitForTimeout(1_000)
           break
         }
       }
     }
 
-    // After night, should transition to DAY (or GAME_OVER)
-    // Wait longer for backend to process all actions and trigger phase transition
-    await ctx.hostPage.waitForTimeout(10_000)
-
+    // After night, the backend transitions NIGHT → DAY_PENDING → DAY_DISCUSSION.
+    // Poll the backend rather than guess a 10-second buffer; if the game
+    // ended (GAME_OVER), the page URL will already be /result/...
     const isOver = ctx.hostPage.url().includes('/result/')
     if (!isOver) {
+      await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_DISCUSSION', 20_000)
       await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000)
     }
 
