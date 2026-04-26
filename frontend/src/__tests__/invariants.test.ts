@@ -8,7 +8,6 @@ import {
   assertGameInvariantsOnState,
   computePhaseRank,
   newInvariantState,
-  type GameInvariantState,
   type MinimalGameState,
 } from '../../e2e/real/helpers/invariants'
 
