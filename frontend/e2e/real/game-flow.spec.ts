@@ -19,6 +19,7 @@ import {
   readUnvotedAlivePlayerIds,
   waitForNightSubPhase,
 } from './helpers/state-polling'
+import { assertNoBrowserErrors } from './helpers/error-sentinel'
 
 let ctx: GameContext
 
@@ -38,9 +39,20 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     await ctx?.cleanup()
   })
 
+  // Reset the per-test error/log buffers BEFORE each test so the post-test
+  // assertions only see what happened during this test's window.
+  test.beforeEach(async () => {
+    ctx?.resetErrors()
+  })
+
   test.afterEach(async ({}, testInfo) => {
     if (testInfo.status === 'failed' && ctx?.pages) {
       await attachCompositeOnFailure(ctx.pages, testInfo)
+    }
+    // Sentinel #3: any uncaught JS exception or 5xx in any browser fails
+    // the test, even if the gameplay-level assertions otherwise passed.
+    if (ctx) {
+      await assertNoBrowserErrors(ctx.errors, testInfo)
     }
   })
 

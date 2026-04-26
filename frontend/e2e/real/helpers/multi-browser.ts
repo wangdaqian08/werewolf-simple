@@ -23,6 +23,7 @@ import {
     type RoleMap,
     type RoleName,
 } from './shell-runner'
+import {attachErrorListeners, type BrowserError, resetBrowserErrors} from './error-sentinel'
 
 const BASE_URL = 'http://localhost:5174'
 
@@ -45,6 +46,14 @@ export interface GameContext {
   hostRole: RoleName | null
   /** Roles where the host IS the player (use browser, not scripts) */
   isHostRole: (role: RoleName) => boolean
+  /**
+   * Per-test browser-error buffer. Populated by the page sentinels on
+   * `pageerror` and `response` (5xx). Reset between tests via `resetErrors()`;
+   * asserted in afterEach via `assertNoBrowserErrors()`.
+   */
+  errors: BrowserError[]
+  /** Clear the errors buffer; call in beforeEach for a clean test window. */
+  resetErrors: () => void
   /** Clean up all browser contexts */
   cleanup: () => Promise<void>
 }
@@ -81,9 +90,12 @@ export async function setupGame(
 
   // ── Step 1: Host logs in and creates room ──────────────────────────────
 
+  const errors: BrowserError[] = []
+
   const hostContext = await browser.newContext()
   contexts.push(hostContext)
   const hostPage = await hostContext.newPage()
+  attachErrorListeners('HOST', hostPage, errors)
 
   await hostPage.goto(`${BASE_URL}/`)
   await hostPage.evaluate(() => localStorage.clear())
@@ -329,6 +341,7 @@ export async function setupGame(
     const ctx = await browser.newContext()
     contexts.push(ctx)
     const page = await ctx.newPage()
+    attachErrorListeners(role, page, errors)
 
     // Login by setting localStorage directly
     await page.goto(`${BASE_URL}/`)
@@ -364,6 +377,8 @@ export async function setupGame(
     roleMap,
     hostRole,
     isHostRole,
+    errors,
+    resetErrors: () => resetBrowserErrors(errors),
     cleanup: async () => {
       for (const ctx of contexts) {
         try {
