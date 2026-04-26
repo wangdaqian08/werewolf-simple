@@ -4,9 +4,12 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# Install deps first for cache-friendly layers.
+# Install deps first for cache-friendly layers. The npm cache mount persists
+# the download cache across image builds on the same host — `npm ci` without
+# it re-downloads every package from the registry every build.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 # Copy sources and build. `npm run build` = vue-tsc -b && vite build → dist/.
 COPY . .

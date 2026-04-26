@@ -75,6 +75,85 @@ function stripAnsi(str: string): string {
   return str.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
 }
 
+/**
+ * Best-effort enrichment for an act.sh rejection. When the backend rejects
+ * an action ("Target not found or dead", "Not in WITCH_ACT sub-phase", …)
+ * the user typically can't tell from the response WHY without manually
+ * cross-referencing roleMap, alive flags, and current sub-phase.
+ *
+ * This pulls /api/game/<id>/state via curl using the first bot's token
+ * and formats the actor's + target's alive/seat info plus the current
+ * phase/sub-phase. Returns an empty string on any failure so we never
+ * lose the original rejection log.
+ */
+function describeRejectionContext(
+  roomCode: string | undefined,
+  actor: string | undefined,
+  target: string | undefined,
+): string {
+  if (!roomCode) return ''
+  try {
+    const filePath = path.join(STATE_DIR, `werewolf-${roomCode.toUpperCase()}.json`)
+    const state: StateFile & { gameId?: number } = JSON.parse(readFileSync(filePath, 'utf-8'))
+    const token = state.bots?.[0]?.token
+    const gameId = state.gameId
+    if (!token || !gameId) return ''
+    const base = process.env.BACKEND_BASE ?? 'http://localhost:8080/api'
+    const cmd = `curl -s -m 5 -H 'Authorization: Bearer ${token}' '${base}/game/${gameId}/state'`
+    const raw = execSync(cmd, { encoding: 'utf-8', timeout: 6_000 })
+    const body = JSON.parse(raw) as {
+      phase?: string
+      subPhase?: string
+      nightPhase?: { subPhase?: string; dayNumber?: number }
+      players?: Array<{
+        seatIndex?: number
+        nickname?: string
+        userId?: string
+        isAlive?: boolean
+        role?: string
+      }>
+    }
+    const phase = body.phase ?? '?'
+    const sub = body.nightPhase?.subPhase ?? body.subPhase ?? '-'
+    const day = body.nightPhase?.dayNumber ?? '?'
+
+    const findPlayer = (id: string | undefined) => {
+      if (!id || !body.players) return undefined
+      // Try nickname (case-insensitive substring), then seat number, then userId
+      const nickHit = body.players.find(
+        (p) => p.nickname && p.nickname.toLowerCase() === id.toLowerCase(),
+      )
+      if (nickHit) return nickHit
+      const seat = parseInt(id, 10)
+      if (!isNaN(seat)) {
+        const seatHit = body.players.find((p) => p.seatIndex === seat)
+        if (seatHit) return seatHit
+      }
+      return body.players.find((p) => p.userId === id)
+    }
+
+    const fmt = (
+      label: string,
+      id: string | undefined,
+      p: ReturnType<typeof findPlayer>,
+    ) =>
+      p
+        ? `  ${label}: ${p.nickname} (seat ${p.seatIndex}, alive=${p.isAlive ? 'yes' : 'NO'}${p.role ? `, role=${p.role}` : ''})`
+        : `  ${label}: <${id ?? '-'}> not found in roster`
+
+    const lines = [
+      `  state:  phase=${phase}, sub=${sub}, day=${day}`,
+      fmt('actor ', actor, findPlayer(actor)),
+    ]
+    if (target !== undefined) {
+      lines.push(fmt('target', target, findPlayer(target)))
+    }
+    return '\n' + lines.join('\n')
+  } catch {
+    return ''
+  }
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /** Join N bots to the room and optionally mark them ready. */
@@ -127,11 +206,15 @@ export function act(
     output = stripAnsi(run(cmd))
     const rejected = /reject|Rejected/.test(output)
     if (!rejected) return output
+    // Enriched rejection log: include actor + target alive/seat status and
+    // current phase/sub-phase. Cuts the "Target not found or dead" mystery
+    // down to "target was already killed in N1" without manual digging.
+    const context = describeRejectionContext(opts?.room, player, opts?.target)
     // eslint-disable-next-line no-console
     console.warn(
       `[act rejected] attempt ${attempt}/${maxAttempts} action=${action} ` +
         `player=${player ?? '-'} target=${opts?.target ?? '-'} ` +
-        `room=${opts?.room ?? '-'}\noutput:\n${output}`,
+        `room=${opts?.room ?? '-'}${context}\noutput:\n${output}`,
     )
     if (attempt < maxAttempts) {
       // Synchronous sleep — act() is sync and changing it to async would

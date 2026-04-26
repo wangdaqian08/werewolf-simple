@@ -16,12 +16,21 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {captureSnapshot} from './helpers/composite-screenshot'
+import {attachBackendLogOnFailure} from './helpers/backend-log'
 import {readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
 
 let ctx: GameContext
 
 test.describe('Idiot flow — multi-browser STOMP verification', () => {
   test.setTimeout(60_000) // 3 minutes for the full flow
+
+  // Each test in this file constructs its own localCtx via setupGame inside
+  // the test body — there's no shared `ctx` to call attachCompositeOnFailure
+  // against. Attach backend log directly so failures still ship the backend
+  // tail (the single most useful artifact for stuck-on-NIGHT diagnostics).
+  test.afterEach(async ({}, testInfo) => {
+    await attachBackendLogOnFailure(testInfo)
+  })
 
   // ── Test 1: Setup verification ──────────────────────────────────────────────
 
