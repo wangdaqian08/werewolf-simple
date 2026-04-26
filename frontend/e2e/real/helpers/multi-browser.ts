@@ -12,7 +12,7 @@
  */
 import {readFileSync, writeFileSync} from 'fs'
 import path from 'path'
-import {type Browser, type BrowserContext, expect, type Page} from '@playwright/test'
+import {type Browser, type BrowserContext, expect, type Page, type TestInfo} from '@playwright/test'
 import {
     act,
     type BotInfo,
@@ -24,6 +24,7 @@ import {
     type RoleName,
 } from './shell-runner'
 import {attachErrorListeners, type BrowserError, resetBrowserErrors} from './error-sentinel'
+import {assertNoBackendErrorsSince, readBackendLogLineCount} from './backend-log'
 
 const BASE_URL = 'http://localhost:5174'
 
@@ -54,6 +55,18 @@ export interface GameContext {
   errors: BrowserError[]
   /** Clear the errors buffer; call in beforeEach for a clean test window. */
   resetErrors: () => void
+  /**
+   * Snapshot the current backend-log line count so the next
+   * `assertNoBackendErrors` call only inspects lines added during the
+   * test. Call in beforeEach.
+   */
+  markBackendLogPosition: () => void
+  /**
+   * Fail the test if any ERROR/FATAL line appeared in the backend log
+   * since the most recent `markBackendLogPosition`. Call in afterEach
+   * after any failure-only attachments.
+   */
+  assertNoBackendErrors: (testInfo: TestInfo) => Promise<void>
   /** Clean up all browser contexts */
   cleanup: () => Promise<void>
 }
@@ -366,6 +379,8 @@ export async function setupGame(
 
   const isHostRole = (role: RoleName) => hostRole === role
 
+  let backendLogStartLine = readBackendLogLineCount()
+
   return {
     roomCode,
     gameId,
@@ -379,6 +394,11 @@ export async function setupGame(
     isHostRole,
     errors,
     resetErrors: () => resetBrowserErrors(errors),
+    markBackendLogPosition: () => {
+      backendLogStartLine = readBackendLogLineCount()
+    },
+    assertNoBackendErrors: (testInfo) =>
+      assertNoBackendErrorsSince(backendLogStartLine, testInfo),
     cleanup: async () => {
       for (const ctx of contexts) {
         try {

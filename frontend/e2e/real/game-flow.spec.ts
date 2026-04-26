@@ -43,17 +43,21 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
   // assertions only see what happened during this test's window.
   test.beforeEach(async () => {
     ctx?.resetErrors()
+    ctx?.markBackendLogPosition()
   })
 
   test.afterEach(async ({}, testInfo) => {
     if (testInfo.status === 'failed' && ctx?.pages) {
       await attachCompositeOnFailure(ctx.pages, testInfo)
     }
+    if (!ctx) return
     // Sentinel #3: any uncaught JS exception or 5xx in any browser fails
     // the test, even if the gameplay-level assertions otherwise passed.
-    if (ctx) {
-      await assertNoBrowserErrors(ctx.errors, testInfo)
-    }
+    await assertNoBrowserErrors(ctx.errors, testInfo)
+    // Sentinel #6: any ERROR/FATAL backend log line during the test window
+    // fails the test. Catches backend bugs that retried/recovered and were
+    // therefore invisible to the frontend.
+    await ctx.assertNoBackendErrors(testInfo)
   })
 
   // ── Test 1: Role reveal ──────────────────────────────────────────────
