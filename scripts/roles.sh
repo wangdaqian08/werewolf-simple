@@ -64,11 +64,19 @@ print(','.join(b['userId'] for b in bots))
 
 # ALL_PLAYERS = bots + manually-logged-in users (added via: dev-login.sh <nick> --room <code>)
 # Filter users to only those actually in the game (have valid seat from API)
-ALL_PLAYERS_JSON=$(python3 - "$STATE_FILE" "$FIRST_TOKEN" << 'PYEOF'
-import json, urllib.request, sys, base64
+ALL_PLAYERS_JSON=$(python3 - "$STATE_FILE" "$FIRST_TOKEN" "$BASE" << 'PYEOF'
+import json, urllib.request, sys
 
 path = sys.argv[1]
 token = sys.argv[2]
+base = sys.argv[3]
+# Note: f"{BASE}/..." here used to reference an undefined Python `BASE`,
+# raising NameError on every loop iteration → the bare `except: continue`
+# swallowed it → `valid_user_ids` stayed empty → manually-logged-in users
+# (including the test-host) were filtered out of every roles.sh report.
+# Fixed by passing $BASE as argv[3] and using lower-case `base` consistently
+# below (the heredoc is single-quoted so bash $-expansion is intentionally
+# disabled to keep the python literal stable).
 
 state = json.load(open(path))
 bots = state['bots']
@@ -82,7 +90,7 @@ try:
     for gid in range(1, 10000):
         try:
             req = urllib.request.Request(
-                f"{BASE}/game/{gid}/state",
+                f"{base}/game/{gid}/state",
                 headers={"Authorization": f"Bearer {token}"}
             )
             with urllib.request.urlopen(req) as r:
@@ -92,9 +100,9 @@ try:
                     if bot_ids.issubset(game_player_ids):
                         valid_user_ids = game_player_ids
                         break
-        except:
+        except Exception:
             continue
-except:
+except Exception:
     pass
 
 # Filter users to only those actually in the game

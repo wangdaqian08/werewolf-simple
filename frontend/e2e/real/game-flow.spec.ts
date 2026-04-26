@@ -62,9 +62,18 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000) // setup can take a while with shell scripts
+    // Explicit `roles` is required: setupGame's role-toggle block is only
+    // entered when opts.roles is non-empty (multi-browser.ts:152). Without
+    // this, the room defaults to CreateRoomView's enabledOptional set
+    // {SEER, WITCH, HUNTER} — GUARD is OFF, no guard bot is assigned, and
+    // ctx.pages.get('GUARD') returns undefined, crashing Test 4 with
+    // "Cannot read properties of undefined (reading 'getByTestId')".
+    // Verified locally: roles.sh on a fresh game showed
+    // WEREWOLF×3 + SEER + WITCH + HUNTER + VILLAGER, no GUARD.
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
+      roles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'HUNTER', 'VILLAGER'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
     })
     invariants = newInvariantState()
@@ -273,41 +282,39 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
 
-    // -- Antidote decision --
+    // -- Antidote decision: clicking antidote submits a COMPLETE WITCH_ACT
+    //    (useAntidote=true, poisonTargetUserId=null) — the witch turn ends
+    //    on the backend with this single click. Do NOT click skip-poison
+    //    afterwards: that would send a second WITCH_ACT during the
+    //    inter-role-gap window, race the role-loop's queuedActionSignal
+    //    map, and auto-complete GUARD_PICK in 2 ms before the guard's
+    //    browser can render guard-confirm-protect.
+    //
+    //    The witch UI's antidote/poison panels are independent visually —
+    //    after antidote, skip-poison is still rendered (poisonDecided
+    //    only flips when poison-specific action arrives). That's a
+    //    frontend display nuance; under the hood the night is already
+    //    advancing.
     const useAntidoteBtn = witchPage.getByTestId('witch-antidote')
+    const passAntidoteBtn = witchPage.getByTestId('switch-pass-antidote')
+    const witchSkipBtn = witchPage.getByTestId('witch-skip')
+
     if (await useAntidoteBtn.isVisible().catch(() => false)) {
       await captureSnapshot(ctx.pages, testInfo, '04-witch-antidote-choice')
-
       await useAntidoteBtn.click()
-      // Action observability: witch saved the wolf's target. Test 5
-      // asserts the day banner is the peaceful variant.
       nightOneOutcome.witchSavedTarget = true
-      // After antidote click, the antidote section is consumed — the
-      // skip-poison or witch-skip button should surface as the next
-      // decision. Wait for either rather than for a fixed 500ms.
-      await expect(
-        witchPage.locator('[data-testid="switch-pass-poison"], [data-testid="witch-skip"]'),
-      ).toBeVisible({ timeout: 5_000 })
-
-      await captureSnapshot(ctx.pages, testInfo, '04-witch-after-antidote')
-    }
-
-    // -- Skip poison (if still available after antidote) --
-    const skipPoisonBtn = witchPage.getByTestId('switch-pass-poison')
-    if (await skipPoisonBtn.isVisible().catch(() => false)) {
-      await skipPoisonBtn.click()
-      // Skipping poison ends the witch turn — wait for the night
-      // sub-phase to advance past WITCH_ACT (proves the backend
-      // received the action) before continuing.
+      // Confirm WITCH_ACT actually advanced server-side before moving on
+      // to the guard block — otherwise the test races the night loop.
       await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
-      await captureSnapshot(ctx.pages, testInfo, '04-witch-after-action')
-    }
-
-    // If no items at all (rare: both antidote+poison already consumed
-    // in earlier rounds), click the done button.
-    const doneBtn = witchPage.getByTestId('witch-skip')
-    if (await doneBtn.isVisible().catch(() => false)) {
-      await doneBtn.click()
+      await captureSnapshot(ctx.pages, testInfo, '04-witch-after-antidote')
+    } else if (await passAntidoteBtn.isVisible().catch(() => false)) {
+      // Witch has antidote but no kill happened (or witch already used
+      // antidote in a prior round). Pass cleanly with one click.
+      await passAntidoteBtn.click()
+      await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
+    } else if (await witchSkipBtn.isVisible().catch(() => false)) {
+      // No items at all (both consumed earlier rounds): single done click.
+      await witchSkipBtn.click()
       await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
     }
 
@@ -621,7 +628,14 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
 
-    // ── Witch — DOM-first via witch browser (pass on both items) ──
+    // ── Witch — DOM-first via witch browser. ONE click only.
+    //   Each witch button submits a complete WITCH_ACT (useAntidote +
+    //   poisonTargetUserId in one payload). Clicking a second button
+    //   sends a SECOND WITCH_ACT during the inter-role-gap window,
+    //   which races queuedActionSignals[gameId] and auto-completes
+    //   the next role's sub-phase in 2 ms — the bug that was failing
+    //   GUARD_PICK on Night 1. Pick whichever pass button is visible
+    //   and stop there.
     const witchPage = ctx.pages.get('WITCH')
     let witchDone = false
     if (witchPage) {
@@ -633,30 +647,19 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         .catch(() => false)
       if (sectionReady) {
         const passAntidote = witchPage.getByTestId('switch-pass-antidote')
-        if (
-          await passAntidote
-            .waitFor({ state: 'visible', timeout: 2_000 })
-            .then(() => true)
-            .catch(() => false)
-        ) {
-          await passAntidote.click()
-        }
         const passPoison = witchPage.getByTestId('switch-pass-poison')
-        if (
-          await passPoison
-            .waitFor({ state: 'visible', timeout: 2_000 })
-            .then(() => true)
-            .catch(() => false)
-        ) {
-          await passPoison.click()
-        }
         const witchSkip = witchPage.getByTestId('witch-skip')
-        if (
-          await witchSkip
+        const visibleSoon = (loc: ReturnType<typeof witchPage.getByTestId>) =>
+          loc
             .waitFor({ state: 'visible', timeout: 2_000 })
             .then(() => true)
             .catch(() => false)
-        ) {
+
+        if (await visibleSoon(passAntidote)) {
+          await passAntidote.click()
+        } else if (await visibleSoon(passPoison)) {
+          await passPoison.click()
+        } else if (await visibleSoon(witchSkip)) {
           await witchSkip.click()
         }
         await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
