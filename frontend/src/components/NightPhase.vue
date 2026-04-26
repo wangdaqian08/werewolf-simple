@@ -126,7 +126,12 @@
       "
     >
       <div class="sr-wrap">
-        <div :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']">
+        <div
+          :class="['sr-card', nightPhase.seerResult.isWerewolf ? 'sr-wolf' : 'sr-village']"
+          data-testid="seer-result-card"
+          :data-alignment="nightPhase.seerResult.isWerewolf ? 'wolf' : 'village'"
+          :data-checked-seat="nightPhase.seerResult.checkedSeatIndex"
+        >
           <div class="sr-player">
             {{ nightPhase.seerResult.checkedSeatIndex }}号 ·
             {{ nightPhase.seerResult.checkedNickname }}

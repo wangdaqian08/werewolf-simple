@@ -53,3 +53,68 @@ describe('DayPhase — game log button visibility', () => {
     expect(wrapper.find('.log-fab').exists()).toBe(true)
   })
 })
+
+describe('DayPhase — observability testids (action-observability sentinel)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const peacefulDay: DayPhaseState = {
+    subPhase: 'RESULT_REVEALED',
+    dayNumber: 2,
+    phaseDeadline: Date.now() + 60000,
+    phaseStarted: Date.now() - 5000,
+    canVote: true,
+    nightResult: { killedPlayers: [] },
+  }
+
+  it('peaceful night surfaces day-banner-peaceful testid', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: peacefulDay },
+    })
+    expect(wrapper.find('[data-testid="day-banner-peaceful"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-banner-kill"]').exists()).toBe(false)
+  })
+
+  it('kill night surfaces day-banner-kill testid + per-seat testids', () => {
+    const dayWithKill: DayPhaseState = {
+      ...peacefulDay,
+      nightResult: {
+        killedPlayers: [
+          { killedPlayerId: 'u-killed', killedSeatIndex: 5, killedNickname: 'Eve' },
+        ],
+      },
+    }
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: dayWithKill },
+    })
+    expect(wrapper.find('[data-testid="day-banner-kill"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-banner-peaceful"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-killed-seat-5"]').exists()).toBe(true)
+  })
+
+  it('multiple kills each get their own per-seat testid', () => {
+    const dayWithKills: DayPhaseState = {
+      ...peacefulDay,
+      nightResult: {
+        killedPlayers: [
+          { killedPlayerId: 'a', killedSeatIndex: 3, killedNickname: 'Ann' },
+          { killedPlayerId: 'b', killedSeatIndex: 7, killedNickname: 'Bea' },
+        ],
+      },
+    }
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: dayWithKills },
+    })
+    expect(wrapper.find('[data-testid="day-killed-seat-3"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-killed-seat-7"]').exists()).toBe(true)
+  })
+
+  it('RESULT_HIDDEN renders neither banner (so result is not leaked)', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_HIDDEN') },
+    })
+    expect(wrapper.find('[data-testid="day-banner-peaceful"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-banner-kill"]').exists()).toBe(false)
+  })
+})

@@ -38,6 +38,25 @@ let ctx: GameContext
 // state to the previous step's. Initialized in beforeAll.
 let invariants: GameInvariantState = newInvariantState()
 
+// Action-observability ledger: each gameplay action records its
+// expected DOM/state side-effect, and a later step asserts the
+// expectation matches reality. Without this the test could "succeed"
+// even when the action targeted the wrong seat or its result was lost.
+interface ExpectedNightOutcome {
+  wolfTargetSeat: number | null
+  witchSavedTarget: boolean
+}
+let nightOneOutcome: ExpectedNightOutcome = { wolfTargetSeat: null, witchSavedTarget: false }
+
+/** Look up the role of a player by seat. Reads from ctx.roleMap (built
+ *  at game start by roles.sh). Returns null if no bot/host has that seat. */
+function roleOfSeat(seat: number): RoleName | null {
+  for (const [role, bots] of Object.entries(ctx.roleMap) as [RoleName, typeof ctx.allBots][]) {
+    if (bots.some((b) => b.seat === seat)) return role
+  }
+  return null
+}
+
 test.describe('Game flow — multi-browser STOMP verification', () => {
   test.setTimeout(60_000) // 3 minutes for the full flow
 
@@ -49,6 +68,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
     })
     invariants = newInvariantState()
+    nightOneOutcome = { wolfTargetSeat: null, witchSavedTarget: false }
   })
 
   test.afterAll(async () => {
@@ -161,6 +181,15 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000)
     const wolfTargetSlot = wolfPage.locator('.player-grid .slot-alive').first()
     await wolfTargetSlot.waitFor({ state: 'visible', timeout: 10_000 })
+    // Action observability: capture the wolf's target seat from the slot's
+    // data-seat attribute BEFORE clicking. Test 5 asserts the day-result
+    // banner is consistent with this target (witch-saved → peaceful).
+    const wolfSeatAttr = await wolfTargetSlot.getAttribute('data-seat')
+    nightOneOutcome.wolfTargetSeat = wolfSeatAttr ? Number(wolfSeatAttr) : null
+    expect(
+      nightOneOutcome.wolfTargetSeat,
+      'wolf target slot must expose data-seat',
+    ).not.toBeNull()
     await wolfTargetSlot.click()
     await wolfPage.getByTestId('wolf-confirm-kill').click()
 
@@ -187,11 +216,33 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
 
     const seerTargetSlot = seerPage.locator('.player-grid .slot-alive').first()
     await seerTargetSlot.waitFor({ state: 'visible', timeout: 5_000 })
+    // Action observability: record which seat the seer is about to check
+    // so we can verify the result card shows the correct alignment for
+    // that seat's actual role (cross-referenced via ctx.roleMap).
+    const seerCheckedSeatAttr = await seerTargetSlot.getAttribute('data-seat')
+    expect(
+      seerCheckedSeatAttr,
+      'seer target slot must expose data-seat',
+    ).not.toBeNull()
+    const seerCheckedSeat = Number(seerCheckedSeatAttr)
     await seerTargetSlot.click()
     await seerCheckBtn.click()
 
-    // Result screen appears, then confirm
-    await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
+    // Result card surfaces with data-alignment ('wolf' | 'village') and
+    // data-checked-seat. Verify those match the actual role of the
+    // checked player. A bug here means the seer is being LIED to.
+    const resultCard = seerPage.getByTestId('seer-result-card')
+    await expect(resultCard).toBeVisible({ timeout: 10_000 })
+    const resultSeat = Number(await resultCard.getAttribute('data-checked-seat'))
+    const resultAlignment = await resultCard.getAttribute('data-alignment')
+    expect(resultSeat).toBe(seerCheckedSeat)
+    const actualRole = roleOfSeat(seerCheckedSeat)
+    const expectedAlignment = actualRole === 'WEREWOLF' ? 'wolf' : 'village'
+    expect(
+      resultAlignment,
+      `seer-result-card alignment for seat ${seerCheckedSeat} (role=${actualRole})`,
+    ).toBe(expectedAlignment)
+
     await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
     await seerPage.getByTestId('seer-done').click()
 
@@ -239,6 +290,9 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       await captureSnapshot(ctx.pages, testInfo, '04-witch-antidote-choice')
 
       await useAntidoteBtn.click()
+      // Action observability: witch saved the wolf's target. Test 5
+      // asserts the day banner is the peaceful variant.
+      nightOneOutcome.witchSavedTarget = true
       // After antidote click, the antidote section is consumed — the
       // skip-poison or witch-skip button should surface as the next
       // decision. Wait for either rather than for a fixed 500ms.
@@ -302,16 +356,40 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // Click reveal — verify all browsers see the kill banner
     await revealBtn.click()
 
-    // All browsers should see a result banner (.banner is the parent class
-    // shared by the kill banner and the peaceful-night banner; both only
-    // render after dayPhase.subPhase becomes RESULT_REVEALED). Wait in
-    // parallel so a single laggy STOMP delivery does not serialize.
+    // Action observability: in Night 1 the wolf killed seat
+    // `nightOneOutcome.wolfTargetSeat` and the witch antidoted. The
+    // expected banner is therefore the PEACEFUL variant on every
+    // browser, AND the wolf's target seat must NOT appear in any
+    // kill list. If the witch save was lost we'd see the kill banner
+    // here — exactly the kind of bug the existing "phase advanced"
+    // check would have masked.
+    const expectedPeaceful = nightOneOutcome.witchSavedTarget
+    const wolfTarget = nightOneOutcome.wolfTargetSeat
+
     await Promise.all(
-      Array.from(ctx.pages.values()).map((page) =>
-        expect(page.locator('.day-wrap .banner').first()).toBeVisible({
-          timeout: 10_000,
-        }),
-      ),
+      Array.from(ctx.pages.values()).map(async (page) => {
+        if (expectedPeaceful) {
+          await expect(page.getByTestId('day-banner-peaceful')).toBeVisible({
+            timeout: 10_000,
+          })
+          if (wolfTarget !== null) {
+            // Even though the kill banner shouldn't be present, double-check
+            // the wolf's saved target is NOT listed as killed anywhere.
+            await expect(
+              page.getByTestId(`day-killed-seat-${wolfTarget}`),
+            ).toHaveCount(0)
+          }
+        } else if (wolfTarget !== null) {
+          // No witch save → the wolf's target should appear in the kill list.
+          await expect(
+            page.getByTestId(`day-killed-seat-${wolfTarget}`),
+          ).toBeVisible({ timeout: 10_000 })
+        } else {
+          await expect(page.locator('.day-wrap .banner').first()).toBeVisible({
+            timeout: 10_000,
+          })
+        }
+      }),
     )
 
     await captureSnapshot(ctx.pages, testInfo, '05-day-reveal')
@@ -509,9 +587,31 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         .then(() => true)
         .catch(() => false)
       if (slotReady) {
+        // Action observability: capture the checked seat and verify the
+        // alignment matches actual role — same contract as Night 1, so a
+        // Night-2 seer-result regression is caught the same way.
+        const seatAttr = await targetSlot.getAttribute('data-seat')
+        const checkedSeat = seatAttr ? Number(seatAttr) : null
         await targetSlot.click()
         await seerPage.getByTestId('seer-check').click()
-        await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
+        const card = seerPage.getByTestId('seer-result-card')
+        await expect(card).toBeVisible({ timeout: 10_000 })
+        if (checkedSeat !== null) {
+          const resultSeat = Number(await card.getAttribute('data-checked-seat'))
+          expect(resultSeat).toBe(checkedSeat)
+          const resultAlignment = await card.getAttribute('data-alignment')
+          const actualRole = roleOfSeat(checkedSeat)
+          // actualRole may be null if the seer happened to check the
+          // host without a bot entry; in that case skip the strict
+          // alignment check rather than fail noisily.
+          if (actualRole) {
+            const expectedAlignment = actualRole === 'WEREWOLF' ? 'wolf' : 'village'
+            expect(
+              resultAlignment,
+              `night-2 seer alignment for seat ${checkedSeat} (role=${actualRole})`,
+            ).toBe(expectedAlignment)
+          }
+        }
         await seerPage.getByTestId('seer-done').click()
         // Seer-done advances backend from SEER_RESULT to next role.
         await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 8_000)

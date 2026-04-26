@@ -1,6 +1,7 @@
 <template>
   <div
     :class="['player-slot', variantClass, mode === 'room' && 'slot-room']"
+    :data-seat="seat"
     @click="$emit('click')"
   >
     <!-- ── Room mode: square card with avatar circle ── -->
