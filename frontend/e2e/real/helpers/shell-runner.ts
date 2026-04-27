@@ -193,7 +193,7 @@ export function readStateFile(roomCode: string): StateFile {
  * retry.
  */
 const PERMANENT_REJECTION_RE =
-  /Actor is dead|Target is dead|Cannot protect the same player two nights in a row|Cannot use antidote and poison on the same night|Action already taken|Already (voted|campaigned|signed up)|Only host can|No active (night|voting) phase|Player not found|already exists/i
+  /Actor is dead|Target is dead|Dead players cannot vote|Cannot check yourself|Cannot vote for yourself|Cannot protect the same player two nights in a row|Cannot use antidote and poison on the same night|Action already taken|Already voted this round|Already (voted|campaigned|signed up)|Only host can|No active (night|voting) phase|Not in (WEREWOLF_PICK|SEER_PICK|SEER_RESULT|WITCH_ACT|GUARD_PICK|VOTE_RESULT|VOTING|SPEECH|SIGNUP|RESULT) sub-phase|Player not found|Target not found or dead|already exists/i
 
 /**
  * Run act.sh with the given action.

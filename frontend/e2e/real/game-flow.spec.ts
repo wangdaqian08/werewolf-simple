@@ -650,9 +650,14 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
     if (!seerDone) {
-      // Browser-seer is dead. Try API on remaining seer bots.
+      // Browser-seer is dead. Try API on remaining seer bots. Exclude the
+      // seer's own seat from candidate targets — `allTargets` includes
+      // seerBots, so without this filter the inner loop tries SEER_CHECK
+      // self-check, backend rejects "Cannot check yourself" (3× retries
+      // pollute the log), then moves to the next target.
       for (const sb of seerBots) {
         for (const tgt of allTargets) {
+          if (tgt.userId === sb.userId) continue
           if (tryAct('SEER_CHECK', actName(sb), { target: String(tgt.seat), room: ctx.roomCode })) {
             // Backend transitions SEER_PICK → SEER_RESULT after CHECK,
             // then SEER_RESULT → next sub-phase after CONFIRM.
@@ -1151,10 +1156,17 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       await hostPage.getByTestId('day-start-vote').click()
       await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
 
-      // Vote out wolves[0] (the surviving wolf). All bots vote target=seat.
-      // act.sh's "all" fan-out + the host's UI abstain combine to total all
-      // alive voters.
-      act('SUBMIT_VOTE', undefined, { target: String(wolves[0].seat), room: localCtx.roomCode })
+      // Vote out wolves[0] (the surviving wolf). Iterate alive non-host
+      // unvoted bots explicitly — `act('SUBMIT_VOTE', undefined, ...)` does
+      // act.sh's full bot fan-out which includes dead bots, producing
+      // "Dead players cannot vote" rejections in the CI log (the wolf
+      // killed villagers[0] at N1, so by D1 they're dead).
+      const unvoted1 = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
+      for (const bot of localCtx.allBots) {
+        if (bot.nick === 'Host') continue
+        if (!unvoted1.has(bot.userId)) continue
+        act('SUBMIT_VOTE', bot.nick, { target: String(wolves[0].seat), room: localCtx.roomCode })
+      }
       const hostAbstain = hostPage.locator('.skip-btn').first()
       if (await hostAbstain.isVisible({ timeout: 3_000 }).catch(() => false)) {
         await hostAbstain.click()
@@ -1228,7 +1240,13 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       await hostPage.getByTestId('day-start-vote').click()
       await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
 
-      act('SUBMIT_VOTE', undefined, { target: String(villagers[1].seat), room: localCtx.roomCode })
+      // Per-bot fan-out filtering dead bots (villagers[0] died at N1).
+      const unvoted2 = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
+      for (const bot of localCtx.allBots) {
+        if (bot.nick === 'Host') continue
+        if (!unvoted2.has(bot.userId)) continue
+        act('SUBMIT_VOTE', bot.nick, { target: String(villagers[1].seat), room: localCtx.roomCode })
+      }
       const hostAbstain = hostPage.locator('.skip-btn').first()
       if (await hostAbstain.isVisible({ timeout: 3_000 }).catch(() => false)) {
         await hostAbstain.click()
@@ -1303,7 +1321,15 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       await hostPage.getByTestId('day-start-vote').click()
       await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
 
-      act('SUBMIT_VOTE', undefined, { target: String(hunter.seat), room: localCtx.roomCode })
+      // Per-bot fan-out — witch saved villagers[0] at N1 so all bots alive,
+      // but iterate explicitly to match the pattern (and to surface any
+      // dead bot via a positive readUnvotedAlivePlayerIds gate).
+      const unvotedRow4 = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
+      for (const bot of localCtx.allBots) {
+        if (bot.nick === 'Host') continue
+        if (!unvotedRow4.has(bot.userId)) continue
+        act('SUBMIT_VOTE', bot.nick, { target: String(hunter.seat), room: localCtx.roomCode })
+      }
       const hostAbstain = hostPage.locator('.skip-btn').first()
       if (await hostAbstain.isVisible({ timeout: 3_000 }).catch(() => false)) {
         await hostAbstain.click()

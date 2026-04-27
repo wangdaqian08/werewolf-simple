@@ -443,7 +443,14 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   const resolvedTargetSeatNum = typeof resolvedTargetSeat === 'string' ? Number(resolvedTargetSeat) : resolvedTargetSeat
 
   // ── WEREWOLF_PICK ──
-  await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 20_000)
+  // Only fire the kill if the backend actually reached the WEREWOLF_PICK
+  // sub-phase. waitForSubPhase returns false when the game already left
+  // NIGHT (e.g. someone won at post-night-resolve before this call ran)
+  // or the gate timed out — in either case there's nothing for the role
+  // actor to do, and firing anyway produces a "Not in WEREWOLF_PICK
+  // sub-phase" rejection in the CI log.
+  const reachedWolfPick = await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 20_000)
+  if (!reachedWolfPick) return
   if (wolfBot) {
     tryAct('WOLF_KILL', actName(wolfBot), { target: String(resolvedTargetSeatNum), room: ctx.roomCode })
   } else {
