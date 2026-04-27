@@ -52,11 +52,23 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
   // ── Test 2: Players sign up, button changes ────────────────────────────
 
   test('2. Sheriff signup — browser player signs up, button changes', async ({}, testInfo) => {
-    // Use seer browser to sign up for sheriff
+    // Use seer browser to sign up for sheriff. setupGame is invariably
+    // configured with browserRoles including 'SEER' (line 23 of beforeAll),
+    // and helpers/multi-browser.ts:362-405 either maps hostPage to the SEER
+    // entry (when host rolled SEER) or opens a new context for the first
+    // non-host SEER bot. roleMap.SEER is always non-empty because the 9p
+    // role distribution always includes one SEER (GameService.kt:322 runs
+    // when room.hasSeer is true, the CreateRoom default). So `seerPage`
+    // can never be undefined here. Replace the dead `test.skip()` with a
+    // throw that surfaces the diagnostic if a future change ever
+    // invalidates that invariant.
     const seerPage = ctx.pages.get('SEER')
     if (!seerPage) {
-      test.skip()
-      return
+      throw new Error(
+        `ctx.pages.get('SEER') is undefined — setupGame did not assign a SEER page. ` +
+          `Check beforeAll's browserRoles (must include 'SEER') and the role kit ` +
+          `(room.hasSeer must be true). hostRole=${ctx.hostRole}.`,
+      )
     }
 
     // Click "Run for Sheriff" button
