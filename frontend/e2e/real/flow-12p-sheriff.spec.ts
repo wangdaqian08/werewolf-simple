@@ -740,9 +740,25 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
 
   test.beforeAll(async ({ browser }, testInfo) => {
     // CI scales ~2× slower; 180s is tight for a 12p sheriff-elect + 2-night
-    // game on ubuntu-latest. Bump to 360s under CI only.
-    testInfo.setTimeout(process.env.CI ? 360_000 : 180_000)
-    ctx = await setupGame(browser, {
+    // game on ubuntu-latest. Bump to 360s under CI only. Then add a retry
+    // budget on top — see the loop below for why setup may need to re-roll.
+    testInfo.setTimeout(process.env.CI ? 480_000 : 240_000)
+
+    // The HARD_MODE wolf-win plan kills the GUARD on N1, votes out the SEER
+    // (sheriff) on D1, kills the WITCH on N2, and votes a villager on D2 to
+    // trigger the POST_VOTE counterplay-exhaustion check. If the host holds
+    // any of {SEER, WITCH, GUARD}, that branch of the plan would either kill
+    // the host (test loses its UI driver) or vote them out at D1 (sheriff =
+    // host, lost). The host being VILLAGER or WEREWOLF is safe — wolves
+    // never kill themselves, and we never vote a wolf in this plan.
+    //
+    // Earlier this used `test.skip(...)` and lost ~25% of CI runs. Re-roll
+    // setup until host lands on a safe role instead — averages 1.33 setups
+    // (3 in 4 first rolls land safe, 25% of those re-roll once). 5-attempt
+    // budget keeps the worst-case at P(5 unsafe) ≈ 0.001 of triggering the
+    // throw — effectively zero.
+    const SAFE_ROLES = new Set<RoleName>(['VILLAGER', 'WEREWOLF'])
+    const setupOpts = {
       totalPlayers: 12,
       hasSheriff: true,
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
@@ -754,8 +770,26 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
       // not exist in the backend ActionType enum, so the script's `try/catch`
       // swallowed the rejection and the game ran under CLASSIC — visible in
       // /tmp/werewolf-e2e-backend.log when reproducing locally on 2026-04-27).
-      winCondition: 'HARD_MODE',
-    })
+      winCondition: 'HARD_MODE' as const,
+    }
+
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const candidate = await setupGame(browser, setupOpts)
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[hard-mode setup] attempt ${attempt}/5 → hostRole=${candidate.hostRole ?? 'unknown'} ` +
+          `(safe=${candidate.hostRole ? SAFE_ROLES.has(candidate.hostRole) : false})`,
+      )
+      if (candidate.hostRole && SAFE_ROLES.has(candidate.hostRole)) {
+        ctx = candidate
+        return
+      }
+      await candidate.cleanup()
+    }
+    throw new Error(
+      'Could not roll a host role in {VILLAGER, WEREWOLF} after 5 setupGame attempts. ' +
+        'Random role assignment is suspect — check the backend role-distribution code.',
+    )
   })
 
   test.afterAll(async () => {
@@ -769,22 +803,12 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
   })
 
   test('phase: role-reveal + sheriff-elect (seer) + D1 vote out sheriff → badge passover → wolves win', async ({}, testInfo) => {
-    // The deterministic HARD_MODE wolf-win plan needs to kill the guard,
-    // vote out the seer (sheriff), and kill the witch — all without losing
-    // the host. If the host happens to hold one of those roles, the test
-    // would either kill its own driver or leave the elected sheriff on the
-    // host (who would then be the eliminated player, breaking host-driven
-    // continuation). With 4W/1S/1Wi/1G/5V the host is in the safe set
-    // (WEREWOLF or VILLAGER) ~75% of the time; flag the rest.
-    if (ctx.hostRole && ['SEER', 'WITCH', 'GUARD'].includes(ctx.hostRole)) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[hard-mode] host rolled ${ctx.hostRole} — skipping (HARD_MODE plan needs ` +
-          `host non-S/W/G so host can survive to drive the badge-handover + D2 vote)`,
-      )
-      test.skip(true, `host role is ${ctx.hostRole}; HARD_MODE plan requires VILLAGER or WEREWOLF`)
-      return
-    }
+    // beforeAll has guaranteed `ctx.hostRole` is in {VILLAGER, WEREWOLF} via
+    // the setupGame retry loop, so the deterministic kill plan below (kill
+    // GUARD N1, vote SEER D1, kill WITCH N2, vote villager D2) is always
+    // safe to drive — the host can never be killed or voted by it.
+    // eslint-disable-next-line no-console
+    console.warn(`[hard-mode test] proceeding with hostRole=${ctx.hostRole}`)
 
     await captureSnapshot(ctx.pages, testInfo, 'hard-01-role-reveal-or-election-start')
 
