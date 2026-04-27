@@ -84,6 +84,9 @@ export interface GameSetupOptions {
   roles?: RoleName[]
   /** Which roles to open browsers for. Defaults to all special roles + 1 villager. */
   browserRoles?: RoleName[]
+  /** Win condition mode. Defaults to 'CLASSIC'; pass 'HARD_MODE' to flip the
+   *  CreateRoom DOM toggle before submission. */
+  winCondition?: 'CLASSIC' | 'HARD_MODE'
 }
 
 // ── Setup ────────────────────────────────────────────────────────────────────
@@ -189,6 +192,20 @@ export async function setupGame(
     if ((await toggle.count()) > 0) {
       await toggle.click()
       await hostPage.waitForTimeout(300)
+    }
+  }
+
+  // Flip win-condition toggle if HARD_MODE requested. Default is CLASSIC, so
+  // CLASSIC requests need no click.
+  if (opts.winCondition === 'HARD_MODE') {
+    const winToggle = hostPage.getByTestId('winCondition-toggle')
+    await winToggle.waitFor({ state: 'visible', timeout: 5_000 })
+    const current = await winToggle.getAttribute('data-win-condition')
+    if (current !== 'HARD_MODE') {
+      await winToggle.click()
+      await expect(winToggle).toHaveAttribute('data-win-condition', 'HARD_MODE', {
+        timeout: 5_000,
+      })
     }
   }
 

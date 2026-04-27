@@ -414,7 +414,7 @@
 
     <!-- ── BADGE_HANDOVER screen (includes BADGE_RECEIVED — merged) ── -->
     <template v-else-if="isBadgeScreen">
-      <header class="day-header">
+      <header class="day-header" data-testid="badge-handover-screen">
         <div class="day-pill">
           第 {{ votingPhase.dayNumber }} 天
           <span class="day-pill-sep">·</span>
@@ -483,6 +483,7 @@
                 class="btn btn-primary vote-btn"
                 :class="{ 'is-loading': actionPending }"
                 :disabled="actionPending"
+                data-testid="badge-continue-night"
                 @click="emit('continueVoting')"
               >
                 → 进入夜晚 / Night
@@ -501,6 +502,7 @@
                 class="btn btn-gold vote-btn"
                 :class="{ 'is-loading': actionPending }"
                 :disabled="!effectiveSelected || actionPending"
+                data-testid="badge-pass"
                 @click="effectiveSelected && emit('passBadge', effectiveSelected)"
               >
                 移交警徽 / Pass Badge
@@ -509,6 +511,7 @@
                 class="btn btn-secondary skip-btn"
                 :class="{ 'is-loading': actionPending }"
                 :disabled="actionPending"
+                data-testid="badge-destroy"
                 @click="emit('destroyBadge')"
               >
                 销毁
