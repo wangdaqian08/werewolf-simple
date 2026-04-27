@@ -58,7 +58,7 @@ function roleOfSeat(seat: number): RoleName | null {
 }
 
 test.describe('Game flow — multi-browser STOMP verification', () => {
-  test.setTimeout(60_000) // 3 minutes for the full flow
+  test.setTimeout(180_000) // 3 min per test — N1 + N2 + N3 nights each cycle 4 roles
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000) // setup can take a while with shell scripts
@@ -488,23 +488,25 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
   // ── Test 8: Night 2 cycle ────────────────────────────────────────────
 
   test('8. Night 2 — phase cycling works, transitions back to DAY', async ({}, testInfo) => {
-    // 9p game starts with 3 wolves (GameService.kt:316 — wolfCount=3 when
-    // playerCount<=9). Test 7 votes out the first wolf at D1, leaving 2
-    // wolves alive — POST_VOTE check is `wolves >= humans` for CLASSIC and
-    // 2 < 6 humans, so no win triggers and the game advances to N2. The
-    // earlier `if (isGameOver) test.skip()` guard never fired in practice
-    // and was speculative; if a future change reduces the wolf count or
-    // adds another elimination, surface the impossibility here so the
-    // root cause is visible instead of silently skipping.
-    if (ctx.hostPage.url().includes('/result/')) {
-      throw new Error(
-        `Test 8 reached with game already over after D1 — unexpected for 9p (3 wolves). ` +
-          `Either Test 7's vote target reduced wolves to 0 or another mechanic eliminated ` +
-          `wolves at N1. Inspect the latest game.state lines in /tmp/werewolf-e2e-backend.log.`,
-      )
-    }
-    // eslint-disable-next-line no-console
-    console.warn(`[game-flow test 8] starting Night 2 — game URL=${ctx.hostPage.url()}`)
+    // Precondition contract: by this point, tests 1–7 have driven the game
+    // through ROLE_REVEAL → NIGHT (day=1) → DAY → DAY_VOTING (day=1) →
+    // NIGHT (day=2). 9p kit has 3 wolves (GameService.kt:316), test 7 voted
+    // out 1 wolf, the POST_VOTE check sees 2 wolves vs 6 humans, no win
+    // triggers, and the backend transitions to NIGHT day=2.
+    //
+    // Assert the contract explicitly. If a future change in test 7 (or in
+    // role distribution) leaves the game in any other state, this assertion
+    // fails with the actual phase/sub-phase from /api/game/{id}/state, and
+    // the failure points straight at the violated invariant.
+    const reachedNight = await waitForPhase(ctx.hostPage, ctx.gameId, 'NIGHT', 15_000)
+    expect(reachedNight, 'expected NIGHT day=2 after test 7').toBe(true)
+    const reachedWolfPick = await waitForNightSubPhase(
+      ctx.hostPage,
+      ctx.gameId,
+      'WEREWOLF_PICK',
+      15_000,
+    )
+    expect(reachedWolfPick, 'expected NIGHT/WEREWOLF_PICK on day=2 entry').toBe(true)
 
     // Night 2: some browser-bound role bots may have been voted out on
     // Day 1. Each role tries DOM-first via its browser; if that browser's
@@ -528,15 +530,41 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
 
-    const wolfBots = ctx.roleMap.WEREWOLF ?? []
-    const seerBots = ctx.roleMap.SEER ?? []
-    const witchBots = ctx.roleMap.WITCH ?? []
-    const guardBots = ctx.roleMap.GUARD ?? []
-    const villagerBots = ctx.roleMap.VILLAGER ?? []
+    // Read the live-alive set from /api/game/state so the API fallback only
+    // tries actors / targets that are actually alive on the backend. Without
+    // this filter, a wolf voted out at D1 stays in roleMap (which is built
+    // at game start) and the inner loop fans 4 targets × act.sh's 3 retries
+    // = 12-15 s burned per dead actor before reaching a live wolf.
+    //
+    // act.sh now short-circuits "Actor is dead" via PERMANENT_REJECTION_RE,
+    // but cutting the dead-actor call upstream is faster AND surfaces the
+    // intent ("we know who's alive") in the test code.
+    const aliveIds = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return [] as string[]
+      const state = await res.json()
+      return ((state?.players ?? []) as Array<{ isAlive?: boolean; userId: string }>)
+        .filter((p) => p.isAlive !== false)
+        .map((p) => p.userId)
+    }, ctx.gameId)
+    const aliveSet = new Set(aliveIds)
+    const aliveBotsOf = (role: RoleName) =>
+      (ctx.roleMap[role] ?? []).filter((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
 
-    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots].filter(
-      (b) => b.nick !== 'Host',
-    )
+    const wolfBots = aliveBotsOf('WEREWOLF')
+    const seerBots = aliveBotsOf('SEER')
+    const witchBots = aliveBotsOf('WITCH')
+    const guardBots = aliveBotsOf('GUARD')
+    const villagerBots = aliveBotsOf('VILLAGER')
+
+    // Targets exclude wolves (a wolf can't kill another wolf) and Host (the
+    // wolf-page DOM-first path covers host-as-wolf). Filter by alive too —
+    // the role-page DOM-first paths target `.slot-alive` already, so the
+    // API fallback should match that contract.
+    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots]
 
     // Locator visibility helper — Playwright's isVisible() does NOT retry,
     // so wrapping waitFor lets us return a boolean after a real wait.
@@ -718,14 +746,604 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // After night, the backend transitions NIGHT → DAY_PENDING → DAY_DISCUSSION.
-    // Poll the backend rather than guess a 10-second buffer; if the game
-    // ended (GAME_OVER), the page URL will already be /result/...
-    const isOver = ctx.hostPage.url().includes('/result/')
-    if (!isOver) {
+    // Poll the backend's `phase` field rather than the URL — STOMP-driven
+    // /result/ redirect lags backend commit, so URL-only check misses
+    // GAME_OVER on CI. /api/game/state is the authoritative signal.
+    const phaseAfterNight = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    if (phaseAfterNight !== 'GAME_OVER') {
       await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_DISCUSSION', 20_000)
       await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000)
     }
 
     await captureSnapshot(ctx.pages, testInfo, '08-night2-complete')
+  })
+
+  // ── Test 9: Day 2 voting cycle ────────────────────────────────────────
+  // Verifies the voting machinery still works on day 2: host reveals N2
+  // results, opens the vote, bots vote a wolf out, tally → VOTE_RESULT,
+  // continue → NIGHT day=3. This catches regressions where the second
+  // voting round breaks (e.g. day-counter off-by-one, sub-phase reset
+  // missing, allVoted check uses stale day-1 voter set).
+
+  test('9. Day 2 voting — vote second wolf, transition to NIGHT day=3', async ({}, testInfo) => {
+    const hostPage = ctx.hostPage
+
+    // Precondition: test 8 left us in DAY_DISCUSSION (day=2) with the
+    // night-2 result hidden.
+    await waitForPhase(hostPage, ctx.gameId, 'DAY_DISCUSSION', 15_000)
+
+    // Host reveals N2 result (whatever it was — depends on whether witch
+    // had antidote remaining; in this spec test 4 spent it, so N2 kills land).
+    const revealBtn = hostPage.getByTestId('day-reveal-result')
+    await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
+    await revealBtn.click()
+    await captureSnapshot(ctx.pages, testInfo, '09-day2-reveal')
+
+    // Host opens voting.
+    const startVoteBtn = hostPage.getByTestId('day-start-vote')
+    await startVoteBtn.waitFor({ state: 'visible', timeout: 10_000 })
+    await startVoteBtn.click()
+    await waitForVotingSubPhase(hostPage, ctx.gameId, 'VOTING', 10_000)
+
+    // Host abstains first so the bot fan-out doesn't burn act.sh's retry
+    // quota on the host (already-voted check).
+    const hostId = await readHostUserId(hostPage)
+    const abstainBtn = hostPage.locator('.skip-btn').first()
+    await abstainBtn.waitFor({ state: 'visible', timeout: 10_000 })
+    await abstainBtn.click()
+    if (hostId) {
+      await waitForVoteRegistered(hostPage, ctx.gameId, hostId, 5_000)
+    }
+
+    // Pick the next alive wolf as target. roleMap is from setup-time, but
+    // we filter by the live-alive set so a dead bot from test 7 isn't
+    // chosen.
+    const aliveIds = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) return [] as string[]
+      const state = await res.json()
+      return ((state?.players ?? []) as Array<{ isAlive?: boolean; userId: string }>)
+        .filter((p) => p.isAlive !== false)
+        .map((p) => p.userId)
+    }, ctx.gameId)
+    const aliveSet = new Set(aliveIds)
+    const wolfTarget = (ctx.roleMap.WEREWOLF ?? []).find(
+      (b) => b.nick !== 'Host' && aliveSet.has(b.userId),
+    )
+    expect(wolfTarget, 'expected an alive non-host wolf for D2 vote').toBeDefined()
+
+    // Fan out the vote across alive non-host bots that haven't already voted.
+    const unvoted = await readUnvotedAlivePlayerIds(hostPage, ctx.gameId)
+    const expectedVoterIds: string[] = []
+    for (const bot of ctx.allBots) {
+      if (bot.nick === 'Host' || bot.userId === hostId) continue
+      if (!unvoted.has(bot.userId)) continue
+      act('SUBMIT_VOTE', bot.nick, { target: String(wolfTarget!.seat), room: ctx.roomCode })
+      expectedVoterIds.push(bot.userId)
+    }
+    if (expectedVoterIds.length > 0) {
+      await waitForAllVotesRegistered(hostPage, ctx.gameId, expectedVoterIds, 10_000)
+    }
+
+    // Reveal tally.
+    const revealTallyBtn = hostPage.getByTestId('voting-reveal')
+    await revealTallyBtn.waitFor({ state: 'visible', timeout: 10_000 })
+    await revealTallyBtn.click()
+    await waitForVotingSubPhase(hostPage, ctx.gameId, 'VOTE_RESULT', 6_000)
+
+    await captureSnapshot(ctx.pages, testInfo, '09-day2-tally')
+
+    // Continue to night.
+    const continueBtn = hostPage.getByTestId('voting-continue')
+    const continueVisible = await continueBtn
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (continueVisible) {
+      await continueBtn.click()
+    }
+
+    // Either game continues to N3 (wolves > 0), or it ends right here
+    // (POST_VOTE check fired villager-win because we voted the second
+    // wolf and the third was killed somewhere already — unusual but
+    // possible if a witch poisoned earlier). Both are valid outcomes;
+    // this test asserts the deterministic part: the vote machinery
+    // produced a sub-phase transition.
+    //
+    // Use API state, not URL, to detect game-end. The URL → /result/ redirect
+    // is driven by a STOMP GameOverEvent → router.push, which lags backend
+    // commit by 200-500 ms locally and longer under CI load. Polling
+    // /api/game/state.phase === 'GAME_OVER' is the authoritative signal.
+    const phaseAfterContinue = await hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    if (phaseAfterContinue !== 'GAME_OVER') {
+      await waitForPhase(hostPage, ctx.gameId, 'NIGHT', 15_000)
+      await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 15_000)
+    }
+    await captureSnapshot(ctx.pages, testInfo, '09-day2-complete')
+  })
+
+  // ── Test 10: Night 3 cycle ────────────────────────────────────────────
+  // Verifies the night machinery still cycles on day 3 — same loop as
+  // test 8 but one round later, after another wolf and another villager
+  // have been eliminated. The browser-bound role bot may have died at
+  // any point; each role tries DOM first, then falls back to API on
+  // remaining live bots.
+
+  test('10. Night 3 — cycle continues past day 2, transitions back to DAY day=3', async ({}, testInfo) => {
+    // If the game ended at D2 (test 9 hit a villager-win edge), there's
+    // nothing to test here — assert that fact and exit cleanly. NOT a
+    // skip: a clean exit with a captured screenshot is the correct
+    // outcome for the early-end branch.
+    //
+    // Detect via API state.phase, NOT URL. STOMP-driven router.push to
+    // /result/ lags backend commit; on CI the URL can still be /game/N
+    // even after phase=GAME_OVER, which then makes this guard miss the
+    // early-end and the NIGHT precondition assertion below fail with
+    // "expected NIGHT day=3 after test 9" — exactly the shape of the
+    // CI shard-1 failure on commit f757f1e.
+    const initialState = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? res.json() : null
+    }, ctx.gameId)
+    if (initialState?.phase === 'GAME_OVER') {
+      await captureSnapshot(ctx.pages, testInfo, '10-game-over-at-d2')
+      return
+    }
+
+    // Precondition: NIGHT day=3 / WEREWOLF_PICK after test 9.
+    expect(
+      await waitForPhase(ctx.hostPage, ctx.gameId, 'NIGHT', 15_000),
+      'expected NIGHT day=3 after test 9',
+    ).toBe(true)
+    expect(
+      await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000),
+      'expected NIGHT/WEREWOLF_PICK on day=3 entry',
+    ).toBe(true)
+
+    // Helper: wrap script call to surface rejections (same idiom as test 8).
+    const tryAct = (...args: Parameters<typeof act>): boolean => {
+      try {
+        const out = act(...args)
+        const rejected = out.includes('rejected')
+        if (rejected) {
+          // eslint-disable-next-line no-console
+          console.warn(`[tryAct rejected] args=${JSON.stringify(args)} output=\n${out}`)
+        }
+        return !rejected
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn(`[tryAct threw] args=${JSON.stringify(args)} err=${(e as Error).message}`)
+        return false
+      }
+    }
+
+    // Read live alive set from the API for live filtering of role bots.
+    const aliveIds = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) return [] as string[]
+      const state = await res.json()
+      return ((state?.players ?? []) as Array<{ isAlive?: boolean; userId: string }>)
+        .filter((p) => p.isAlive !== false)
+        .map((p) => p.userId)
+    }, ctx.gameId)
+    const aliveSet = new Set(aliveIds)
+
+    const wolfBot = (ctx.roleMap.WEREWOLF ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
+    const seerBot = (ctx.roleMap.SEER ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
+    const witchBot = (ctx.roleMap.WITCH ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
+    const guardBot = (ctx.roleMap.GUARD ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
+
+    const isVisibleSoon = async (page: Page, testId: string, timeoutMs = 5_000) =>
+      page
+        .getByTestId(testId)
+        .waitFor({ state: 'visible', timeout: timeoutMs })
+        .then(() => true)
+        .catch(() => false)
+
+    // ── Wolf kill ──
+    // After 2 day votes (test 7 + test 9), the originally browser-bound
+    // WEREWOLF bot may be dead (voted out). The remaining alive wolf can
+    // be the host (when host rolled WEREWOLF) — in which case `wolfBot`
+    // (filtered to non-host) is undefined, but ctx.pages.get('WEREWOLF')
+    // === hostPage (per setupGame's mapping at multi-browser.ts:362-364)
+    // and the host's wolf-kill UI is rendered. DOM-first via the wolf
+    // page handles host-as-wolf cleanly; API fallback handles the case
+    // where the wolf page's bot is dead but another wolf bot is alive.
+    const wolfPage = ctx.pages.get('WEREWOLF')
+    let wolfDone = false
+    if (wolfPage && (await isVisibleSoon(wolfPage, 'wolf-confirm-kill'))) {
+      const targetSlot = wolfPage.locator('.player-grid .slot-alive').first()
+      const slotReady = await targetSlot
+        .waitFor({ state: 'visible', timeout: 2_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (slotReady) {
+        await targetSlot.click()
+        await wolfPage.getByTestId('wolf-confirm-kill').click()
+        wolfDone = true
+        await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 8_000)
+      }
+    }
+    if (!wolfDone) {
+      // wolfPage's bot is dead OR UI didn't render. Try API on remaining
+      // alive non-host wolf bots.
+      const wolfTargetCandidate = ctx.allBots.find(
+        (b) =>
+          b.nick !== 'Host' &&
+          aliveSet.has(b.userId) &&
+          !(ctx.roleMap.WEREWOLF ?? []).some((w) => w.userId === b.userId),
+      )
+      if (wolfBot && wolfTargetCandidate) {
+        tryAct('WOLF_KILL', actName(wolfBot), { target: String(wolfTargetCandidate.seat), room: ctx.roomCode })
+        await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 8_000)
+      }
+    }
+
+    // ── Seer check (just to advance the phase) ──
+    if (seerBot) {
+      const reached = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 10_000)
+      if (reached) {
+        const checkTarget = ctx.allBots.find(
+          (b) => b.userId !== seerBot.userId && b.nick !== 'Host' && aliveSet.has(b.userId),
+        )
+        if (checkTarget) {
+          tryAct('SEER_CHECK', actName(seerBot), { target: String(checkTarget.seat), room: ctx.roomCode })
+          await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 8_000)
+          tryAct('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
+        }
+      }
+    }
+
+    // ── Witch act: by N3 the antidote is spent (test 4 used it). Just decline. ──
+    if (witchBot) {
+      const reached = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 10_000)
+      if (reached) {
+        tryAct('WITCH_ACT', actName(witchBot), {
+          room: ctx.roomCode,
+          payload: '{"useAntidote":false}',
+        })
+      }
+    }
+
+    // ── Guard skip ──
+    // GUARD_PROTECT carries a "cannot protect the same player two nights in
+    // a row" rule (verified empirically — backend log on N3 with bot3
+    // chosen at N2 returned `REJECTED reason="Cannot protect the same
+    // player two nights in a row"`). Picking a deterministic-different
+    // target across nights is brittle (the UI's `.slot-alive .first()`
+    // ordering changes once kill targets are recorded). GUARD_SKIP doesn't
+    // have this constraint — same as test 8's API fallback. Use it here to
+    // advance the night cleanly.
+    if (guardBot) {
+      const reached = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 10_000)
+      if (reached) {
+        const advanced = tryAct('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
+        if (advanced) {
+          await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 8_000)
+        }
+      }
+    }
+
+    // Backend transitions to DAY day=3, OR to GAME_OVER if a witch poison
+    // at N3 kills the last wolf (rare but possible). Check API state first
+    // so the GAME_OVER branch doesn't time out on waitForPhase DAY.
+    const phaseAfterN3 = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    if (phaseAfterN3 !== 'GAME_OVER') {
+      await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_DISCUSSION', 20_000)
+      await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000)
+    }
+    await captureSnapshot(ctx.pages, testInfo, '10-night3-complete')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Day 1 outcome scenarios — each reachable post-D1 end-state from the table in
+// PR #75's review thread, asserted explicitly.
+//
+//   Row 1 (NIGHT/day=2)         — covered by the main flow's test 8.
+//   Row 2 (GAME_OVER, villager) — this section.
+//   Row 3 (GAME_OVER, wolves)   — this section.
+//   Row 4 (HUNTER_SHOOT)        — this section.
+//   Row 5 (BADGE_HANDOVER)      — covered by `flow-12p-sheriff.spec.ts` (CLASSIC + HARD_MODE).
+//                                 Not reachable here: this spec uses hasSheriff=false.
+//
+// Each scenario starts a fresh `setupGame` because the kill plan needed to
+// produce that end-state is incompatible with the prior test's game state.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
+  test.setTimeout(180_000)
+
+  // ── Row 2: villager-win when D1 vote eliminates the last wolf ──
+  test('row 2 — villager-win after D1 vote kills the last wolf', async ({ browser }, testInfo) => {
+    testInfo.setTimeout(240_000)
+    // 6p kit: GameService.kt:316 → 2 wolves. Plus SEER + WITCH + 2 villagers
+    // (HUNTER and GUARD intentionally off so D1's elimination cleanly
+    // resolves to a win check, no HUNTER_SHOOT detour).
+    const localCtx = await setupGame(browser, {
+      totalPlayers: 6,
+      hasSheriff: false,
+      roles: ['WEREWOLF', 'SEER', 'WITCH', 'VILLAGER'] as RoleName[],
+      browserRoles: ['WEREWOLF', 'SEER', 'WITCH'] as RoleName[],
+    })
+    try {
+      const hostPage = localCtx.hostPage
+      // Don't filter host out: act.sh handles PLAYER='HOST' via the cached
+      // host token (act.sh:378), so a host-as-WITCH/SEER/WEREWOLF row is
+      // driveable through the same script path. The role lookup just needs
+      // to return whoever holds the role, host or bot.
+      const wolves = (localCtx.roleMap.WEREWOLF ?? [])
+      const seer = (localCtx.roleMap.SEER ?? [])[0]
+      const witch = (localCtx.roleMap.WITCH ?? [])[0]
+      expect(wolves.length, 'kit must have 2 wolves').toBe(2)
+      expect(seer, 'kit must have 1 seer').toBeDefined()
+      expect(witch, 'kit must have 1 witch').toBeDefined()
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[row 2] hostRole=${localCtx.hostRole} wolves=${wolves.map((b) => b.nick).join(',')} ` +
+          `seer=${seer.nick} witch=${witch.nick}`,
+      )
+
+      // Start night
+      await hostPage.getByTestId('start-night').click()
+      await waitForPhase(hostPage, localCtx.gameId, 'NIGHT', 15_000)
+
+      // ── N1 ──
+      // Wolves kill SOME victim. Backend rule (verified by log on a prior
+      // run: REJECTED reason="Cannot use antidote and poison on the same
+      // night"): witch can't use BOTH potions in one WITCH_ACT. So we
+      // use poison only — the wolf-kill victim dies, AND wolves[1] dies
+      // from poison. After N1: 2 deaths. wolves=1, humans=3. D1 vote of
+      // wolves[0] then closes out the wolves → villager-win.
+      const wolfIds = new Set(wolves.map((w) => w.userId))
+      const victim =
+        (localCtx.roleMap.VILLAGER ?? []).find((b) => !wolfIds.has(b.userId))
+        ?? localCtx.allBots.find((b) => !wolfIds.has(b.userId) && b.userId !== seer.userId && b.userId !== witch.userId)
+      expect(victim, 'need a non-wolf victim for the wolves to kill').toBeDefined()
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000)
+      act('WOLF_KILL', actName(wolves[0]), { target: String(victim!.seat), room: localCtx.roomCode })
+
+      // Seer checks (just to advance the phase deterministically).
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000)
+      act('SEER_CHECK', actName(seer), { target: String(wolves[0].seat), room: localCtx.roomCode })
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)
+      act('SEER_CONFIRM', actName(seer), { room: localCtx.roomCode })
+
+      // Witch: poison-only on wolves[1]. No antidote (backend forbids
+      // combined antidote+poison in a single WITCH_ACT).
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)
+      act('WITCH_ACT', actName(witch), {
+        room: localCtx.roomCode,
+        payload: JSON.stringify({
+          useAntidote: false,
+          poisonTargetUserId: wolves[1].userId,
+        }),
+      })
+
+      // Night resolves. victim dead (wolf kill, no save), wolves[1] dead (poison).
+      await waitForPhase(hostPage, localCtx.gameId, 'DAY_DISCUSSION', 20_000)
+
+      // ── D1 ──
+      await hostPage.getByTestId('day-reveal-result').click()
+      await hostPage.getByTestId('day-start-vote').click()
+      await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
+
+      // Vote out wolves[0] (the surviving wolf). All bots vote target=seat.
+      // act.sh's "all" fan-out + the host's UI abstain combine to total all
+      // alive voters.
+      act('SUBMIT_VOTE', undefined, { target: String(wolves[0].seat), room: localCtx.roomCode })
+      const hostAbstain = hostPage.locator('.skip-btn').first()
+      if (await hostAbstain.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await hostAbstain.click()
+      }
+
+      // Reveal tally → wolf eliminated → POST_VOTE check sees wolves=0 → villager_win.
+      await hostPage.getByTestId('voting-reveal').click()
+
+      // Assert game-over state via the API (authoritative) AND the result URL.
+      await hostPage.waitForURL(/\/result\//, { timeout: 30_000 })
+      const finalState = await hostPage.evaluate(async (id: string) => {
+        const token = localStorage.getItem('jwt')
+        const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+        return res.ok ? res.json() : null
+      }, localCtx.gameId)
+      expect(finalState?.phase, 'phase=GAME_OVER expected').toBe('GAME_OVER')
+      expect(finalState?.winner, 'winner=VILLAGER expected').toBe('VILLAGER')
+      await captureSnapshot(localCtx.pages, testInfo, 'row2-villager-win')
+    } finally {
+      await localCtx.cleanup()
+    }
+  })
+
+  // ── Row 3: wolf-win at parity when D1 vote eliminates a villager ──
+  test('row 3 — wolf-win at parity after D1 mis-vote', async ({ browser }, testInfo) => {
+    testInfo.setTimeout(240_000)
+    const localCtx = await setupGame(browser, {
+      totalPlayers: 6,
+      hasSheriff: false,
+      roles: ['WEREWOLF', 'SEER', 'WITCH', 'VILLAGER'] as RoleName[],
+      browserRoles: ['WEREWOLF', 'SEER', 'WITCH'] as RoleName[],
+    })
+    try {
+      const hostPage = localCtx.hostPage
+      const wolves = localCtx.roleMap.WEREWOLF ?? []
+      const seer = (localCtx.roleMap.SEER ?? [])[0]
+      const witch = (localCtx.roleMap.WITCH ?? [])[0]
+      const villagers = localCtx.roleMap.VILLAGER ?? []
+      expect(wolves.length, 'kit must have 2 wolves').toBe(2)
+      expect(seer, 'kit must have 1 seer').toBeDefined()
+      expect(witch, 'kit must have 1 witch').toBeDefined()
+      expect(villagers.length, 'kit must have 2 villagers').toBe(2)
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[row 3] hostRole=${localCtx.hostRole} villagers=${villagers.map((b) => b.nick).join(',')}`,
+      )
+
+      await hostPage.getByTestId('start-night').click()
+      await waitForPhase(hostPage, localCtx.gameId, 'NIGHT', 15_000)
+
+      // ── N1 ── wolves kill villager-1, witch declines (villager-1 dies).
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000)
+      act('WOLF_KILL', actName(wolves[0]), { target: String(villagers[0].seat), room: localCtx.roomCode })
+
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000)
+      act('SEER_CHECK', actName(seer), { target: String(wolves[0].seat), room: localCtx.roomCode })
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)
+      act('SEER_CONFIRM', actName(seer), { room: localCtx.roomCode })
+
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)
+      act('WITCH_ACT', actName(witch), {
+        room: localCtx.roomCode,
+        payload: '{"useAntidote":false}',
+      })
+
+      // After N1: 2 wolves + 3 humans (host + seer + witch + villagers[1] minus villagers[0]).
+      await waitForPhase(hostPage, localCtx.gameId, 'DAY_DISCUSSION', 20_000)
+
+      // ── D1 ── vote villagers[1] (NOT a wolf). After D1: 2 wolves + 2 humans → parity.
+      await hostPage.getByTestId('day-reveal-result').click()
+      await hostPage.getByTestId('day-start-vote').click()
+      await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
+
+      act('SUBMIT_VOTE', undefined, { target: String(villagers[1].seat), room: localCtx.roomCode })
+      const hostAbstain = hostPage.locator('.skip-btn').first()
+      if (await hostAbstain.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await hostAbstain.click()
+      }
+      await hostPage.getByTestId('voting-reveal').click()
+
+      await hostPage.waitForURL(/\/result\//, { timeout: 30_000 })
+      const finalState = await hostPage.evaluate(async (id: string) => {
+        const token = localStorage.getItem('jwt')
+        const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+        return res.ok ? res.json() : null
+      }, localCtx.gameId)
+      expect(finalState?.phase, 'phase=GAME_OVER expected').toBe('GAME_OVER')
+      expect(finalState?.winner, 'winner=WEREWOLF expected (parity)').toBe('WEREWOLF')
+      await captureSnapshot(localCtx.pages, testInfo, 'row3-wolf-win')
+    } finally {
+      await localCtx.cleanup()
+    }
+  })
+
+  // ── Row 4: HUNTER_SHOOT subPhase fires when hunter is voted out at D1 ──
+  test('row 4 — HUNTER_SHOOT subPhase when D1 votes the hunter', async ({ browser }, testInfo) => {
+    testInfo.setTimeout(240_000)
+    const localCtx = await setupGame(browser, {
+      totalPlayers: 9,
+      hasSheriff: false,
+      roles: ['WEREWOLF', 'SEER', 'WITCH', 'HUNTER', 'VILLAGER'] as RoleName[],
+      browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'HUNTER'] as RoleName[],
+    })
+    try {
+      const hostPage = localCtx.hostPage
+      // Don't filter host out: act.sh handles PLAYER='HOST' via host token.
+      const wolves = localCtx.roleMap.WEREWOLF ?? []
+      const seer = (localCtx.roleMap.SEER ?? [])[0]
+      const witch = (localCtx.roleMap.WITCH ?? [])[0]
+      const hunter = (localCtx.roleMap.HUNTER ?? [])[0]
+      const villagers = localCtx.roleMap.VILLAGER ?? []
+      expect(wolves.length, 'kit must have wolves').toBeGreaterThan(0)
+      expect(seer, 'kit must have a seer').toBeDefined()
+      expect(witch, 'kit must have a witch').toBeDefined()
+      expect(hunter, 'kit must have a hunter').toBeDefined()
+      expect(villagers.length, 'kit must have a villager for the wolf to kill').toBeGreaterThan(0)
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[row 4] hostRole=${localCtx.hostRole} hunter=${hunter.nick}(seat=${hunter.seat})`,
+      )
+
+      await hostPage.getByTestId('start-night').click()
+      await waitForPhase(hostPage, localCtx.gameId, 'NIGHT', 15_000)
+
+      // ── N1 ── wolves kill a villager. Witch saves them (no death) so D1
+      // alive count is full and the hunter-vote elimination is the only D1
+      // event.
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000)
+      act('WOLF_KILL', actName(wolves[0]), { target: String(villagers[0].seat), room: localCtx.roomCode })
+
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000)
+      act('SEER_CHECK', actName(seer), { target: String(wolves[0].seat), room: localCtx.roomCode })
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)
+      act('SEER_CONFIRM', actName(seer), { room: localCtx.roomCode })
+
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)
+      act('WITCH_ACT', actName(witch), {
+        room: localCtx.roomCode,
+        payload: '{"useAntidote":true}',
+      })
+
+      await waitForPhase(hostPage, localCtx.gameId, 'DAY_DISCUSSION', 20_000)
+
+      // ── D1 ── vote the hunter.
+      await hostPage.getByTestId('day-reveal-result').click()
+      await hostPage.getByTestId('day-start-vote').click()
+      await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
+
+      act('SUBMIT_VOTE', undefined, { target: String(hunter.seat), room: localCtx.roomCode })
+      const hostAbstain = hostPage.locator('.skip-btn').first()
+      if (await hostAbstain.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await hostAbstain.click()
+      }
+      await hostPage.getByTestId('voting-reveal').click()
+
+      // Backend transitions to HUNTER_SHOOT (not VOTE_RESULT or GAME_OVER yet).
+      const reachedHunterShoot = await waitForVotingSubPhase(
+        hostPage,
+        localCtx.gameId,
+        'HUNTER_SHOOT',
+        15_000,
+      )
+      expect(reachedHunterShoot, 'expected DAY_VOTING/HUNTER_SHOOT after voting hunter out').toBe(true)
+      await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-entered')
+
+      // Drive the hunter's pass (no shoot) so the game can advance — the
+      // important contract here is the SUB-PHASE TRANSITION, not which seat
+      // hunter targets.
+      act('HUNTER_PASS', actName(hunter), { room: localCtx.roomCode })
+
+      // Sub-phase advances out of HUNTER_SHOOT (to VOTE_RESULT, NIGHT, or
+      // GAME_OVER depending on remaining state). Either is acceptable —
+      // we're not asserting a specific downstream state, only that the
+      // transition out of HUNTER_SHOOT happened.
+      await waitForCondition(
+        async () => {
+          const state = await hostPage.evaluate(async (id: string) => {
+            const token = localStorage.getItem('jwt')
+            const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+            return res.ok ? res.json() : null
+          }, localCtx.gameId)
+          return state?.votingPhase?.subPhase !== 'HUNTER_SHOOT'
+        },
+        'sub-phase to leave HUNTER_SHOOT after HUNTER_PASS',
+        10_000,
+      )
+      await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-resolved')
+    } finally {
+      await localCtx.cleanup()
+    }
   })
 })

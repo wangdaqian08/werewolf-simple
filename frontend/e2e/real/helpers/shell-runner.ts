@@ -181,18 +181,33 @@ export function readStateFile(roomCode: string): StateFile {
 }
 
 /**
+ * Permanent rejection reasons — rule / state-violation rejections that retrying
+ * cannot fix (the actor is dead, the action was already taken, the target was
+ * already eliminated, etc.). When the backend emits one of these, retries
+ * waste ~1.8 s each AND mask the bug — the test was wrong to call act() with
+ * those args, and the right fix is upstream filtering, not retry-and-pray.
+ *
+ * Transient rejections (sub-phase commit lag, brief coroutine races) are NOT
+ * matched here and still get the 3-attempt retry. Add new permanent reasons
+ * here as the backend grows, but don't add anything that can become valid on
+ * retry.
+ */
+const PERMANENT_REJECTION_RE =
+  /Actor is dead|Target is dead|Cannot protect the same player two nights in a row|Cannot use antidote and poison on the same night|Action already taken|Already (voted|campaigned|signed up)|Only host can|No active (night|voting) phase|Player not found|already exists/i
+
+/**
  * Run act.sh with the given action.
  *
  * Returns raw stdout (stripped of ANSI codes).
  *
- * On CI, retries up to 3 times on "rejected" output with a 600ms gap. This
- * absorbs the well-known race where a bot action fires faster than the
- * role-loop coroutine advances, lands in the wrong sub-phase, and is
- * rejected. Locally the coroutine is fast enough that retries rarely trigger.
+ * On CI, retries up to 3 times on "rejected" output with a 600ms gap, but
+ * ONLY for transient rejections (sub-phase commit lag race). Permanent
+ * rejections — see PERMANENT_REJECTION_RE — short-circuit on the first
+ * attempt: retry won't change a dead actor or a duplicate action, and the
+ * 1.8 s retry budget hides upstream filtering bugs. Locally maxAttempts=1.
  *
- * Every rejection — whether recovered or not — is logged via console.warn so
- * genuine rejections (target dead, action already taken, etc.) still surface
- * in CI logs rather than being absorbed silently.
+ * Every rejection — recovered, fast-failed, or final — is logged via
+ * console.warn so they still surface in CI logs rather than being silent.
  */
 export function act(
   action: string,
@@ -217,12 +232,14 @@ export function act(
     // current phase/sub-phase. Cuts the "Target not found or dead" mystery
     // down to "target was already killed in N1" without manual digging.
     const context = describeRejectionContext(opts?.room, player, opts?.target)
+    const isPermanent = PERMANENT_REJECTION_RE.test(output)
     // eslint-disable-next-line no-console
     console.warn(
       `[act rejected] attempt ${attempt}/${maxAttempts} action=${action} ` +
         `player=${player ?? '-'} target=${opts?.target ?? '-'} ` +
-        `room=${opts?.room ?? '-'}${context}\noutput:\n${output}`,
+        `room=${opts?.room ?? '-'}${isPermanent ? ' (permanent — no retry)' : ''}${context}\noutput:\n${output}`,
     )
+    if (isPermanent) return output
     if (attempt < maxAttempts) {
       // Synchronous sleep — act() is sync and changing it to async would
       // ripple through every spec. execSync('sleep 0.6') blocks this worker
