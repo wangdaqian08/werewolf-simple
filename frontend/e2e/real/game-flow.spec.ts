@@ -551,19 +551,23 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         .map((p) => p.userId)
     }, ctx.gameId)
     const aliveSet = new Set(aliveIds)
-    const aliveBotsOf = (role: RoleName) =>
-      (ctx.roleMap[role] ?? []).filter((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
+    // Don't filter Host out. When host has a special role (e.g. host=WITCH)
+    // and the role's DOM-first path doesn't fire (browser stale, slot
+    // selector mismatch), the API fallback needs the host as the actor —
+    // otherwise the night stalls at that sub-phase forever. actName(host)
+    // returns 'HOST' and act.sh resolves to the cached host token, so
+    // host-as-X works through the same script path.
+    const aliveActorsOf = (role: RoleName) =>
+      (ctx.roleMap[role] ?? []).filter((b) => aliveSet.has(b.userId))
 
-    const wolfBots = aliveBotsOf('WEREWOLF')
-    const seerBots = aliveBotsOf('SEER')
-    const witchBots = aliveBotsOf('WITCH')
-    const guardBots = aliveBotsOf('GUARD')
-    const villagerBots = aliveBotsOf('VILLAGER')
+    const wolfBots = aliveActorsOf('WEREWOLF')
+    const seerBots = aliveActorsOf('SEER')
+    const witchBots = aliveActorsOf('WITCH')
+    const guardBots = aliveActorsOf('GUARD')
+    const villagerBots = aliveActorsOf('VILLAGER')
 
-    // Targets exclude wolves (a wolf can't kill another wolf) and Host (the
-    // wolf-page DOM-first path covers host-as-wolf). Filter by alive too —
-    // the role-page DOM-first paths target `.slot-alive` already, so the
-    // API fallback should match that contract.
+    // Targets exclude wolves (a wolf can't kill another wolf). Host may be
+    // included as a target if they hold a non-wolf role.
     const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots]
 
     // Locator visibility helper — Playwright's isVisible() does NOT retry,
@@ -950,10 +954,18 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }, ctx.gameId)
     const aliveSet = new Set(aliveIds)
 
-    const wolfBot = (ctx.roleMap.WEREWOLF ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
-    const seerBot = (ctx.roleMap.SEER ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
-    const witchBot = (ctx.roleMap.WITCH ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
-    const guardBot = (ctx.roleMap.GUARD ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
+    // Don't filter Host out of role actors. When host has a special role
+    // and is the only alive actor (e.g. host=WITCH, witch is the sole
+    // witch in the kit), filtering out the host leaves the role unactioned
+    // and the night stalls at that sub-phase forever (CI shard-1 failure
+    // on commit 67fb784 hit this with host-as-WITCH at N3 — game stuck at
+    // NIGHT/WITCH_ACT day=3). actName() returns 'HOST' for the host bot
+    // and act.sh resolves that to the cached host token, so host-as-X
+    // routes through the same script path as a bot-as-X.
+    const wolfBot = (ctx.roleMap.WEREWOLF ?? []).find((b) => aliveSet.has(b.userId))
+    const seerBot = (ctx.roleMap.SEER ?? []).find((b) => aliveSet.has(b.userId))
+    const witchBot = (ctx.roleMap.WITCH ?? []).find((b) => aliveSet.has(b.userId))
+    const guardBot = (ctx.roleMap.GUARD ?? []).find((b) => aliveSet.has(b.userId))
 
     const isVisibleSoon = async (page: Page, testId: string, timeoutMs = 5_000) =>
       page
