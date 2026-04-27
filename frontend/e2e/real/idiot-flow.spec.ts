@@ -11,15 +11,66 @@
  *   - Idiot loses voting right permanently
  *   - Phase transitions correctly from VOTE_RESULT to NIGHT
  */
-import {expect, test} from '@playwright/test'
+import {expect, test, type Page} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, actName, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {captureSnapshot} from './helpers/composite-screenshot'
 import {attachBackendLogOnFailure} from './helpers/backend-log'
-import {readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
+import {
+  readHostSeat,
+  readHostUserId,
+  readUnvotedAlivePlayerIds,
+  waitForNightSubPhase,
+} from './helpers/state-polling'
 
 let ctx: GameContext
+
+/**
+ * Resolve the player who currently holds the IDIOT role to a vote target.
+ *
+ * `roleMap.IDIOT` only tracks non-host bots; when the random role roll lands
+ * IDIOT on the host, that array is empty and the test previously skipped
+ * with "Host rolled IDIOT — covered by test 1". The IDIOT mechanic is the
+ * same regardless of who has the role, so we can always vote them out by
+ * looking up the host's seat from the live game state.
+ *
+ * Returns `{ seat, nickname, isHost }` so callers can both fan-out the bot
+ * vote (target=seat) and verify the elimination banner contains the right
+ * nickname (host's nickname is "Host").
+ */
+async function resolveIdiotTarget(
+  localCtx: GameContext,
+  hostPage: Page,
+): Promise<{ seat: number; nickname: string; isHost: boolean }> {
+  // Check host-IDIOT FIRST. roles.sh includes the host in roleMap (it merges
+  // state.bots + state.users + the API), so `roleMap.IDIOT` can be a length-1
+  // array containing the host's state.users entry — but that entry has
+  // `seat: 0` (initial value from setupGame; never updated after the seat-
+  // claim click). Targeting seat=0 happens to route to the host via act.sh's
+  // seat-lookup table, so the test "passes" but the seat number in any
+  // diagnostic log is wrong. Reading the real seat from the API is correct
+  // and makes the diagnostic log point at the actual seat.
+  if (localCtx.isHostRole('IDIOT')) {
+    const hostSeat = await readHostSeat(hostPage, localCtx.gameId)
+    if (hostSeat == null) {
+      throw new Error(
+        `Host is the IDIOT but readHostSeat returned null for game=${localCtx.gameId} — ` +
+          `the state.players row for the host may not be populated yet.`,
+      )
+    }
+    return { seat: hostSeat, nickname: 'Host', isHost: true }
+  }
+  const idiotBots = localCtx.roleMap['IDIOT'] ?? []
+  if (idiotBots.length === 0) {
+    throw new Error(
+      `IDIOT not assigned: roleMap.IDIOT empty AND ctx.hostRole=${localCtx.hostRole} — ` +
+        `game setup likely failed. Check setupGame's role-assignment retry budget.`,
+    )
+  }
+  const idiotBot = idiotBots[0]
+  return { seat: idiotBot.seat, nickname: idiotBot.nick, isHost: false }
+}
 
 test.describe('Idiot flow — multi-browser STOMP verification', () => {
   test.setTimeout(60_000) // 3 minutes for the full flow
@@ -84,17 +135,11 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
     })
 
     try {
-      // When random role assignment lands IDIOT on the host seat, the existing
-      // "all bots vote for idiot" path via act.sh doesn't apply — the host
-      // isn't in the bot state file. Test 1 still covers this case via its
-      // isHostRole('IDIOT') branch; skip here with a clear rationale.
-      // Memory: e2e-ci-vs-local-env-differences item 4.
-      if (localCtx.isHostRole('IDIOT')) {
-        testInfo.attach('skip-reason', { body: 'Host rolled IDIOT — idiot-reveal voting flow requires a bot IDIOT. Test 1 covers host-as-IDIOT.' })
-        test.skip(true, 'Host rolled IDIOT — covered by test 1')
-        return
-      }
-
+      // host-IDIOT used to skip here on the assumption that act.sh can only
+      // target bot seats. Not true — act.sh targets a seat number, not a
+      // userId, so as long as we resolve the IDIOT's seat (`resolveIdiotTarget`)
+      // the fan-out works for both bot-IDIOT and host-IDIOT rolls. Memory:
+      // e2e-ci-vs-local-env-differences item 4.
       const hostPage = localCtx.hostPage
 
       // Check initial game state after setup
@@ -310,50 +355,54 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       testInfo.attach('voting-phase-reached', { body: 'Voting phase reached successfully' })
       
       // ── Phase 4: Idiot Reveal ──
-      // Get idiot bot information
-      const idiotBots = localCtx.roleMap['IDIOT']
-      if (!idiotBots || idiotBots.length === 0) {
-        throw new Error('IDIOT bots not found')
-      }
-      
-      const idiotBot = idiotBots[0]
-      testInfo.attach('idiot-info', { body: JSON.stringify(idiotBot, null, 2) })
+      // Resolve the IDIOT's seat + nickname. Works for both bot-IDIOT (most
+      // rolls) and host-IDIOT (~1/6 of 6p IDIOT-kit games) — the host case
+      // reads the host's seat from the live game state.
+      const idiot = await resolveIdiotTarget(localCtx, hostPage)
+      testInfo.attach('idiot-info', { body: JSON.stringify(idiot, null, 2) })
+      // eslint-disable-next-line no-console
+      console.log(`[idiot-flow test 2] resolved IDIOT seat=${idiot.seat} nick=${idiot.nickname} isHost=${idiot.isHost}`)
 
       // Fan-out vote only to alive, non-host, unvoted bots — skips
       // already-voted and dead players to avoid act.sh's 3× retry cascade.
+      // The IDIOT (whether bot or host) is the vote target; we never need
+      // them to vote for themselves, and the host never votes via fan-out
+      // anyway, so the host-IDIOT case Just Works without special-casing.
       {
         const unvoted = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
         const hostId = await readHostUserId(hostPage)
         for (const bot of localCtx.allBots) {
           if (bot.nick === 'Host' || bot.userId === hostId) continue
           if (!unvoted.has(bot.userId)) continue
-          act('SUBMIT_VOTE', bot.nick, { target: String(idiotBot.seat), room: localCtx.roomCode })
+          act('SUBMIT_VOTE', bot.nick, { target: String(idiot.seat), room: localCtx.roomCode })
         }
-        testInfo.attach('votes-submitted', { body: `Fan-out vote for idiot at seat ${idiotBot.seat}` })
+        testInfo.attach('votes-submitted', { body: `Fan-out vote for idiot at seat ${idiot.seat}` })
       }
-      
+
       // Wait for all votes to register
       await hostPage.waitForTimeout(2_000)
-      
+
       // Host reveals tally via script
       act('VOTING_REVEAL_TALLY', 'HOST', { room: localCtx.roomCode })
       testInfo.attach('tally-revealed', { body: 'Vote tally revealed' })
-      
+
       // Wait for the UI to update - this is where idiot reveal should happen
       await hostPage.waitForTimeout(3_000)
-      
+
       // Verify idiot reveal banner appears in all browsers
       for (const [roleName, page] of localCtx.pages) {
         const idiotBanner = page.locator('.elim-banner-body').filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
         await expect(idiotBanner).toBeVisible({ timeout: 10_000 })
-        
+
         // Verify banner shows correct content
         await expect(idiotBanner.getByText(/白痴翻牌/i)).toBeVisible()
         await expect(idiotBanner.getByText(/IDIOT REVEALED/i)).toBeVisible()
-        // Verify the idiot's nickname appears in the banner
-        await expect(idiotBanner.getByText(new RegExp(idiotBot.nick, 'i'))).toBeVisible()
-        
-        testInfo.attach(`idiot-banner-${roleName}`, { body: `Banner visible in ${roleName} browser` })
+        // Verify the idiot's nickname appears in the banner. Use a literal
+        // string match (not regex) so a nickname like "Host" doesn't
+        // accidentally match unrelated banner text.
+        await expect(idiotBanner.filter({ hasText: idiot.nickname })).toBeVisible()
+
+        testInfo.attach(`idiot-banner-${roleName}`, { body: `Banner visible in ${roleName} browser (idiot=${idiot.nickname})` })
       }
       
       // Verify 🃏 overlay appears on idiot's card in all browsers
@@ -383,15 +432,9 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
     })
 
     try {
-      // Same host-as-IDIOT skip as test 2 — the idiot-reveal voting path
-      // requires a bot IDIOT so act.sh can drive it. Memory:
-      // e2e-ci-vs-local-env-differences item 4.
-      if (localCtx.isHostRole('IDIOT')) {
-        testInfo.attach('skip-reason', { body: 'Host rolled IDIOT — VOTE_RESULT→NIGHT path needs a bot IDIOT.' })
-        test.skip(true, 'Host rolled IDIOT — covered by test 1')
-        return
-      }
-
+      // host-IDIOT branch is now exercised via resolveIdiotTarget — the
+      // fan-out vote targets a seat number, not a userId, so the test
+      // works for both bot-IDIOT and host-IDIOT rolls.
       const hostPage = localCtx.hostPage
 
       // ── Phase 0: Start Night Phase ──
@@ -523,14 +566,14 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       await startVoteBtn.click()
       
       await verifyAllBrowsersPhase(localCtx.pages, 'VOTING', 15_000)
-      
-      // Vote for idiot to trigger reveal
-      const idiotBots = localCtx.roleMap['IDIOT']
-      if (!idiotBots || idiotBots.length === 0) {
-        throw new Error('IDIOT bots not found')
-      }
-      
-      const idiotBot = idiotBots[0]
+
+      // Vote for idiot to trigger reveal — works for both bot-IDIOT and
+      // host-IDIOT rolls (resolveIdiotTarget reads host's seat from state).
+      const idiot = await resolveIdiotTarget(localCtx, hostPage)
+      testInfo.attach('idiot-info', { body: JSON.stringify(idiot, null, 2) })
+      // eslint-disable-next-line no-console
+      console.log(`[idiot-flow test 3] resolved IDIOT seat=${idiot.seat} nick=${idiot.nickname} isHost=${idiot.isHost}`)
+
       // Fan-out vote only to alive, non-host, unvoted bots (same rationale
       // as test 2's vote step).
       {
@@ -539,7 +582,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
         for (const bot of localCtx.allBots) {
           if (bot.nick === 'Host' || bot.userId === hostId) continue
           if (!unvoted.has(bot.userId)) continue
-          act('SUBMIT_VOTE', bot.nick, { target: String(idiotBot.seat), room: localCtx.roomCode })
+          act('SUBMIT_VOTE', bot.nick, { target: String(idiot.seat), room: localCtx.roomCode })
         }
       }
       await hostPage.waitForTimeout(2_000)

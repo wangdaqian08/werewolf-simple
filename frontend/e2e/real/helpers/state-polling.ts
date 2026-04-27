@@ -184,6 +184,36 @@ export async function readHostUserId(hostPage: Page): Promise<string | null> {
 }
 
 /**
+ * Return the host's seat number from the live game state (or null if the
+ * host has not yet claimed a seat / the API rejects). The seat is read from
+ * `state.players[*]` matching the host's userId — `setupGame` writes the
+ * host into `state.users` with `seat: 0` until the seat-claim click lands,
+ * so the shell state file is unreliable for this; the API is authoritative.
+ *
+ * Use when a spec needs to vote for / target the host's seat — e.g. the
+ * idiot-flow host-IDIOT branch where the IDIOT player is the host and
+ * `roleMap.IDIOT` is empty.
+ */
+export async function readHostSeat(hostPage: Page, gameId: string): Promise<number | null> {
+  return hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    const userId = localStorage.getItem('userId')
+    if (!token || !userId) return null
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const state = await res.json()
+    const me = ((state?.players ?? []) as Array<{ userId: string; seatIndex?: number; seat?: number }>)
+      .find((p) => p.userId === userId)
+    if (!me) return null
+    // The state DTO uses `seatIndex` in some places and `seat` in others —
+    // accept either to stay forward-compatible with the GamePlayerDto shape.
+    return (me.seatIndex ?? me.seat ?? null) as number | null
+  }, gameId)
+}
+
+/**
  * Generic effect-poll helper. Calls `predicate()` every `pollMs` until it
  * resolves true OR the deadline expires. Throws on timeout with the
  * supplied `description` so the failure log says what we were waiting on.
