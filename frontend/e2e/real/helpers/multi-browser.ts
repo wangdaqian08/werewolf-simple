@@ -274,7 +274,25 @@ export async function setupGame(
 
   // ── Step 5: All bots confirm roles ─────────────────────────────────────
   // Note: this confirms ALL users in the state file, including the host.
-  // The game logic relies on STMP synchronization to handle state transitions.
+  // The game logic relies on STOMP synchronization to handle state transitions.
+  //
+  // BEFORE the act() call, write gameId to the state file. Without this,
+  // act.sh's first call hits the no-cache path (act.sh:287-330) and scans
+  // games 1..10000 looking for one whose `players` set contains all our
+  // bot userIds. On CI that scan races with the game's DB commit: the
+  // host's URL redirect to /game/N happens as soon as the backend assigns
+  // the gameId, but the game.players row write may lag a few hundred ms.
+  // The scan iterates IDs faster than that, fails to find a match, and
+  // exits with "Could not find active game for room <CODE>". Fix: write
+  // the gameId we already extracted from the URL into the state file —
+  // act.sh's cache hit path (act.sh:268-281) just probes /game/N/state
+  // and uses it, which is far more tolerant of commit lag.
+  {
+    const stateFilePath = path.join('/tmp', `werewolf-${roomCode.toUpperCase()}.json`)
+    const stateData = JSON.parse(readFileSync(stateFilePath, 'utf-8'))
+    stateData.gameId = Number(gameId)
+    writeFileSync(stateFilePath, JSON.stringify(stateData, null, 2))
+  }
 
   act('CONFIRM_ROLE', undefined, { room: roomCode })
 

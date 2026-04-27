@@ -551,19 +551,23 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
         .map((p) => p.userId)
     }, ctx.gameId)
     const aliveSet = new Set(aliveIds)
-    const aliveBotsOf = (role: RoleName) =>
-      (ctx.roleMap[role] ?? []).filter((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
+    // Don't filter Host out. When host has a special role (e.g. host=WITCH)
+    // and the role's DOM-first path doesn't fire (browser stale, slot
+    // selector mismatch), the API fallback needs the host as the actor —
+    // otherwise the night stalls at that sub-phase forever. actName(host)
+    // returns 'HOST' and act.sh resolves to the cached host token, so
+    // host-as-X works through the same script path.
+    const aliveActorsOf = (role: RoleName) =>
+      (ctx.roleMap[role] ?? []).filter((b) => aliveSet.has(b.userId))
 
-    const wolfBots = aliveBotsOf('WEREWOLF')
-    const seerBots = aliveBotsOf('SEER')
-    const witchBots = aliveBotsOf('WITCH')
-    const guardBots = aliveBotsOf('GUARD')
-    const villagerBots = aliveBotsOf('VILLAGER')
+    const wolfBots = aliveActorsOf('WEREWOLF')
+    const seerBots = aliveActorsOf('SEER')
+    const witchBots = aliveActorsOf('WITCH')
+    const guardBots = aliveActorsOf('GUARD')
+    const villagerBots = aliveActorsOf('VILLAGER')
 
-    // Targets exclude wolves (a wolf can't kill another wolf) and Host (the
-    // wolf-page DOM-first path covers host-as-wolf). Filter by alive too —
-    // the role-page DOM-first paths target `.slot-alive` already, so the
-    // API fallback should match that contract.
+    // Targets exclude wolves (a wolf can't kill another wolf). Host may be
+    // included as a target if they hold a non-wolf role.
     const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots]
 
     // Locator visibility helper — Playwright's isVisible() does NOT retry,
@@ -650,9 +654,14 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
     if (!seerDone) {
-      // Browser-seer is dead. Try API on remaining seer bots.
+      // Browser-seer is dead. Try API on remaining seer bots. Exclude the
+      // seer's own seat from candidate targets — `allTargets` includes
+      // seerBots, so without this filter the inner loop tries SEER_CHECK
+      // self-check, backend rejects "Cannot check yourself" (3× retries
+      // pollute the log), then moves to the next target.
       for (const sb of seerBots) {
         for (const tgt of allTargets) {
+          if (tgt.userId === sb.userId) continue
           if (tryAct('SEER_CHECK', actName(sb), { target: String(tgt.seat), room: ctx.roomCode })) {
             // Backend transitions SEER_PICK → SEER_RESULT after CHECK,
             // then SEER_RESULT → next sub-phase after CONFIRM.
@@ -945,10 +954,18 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }, ctx.gameId)
     const aliveSet = new Set(aliveIds)
 
-    const wolfBot = (ctx.roleMap.WEREWOLF ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
-    const seerBot = (ctx.roleMap.SEER ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
-    const witchBot = (ctx.roleMap.WITCH ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
-    const guardBot = (ctx.roleMap.GUARD ?? []).find((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
+    // Don't filter Host out of role actors. When host has a special role
+    // and is the only alive actor (e.g. host=WITCH, witch is the sole
+    // witch in the kit), filtering out the host leaves the role unactioned
+    // and the night stalls at that sub-phase forever (CI shard-1 failure
+    // on commit 67fb784 hit this with host-as-WITCH at N3 — game stuck at
+    // NIGHT/WITCH_ACT day=3). actName() returns 'HOST' for the host bot
+    // and act.sh resolves that to the cached host token, so host-as-X
+    // routes through the same script path as a bot-as-X.
+    const wolfBot = (ctx.roleMap.WEREWOLF ?? []).find((b) => aliveSet.has(b.userId))
+    const seerBot = (ctx.roleMap.SEER ?? []).find((b) => aliveSet.has(b.userId))
+    const witchBot = (ctx.roleMap.WITCH ?? []).find((b) => aliveSet.has(b.userId))
+    const guardBot = (ctx.roleMap.GUARD ?? []).find((b) => aliveSet.has(b.userId))
 
     const isVisibleSoon = async (page: Page, testId: string, timeoutMs = 5_000) =>
       page
@@ -1123,18 +1140,32 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
         (localCtx.roleMap.VILLAGER ?? []).find((b) => !wolfIds.has(b.userId))
         ?? localCtx.allBots.find((b) => !wolfIds.has(b.userId) && b.userId !== seer.userId && b.userId !== witch.userId)
       expect(victim, 'need a non-wolf victim for the wolves to kill').toBeDefined()
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000)
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
+        'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
+      ).toBe(true)
       act('WOLF_KILL', actName(wolves[0]), { target: String(victim!.seat), room: localCtx.roomCode })
 
-      // Seer checks (just to advance the phase deterministically).
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000)
+      // Seer checks (just to advance the phase deterministically). Assert
+      // each gate so a wrong-sub-phase doesn't silently fire act() with
+      // a "Not in <X> sub-phase" rejection in the CI log.
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
+        'expected NIGHT/SEER_PICK before firing SEER_CHECK',
+      ).toBe(true)
       act('SEER_CHECK', actName(seer), { target: String(wolves[0].seat), room: localCtx.roomCode })
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
+        'expected NIGHT/SEER_RESULT before firing SEER_CONFIRM',
+      ).toBe(true)
       act('SEER_CONFIRM', actName(seer), { room: localCtx.roomCode })
 
       // Witch: poison-only on wolves[1]. No antidote (backend forbids
       // combined antidote+poison in a single WITCH_ACT).
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
+        'expected NIGHT/WITCH_ACT before firing WITCH_ACT',
+      ).toBe(true)
       act('WITCH_ACT', actName(witch), {
         room: localCtx.roomCode,
         payload: JSON.stringify({
@@ -1151,10 +1182,17 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       await hostPage.getByTestId('day-start-vote').click()
       await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
 
-      // Vote out wolves[0] (the surviving wolf). All bots vote target=seat.
-      // act.sh's "all" fan-out + the host's UI abstain combine to total all
-      // alive voters.
-      act('SUBMIT_VOTE', undefined, { target: String(wolves[0].seat), room: localCtx.roomCode })
+      // Vote out wolves[0] (the surviving wolf). Iterate alive non-host
+      // unvoted bots explicitly — `act('SUBMIT_VOTE', undefined, ...)` does
+      // act.sh's full bot fan-out which includes dead bots, producing
+      // "Dead players cannot vote" rejections in the CI log (the wolf
+      // killed villagers[0] at N1, so by D1 they're dead).
+      const unvoted1 = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
+      for (const bot of localCtx.allBots) {
+        if (bot.nick === 'Host') continue
+        if (!unvoted1.has(bot.userId)) continue
+        act('SUBMIT_VOTE', bot.nick, { target: String(wolves[0].seat), room: localCtx.roomCode })
+      }
       const hostAbstain = hostPage.locator('.skip-btn').first()
       if (await hostAbstain.isVisible({ timeout: 3_000 }).catch(() => false)) {
         await hostAbstain.click()
@@ -1206,15 +1244,29 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       await waitForPhase(hostPage, localCtx.gameId, 'NIGHT', 15_000)
 
       // ── N1 ── wolves kill villager-1, witch declines (villager-1 dies).
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000)
+      // Assert each sub-phase gate so a wrong-sub-phase doesn't silently
+      // fire act() with a "Not in <X> sub-phase" rejection in CI logs.
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
+        'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
+      ).toBe(true)
       act('WOLF_KILL', actName(wolves[0]), { target: String(villagers[0].seat), room: localCtx.roomCode })
 
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000)
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
+        'expected NIGHT/SEER_PICK before firing SEER_CHECK',
+      ).toBe(true)
       act('SEER_CHECK', actName(seer), { target: String(wolves[0].seat), room: localCtx.roomCode })
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
+        'expected NIGHT/SEER_RESULT before firing SEER_CONFIRM',
+      ).toBe(true)
       act('SEER_CONFIRM', actName(seer), { room: localCtx.roomCode })
 
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
+        'expected NIGHT/WITCH_ACT before firing WITCH_ACT',
+      ).toBe(true)
       act('WITCH_ACT', actName(witch), {
         room: localCtx.roomCode,
         payload: '{"useAntidote":false}',
@@ -1228,7 +1280,13 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       await hostPage.getByTestId('day-start-vote').click()
       await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
 
-      act('SUBMIT_VOTE', undefined, { target: String(villagers[1].seat), room: localCtx.roomCode })
+      // Per-bot fan-out filtering dead bots (villagers[0] died at N1).
+      const unvoted2 = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
+      for (const bot of localCtx.allBots) {
+        if (bot.nick === 'Host') continue
+        if (!unvoted2.has(bot.userId)) continue
+        act('SUBMIT_VOTE', bot.nick, { target: String(villagers[1].seat), room: localCtx.roomCode })
+      }
       const hostAbstain = hostPage.locator('.skip-btn').first()
       if (await hostAbstain.isVisible({ timeout: 3_000 }).catch(() => false)) {
         await hostAbstain.click()
@@ -1281,16 +1339,29 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
 
       // ── N1 ── wolves kill a villager. Witch saves them (no death) so D1
       // alive count is full and the hunter-vote elimination is the only D1
-      // event.
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000)
+      // event. Assert each sub-phase gate so a wrong-sub-phase doesn't
+      // silently fire act() with a "Not in <X> sub-phase" rejection.
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
+        'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
+      ).toBe(true)
       act('WOLF_KILL', actName(wolves[0]), { target: String(villagers[0].seat), room: localCtx.roomCode })
 
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000)
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
+        'expected NIGHT/SEER_PICK before firing SEER_CHECK',
+      ).toBe(true)
       act('SEER_CHECK', actName(seer), { target: String(wolves[0].seat), room: localCtx.roomCode })
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
+        'expected NIGHT/SEER_RESULT before firing SEER_CONFIRM',
+      ).toBe(true)
       act('SEER_CONFIRM', actName(seer), { room: localCtx.roomCode })
 
-      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)
+      expect(
+        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
+        'expected NIGHT/WITCH_ACT before firing WITCH_ACT',
+      ).toBe(true)
       act('WITCH_ACT', actName(witch), {
         room: localCtx.roomCode,
         payload: '{"useAntidote":true}',
@@ -1303,7 +1374,15 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       await hostPage.getByTestId('day-start-vote').click()
       await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
 
-      act('SUBMIT_VOTE', undefined, { target: String(hunter.seat), room: localCtx.roomCode })
+      // Per-bot fan-out — witch saved villagers[0] at N1 so all bots alive,
+      // but iterate explicitly to match the pattern (and to surface any
+      // dead bot via a positive readUnvotedAlivePlayerIds gate).
+      const unvotedRow4 = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
+      for (const bot of localCtx.allBots) {
+        if (bot.nick === 'Host') continue
+        if (!unvotedRow4.has(bot.userId)) continue
+        act('SUBMIT_VOTE', bot.nick, { target: String(hunter.seat), room: localCtx.roomCode })
+      }
       const hostAbstain = hostPage.locator('.skip-btn').first()
       if (await hostAbstain.isVisible({ timeout: 3_000 }).catch(() => false)) {
         await hostAbstain.click()

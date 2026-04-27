@@ -35,6 +35,17 @@ interface RolePlayer {
 }
 
 /**
+ * `expect(value).not.toBeNull()` doesn't narrow via TypeScript flow analysis,
+ * so callers still see `T | null` after the assertion. This helper uses a TS
+ * assertion signature so subsequent reads of `value` are non-null without
+ * resorting to a non-null bang at every call site.
+ */
+function assertNonNull<T>(value: T | null | undefined, msg: string): asserts value is T {
+  expect(value, msg).not.toBeNull()
+  expect(value, msg).not.toBeUndefined()
+}
+
+/**
  * Resolve `role` to its bot OR to the host (whoever holds it). Returns null
  * only if neither holds the role (impossible if the role is in the kit).
  */
@@ -432,7 +443,14 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   const resolvedTargetSeatNum = typeof resolvedTargetSeat === 'string' ? Number(resolvedTargetSeat) : resolvedTargetSeat
 
   // ── WEREWOLF_PICK ──
-  await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 20_000)
+  // Only fire the kill if the backend actually reached the WEREWOLF_PICK
+  // sub-phase. waitForSubPhase returns false when the game already left
+  // NIGHT (e.g. someone won at post-night-resolve before this call ran)
+  // or the gate timed out — in either case there's nothing for the role
+  // actor to do, and firing anyway produces a "Not in WEREWOLF_PICK
+  // sub-phase" rejection in the CI log.
+  const reachedWolfPick = await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 20_000)
+  if (!reachedWolfPick) return
   if (wolfBot) {
     tryAct('WOLF_KILL', actName(wolfBot), { target: String(resolvedTargetSeatNum), room: ctx.roomCode })
   } else {
@@ -836,19 +854,24 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
       round++
     }
 
-    // Expect GAME_OVER — verify result screen
-    await ctx.hostPage.waitForURL(/\/result\//, { timeout: 60_000 }).catch(() => {})
-    await captureSnapshot(ctx.pages, testInfo, 'classic-99-result-screen')
-
-    const onResult = ctx.hostPage.url().includes('/result/')
-    if (!onResult) {
-      // Not necessarily a failure — capture diagnostic and flag it
-      const currentPhase = await ctx.hostPage.evaluate(() => {
-        const el = document.querySelector('[data-testid="current-phase"]')
-        return el?.textContent ?? document.body.className
+    // Expect GAME_OVER — assert via authoritative API state, not URL.
+    // STOMP-driven router.push to /result lags backend commit by 200-500ms
+    // (longer on CI), so URL-only detection is racy.
+    const finalPhase = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      throw new Error(`Villager-win scenario did not reach /result in 6 rounds. Current host state: ${currentPhase}`)
-    }
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    expect(
+      finalPhase,
+      `villager-win plan must reach GAME_OVER within ${maxRounds} rounds — actual phase=${finalPhase}`,
+    ).toBe('GAME_OVER')
+
+    // Wait for the result-screen redirect so the outcome title renders.
+    await ctx.hostPage.waitForURL(/\/result\//, { timeout: 60_000 })
+    await captureSnapshot(ctx.pages, testInfo, 'classic-99-result-screen')
 
     await expect(ctx.hostPage.locator('.outcome-title')).toBeVisible({ timeout: 10_000 })
     const winner = (await ctx.hostPage.locator('.outcome-title').textContent()) ?? ''
@@ -905,11 +928,9 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     const seer = await resolveRolePlayer(ctx, 'SEER')
     const guard = await resolveRolePlayer(ctx, 'GUARD')
     const witch = await resolveRolePlayer(ctx, 'WITCH')
-    if (!seer || !guard || !witch) {
-      throw new Error(
-        `Missing special role player — seer=${!!seer} guard=${!!guard} witch=${!!witch} (hostRole=${ctx.hostRole})`,
-      )
-    }
+    assertNonNull(seer, `kit must have a SEER (bot or host=${ctx.hostRole})`)
+    assertNonNull(guard, `kit must have a GUARD (bot or host=${ctx.hostRole})`)
+    assertNonNull(witch, `kit must have a WITCH (bot or host=${ctx.hostRole})`)
     // eslint-disable-next-line no-console
     console.warn(
       `[hard-mode test] resolved roles — seer=${seer.nick}(seat=${seer.seat},host=${seer.isHost}) ` +
@@ -922,9 +943,10 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
       .filter((b) => b.nick !== 'Host')
       .map((b) => b.seat)
       .filter((s) => !wolfSeats.has(s))
-    if (villagerSeats.length < 1) {
-      throw new Error(`Need at least one non-host villager seat for D2 vote-out; got ${villagerSeats.length}`)
-    }
+    expect(
+      villagerSeats.length,
+      `D2 vote-out plan needs at least one non-host non-wolf villager seat`,
+    ).toBeGreaterThanOrEqual(1)
 
     // Sheriff election — only the seer campaigns. After speeches + votes
     // the seer holds the badge.
@@ -958,13 +980,15 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     // badge UI. Park the badge on a non-host wolf so the sheriff never
     // moves again (wolves don't get voted, don't kill themselves).
     const seerPage = ctx.pages.get('SEER')
-    if (!seerPage) {
-      throw new Error('No SEER browser page in ctx — cannot drive badge handover via DOM')
-    }
+    assertNonNull(
+      seerPage,
+      'badge-handover needs the SEER browser page — only the eliminated sheriff sees the pass-badge UI',
+    )
     const badgeWolfBot = wolfBots.find((b) => b.nick !== 'Host')
-    if (!badgeWolfBot) {
-      throw new Error('No non-host wolf available to receive the badge')
-    }
+    assertNonNull(
+      badgeWolfBot,
+      'a non-host wolf is needed as the badge recipient so the badge stays put for the rest of the test',
+    )
     await completeDay(
       ctx,
       testInfo,
@@ -975,9 +999,20 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     )
     await ctx.hostPage.waitForTimeout(2_000)
 
-    if (ctx.hostPage.url().includes('/result/')) {
-      throw new Error('Game ended at D1 vote-out — wolf-win plan expected to need 2 nights')
-    }
+    // Plan needs 2 nights: D1 vote-out fires BADGE_HANDOVER + post-vote win
+    // check, but counterplay (witch + alive humans) keeps it from ending.
+    // Use API state, not URL — STOMP /result/ redirect lags backend commit.
+    const phaseAfterD1 = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    expect(
+      phaseAfterD1,
+      'wolf-win plan needs 2 nights — D1 vote-out should NOT end the game',
+    ).not.toBe('GAME_OVER')
 
     // N2: wolves kill the WITCH. Witch sees herself as the wolves' target
     // during WITCH_ACT but the `useAntidote: false` payload (in
@@ -987,10 +1022,18 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     await ctx.hostPage.waitForTimeout(2_500)
     await captureSnapshot(ctx.pages, testInfo, 'hard-06-night-2-done')
 
-    if (ctx.hostPage.url().includes('/result/')) {
-      // Edge: witch self-action timing meant POST_NIGHT literal-humans-zero
-      // didn't apply, but if the game already wrapped (e.g. wolves got
-      // parity post-night via cascading death) capture and assert.
+    // Edge: if N2 already wrapped the game (wolves got parity via cascading
+    // death), capture and assert wolf-win here. Use API state — STOMP
+    // /result/ redirect lags backend GAME_OVER commit.
+    const phaseAfterN2 = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    if (phaseAfterN2 === 'GAME_OVER') {
+      await ctx.hostPage.waitForURL(/\/result\//, { timeout: 30_000 })
       await captureSnapshot(ctx.pages, testInfo, 'hard-99-result-screen')
       await expect(ctx.hostPage.locator('.outcome-title')).toBeVisible({ timeout: 10_000 })
       const winnerEarly = (await ctx.hostPage.locator('.outcome-title').textContent()) ?? ''
@@ -1006,15 +1049,21 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     await completeDay(ctx, testInfo, villagerSeats[0], 'hard-07-day-2')
     await ctx.hostPage.waitForTimeout(2_000)
 
-    await ctx.hostPage.waitForURL(/\/result\//, { timeout: 60_000 }).catch(() => {})
-    await captureSnapshot(ctx.pages, testInfo, 'hard-99-result-screen')
+    // Authoritative GAME_OVER assertion via API, not URL.
+    const phaseAfterD2 = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    expect(
+      phaseAfterD2,
+      `HARD_MODE plan must reach GAME_OVER after N1(guard)+D1(seer)+N2(witch)+D2(villager) — actual=${phaseAfterD2}`,
+    ).toBe('GAME_OVER')
 
-    if (!ctx.hostPage.url().includes('/result/')) {
-      throw new Error(
-        `HARD_MODE wolf-win scenario did not reach /result after N1(guard)+D1(seer)+N2(witch)+D2(villager). ` +
-          `Current URL=${ctx.hostPage.url()}`,
-      )
-    }
+    await ctx.hostPage.waitForURL(/\/result\//, { timeout: 60_000 })
+    await captureSnapshot(ctx.pages, testInfo, 'hard-99-result-screen')
 
     await expect(ctx.hostPage.locator('.outcome-title')).toBeVisible({ timeout: 10_000 })
     const winner = (await ctx.hostPage.locator('.outcome-title').textContent()) ?? ''
