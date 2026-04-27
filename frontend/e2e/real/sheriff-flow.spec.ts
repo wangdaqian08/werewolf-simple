@@ -6,9 +6,10 @@
  */
 import {expect, test} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act, type RoleName, sheriff} from './helpers/shell-runner'
+import {act, actName, type RoleName, sheriff} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import {waitForCondition} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -52,16 +53,20 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
   // ── Test 2: Players sign up, button changes ────────────────────────────
 
   test('2. Sheriff signup — browser player signs up, button changes', async ({}, testInfo) => {
-    // Use seer browser to sign up for sheriff. setupGame is invariably
-    // configured with browserRoles including 'SEER' (line 23 of beforeAll),
-    // and helpers/multi-browser.ts:362-405 either maps hostPage to the SEER
-    // entry (when host rolled SEER) or opens a new context for the first
-    // non-host SEER bot. roleMap.SEER is always non-empty because the 9p
-    // role distribution always includes one SEER (GameService.kt:322 runs
-    // when room.hasSeer is true, the CreateRoom default). So `seerPage`
-    // can never be undefined here. Replace the dead `test.skip()` with a
-    // throw that surfaces the diagnostic if a future change ever
-    // invalidates that invariant.
+    // Strong contract — three things this test exercises that no other
+    // sheriff-flow test does:
+    //   (a) The seer's browser shows `sheriff-run` while in SIGNUP.
+    //   (b) Clicking it round-trips through STOMP and the same browser
+    //       sees `sheriff-withdraw` (proves signup registered + state
+    //       broadcast back to the originating browser).
+    //   (c) Bot campaigns submitted via the REST script appear in the
+    //       seer's candidate list (cross-browser STOMP fan-out).
+    //
+    // Earlier versions wrapped (b) in `if (await runBtn.isVisible())` and
+    // (c) in `try { ... } catch {}`, so the test passed silently even when
+    // the signup feature was completely broken. Same anti-pattern as
+    // `test.skip()` — replaced with positive assertions.
+
     const seerPage = ctx.pages.get('SEER')
     if (!seerPage) {
       throw new Error(
@@ -71,29 +76,57 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       )
     }
 
-    // Click "Run for Sheriff" button
+    // Wait for SHERIFF_ELECTION/SIGNUP — only sub-phase where `sheriff-run`
+    // renders. Backend may take a moment after role-reveal-end to enter it.
+    await waitForCondition(
+      async () => {
+        const state = await seerPage.evaluate(async (id: string) => {
+          const token = localStorage.getItem('jwt')
+          const res = await fetch(`/api/game/${id}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          return res.ok ? res.json() : null
+        }, ctx.gameId)
+        return state?.sheriffElection?.subPhase === 'SIGNUP'
+      },
+      'sheriffElection.subPhase to reach SIGNUP',
+      15_000,
+    )
+
+    // (a) sheriff-run must render. If it doesn't, that's a regression in
+    //     SheriffElection.vue's signup template (or an aliveness bug).
     const runBtn = seerPage.getByTestId('sheriff-run')
-    if (await runBtn.isVisible().catch(() => false)) {
-      await runBtn.click()
+    await expect(runBtn).toBeVisible({ timeout: 10_000 })
 
-      // Verify: button should change to "Withdraw"
-      await expect(
-        seerPage.getByTestId('sheriff-withdraw'),
-      ).toBeVisible({ timeout: 5_000 })
-    }
+    // (b) Click → button toggles to "Withdraw" (signup confirmed).
+    await runBtn.click()
+    await expect(seerPage.getByTestId('sheriff-withdraw')).toBeVisible({
+      timeout: 10_000,
+    })
 
-    // Have some bots campaign via script
+    // (c) Drive 3 bot campaigns via script and assert all 3 appear in the
+    //     seer's candidate list (1 self-signup + 3 bots = 4 candidates).
+    //     Filter Host out: the seer just signed up via the seerPage click;
+    //     if host rolled SEER, seerPage IS hostPage and the host is already
+    //     in the list — feeding host into `sheriff campaign` here would be
+    //     a duplicate signup that the backend rejects.
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
     const villagerBots = ctx.roleMap.VILLAGER ?? []
-    const campaigners = [...wolfBots.slice(0, 1), ...villagerBots.slice(0, 2)]
-
+    const campaigners = [...wolfBots.slice(0, 1), ...villagerBots.slice(0, 2)].filter(
+      (b) => b.nick !== 'Host',
+    )
+    expect(campaigners.length, 'need at least one non-host bot to campaign').toBeGreaterThan(0)
     for (const bot of campaigners) {
-      try {
-        sheriff('campaign', { player: bot.nick, room: ctx.roomCode })
-      } catch {
-        // Some may already have signed up or phase moved on
-      }
+      sheriff('campaign', { player: actName(bot), room: ctx.roomCode })
     }
+
+    // Candidate count on the seer's UI = 1 (self) + campaigners.length,
+    // propagated via STOMP. toHaveCount retries until the count matches
+    // or the timeout expires, so this naturally waits for STOMP delivery.
+    await expect(seerPage.locator('.cand-row-running')).toHaveCount(
+      1 + campaigners.length,
+      { timeout: 10_000 },
+    )
 
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-02-signup-done')
   })
