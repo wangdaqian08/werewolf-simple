@@ -129,6 +129,13 @@ BOTS_JSON=$(python3 -c "import json; print(json.dumps(json.load(open('$STATE_FIL
 BOT_COUNT=$(echo "$BOTS_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
 [ "$BOT_COUNT" -eq 0 ] && fail "No bots in state file for room $ROOM_CODE"
 
+# Host token (optional; only present when setupGame injected it). Used so the
+# host can drive sheriff actions (campaign / abstain / vote / quit) the same
+# way bots do — required when the random role roll lands SEER on the host and
+# the host is the only sheriff candidate.
+HOST_TOKEN=$(python3 -c "import json; print(json.load(open('$STATE_FILE')).get('hostToken',''))" 2>/dev/null || true)
+HOST_NICK=$(python3 -c "import json; print(json.load(open('$STATE_FILE')).get('hostNick','Host'))" 2>/dev/null || echo "Host")
+
 ROOM_ID=$(python3 -c "import json; print(json.load(open('$STATE_FILE'))['roomId'])")
 
 # ── Auto-detect game ID ───────────────────────────────────────────────────────
@@ -183,7 +190,13 @@ PYEOF
 info "Game ID = $GAME_ID"
 
 # ── Resolve acting players ────────────────────────────────────────────────────
-PLAYERS_JSON=$(python3 -c "
+# Special case 'host'/'Host'/'HOST' first: the host's token lives outside the
+# `bots` list, so the bot-search below would never find it.
+if [ "$(echo "$PLAYER_SEL" | tr 'a-z' 'A-Z')" = "HOST" ]; then
+  [ -z "$HOST_TOKEN" ] && fail "No hostToken in state file — cannot drive '$PLAYER_SEL' as the host"
+  PLAYERS_JSON="[{\"nick\":\"$HOST_NICK\",\"token\":\"$HOST_TOKEN\",\"seat\":\"host\",\"userId\":\"\"}]"
+else
+  PLAYERS_JSON=$(python3 -c "
 import json
 bots = json.loads('''$BOTS_JSON''')
 sel  = '$PLAYER_SEL'.strip()
@@ -202,7 +215,8 @@ else:
 
 print(json.dumps(result) if result else '')
 ")
-[ -z "$PLAYERS_JSON" ] && fail "No bots matched '$PLAYER_SEL'"
+  [ -z "$PLAYERS_JSON" ] && fail "No bots matched '$PLAYER_SEL'"
+fi
 
 PLAYER_COUNT=$(echo "$PLAYERS_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
 
@@ -212,11 +226,12 @@ if [ -n "$TARGET_SEL" ]; then
   TARGET_UID=$(python3 << PYEOF
 import json, urllib.request, urllib.error
 
-bots  = json.loads(r"""$BOTS_JSON""")
-sel   = "$TARGET_SEL"
-base  = "$BASE"
-gid   = "$GAME_ID"
-token = "$FIRST_TOKEN"
+bots       = json.loads(r"""$BOTS_JSON""")
+sel        = "$TARGET_SEL"
+base       = "$BASE"
+gid        = "$GAME_ID"
+token      = "$FIRST_TOKEN"
+host_nick  = "$HOST_NICK"
 
 # Try bot state file first ────────────────────────────────────────────────────
 if sel.isdigit():
@@ -231,6 +246,10 @@ else:
     match = next((b for b in bots if lo in b["nick"].lower()), None)
     if match:
         print(match["userId"]); exit()
+    # Host as nickname target — match against host_nick. The host's userId
+    # is not in the bots list; resolve via the API state below.
+    if lo == host_nick.lower():
+        pass  # fall through to API lookup
 
 # Fallback: query game state, match by seatIndex ──────────────────────────────
 req = urllib.request.Request(f"{base}/game/{gid}/state",
@@ -246,6 +265,14 @@ if sel.isdigit():
                   if str(p.get("seatIndex", "")) == sel), None)
     if match:
         print(match["userId"]); exit()
+
+# Nickname match against state.players[].nickname (covers host whose nick is
+# 'Host' but whose userId is 'guest:host' and absent from the bots list).
+lo = sel.lower()
+match = next((p for p in state.get("players", [])
+              if (p.get("nickname") or "").lower() == lo), None)
+if match:
+    print(match["userId"]); exit()
 
 print(sel)   # last resort: pass through as-is
 PYEOF

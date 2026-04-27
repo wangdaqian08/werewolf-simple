@@ -169,6 +169,8 @@ These are the templates. When the next failing test lands on your desk, the loop
 
 - Suggesting a fix before you've reproduced the failure locally.
 - Citing "flake", "timeout", "race condition", or "resource pressure" as a root cause without a backend log line that proves it.
+- **Wrapping a failing-on-some-rolls test in a retry-until-safe loop** — `for (let attempt = 0; attempt < 5; attempt++) { setupGame(); if (safe) break; cleanup() }`. This is the procedural cousin of "increase the timeout" — it papers over the unhappy path without ever reading why it fails. The user flagged this on PR #72. See `feedback_no_retry_until_happy_path.md`.
+- Probability language in commit messages ("averages 1.33 setups", "P(all unsafe) ≈ 0.001"). That is talking about how often you've hidden the failure, not what the failure was.
 - Reaching for `act.sh` REST shortcuts when a real player would click a button.
 - Lengthening a `waitForTimeout` instead of waiting for an effect.
 - `getByText` instead of `getByTestId`.
@@ -177,3 +179,14 @@ These are the templates. When the next failing test lands on your desk, the loop
 - Telling the user "should be fixed" without monitoring CI to green.
 
 If you find yourself in any of these, restart at step 0.
+
+## Probabilistic failures — un-skip first, observe, *then* fix
+
+When the failing case fires only on N% of inputs (random role rolls, random ordering), the **wrong** instinct is "loop the setup until the input lands on the happy path". The right instinct is:
+
+1. Drop the conditional skip / retry guard.
+2. Run the test until the unhappy case actually triggers (or force it via a deterministic seed if available).
+3. Read the log to find what actually fails on that path. Common surprise: the unhappy case *would have passed* — the skip was speculative.
+4. Only then write a fix. The fix is either backend behavior, test logic that adapts to the input, or a real reason to skip — quoted from the log line, not from speculation.
+
+Worked example of this trap: PR #72 wrapped a 25%-host-role-roll skip in a 5-attempt setupGame retry. The user rejected it as "unacceptable, it will increase the CI job, exceed the time limit." The right move was to un-skip and verify whether host-only buttons (`day-reveal-result`, `voting-continue`) actually need a live host — they check `hostUserId`, not alive status, so the unhappy path may have always worked.

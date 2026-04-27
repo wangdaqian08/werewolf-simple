@@ -192,7 +192,8 @@ export async function readHostUserId(hostPage: Page): Promise<string | null> {
  *
  * Use when a spec needs to vote for / target the host's seat — e.g. the
  * idiot-flow host-IDIOT branch where the IDIOT player is the host and
- * `roleMap.IDIOT` is empty.
+ * `roleMap.IDIOT` is empty, or the 12p-sheriff host=SEER/WITCH/GUARD case
+ * where the kill plan targets the host's seat.
  */
 export async function readHostSeat(hostPage: Page, gameId: string): Promise<number | null> {
   return hostPage.evaluate(async (id: string) => {
