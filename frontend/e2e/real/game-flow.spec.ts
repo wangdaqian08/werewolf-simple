@@ -488,12 +488,23 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
   // ── Test 8: Night 2 cycle ────────────────────────────────────────────
 
   test('8. Night 2 — phase cycling works, transitions back to DAY', async ({}, testInfo) => {
-    // Check if game is over first
-    const isGameOver = ctx.hostPage.url().includes('/result/')
-    if (isGameOver) {
-      test.skip()
-      return
+    // 9p game starts with 3 wolves (GameService.kt:316 — wolfCount=3 when
+    // playerCount<=9). Test 7 votes out the first wolf at D1, leaving 2
+    // wolves alive — POST_VOTE check is `wolves >= humans` for CLASSIC and
+    // 2 < 6 humans, so no win triggers and the game advances to N2. The
+    // earlier `if (isGameOver) test.skip()` guard never fired in practice
+    // and was speculative; if a future change reduces the wolf count or
+    // adds another elimination, surface the impossibility here so the
+    // root cause is visible instead of silently skipping.
+    if (ctx.hostPage.url().includes('/result/')) {
+      throw new Error(
+        `Test 8 reached with game already over after D1 — unexpected for 9p (3 wolves). ` +
+          `Either Test 7's vote target reduced wolves to 0 or another mechanic eliminated ` +
+          `wolves at N1. Inspect the latest game.state lines in /tmp/werewolf-e2e-backend.log.`,
+      )
     }
+    // eslint-disable-next-line no-console
+    console.warn(`[game-flow test 8] starting Night 2 — game URL=${ctx.hostPage.url()}`)
 
     // Night 2: some browser-bound role bots may have been voted out on
     // Day 1. Each role tries DOM-first via its browser; if that browser's
