@@ -20,10 +20,38 @@ import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 import {
   readAlivePlayerIds,
+  readHostSeat,
   readHostUserId,
   readUnvotedAlivePlayerIds,
   waitForVotingSubPhase,
 } from './helpers/state-polling'
+
+/** A special-role player resolved to either a bot OR the host. */
+interface RolePlayer {
+  seat: number
+  nick: string
+  isHost: boolean
+  userId: string
+}
+
+/**
+ * Resolve `role` to its bot OR to the host (whoever holds it). Returns null
+ * only if neither holds the role (impossible if the role is in the kit).
+ */
+async function resolveRolePlayer(
+  ctx: GameContext,
+  role: RoleName,
+): Promise<RolePlayer | null> {
+  if (ctx.isHostRole(role)) {
+    const hostSeat = await readHostSeat(ctx.hostPage, ctx.gameId)
+    const hostUserId = await readHostUserId(ctx.hostPage)
+    if (hostSeat == null || hostUserId == null) return null
+    return { seat: hostSeat, nick: 'Host', isHost: true, userId: hostUserId }
+  }
+  const bot = (ctx.roleMap[role] ?? []).find((b) => b.nick !== 'Host')
+  if (!bot) return null
+  return { seat: bot.seat, nick: bot.nick, isHost: false, userId: bot.userId }
+}
 
 const BROWSER_ROLES: RoleName[] = ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER']
 
@@ -375,18 +403,38 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   const guardBot = guardBots.find((b) => isAlive(b.userId))
 
   // Verify WOLF_KILL target is alive; if not, re-target any alive non-wolf
-  // non-host seat. Avoids the "villagerSeats rotation hands wolves an already
-  // dead seat on a later round" stall documented in the 2026-04-24 walkthrough.
+  // seat. Avoids the "villagerSeats rotation hands wolves an already dead
+  // seat on a later round" stall documented in the 2026-04-24 walkthrough.
+  // Resolve via the live game state (not ctx.allBots) — the host is in
+  // state.players but not in ctx.allBots, so a host-seated kill target
+  // (e.g. host=GUARD on N1, host=WITCH on N2) would otherwise fall through
+  // to the first non-host alive bot.
   const wolfSeats = new Set(wolfBots.map((b) => b.seat))
-  const targetBot = ctx.allBots.find((b) => b.seat === targetSeat && isAlive(b.userId))
-  const resolvedTargetSeat = targetBot
+  const seatToUserId = await hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return {} as Record<string, string>
+    const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) return {} as Record<string, string>
+    const state = await res.json()
+    return Object.fromEntries(
+      ((state?.players ?? []) as Array<{ seatIndex: number; userId: string; isAlive?: boolean }>)
+        .filter((p) => p.isAlive !== false)
+        .map((p) => [String(p.seatIndex), p.userId]),
+    )
+  }, gameId)
+  const targetUserId = seatToUserId[String(targetSeat)] ?? null
+  const targetIsAlive = targetUserId != null && isAlive(targetUserId)
+  const resolvedTargetSeat = targetIsAlive
     ? targetSeat
-    : ctx.allBots.find((b) => b.nick !== 'Host' && !wolfSeats.has(b.seat) && isAlive(b.userId))?.seat ?? targetSeat
+    : (Object.entries(seatToUserId).find(
+        ([s, uid]) => !wolfSeats.has(Number(s)) && isAlive(uid),
+      )?.[0] ?? targetSeat)
+  const resolvedTargetSeatNum = typeof resolvedTargetSeat === 'string' ? Number(resolvedTargetSeat) : resolvedTargetSeat
 
   // ── WEREWOLF_PICK ──
   await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 20_000)
   if (wolfBot) {
-    tryAct('WOLF_KILL', actName(wolfBot), { target: String(resolvedTargetSeat), room: ctx.roomCode })
+    tryAct('WOLF_KILL', actName(wolfBot), { target: String(resolvedTargetSeatNum), room: ctx.roomCode })
   } else {
     // host is the sole alive wolf — drive via host UI
     await hostPage.locator('.player-grid .slot-alive').first().click().catch(() => {})
@@ -477,11 +525,34 @@ async function completeDay(
   await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-day-voting-opened`)
 
   // Resolve target (if any) from the current alive roster. Unresolved target
-  // → everyone abstains.
+  // → everyone abstains. Use the live game state's `players` list (not
+  // `ctx.allBots`) — the host is in `players` but not in `allBots`, so a
+  // host-seated target (e.g. the seer-as-sheriff when the host rolled SEER)
+  // would otherwise resolve to undefined and the fan-out would silently
+  // abstain instead of voting.
   const aliveIds = await readAlivePlayerIds(hostPage, gameId)
-  const targetBot = targetSeat >= 0
-    ? ctx.allBots.find((b) => b.seat === targetSeat && aliveIds.has(b.userId))
-    : undefined
+  const targetUserId = targetSeat >= 0
+    ? await hostPage.evaluate(
+        async ({ id, seat }) => {
+          const token = localStorage.getItem('jwt')
+          if (!token) return null as string | null
+          const res = await fetch(`/api/game/${id}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!res.ok) return null as string | null
+          const state = await res.json()
+          const match = ((state?.players ?? []) as Array<{ seatIndex: number; userId: string }>)
+            .find((p) => p.seatIndex === seat)
+          return match?.userId ?? null
+        },
+        { id: gameId, seat: targetSeat },
+      )
+    : null
+  const targetBot = targetUserId && aliveIds.has(targetUserId) ? { seat: targetSeat, userId: targetUserId } : undefined
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[completeDay] targetSeat=${targetSeat} → targetUserId=${targetUserId ?? 'null'} alive=${targetUserId ? aliveIds.has(targetUserId) : false}`,
+  )
 
   // Vote cycle — up to 3 rounds (initial + 2 revotes).
   //
@@ -769,33 +840,30 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
   })
 
   test('phase: role-reveal + sheriff-elect (seer) + D1 vote out sheriff → badge passover → wolves win', async ({}, testInfo) => {
-    // The deterministic HARD_MODE wolf-win plan needs to kill the guard,
-    // vote out the seer (sheriff), and kill the witch — all without losing
-    // the host. If the host happens to hold one of those roles, the test
-    // would either kill its own driver or leave the elected sheriff on the
-    // host (who would then be the eliminated player, breaking host-driven
-    // continuation). With 4W/1S/1Wi/1G/5V the host is in the safe set
-    // (WEREWOLF or VILLAGER) ~75% of the time; flag the rest.
-    if (ctx.hostRole && ['SEER', 'WITCH', 'GUARD'].includes(ctx.hostRole)) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[hard-mode] host rolled ${ctx.hostRole} — skipping (HARD_MODE plan needs ` +
-          `host non-S/W/G so host can survive to drive the badge-handover + D2 vote)`,
-      )
-      test.skip(true, `host role is ${ctx.hostRole}; HARD_MODE plan requires VILLAGER or WEREWOLF`)
-      return
-    }
+    // eslint-disable-next-line no-console
+    console.warn(`[hard-mode test] starting with hostRole=${ctx.hostRole}`)
 
     await captureSnapshot(ctx.pages, testInfo, 'hard-01-role-reveal-or-election-start')
 
-    const seerBot = (ctx.roleMap.SEER ?? []).find((b) => b.nick !== 'Host')
-    const guardBot = (ctx.roleMap.GUARD ?? []).find((b) => b.nick !== 'Host')
-    const witchBot = (ctx.roleMap.WITCH ?? []).find((b) => b.nick !== 'Host')
-    if (!seerBot || !guardBot || !witchBot) {
+    // For each special role: resolve to bot OR host (host takes the role on
+    // ~25% of rolls in this 12p kit). Read the host's actual seat from the
+    // live game state — the shell state file's seat=0 for the host is stale
+    // (multi-browser.ts:227 writes it once before seat-claim and never
+    // updates it).
+    const seer = await resolveRolePlayer(ctx, 'SEER')
+    const guard = await resolveRolePlayer(ctx, 'GUARD')
+    const witch = await resolveRolePlayer(ctx, 'WITCH')
+    if (!seer || !guard || !witch) {
       throw new Error(
-        `Missing non-host special role bot — seer=${!!seerBot} guard=${!!guardBot} witch=${!!witchBot}`,
+        `Missing special role player — seer=${!!seer} guard=${!!guard} witch=${!!witch} (hostRole=${ctx.hostRole})`,
       )
     }
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[hard-mode test] resolved roles — seer=${seer.nick}(seat=${seer.seat},host=${seer.isHost}) ` +
+        `guard=${guard.nick}(seat=${guard.seat},host=${guard.isHost}) ` +
+        `witch=${witch.nick}(seat=${witch.seat},host=${witch.isHost})`,
+    )
 
     const wolfSeats = new Set((ctx.roleMap.WEREWOLF ?? []).map((b) => b.seat))
     const villagerSeats = (ctx.roleMap.VILLAGER ?? [])
@@ -808,7 +876,7 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
 
     // Sheriff election — only the seer campaigns. After speeches + votes
     // the seer holds the badge.
-    await runSheriffElection(ctx, [seerBot.nick])
+    await runSheriffElection(ctx, [seer.nick])
     await captureSnapshot(ctx.pages, testInfo, 'hard-02-sheriff-elected-is-seer')
 
     // Start night 1
@@ -826,17 +894,17 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     // SEER_PICK sub-phase advances. After: 11 alive (4W/1S/1Wi/0G/5V),
     // counterplay still has the witch, post-night logical win is skipped.
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
-    await completeNight(ctx, guardBot.seat, wolfBots[0]?.seat ?? guardBot.seat)
+    await completeNight(ctx, guard.seat, wolfBots[0]?.seat ?? guard.seat)
     await ctx.hostPage.waitForTimeout(2_500)
     await captureSnapshot(ctx.pages, testInfo, 'hard-04-night-1-done')
 
     // D1: village votes out the seer (sheriff). Backend transitions to
     // BADGE_HANDOVER — only the seer's browser page sees the pass-badge
-    // button (isEliminatedSheriff is true there only). Pass `seerPage` so
-    // completeDay can drive the DOM click. The badge is parked on a wolf
-    // seat: wolves never die in this scenario (we don't vote wolves; they
-    // don't kill themselves), so the sheriff never changes again — avoids
-    // the cascading BADGE_HANDOVER on D2 when we vote out a villager.
+    // button (isEliminatedSheriff is true there only). When the host is
+    // the seer, ctx.pages.get('SEER') === ctx.hostPage by setupGame's
+    // mapping (multi-browser.ts:347), so the host's own page renders the
+    // badge UI. Park the badge on a non-host wolf so the sheriff never
+    // moves again (wolves don't get voted, don't kill themselves).
     const seerPage = ctx.pages.get('SEER')
     if (!seerPage) {
       throw new Error('No SEER browser page in ctx — cannot drive badge handover via DOM')
@@ -848,7 +916,7 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     await completeDay(
       ctx,
       testInfo,
-      seerBot.seat,
+      seer.seat,
       'hard-05-day-1',
       seerPage,
       badgeWolfBot.seat,
@@ -863,7 +931,7 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     // during WITCH_ACT but the `useAntidote: false` payload (in
     // completeNight) forces the witch to decline self-heal — she dies. After:
     // 9 alive (4W/0S/0Wi/0G/5V), no remaining counterplay tokens.
-    await completeNight(ctx, witchBot.seat)
+    await completeNight(ctx, witch.seat)
     await ctx.hostPage.waitForTimeout(2_500)
     await captureSnapshot(ctx.pages, testInfo, 'hard-06-night-2-done')
 
