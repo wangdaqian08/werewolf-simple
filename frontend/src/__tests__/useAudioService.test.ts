@@ -15,6 +15,7 @@ const mockClearQueue = vi.fn()
 const mockStopAll = vi.fn()
 const mockIsMuted = vi.fn().mockReturnValue(false)
 const mockToggleMute = vi.fn()
+const mockIsQueueActive = vi.fn().mockReturnValue(false)
 
 vi.mock('@/services/audioService', () => ({
   audioService: {
@@ -23,6 +24,7 @@ vi.mock('@/services/audioService', () => ({
     stopAll: () => mockStopAll(),
     isMuted: () => mockIsMuted(),
     toggleMute: () => mockToggleMute(),
+    isQueueActive: () => mockIsQueueActive(),
     setGlobalVolume: vi.fn(),
     getGlobalVolume: vi.fn().mockReturnValue(1),
   },
@@ -147,6 +149,32 @@ describe('useAudioService', () => {
   })
 
   // ── Queue behavior: priority-aware to guarantee sequential, non-overlapping playback ─
+
+  it('high-priority sequence (>=10) APPENDS when queue still has role-owned audio in flight', async () => {
+    // Regression: when DAY's rooster_crowing arrives while the role-owned
+    // queue is still draining (e.g. guard_close_eyes queued ~15ms before),
+    // the previous behavior unconditionally clearQueue()'d and dropped
+    // guard_close_eyes — verified end-to-end in
+    // /tmp/werewolf-e2e-backend.log on 2026-04-27. The queue-active branch
+    // appends instead, preserving narrative integrity.
+    mockIsQueueActive.mockReturnValue(true)
+
+    const gameStore = useGameStore()
+    setupComposable()
+
+    gameStore.setState(
+      makeState({
+        audioSequence: { ...makeSequence(['rooster_crowing.mp3'], 'day-arrives'), priority: 10 },
+      }),
+    )
+    await nextTick()
+
+    expect(mockClearQueue).not.toHaveBeenCalled()
+    expect(mockPlaySequential).toHaveBeenCalledWith(['rooster_crowing.mp3'])
+
+    // Reset for any later test in this file that depends on queue-idle default.
+    mockIsQueueActive.mockReturnValue(false)
+  })
 
   it('high-priority sequence (>=10) clears the queue so it plays immediately', async () => {
     // Phase-boundary audio (DAY→NIGHT, NIGHT→DAY) must interrupt any lingering audio

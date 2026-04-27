@@ -86,22 +86,7 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     }
   })
 
-  // SKIPPED: reveals a genuine product audio-queue-clear bug, not a test flake.
-  // Local reproduction (backend inter-role-gap-ms set to 0 to squeeze timing, or on
-  // any CI runner with the current shrunk e2e timings) shows guard_close_eyes.mp3
-  // getting queued ~15ms before the NIGHT→DAY AudioSequence arrives. The DAY
-  // sequence is high-priority (>=10) and calls audioService.clearQueue() at
-  // useAudioService.ts:46-52, wiping guard_close_eyes before it plays.
-  //
-  // Even bumping inter-role-gap-ms to production's 3000 doesn't help: the
-  // cumulative night audio (~15-20s across 4 roles' open+close files) exceeds
-  // the cumulative night backend budget, so the queue stays behind all night
-  // and DAY always clears lingering items.
-  //
-  // Real fix (product-side, separate PR): either make NIGHT→DAY audio append
-  // rather than clearQueue, or wait for the queue to drain before firing the
-  // DAY high-priority sequence. Re-enable this test once that lands.
-  test.skip('guard as last role - guard_close_eyes plays exactly once', async ({}, testInfo) => {
+  test('guard as last role - guard_close_eyes plays exactly once', async ({}, testInfo) => {
     const hostPage = ctx.hostPage
     const gameId = ctx.gameId
 
@@ -231,8 +216,26 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     await captureSnapshot(ctx.pages, testInfo, '05-guard-completed-day-started')
 
     // ── Step 6: Verify audio sequence integrity ───────────────────────────
-    // Wait a bit for any delayed audio events
-    await hostPage.waitForTimeout(3_000)
+    // Wait until rooster_crowing ACTUALLY starts playing through the queue.
+    // Under e2e timings the role-owned audio queue can carry 9+ files
+    // (wolf/seer/witch/guard open+close + transitions); rooster_crowing is
+    // the LAST item appended after guard_close_eyes (DAY sequence is high-
+    // priority but now appends rather than clearing, per useAudioService.ts
+    // fix). Once rooster_crowing has started, guard_close_eyes has provably
+    // already played (queue is FIFO). Polling the sentinel that comes
+    // last lets us assert both files in one wait. Budget 45s in CI, 30s
+    // locally — wolf_howl alone is ~5s and 9 files at ~1.5s each is the
+    // headroom we need.
+    const lastSentinel = (e: string): boolean =>
+      e.includes('Starting playback') && e.includes('rooster_crowing.mp3')
+    const sentinelDeadline = Date.now() + (process.env.CI ? 45_000 : 30_000)
+    while (Date.now() < sentinelDeadline) {
+      if (audioEvents.some(lastSentinel)) break
+      await hostPage.waitForTimeout(250)
+    }
+    // Settle so any duplicate guard_close_eyes (the bug we're hunting)
+    // has time to surface in the buffer.
+    await hostPage.waitForTimeout(1_000)
 
     // Two audio log sources:
     //   audioService.ts:    `[AudioService] Starting playback: ${filename}` — template literal, filename inline
@@ -275,14 +278,7 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     expect(guardCloseIndex).toBeLessThan(roosterIndex)
   })
 
-  // SKIPPED alongside the sister test above. Its only strict assertion was
-  // .toBeGreaterThanOrEqual(0) (always-true), so in prior runs it passed
-  // vacuously — the useful failure was really about the guard action never
-  // reaching the backend when the host was assigned the guard role. Rather
-  // than keep a vacuous pass alive that masks the product bug the other test
-  // names, skip both together; the whole file can re-enable when the audio
-  // clearQueue() behavior is addressed.
-  test.skip('rapid phase transitions - no duplicate or stale audio playback', async ({}, testInfo) => {
+  test('rapid phase transitions - no duplicate or stale audio playback', async ({}, testInfo) => {
     // This test verifies that rapid state updates don't cause stale audio to replay.
     // "Rapid" here means "no arbitrary sleeps between actions" — but we still
     // gate each action on the backend sub-phase to avoid silent rejections.

@@ -16,10 +16,12 @@ const mockStopAll = vi.fn()
 const mockIsMuted = vi.fn().mockReturnValue(false)
 const mockToggleMute = vi.fn()
 
+const mockIsQueueActive = vi.fn().mockReturnValue(false)
 vi.mock('@/services/audioService', () => ({
   audioService: {
     playSequential: (...args: unknown[]) => mockPlaySequential(...args),
     clearQueue: () => mockClearQueue(),
+    isQueueActive: () => mockIsQueueActive(),
     stopAll: () => mockStopAll(),
     isMuted: () => mockIsMuted(),
     toggleMute: () => mockToggleMute(),
