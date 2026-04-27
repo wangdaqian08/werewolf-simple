@@ -437,12 +437,23 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
  * Every alive non-target voter votes for [targetNickOrSeat]. Host reveals tally;
  * host clicks continue. Handles the optional BADGE_HANDOVER sub-phase when the
  * sheriff is voted out: captures a dedicated screenshot and passes the badge.
+ *
+ * When the sheriff is expected to be voted out, pass `sheriffPage` — the
+ * browser page logged in as the player wearing the badge. Only that page sees
+ * the pass-badge / destroy-badge buttons (`isEliminatedSheriff` is true on
+ * that page only — VotingPhase.vue:601). Without the page, badge handover
+ * never resolves and the game stays parked at DAY_VOTING/BADGE_HANDOVER until
+ * the test times out (root cause of the pre-fix HARD_MODE 6-round timeout —
+ * verified locally 2026-04-27 in /tmp/werewolf-e2e-backend.log: every
+ * subsequent WOLF_KILL was REJECTED with "No active night phase").
  */
 async function completeDay(
   ctx: GameContext,
   testInfo: Parameters<typeof captureSnapshot>[1],
   targetSeat: number,
   evidenceLabel: string,
+  sheriffPage?: Page,
+  badgeRecipientSeat?: number,
 ): Promise<void> {
   const hostPage = ctx.hostPage
   const gameId = ctx.gameId
@@ -528,32 +539,70 @@ async function completeDay(
     if (leftVoting) break
   }
 
-  // Did BADGE_HANDOVER fire? If yes, capture + pass the badge to seat 1 (or destroy).
-  const badgeSection = hostPage.locator('[data-testid="badge-handover-panel"], .badge-handover, .badge-passover')
-  const badgeVisible = await badgeSection.first().isVisible({ timeout: 2_000 }).catch(() => false)
-  if (badgeVisible) {
+  // Did BADGE_HANDOVER fire? Read the backend sub-phase directly — DOM-only
+  // detection misses fast transitions on slow runners.
+  const subPhaseAfterReveal = await hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return null
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    return (await res.json())?.votingPhase?.subPhase ?? null
+  }, gameId)
+
+  if (subPhaseAfterReveal === 'BADGE_HANDOVER') {
     await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-badge-handover-triggered`)
-    const survivorIds = await readAlivePlayerIds(hostPage, gameId)
-    let passed = false
-    for (const b of ctx.allBots) {
-      if (!survivorIds.has(b.userId)) continue
-      if (b.seat === targetSeat) continue
-      if (tryAct('BADGE_PASS', b.nick, { target: '1', room: ctx.roomCode })) {
-        passed = true
-        break
+    if (!sheriffPage) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[completeDay] BADGE_HANDOVER fired for game=${gameId} but no sheriffPage provided — ` +
+          `caller must pass the eliminated sheriff's browser page so DOM clicks can resolve it.`,
+      )
+    } else {
+      // Pick the badge recipient. If the caller supplied `badgeRecipientSeat`,
+      // click that exact seat — important when the same eliminated-sheriff
+      // flow can fire on a later day with a different person voted out
+      // (e.g. HARD_MODE D2 elimination), where parking the badge on a wolf
+      // keeps it sticky for the remainder of the test. Otherwise pick the
+      // first alive slot. Click is on the page where `isEliminatedSheriff`
+      // is true (sheriffPage) — only that page renders the buttons.
+      const slot = badgeRecipientSeat !== undefined
+        ? sheriffPage.locator(`.player-grid [data-seat="${badgeRecipientSeat}"].slot-alive`)
+        : sheriffPage.locator('.player-grid .slot-alive').first()
+      await slot.waitFor({ state: 'visible', timeout: 10_000 })
+      await slot.click()
+      await sheriffPage.waitForTimeout(300)
+
+      const passBtn = sheriffPage.getByTestId('badge-pass')
+      const passEnabled = await passBtn
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (passEnabled) {
+        await passBtn.click()
+      } else {
+        // Fall back to destroy if for some reason no slot was selectable.
+        const destroyBtn = sheriffPage.getByTestId('badge-destroy')
+        if (await destroyBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await destroyBtn.click()
+        }
       }
-    }
-    if (!passed) {
-      const destroyBtn = hostPage.locator('button:has-text("销毁"), button:has-text("Destroy")').first()
-      if (await destroyBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-        await destroyBtn.click()
-      }
+      // Wait for the sub-phase to leave BADGE_HANDOVER (backend transitions
+      // to VOTE_RESULT once the badge is passed/destroyed).
+      const leftBadge = await waitForVotingSubPhase(hostPage, gameId, 'VOTE_RESULT', 10_000)
+      // eslint-disable-next-line no-console
+      console.warn(`[completeDay] left BADGE_HANDOVER → VOTE_RESULT: ${leftBadge}`)
     }
     await hostPage.waitForTimeout(1_000)
     await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-badge-handover-done`)
   }
 
-  // Host clicks Continue to advance to night
+  // Host clicks Continue to advance to night. After the badge handover
+  // resolves the host page sees `voting-continue`; if the elimination ended
+  // the game (HARD_MODE wolf-win at this very vote) the page redirected to
+  // /result and the button never renders — that's fine, just skip it.
+  if (hostPage.url().includes('/result/')) return
   const continueBtn = hostPage.getByTestId('voting-continue')
   if (await continueBtn.isVisible({ timeout: 6_000 }).catch(() => false)) {
     await continueBtn.click()
@@ -690,28 +739,23 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
   let ctx: GameContext
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    // CI scales ~2× slower; 180s is tight for a 12p 6-round classic game on
-    // ubuntu-latest. Bump to 360s under CI only.
+    // CI scales ~2× slower; 180s is tight for a 12p sheriff-elect + 2-night
+    // game on ubuntu-latest. Bump to 360s under CI only.
     testInfo.setTimeout(process.env.CI ? 360_000 : 180_000)
     ctx = await setupGame(browser, {
       totalPlayers: 12,
       hasSheriff: true,
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
       browserRoles: BROWSER_ROLES,
+      // Drive the room's win condition through the DOM toggle on the host's
+      // CreateRoom view. Acting through the create-room form keeps the test
+      // honest to a real player flow and avoids the silent fall-through that
+      // the prior `act('SET_WIN_CONDITION', ...)` produced (the action does
+      // not exist in the backend ActionType enum, so the script's `try/catch`
+      // swallowed the rejection and the game ran under CLASSIC — visible in
+      // /tmp/werewolf-e2e-backend.log when reproducing locally on 2026-04-27).
+      winCondition: 'HARD_MODE',
     })
-
-    // Flip the room's win condition to HARD_MODE — no UI toggle for it in
-    // create-room, so we patch the already-created room directly through the
-    // bot-side REST (dev endpoint). If this is rejected the spec continues
-    // under CLASSIC and still demonstrates sheriff + badge passover.
-    try {
-      act('SET_WIN_CONDITION', 'Host', {
-        payload: JSON.stringify({ winCondition: 'HARD_MODE' }),
-        room: ctx.roomCode,
-      })
-    } catch {
-      // not supported — fall back to CLASSIC for this scenario
-    }
   })
 
   test.afterAll(async () => {
@@ -724,23 +768,47 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     }
   })
 
-  // SKIPPED 2026-04-25: HARD_MODE scenario times out in CI ("did not reach
-  // /result in 6 rounds") even though CLASSIC passes locally end-to-end. The
-  // HARD_MODE win path depends on BADGE_HANDOVER firing on D1 when the elected
-  // sheriff (seer) is voted out; 6 rounds of 4-role night + day + revote burn
-  // the 360s CI-scaled test timeout before GAME_OVER lands. Needs its own local
-  // walkthrough to identify the stall point. CLASSIC sibling un-quarantine
-  // stays active.
-  test.skip('phase: role-reveal + sheriff-elect (seer) + D1 vote out sheriff → badge passover → wolves win', async ({}, testInfo) => {
-    await captureSnapshot(ctx.pages, testInfo, 'hard-01-role-reveal-or-election-start')
-
-    const seerBots = ctx.roleMap.SEER ?? []
-    const seerNick = seerBots.find((b) => b.nick !== 'Host')?.nick ?? seerBots[0]?.nick
-    if (!seerNick) {
-      throw new Error('No seer found — cannot run sheriff-elected-is-seer scenario')
+  test('phase: role-reveal + sheriff-elect (seer) + D1 vote out sheriff → badge passover → wolves win', async ({}, testInfo) => {
+    // The deterministic HARD_MODE wolf-win plan needs to kill the guard,
+    // vote out the seer (sheriff), and kill the witch — all without losing
+    // the host. If the host happens to hold one of those roles, the test
+    // would either kill its own driver or leave the elected sheriff on the
+    // host (who would then be the eliminated player, breaking host-driven
+    // continuation). With 4W/1S/1Wi/1G/5V the host is in the safe set
+    // (WEREWOLF or VILLAGER) ~75% of the time; flag the rest.
+    if (ctx.hostRole && ['SEER', 'WITCH', 'GUARD'].includes(ctx.hostRole)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[hard-mode] host rolled ${ctx.hostRole} — skipping (HARD_MODE plan needs ` +
+          `host non-S/W/G so host can survive to drive the badge-handover + D2 vote)`,
+      )
+      test.skip(true, `host role is ${ctx.hostRole}; HARD_MODE plan requires VILLAGER or WEREWOLF`)
+      return
     }
 
-    await runSheriffElection(ctx, [seerNick])
+    await captureSnapshot(ctx.pages, testInfo, 'hard-01-role-reveal-or-election-start')
+
+    const seerBot = (ctx.roleMap.SEER ?? []).find((b) => b.nick !== 'Host')
+    const guardBot = (ctx.roleMap.GUARD ?? []).find((b) => b.nick !== 'Host')
+    const witchBot = (ctx.roleMap.WITCH ?? []).find((b) => b.nick !== 'Host')
+    if (!seerBot || !guardBot || !witchBot) {
+      throw new Error(
+        `Missing non-host special role bot — seer=${!!seerBot} guard=${!!guardBot} witch=${!!witchBot}`,
+      )
+    }
+
+    const wolfSeats = new Set((ctx.roleMap.WEREWOLF ?? []).map((b) => b.seat))
+    const villagerSeats = (ctx.roleMap.VILLAGER ?? [])
+      .filter((b) => b.nick !== 'Host')
+      .map((b) => b.seat)
+      .filter((s) => !wolfSeats.has(s))
+    if (villagerSeats.length < 1) {
+      throw new Error(`Need at least one non-host villager seat for D2 vote-out; got ${villagerSeats.length}`)
+    }
+
+    // Sheriff election — only the seer campaigns. After speeches + votes
+    // the seer holds the badge.
+    await runSheriffElection(ctx, [seerBot.nick])
     await captureSnapshot(ctx.pages, testInfo, 'hard-02-sheriff-elected-is-seer')
 
     // Start night 1
@@ -753,40 +821,79 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 20_000)
     await captureSnapshot(ctx.pages, testInfo, 'hard-03-night-1-entered')
 
-    // N1: wolves kill a random villager; seer checks a wolf. Exclude the
-    // host from kill targets so the host stays alive to keep driving the UI.
-    const villagers = (ctx.roleMap.VILLAGER ?? [])
-      .filter((b) => b.nick !== 'Host')
-      .map((b) => b.seat)
-    const wolves = (ctx.roleMap.WEREWOLF ?? []).map((b) => b.seat)
-    await completeNight(ctx, villagers[0] ?? 2, wolves[0] ?? 1)
-    await ctx.hostPage.waitForTimeout(3_000)
+    // N1: wolves kill the GUARD. Witch's `useAntidote: false` (set inside
+    // completeNight) leaves the kill standing. Seer checks a wolf so the
+    // SEER_PICK sub-phase advances. After: 11 alive (4W/1S/1Wi/0G/5V),
+    // counterplay still has the witch, post-night logical win is skipped.
+    const wolfBots = ctx.roleMap.WEREWOLF ?? []
+    await completeNight(ctx, guardBot.seat, wolfBots[0]?.seat ?? guardBot.seat)
+    await ctx.hostPage.waitForTimeout(2_500)
     await captureSnapshot(ctx.pages, testInfo, 'hard-04-night-1-done')
 
-    // D1: village votes out the sheriff (seer). Triggers BADGE_HANDOVER.
-    const seerSeat = seerBots.find((b) => b.nick === seerNick)?.seat ?? 1
-    await completeDay(ctx, testInfo, seerSeat, 'hard-05-day-1')
-
-    // Continue nights — wolves kill one per night; witch keeps potions unused
-    // so hasWitchWithPotions stays true for a while, then both spent = win path
-    const targets = villagers.filter((s) => s !== seerSeat)
-    for (let round = 0; round < 5; round++) {
-      if (ctx.hostPage.url().includes('/result/')) break
-      const killSeat = targets[round % targets.length] ?? 3
-      await completeNight(ctx, killSeat)
-      await ctx.hostPage.waitForTimeout(2_500)
-      if (ctx.hostPage.url().includes('/result/')) break
-
-      // Day: village can't find wolves; abstain via host-UI skip so the game
-      // progresses wolf-ward. Any tie → revote happens in completeDay.
-      await completeDay(ctx, testInfo, -1, `hard-06-day-${round + 2}`)
+    // D1: village votes out the seer (sheriff). Backend transitions to
+    // BADGE_HANDOVER — only the seer's browser page sees the pass-badge
+    // button (isEliminatedSheriff is true there only). Pass `seerPage` so
+    // completeDay can drive the DOM click. The badge is parked on a wolf
+    // seat: wolves never die in this scenario (we don't vote wolves; they
+    // don't kill themselves), so the sheriff never changes again — avoids
+    // the cascading BADGE_HANDOVER on D2 when we vote out a villager.
+    const seerPage = ctx.pages.get('SEER')
+    if (!seerPage) {
+      throw new Error('No SEER browser page in ctx — cannot drive badge handover via DOM')
     }
+    const badgeWolfBot = wolfBots.find((b) => b.nick !== 'Host')
+    if (!badgeWolfBot) {
+      throw new Error('No non-host wolf available to receive the badge')
+    }
+    await completeDay(
+      ctx,
+      testInfo,
+      seerBot.seat,
+      'hard-05-day-1',
+      seerPage,
+      badgeWolfBot.seat,
+    )
+    await ctx.hostPage.waitForTimeout(2_000)
+
+    if (ctx.hostPage.url().includes('/result/')) {
+      throw new Error('Game ended at D1 vote-out — wolf-win plan expected to need 2 nights')
+    }
+
+    // N2: wolves kill the WITCH. Witch sees herself as the wolves' target
+    // during WITCH_ACT but the `useAntidote: false` payload (in
+    // completeNight) forces the witch to decline self-heal — she dies. After:
+    // 9 alive (4W/0S/0Wi/0G/5V), no remaining counterplay tokens.
+    await completeNight(ctx, witchBot.seat)
+    await ctx.hostPage.waitForTimeout(2_500)
+    await captureSnapshot(ctx.pages, testInfo, 'hard-06-night-2-done')
+
+    if (ctx.hostPage.url().includes('/result/')) {
+      // Edge: witch self-action timing meant POST_NIGHT literal-humans-zero
+      // didn't apply, but if the game already wrapped (e.g. wolves got
+      // parity post-night via cascading death) capture and assert.
+      await captureSnapshot(ctx.pages, testInfo, 'hard-99-result-screen')
+      await expect(ctx.hostPage.locator('.outcome-title')).toBeVisible({ timeout: 10_000 })
+      const winnerEarly = (await ctx.hostPage.locator('.outcome-title').textContent()) ?? ''
+      expect(winnerEarly).toMatch(/狼人|Werewolf|WOLF/i)
+      return
+    }
+
+    // D2: village votes out any non-host non-wolf villager. The vote
+    // produces an elimination, which fires the POST_VOTE win check — and
+    // with hasGuard=false, hasWitch=false, hasHunter=N/A (HUNTER not in role
+    // kit), counterplay.any=false. Wolves at parity (4W vs 4 humans
+    // remaining: host + 3 villagers) → HARD_MODE wolf-win logical branch.
+    await completeDay(ctx, testInfo, villagerSeats[0], 'hard-07-day-2')
+    await ctx.hostPage.waitForTimeout(2_000)
 
     await ctx.hostPage.waitForURL(/\/result\//, { timeout: 60_000 }).catch(() => {})
     await captureSnapshot(ctx.pages, testInfo, 'hard-99-result-screen')
 
     if (!ctx.hostPage.url().includes('/result/')) {
-      throw new Error('HARD_MODE wolf-win scenario did not reach /result in 6 rounds')
+      throw new Error(
+        `HARD_MODE wolf-win scenario did not reach /result after N1(guard)+D1(seer)+N2(witch)+D2(villager). ` +
+          `Current URL=${ctx.hostPage.url()}`,
+      )
     }
 
     await expect(ctx.hostPage.locator('.outcome-title')).toBeVisible({ timeout: 10_000 })

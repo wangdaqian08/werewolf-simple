@@ -105,6 +105,8 @@
           <button
             :class="winCondition === 'HARD_MODE' ? 'toggle-on' : 'toggle-off'"
             class="toggle"
+            data-testid="winCondition-toggle"
+            :data-win-condition="winCondition"
             @click="winCondition = winCondition === 'CLASSIC' ? 'HARD_MODE' : 'CLASSIC'"
           >
             <span class="toggle-thumb" />
