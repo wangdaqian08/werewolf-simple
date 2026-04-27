@@ -58,7 +58,7 @@ function roleOfSeat(seat: number): RoleName | null {
 }
 
 test.describe('Game flow — multi-browser STOMP verification', () => {
-  test.setTimeout(60_000) // 3 minutes for the full flow
+  test.setTimeout(180_000) // 3 min per test — N1 + N2 + N3 nights each cycle 4 roles
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000) // setup can take a while with shell scripts
@@ -530,15 +530,41 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
 
-    const wolfBots = ctx.roleMap.WEREWOLF ?? []
-    const seerBots = ctx.roleMap.SEER ?? []
-    const witchBots = ctx.roleMap.WITCH ?? []
-    const guardBots = ctx.roleMap.GUARD ?? []
-    const villagerBots = ctx.roleMap.VILLAGER ?? []
+    // Read the live-alive set from /api/game/state so the API fallback only
+    // tries actors / targets that are actually alive on the backend. Without
+    // this filter, a wolf voted out at D1 stays in roleMap (which is built
+    // at game start) and the inner loop fans 4 targets × act.sh's 3 retries
+    // = 12-15 s burned per dead actor before reaching a live wolf.
+    //
+    // act.sh now short-circuits "Actor is dead" via PERMANENT_REJECTION_RE,
+    // but cutting the dead-actor call upstream is faster AND surfaces the
+    // intent ("we know who's alive") in the test code.
+    const aliveIds = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return [] as string[]
+      const state = await res.json()
+      return ((state?.players ?? []) as Array<{ isAlive?: boolean; userId: string }>)
+        .filter((p) => p.isAlive !== false)
+        .map((p) => p.userId)
+    }, ctx.gameId)
+    const aliveSet = new Set(aliveIds)
+    const aliveBotsOf = (role: RoleName) =>
+      (ctx.roleMap[role] ?? []).filter((b) => b.nick !== 'Host' && aliveSet.has(b.userId))
 
-    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots].filter(
-      (b) => b.nick !== 'Host',
-    )
+    const wolfBots = aliveBotsOf('WEREWOLF')
+    const seerBots = aliveBotsOf('SEER')
+    const witchBots = aliveBotsOf('WITCH')
+    const guardBots = aliveBotsOf('GUARD')
+    const villagerBots = aliveBotsOf('VILLAGER')
+
+    // Targets exclude wolves (a wolf can't kill another wolf) and Host (the
+    // wolf-page DOM-first path covers host-as-wolf). Filter by alive too —
+    // the role-page DOM-first paths target `.slot-alive` already, so the
+    // API fallback should match that contract.
+    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots]
 
     // Locator visibility helper — Playwright's isVisible() does NOT retry,
     // so wrapping waitFor lets us return a boolean after a real wait.
@@ -720,10 +746,17 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     }
 
     // After night, the backend transitions NIGHT → DAY_PENDING → DAY_DISCUSSION.
-    // Poll the backend rather than guess a 10-second buffer; if the game
-    // ended (GAME_OVER), the page URL will already be /result/...
-    const isOver = ctx.hostPage.url().includes('/result/')
-    if (!isOver) {
+    // Poll the backend's `phase` field rather than the URL — STOMP-driven
+    // /result/ redirect lags backend commit, so URL-only check misses
+    // GAME_OVER on CI. /api/game/state is the authoritative signal.
+    const phaseAfterNight = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    if (phaseAfterNight !== 'GAME_OVER') {
       await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_DISCUSSION', 20_000)
       await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000)
     }
@@ -823,7 +856,19 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // possible if a witch poisoned earlier). Both are valid outcomes;
     // this test asserts the deterministic part: the vote machinery
     // produced a sub-phase transition.
-    if (!hostPage.url().includes('/result/')) {
+    //
+    // Use API state, not URL, to detect game-end. The URL → /result/ redirect
+    // is driven by a STOMP GameOverEvent → router.push, which lags backend
+    // commit by 200-500 ms locally and longer under CI load. Polling
+    // /api/game/state.phase === 'GAME_OVER' is the authoritative signal.
+    const phaseAfterContinue = await hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    if (phaseAfterContinue !== 'GAME_OVER') {
       await waitForPhase(hostPage, ctx.gameId, 'NIGHT', 15_000)
       await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 15_000)
     }
@@ -842,13 +887,21 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // nothing to test here — assert that fact and exit cleanly. NOT a
     // skip: a clean exit with a captured screenshot is the correct
     // outcome for the early-end branch.
-    if (ctx.hostPage.url().includes('/result/')) {
-      const finalState = await ctx.hostPage.evaluate(async (id: string) => {
-        const token = localStorage.getItem('jwt')
-        const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
-        return res.ok ? res.json() : null
-      }, ctx.gameId)
-      expect(finalState?.phase, 'game ended at D2 — expected GAME_OVER').toBe('GAME_OVER')
+    //
+    // Detect via API state.phase, NOT URL. STOMP-driven router.push to
+    // /result/ lags backend commit; on CI the URL can still be /game/N
+    // even after phase=GAME_OVER, which then makes this guard miss the
+    // early-end and the NIGHT precondition assertion below fail with
+    // "expected NIGHT day=3 after test 9" — exactly the shape of the
+    // CI shard-1 failure on commit f757f1e.
+    const initialState = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? res.json() : null
+    }, ctx.gameId)
+    if (initialState?.phase === 'GAME_OVER') {
       await captureSnapshot(ctx.pages, testInfo, '10-game-over-at-d2')
       return
     }
@@ -988,11 +1041,20 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
 
-    // Backend transitions to DAY day=3 (or GAME_OVER if last wolf died at N3,
-    // which is impossible since wolves don't kill themselves — so DAY is
-    // the only valid outcome here).
-    await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_DISCUSSION', 20_000)
-    await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000)
+    // Backend transitions to DAY day=3, OR to GAME_OVER if a witch poison
+    // at N3 kills the last wolf (rare but possible). Check API state first
+    // so the GAME_OVER branch doesn't time out on waitForPhase DAY.
+    const phaseAfterN3 = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.phase : null
+    }, ctx.gameId)
+    if (phaseAfterN3 !== 'GAME_OVER') {
+      await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_DISCUSSION', 20_000)
+      await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000)
+    }
     await captureSnapshot(ctx.pages, testInfo, '10-night3-complete')
   })
 })
