@@ -8,72 +8,202 @@
  *   - Idiot receives highest votes in first round
  *   - Idiot reveal banner appears in all browsers
  *   - 🃏 overlay appears on idiot's card
- *   - Idiot loses voting right permanently
  *   - Phase transitions correctly from VOTE_RESULT to NIGHT
  */
-import {expect, test, type Page} from '@playwright/test'
-import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act, actName, type RoleName} from './helpers/shell-runner'
-import {verifyAllBrowsersPhase,} from './helpers/assertions'
-import {captureSnapshot} from './helpers/composite-screenshot'
-import {attachBackendLogOnFailure} from './helpers/backend-log'
+import { expect, test, type Page } from '@playwright/test'
+import { type GameContext, setupGame } from './helpers/multi-browser'
+import { act, actName, type RoleName } from './helpers/shell-runner'
+import { verifyAllBrowsersPhase } from './helpers/assertions'
+import { captureSnapshot } from './helpers/composite-screenshot'
+import { attachBackendLogOnFailure } from './helpers/backend-log'
 import {
   readHostSeat,
   readHostUserId,
   readUnvotedAlivePlayerIds,
+  waitForAllVotesRegistered,
   waitForNightSubPhase,
+  waitForPhase,
+  waitForVotingSubPhase,
 } from './helpers/state-polling'
-
-let ctx: GameContext
 
 /**
  * Resolve the player who currently holds the IDIOT role to a vote target.
  *
  * `roleMap.IDIOT` only tracks non-host bots; when the random role roll lands
- * IDIOT on the host, that array is empty and the test previously skipped
- * with "Host rolled IDIOT — covered by test 1". The IDIOT mechanic is the
- * same regardless of who has the role, so we can always vote them out by
- * looking up the host's seat from the live game state.
+ * IDIOT on the host, that array is empty. The IDIOT mechanic is the same
+ * regardless of who has the role, so we always resolve to a `{ seat, nickname }`
+ * pair the test can use both for the bot fan-out vote and for the
+ * banner-nickname assertion.
  *
- * Returns `{ seat, nickname, isHost }` so callers can both fan-out the bot
- * vote (target=seat) and verify the elimination banner contains the right
- * nickname (host's nickname is "Host").
+ * Failures are surfaced via `expect()` so the test reports a positive contract
+ * violation ("host's seat must be populated") rather than a generic Error.
  */
 async function resolveIdiotTarget(
   localCtx: GameContext,
   hostPage: Page,
 ): Promise<{ seat: number; nickname: string; isHost: boolean }> {
-  // Check host-IDIOT FIRST. roles.sh includes the host in roleMap (it merges
-  // state.bots + state.users + the API), so `roleMap.IDIOT` can be a length-1
-  // array containing the host's state.users entry — but that entry has
-  // `seat: 0` (initial value from setupGame; never updated after the seat-
-  // claim click). Targeting seat=0 happens to route to the host via act.sh's
-  // seat-lookup table, so the test "passes" but the seat number in any
-  // diagnostic log is wrong. Reading the real seat from the API is correct
-  // and makes the diagnostic log point at the actual seat.
   if (localCtx.isHostRole('IDIOT')) {
+    // roles.sh's host entry has `seat: 0` (initial value before the seat-claim
+    // click is reflected); read the real seat from /api/game/{id}/state.
     const hostSeat = await readHostSeat(hostPage, localCtx.gameId)
-    if (hostSeat == null) {
-      throw new Error(
-        `Host is the IDIOT but readHostSeat returned null for game=${localCtx.gameId} — ` +
-          `the state.players row for the host may not be populated yet.`,
-      )
-    }
-    return { seat: hostSeat, nickname: 'Host', isHost: true }
+    expect(
+      hostSeat,
+      `host's state.players row must include a seat when host rolled IDIOT (game=${localCtx.gameId})`,
+    ).not.toBeNull()
+    return { seat: hostSeat as number, nickname: 'Host', isHost: true }
   }
   const idiotBots = localCtx.roleMap['IDIOT'] ?? []
-  if (idiotBots.length === 0) {
-    throw new Error(
-      `IDIOT not assigned: roleMap.IDIOT empty AND ctx.hostRole=${localCtx.hostRole} — ` +
-        `game setup likely failed. Check setupGame's role-assignment retry budget.`,
-    )
-  }
+  expect(
+    idiotBots.length,
+    `roleMap.IDIOT must contain at least one bot when hostRole=${localCtx.hostRole} — ` +
+      `setupGame's role-assignment loop did not produce an IDIOT.`,
+  ).toBeGreaterThan(0)
   const idiotBot = idiotBots[0]
   return { seat: idiotBot.seat, nickname: idiotBot.nick, isHost: false }
 }
 
+/**
+ * Drive a 6p IDIOT-kit night through to DAY_DISCUSSION (day=1).
+ *
+ * Reused by tests 2 and 3, both of which need the same "wolf attacks
+ * non-IDIOT, seer no-ops, witch declines" night plan to land DAY with the
+ * IDIOT alive and votable. Sub-phase-gated for CI race-safety.
+ */
+async function runNight1ToDay(localCtx: GameContext): Promise<void> {
+  const hostPage = localCtx.hostPage
+
+  // Host clicks Start Night via DOM (start-night button is always rendered for
+  // the host on the role-reveal panel; testid verified in GameView.vue:57).
+  await hostPage.getByTestId('start-night').click()
+  expect(
+    await waitForPhase(hostPage, localCtx.gameId, 'NIGHT', 15_000),
+    'expected NIGHT phase after host clicked start-night',
+  ).toBe(true)
+
+  // Don't filter Host out of role rosters: when the random role-assignment
+  // lands a special role (WITCH / SEER) on the host, the kit only has ONE of
+  // that role, so dropping the host leaves zero actors and the night gets
+  // stuck waiting forever for the host's action that we never fire. The
+  // 6p IDIOT-kit has only 1 SEER and 1 WITCH, so this matters.
+  //
+  // act.sh handles `actName(host) === 'HOST'` via the cached host token
+  // (act.sh:378), so the host can drive any role action through the same
+  // script path. WEREWOLF in this kit has 2 actors, so even if one is the
+  // host the other bot wolf can still act — but for symmetry we don't
+  // filter wolves either.
+  const wolfBots = localCtx.roleMap.WEREWOLF ?? []
+  const seerBots = localCtx.roleMap.SEER ?? []
+  const witchBots = localCtx.roleMap.WITCH ?? []
+  const idiotBots = localCtx.roleMap['IDIOT'] ?? []
+
+  // Wolf attacks a non-IDIOT non-wolf alive seat — IDIOT must survive to D1.
+  // When host is IDIOT, roleMap.IDIOT is empty (it tracks bots only), so we
+  // also need to exclude the host from the target pool in that case.
+  expect(wolfBots.length, 'kit must have at least one wolf').toBeGreaterThan(0)
+  const wolfBot = wolfBots[0]
+  const hostIsIdiot = localCtx.isHostRole('IDIOT')
+  const wolfTarget = localCtx.allBots.find(
+    (b) =>
+      b.userId !== wolfBot.userId &&
+      !idiotBots.some((i) => i.userId === b.userId) &&
+      !wolfBots.some((w) => w.userId === b.userId) &&
+      !(hostIsIdiot && b.nick === 'Host'),
+  )
+  expect(wolfTarget, 'kit must have a non-IDIOT non-wolf target').toBeDefined()
+  expect(
+    await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
+    'expected NIGHT/WEREWOLF_PICK',
+  ).toBe(true)
+  act('WOLF_KILL', actName(wolfBot), {
+    target: String(wolfTarget!.seat),
+    room: localCtx.roomCode,
+  })
+
+  // Seer checks the wolf (non-functional for the IDIOT-reveal contract — just
+  // advances the phase deterministically). Always present in the kit, including
+  // when host rolled SEER (uses host token via actName).
+  expect(seerBots.length, 'kit must have a SEER').toBeGreaterThan(0)
+  const seerBot = seerBots[0]
+  expect(
+    await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
+    'expected NIGHT/SEER_PICK',
+  ).toBe(true)
+  act('SEER_CHECK', actName(seerBot), {
+    target: String(wolfBot.seat),
+    room: localCtx.roomCode,
+  })
+  expect(
+    await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
+    'expected NIGHT/SEER_RESULT after SEER_CHECK',
+  ).toBe(true)
+  act('SEER_CONFIRM', actName(seerBot), { room: localCtx.roomCode })
+
+  // Witch declines both potions so the wolf-killed villager actually dies and
+  // the day count is right. Always present, including host-as-WITCH (uses
+  // host token via actName).
+  expect(witchBots.length, 'kit must have a WITCH').toBeGreaterThan(0)
+  const witchBot = witchBots[0]
+  expect(
+    await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
+    'expected NIGHT/WITCH_ACT',
+  ).toBe(true)
+  act('WITCH_ACT', actName(witchBot), {
+    room: localCtx.roomCode,
+    payload: '{"useAntidote":false}',
+  })
+
+  expect(
+    await waitForPhase(hostPage, localCtx.gameId, 'DAY_DISCUSSION', 30_000),
+    'expected DAY_DISCUSSION after night resolved',
+  ).toBe(true)
+}
+
+/**
+ * Drive D1 vote against the IDIOT and verify the tally is revealed.
+ * Returns the resolved IDIOT info so callers can assert banner contents.
+ */
+async function voteIdiotOut(
+  localCtx: GameContext,
+): Promise<{ seat: number; nickname: string; isHost: boolean }> {
+  const hostPage = localCtx.hostPage
+
+  // Host reveals N1 result + opens vote.
+  const revealBtn = hostPage.getByTestId('day-reveal-result')
+  await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
+  await revealBtn.click()
+  const startVoteBtn = hostPage.getByTestId('day-start-vote')
+  await startVoteBtn.waitFor({ state: 'visible', timeout: 10_000 })
+  await startVoteBtn.click()
+  await verifyAllBrowsersPhase(localCtx.pages, 'VOTING', 15_000)
+
+  // Resolve IDIOT (works for both bot-IDIOT and host-IDIOT rolls).
+  const idiot = await resolveIdiotTarget(localCtx, hostPage)
+
+  // Fan-out vote: every alive non-host non-voted bot votes the IDIOT.
+  const unvoted = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
+  const hostId = await readHostUserId(hostPage)
+  const expectedVoterIds: string[] = []
+  for (const bot of localCtx.allBots) {
+    if (bot.nick === 'Host' || bot.userId === hostId) continue
+    if (!unvoted.has(bot.userId)) continue
+    act('SUBMIT_VOTE', bot.nick, { target: String(idiot.seat), room: localCtx.roomCode })
+    expectedVoterIds.push(bot.userId)
+  }
+  expect(expectedVoterIds.length, 'at least one bot must be eligible to vote').toBeGreaterThan(0)
+  await waitForAllVotesRegistered(hostPage, localCtx.gameId, expectedVoterIds, 10_000)
+
+  // Reveal tally → backend transitions to VOTE_RESULT.
+  act('VOTING_REVEAL_TALLY', 'HOST', { room: localCtx.roomCode })
+  expect(
+    await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTE_RESULT', 10_000),
+    'expected DAY_VOTING/VOTE_RESULT after VOTING_REVEAL_TALLY',
+  ).toBe(true)
+
+  return idiot
+}
+
 test.describe('Idiot flow — multi-browser STOMP verification', () => {
-  test.setTimeout(60_000) // 3 minutes for the full flow
+  test.setTimeout(180_000) // 3 min — N1 + D1 vote + IDIOT reveal + (test 3) night transition
 
   // Each test in this file constructs its own localCtx via setupGame inside
   // the test body — there's no shared `ctx` to call attachCompositeOnFailure
@@ -95,10 +225,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
     })
 
     try {
-      // Verify that IDIOT is assigned. roleMap only tracks non-host bots, so
-      // when the backend's random role-assignment lands IDIOT on the host
-      // seat `roleMap.IDIOT` is empty and the verification has to go through
-      // localCtx.hostRole instead.
+      // IDIOT is assigned either to the host or to one bot (mutually exclusive).
       if (localCtx.isHostRole('IDIOT')) {
         expect(localCtx.hostRole).toBe('IDIOT')
       } else {
@@ -107,26 +234,20 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
         expect(idiotBots?.length).toBeGreaterThan(0)
       }
 
-      // IDIOT browser page exists either way — setupGame maps the host's page
-      // under hostRole's key when hostRole is one of the browserRoles.
-      const idiotPage = localCtx.pages.get('IDIOT')
-      expect(idiotPage).toBeDefined()
-
-      testInfo.attach('idiot-info', { body: JSON.stringify({
-        hostRole: localCtx.hostRole,
-        idiotBots: localCtx.roleMap['IDIOT'],
-        hasIdiotPage: !!idiotPage,
-        totalBots: localCtx.allBots.length
-      }, null, 2) })
+      // setupGame's mapping (multi-browser.ts:362-405) routes the host's page
+      // under the host's rolled-role key when that role is in browserRoles, OR
+      // opens a new context for the first non-host bot of that role. Either
+      // way, an IDIOT page exists.
+      expect(localCtx.pages.get('IDIOT')).toBeDefined()
     } finally {
       await localCtx.cleanup()
     }
   })
 
-  // ── Test 2: Night → Day → Voting → Idiot Reveal ─────────────────────────────────
+  // ── Test 2: IDIOT reveal banner + overlay propagated to every browser ──
 
   test('2. Idiot reveal — all browsers show idiot reveal banner', async ({ browser }, testInfo) => {
-    testInfo.setTimeout(120_000)
+    testInfo.setTimeout(180_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
       hasSheriff: false,
@@ -135,295 +256,41 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
     })
 
     try {
-      // host-IDIOT used to skip here on the assumption that act.sh can only
-      // target bot seats. Not true — act.sh targets a seat number, not a
-      // userId, so as long as we resolve the IDIOT's seat (`resolveIdiotTarget`)
-      // the fan-out works for both bot-IDIOT and host-IDIOT rolls. Memory:
-      // e2e-ci-vs-local-env-differences item 4.
-      const hostPage = localCtx.hostPage
+      await runNight1ToDay(localCtx)
+      const idiot = await voteIdiotOut(localCtx)
 
-      // Check initial game state after setup
-      const initialState = await hostPage.evaluate(() => {
-        const gameWrap = document.querySelector('.game-wrap')
-        const waitingScreen = document.querySelector('.waiting-screen')
-        const nightWrap = document.querySelector('.night-wrap')
-        const dayWrap = document.querySelector('.day-wrap')
-        const votingWrap = document.querySelector('.voting-wrap')
-        return { 
-          hasWaitingScreen: !!waitingScreen,
-          hasNightWrap: !!nightWrap,
-          hasDayWrap: !!dayWrap,
-          hasVotingWrap: !!votingWrap,
-          gameWrapClasses: gameWrap?.className || ''
-        }
-      })
-      testInfo.attach('initial-game-state', { body: JSON.stringify(initialState, null, 2) })
-      
-      // If we're in waiting screen, give more time for game to start
-      if (initialState.hasWaitingScreen) {
-        testInfo.attach('waiting-for-game-start', { body: 'Game in waiting screen, waiting for auto-advancement' })
-        await hostPage.waitForTimeout(10_000)
-      }
-      
-      // Re-check game state after waiting
-      const afterWaitState = await hostPage.evaluate(() => {
-        const gameWrap = document.querySelector('.game-wrap')
-        const waitingScreen = document.querySelector('.waiting-screen')
-        const nightWrap = document.querySelector('.night-wrap')
-        const dayWrap = document.querySelector('.day-wrap')
-        return { 
-          hasWaitingScreen: !!waitingScreen,
-          hasNightWrap: !!nightWrap,
-          hasDayWrap: !!dayWrap,
-          gameWrapClasses: gameWrap?.className || ''
-        }
-      })
-      testInfo.attach('after-wait-game-state', { body: JSON.stringify(afterWaitState, null, 2) })
-      
-      // If we're still in waiting screen, try to manually advance to night
-      if (afterWaitState.hasWaitingScreen) {
-        testInfo.attach('trying-manual-night-start', { body: 'Attempting to manually start night phase' })
-        
-        // Try to use script to start night phase
-        try {
-          act('START_NIGHT', 'Host', { room: localCtx.roomCode })
-          testInfo.attach('night-start-triggered', { body: 'Start night action triggered' })
-          await hostPage.waitForTimeout(5_000)
-        } catch (error) {
-          testInfo.attach('night-start-failed', { body: `Failed to start night: ${error}` })
-        }
-      }
-      
-      // Final check of game state
-      const finalState = await hostPage.evaluate(() => {
-        const gameWrap = document.querySelector('.game-wrap')
-        const waitingScreen = document.querySelector('.waiting-screen')
-        const nightWrap = document.querySelector('.night-wrap')
-        const dayWrap = document.querySelector('.day-wrap')
-        return { 
-          hasWaitingScreen: !!waitingScreen,
-          hasNightWrap: !!nightWrap,
-          hasDayWrap: !!dayWrap,
-          gameWrapClasses: gameWrap?.className || ''
-        }
-      })
-      testInfo.attach('final-game-state', { body: JSON.stringify(finalState, null, 2) })
-      
-      // ── Phase 1: Night Phase ──
-      testInfo.attach('starting-night', { body: 'Starting night phase' })
-      
-      // Check current phase before night actions
-      const beforeNightPhase = await hostPage.evaluate(() => {
-        const nightWrap = document.querySelector('.night-wrap')
-        const waitingScreen = document.querySelector('.waiting-screen')
-        return {
-          hasNightWrap: !!nightWrap,
-          hasWaitingScreen: !!waitingScreen,
-          nightSubPhase: nightWrap ? nightWrap.querySelector('.night-sub-phase')?.textContent : null
-        }
-      })
-      testInfo.attach('before-night-phase', { body: JSON.stringify(beforeNightPhase, null, 2) })
-      
-      const wolfBots = localCtx.roleMap.WEREWOLF ?? []
-      const seerBots = localCtx.roleMap.SEER ?? []
-      const witchBots = localCtx.roleMap.WITCH ?? []
+      await captureSnapshot(localCtx.pages, testInfo, '02-tally-revealed')
 
-      // Wolf attacks someone (not idiot to ensure idiot survives).
-      // Gate on WEREWOLF_PICK so the action lands in the correct sub-phase —
-      // without this, act() fires while the Kotlin role-loop is still in a
-      // prior sub-phase and the action is silently rejected (act.sh exits 0
-      // on rejection). See e2e-ci-vs-local-env-differences memory item 1.
-      // If the gate returns false (coroutine skipped the sub-phase), skip
-      // the block rather than firing actions that'll be rejected.
-      if (wolfBots.length > 0) {
-        const wolfBot = wolfBots[0]
-        const idiotBots = localCtx.roleMap['IDIOT'] ?? []
-        const targetBot = localCtx.allBots.find(b =>
-          b.userId !== wolfBot.userId &&
-          !(idiotBots.some(i => i.userId === b.userId))
-        )
-        if (targetBot && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000))) {
-          act('WOLF_SELECT', actName(wolfBot), { target: String(targetBot.seat), room: localCtx.roomCode })
-          act('WOLF_KILL', actName(wolfBot), { target: String(targetBot.seat), room: localCtx.roomCode })
-          testInfo.attach('wolf-action', { body: `Wolf ${wolfBot.nick} attacks ${targetBot.nick} at seat ${targetBot.seat}` })
-        }
-      }
-
-      // Seer checks someone. Gate on SEER_PICK before the CHECK, then on
-      // SEER_RESULT before the CONFIRM so each lands in its expected sub-phase.
-      if (seerBots.length > 0) {
-        const seerBot = seerBots[0]
-        const checkTarget = localCtx.allBots.find(b => b.userId !== seerBot.userId)
-        if (checkTarget && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000))) {
-          act('SEER_CHECK', actName(seerBot), { target: String(checkTarget.seat), room: localCtx.roomCode })
-          if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)) {
-            act('SEER_CONFIRM', actName(seerBot), { room: localCtx.roomCode })
-          }
-          testInfo.attach('seer-action', { body: `Seer ${seerBot.nick} checks ${checkTarget.nick}` })
-        }
-      }
-
-      // Witch uses no potion — gate on WITCH_ACT sub-phase first.
-      if (witchBots.length > 0) {
-        const witchBot = witchBots[0]
-        if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)) {
-          act('WITCH_ACT', actName(witchBot), { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
-          testInfo.attach('witch-action', { body: `Witch ${witchBot.nick} uses no potion` })
-        }
-      }
-
-      // Wait for night to complete and transition to DAY
-      testInfo.attach('waiting-for-night-to-day', { body: 'Waiting for night to complete and transition to DAY' })
-      
-      // Use a more reliable wait strategy - check for day phase indicator
-      await hostPage.waitForTimeout(5_000)
-      
-      // Try multiple times to check if we've reached day phase
-      let dayPhaseReached = false
-      for (let i = 0; i < 6; i++) {
-        const phaseCheck = await hostPage.evaluate(() => {
-          const dayWrap = document.querySelector('.day-wrap')
-          const waitingScreen = document.querySelector('.waiting-screen')
-          const nightWrap = document.querySelector('.night-wrap')
-          return {
-            hasDayWrap: !!dayWrap,
-            hasWaitingScreen: !!waitingScreen,
-            hasNightWrap: !!nightWrap
-          }
-        })
-        
-        testInfo.attach(`phase-check-attempt-${i}`, { body: JSON.stringify(phaseCheck, null, 2) })
-        
-        if (phaseCheck.hasDayWrap || !phaseCheck.hasNightWrap) {
-          dayPhaseReached = phaseCheck.hasDayWrap
-          break
-        }
-        
-        await hostPage.waitForTimeout(3_000)
-      }
-      
-      if (!dayPhaseReached) {
-        testInfo.attach('day-phase-not-reached', { body: 'Day phase not reached after multiple attempts' })
-      }
-      
-      // Try to capture current phase information
-      const currentPhase = await hostPage.evaluate(() => {
-        const gameWrap = document.querySelector('.game-wrap')
-        if (gameWrap) {
-          const classes = gameWrap.className
-          const waitingScreen = document.querySelector('.waiting-screen')
-          const dayWrap = document.querySelector('.day-wrap')
-          const nightWrap = document.querySelector('.night-wrap')
-          return { 
-            classes, 
-            hasWaitingScreen: !!waitingScreen,
-            hasDayWrap: !!dayWrap,
-            hasNightWrap: !!nightWrap,
-            html: gameWrap.innerHTML.substring(0, 500)
-          }
-        }
-        return { error: 'No game wrap found' }
-      })
-      testInfo.attach('current-phase-before-day', { body: JSON.stringify(currentPhase, null, 2) })
-      
-      // If we're still in waiting screen, give more time
-      if (currentPhase.hasWaitingScreen) {
-        testInfo.attach('still-waiting', { body: 'Still in waiting screen, waiting more...' })
-        await hostPage.waitForTimeout(10_000)
-      }
-      
-      // ── Phase 2: Day Phase ──
-      testInfo.attach('waiting-day', { body: 'Waiting for day phase' })
-      await verifyAllBrowsersPhase(localCtx.pages, 'DAY', 15_000)
-      testInfo.attach('day-phase-reached', { body: 'Day phase reached successfully' })
-
-      // Host reveals night result
-      const revealBtn = hostPage.getByTestId('day-reveal-result')
-      await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
-      await revealBtn.click()
-      
-      await captureSnapshot(localCtx.pages, testInfo, '01-day-reveal')
-      await hostPage.waitForTimeout(2_000)
-      
-      // ── Phase 3: Voting Phase ──
-      // Host starts voting
-      const startVoteBtn = hostPage.getByTestId('day-start-vote')
-      await startVoteBtn.waitFor({ state: 'visible', timeout: 10_000 })
-      await startVoteBtn.click()
-      
-      await verifyAllBrowsersPhase(localCtx.pages, 'VOTING', 15_000)
-      testInfo.attach('voting-phase-reached', { body: 'Voting phase reached successfully' })
-      
-      // ── Phase 4: Idiot Reveal ──
-      // Resolve the IDIOT's seat + nickname. Works for both bot-IDIOT (most
-      // rolls) and host-IDIOT (~1/6 of 6p IDIOT-kit games) — the host case
-      // reads the host's seat from the live game state.
-      const idiot = await resolveIdiotTarget(localCtx, hostPage)
-      testInfo.attach('idiot-info', { body: JSON.stringify(idiot, null, 2) })
-      // eslint-disable-next-line no-console
-      console.log(`[idiot-flow test 2] resolved IDIOT seat=${idiot.seat} nick=${idiot.nickname} isHost=${idiot.isHost}`)
-
-      // Fan-out vote only to alive, non-host, unvoted bots — skips
-      // already-voted and dead players to avoid act.sh's 3× retry cascade.
-      // The IDIOT (whether bot or host) is the vote target; we never need
-      // them to vote for themselves, and the host never votes via fan-out
-      // anyway, so the host-IDIOT case Just Works without special-casing.
-      {
-        const unvoted = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
-        const hostId = await readHostUserId(hostPage)
-        for (const bot of localCtx.allBots) {
-          if (bot.nick === 'Host' || bot.userId === hostId) continue
-          if (!unvoted.has(bot.userId)) continue
-          act('SUBMIT_VOTE', bot.nick, { target: String(idiot.seat), room: localCtx.roomCode })
-        }
-        testInfo.attach('votes-submitted', { body: `Fan-out vote for idiot at seat ${idiot.seat}` })
-      }
-
-      // Wait for all votes to register
-      await hostPage.waitForTimeout(2_000)
-
-      // Host reveals tally via script
-      act('VOTING_REVEAL_TALLY', 'HOST', { room: localCtx.roomCode })
-      testInfo.attach('tally-revealed', { body: 'Vote tally revealed' })
-
-      // Wait for the UI to update - this is where idiot reveal should happen
-      await hostPage.waitForTimeout(3_000)
-
-      // Verify idiot reveal banner appears in all browsers
+      // Contract: every browser shows the IDIOT reveal banner with the
+      // IDIOT's nickname AND the 🃏 overlay on the IDIOT's card.
       for (const [roleName, page] of localCtx.pages) {
-        const idiotBanner = page.locator('.elim-banner-body').filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
-        await expect(idiotBanner).toBeVisible({ timeout: 10_000 })
+        const idiotBanner = page
+          .locator('.elim-banner-body')
+          .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
+        await expect(
+          idiotBanner,
+          `[${roleName} browser] elim-banner-body must show IDIOT-reveal text`,
+        ).toBeVisible({ timeout: 10_000 })
+        await expect(
+          idiotBanner.filter({ hasText: idiot.nickname }),
+          `[${roleName} browser] reveal banner must contain IDIOT nickname (${idiot.nickname})`,
+        ).toBeVisible()
 
-        // Verify banner shows correct content
-        await expect(idiotBanner.getByText(/白痴翻牌/i)).toBeVisible()
-        await expect(idiotBanner.getByText(/IDIOT REVEALED/i)).toBeVisible()
-        // Verify the idiot's nickname appears in the banner. Use a literal
-        // string match (not regex) so a nickname like "Host" doesn't
-        // accidentally match unrelated banner text.
-        await expect(idiotBanner.filter({ hasText: idiot.nickname })).toBeVisible()
-
-        testInfo.attach(`idiot-banner-${roleName}`, { body: `Banner visible in ${roleName} browser (idiot=${idiot.nickname})` })
-      }
-      
-      // Verify 🃏 overlay appears on idiot's card in all browsers
-      for (const [roleName, page] of localCtx.pages) {
         const idiotOverlay = page.locator('.slot-overlay.idiot-overlay')
-        await expect(idiotOverlay).toBeVisible({ timeout: 10_000 })
-        
-        testInfo.attach(`idiot-overlay-${roleName}`, { body: `Overlay visible in ${roleName} browser` })
+        await expect(
+          idiotOverlay,
+          `[${roleName} browser] .slot-overlay.idiot-overlay must be visible after reveal`,
+        ).toBeVisible({ timeout: 10_000 })
       }
-      
-      testInfo.attach('idiot-reveal-verified', { body: 'Idiot reveal banner and overlay verified in all browsers' })
-      
     } finally {
       await localCtx.cleanup()
     }
   })
 
-  // ── Test 3: Phase Transition after Idiot Reveal ──────────────────────────────
+  // ── Test 3: VOTE_RESULT → NIGHT transition after IDIOT reveal ──
 
   test('3. Phase transition — VOTE_RESULT to NIGHT', async ({ browser }, testInfo) => {
-    testInfo.setTimeout(120_000)
+    testInfo.setTimeout(180_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
       hasSheriff: false,
@@ -432,186 +299,32 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
     })
 
     try {
-      // host-IDIOT branch is now exercised via resolveIdiotTarget — the
-      // fan-out vote targets a seat number, not a userId, so the test
-      // works for both bot-IDIOT and host-IDIOT rolls.
+      await runNight1ToDay(localCtx)
+      await voteIdiotOut(localCtx)
+
+      // Pre-condition for this test's contract: reveal banner is visible
+      // before continue is clicked.
       const hostPage = localCtx.hostPage
-
-      // ── Phase 0: Start Night Phase ──
-      // First, we need to start the night phase like test1 does
-      testInfo.attach('starting-game-setup', { body: 'Starting game and triggering night phase' })
-      
-      // Use script to start night phase
-      try {
-        act('START_NIGHT', 'Host', { room: localCtx.roomCode })
-        testInfo.attach('night-start-triggered', { body: 'Start night action triggered' })
-        await hostPage.waitForTimeout(5_000)
-      } catch (error) {
-        testInfo.attach('night-start-failed', { body: `Failed to start night: ${error}` })
-      }
-      
-      // ── Phase 1: Complete Night Phase (sub-phase-gated — see Test 2 rationale) ──
-      const wolfBots = localCtx.roleMap.WEREWOLF ?? []
-      const seerBots = localCtx.roleMap.SEER ?? []
-      const witchBots = localCtx.roleMap.WITCH ?? []
-
-      if (wolfBots.length > 0) {
-        const wolfBot = wolfBots[0]
-        const idiotBots = localCtx.roleMap['IDIOT'] ?? []
-        const targetBot = localCtx.allBots.find(b =>
-          b.userId !== wolfBot.userId &&
-          !(idiotBots.some(i => i.userId === b.userId))
-        )
-        if (targetBot && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000))) {
-          act('WOLF_SELECT', actName(wolfBot), { target: String(targetBot.seat), room: localCtx.roomCode })
-          act('WOLF_KILL', actName(wolfBot), { target: String(targetBot.seat), room: localCtx.roomCode })
-        }
-      }
-
-      if (seerBots.length > 0) {
-        const seerBot = seerBots[0]
-        const checkTarget = localCtx.allBots.find(b => b.userId !== seerBot.userId)
-        if (checkTarget && (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000))) {
-          act('SEER_CHECK', actName(seerBot), { target: String(checkTarget.seat), room: localCtx.roomCode })
-          if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000)) {
-            act('SEER_CONFIRM', actName(seerBot), { room: localCtx.roomCode })
-          }
-        }
-      }
-
-      if (witchBots.length > 0) {
-        const witchBot = witchBots[0]
-        if (await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000)) {
-          act('WITCH_ACT', actName(witchBot), { room: localCtx.roomCode, payload: '{"useAntidote":false}' })
-        }
-      }
-
-      await hostPage.waitForTimeout(5_000)
-      
-      // Use smart wait strategy for day phase
-      let dayPhaseReached = false
-      for (let i = 0; i < 6; i++) {
-        const phaseCheck = await hostPage.evaluate(() => {
-          const dayWrap = document.querySelector('.day-wrap')
-          const waitingScreen = document.querySelector('.waiting-screen')
-          const nightWrap = document.querySelector('.night-wrap')
-          const gameWrap = document.querySelector('.game-wrap')
-          const body = document.body
-          const allButtons = Array.from(document.querySelectorAll('button'))
-          const buttonInfo = allButtons.map(btn => ({
-            text: btn.textContent?.trim(),
-            visible: btn.offsetParent !== null,
-            disabled: btn.disabled
-          }))
-          return {
-            hasDayWrap: !!dayWrap,
-            hasWaitingScreen: !!waitingScreen,
-            hasNightWrap: !!nightWrap,
-            hasGameWrap: !!gameWrap,
-            bodyText: body.textContent?.substring(0, 200),
-            bodyClasses: body.className,
-            buttons: buttonInfo
-          }
-        })
-        
-        testInfo.attach(`phase-check-attempt-${i}-test2`, { body: JSON.stringify(phaseCheck, null, 2) })
-        
-        // If we're stuck in waiting screen, try to click any visible button to advance the game
-        if (phaseCheck.hasWaitingScreen && !phaseCheck.hasDayWrap) {
-          const continueBtn = phaseCheck.buttons.find(btn => 
-            btn.visible && !btn.disabled && 
-            (btn.text.includes('开始夜晚') || btn.text.includes('Start Night') || 
-             btn.text.includes('继续') || btn.text.includes('Continue') || 
-             btn.text.includes('进入') || btn.text.includes('Enter'))
-          )
-          if (continueBtn) {
-            testInfo.attach(`clicking-continue-button-attempt-${i}`, { body: `Found continue button: ${continueBtn.text}` })
-            // Click the first matching button
-            const allButtons = await hostPage.locator('button').all()
-            for (const btn of allButtons) {
-              const text = await btn.textContent()
-              if (text?.includes(continueBtn.text)) {
-                await btn.click()
-                await hostPage.waitForTimeout(2_000)
-                break
-              }
-            }
-          }
-        }
-        
-        if (phaseCheck.hasDayWrap) {
-          dayPhaseReached = true
-          break
-        }
-        
-        await hostPage.waitForTimeout(3_000)
-      }
-      
-      if (!dayPhaseReached) {
-        testInfo.attach('day-phase-not-reached-test2', { body: 'Day phase not reached after multiple attempts in test2' })
-      }
-      
-      // ── Phase 2: Day Phase ──
-      await verifyAllBrowsersPhase(localCtx.pages, 'DAY', 15_000)
-
-      const revealBtn = hostPage.getByTestId('day-reveal-result')
-      await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
-      await revealBtn.click()
-      
-      await hostPage.waitForTimeout(2_000)
-      
-      // ── Phase 3: Voting Phase with Idiot Reveal ──
-      const startVoteBtn = hostPage.getByTestId('day-start-vote')
-      await startVoteBtn.waitFor({ state: 'visible', timeout: 10_000 })
-      await startVoteBtn.click()
-      
-      await verifyAllBrowsersPhase(localCtx.pages, 'VOTING', 15_000)
-
-      // Vote for idiot to trigger reveal — works for both bot-IDIOT and
-      // host-IDIOT rolls (resolveIdiotTarget reads host's seat from state).
-      const idiot = await resolveIdiotTarget(localCtx, hostPage)
-      testInfo.attach('idiot-info', { body: JSON.stringify(idiot, null, 2) })
-      // eslint-disable-next-line no-console
-      console.log(`[idiot-flow test 3] resolved IDIOT seat=${idiot.seat} nick=${idiot.nickname} isHost=${idiot.isHost}`)
-
-      // Fan-out vote only to alive, non-host, unvoted bots (same rationale
-      // as test 2's vote step).
-      {
-        const unvoted = await readUnvotedAlivePlayerIds(hostPage, localCtx.gameId)
-        const hostId = await readHostUserId(hostPage)
-        for (const bot of localCtx.allBots) {
-          if (bot.nick === 'Host' || bot.userId === hostId) continue
-          if (!unvoted.has(bot.userId)) continue
-          act('SUBMIT_VOTE', bot.nick, { target: String(idiot.seat), room: localCtx.roomCode })
-        }
-      }
-      await hostPage.waitForTimeout(2_000)
-      act('VOTING_REVEAL_TALLY', 'HOST', { room: localCtx.roomCode })
-      await hostPage.waitForTimeout(3_000)
-      
-      // Verify idiot reveal banner is visible
-      const idiotBanner = hostPage.locator('.elim-banner-body').filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
+      const idiotBanner = hostPage
+        .locator('.elim-banner-body')
+        .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
       await expect(idiotBanner).toBeVisible({ timeout: 10_000 })
-      testInfo.attach('idiot-reveal-confirmed', { body: 'Idiot reveal banner confirmed visible' })
-      
-      // ── Phase 4: Transition to NIGHT ──
-      // Host can click continue button to advance to night
+
+      // Host clicks voting-continue to advance D1 → N2.
       const continueBtn = hostPage.getByTestId('voting-continue')
       await continueBtn.waitFor({ state: 'visible', timeout: 10_000 })
       await continueBtn.click()
-      testInfo.attach('continue-clicked', { body: 'Host clicked continue to advance to night' })
-      
-      // Verify all browsers transition to NIGHT phase
+
+      // Contract: every browser transitions to NIGHT phase, AND the
+      // IDIOT-reveal banner is no longer visible (we left day-voting).
       await verifyAllBrowsersPhase(localCtx.pages, 'NIGHT', 15_000)
-      testInfo.attach('night-phase-reached', { body: 'All browsers successfully transitioned to NIGHT phase' })
-      
-      // Additional verification: confirm idiot reveal banner is no longer visible (we're in night phase now)
-      const idiotBannerAfter = hostPage.locator('.elim-banner-body').filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
-      await expect(idiotBannerAfter).not.toBeVisible({ timeout: 5_000 })
-      testInfo.attach('idiot-banner-gone', { body: 'Idiot reveal banner correctly hidden in night phase' })
-      
+      await expect(
+        idiotBanner,
+        'IDIOT reveal banner must hide once we leave day-voting',
+      ).not.toBeVisible({ timeout: 5_000 })
     } finally {
       await localCtx.cleanup()
     }
   })
 })
+
