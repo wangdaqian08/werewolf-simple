@@ -624,11 +624,59 @@ async function completeDay(
 
   if (subPhaseAfterReveal === 'BADGE_HANDOVER') {
     await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-badge-handover-triggered`)
-    if (!sheriffPage) {
+    // Resolve the eliminated sheriff's page. Caller may have supplied it
+    // explicitly (HARD_MODE knows the seer is sheriff up-front) but in
+    // CLASSIC the elected sheriff depends on who campaigns + who wins (e.g.
+    // when host=SEER, the wolf becomes sole candidate and wins; voting that
+    // wolf out then triggers BADGE_HANDOVER on the wolf bot's own page).
+    // Auto-resolve in priority order:
+    //   1. eliminated == host → use hostPage.
+    //   2. eliminated is the bot tracked in ctx.bots[role] → use that role's page.
+    //   3. eliminated is a different bot of a tracked role → match by userId
+    //      across roleMap, but only if we have a page logged in as THAT bot.
+    //   4. None match → log + skip (game stalls — caller must open a page).
+    const hostUserId = await readHostUserId(hostPage)
+    let resolvedSheriffPage = sheriffPage
+    if (!resolvedSheriffPage && targetUserId) {
+      if (targetUserId === hostUserId) {
+        resolvedSheriffPage = hostPage
+      } else {
+        for (const [role, bot] of ctx.bots) {
+          if (bot.userId === targetUserId) {
+            resolvedSheriffPage = ctx.pages.get(role)
+            break
+          }
+        }
+      }
       // eslint-disable-next-line no-console
       console.warn(
-        `[completeDay] BADGE_HANDOVER fired for game=${gameId} but no sheriffPage provided — ` +
-          `caller must pass the eliminated sheriff's browser page so DOM clicks can resolve it.`,
+        `[completeDay] auto-resolved sheriffPage for eliminated userId=${targetUserId} → ` +
+          `${resolvedSheriffPage ? 'found' : 'NOT FOUND in ctx.pages or hostPage'}`,
+      )
+    }
+    // Default the badge recipient to host's seat if the caller didn't
+    // specify one. This avoids cascading BADGE_HANDOVERs in CLASSIC: when
+    // bot-A sheriff is voted out and we click "first alive slot" on bot-A's
+    // page, the badge can land on another wolf bot we don't have a page
+    // for; voting THAT bot out later then fires BADGE_HANDOVER and the
+    // auto-resolve has no page to drive. Parking the badge on the host
+    // (whose page we always have) makes the next handover — when host
+    // themselves gets voted out — driveable on hostPage. When host IS the
+    // eliminated sheriff, fall back to first-alive (host's seat is dead).
+    let resolvedRecipientSeat = badgeRecipientSeat
+    if (resolvedRecipientSeat === undefined && targetUserId !== hostUserId) {
+      const hostSeat = await readHostSeat(hostPage, gameId)
+      if (hostSeat != null) {
+        resolvedRecipientSeat = hostSeat
+        // eslint-disable-next-line no-console
+        console.warn(`[completeDay] defaulting badge recipient to host seat=${hostSeat}`)
+      }
+    }
+    if (!resolvedSheriffPage) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[completeDay] BADGE_HANDOVER fired for game=${gameId} but no sheriffPage available — ` +
+          `caller must pass the eliminated sheriff's browser page (or open one in browserRoles).`,
       )
     } else {
       // Pick the badge recipient. If the caller supplied `badgeRecipientSeat`,
@@ -637,15 +685,15 @@ async function completeDay(
       // (e.g. HARD_MODE D2 elimination), where parking the badge on a wolf
       // keeps it sticky for the remainder of the test. Otherwise pick the
       // first alive slot. Click is on the page where `isEliminatedSheriff`
-      // is true (sheriffPage) — only that page renders the buttons.
-      const slot = badgeRecipientSeat !== undefined
-        ? sheriffPage.locator(`.player-grid [data-seat="${badgeRecipientSeat}"].slot-alive`)
-        : sheriffPage.locator('.player-grid .slot-alive').first()
+      // is true (resolvedSheriffPage) — only that page renders the buttons.
+      const slot = resolvedRecipientSeat !== undefined
+        ? resolvedSheriffPage.locator(`.player-grid [data-seat="${resolvedRecipientSeat}"].slot-alive`)
+        : resolvedSheriffPage.locator('.player-grid .slot-alive').first()
       await slot.waitFor({ state: 'visible', timeout: 10_000 })
       await slot.click()
-      await sheriffPage.waitForTimeout(300)
+      await resolvedSheriffPage.waitForTimeout(300)
 
-      const passBtn = sheriffPage.getByTestId('badge-pass')
+      const passBtn = resolvedSheriffPage.getByTestId('badge-pass')
       const passEnabled = await passBtn
         .waitFor({ state: 'visible', timeout: 5_000 })
         .then(() => true)
@@ -654,7 +702,7 @@ async function completeDay(
         await passBtn.click()
       } else {
         // Fall back to destroy if for some reason no slot was selectable.
-        const destroyBtn = sheriffPage.getByTestId('badge-destroy')
+        const destroyBtn = resolvedSheriffPage.getByTestId('badge-destroy')
         if (await destroyBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
           await destroyBtn.click()
         }
@@ -742,12 +790,23 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
 
     // Wolves will be voted out every day. No village player dies at night if
     // we can avoid it — wolves hit a villager target we'll vote no-one for.
-    // Alive wolves-to-eliminate order: all wolves, one per day.
-    // Exclude the host even if the host is a wolf — the host drives UI clicks
-    // for the rest of the flow, so voting them out stalls the spec. (Host-wolf
-    // still dies in the last round when it's the only wolf left; in a 12p
-    // classic game there are 4 wolves, so excluding one is safe.)
-    const wolvesToEliminate = (ctx.roleMap.WEREWOLF ?? []).filter((b) => b.nick !== 'Host')
+    // Alive wolves-to-eliminate order: all wolves including host (if host
+    // rolled WEREWOLF). The earlier "exclude host" filter was wrong: with
+    // host filtered, a host-wolf survives the entire spec, the loop exits
+    // with 1 wolf still alive, and `/result/` is never reached. The host
+    // can be voted out and still drive the post-elimination UI (host-only
+    // buttons check hostUserId, not alive status). Include host with their
+    // real seat from the API — the shell state file's seat=0 is stale.
+    const hostSeat = await readHostSeat(ctx.hostPage, ctx.gameId)
+    const wolvesToEliminate = (ctx.roleMap.WEREWOLF ?? []).map((b) => ({
+      nick: b.nick,
+      userId: b.userId,
+      // Host's seat in roleMap comes from the shell state file's seat=0
+      // (initialized in setupGame and never updated post seat-claim).
+      // Substitute the live API seat. Other bots' seats from the state
+      // file are correct.
+      seat: b.nick === 'Host' && hostSeat != null ? hostSeat : b.seat,
+    }))
 
     const villagerBots = ctx.roleMap.VILLAGER ?? []
     // Do NOT target the host even if the host's role is VILLAGER — the spec
@@ -818,13 +877,6 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
       hasSheriff: true,
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
       browserRoles: BROWSER_ROLES,
-      // Drive the room's win condition through the DOM toggle on the host's
-      // CreateRoom view. Acting through the create-room form keeps the test
-      // honest to a real player flow and avoids the silent fall-through that
-      // the prior `act('SET_WIN_CONDITION', ...)` produced (the action does
-      // not exist in the backend ActionType enum, so the script's `try/catch`
-      // swallowed the rejection and the game ran under CLASSIC — visible in
-      // /tmp/werewolf-e2e-backend.log when reproducing locally on 2026-04-27).
       winCondition: 'HARD_MODE',
     })
   })
