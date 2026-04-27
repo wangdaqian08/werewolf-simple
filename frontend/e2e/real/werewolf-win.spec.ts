@@ -280,10 +280,28 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       }
       await hostPage.waitForTimeout(2_000)
 
+      // Reveal tally → backend's next sub-phase depends on the tally:
+      //   - decisive → VOTE_RESULT (VOTING_CONTINUE applies)
+      //   - tied     → RE_VOTING auto-fires (VOTING_CONTINUE doesn't apply,
+      //                firing it returns "Not in VOTE_RESULT sub-phase")
+      // Poll for either; only fire VOTING_CONTINUE on VOTE_RESULT.
       tryAct('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })
-      await hostPage.waitForTimeout(2_000)
+      let postRevealSub: string | null = null
+      for (let i = 0; i < 20; i++) {
+        postRevealSub = await ctx.hostPage.evaluate(async (id: string) => {
+          const token = localStorage.getItem('jwt')
+          const res = await fetch(`/api/game/${id}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          return res.ok ? ((await res.json())?.votingPhase?.subPhase ?? null) : null
+        }, ctx.gameId)
+        if (postRevealSub === 'VOTE_RESULT' || postRevealSub === 'RE_VOTING') break
+        await hostPage.waitForTimeout(300)
+      }
 
-      tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+      if (postRevealSub === 'VOTE_RESULT') {
+        tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+      }
       await hostPage.waitForTimeout(3_000)
 
       // Check if still in voting (revote) — if skip-btn reappears, another round needed

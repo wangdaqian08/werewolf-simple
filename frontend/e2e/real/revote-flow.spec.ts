@@ -382,14 +382,28 @@ test.describe('Voting tie → revote → game proceeds', () => {
 
     await hostPage.waitForTimeout(2_000)
 
-    // Host reveals tally
+    // Host reveals tally. Backend's next sub-phase depends on the tally:
+    //   - decisive vote → VOTE_RESULT (VOTING_CONTINUE applies)
+    //   - tied vote   → RE_VOTING auto-fires (VOTING_CONTINUE doesn't apply,
+    //                   firing it returns "Not in VOTE_RESULT sub-phase")
+    // Poll for whichever sub-phase the backend lands on, then fire
+    // VOTING_CONTINUE only when it's appropriate.
     tryAct('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })
-    await hostPage.waitForTimeout(2_000)
+    let postRevealSub: string | null = null
+    for (let i = 0; i < 20; i++) {
+      postRevealSub = await readVotingSubPhase(hostPage, ctx.gameId)
+      if (postRevealSub === 'VOTE_RESULT' || postRevealSub === 'RE_VOTING') break
+      await hostPage.waitForTimeout(300)
+    }
 
     await captureSnapshot(ctx.pages, testInfo, '03-vote-tally-tied')
 
-    // Host continues — should trigger RE_VOTING if tied
-    tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+    // Only fire VOTING_CONTINUE when VOTE_RESULT was reached. RE_VOTING is
+    // auto-triggered by the backend on a tie; VOTING_CONTINUE doesn't apply
+    // there and would be rejected with "Not in VOTE_RESULT sub-phase".
+    if (postRevealSub === 'VOTE_RESULT') {
+      tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+    }
     await hostPage.waitForTimeout(3_000)
 
     await captureSnapshot(ctx.pages, testInfo, '03-after-continue')
@@ -484,14 +498,24 @@ test.describe('Voting tie → revote → game proceeds', () => {
       }
     }
 
-    /** Host reveals tally then clicks continue. */
+    /** Host reveals tally, then fires VOTING_CONTINUE only if the backend
+     *  reached VOTE_RESULT. RE_VOTING auto-fires on a tie and doesn't
+     *  accept VOTING_CONTINUE (rejected as "Not in VOTE_RESULT sub-phase"
+     *  — the spam in /tmp/werewolf-e2e-backend.log on this spec). */
     async function revealAndContinue() {
       const revealBtn = ctx.hostPage.getByTestId('voting-reveal')
       await revealBtn.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
       await expect(revealBtn).toBeEnabled({ timeout: 15_000 }).catch(() => {})
       tryAct('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })
-      await ctx.hostPage.waitForTimeout(1_500)
-      tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+      let postRevealSub: string | null = null
+      for (let i = 0; i < 20; i++) {
+        postRevealSub = await readVotingSubPhase(ctx.hostPage, ctx.gameId)
+        if (postRevealSub === 'VOTE_RESULT' || postRevealSub === 'RE_VOTING') break
+        await ctx.hostPage.waitForTimeout(300)
+      }
+      if (postRevealSub === 'VOTE_RESULT') {
+        tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+      }
       await ctx.hostPage.waitForTimeout(1_500)
     }
 
