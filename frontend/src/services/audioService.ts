@@ -318,6 +318,16 @@ class AudioService {
     this.stopAll()
     this.isPlayingQueue = false
   }
+
+  /**
+   * True when an item is currently playing OR queued and pending.
+   * Callers that want to interrupt mid-narrative use this to decide between
+   * a "clear-and-replace" hard reset (queue idle) and a "wait-then-play"
+   * append (queue still draining role-owned audio).
+   */
+  isQueueActive(): boolean {
+    return this.isPlayingQueue || this.audioQueue.length > 0
+  }
 }
 
 // Export singleton instance

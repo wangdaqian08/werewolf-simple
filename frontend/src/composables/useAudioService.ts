@@ -37,19 +37,34 @@ export function useAudioService() {
         return
       }
 
-      // Phase-level audio (priority >= 10) replaces the queue — e.g. DAY→NIGHT rooster
-      // must interrupt any lingering night audio. Lower-priority sequences (role open/
-      // close eyes, dead-role sim) APPEND to the queue so they play sequentially after
-      // whatever is currently playing. This is what guarantees wolf_open_eyes.mp3
-      // never overlaps with goes_dark_close_eyes.mp3 or wolf_howl.mp3, even if the
-      // backend's NIGHT_INIT_AUDIO_DELAY_MS timing underestimates the combined duration.
+      // Phase-level audio (priority >= 10) is meant to replace the queue —
+      // e.g. DAY→NIGHT rooster_crowing should interrupt any lingering night
+      // audio. But an unconditional clearQueue() drops role-owned audio that
+      // is queued but hasn't started yet — the most common offender:
+      // guard_close_eyes.mp3 gets queued ~15ms before the DAY AudioSequence
+      // arrives, and clearQueue wipes it before audio.play() ever fires.
+      // Result: the audible role-narrative ("all roles done → day breaks")
+      // is silently truncated.
+      //
+      // Fix: only clear when the queue is idle (no harm done). When it is
+      // still draining low-priority role audio, APPEND the high-priority
+      // files so they play after the role-narrative audio finishes —
+      // preserves narrative integrity while still ensuring the high-priority
+      // sequence eventually plays.
       const isHighPriority = (newSequence.priority ?? 0) >= 10
       if (isHighPriority) {
-        console.log(
-          '[useAudioService] High-priority sequence — clearing queue:',
-          newSequence.audioFiles,
-        )
-        audioService.clearQueue()
+        if (audioService.isQueueActive()) {
+          console.log(
+            '[useAudioService] High-priority sequence — queue active, appending after current items:',
+            newSequence.audioFiles,
+          )
+        } else {
+          console.log(
+            '[useAudioService] High-priority sequence — clearing idle queue:',
+            newSequence.audioFiles,
+          )
+          audioService.clearQueue()
+        }
       } else {
         console.log(
           '[useAudioService] Low-priority sequence — appending to queue:',
