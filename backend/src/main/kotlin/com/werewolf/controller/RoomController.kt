@@ -4,6 +4,7 @@ import com.werewolf.auth.UserClaims
 import com.werewolf.dto.ClaimSeatRequest
 import com.werewolf.dto.CreateRoomRequest
 import com.werewolf.dto.JoinRoomRequest
+import com.werewolf.dto.KickPlayerRequest
 import com.werewolf.dto.SetReadyRequest
 import com.werewolf.service.*
 import org.springframework.http.ResponseEntity
@@ -87,6 +88,30 @@ class RoomController(private val roomService: RoomService) {
         } catch (e: RoomNotFoundException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         }
+
+    @PostMapping("/kick")
+    fun kickPlayer(
+        @RequestBody body: KickPlayerRequest,
+        authentication: Authentication,
+    ): ResponseEntity<Any> {
+        if (body.targetUserId.isBlank())
+            return ResponseEntity.badRequest().body(mapOf("error" to "targetUserId must not be blank"))
+        val (userId, _, _) = authentication.userClaims()
+        return try {
+            roomService.kickPlayer(userId, body.roomId, body.targetUserId)
+            ResponseEntity.ok(mapOf("success" to true))
+        } catch (e: RoomNotFoundException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: RoomNotOpenException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: NotHostException) {
+            ResponseEntity.status(403).body(mapOf("error" to e.message))
+        } catch (e: CannotKickHostException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: PlayerNotInRoomException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        }
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
