@@ -55,17 +55,61 @@ class RoomService(
 
         val room = roomRepository.findByRoomCode(roomCode).orElse(null)
             ?: throw RoomNotFoundException("Room not found")
-        if (room.status != RoomStatus.WAITING)
-            throw RoomNotOpenException("Room is not open")
-
         val roomId = room.roomId ?: error("Room has no ID")
-        if (!roomPlayerRepository.findByRoomIdAndUserId(roomId, userId).isPresent) {
-            val count = roomPlayerRepository.findByRoomId(roomId).size
-            if (count >= room.totalPlayers) throw RoomFullException("Room is full")
-            roomPlayerRepository.save(RoomPlayer(roomId = roomId, userId = userId))
+
+        // Existing member can rejoin at any game stage. Supports:
+        //   1. Network drop / mobile backgrounding mid-game — player navigates
+        //      back to /room/<code> from the lobby and gets a fresh room snapshot.
+        //   2. Page refresh during ROLE_REVEAL / NIGHT / DAY / SHERIFF_ELECTION.
+        //   3. Kick + re-add: a kicked player's row is deleted (kickPlayer below),
+        //      so they fall through to the "new player" branch and are bound
+        //      by the WAITING + full guards just like a brand-new joiner.
+        if (roomPlayerRepository.findByRoomIdAndUserId(roomId, userId).isPresent) {
+            return buildRoomDto(room)
         }
 
+        // New player: must be in WAITING and room not full.
+        if (room.status != RoomStatus.WAITING)
+            throw RoomNotOpenException("Room is not open")
+        val count = roomPlayerRepository.findByRoomId(roomId).size
+        if (count >= room.totalPlayers) throw RoomFullException("Room is full")
+        roomPlayerRepository.save(RoomPlayer(roomId = roomId, userId = userId))
+
         return buildRoomDto(room)
+    }
+
+    /**
+     * Host removes a player from the room. Only valid during the WAITING stage
+     * (room hasn't started a game yet). Deletes the player's row so they fall
+     * through to the "new player" branch on a re-join attempt — meaning they
+     * can re-join only if (a) the room is still WAITING and (b) the seat
+     * hasn't been filled by someone else, and they CANNOT re-join once the
+     * host clicks Start Game.
+     *
+     * Broadcasts:
+     *   - PLAYER_KICKED — kicked player's frontend redirects to lobby.
+     *   - ROOM_UPDATE   — other players see the seat empty.
+     */
+    @Transactional
+    fun kickPlayer(hostUserId: String, roomId: Int, targetUserId: String) {
+        val room = roomRepository.findById(roomId).orElse(null)
+            ?: throw RoomNotFoundException("Room not found")
+        if (room.status != RoomStatus.WAITING)
+            throw RoomNotOpenException("Cannot kick after the game has started")
+        if (room.hostUserId != hostUserId)
+            throw NotHostException("Only the host can kick players")
+        if (targetUserId == hostUserId)
+            throw CannotKickHostException("Host cannot kick themselves")
+
+        val target = roomPlayerRepository.findByRoomIdAndUserId(roomId, targetUserId).orElse(null)
+            ?: throw PlayerNotInRoomException("Player not in room")
+
+        roomPlayerRepository.delete(target)
+
+        stompPublisher.broadcastRoom(roomId, mapOf("type" to "PLAYER_KICKED",
+            "payload" to mapOf("userId" to targetUserId)))
+        stompPublisher.broadcastRoom(roomId, mapOf("type" to "ROOM_UPDATE",
+            "payload" to mapOf("players" to buildRoomDto(room).players)))
     }
 
     @Transactional
@@ -174,3 +218,5 @@ class RoomNotOpenException(message: String) : RuntimeException(message)
 class RoomFullException(message: String) : RuntimeException(message)
 class PlayerNotInRoomException(message: String) : RuntimeException(message)
 class SeatTakenException(message: String) : RuntimeException(message)
+class NotHostException(message: String) : RuntimeException(message)
+class CannotKickHostException(message: String) : RuntimeException(message)

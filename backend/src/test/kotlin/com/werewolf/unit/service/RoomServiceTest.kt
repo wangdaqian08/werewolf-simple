@@ -121,12 +121,38 @@ class RoomServiceTest {
     }
 
     @Test
-    fun `joinRoom - throws RoomNotOpenException when room is IN_GAME`() {
+    fun `joinRoom - throws RoomNotOpenException when NEW user joins IN_GAME room`() {
+        // The WAITING guard only applies to brand-new joiners. Existing
+        // members (already in room_players) bypass it — see the rejoin
+        // tests below.
         val room = room(status = RoomStatus.IN_GAME)
         whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.empty())
 
         assertThatThrownBy { roomService.joinRoom(userId, "Nick", null, "ABCD") }
             .isInstanceOf(RoomNotOpenException::class.java)
+    }
+
+    @Test
+    fun `joinRoom - existing member can rejoin IN_GAME room (mid-game resume)`() {
+        // Player who is already in room_players (whether they disconnected,
+        // backgrounded their phone, or just refreshed) re-runs joinRoom and
+        // gets back the current room snapshot — even after the host has
+        // started the game.
+        val room = room(status = RoomStatus.IN_GAME)
+        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId))
+            .thenReturn(Optional.of(RoomPlayer(roomId = 1, userId = userId)))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(
+            listOf(RoomPlayer(roomId = 1, userId = userId))
+        )
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        val result = roomService.joinRoom(userId, "Nick", null, "ABCD")
+
+        verify(roomPlayerRepository, never()).save(any<RoomPlayer>())
+        assertThat(result.roomCode).isEqualTo("ABCD")
+        assertThat(result.status).isEqualTo("IN_GAME")
     }
 
     @Test
@@ -201,5 +227,75 @@ class RoomServiceTest {
 
         assertThat(result.roomCode).isEqualTo("ABCD")
         assertThat(result.hostId).isEqualTo(hostId)
+    }
+
+    // ── kickPlayer ───────────────────────────────────────────────────────────
+
+    @Test
+    fun `kickPlayer - throws RoomNotFoundException when room missing`() {
+        whenever(roomRepository.findById(999)).thenReturn(Optional.empty())
+
+        assertThatThrownBy { roomService.kickPlayer(hostId, 999, userId) }
+            .isInstanceOf(RoomNotFoundException::class.java)
+    }
+
+    @Test
+    fun `kickPlayer - throws RoomNotOpenException after game has started`() {
+        val room = room(status = RoomStatus.IN_GAME)
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+
+        assertThatThrownBy { roomService.kickPlayer(hostId, 1, userId) }
+            .isInstanceOf(RoomNotOpenException::class.java)
+    }
+
+    @Test
+    fun `kickPlayer - throws NotHostException when caller is not the host`() {
+        val room = room()
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+
+        assertThatThrownBy { roomService.kickPlayer(userId, 1, "u2") }
+            .isInstanceOf(NotHostException::class.java)
+    }
+
+    @Test
+    fun `kickPlayer - throws CannotKickHostException when host targets themselves`() {
+        val room = room()
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+
+        assertThatThrownBy { roomService.kickPlayer(hostId, 1, hostId) }
+            .isInstanceOf(CannotKickHostException::class.java)
+    }
+
+    @Test
+    fun `kickPlayer - throws PlayerNotInRoomException when target is not in room`() {
+        val room = room()
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.empty())
+
+        assertThatThrownBy { roomService.kickPlayer(hostId, 1, userId) }
+            .isInstanceOf(PlayerNotInRoomException::class.java)
+    }
+
+    @Test
+    fun `kickPlayer - deletes target row and broadcasts PLAYER_KICKED + ROOM_UPDATE`() {
+        val room = room()
+        val targetRow = RoomPlayer(roomId = 1, userId = userId)
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.of(targetRow))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(
+            listOf(RoomPlayer(roomId = 1, userId = hostId))  // host left after kick
+        )
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.kickPlayer(hostId, 1, userId)
+
+        verify(roomPlayerRepository).delete(targetRow)
+        verify(stompPublisher).broadcastRoom(eq(1), argThat<Map<String, Any>> {
+            this["type"] == "PLAYER_KICKED" &&
+            (this["payload"] as? Map<*, *>)?.get("userId") == userId
+        })
+        verify(stompPublisher).broadcastRoom(eq(1), argThat<Map<String, Any>> {
+            this["type"] == "ROOM_UPDATE"
+        })
     }
 }

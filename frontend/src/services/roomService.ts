@@ -33,4 +33,8 @@ export const roomService = {
   async claimSeat(seatIndex: number, roomId: string): Promise<void> {
     await http.post('/room/seat', { seatIndex, roomId: Number(roomId) })
   },
+
+  async kickPlayer(roomId: string, targetUserId: string): Promise<void> {
+    await http.post('/room/kick', { roomId: Number(roomId), targetUserId })
+  },
 }
