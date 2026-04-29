@@ -566,9 +566,13 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const guardBots = aliveActorsOf('GUARD')
     const villagerBots = aliveActorsOf('VILLAGER')
 
-    // Targets exclude wolves (a wolf can't kill another wolf). Host may be
-    // included as a target if they hold a non-wolf role.
-    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots]
+    // Targets exclude wolves (a wolf can't kill another wolf) AND the host. The
+    // host drives later steps that require host-alive UI — `.skip-btn` in
+    // VotingPhase.vue is gated on `viewRole === 'ALIVE'`, so killing the host
+    // here makes the day-2 abstain wait time out and tests 9-10 cascade-fail.
+    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots].filter(
+      (b) => b.nick !== 'Host',
+    )
 
     // Locator visibility helper — Playwright's isVisible() does NOT retry,
     // so wrapping waitFor lets us return a boolean after a real wait.
@@ -815,7 +819,9 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // chosen.
     const aliveIds = await ctx.hostPage.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
-      const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       if (!res.ok) return [] as string[]
       const state = await res.json()
       return ((state?.players ?? []) as Array<{ isAlive?: boolean; userId: string }>)
@@ -945,7 +951,9 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // Read live alive set from the API for live filtering of role bots.
     const aliveIds = await ctx.hostPage.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
-      const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       if (!res.ok) return [] as string[]
       const state = await res.json()
       return ((state?.players ?? []) as Array<{ isAlive?: boolean; userId: string }>)
@@ -1008,7 +1016,10 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
           !(ctx.roleMap.WEREWOLF ?? []).some((w) => w.userId === b.userId),
       )
       if (wolfBot && wolfTargetCandidate) {
-        tryAct('WOLF_KILL', actName(wolfBot), { target: String(wolfTargetCandidate.seat), room: ctx.roomCode })
+        tryAct('WOLF_KILL', actName(wolfBot), {
+          target: String(wolfTargetCandidate.seat),
+          room: ctx.roomCode,
+        })
         await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 8_000)
       }
     }
@@ -1021,7 +1032,10 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
           (b) => b.userId !== seerBot.userId && b.nick !== 'Host' && aliveSet.has(b.userId),
         )
         if (checkTarget) {
-          tryAct('SEER_CHECK', actName(seerBot), { target: String(checkTarget.seat), room: ctx.roomCode })
+          tryAct('SEER_CHECK', actName(seerBot), {
+            target: String(checkTarget.seat),
+            room: ctx.roomCode,
+          })
           await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 8_000)
           tryAct('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
         }
@@ -1112,7 +1126,7 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       // host token (act.sh:378), so a host-as-WITCH/SEER/WEREWOLF row is
       // driveable through the same script path. The role lookup just needs
       // to return whoever holds the role, host or bot.
-      const wolves = (localCtx.roleMap.WEREWOLF ?? [])
+      const wolves = localCtx.roleMap.WEREWOLF ?? []
       const seer = (localCtx.roleMap.SEER ?? [])[0]
       const witch = (localCtx.roleMap.WITCH ?? [])[0]
       expect(wolves.length, 'kit must have 2 wolves').toBe(2)
@@ -1137,14 +1151,19 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       // wolves[0] then closes out the wolves → villager-win.
       const wolfIds = new Set(wolves.map((w) => w.userId))
       const victim =
-        (localCtx.roleMap.VILLAGER ?? []).find((b) => !wolfIds.has(b.userId))
-        ?? localCtx.allBots.find((b) => !wolfIds.has(b.userId) && b.userId !== seer.userId && b.userId !== witch.userId)
+        (localCtx.roleMap.VILLAGER ?? []).find((b) => !wolfIds.has(b.userId)) ??
+        localCtx.allBots.find(
+          (b) => !wolfIds.has(b.userId) && b.userId !== seer.userId && b.userId !== witch.userId,
+        )
       expect(victim, 'need a non-wolf victim for the wolves to kill').toBeDefined()
       expect(
         await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
         'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
       ).toBe(true)
-      act('WOLF_KILL', actName(wolves[0]), { target: String(victim!.seat), room: localCtx.roomCode })
+      act('WOLF_KILL', actName(wolves[0]), {
+        target: String(victim!.seat),
+        room: localCtx.roomCode,
+      })
 
       // Seer checks (just to advance the phase deterministically). Assert
       // each gate so a wrong-sub-phase doesn't silently fire act() with
@@ -1205,7 +1224,9 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       await hostPage.waitForURL(/\/result\//, { timeout: 30_000 })
       const finalState = await hostPage.evaluate(async (id: string) => {
         const token = localStorage.getItem('jwt')
-        const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+        const res = await fetch(`/api/game/${id}/state`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
         return res.ok ? res.json() : null
       }, localCtx.gameId)
       expect(finalState?.phase, 'phase=GAME_OVER expected').toBe('GAME_OVER')
@@ -1250,7 +1271,10 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
         await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
         'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
       ).toBe(true)
-      act('WOLF_KILL', actName(wolves[0]), { target: String(villagers[0].seat), room: localCtx.roomCode })
+      act('WOLF_KILL', actName(wolves[0]), {
+        target: String(villagers[0].seat),
+        room: localCtx.roomCode,
+      })
 
       expect(
         await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
@@ -1296,7 +1320,9 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       await hostPage.waitForURL(/\/result\//, { timeout: 30_000 })
       const finalState = await hostPage.evaluate(async (id: string) => {
         const token = localStorage.getItem('jwt')
-        const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+        const res = await fetch(`/api/game/${id}/state`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
         return res.ok ? res.json() : null
       }, localCtx.gameId)
       expect(finalState?.phase, 'phase=GAME_OVER expected').toBe('GAME_OVER')
@@ -1345,7 +1371,10 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
         await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
         'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
       ).toBe(true)
-      act('WOLF_KILL', actName(wolves[0]), { target: String(villagers[0].seat), room: localCtx.roomCode })
+      act('WOLF_KILL', actName(wolves[0]), {
+        target: String(villagers[0].seat),
+        room: localCtx.roomCode,
+      })
 
       expect(
         await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
@@ -1396,7 +1425,9 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
         'HUNTER_SHOOT',
         15_000,
       )
-      expect(reachedHunterShoot, 'expected DAY_VOTING/HUNTER_SHOOT after voting hunter out').toBe(true)
+      expect(reachedHunterShoot, 'expected DAY_VOTING/HUNTER_SHOOT after voting hunter out').toBe(
+        true,
+      )
       await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-entered')
 
       // Drive the hunter's pass (no shoot) so the game can advance — the
@@ -1412,7 +1443,9 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
         async () => {
           const state = await hostPage.evaluate(async (id: string) => {
             const token = localStorage.getItem('jwt')
-            const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+            const res = await fetch(`/api/game/${id}/state`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
             return res.ok ? res.json() : null
           }, localCtx.gameId)
           return state?.votingPhase?.subPhase !== 'HUNTER_SHOOT'
