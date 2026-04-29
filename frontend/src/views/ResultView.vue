@@ -109,7 +109,8 @@ const outcomeSub = computed(() => {
 })
 
 const outcomeDesc = computed(() => {
-  if (!winner.value) return '服务器已重启，请回到房间重新开始 / Server restarted — return to your room and start a new game'
+  if (!winner.value)
+    return '服务器已重启，请回到房间重新开始 / Server restarted — return to your room and start a new game'
   return winner.value === 'WEREWOLF'
     ? '狼人数量超过村民 / Wolves outnumber the village'
     : '所有狼人已被消灭 / All werewolves eliminated'
