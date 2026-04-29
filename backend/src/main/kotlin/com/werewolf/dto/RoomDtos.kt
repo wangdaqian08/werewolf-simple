@@ -16,6 +16,7 @@ data class JoinRoomRequest(val roomCode: String)
 
 data class SetReadyRequest(val ready: Boolean, val roomId: Int)
 data class ClaimSeatRequest(val seatIndex: Int, val roomId: Int)
+data class KickPlayerRequest(val roomId: Int, val targetUserId: String)
 
 data class RoomPlayerDto(
     val userId: String,

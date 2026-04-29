@@ -42,7 +42,25 @@
           :variant="slotVariant(seat)"
           mode="room"
           @click="handleSeatClick(seat)"
-        />
+        >
+          <!--
+            Host-only: × button on every occupied non-host seat.
+            Stops click propagation so the surrounding seat-click (seat
+            select / claim) doesn't fire. Available only during the
+            WAITING stage; the button isn't rendered after Start Game
+            because the room view isn't shown then.
+          -->
+          <template v-if="canKick(seat)" #overlay>
+            <button
+              class="kick-btn"
+              :data-testid="`kick-player-${seat}`"
+              :aria-label="`Kick ${playerAtSeat(seat)?.nickname}`"
+              @click.stop="handleKickPlayer(seat)"
+            >
+              ×
+            </button>
+          </template>
+        </PlayerSlot>
       </section>
 
       <!-- Debug panel (mock mode only) -->
@@ -179,6 +197,31 @@ async function handleSeatClick(seat: number) {
   }
 }
 
+// Host can kick: occupied seat, not the host themselves. Backend also
+// validates this server-side; the predicate just controls whether the
+// × button renders so the host doesn't see the option on themselves.
+function canKick(seat: number): boolean {
+  if (!isHost.value) return false
+  const player = playerAtSeat(seat)
+  if (!player) return false
+  return player.userId !== userStore.userId && !player.isHost
+}
+
+async function handleKickPlayer(seat: number) {
+  if (!roomStore.room) return
+  const player = playerAtSeat(seat)
+  if (!player) return
+  try {
+    await roomService.kickPlayer(roomStore.room.roomId, player.userId)
+    // STOMP PLAYER_KICKED + ROOM_UPDATE will land via the topic subscription;
+    // local store updates from there. No optimistic update — keeps the
+    // single source of truth on the server.
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[RoomView] kick failed', err)
+  }
+}
+
 async function handleReady(ready: boolean) {
   await roomService.setReady(ready, roomStore.room!.roomId)
   if (userStore.userId) {
@@ -273,6 +316,18 @@ onMounted(async () => {
         }
         if (data.type === 'GAME_STARTED') {
           router.push({ name: 'game', params: { gameId: data.payload.gameId } })
+        }
+        if (data.type === 'PLAYER_KICKED') {
+          // If THIS browser was the kicked player, clear local state and
+          // bounce to lobby. The backend has already deleted our row, so
+          // any further STOMP/HTTP calls would fail anyway. Other players'
+          // browsers ignore this event; the trailing ROOM_UPDATE will
+          // refresh their player list.
+          if (data.payload.userId === userStore.userId) {
+            roomStore.clearRoom()
+            disconnectStomp()
+            router.push({ name: 'lobby' })
+          }
         }
       })
     }
@@ -514,6 +569,32 @@ onUnmounted(() => {
 }
 
 .debug-start-btn:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* Host-only kick button overlaid on a player's seat card. */
+.kick-btn {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.125rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  z-index: 1;
+}
+.kick-btn:hover {
   border-color: var(--red);
   color: var(--red);
 }

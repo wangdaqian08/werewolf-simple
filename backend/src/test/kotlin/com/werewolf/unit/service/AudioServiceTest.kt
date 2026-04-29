@@ -1077,6 +1077,91 @@ class AudioServiceTest {
         )
     }
 
+    // ── User-flagged scenarios: ensure full role-call audio plays even when ──
+    // ── one or more special roles have been eliminated. Wolves listening at ──
+    // ── night must hear every special role's open/close eyes — otherwise    ──
+    // ── the absence of audio leaks "this role is dead" to the wolves.       ──
+
+    @Test
+    fun `DEAD ROLE - dead seer (witch alive) + dead guard plays full chain`() {
+        // Seer + Guard eliminated; witch is the only alive special role.
+        // Sequence: seer_open → seer_close → witch_open (target) — guard's
+        // dead audio doesn't fire here because guard isn't between
+        // SEER_RESULT and WITCH_ACT in the role order. Guard's dead audio
+        // fires on the witch→guard transition (next sub-phase call).
+        val seerToWitch = audioService.calculateDeadRoleAudioSequence(
+            gameId = 1,
+            skippedRoles = listOf(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT),
+            targetSubPhase = NightSubPhase.WITCH_ACT,
+        )
+        assertThat(seerToWitch.audioFiles).containsExactly(
+            "seer_open_eyes.mp3",
+            "seer_close_eyes.mp3",
+            "witch_open_eyes.mp3",
+        )
+
+        // Then witch acts → guard is dead → close+open chain finishes the night.
+        val witchToDeadGuard = audioService.calculateDeadRoleAudioSequence(
+            gameId = 1,
+            skippedRoles = listOf(NightSubPhase.GUARD_PICK),
+            targetSubPhase = NightSubPhase.COMPLETE,
+        )
+        assertThat(witchToDeadGuard.audioFiles).containsExactly(
+            "guard_open_eyes.mp3",
+            "guard_close_eyes.mp3",
+        )
+    }
+
+    @Test
+    fun `DEAD ROLE - dead witch + dead guard plays full chain after seer`() {
+        // Seer alive, witch + guard both eliminated. After seer acts (SEER_RESULT),
+        // the role-loop reaches a state where both WITCH_ACT and GUARD_PICK are
+        // skipped → both must play their full open/close to mask the absence.
+        val sequence = audioService.calculateDeadRoleAudioSequence(
+            gameId = 1,
+            skippedRoles = listOf(NightSubPhase.WITCH_ACT, NightSubPhase.GUARD_PICK),
+            targetSubPhase = NightSubPhase.COMPLETE,
+        )
+
+        // Both dead roles each play open→close. No target audio since
+        // target is COMPLETE (night is ending).
+        assertThat(sequence.audioFiles).containsExactly(
+            "witch_open_eyes.mp3",
+            "witch_close_eyes.mp3",
+            "guard_open_eyes.mp3",
+            "guard_close_eyes.mp3",
+        )
+    }
+
+    @Test
+    fun `DEAD ROLE - all three special roles dead plays full audio chain`() {
+        // The most extreme scenario: seer, witch, AND guard all eliminated
+        // in prior rounds. Wolves acting tonight must still hear the full
+        // role-call audio to preserve information secrecy. This is also
+        // the audio that would precede a wolf-win check at night resolve.
+        val sequence = audioService.calculateDeadRoleAudioSequence(
+            gameId = 1,
+            skippedRoles = listOf(
+                NightSubPhase.SEER_PICK,
+                NightSubPhase.SEER_RESULT,
+                NightSubPhase.WITCH_ACT,
+                NightSubPhase.GUARD_PICK,
+            ),
+            targetSubPhase = NightSubPhase.COMPLETE,
+        )
+
+        // Every role plays open→close in role order. No target audio — the
+        // night ends after the last dead role's close_eyes.
+        assertThat(sequence.audioFiles).containsExactly(
+            "seer_open_eyes.mp3",
+            "seer_close_eyes.mp3",
+            "witch_open_eyes.mp3",
+            "witch_close_eyes.mp3",
+            "guard_open_eyes.mp3",
+            "guard_close_eyes.mp3",
+        )
+    }
+
     // ── Room Configuration Tests ──────────────────────────────────────────────
 
     @Test
