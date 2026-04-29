@@ -566,9 +566,14 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const guardBots = aliveActorsOf('GUARD')
     const villagerBots = aliveActorsOf('VILLAGER')
 
-    // Targets exclude wolves (a wolf can't kill another wolf). Host may be
-    // included as a target if they hold a non-wolf role.
-    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots]
+    // Targets exclude wolves (a wolf can't kill another wolf) AND the host.
+    // The host drives subsequent steps that require host-alive UI, including
+    // `.skip-btn` for the day-2 host abstain — VotingPhase.vue gates that
+    // button on `viewRole === 'ALIVE'`, so killing the host here makes the
+    // later abstain wait time out.
+    const allTargets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots].filter(
+      (b) => b.nick !== 'Host',
+    )
 
     // Locator visibility helper — Playwright's isVisible() does NOT retry,
     // so wrapping waitFor lets us return a boolean after a real wait.

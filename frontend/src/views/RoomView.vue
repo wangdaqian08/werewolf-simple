@@ -217,7 +217,7 @@ async function handleKickPlayer(seat: number) {
     // local store updates from there. No optimistic update — keeps the
     // single source of truth on the server.
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error('[RoomView] kick failed', err)
   }
 }

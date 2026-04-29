@@ -58,10 +58,23 @@ import {
   waitForVoteRegistered,
   waitForVotingSubPhase,
 } from './helpers/state-polling'
-import { readBackendLogLineCount, readBackendLogSince } from './helpers/backend-log'
+import {
+  attachBackendLogOnFailure,
+  readBackendLogLineCount,
+  readBackendLogSince,
+} from './helpers/backend-log'
 
 test.describe('Dead-role night audio — eliminated specials still play role-call', () => {
   test.setTimeout(180_000)
+
+  // Attach backend log tail on failure so phase/sub-phase progression is
+  // visible in the artifact — without it, only screenshots ship and the
+  // failing sub-phase has to be inferred from a single frame.
+  test.afterEach(async ({}, testInfo) => {
+    if (testInfo.status === 'failed') {
+      await attachBackendLogOnFailure(testInfo)
+    }
+  })
 
   // ── Test 1: ONE special role dead (seer killed at N1) ─────────────────
 
