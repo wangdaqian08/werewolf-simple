@@ -7,14 +7,9 @@ description: Use when debugging the live werewolf-simple game on the GCP product
 
 ## Coordinates
 
-| Field | Value |
-|---|---|
-| VM name | `werewolf-server` |
-| Zone | `us-east1-d` |
-| GCP project | `werewolf-301709` |
-| External IP | `35.243.171.224` |
-| Internal IP | `10.142.0.2` |
-| Repo path on VM | `/opt/werewolf-simple` |
+VM identity (name, zone, GCP project, external IP, SSH user, host key alias) lives in `scripts/.env.vm` — gitignored, populated once per machine from `scripts/.env.vm.example`. **Never paste these values into chat or commit them anywhere.** All commands in this skill go through `./scripts/vm-ssh.sh`, which sources that file.
+
+**Repo path on VM:** `/opt/werewolf-simple`.
 
 **Stack on VM:** docker compose. Three services — `postgres`, `backend` (`127.0.0.1:8080`), `frontend` (`127.0.0.1:8081`). Host Nginx terminates TLS and proxies `/api` + `/ws` to `backend`. See `deploy/README.md` and `docker-compose.yml` at the repo root.
 
@@ -23,15 +18,15 @@ description: Use when debugging the live werewolf-simple game on the GCP product
 Expired gcloud creds surface as "permission denied" on SSH, not as an auth error. Check first:
 
 ```bash
-gcloud auth list        # must show an ACTIVE account, not "No credentialed accounts"
-gcloud config get-value project   # must print werewolf-301709
+gcloud auth list                       # must show an ACTIVE account
+gcloud config get-value project        # must match $VM_PROJECT in scripts/.env.vm
 ```
 
 If either fails, STOP and ask the user to run (in their own terminal — interactive OAuth):
 
 ```bash
 gcloud auth login
-gcloud config set project werewolf-301709
+gcloud config set project "$VM_PROJECT"   # value from scripts/.env.vm
 ```
 
 Do not try to run SSH commands until this passes. Retrying a failing SSH just produces noise.
@@ -51,26 +46,17 @@ Do not try to run SSH commands until this passes. Retrying a failing SSH just pr
 ./scripts/vm-ssh.sh 'cd /opt/werewolf-simple && sudo docker compose --env-file .env.prod ps'
 ```
 
-**Raw gcloud one-shot** (fall back when the helper isn't available, e.g. from a fresh checkout):
+**Interactive shell or port-forward** (rare; needs a real terminal so the helper script doesn't apply):
 
 ```bash
-gcloud compute ssh werewolf-server --zone=us-east1-d --command="<cmd>"
-```
+# Source the env file once for the current shell
+source scripts/.env.vm
 
-**Interactive shell** (for poking around, multi-step debugging):
+# Interactive
+gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT"
 
-```bash
-gcloud compute ssh werewolf-server --zone=us-east1-d
-```
-
-**Port-forward** (run LOCAL scripts against the remote backend — keeps `/tmp/werewolf-*.json` state files local):
-
-```bash
-# Terminal 1: forward 8080 → VM backend
-gcloud compute ssh werewolf-server --zone=us-east1-d -- -L 8080:127.0.0.1:8080 -N
-
-# Terminal 2: local scripts use the tunnel
-BACKEND_BASE=http://localhost:8080/api ./scripts/act.sh STATUS --room ABCD
+# Port-forward (Terminal 1) — local scripts then talk to localhost:8080
+gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT" -- -L 8080:127.0.0.1:8080 -N
 ```
 
 ## Step 3 — Common debug commands
@@ -154,11 +140,11 @@ If prod is active, use read-only routes (`/api/room/{id}`, `/api/game/{id}/state
 
 ```bash
 # Single file
-gcloud compute scp werewolf-server:/opt/werewolf-simple/some.log /tmp/ --zone=us-east1-d
+source scripts/.env.vm
+gcloud compute scp "$VM_NAME:/opt/werewolf-simple/some.log" /tmp/ --zone="$VM_ZONE" --project="$VM_PROJECT"
 
 # Capture inline (preferred for short snippets — avoids leaving files on the VM)
-gcloud compute ssh werewolf-server --zone=us-east1-d \
-  --command="cd /opt/werewolf-simple && docker compose logs --tail=500 backend" > /tmp/backend-tail.log
+./scripts/vm-ssh.sh 'cd /opt/werewolf-simple && sudo docker compose --env-file .env.prod logs --tail=500 backend' > /tmp/backend-tail.log
 ```
 
 ## Safety rules (non-negotiable)
@@ -181,7 +167,7 @@ Other rules:
 ## Quick reference
 
 Prefix every remote command with:
-`gcloud compute ssh werewolf-server --zone=us-east1-d --command="cd /opt/werewolf-simple && ..."`
+`./scripts/vm-ssh.sh 'cd /opt/werewolf-simple && ...'`
 
 Inside that, `DC` = `sudo docker compose --env-file .env.prod` (both bits are required on this VM).
 
@@ -203,7 +189,7 @@ Inside that, `DC` = `sudo docker compose --env-file .env.prod` (both bits are re
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `gcloud compute ssh` → permission denied | Token expired / wrong project | Re-run `gcloud auth login` and `gcloud config set project werewolf-301709` |
+| `gcloud compute ssh` → permission denied | Token expired / wrong project | Re-run `gcloud auth login` and `gcloud config set project "$VM_PROJECT"` (value from `scripts/.env.vm`) |
 | `permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock` | User not in `docker` group on this VM | Prefix with `sudo` |
 | `warning: The "POSTGRES_USER" variable is not set. Defaulting to a blank string.` (and friends) | `docker compose` didn't load `.env.prod` | Add `--env-file .env.prod` |
 | `the input device is not a TTY` | Missing `-T` on `docker compose exec` in non-interactive mode | Add `-T` |

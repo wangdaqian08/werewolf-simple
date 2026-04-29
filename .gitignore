@@ -45,6 +45,7 @@ Thumbs.db
 .env.*.local
 .env.prod
 backend/.env.prod
+scripts/.env.vm
 
 # ─── Logs ──────────────────────────────────────────────────────────────────────
 *.log

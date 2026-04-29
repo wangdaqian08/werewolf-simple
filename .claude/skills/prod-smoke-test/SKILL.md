@@ -51,10 +51,12 @@ Expect `{"status":"UP"}`, all 3 containers Up, deployed commit matches the relea
 
 Long-lived SSH that tails the backend container log on the VM with `--tail=0 -f` so we see only events emitted DURING the test. Filter is broad on purpose — every line is a potential failure signal.
 
-Spawn via the `Monitor` tool with `persistent: true`:
+Spawn via the `Monitor` tool with `persistent: true`. VM coordinates come from `scripts/.env.vm` (gitignored — see `vm-debug` skill); `gcloud compute ssh` is used directly here because the long-lived stream is incompatible with `vm-ssh.sh`'s ControlMaster wrapper.
 
 ```bash
-gcloud compute ssh werewolf-server --zone=us-east1-d --command='sudo docker compose -f /opt/werewolf-simple/docker-compose.yml --env-file /opt/werewolf-simple/.env.prod logs --tail=0 -f backend 2>&1 | stdbuf -oL grep -E "action\.submit|PhaseChanged|Exception|ERROR|WARN.*werewolf|disconnect|STOMP|waitingOn=|GameOver|BadgeHandover|game\.state"'
+source scripts/.env.vm && \
+gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT" \
+  --command='sudo docker compose -f /opt/werewolf-simple/docker-compose.yml --env-file /opt/werewolf-simple/.env.prod logs --tail=0 -f backend 2>&1 | stdbuf -oL grep -E "action\.submit|PhaseChanged|Exception|ERROR|WARN.*werewolf|disconnect|STOMP|waitingOn=|GameOver|BadgeHandover|game\.state"'
 ```
 
 `stdbuf -oL` is critical — without it, grep's stdout buffers and notifications batch into 4 KB chunks (~30 s of silence between updates).
