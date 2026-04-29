@@ -94,22 +94,22 @@ function rolePillClass(role?: string): string {
 }
 
 const outcomeIcon = computed(() => {
-  if (!winner.value) return '🎲'
+  if (!winner.value) return '⏸️'
   return winner.value === 'WEREWOLF' ? '🌕' : '🌅'
 })
 
 const outcomeTitle = computed(() => {
-  if (!winner.value) return '游戏结束'
+  if (!winner.value) return '比赛取消'
   return winner.value === 'WEREWOLF' ? '狼人胜利' : '村民胜利'
 })
 
 const outcomeSub = computed(() => {
-  if (!winner.value) return ''
+  if (!winner.value) return 'Game Cancelled'
   return winner.value === 'WEREWOLF' ? 'Wolves Win' : 'Village Wins'
 })
 
 const outcomeDesc = computed(() => {
-  if (!winner.value) return ''
+  if (!winner.value) return '服务器已重启，请回到房间重新开始 / Server restarted — return to your room and start a new game'
   return winner.value === 'WEREWOLF'
     ? '狼人数量超过村民 / Wolves outnumber the village'
     : '所有狼人已被消灭 / All werewolves eliminated'

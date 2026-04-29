@@ -32,6 +32,7 @@ interface RoomPlayerRepository : JpaRepository<RoomPlayer, Int> {
 
 interface GameRepository : JpaRepository<Game, Int> {
     fun findByRoomIdAndEndedAtIsNull(roomId: Int): Optional<Game>
+    fun findByEndedAtIsNull(): List<Game>
 }
 
 interface GamePlayerRepository : JpaRepository<GamePlayer, Int> {
