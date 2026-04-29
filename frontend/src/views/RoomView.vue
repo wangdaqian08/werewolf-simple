@@ -146,10 +146,11 @@ import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import { gameService } from '@/services/gameService'
-import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import { createStompClient, disconnectStomp, getStompClient, subscribeToTopic } from '@/services/stompClient'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import { useRoomStatus } from '@/composables/useRoomStatus'
+import { useConnectionLifecycle } from '@/composables/useConnectionLifecycle'
 
 const route = useRoute()
 const router = useRouter()
@@ -268,11 +269,20 @@ async function checkActiveGame() {
   }
 }
 
-function onVisibilityChange() {
-  if (document.visibilityState === 'visible') {
-    checkActiveGame()
-  }
-}
+useConnectionLifecycle({
+  onResume: () => {
+    // iOS Safari may have frozen the WebSocket while we were backgrounded.
+    // Force-reconnect so the auto-reconnect path fires `onConnect`, which
+    // re-subscribes and calls checkActiveGame for us. If the client is
+    // already inactive (initial mount, post-leave), just probe room state.
+    const client = getStompClient()
+    if (client?.active) {
+      client.forceDisconnect()
+    } else {
+      void checkActiveGame()
+    }
+  },
+})
 
 onMounted(async () => {
   const roomId = route.params.roomId as string
@@ -293,10 +303,6 @@ onMounted(async () => {
     router.push({ name: 'game', params: { gameId: roomStore.room.activeGameId } })
     return
   }
-
-  // Trigger 3 — visibility change: Safari suspends background tabs, killing the
-  // WebSocket. When the tab returns to foreground, re-check room status.
-  document.addEventListener('visibilitychange', onVisibilityChange)
 
   if (userStore.token && roomStore.room) {
     const client = createStompClient(userStore.token)
@@ -336,7 +342,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  document.removeEventListener('visibilitychange', onVisibilityChange)
   disconnectStomp()
 })
 </script>

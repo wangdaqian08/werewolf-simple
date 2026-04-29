@@ -470,7 +470,7 @@ import { useUserStore } from '@/stores/userStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { gameService } from '@/services/gameService'
-import { createStompClient, disconnectStomp, subscribeToTopic } from '@/services/stompClient'
+import { createStompClient, disconnectStomp, getStompClient, subscribeToTopic } from '@/services/stompClient'
 import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
@@ -480,6 +480,8 @@ import NightPhase from '@/components/NightPhase.vue'
 import VotingPhase from '@/components/VotingPhase.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import { useAudioService } from '@/composables/useAudioService'
+import { useConnectionLifecycle } from '@/composables/useConnectionLifecycle'
+import { useWakeLock } from '@/composables/useWakeLock'
 import type { GamePlayer } from '@/types'
 
 const route = useRoute()
@@ -530,6 +532,22 @@ const isHost = computed(() => {
 })
 
 useNavigationGuard()
+
+// Keep the screen on for the duration of the game; mobile players hold their
+// phones for 15+ minutes between meaningful taps, far past any default timeout.
+useWakeLock()
+
+// On tab resume / network resume, force a fresh STOMP connection so the
+// existing `onConnect` reconnect handler refetches authoritative state. Closes
+// the "stuck UI after backgrounding" gap that heartbeats alone can't reach.
+useConnectionLifecycle({
+  onResume: () => {
+    const client = getStompClient()
+    if (client?.active) {
+      client.forceDisconnect()
+    }
+  },
+})
 
 const isNight = computed(() => gameStore.state?.phase === 'NIGHT')
 
