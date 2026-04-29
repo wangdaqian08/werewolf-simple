@@ -146,7 +146,12 @@ import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import { gameService } from '@/services/gameService'
-import { createStompClient, disconnectStomp, getStompClient, subscribeToTopic } from '@/services/stompClient'
+import {
+  createStompClient,
+  disconnectStomp,
+  getStompClient,
+  subscribeToTopic,
+} from '@/services/stompClient'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import { useRoomStatus } from '@/composables/useRoomStatus'

@@ -470,7 +470,12 @@ import { useUserStore } from '@/stores/userStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { gameService } from '@/services/gameService'
-import { createStompClient, disconnectStomp, getStompClient, subscribeToTopic } from '@/services/stompClient'
+import {
+  createStompClient,
+  disconnectStomp,
+  getStompClient,
+  subscribeToTopic,
+} from '@/services/stompClient'
 import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
