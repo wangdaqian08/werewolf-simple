@@ -15,6 +15,8 @@ import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 class SheriffService(
@@ -197,7 +199,7 @@ class SheriffService(
         election.speakingOrder = candidates.map { it.userId }.shuffled().joinToString(",")
         election.currentSpeakerIdx = 0
         sheriffElectionRepository.save(election)
-        stompPublisher.broadcastGame(
+        broadcastAfterCommit(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name)
         )
@@ -229,14 +231,14 @@ class SheriffService(
             // All candidates have spoken (or quit) - move to voting
             election.subPhase = ElectionSubPhase.VOTING
             sheriffElectionRepository.save(election)
-            stompPublisher.broadcastGame(
+            broadcastAfterCommit(
                 context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.VOTING.name)
             )
         } else {
             election.currentSpeakerIdx = nextIdx
             sheriffElectionRepository.save(election)
-            stompPublisher.broadcastGame(
+            broadcastAfterCommit(
                 context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name)
             )
@@ -265,13 +267,13 @@ class SheriffService(
                 // Running candidates exist but got zero votes → TIED → host appoints
                 election.subPhase = ElectionSubPhase.TIED
                 sheriffElectionRepository.save(election)
-                stompPublisher.broadcastGame(context.gameId,
+                broadcastAfterCommit(context.gameId,
                     DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.TIED.name))
             } else {
                 // No running candidates at all → RESULT with auto-advance to night
                 election.subPhase = ElectionSubPhase.RESULT
                 sheriffElectionRepository.save(election)
-                stompPublisher.broadcastGame(context.gameId,
+                broadcastAfterCommit(context.gameId,
                     DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
                 scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
             }
@@ -283,15 +285,15 @@ class SheriffService(
             election.electedSheriffUserId = winnerUserId
             sheriffElectionRepository.save(election)
             electSheriff(winnerUserId, context)
-            stompPublisher.broadcastGame(context.gameId, DomainEvent.SheriffElected(context.gameId, winnerUserId))
-            stompPublisher.broadcastGame(context.gameId,
+            broadcastAfterCommit(context.gameId, DomainEvent.SheriffElected(context.gameId, winnerUserId))
+            broadcastAfterCommit(context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
             // Schedule auto-advance to night in 30 seconds
             scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
         } else {
             election.subPhase = ElectionSubPhase.TIED
             sheriffElectionRepository.save(election)
-            stompPublisher.broadcastGame(context.gameId,
+            broadcastAfterCommit(context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.TIED.name))
         }
         return GameActionResult.Success()
@@ -315,8 +317,8 @@ class SheriffService(
         sheriffElectionRepository.save(election)
         electSheriff(targetUserId, context)
 
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.SheriffElected(context.gameId, targetUserId))
-        stompPublisher.broadcastGame(context.gameId,
+        broadcastAfterCommit(context.gameId, DomainEvent.SheriffElected(context.gameId, targetUserId))
+        broadcastAfterCommit(context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
         // Schedule auto-advance to night in 30 seconds
         scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
@@ -353,13 +355,13 @@ class SheriffService(
             // No running candidates remain → show RESULT phase with auto-advance to night
             election.subPhase = ElectionSubPhase.RESULT
             sheriffElectionRepository.save(election)
-            stompPublisher.broadcastGame(context.gameId,
+            broadcastAfterCommit(context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
             scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
             return GameActionResult.Success()
         }
 
-        stompPublisher.broadcastGame(
+        broadcastAfterCommit(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name)
         )
@@ -433,14 +435,14 @@ class SheriffService(
     }
 
     private fun broadcastSignupUpdate(gameId: Int) {
-        stompPublisher.broadcastGame(
+        broadcastAfterCommit(
             gameId,
             DomainEvent.PhaseChanged(gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
         )
     }
 
     private fun broadcastVotingUpdate(gameId: Int) {
-        stompPublisher.broadcastGame(
+        broadcastAfterCommit(
             gameId,
             DomainEvent.PhaseChanged(gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.VOTING.name)
         )
@@ -511,5 +513,31 @@ class SheriffService(
     fun cancelScheduledJob(gameId: Int) {
         scheduledJobs[gameId]?.cancel()
         scheduledJobs.remove(gameId)
+    }
+
+    /**
+     * Broadcast a game event so it lands AFTER the surrounding @Transactional commits.
+     *
+     * Sheriff-election state (`election.subPhase`, candidate status, votes) lives in
+     * SheriffElection / SheriffCandidate / Vote rows that this service writes inside
+     * `@Transactional handle()`. If we publish the PhaseChanged STOMP frame
+     * immediately, fast clients (e.g. CI shard 3, observed 2026-04-30) read
+     * `/api/game/{id}/state` in their own short read tx before the outer write tx
+     * commits, get the *prior* sub-phase, and the test loop spins until timeout.
+     *
+     * Same shape PR #67 fixed for `GamePhasePipeline.dayAdvance`. When called
+     * outside an active tx (e.g. from a coroutine that already committed), fall
+     * through to an immediate broadcast.
+     */
+    private fun broadcastAfterCommit(gameId: Int, event: DomainEvent) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() {
+                    stompPublisher.broadcastGame(gameId, event)
+                }
+            })
+        } else {
+            stompPublisher.broadcastGame(gameId, event)
+        }
     }
 }

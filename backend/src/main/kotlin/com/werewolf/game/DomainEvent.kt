@@ -33,7 +33,7 @@ sealed class DomainEvent {
     @JsonTypeName("SheriffElected")
     data class SheriffElected(val gameId: Int, val sheriffUserId: String?) : DomainEvent()
     @JsonTypeName("GameOver")
-    data class GameOver(val gameId: Int, val winner: WinnerSide) : DomainEvent()
+    data class GameOver(val gameId: Int, val winner: WinnerSide?) : DomainEvent()
     @JsonTypeName("RoleConfirmed")
     data class RoleConfirmed(val gameId: Int, val userId: String) : DomainEvent()
     @JsonTypeName("IdiotRevealed")
