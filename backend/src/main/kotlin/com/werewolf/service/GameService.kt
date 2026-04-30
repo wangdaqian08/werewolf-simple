@@ -8,6 +8,8 @@ import com.werewolf.model.*
 import com.werewolf.repository.*
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 class GameService(
@@ -60,14 +62,33 @@ class GameService(
         room.status = RoomStatus.IN_GAME
         roomRepository.save(room)
 
-        stompPublisher.broadcastRoom(roomId, mapOf("type" to "GAME_STARTED", "payload" to mapOf("gameId" to gameId)))
+        // Broadcasts must happen AFTER the transaction commits. Otherwise a
+        // recipient that navigates to /game/{id} on GAME_STARTED and calls
+        // getGameState in a separate read transaction will not yet see the
+        // games row this method just inserted, and the response degrades to
+        // {error: "Game not found"} — the frontend then renders a blank
+        // fallback UI. Reproduced in prod 2026-04-29 game=10: GAME_STARTED
+        // delivered at t≈0, getGameState SKIPped "(game not found)" at
+        // t+1.8s, the @Transactional only returned (committed) at t+2.5s.
+        val playersForBroadcast = gamePlayers.toList()
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() {
+                    broadcastGameStarted(roomId, gameId, playersForBroadcast)
+                }
+            })
+        } else {
+            broadcastGameStarted(roomId, gameId, playersForBroadcast)
+        }
+        return GameActionResult.Success()
+    }
 
+    private fun broadcastGameStarted(roomId: Int, gameId: Int, gamePlayers: List<GamePlayer>) {
+        stompPublisher.broadcastRoom(roomId, mapOf("type" to "GAME_STARTED", "payload" to mapOf("gameId" to gameId)))
         gamePlayers.forEach { gp ->
             stompPublisher.sendPrivate(gp.userId, DomainEvent.RoleAssigned(gameId, gp.userId, gp.role))
         }
-
         stompPublisher.broadcastGame(gameId, DomainEvent.PhaseChanged(gameId, GamePhase.ROLE_REVEAL, null))
-        return GameActionResult.Success()
     }
 
 @Transactional
