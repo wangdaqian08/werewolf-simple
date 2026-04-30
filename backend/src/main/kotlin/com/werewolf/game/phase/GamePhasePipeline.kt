@@ -53,7 +53,7 @@ class GamePhasePipeline(
         gameRepository.save(context.game)
         
         log.info("[revealNightResult] Successfully revealed night result")
-        stompPublisher.broadcastGame(
+        stompPublisher.broadcastGameAfterCommit(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
         )
@@ -124,7 +124,7 @@ class GamePhasePipeline(
         player.confirmedRole = true
         gamePlayerRepository.save(player)
 
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.RoleConfirmed(context.gameId, request.actorUserId))
+        stompPublisher.broadcastGameAfterCommit(context.gameId, DomainEvent.RoleConfirmed(context.gameId, request.actorUserId))
 
         // Advance once everyone has confirmed
         val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
@@ -133,7 +133,7 @@ class GamePhasePipeline(
                 context.game.phase = GamePhase.SHERIFF_ELECTION
                 gameRepository.save(context.game)
                 sheriffElectionRepository.save(SheriffElection(gameId = context.gameId))
-                stompPublisher.broadcastGame(
+                stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
                     DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
                 )

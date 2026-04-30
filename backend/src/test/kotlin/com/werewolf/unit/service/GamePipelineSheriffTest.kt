@@ -90,7 +90,7 @@ class GamePipelineSheriffTest {
         verifyNoInteractions(sheriffElectionRepository)
         verifyNoInteractions(nightOrchestrator)
         verifyNoInteractions(gameRepository)
-        verify(stompPublisher).broadcastGame(eq(gameId), any())
+        verify(stompPublisher).broadcastGameAfterCommit(eq(gameId), any())
     }
 
     @Test

@@ -94,7 +94,7 @@ class GamePhasePipelineDayTest {
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
         verify(gameRepository).save(game)
-        verify(stompPublisher).broadcastGame(eq(gameId), any())
+        verify(stompPublisher).broadcastGameAfterCommit(eq(gameId), any())
     }
 
     // ── dayAdvance ───────────────────────────────────────────────────────────

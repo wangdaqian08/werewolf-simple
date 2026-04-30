@@ -57,7 +57,7 @@ class RoomServiceReadyTest {
         roomService.setReady(userId, roomId, ready = true)
 
         verify(roomPlayerRepository).setReadyIfSeated(roomId, userId)
-        verify(stompPublisher).broadcastRoom(eq(roomId), any())
+        verify(stompPublisher).broadcastRoomAfterCommit(eq(roomId), any())
     }
 
     @Test
@@ -71,7 +71,7 @@ class RoomServiceReadyTest {
         roomService.setReady(userId, roomId, ready = false)
 
         verify(roomPlayerRepository).updateStatus(roomId, userId, ReadyStatus.NOT_READY)
-        verify(stompPublisher).broadcastRoom(eq(roomId), any())
+        verify(stompPublisher).broadcastRoomAfterCommit(eq(roomId), any())
     }
 
     @Test
@@ -120,7 +120,7 @@ class RoomServiceReadyTest {
         roomService.claimSeat(userId, roomId, seatIndex = 2)
 
         verify(roomPlayerRepository).updateSeatIndex(roomId, userId, 2)
-        verify(stompPublisher).broadcastRoom(eq(roomId), any())
+        verify(stompPublisher).broadcastRoomAfterCommit(eq(roomId), any())
     }
 
     @Test

@@ -437,7 +437,7 @@ class NightOrchestratorTest {
 
         assertThat(np.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK)
         verify(nightPhaseRepository).save(np)
-        verify(stompPublisher).broadcastGame(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
+        verify(stompPublisher).broadcastGameAfterCommit(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
     }
 
     @Test
@@ -453,7 +453,7 @@ class NightOrchestratorTest {
         nightOrchestrator.advanceFromWaiting(gameId)
 
         verify(nightPhaseRepository, never()).save(any())
-        verify(stompPublisher, never()).broadcastGame(any(), any())
+        verify(stompPublisher, never()).broadcastGameAfterCommit(any(), any())
     }
 
     @Test
@@ -484,7 +484,7 @@ class NightOrchestratorTest {
 
         assertThat(np.subPhase).isEqualTo(NightSubPhase.SEER_PICK)
         verify(nightPhaseRepository).save(np)
-        verify(stompPublisher).broadcastGame(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
+        verify(stompPublisher).broadcastGameAfterCommit(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
     }
 
     @Test
@@ -658,7 +658,7 @@ class NightOrchestratorTest {
 
         // Verify AudioSequence event was broadcast
         val audioEventCaptor = argumentCaptor<DomainEvent>()
-        verify(stompPublisher, times(2)).broadcastGame(eq(gameId), audioEventCaptor.capture())
+        verify(stompPublisher, times(2)).broadcastGameAfterCommit(eq(gameId), audioEventCaptor.capture())
 
         val events = audioEventCaptor.allValues
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
@@ -698,7 +698,7 @@ class NightOrchestratorTest {
 
         // Verify AudioSequence event was broadcast
         val audioEventCaptor = argumentCaptor<DomainEvent>()
-        verify(stompPublisher, times(2)).broadcastGame(eq(gameId), audioEventCaptor.capture())
+        verify(stompPublisher, times(2)).broadcastGameAfterCommit(eq(gameId), audioEventCaptor.capture())
 
         val events = audioEventCaptor.allValues
         val audioEvent = events.find { it is DomainEvent.AudioSequence }

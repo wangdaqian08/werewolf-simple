@@ -78,7 +78,7 @@ class VotingPipeline(
             )
         )
 
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.VoteSubmitted(context.gameId, request.actorUserId))
+        stompPublisher.broadcastGameAfterCommit(context.gameId, DomainEvent.VoteSubmitted(context.gameId, request.actorUserId))
         return GameActionResult.Success()
     }
 
@@ -96,7 +96,7 @@ class VotingPipeline(
             ?: return GameActionResult.Rejected("No vote to retract")
 
         voteRepository.delete(myVote)
-        stompPublisher.broadcastGame(context.gameId, DomainEvent.VoteSubmitted(context.gameId, request.actorUserId))
+        stompPublisher.broadcastGameAfterCommit(context.gameId, DomainEvent.VoteSubmitted(context.gameId, request.actorUserId))
         return GameActionResult.Success()
     }
 
@@ -206,11 +206,11 @@ class VotingPipeline(
                         eliminationHistoryRepository.save(history)
                     }
 
-                stompPublisher.broadcastGame(
+                stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
                     DomainEvent.HunterShot(context.gameId, actor.userId, target)
                 )
-                stompPublisher.broadcastGame(
+                stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
                     DomainEvent.PlayerEliminated(context.gameId, target, targetPlayer.role)
                 )
@@ -219,7 +219,7 @@ class VotingPipeline(
                 if (target == context.game.sheriffUserId) {
                     context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
                     gameRepository.save(context.game)
-                    stompPublisher.broadcastGame(
+                    stompPublisher.broadcastGameAfterCommit(
                         context.gameId,
                         DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.BADGE_HANDOVER.name)
                     )
@@ -235,7 +235,7 @@ class VotingPipeline(
                 if (actor.userId == context.game.sheriffUserId) {
                     context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
                     gameRepository.save(context.game)
-                    stompPublisher.broadcastGame(
+                    stompPublisher.broadcastGameAfterCommit(
                         context.gameId,
                         DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.BADGE_HANDOVER.name)
                     )
@@ -280,11 +280,11 @@ class VotingPipeline(
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, target).ifPresent {
                     it.sheriff = true; gamePlayerRepository.save(it)
                 }
-                stompPublisher.broadcastGame(
+                stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
                     DomainEvent.BadgeHandover(context.gameId, actor.userId, target)
                 )
-                stompPublisher.broadcastGame(
+                stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
                     DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
                 )
@@ -298,11 +298,11 @@ class VotingPipeline(
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
                     it.sheriff = false; gamePlayerRepository.save(it)
                 }
-                stompPublisher.broadcastGame(
+                stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
                     DomainEvent.BadgeHandover(context.gameId, actor.userId, null)
                 )
-                stompPublisher.broadcastGame(
+                stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
                     DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
                 )

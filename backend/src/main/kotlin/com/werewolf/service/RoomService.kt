@@ -106,9 +106,9 @@ class RoomService(
 
         roomPlayerRepository.delete(target)
 
-        stompPublisher.broadcastRoom(roomId, mapOf("type" to "PLAYER_KICKED",
+        stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "PLAYER_KICKED",
             "payload" to mapOf("userId" to targetUserId)))
-        stompPublisher.broadcastRoom(roomId, mapOf("type" to "ROOM_UPDATE",
+        stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "ROOM_UPDATE",
             "payload" to mapOf("players" to buildRoomDto(room).players)))
     }
 
@@ -124,7 +124,7 @@ class RoomService(
         }
         if (affected == 0) throw PlayerNotInRoomException("Player not in room or seat not yet claimed")
 
-        stompPublisher.broadcastRoom(roomId, mapOf("type" to "ROOM_UPDATE",
+        stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "ROOM_UPDATE",
             "payload" to mapOf("players" to buildRoomDto(room).players)))
     }
 
@@ -139,7 +139,7 @@ class RoomService(
         val affected = roomPlayerRepository.updateSeatIndex(roomId, userId, seatIndex)
         if (affected == 0) throw PlayerNotInRoomException("Player not in room")
 
-        stompPublisher.broadcastRoom(roomId, mapOf("type" to "ROOM_UPDATE",
+        stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "ROOM_UPDATE",
             "payload" to mapOf("players" to buildRoomDto(room).players)))
     }
 

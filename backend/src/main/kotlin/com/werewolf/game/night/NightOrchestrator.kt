@@ -215,8 +215,8 @@ class NightOrchestrator(
             newSubPhase = firstRealSubPhase,
         )
 
-        stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstRealSubPhase))
-        stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+        stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstRealSubPhase))
+        stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
     }
 
     /**
@@ -238,8 +238,8 @@ class NightOrchestrator(
             newSubPhase = targetSubPhase,
         )
 
-        stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, targetSubPhase))
-        stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+        stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.NightSubPhaseChanged(gameId, targetSubPhase))
+        stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
     }
 
     /**

@@ -53,10 +53,12 @@ class GameActionDispatcher(
             ActionType.WOLF_SELECT -> {
                 val result = handlers.first { it.role == PlayerRole.WEREWOLF }.handle(request, context)
                 if (result is GameActionResult.Success) {
-                    // Broadcast selection to all alive wolves (no sub-phase advance)
+                    // Broadcast selection to all alive wolves (no sub-phase advance).
+                    // afterCommit ordering keeps the event consistent with what
+                    // /api/game/{id}/state will return on a follow-up read.
                     val aliveWolves = context.alivePlayers.filter { it.role == PlayerRole.WEREWOLF }
                     result.events.forEach { event ->
-                        aliveWolves.forEach { wolf -> stompPublisher.sendPrivate(wolf.userId, event) }
+                        aliveWolves.forEach { wolf -> stompPublisher.sendPrivateAfterCommit(wolf.userId, event) }
                     }
                 }
                 result
@@ -66,8 +68,11 @@ class GameActionDispatcher(
             ActionType.SEER_CHECK -> {
                 val result = handlers.first { it.role == PlayerRole.SEER }.handle(request, context)
                 if (result is GameActionResult.Success) {
-                    // Send seer result privately before signalling the coroutine
-                    result.events.forEach { stompPublisher.sendPrivate(request.actorUserId, it) }
+                    // Send seer result privately AFTER commit. The frontend's
+                    // SeerResult handler refetches state to pick up
+                    // nightPhase.seerCheckedUserId / seerResultIsWerewolf — a
+                    // pre-commit send would let that refetch see null fields.
+                    result.events.forEach { stompPublisher.sendPrivateAfterCommit(request.actorUserId, it) }
                     nightOrchestrator.submitAction(request.gameId)
                 }
                 result
