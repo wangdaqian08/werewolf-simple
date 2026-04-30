@@ -494,7 +494,7 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         verify(voteRepository).save(any<Vote>())
-        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), any())
+        verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), any())
     }
 
     @Test
@@ -600,7 +600,7 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         verify(voteRepository).delete(existingVote)
-        verify(stompPublisher).broadcastGame(eq(gameId), any())
+        verify(stompPublisher).broadcastGameAfterCommit(eq(gameId), any())
     }
 
     @Test

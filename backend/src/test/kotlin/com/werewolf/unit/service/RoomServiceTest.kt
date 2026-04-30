@@ -290,11 +290,11 @@ class RoomServiceTest {
         roomService.kickPlayer(hostId, 1, userId)
 
         verify(roomPlayerRepository).delete(targetRow)
-        verify(stompPublisher).broadcastRoom(eq(1), argThat<Map<String, Any>> {
+        verify(stompPublisher).broadcastRoomAfterCommit(eq(1), argThat<Map<String, Any>> {
             this["type"] == "PLAYER_KICKED" &&
             (this["payload"] as? Map<*, *>)?.get("userId") == userId
         })
-        verify(stompPublisher).broadcastRoom(eq(1), argThat<Map<String, Any>> {
+        verify(stompPublisher).broadcastRoomAfterCommit(eq(1), argThat<Map<String, Any>> {
             this["type"] == "ROOM_UPDATE"
         })
     }

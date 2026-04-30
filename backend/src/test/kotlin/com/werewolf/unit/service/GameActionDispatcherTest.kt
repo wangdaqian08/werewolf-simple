@@ -114,8 +114,8 @@ class GameActionDispatcherTest {
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
             // Only the 2 alive wolves receive the private broadcast
-            verify(stompPublisher).sendPrivate(wolfId, selectionEvent)
-            verify(stompPublisher).sendPrivate(wolf2Id, selectionEvent)
+            verify(stompPublisher).sendPrivateAfterCommit(wolfId, selectionEvent)
+            verify(stompPublisher).sendPrivateAfterCommit(wolf2Id, selectionEvent)
             verify(stompPublisher, never()).sendPrivate(eq("v1"), any())
         }
 
@@ -129,7 +129,7 @@ class GameActionDispatcherTest {
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
-            verify(stompPublisher).sendPrivate(wolfId, selectionEvent)
+            verify(stompPublisher).sendPrivateAfterCommit(wolfId, selectionEvent)
             verify(stompPublisher, never()).sendPrivate(eq(deadWolfId), any())
         }
 
@@ -165,8 +165,8 @@ class GameActionDispatcherTest {
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
-            verify(stompPublisher, times(1)).sendPrivate(any(), any())
-            verify(stompPublisher).sendPrivate(wolfId, selectionEvent)
+            verify(stompPublisher, times(1)).sendPrivateAfterCommit(any(), any())
+            verify(stompPublisher).sendPrivateAfterCommit(wolfId, selectionEvent)
         }
     }
 
@@ -185,7 +185,7 @@ class GameActionDispatcherTest {
 
             makeDispatcher(listOf(seerHandler)).dispatch(req(seerActorId, ActionType.SEER_CHECK, "u2"))
 
-            verify(stompPublisher).sendPrivate(seerActorId, seerResultEvent)
+            verify(stompPublisher).sendPrivateAfterCommit(seerActorId, seerResultEvent)
             verify(nightOrchestrator).submitAction(gameId)
         }
 
