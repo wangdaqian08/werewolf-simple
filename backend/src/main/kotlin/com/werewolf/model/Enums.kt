@@ -27,7 +27,14 @@ enum class VoteContext { SHERIFF_ELECTION, ELIMINATION }
 
 enum class WinnerSide { WEREWOLF, VILLAGER }
 
-enum class DaySubPhase { RESULT_HIDDEN, RESULT_REVEALED }
+// Phase B: BADGE_HANDOVER and HUNTER_SHOOT also live in the DAY_DISCUSSION
+// flow when a sheriff/hunter dies at NIGHT (see GamePhasePipeline.revealNightResult).
+// These values are intentionally shared with VotingSubPhase — the DB CHECK
+// constraint on games.sub_phase already accepts them (no migration needed),
+// and the parent phase (DAY_DISCUSSION vs DAY_VOTING) disambiguates which
+// flow owns the sub-phase. Handlers live in VotingPipeline and accept either
+// parent phase.
+enum class DaySubPhase { RESULT_HIDDEN, RESULT_REVEALED, BADGE_HANDOVER, HUNTER_SHOOT }
 
 enum class VotingSubPhase { VOTING, RE_VOTING, VOTE_RESULT, HUNTER_SHOOT, BADGE_HANDOVER }
 

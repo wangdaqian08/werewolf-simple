@@ -243,4 +243,124 @@ class GamePipelineSheriffTest {
         verifyNoInteractions(sheriffElectionRepository)
         assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
     }
+
+    // ── Phase B: night-kill HUNTER_SHOOT and BADGE_HANDOVER routing ───────────
+
+    @Test
+    fun `revealNightResult routes to HUNTER_SHOOT when killed player is HUNTER (Phase B)`() {
+        // Wolf killed player u3 who happens to be a hunter. Hunter should get
+        // a chance to shoot before the night result is fully revealed.
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.COMPLETE
+            it.wolfTargetUserId = "u3"
+        }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("u3"))
+
+        val hunter = GamePlayer(gameId = gameId, userId = "u3", seatIndex = 3, role = PlayerRole.HUNTER)
+        val villager = GamePlayer(gameId = gameId, userId = "u4", seatIndex = 4, role = PlayerRole.VILLAGER)
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(hunter, villager))
+
+        val ctx = GameContext(
+            game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
+            room(hasSheriff = false),
+            emptyList(),
+        )
+
+        val req = GameActionRequest(gameId, hostId, ActionType.REVEAL_NIGHT_RESULT)
+        val result = pipeline.revealNightResult(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        verify(nightOrchestrator).applyNightKills(gameId, listOf("u3"))
+        // Routes to HUNTER_SHOOT, not RESULT_REVEALED.
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.HUNTER_SHOOT.name)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+    }
+
+    @Test
+    fun `revealNightResult routes to BADGE_HANDOVER when killed player is sheriff (Phase B)`() {
+        // Wolf killed the sheriff. Sheriff should choose pass-or-destroy
+        // before the day continues.
+        val sheriffId = "sheriff:001"
+        val np = NightPhase(gameId = gameId, dayNumber = 2).also {
+            it.subPhase = NightSubPhase.COMPLETE
+            it.wolfTargetUserId = sheriffId
+        }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf(sheriffId))
+
+        val sheriff = GamePlayer(gameId = gameId, userId = sheriffId, seatIndex = 5, role = PlayerRole.VILLAGER)
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(sheriff))
+
+        val gameWithSheriff = game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 2, subPhase = DaySubPhase.RESULT_HIDDEN.name)
+            .also { it.sheriffUserId = sheriffId }
+        val ctx = GameContext(gameWithSheriff, room(hasSheriff = true), emptyList())
+
+        val req = GameActionRequest(gameId, hostId, ActionType.REVEAL_NIGHT_RESULT)
+        val result = pipeline.revealNightResult(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        verify(nightOrchestrator).applyNightKills(gameId, listOf(sheriffId))
+        // Routes to BADGE_HANDOVER under DAY_DISCUSSION.
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+    }
+
+    @Test
+    fun `revealNightResult prioritises HUNTER_SHOOT when both hunter and sheriff are killed`() {
+        // Wolf killed hunter, witch poisoned sheriff. HUNTER_SHOOT fires first;
+        // the hunter handler chains to BADGE_HANDOVER if its shot target
+        // happens to be the (now-also-dead) sheriff. Otherwise badge handover
+        // can be triggered by the test logic afterwards. This test only
+        // asserts the immediate routing decision: HUNTER_SHOOT first.
+        val sheriffId = "sheriff:002"
+        val hunterId = "hunter:001"
+        val np = NightPhase(gameId = gameId, dayNumber = 3).also {
+            it.subPhase = NightSubPhase.COMPLETE
+            it.wolfTargetUserId = hunterId
+            it.witchPoisonTargetUserId = sheriffId
+        }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 3)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf(hunterId, sheriffId))
+
+        val hunter = GamePlayer(gameId = gameId, userId = hunterId, seatIndex = 1, role = PlayerRole.HUNTER)
+        val sheriff = GamePlayer(gameId = gameId, userId = sheriffId, seatIndex = 2, role = PlayerRole.VILLAGER)
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(hunter, sheriff))
+
+        val gameWithSheriff = game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 3, subPhase = DaySubPhase.RESULT_HIDDEN.name)
+            .also { it.sheriffUserId = sheriffId }
+        val ctx = GameContext(gameWithSheriff, room(hasSheriff = true), emptyList())
+
+        val req = GameActionRequest(gameId, hostId, ActionType.REVEAL_NIGHT_RESULT)
+        pipeline.revealNightResult(req, ctx)
+
+        // Hunter shoots first; badge handover follows in the hunter handler
+        // (DAY_DISCUSSION/HUNTER_SHOOT → … → BADGE_HANDOVER if applicable).
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.HUNTER_SHOOT.name)
+    }
+
+    @Test
+    fun `revealNightResult routes to RESULT_REVEALED when no special role killed`() {
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.COMPLETE
+            it.wolfTargetUserId = "u3"
+        }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("u3"))
+
+        // Killed player is just a villager (no special role).
+        val villager = GamePlayer(gameId = gameId, userId = "u3", seatIndex = 3, role = PlayerRole.VILLAGER)
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(villager))
+
+        val ctx = GameContext(
+            game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
+            room(hasSheriff = true),
+            emptyList(),
+        )
+
+        val req = GameActionRequest(gameId, hostId, ActionType.REVEAL_NIGHT_RESULT)
+        pipeline.revealNightResult(req, ctx)
+
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+    }
 }
