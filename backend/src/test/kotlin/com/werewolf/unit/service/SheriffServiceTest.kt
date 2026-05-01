@@ -3,6 +3,7 @@ package com.werewolf.unit.service
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
+import com.werewolf.config.GameTimingProperties
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.model.*
 import com.werewolf.repository.*
@@ -38,6 +39,7 @@ class SheriffServiceTest {
             gameRepository, gamePlayerRepository, sheriffElectionRepository,
             sheriffCandidateRepository, voteRepository, userRepository,
             stompPublisher, CoroutineScope(Dispatchers.Default),
+            GameTimingProperties(),
         )
     }
 

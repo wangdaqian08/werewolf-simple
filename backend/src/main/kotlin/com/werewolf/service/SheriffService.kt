@@ -4,6 +4,7 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
+import com.werewolf.config.GameTimingProperties
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,7 @@ class SheriffService(
     private val userRepository: UserRepository,
     private val stompPublisher: StompPublisher,
     private val coroutineScope: CoroutineScope,
+    private val timingProperties: GameTimingProperties,
 ) {
     val log = LoggerFactory.getLogger(SheriffService::class.java)
     private val scheduledJobs = mutableMapOf<Int, Job>()
@@ -505,9 +507,10 @@ class SheriffService(
      * — we are NOT starting a new night.
      */
     private fun scheduleAutoAdvanceFromSheriffResult(gameId: Int): Job {
-        log.info("[SheriffService] Scheduling auto-advance to day discussion for game $gameId in 60 seconds")
+        val delayMs = timingProperties.sheriffResultAutoAdvanceMs ?: 60_000L
+        log.info("[SheriffService] Scheduling auto-advance to day discussion for game $gameId in ${delayMs}ms")
         return coroutineScope.launch {
-            delay(60_000) // 60 seconds for manual interaction
+            delay(delayMs)
             log.info("[SheriffService] Auto-advance to day discussion triggered for game $gameId")
             advanceToDayDiscussion(gameId)
         }.also { job ->

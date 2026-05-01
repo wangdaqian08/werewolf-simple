@@ -53,3 +53,4 @@ werewolf:
     inter-role-gap-ms: 300
     night-init-audio-delay-ms: 500
     waiting-delay-ms: 200
+    sheriff-result-auto-advance-ms: 1000
