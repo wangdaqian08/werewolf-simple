@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import type { GameContext } from './multi-browser'
-import { waitForCondition, waitForNightSubPhase } from './state-polling'
+import { waitForCondition, waitForNightSubPhase, waitForPhase } from './state-polling'
 
 /**
  * Drive a Night 1 to completion via DOM clicks on each special-role browser.
@@ -32,6 +32,16 @@ export async function driveMinimalNight1ViaDom(
   await expect(startBtn).toBeVisible({ timeout: 15_000 })
   await expect(startBtn).toBeEnabled({ timeout: 10_000 })
   await startBtn.click()
+
+  // After clicking start-night, the backend transitions ROLE_REVEAL → NIGHT.
+  // waitForNightSubPhase has an early-exit guard that returns false if
+  // game.phase is anything other than NIGHT — gate on phase=NIGHT first
+  // to avoid racing that guard while the transition is still in-flight.
+  // (Flake observed in PR #89 CI run 73954244714: the helper was called
+  // mid-transition while phase still showed ROLE_REVEAL.)
+  if (!(await waitForPhase(hostPage, gameId, 'NIGHT', 15_000))) {
+    throw new Error('driveMinimalNight1ViaDom: NIGHT phase not reached after start-night click')
+  }
 
   // ── Wolf kill ────────────────────────────────────────────────────────
   const reachedWolfPick = await waitForNightSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 25_000)

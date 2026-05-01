@@ -303,8 +303,9 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       20_000,
     )
 
-    // All browsers transition to DAY_DISCUSSION.
-    await verifyAllBrowsersPhase(ctx.pages, 'DAY_DISCUSSION', 15_000)
+    // All browsers transition to DAY (PHASE_DATA_VALUES maps "DAY" to
+    // {DAY_PENDING, DAY_DISCUSSION} on the data-phase attribute).
+    await verifyAllBrowsersPhase(ctx.pages, 'DAY', 15_000)
 
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-05-day-discussion')
   })
