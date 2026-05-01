@@ -47,7 +47,6 @@
         <button
           v-if="
             isHost &&
-            gameStore.state.hasSheriff === false &&
             gameStore.state.roleReveal?.confirmedCount === gameStore.state.roleReveal?.totalCount
           "
           class="btn btn-primary"
@@ -82,7 +81,6 @@
         @advance-speech="handleSheriffAdvanceSpeech"
         @reveal-result="handleSheriffRevealResult"
         @appoint="handleSheriffAppoint"
-        @start-night="handleSheriffStartNight"
       />
     </template>
 
@@ -670,10 +668,6 @@ async function handleSheriffRevealResult() {
 async function handleSheriffAppoint(userId: string) {
   await action({ actionType: 'SHERIFF_APPOINT', targetId: userId })
 }
-async function handleSheriffStartNight() {
-  await action({ actionType: 'START_NIGHT' })
-}
-
 async function handleRevealResult() {
   await action({ actionType: 'REVEAL_NIGHT_RESULT' })
 }
