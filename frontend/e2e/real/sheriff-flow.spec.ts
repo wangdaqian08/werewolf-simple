@@ -23,8 +23,13 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       totalPlayers: 9,
       hasSheriff: true,
       // Variant B: each role's Night 1 action is DOM-driven from its own
-      // browser context. WITCH and GUARD now need browsers (they were API-
-      // only before).
+      // browser context. driveMinimalNight1ViaDom drives WEREWOLF_PICK →
+      // SEER_PICK → SEER_RESULT → WITCH_ACT → GUARD_PICK in order, so the
+      // kit MUST include all four special roles; otherwise the missing
+      // role's sub-phase never fires and the wait times out. Explicit
+      // roles also bypass the default 9p kit which doesn't guarantee
+      // GUARD presence.
+      roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
     })
   })
