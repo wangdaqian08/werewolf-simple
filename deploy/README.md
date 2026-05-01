@@ -32,6 +32,17 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d werewolf.example.com
 ```
 
+## VM access
+
+```bash
+source scripts/.env.vm
+gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT"
+```
+
+Requires `scripts/.env.vm` populated locally (copy from `.env.vm.example`).
+For one-shot commands use `./scripts/vm-ssh.sh '<cmd>'` — same auth, but
+reuses the SSH ControlMaster (~0.5s vs ~3s per call).
+
 ## Deploy
 
 Images are pre-built by GitHub Actions and published to `ghcr.io` on every
