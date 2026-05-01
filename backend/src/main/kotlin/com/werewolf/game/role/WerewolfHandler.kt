@@ -58,12 +58,19 @@ class WerewolfHandler(
         if (nightPhase.subPhase != NightSubPhase.WEREWOLF_PICK)
             return GameActionResult.Rejected("Not in WEREWOLF_PICK sub-phase")
 
-        // Only the first WOLF_KILL per night advances the phase.
-        // Reject duplicates so submitAction is called exactly once.
+        // Once any wolf has confirmed via WOLF_KILL, the target is locked for
+        // the rest of WEREWOLF_PICK. Reject BOTH further WOLF_KILL and
+        // WOLF_SELECT — the latter would silently overwrite wolfTargetUserId
+        // and disagree with the first wolf's confirmed pick.
+        // Regression: prod game 15 (2026-05-01) — wolf1 confirmed kill on
+        // player A, wolf2 then SELECTed player B; B died, contradicting the
+        // confirmation.
         if (action.actionType == ActionType.WOLF_KILL) {
             if (killConfirmed.putIfAbsent(action.gameId, true) != null) {
                 return GameActionResult.Rejected("Kill already confirmed by teammate")
             }
+        } else if (killConfirmed.containsKey(action.gameId)) {
+            return GameActionResult.Rejected("Kill already confirmed by teammate")
         }
 
         val target = action.targetUserId
