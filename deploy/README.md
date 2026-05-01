@@ -51,17 +51,77 @@ docker compose --env-file .env.prod up -d
 
 ### Release a new version
 
-1. On the repo: tag main with `vX.Y.Z` and push. GitHub Actions builds + pushes
-   `ghcr.io/.../werewolf-simple-{backend,frontend}:vX.Y.Z` + `:latest`.
-2. On the VM:
-   ```bash
-   cd /opt/werewolf-simple
-   sed -i 's/^WEREWOLF_VERSION=.*$/WEREWOLF_VERSION=vX.Y.Z/' .env.prod
-   docker compose --env-file .env.prod pull
-   docker compose --env-file .env.prod up -d
-   ```
-   `up -d` detects the image reference changed and recreates the container; no
-   `--force-recreate` needed.
+Substitute `vX.Y.Z` for the version you're shipping (e.g. `v0.3.1`).
+
+#### A. Local — tag and push (triggers the image build)
+
+```bash
+git checkout main && git pull origin main
+git tag -a vX.Y.Z -m "<one-line release summary>"
+git push origin vX.Y.Z
+```
+
+The `publish-images.yml` workflow builds + publishes
+`ghcr.io/.../werewolf-simple-{backend,frontend}:vX.Y.Z` + `:latest`. Wait
+~5–10 min for it to go green:
+
+```bash
+gh run watch                            # latest workflow run
+```
+
+Don't proceed until both images are published.
+
+#### B. On the VM — advance the tree, pin, pull, recreate
+
+```bash
+cd /opt/werewolf-simple
+
+# 1. Move the working tree to the new tag (so docker-compose.yml matches)
+git fetch origin --tags
+git checkout vX.Y.Z
+
+# 2. Pin the version in .env.prod
+#    `sed -i` REPLACES the line; if WEREWOLF_VERSION isn't present yet,
+#    append it instead: echo 'WEREWOLF_VERSION=vX.Y.Z' | sudo tee -a .env.prod
+sudo sed -i 's/^WEREWOLF_VERSION=.*$/WEREWOLF_VERSION=vX.Y.Z/' .env.prod
+grep '^WEREWOLF_VERSION=' .env.prod      # confirm it's set
+
+# 3. Pull the published images and recreate containers.
+#    --force-recreate replaces even when compose thinks nothing changed.
+sudo docker compose --env-file .env.prod pull
+sudo docker compose --env-file .env.prod up -d --force-recreate backend frontend
+```
+
+> `sudo` is required throughout: the VM login user isn't in the `docker`
+> group, and `.env.prod` is root-owned.
+
+#### C. Verify
+
+```bash
+# Image refs of running containers — both should end in :vX.Y.Z
+sudo docker compose --env-file .env.prod ps --format '{{.Service}}: {{.Image}}'
+
+# Digest match: running container vs ghcr.io tag
+sudo docker inspect --format '{{.Image}}' \
+  $(sudo docker compose --env-file .env.prod ps -q backend)
+sudo docker inspect --format '{{.Id}}' \
+  ghcr.io/wangdaqian08/werewolf-simple-backend:vX.Y.Z
+# ↑ both should print the same sha256:...
+
+# Health + recent logs
+curl -sf http://127.0.0.1:8080/api/health        # {"status":"UP"}
+sudo docker compose --env-file .env.prod logs --since=2m backend | \
+  grep -iE 'Started Werewolf|active profile' | head
+```
+
+#### D. Rollback (if anything looks wrong)
+
+```bash
+git checkout vX.Y.Z-PREVIOUS                                  # e.g. v0.3.0
+sudo sed -i 's/^WEREWOLF_VERSION=.*$/WEREWOLF_VERSION=vX.Y.Z-PREVIOUS/' .env.prod
+sudo docker compose --env-file .env.prod pull
+sudo docker compose --env-file .env.prod up -d --force-recreate backend frontend
+```
 
 ### Emergency rebuild on the VM (fallback)
 
