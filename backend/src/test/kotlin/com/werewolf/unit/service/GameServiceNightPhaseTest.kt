@@ -118,6 +118,27 @@ class GameServiceNightPhaseTest {
     }
 
     @Test
+    fun `getGameState - players list is sorted by seatIndex regardless of repository order`() {
+        // Repository can return rows in heap order (post-UPDATE), not seat order.
+        // The dashboard renders players directly from this array, so the API must sort.
+        val players = listOf(
+            player("u3", 3, PlayerRole.VILLAGER),
+            player("u1", 1, PlayerRole.VILLAGER),
+            player("u4", 4, PlayerRole.VILLAGER),
+            player("u2", 2, PlayerRole.WEREWOLF),
+        )
+        val users = listOf(user("u1", "A"), user("u2", "B"), user("u3", "C"), user("u4", "D"))
+        val game = game(phase = GamePhase.DAY_DISCUSSION).also { it.dayNumber = 1 }
+        setupGameAndPlayers(game, players, users)
+
+        val result = gameService.getGameState(gameId, "u1")
+
+        @Suppress("UNCHECKED_CAST")
+        val playerList = result["players"] as List<Map<String, Any?>>
+        assertThat(playerList.map { it["seatIndex"] }).containsExactly(1, 2, 3, 4)
+    }
+
+    @Test
     fun `getGameState - WEREWOLF gets teammate list formatted as seat-dot-nick`() {
         val wolf1 = player("u1", 1, PlayerRole.WEREWOLF)
         val wolf2 = player("u2", 2, PlayerRole.WEREWOLF)
