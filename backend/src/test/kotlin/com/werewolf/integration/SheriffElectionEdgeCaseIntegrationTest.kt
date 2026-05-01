@@ -10,8 +10,12 @@ import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.ElectionSubPhase
 import com.werewolf.model.GamePhase
+import com.werewolf.model.NightPhase
+import com.werewolf.model.NightSubPhase
+import com.werewolf.model.SheriffElection
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
+import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.SheriffElectionRepository
 import com.werewolf.service.SheriffService
 import org.assertj.core.api.Assertions.assertThat
@@ -34,6 +38,7 @@ class SheriffElectionEdgeCaseIntegrationTest {
     @Autowired lateinit var gameRepository: GameRepository
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var sheriffElectionRepository: SheriffElectionRepository
+    @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
     @Autowired lateinit var sheriffService: SheriffService
 
     companion object {
@@ -104,7 +109,13 @@ class SheriffElectionEdgeCaseIntegrationTest {
         return players to roomId
     }
 
-    private fun startGameAndConfirmRoles(players: List<TestPlayer>, roomId: Int): Int {
+    /**
+     * Variant B: arrange production-equivalent state for sheriff election
+     * (phase=SHERIFF_ELECTION/SIGNUP with a completed Day 1 NightPhase).
+     * Bypasses START_NIGHT + night actions + REVEAL_NIGHT_RESULT — the
+     * full night flow is not the focus of these tests.
+     */
+    private fun startGameAndOpenSheriffElection(players: List<TestPlayer>, roomId: Int): Int {
         val host = players[0]
         val startResp = restTemplate.postForEntity(
             START_URL, HttpEntity(mapOf("roomId" to roomId), headers(host.token)), Map::class.java
@@ -117,6 +128,15 @@ class SheriffElectionEdgeCaseIntegrationTest {
         players.forEach { player ->
             assertThat(action(player.token, gameId, "CONFIRM_ROLE").statusCode).isEqualTo(HttpStatus.OK)
         }
+
+        game.phase = GamePhase.SHERIFF_ELECTION
+        game.subPhase = null
+        game.dayNumber = 1
+        gameRepository.save(game)
+        nightPhaseRepository.save(NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.COMPLETE
+        })
+        sheriffElectionRepository.save(SheriffElection(gameId = gameId))
         return gameId
     }
 
@@ -138,7 +158,7 @@ class SheriffElectionEdgeCaseIntegrationTest {
         val (players, roomId) = setupSheriffRoom("EC1")
         val host = players[0]; val g1 = players[1]; val g2 = players[2]; val g3 = players[3]
         val g4 = players[4]; val g5 = players[5]
-        val gameId = startGameAndConfirmRoles(players, roomId)
+        val gameId = startGameAndOpenSheriffElection(players, roomId)
 
         // SIGNUP: g1, g2, g3 campaign; others pass
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
@@ -197,7 +217,7 @@ class SheriffElectionEdgeCaseIntegrationTest {
         val (players, roomId) = setupSheriffRoom("EC1a")
         val host = players[0]; val g1 = players[1]; val g2 = players[2]; val g3 = players[3]
         val g4 = players[4]; val g5 = players[5]
-        val gameId = startGameAndConfirmRoles(players, roomId)
+        val gameId = startGameAndOpenSheriffElection(players, roomId)
 
         // SIGNUP: g1, g2, g3 campaign; others pass
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
@@ -236,7 +256,7 @@ class SheriffElectionEdgeCaseIntegrationTest {
         val (players, roomId) = setupSheriffRoom("EC1b")
         val host = players[0]; val g1 = players[1]; val g2 = players[2]; val g3 = players[3]
         val g4 = players[4]; val g5 = players[5]
-        val gameId = startGameAndConfirmRoles(players, roomId)
+        val gameId = startGameAndOpenSheriffElection(players, roomId)
 
         // SIGNUP: g1, g2, g3 campaign; others pass
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)

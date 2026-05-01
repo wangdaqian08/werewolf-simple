@@ -16,6 +16,10 @@
 import {expect, type Page, test} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, actName, type RoleName, sheriff} from './helpers/shell-runner'
+import {
+  driveMinimalNight1ViaDom,
+  waitForDayDiscussionAfterSheriff,
+} from './helpers/night-driver'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 import {
@@ -782,8 +786,8 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
   // diagnostics (browser sentinels, backend log scan, invariants, action
   // observability, sub-phase gating) should make this both bearable on the
   // shared backend AND debuggable when it fails.
-  test('phase: role-reveal + sheriff election + village votes out wolves', async ({}, testInfo) => {
-    await captureSnapshot(ctx.pages, testInfo, 'classic-01-role-reveal-or-election-start')
+  test('phase: role-reveal + N1 + sheriff election + village votes out wolves', async ({}, testInfo) => {
+    await captureSnapshot(ctx.pages, testInfo, 'classic-01-role-reveal')
 
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
     const seerBots = ctx.roleMap.SEER ?? []
@@ -792,19 +796,37 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
       .filter((b): b is NonNullable<typeof b> => !!b && b.nick !== 'Host')
       .map((b) => b.nick)
 
-    await runSheriffElection(ctx, candidates)
-    await captureSnapshot(ctx.pages, testInfo, 'classic-02-sheriff-elected')
+    // Variant B Day 1: drive Night 1 (DOM-clicks) → reveal night result →
+    // sheriff election. The wolf must avoid the seer (so the seer can run
+    // and win Test 1's election). Guard must NOT protect the wolf-target
+    // seat (UI has no skip — guard always protects someone; protecting
+    // the kill target would block the kill and stall the planned outcome).
+    const villagerBots = ctx.roleMap.VILLAGER ?? []
+    const villagerSeats = villagerBots.filter((b) => b.nick !== 'Host').map((b) => b.seat)
+    expect(
+      villagerSeats.length,
+      'classic kit must include at least 2 non-host VILLAGER seats so wolf and guard can target distinct seats',
+    ).toBeGreaterThanOrEqual(2)
+    const wolfTargetSeatN1 = villagerSeats[0]
+    const guardTargetSeatN1 = villagerSeats[1]
 
-    // Start night
-    const startBtn = ctx.hostPage.getByTestId('start-night')
-    if (await startBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await startBtn.click()
-    } else {
-      // sheriff flow sometimes auto-transitions; try scripted fallback
-      tryAct('START_NIGHT', 'Host', { room: ctx.roomCode })
-    }
-    await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 20_000)
-    await captureSnapshot(ctx.pages, testInfo, 'classic-03-night-1-entered')
+    // Variant B (correct): driveMinimalNight1ViaDom drives N1 actions and
+    // waits for the auto-transition into SHERIFF_ELECTION/SIGNUP (Day 1 +
+    // hasSheriff). Kills are still deferred at this point — N1 victims
+    // are alive in DB and could 上警 if the test wanted them to.
+    await driveMinimalNight1ViaDom(ctx, {
+      wolfTargetSeat: wolfTargetSeatN1,
+      guardTargetSeat: guardTargetSeatN1,
+    })
+    await captureSnapshot(ctx.pages, testInfo, 'classic-02-night-1-done-sheriff-opened')
+
+    await runSheriffElection(ctx, candidates)
+    await captureSnapshot(ctx.pages, testInfo, 'classic-03-sheriff-elected')
+
+    // After sheriff RESULT, backend auto-advances to DAY_DISCUSSION/RESULT_HIDDEN
+    // (kills still deferred; host clicks reveal in completeDay below).
+    await waitForDayDiscussionAfterSheriff(ctx)
+    await captureSnapshot(ctx.pages, testInfo, 'classic-04-day-result-hidden')
 
     // Wolves will be voted out every day. No village player dies at night if
     // we can avoid it — wolves hit a villager target we'll vote no-one for.
@@ -819,34 +841,28 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
     const wolvesToEliminate = (ctx.roleMap.WEREWOLF ?? []).map((b) => ({
       nick: b.nick,
       userId: b.userId,
-      // Host's seat in roleMap comes from the shell state file's seat=0
-      // (initialized in setupGame and never updated post seat-claim).
-      // Substitute the live API seat. Other bots' seats from the state
-      // file are correct.
       seat: b.nick === 'Host' && hostSeat != null ? hostSeat : b.seat,
     }))
-
-    const villagerBots = ctx.roleMap.VILLAGER ?? []
-    // Do NOT target the host even if the host's role is VILLAGER — the spec
-    // needs the host alive to keep driving UI clicks. Also exclude the
-    // elected sheriff if they're on the village team so the badge stays put
-    // for as long as possible (simplifies reasoning in evidence screenshots).
-    const villagerSeats = villagerBots.filter((b) => b.nick !== 'Host').map((b) => b.seat)
 
     let round = 0
     const maxRounds = 6
     while (round < maxRounds && wolvesToEliminate.length > 0) {
-      // Night: wolves kill a villager; seer checks a wolf (for evidence)
-      const killSeat = villagerSeats[round % villagerSeats.length] ?? 1
-      const checkSeat = wolvesToEliminate[0]?.seat ?? 1
-      await completeNight(ctx, killSeat, checkSeat)
-      await ctx.hostPage.waitForTimeout(3_000)
-      if (ctx.hostPage.url().includes('/result/')) break
-      await captureSnapshot(ctx.pages, testInfo, `classic-04-night-${round + 1}-actions`)
+      // Skip night on round 0 — Night 1 was already driven before sheriff
+      // election. Subsequent rounds drive Night N>=2 via the existing
+      // completeNight helper (which handles dead actors + seerCheckSeat
+      // logic for nights with prior eliminations).
+      if (round > 0) {
+        const killSeat = villagerSeats[round % villagerSeats.length] ?? 1
+        const checkSeat = wolvesToEliminate[0]?.seat ?? 1
+        await completeNight(ctx, killSeat, checkSeat)
+        await ctx.hostPage.waitForTimeout(3_000)
+        if (ctx.hostPage.url().includes('/result/')) break
+        await captureSnapshot(ctx.pages, testInfo, `classic-06-night-${round + 1}-actions`)
+      }
 
       // Day: vote out the front wolf
       const targetWolfSeat = wolvesToEliminate[0].seat
-      await completeDay(ctx, testInfo, targetWolfSeat, `classic-04-day-${round + 1}`)
+      await completeDay(ctx, testInfo, targetWolfSeat, `classic-07-day-${round + 1}`)
       await ctx.hostPage.waitForTimeout(2_500)
       if (ctx.hostPage.url().includes('/result/')) break
 
@@ -918,7 +934,7 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     // eslint-disable-next-line no-console
     console.warn(`[hard-mode test] starting with hostRole=${ctx.hostRole}`)
 
-    await captureSnapshot(ctx.pages, testInfo, 'hard-01-role-reveal-or-election-start')
+    await captureSnapshot(ctx.pages, testInfo, 'hard-01-role-reveal')
 
     // For each special role: resolve to bot OR host (host takes the role on
     // ~25% of rolls in this 12p kit). Read the host's actual seat from the
@@ -948,29 +964,43 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
       `D2 vote-out plan needs at least one non-host non-wolf villager seat`,
     ).toBeGreaterThanOrEqual(1)
 
+    // Variant B Day 1: drive Night 1 first (DOM-clicks on every special
+    // role browser), then reveal night result → sheriff election.
+    //
+    // N1 plan: wolves kill the GUARD. Witch passes on the antidote (per
+    // helper default), so the kill stands. Seer checks a wolf so the
+    // SEER_RESULT sub-phase has a real check to render. Guard MUST NOT
+    // protect themselves (the UI has no skip; if the guard protects
+    // guard.seat, the wolf kill is blocked and the test plan fails).
+    // Park the guard's protect on a wolf — wolves don't kill each other,
+    // so the protection is wasted but doesn't block the planned death.
+    const wolfBots = ctx.roleMap.WEREWOLF ?? []
+    const wolfSeatForGuardProtect = wolfBots.find((b) => b.nick !== 'Host')?.seat ?? wolfBots[0]?.seat
+    expect(
+      wolfSeatForGuardProtect,
+      'HARD_MODE kit needs at least one wolf so guard can protect a non-target seat',
+    ).toBeDefined()
+
+    // Variant B: drives N1 then waits for end-of-night auto-transition into
+    // SHERIFF_ELECTION/SIGNUP. Guard is the wolf-target but kills are
+    // deferred — guard is still alive in DB during sheriff election (and
+    // could 上警 if the test wanted them to).
+    await driveMinimalNight1ViaDom(ctx, {
+      wolfTargetSeat: guard.seat,
+      seerCheckSeat: wolfBots[0]?.seat ?? guard.seat,
+      guardTargetSeat: wolfSeatForGuardProtect!,
+    })
+    await captureSnapshot(ctx.pages, testInfo, 'hard-02-night-1-done-sheriff-opened')
+
     // Sheriff election — only the seer campaigns. After speeches + votes
     // the seer holds the badge.
     await runSheriffElection(ctx, [seer.nick])
-    await captureSnapshot(ctx.pages, testInfo, 'hard-02-sheriff-elected-is-seer')
+    await captureSnapshot(ctx.pages, testInfo, 'hard-03-sheriff-elected-is-seer')
 
-    // Start night 1
-    const startBtn = ctx.hostPage.getByTestId('start-night')
-    if (await startBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await startBtn.click()
-    } else {
-      tryAct('START_NIGHT', 'Host', { room: ctx.roomCode })
-    }
-    await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 20_000)
-    await captureSnapshot(ctx.pages, testInfo, 'hard-03-night-1-entered')
-
-    // N1: wolves kill the GUARD. Witch's `useAntidote: false` (set inside
-    // completeNight) leaves the kill standing. Seer checks a wolf so the
-    // SEER_PICK sub-phase advances. After: 11 alive (4W/1S/1Wi/0G/5V),
-    // counterplay still has the witch, post-night logical win is skipped.
-    const wolfBots = ctx.roleMap.WEREWOLF ?? []
-    await completeNight(ctx, guard.seat, wolfBots[0]?.seat ?? guard.seat)
-    await ctx.hostPage.waitForTimeout(2_500)
-    await captureSnapshot(ctx.pages, testInfo, 'hard-04-night-1-done')
+    // After sheriff RESULT, backend auto-advances to DAY_DISCUSSION/RESULT_HIDDEN.
+    // Host clicks reveal in completeDay below to apply the deferred guard kill.
+    await waitForDayDiscussionAfterSheriff(ctx)
+    await captureSnapshot(ctx.pages, testInfo, 'hard-04-day-result-hidden')
 
     // D1: village votes out the seer (sheriff). Backend transitions to
     // BADGE_HANDOVER — only the seer's browser page sees the pass-badge

@@ -10,6 +10,7 @@ import {actName, type RoleName, sheriff} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 import {waitForCondition} from './helpers/state-polling'
+import {driveMinimalNight1ViaDom} from './helpers/night-driver'
 
 let ctx: GameContext
 
@@ -21,7 +22,15 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: true,
-      browserRoles: ['WEREWOLF', 'SEER', 'VILLAGER'] as RoleName[],
+      // Variant B: each role's Night 1 action is DOM-driven from its own
+      // browser context. driveMinimalNight1ViaDom drives WEREWOLF_PICK →
+      // SEER_PICK → SEER_RESULT → WITCH_ACT → GUARD_PICK in order, so the
+      // kit MUST include all four special roles; otherwise the missing
+      // role's sub-phase never fires and the wait times out. Explicit
+      // roles also bypass the default 9p kit which doesn't guarantee
+      // GUARD presence.
+      roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
+      browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
     })
   })
 
@@ -35,15 +44,38 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     }
   })
 
-  // ── Test 1: Sheriff signup ─────────────────────────────────────────────
+  // ── Test 1: N1 + reveal → SHERIFF_ELECTION ────────────────────────────
 
-  test('1. Sheriff signup — all browsers show SHERIFF_ELECTION phase', async ({}, testInfo) => {
-    // After role reveal with hasSheriff=true, phase should go to SHERIFF_ELECTION
-    // The host may need to wait for automatic transition, or the election starts automatically
+  test('1. Day 1 morning — sheriff election opens at end-of-night (deferred kills)', async ({}, testInfo) => {
+    // Variant B (correct order): setup leaves us in ROLE_REVEAL. Drive
+    // Night 1 via DOM clicks on each role's browser. The backend
+    // automatically opens SHERIFF_ELECTION at end-of-night when Day 1 +
+    // hasSheriff + no sheriff yet — host does NOT click reveal yet
+    // (kills are deferred until after the sheriff election so N1 victims
+    // can still 上警 / use 挡刀 tactics).
+    //
+    // Wolves can target any non-host villager — even the seer's would-be
+    // running mate works, because deferred kills mean no one is dead in
+    // DB yet during sheriff signup.
+    const villagerSeats = (ctx.roleMap.VILLAGER ?? [])
+      .filter((b) => b.nick !== 'Host')
+      .map((b) => b.seat)
+    const wolfTargetSeat = villagerSeats[0]
+    expect(
+      wolfTargetSeat,
+      'kit must include at least one non-host VILLAGER for the wolf to target',
+    ).toBeDefined()
+
+    // driveMinimalNight1ViaDom drives the 4 night sub-phases via DOM and
+    // then waits for either SHERIFF_ELECTION/SIGNUP (Day 1 + hasSheriff)
+    // or DAY_DISCUSSION/RESULT_HIDDEN (other days). Here we expect SHERIFF.
+    await driveMinimalNight1ViaDom(ctx, { wolfTargetSeat: wolfTargetSeat! })
+
+    // After the auto-transition, all browsers must be in SHERIFF_ELECTION.
     await verifyAllBrowsersPhase(ctx.pages, 'SHERIFF_ELECTION', 20_000)
 
-    // Verify the signup sub-phase UI is shown
-    for (const [role, page] of Array.from(ctx.pages.entries())) {
+    // Verify the signup sub-phase UI is shown on every browser.
+    for (const [, page] of Array.from(ctx.pages.entries())) {
       await expect(page.locator('.sheriff-wrap')).toBeVisible({ timeout: 10_000 })
     }
 
@@ -246,20 +278,35 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-04-result')
   })
 
-  // ── Test 5: Sheriff → Night transition ─────────────────────────────────
+  // ── Test 5: Sheriff result → DAY_DISCUSSION/RESULT_HIDDEN auto-advance ──
 
-  test('5. Sheriff result → Night transition', async ({}, testInfo) => {
-    // After sheriff RESULT, the host has a "start-night" button on the
-    // result screen. The button is the contract — fail loudly if it
-    // doesn't render in 10s rather than silently fall back to a script
-    // that may also fail.
-    const startNightBtn = ctx.hostPage.getByTestId('start-night')
-    await startNightBtn.waitFor({ state: 'visible', timeout: 10_000 })
-    await startNightBtn.click()
+  test('5. Sheriff result → DAY_DISCUSSION/RESULT_HIDDEN auto-advance', async ({}, testInfo) => {
+    // Variant B (correct order): after sheriff RESULT the backend auto-
+    // advances to DAY_DISCUSSION/RESULT_HIDDEN via
+    // SheriffService.scheduleAutoAdvanceFromSheriffResult. The host then
+    // clicks REVEAL_NIGHT_RESULT separately to apply pending kills and
+    // flip to RESULT_REVEALED. The delay is configurable via
+    // werewolf.timing.sheriff-result-auto-advance-ms — application-e2e.yml
+    // sets it to 2_000ms so this test doesn't hang for 60s.
+    await waitForCondition(
+      async () => {
+        const state = await ctx.hostPage.evaluate(async (id: string) => {
+          const token = localStorage.getItem('jwt')
+          const res = await fetch(`/api/game/${id}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          return res.ok ? await res.json() : null
+        }, ctx.gameId)
+        return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
+      },
+      'auto-advance from SHERIFF_ELECTION/RESULT to DAY_DISCUSSION/RESULT_HIDDEN',
+      20_000,
+    )
 
-    // All browsers transition to NIGHT.
-    await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 15_000)
+    // All browsers transition to DAY (PHASE_DATA_VALUES maps "DAY" to
+    // {DAY_PENDING, DAY_DISCUSSION} on the data-phase attribute).
+    await verifyAllBrowsersPhase(ctx.pages, 'DAY', 15_000)
 
-    await captureSnapshot(ctx.pages, testInfo, 'sheriff-05-night-transition')
+    await captureSnapshot(ctx.pages, testInfo, 'sheriff-05-day-discussion')
   })
 })

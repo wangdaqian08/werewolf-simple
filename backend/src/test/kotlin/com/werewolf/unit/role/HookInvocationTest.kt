@@ -48,7 +48,10 @@ class HookInvocationTest {
             it.dayNumber = 1
         }
 
-    private fun room() = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6)
+    // hasSheriff=false keeps resolveNightKills on the DAY_DISCUSSION/RESULT_HIDDEN
+    // branch where onDayEnter fires. Sheriff election (Day 1 + hasSheriff=true)
+    // takes a separate code path tested elsewhere.
+    private fun room() = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasSheriff = false)
 
     private fun player(userId: String, seat: Int, role: PlayerRole = PlayerRole.VILLAGER, alive: Boolean = true) =
         GamePlayer(gameId = gameId, userId = userId, seatIndex = seat, role = role).also { it.alive = alive }
@@ -90,6 +93,7 @@ class HookInvocationTest {
         gameRepository = gameRepository,
         gamePlayerRepository = gamePlayerRepository,
         nightPhaseRepository = nightPhaseRepository,
+        sheriffElectionRepository = mock(),
         eliminationHistoryRepository = eliminationHistoryRepository,
         winConditionChecker = winConditionChecker,
         stompPublisher = stompPublisher,
@@ -126,7 +130,6 @@ class HookInvocationTest {
         val villagerHandler = dayEnterHandler(PlayerRole.VILLAGER)
         val orchestrator = makeOrchestrator(listOf(wolfHandler, villagerHandler))
 
-        whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
         whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
@@ -169,9 +172,9 @@ class HookInvocationTest {
         val wolfHandler = dayEnterHandler(PlayerRole.WEREWOLF)
         val orchestrator = makeOrchestrator(listOf(wolfHandler))
 
-        whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
         whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
         orchestrator.resolveNightKills(initialCtx, np)
 

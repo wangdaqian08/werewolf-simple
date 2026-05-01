@@ -176,9 +176,16 @@ class VotingPipeline(
 
     @Transactional
     fun handleHunterShoot(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.DAY_VOTING)
-            return GameActionResult.Rejected("Not in voting phase")
-        if (context.game.subPhase != VotingSubPhase.HUNTER_SHOOT.name)
+        // Accept HUNTER_SHOOT under either parent phase:
+        //   - DAY_VOTING/HUNTER_SHOOT: hunter voted out (existing path).
+        //   - DAY_DISCUSSION/HUNTER_SHOOT: hunter killed at night (Phase B).
+        // The post-action routing differs between the two — see afterHunterAct
+        // and afterHunterActNightRoute.
+        val nightRoute = context.game.phase == GamePhase.DAY_DISCUSSION &&
+            context.game.subPhase == DaySubPhase.HUNTER_SHOOT.name
+        val voteRoute = context.game.phase == GamePhase.DAY_VOTING &&
+            context.game.subPhase == VotingSubPhase.HUNTER_SHOOT.name
+        if (!nightRoute && !voteRoute)
             return GameActionResult.Rejected("Not in HUNTER_SHOOT sub-phase")
 
         val actor = context.playerById(request.actorUserId)
@@ -217,31 +224,21 @@ class VotingPipeline(
 
                 // If hunted player was the sheriff, need badge handover
                 if (target == context.game.sheriffUserId) {
-                    context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
-                    gameRepository.save(context.game)
-                    stompPublisher.broadcastGameAfterCommit(
-                        context.gameId,
-                        DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.BADGE_HANDOVER.name)
-                    )
+                    transitionToBadgeHandover(context, nightRoute)
                     return GameActionResult.Success()
                 }
 
-                // No badge handover needed — check win then go to night
-                afterHunterAct(context)
+                // No badge handover needed — check win then go to next phase
+                if (nightRoute) afterHunterActNightRoute(context) else afterHunterAct(context)
             }
 
             ActionType.HUNTER_PASS -> {
                 // Hunter chooses not to shoot; check if hunter was sheriff (badge handover needed)
                 if (actor.userId == context.game.sheriffUserId) {
-                    context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
-                    gameRepository.save(context.game)
-                    stompPublisher.broadcastGameAfterCommit(
-                        context.gameId,
-                        DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.BADGE_HANDOVER.name)
-                    )
+                    transitionToBadgeHandover(context, nightRoute)
                     return GameActionResult.Success()
                 }
-                afterHunterAct(context)
+                if (nightRoute) afterHunterActNightRoute(context) else afterHunterAct(context)
             }
 
             else -> return GameActionResult.Rejected("Unknown action: ${request.actionType}")
@@ -251,15 +248,28 @@ class VotingPipeline(
 
     @Transactional
     fun handleBadge(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.DAY_VOTING)
-            return GameActionResult.Rejected("Not in voting phase")
-        if (context.game.subPhase != VotingSubPhase.BADGE_HANDOVER.name)
+        // Accept BADGE_HANDOVER under either parent phase:
+        //   - DAY_VOTING/BADGE_HANDOVER: sheriff voted out (existing path).
+        //   - DAY_DISCUSSION/BADGE_HANDOVER: sheriff killed at night (Phase B).
+        // After handover the post-resolution destination differs (VOTE_RESULT
+        // vs RESULT_REVEALED), so we capture which path we're on up front.
+        val nightRoute = context.game.phase == GamePhase.DAY_DISCUSSION &&
+            context.game.subPhase == DaySubPhase.BADGE_HANDOVER.name
+        val voteRoute = context.game.phase == GamePhase.DAY_VOTING &&
+            context.game.subPhase == VotingSubPhase.BADGE_HANDOVER.name
+        if (!nightRoute && !voteRoute)
             return GameActionResult.Rejected("Not in BADGE_HANDOVER sub-phase")
 
         val actor = context.playerById(request.actorUserId)
             ?: return GameActionResult.Rejected("Actor not found")
         if (actor.userId != context.game.sheriffUserId)
             return GameActionResult.Rejected("Only the current sheriff can hand over the badge")
+
+        val (postPhase, postSubPhase) = if (nightRoute) {
+            GamePhase.DAY_DISCUSSION to DaySubPhase.RESULT_REVEALED.name
+        } else {
+            GamePhase.DAY_VOTING to VotingSubPhase.VOTE_RESULT.name
+        }
 
         when (request.actionType) {
             ActionType.BADGE_PASS -> {
@@ -270,7 +280,8 @@ class VotingPipeline(
 
                 // Update sheriff
                 context.game.sheriffUserId = targetPlayer.userId
-                context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
+                context.game.phase = postPhase
+                context.game.subPhase = postSubPhase
                 gameRepository.save(context.game)
 
                 // Update sheriff flags
@@ -286,14 +297,15 @@ class VotingPipeline(
                 )
                 stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
+                    DomainEvent.PhaseChanged(context.gameId, postPhase, postSubPhase)
                 )
             }
 
             ActionType.BADGE_DESTROY -> {
                 // Update sheriff
                 context.game.sheriffUserId = null
-                context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
+                context.game.phase = postPhase
+                context.game.subPhase = postSubPhase
                 gameRepository.save(context.game)
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
                     it.sheriff = false; gamePlayerRepository.save(it)
@@ -304,23 +316,74 @@ class VotingPipeline(
                 )
                 stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
+                    DomainEvent.PhaseChanged(context.gameId, postPhase, postSubPhase)
                 )
             }
 
             else -> return GameActionResult.Rejected("Unknown action: ${request.actionType}")
+        }
 
-            
+        // Post-action win check + downstream transition. Vote-out path runs
+        // afterElimination (existing behavior — stays in VOTE_RESULT for the
+        // host's continue-to-night click). Night-route path doesn't need
+        // afterElimination (kills already applied during revealNightResult);
+        // game just resumes on RESULT_REVEALED.
+        if (!nightRoute) {
+            afterElimination(context)
+        }
+        return GameActionResult.Success()
+    }
 
-                    }
+    /**
+     * Transition to BADGE_HANDOVER under the appropriate parent phase
+     * (DAY_DISCUSSION when invoked from the night-kill path, DAY_VOTING when
+     * invoked from the vote-out hunter-shoot path).
+     */
+    private fun transitionToBadgeHandover(context: GameContext, nightRoute: Boolean) {
+        val (parent, sub) = if (nightRoute) {
+            GamePhase.DAY_DISCUSSION to DaySubPhase.BADGE_HANDOVER.name
+        } else {
+            GamePhase.DAY_VOTING to VotingSubPhase.BADGE_HANDOVER.name
+        }
+        context.game.phase = parent
+        context.game.subPhase = sub
+        gameRepository.save(context.game)
+        stompPublisher.broadcastGameAfterCommit(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, parent, sub),
+        )
+    }
 
-            
-
-                    afterElimination(context)
-
-                    return GameActionResult.Success()
-
-                }
+    /**
+     * After hunter shoots (or passes) under DAY_DISCUSSION/HUNTER_SHOOT (the
+     * Phase B night-kill path): check post-shot win condition; if no winner,
+     * transition to DAY_DISCUSSION/RESULT_REVEALED so the host can proceed
+     * with the day vote.
+     *
+     * (The DAY_VOTING/HUNTER_SHOOT path uses afterHunterAct, which goes
+     * straight to NIGHT — that's the vote-out flow's contract.)
+     */
+    private fun afterHunterActNightRoute(context: GameContext) {
+        val updatedContext = contextLoader.load(context.gameId)
+        val winner = winConditionChecker.check(
+            alivePlayers = updatedContext.alivePlayers,
+            mode = updatedContext.room.winCondition,
+            trigger = WinCheckTrigger.POST_NIGHT,
+            counterplay = buildCounterplay(updatedContext),
+        )
+        if (winner != null) {
+            endGame(updatedContext, winner)
+            return
+        }
+        val game = updatedContext.game
+        game.phase = GamePhase.DAY_DISCUSSION
+        game.subPhase = DaySubPhase.RESULT_REVEALED.name
+        gameRepository.save(game)
+        stompPublisher.broadcastGameAfterCommit(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name),
+        )
+    }
 
     /** Check win condition; if no winner, stay in VOTE_RESULT for host to proceed to night. */
     private fun afterElimination(context: GameContext) {

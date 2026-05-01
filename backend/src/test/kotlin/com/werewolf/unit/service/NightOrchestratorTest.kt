@@ -70,6 +70,7 @@ class NightOrchestratorTest {
         gameRepository = gameRepository,
         gamePlayerRepository = gamePlayerRepository,
         nightPhaseRepository = nightPhaseRepository,
+        sheriffElectionRepository = mock(),
         eliminationHistoryRepository = eliminationHistoryRepository,
         winConditionChecker = winConditionChecker,
         stompPublisher = stompPublisher,
@@ -144,8 +145,24 @@ class NightOrchestratorTest {
         it.dayNumber = 1
     }
 
-    private fun room(hasSeer: Boolean = false, hasWitch: Boolean = false, hasGuard: Boolean = false) =
-        Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasSeer = hasSeer, hasWitch = hasWitch, hasGuard = hasGuard)
+    // hasSheriff defaults to FALSE in tests so resolveNightKills lands on the
+    // DAY_DISCUSSION/RESULT_HIDDEN branch (the simpler one most assertions
+    // were written against). Tests that exercise the SHERIFF_ELECTION
+    // auto-trigger (Variant B) pass hasSheriff = true explicitly.
+    private fun room(
+        hasSeer: Boolean = false,
+        hasWitch: Boolean = false,
+        hasGuard: Boolean = false,
+        hasSheriff: Boolean = false,
+    ) = Room(
+        roomCode = "ABCD",
+        hostUserId = hostId,
+        totalPlayers = 6,
+        hasSeer = hasSeer,
+        hasWitch = hasWitch,
+        hasGuard = hasGuard,
+        hasSheriff = hasSheriff,
+    )
 
     private fun player(userId: String, seat: Int, role: PlayerRole = PlayerRole.VILLAGER, alive: Boolean = true) =
         GamePlayer(gameId = gameId, userId = userId, seatIndex = seat, role = role).also { it.alive = alive }
@@ -284,15 +301,20 @@ class NightOrchestratorTest {
         val r = room()
         val initialCtx = ctx(wolf, victim, roomOverride = r)
 
-        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(victim))
-        whenever(contextLoader.load(gameId)).thenReturn(ctx(wolf, victim.also { it.alive = false }, roomOverride = r))
         whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
         mockAudioServiceForDayTransition(r)
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
 
-        assertThat(victim.alive).isFalse()
-        verify(gamePlayerRepository).save(victim)
+        // Variant B: kills are deferred until host clicks REVEAL_NIGHT_RESULT.
+        // resolveNightKills only computes the pending kill list; victim stays
+        // alive in DB until applyNightKills is called separately.
+        assertThat(victim.alive).isTrue()
+        verify(gamePlayerRepository, never()).save(victim)
+        // The pending kill IS surfaced via computePendingKills for callers
+        // (e.g. GamePhasePipeline.revealNightResult) to apply on the host's
+        // reveal click.
+        assertThat(nightOrchestrator.computePendingKills(np)).containsExactly("u2")
     }
 
     @Test
@@ -710,7 +732,14 @@ class NightOrchestratorTest {
     // ── Action log recording ─────────────────────────────────────────────────
 
     @Test
-    fun `resolveNightKills - records NIGHT_DEATH events for each killed player`() {
+    fun `resolveNightKills - records NIGHT_DEATH events when game ends on N1 parity`() {
+        // Variant B: actionLogService.recordNightDeaths is now called only in
+        // the GAME_OVER branch (kills are applied immediately when the game
+        // ends). For the no-game-over path, recordNightDeaths fires later from
+        // GamePhasePipeline.revealNightResult — see GamePipelineSheriffTest.
+        //
+        // To exercise the recordNightDeaths call, this test sets up a
+        // wolf-parity scenario where the wolf kill ends the game on N1.
         val wolf = GamePlayer(gameId = gameId, userId = "wolf1", seatIndex = 1, role = PlayerRole.WEREWOLF)
         val villager = GamePlayer(gameId = gameId, userId = "vil1", seatIndex = 2, role = PlayerRole.VILLAGER)
         val game = Game(roomId = 1, hostUserId = hostId).also {
@@ -718,7 +747,7 @@ class NightOrchestratorTest {
             it.phase = GamePhase.NIGHT
             it.dayNumber = 1
         }
-        val room = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6)
+        val room = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasSheriff = false)
         // Use GUARD_PICK (not COMPLETE) — resolveNightKills is called on an in-progress phase
         val nightPhase = NightPhase(gameId = gameId, dayNumber = 1, subPhase = NightSubPhase.GUARD_PICK).also {
             it.wolfTargetUserId = "vil1"
@@ -730,10 +759,12 @@ class NightOrchestratorTest {
             .thenReturn(Optional.of(villager))
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
         whenever(contextLoader.load(gameId)).thenReturn(updatedCtx)
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        // Force GAME_OVER branch so actionLogService.recordNightDeaths runs
+        // immediately. (No-game-over path defers it to revealNightResult,
+        // covered by GamePipelineSheriffTest.)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForDayTransition(room)
 
         nightOrchestrator.resolveNightKills(ctx, nightPhase)
 
@@ -955,6 +986,11 @@ class NightOrchestratorTest {
         val r = Room(
             roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
             hasSeer = true, hasWitch = true, hasGuard = true,
+            // Variant B: hasSheriff=false keeps these tests on the
+            // DAY_DISCUSSION/RESULT_HIDDEN end-of-night branch so the day-
+            // transition audio assertions still apply. Sheriff election
+            // path (Day 1 + hasSheriff=true) is covered separately.
+            hasSheriff = false,
         ).also {
             it.config = GameConfig(mapOf(
                 PlayerRole.WEREWOLF to shortCfg, PlayerRole.SEER to shortCfg,

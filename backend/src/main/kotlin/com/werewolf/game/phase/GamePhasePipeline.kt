@@ -23,11 +23,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 class GamePhasePipeline(
     private val gameRepository: GameRepository,
     private val gamePlayerRepository: GamePlayerRepository,
+    private val nightPhaseRepository: com.werewolf.repository.NightPhaseRepository,
     private val sheriffElectionRepository: SheriffElectionRepository,
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
     private val sheriffService: SheriffService,
     private val nightOrchestrator: NightOrchestrator,
+    private val actionLogService: com.werewolf.service.ActionLogService,
 ) {
     val log: Logger = LoggerFactory.getLogger(GamePhasePipeline::class.java)
     // ── Phase transition actions ───────────────────────────────────────────────
@@ -49,14 +51,61 @@ class GamePhasePipeline(
             return GameActionResult.Rejected("Result already revealed")
         }
 
-        context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
+        // Variant B / correct ordering: kills were *computed* at end of night
+        // but NOT applied — apply them now. This is the moment the deceased
+        // become officially dead in DB; sheriff election (already over by
+        // this point on Day 1, or never opened on Day 2+) saw them as alive.
+        val nightPhase = nightPhaseRepository
+            .findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
+            .orElse(null)
+        val pendingKills = if (nightPhase != null) {
+            nightOrchestrator.computePendingKills(nightPhase)
+        } else emptyList()
+        if (pendingKills.isNotEmpty()) {
+            nightOrchestrator.applyNightKills(context.gameId, pendingKills)
+            actionLogService.recordNightDeaths(context.gameId, context.game.dayNumber, pendingKills)
+        }
+
+        // Phase B: route through HUNTER_SHOOT and BADGE_HANDOVER if any
+        // killed player has the corresponding role/title. Order matters:
+        //  1. HUNTER_SHOOT first — the dying hunter gets to shoot before
+        //     the next sub-phase resolves. The hunter handler chains to
+        //     BADGE_HANDOVER itself if the shot target is the sheriff.
+        //  2. BADGE_HANDOVER if a sheriff was killed (and not already
+        //     routed by hunter handler). Triggers in BOTH CLASSIC and
+        //     HARD_MODE per the design decision (Q4=both modes).
+        //  3. Otherwise: RESULT_REVEALED (existing path).
+        //
+        // This mirrors the vote-out flow's ordering in VotingPipeline
+        // (HUNTER_SHOOT → BADGE_HANDOVER → continue).
+        val players = gamePlayerRepository.findByGameId(context.gameId).associateBy { it.userId }
+        val killedHunter = pendingKills.firstOrNull { players[it]?.role == PlayerRole.HUNTER }
+        val sheriffKilled = context.game.sheriffUserId != null &&
+            pendingKills.contains(context.game.sheriffUserId)
+
+        val (newSubPhase, transitionLog) = when {
+            killedHunter != null ->
+                DaySubPhase.HUNTER_SHOOT.name to "HUNTER_SHOOT (hunter=$killedHunter killed at night)"
+            sheriffKilled ->
+                DaySubPhase.BADGE_HANDOVER.name to "BADGE_HANDOVER (sheriff=${context.game.sheriffUserId} killed at night)"
+            else ->
+                DaySubPhase.RESULT_REVEALED.name to "RESULT_REVEALED (no special-role night kill)"
+        }
+        context.game.subPhase = newSubPhase
         gameRepository.save(context.game)
-        
-        log.info("[revealNightResult] Successfully revealed night result")
+
+        log.info("[revealNightResult] Applied kills=$pendingKills; routing to $transitionLog")
+        if (pendingKills.isNotEmpty()) {
+            stompPublisher.broadcastGameAfterCommit(
+                context.gameId,
+                DomainEvent.NightResult(context.gameId, pendingKills)
+            )
+        }
         stompPublisher.broadcastGameAfterCommit(
             context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, newSubPhase)
         )
+
         return GameActionResult.Success()
     }
 
@@ -126,40 +175,23 @@ class GamePhasePipeline(
 
         stompPublisher.broadcastGameAfterCommit(context.gameId, DomainEvent.RoleConfirmed(context.gameId, request.actorUserId))
 
-        // Advance once everyone has confirmed
-        val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
-        if (allPlayers.all { it.confirmedRole }) {
-            if (context.room.hasSheriff) {
-                context.game.phase = GamePhase.SHERIFF_ELECTION
-                gameRepository.save(context.game)
-                sheriffElectionRepository.save(SheriffElection(gameId = context.gameId))
-                stompPublisher.broadcastGameAfterCommit(
-                    context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
-                )
-            }
-            // When hasSheriff=false, stay in ROLE_REVEAL — host will explicitly call START_NIGHT
-        }
+        // After everyone has confirmed, the host always drives the next step
+        // by calling START_NIGHT. Sheriff election (when enabled) is now run
+        // on Day 1 morning after the N1 result is revealed — see
+        // [revealNightResult] for the auto-trigger.
         return GameActionResult.Success()
     }
 
-    /** Host: start night directly after role reveal when sheriff election is disabled. */
+    /** Host: start night after all roles have been confirmed. */
     @Transactional
     fun startNight(request: GameActionRequest, context: GameContext): GameActionResult {
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only the host can start the night")
-        val fromRoleReveal = context.game.phase == GamePhase.ROLE_REVEAL
-        val fromSheriffResult = context.game.phase == GamePhase.SHERIFF_ELECTION &&
-            context.election?.subPhase == ElectionSubPhase.RESULT
-        if (!fromRoleReveal && !fromSheriffResult)
+        if (context.game.phase != GamePhase.ROLE_REVEAL)
             return GameActionResult.Rejected("Cannot start night from current phase")
-        if (fromRoleReveal) {
-            if (context.room.hasSheriff)
-                return GameActionResult.Rejected("Sheriff election is enabled for this game")
-            val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
-            if (!allPlayers.all { it.confirmedRole })
-                return GameActionResult.Rejected("Not all players have confirmed their role")
-        }
+        val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
+        if (!allPlayers.all { it.confirmedRole })
+            return GameActionResult.Rejected("Not all players have confirmed their role")
         // Cancel any scheduled auto-advance jobs
         sheriffService.cancelScheduledJob(context.gameId)
         nightOrchestrator.initNight(context.gameId, context.game.dayNumber, withWaiting = true)

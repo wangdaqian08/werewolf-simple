@@ -228,7 +228,11 @@ export interface SheriffElectionState {
 
 // ── Day Phase ─────────────────────────────────────────────────────────────────
 
-export type DaySubPhase = 'RESULT_HIDDEN' | 'RESULT_REVEALED'
+// Phase B: BADGE_HANDOVER and HUNTER_SHOOT also live in DAY_DISCUSSION when
+// a sheriff/hunter is killed at night (see GamePhasePipeline.revealNightResult
+// on the backend). They share names with VotingSubPhase but are scoped to
+// the DAY_DISCUSSION parent.
+export type DaySubPhase = 'RESULT_HIDDEN' | 'RESULT_REVEALED' | 'BADGE_HANDOVER' | 'HUNTER_SHOOT'
 
 export interface KilledPlayer {
   killedPlayerId: string

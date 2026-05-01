@@ -4,14 +4,13 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
-import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.config.GameTimingProperties
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -27,8 +26,8 @@ class SheriffService(
     private val voteRepository: VoteRepository,
     private val userRepository: UserRepository,
     private val stompPublisher: StompPublisher,
-    private val nightOrchestrator: NightOrchestrator,
     private val coroutineScope: CoroutineScope,
+    private val timingProperties: GameTimingProperties,
 ) {
     val log = LoggerFactory.getLogger(SheriffService::class.java)
     private val scheduledJobs = mutableMapOf<Int, Job>()
@@ -191,7 +190,9 @@ class SheriffService(
             .filter { it.status == CandidateStatus.RUNNING }
 
         if (candidates.isEmpty()) {
-            nightOrchestrator.initNight(context.gameId, context.game.dayNumber, withWaiting = true)
+            // No one ran — sheriff election is over before it starts.
+            // Variant B: return to day discussion (we're already on Day 1).
+            advanceToDayDiscussion(context.gameId)
             return GameActionResult.Success()
         }
 
@@ -275,7 +276,7 @@ class SheriffService(
                 sheriffElectionRepository.save(election)
                 broadcastAfterCommit(context.gameId,
                     DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
-                scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
+                scheduleAutoAdvanceFromSheriffResult(context.gameId)
             }
             return GameActionResult.Success()
         }
@@ -288,8 +289,8 @@ class SheriffService(
             broadcastAfterCommit(context.gameId, DomainEvent.SheriffElected(context.gameId, winnerUserId))
             broadcastAfterCommit(context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
-            // Schedule auto-advance to night in 30 seconds
-            scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
+            // Schedule auto-advance to day discussion (60s)
+            scheduleAutoAdvanceFromSheriffResult(context.gameId)
         } else {
             election.subPhase = ElectionSubPhase.TIED
             sheriffElectionRepository.save(election)
@@ -320,8 +321,8 @@ class SheriffService(
         broadcastAfterCommit(context.gameId, DomainEvent.SheriffElected(context.gameId, targetUserId))
         broadcastAfterCommit(context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
-        // Schedule auto-advance to night in 30 seconds
-        scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
+        // Schedule auto-advance to day discussion (60s)
+        scheduleAutoAdvanceFromSheriffResult(context.gameId)
         return GameActionResult.Success()
     }
 
@@ -357,7 +358,7 @@ class SheriffService(
             sheriffElectionRepository.save(election)
             broadcastAfterCommit(context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
-            scheduleAutoAdvanceToNight(context.gameId, context.game.dayNumber)
+            scheduleAutoAdvanceFromSheriffResult(context.gameId)
             return GameActionResult.Success()
         }
 
@@ -499,15 +500,46 @@ class SheriffService(
         )
     }
 
-    private fun scheduleAutoAdvanceToNight(gameId: Int, dayNumber: Int): Job {
-        log.info("[SheriffService] Scheduling auto-advance to night for game $gameId in 60 seconds")
+    /**
+     * Variant B: after the sheriff RESULT is shown, auto-advance back to
+     * DAY_DISCUSSION/RESULT_REVEALED. The host then drives the regular day
+     * cadence (dayAdvance → DAY_VOTING). The game stays on the same Day 1
+     * — we are NOT starting a new night.
+     */
+    private fun scheduleAutoAdvanceFromSheriffResult(gameId: Int): Job {
+        val delayMs = timingProperties.sheriffResultAutoAdvanceMs ?: 60_000L
+        log.info("[SheriffService] Scheduling auto-advance to day discussion for game $gameId in ${delayMs}ms")
         return coroutineScope.launch {
-            delay(60_000) // 60 seconds for manual interaction
-            log.info("[SheriffService] Auto-advance to night triggered for game $gameId")
-            nightOrchestrator.initNight(gameId, dayNumber, withWaiting = true)
+            delay(delayMs)
+            log.info("[SheriffService] Auto-advance to day discussion triggered for game $gameId")
+            advanceToDayDiscussion(gameId)
         }.also { job ->
             scheduledJobs[gameId] = job
         }
+    }
+
+    /**
+     * Transition SHERIFF_ELECTION → DAY_DISCUSSION/RESULT_HIDDEN. Idempotent:
+     * if the phase has already moved on (e.g. a fast host clicked a manual
+     * advance before the timer fired) this is a no-op.
+     *
+     * Note: lands on RESULT_HIDDEN, not RESULT_REVEALED. The host still needs
+     * to click REVEAL_NIGHT_RESULT to flip the deaths into RESULT_REVEALED
+     * (and to actually apply the deferred N1 kills). This preserves the
+     * traditional 狼人杀 cadence: sheriff election happens BEFORE death
+     * announcement, so N1 victims could 上警 and use 挡刀 / 撕牌 tactics.
+     */
+    @Transactional
+    fun advanceToDayDiscussion(gameId: Int) {
+        val game = gameRepository.findById(gameId).orElse(null) ?: return
+        if (game.phase != GamePhase.SHERIFF_ELECTION) return
+        game.phase = GamePhase.DAY_DISCUSSION
+        game.subPhase = DaySubPhase.RESULT_HIDDEN.name
+        gameRepository.save(game)
+        broadcastAfterCommit(
+            gameId,
+            DomainEvent.PhaseChanged(gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name),
+        )
     }
 
     fun cancelScheduledJob(gameId: Int) {

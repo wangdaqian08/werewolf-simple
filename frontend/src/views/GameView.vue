@@ -47,7 +47,6 @@
         <button
           v-if="
             isHost &&
-            gameStore.state.hasSheriff === false &&
             gameStore.state.roleReveal?.confirmedCount === gameStore.state.roleReveal?.totalCount
           "
           class="btn btn-primary"
@@ -82,7 +81,6 @@
         @advance-speech="handleSheriffAdvanceSpeech"
         @reveal-result="handleSheriffRevealResult"
         @appoint="handleSheriffAppoint"
-        @start-night="handleSheriffStartNight"
       />
     </template>
 
@@ -106,10 +104,24 @@
     </template>
 
     <!-- Voting phase -->
-    <template v-else-if="gameStore.state?.phase === 'DAY_VOTING' && gameStore.state?.votingPhase">
+    <template
+      v-else-if="
+        (gameStore.state?.phase === 'DAY_VOTING' && gameStore.state?.votingPhase) ||
+        (gameStore.state?.phase === 'DAY_DISCUSSION' &&
+          gameStore.state?.votingPhase &&
+          (gameStore.state?.dayPhase?.subPhase === 'HUNTER_SHOOT' ||
+            gameStore.state?.dayPhase?.subPhase === 'BADGE_HANDOVER'))
+      "
+    >
+      <!--
+        Phase B: VotingPhase also renders under DAY_DISCUSSION when the
+        sub-phase is HUNTER_SHOOT or BADGE_HANDOVER (sheriff/hunter killed
+        at night). The backend populates `votingPhase` with the same shape
+        in this case so the existing UI works without changes.
+      -->
       <VotingPhase
-        :key="`voting-${gameStore.state.votingPhase.subPhase}-${gameStore.state.dayNumber}`"
-        :voting-phase="gameStore.state.votingPhase"
+        :key="`voting-${gameStore.state.votingPhase!.subPhase}-${gameStore.state.dayNumber}`"
+        :voting-phase="gameStore.state.votingPhase!"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
@@ -670,10 +682,6 @@ async function handleSheriffRevealResult() {
 async function handleSheriffAppoint(userId: string) {
   await action({ actionType: 'SHERIFF_APPOINT', targetId: userId })
 }
-async function handleSheriffStartNight() {
-  await action({ actionType: 'START_NIGHT' })
-}
-
 async function handleRevealResult() {
   await action({ actionType: 'REVEAL_NIGHT_RESULT' })
 }

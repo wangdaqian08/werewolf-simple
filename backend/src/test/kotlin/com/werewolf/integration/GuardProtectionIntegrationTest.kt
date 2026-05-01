@@ -57,6 +57,7 @@ class GuardProtectionIntegrationTest {
             gameRepository = gameRepository,
             gamePlayerRepository = gamePlayerRepository,
             nightPhaseRepository = nightPhaseRepository,
+            sheriffElectionRepository = mock(),
             eliminationHistoryRepository = eliminationHistoryRepository,
             winConditionChecker = winConditionChecker,
             stompPublisher = stompPublisher,
@@ -84,7 +85,10 @@ class GuardProtectionIntegrationTest {
         totalPlayers = 6,
         hasSeer = false,
         hasWitch = false,
-        hasGuard = true
+        hasGuard = true,
+        // Variant B: keep this test on the DAY_DISCUSSION end-of-night branch
+        // (sheriff election would intercept on Day 1 with hasSheriff=true).
+        hasSheriff = false,
     )
 
     private fun player(userId: String, seat: Int, role: PlayerRole = PlayerRole.VILLAGER, alive: Boolean = true) =
@@ -165,26 +169,22 @@ class GuardProtectionIntegrationTest {
         assertThat(guardResult).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(np.guardTargetUserId).isEqualTo(victimId)
 
-        // Step 3: Resolve night kills
-        whenever(contextLoader.load(gameId))
-            .thenReturn(ctx(wolf, guard, victim))
+        // Step 3: Resolve night kills (Variant B: kills deferred; no
+        // contextLoader.load call needed by the new resolveNightKills.)
         whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
         mockAudioSequenceForDayTransition()
 
         nightOrchestrator.resolveNightKills(guardCtx, np)
 
-        // Verify victim survives
+        // Variant B: kills are deferred until host REVEAL_NIGHT_RESULT.
+        // Guard-saved victim has no pending kill regardless.
         assertThat(victim.alive).isTrue()
-
-        // Verify victim is not saved (no kill)
         verify(gamePlayerRepository, never()).save(victim)
+        assertThat(nightOrchestrator.computePendingKills(np)).isEmpty()
 
-        // Verify NightResult is broadcast with no kills
-        verify(stompPublisher).broadcastGame(eq(gameId), argThat { e ->
-            e is DomainEvent.NightResult && e.kills.isEmpty()
-        })
-
-        // Verify game transitions to DAY phase
+        // NightResult is no longer broadcast at end-of-night (it would leak
+        // pending kill list before host controls the reveal moment). Only
+        // PhaseChanged + AudioSequence fire here.
         verify(gameRepository).save(argThat<Game> { g -> g.phase == GamePhase.DAY_DISCUSSION })
     }
 
@@ -217,24 +217,18 @@ class GuardProtectionIntegrationTest {
         )
         guardHandler.handle(guardRequest, wolfCtx)
 
-        // Resolve night kills
-        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, victimId))
-            .thenReturn(Optional.of(victim))
-        whenever(contextLoader.load(gameId))
-            .thenReturn(ctx(wolf, guard, victim, otherPlayer))
+        // Resolve night kills (Variant B: kills deferred; no save/lookup yet.)
         whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
         mockAudioSequenceForDayTransition()
 
         nightOrchestrator.resolveNightKills(wolfCtx, np)
 
-        // Verify victim dies (not protected)
-        assertThat(victim.alive).isFalse()
-        verify(gamePlayerRepository).save(victim)
-
-        // Verify NightResult includes victim
-        verify(stompPublisher).broadcastGame(eq(gameId), argThat { e ->
-            e is DomainEvent.NightResult && e.kills.contains(victimId)
-        })
+        // Variant B: kill is computed but deferred. Pending kill list contains
+        // victim; alive flip happens later via applyNightKills (called from
+        // GamePhasePipeline.revealNightResult on host's reveal click).
+        assertThat(nightOrchestrator.computePendingKills(np)).contains(victimId)
+        assertThat(victim.alive).isTrue()
+        verify(gamePlayerRepository, never()).save(victim)
     }
 
     @Test

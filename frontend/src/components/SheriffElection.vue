@@ -471,20 +471,13 @@
           </div>
         </div>
       </div>
-      <template v-if="isHost">
-        <div class="spacer" />
-        <div class="action-footer">
-          <button
-            class="btn btn-primary"
-            :class="{ 'is-loading': actionPending }"
-            :disabled="actionPending"
-            data-testid="start-night"
-            @click="emit('startNight')"
-          >
-            开始夜晚 / Start Night
-          </button>
-        </div>
-      </template>
+      <!--
+        Variant B: no manual "Start Night" button on the sheriff RESULT
+        screen. After the result is shown, the backend auto-advances to
+        DAY_DISCUSSION/RESULT_REVEALED via
+        SheriffService.scheduleAutoAdvanceFromSheriffResult — the host's
+        next manual action is "start vote" on the day-discussion screen.
+      -->
     </template>
   </div>
 </template>
@@ -511,7 +504,6 @@ const emit = defineEmits<{
   advanceSpeech: []
   revealResult: []
   appoint: [userId: string]
-  startNight: []
 }>()
 
 const iAmCandidate = computed(() =>
