@@ -134,6 +134,33 @@ class RoleHandlerTest {
         }
 
         @Test
+        fun `wolf select - rejected after teammate's WOLF_KILL is confirmed (game-15 regression)`() {
+            val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
+            val wolf1 = player("wolf1", 1, PlayerRole.WEREWOLF)
+            val wolf2 = player("wolf2", 2, PlayerRole.WEREWOLF)
+            val firstTarget = player("u3", 3, PlayerRole.VILLAGER)
+            val secondTarget = player("u4", 4, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(wolf1, wolf2, firstTarget, secondTarget), nightPhase = np)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            // wolf1 confirms kill on u3
+            val killResult = handler.handle(req("wolf1", ActionType.WOLF_KILL, "u3"), ctx)
+            assertThat(killResult).isInstanceOf(GameActionResult.Success::class.java)
+
+            // wolf2 attempts to SELECT a different target — must be rejected,
+            // wolfTargetUserId must NOT be overwritten.
+            val selectResult = handler.handle(req("wolf2", ActionType.WOLF_SELECT, "u4"), ctx)
+            assertThat(selectResult).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((selectResult as GameActionResult.Rejected).reason).contains("already confirmed")
+
+            // Only one save (from the WOLF_KILL); the rejected SELECT did not
+            // touch the repository.
+            val captor = argumentCaptor<NightPhase>()
+            verify(nightPhaseRepository).save(captor.capture())
+            assertThat(captor.firstValue.wolfTargetUserId).isEqualTo("u3")
+        }
+
+        @Test
         fun `wolf kill - lock resets for new night`() {
             val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
             val wolf1 = player("wolf1", 1, PlayerRole.WEREWOLF)
