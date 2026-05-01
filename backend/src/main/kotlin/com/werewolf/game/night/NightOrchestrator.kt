@@ -14,6 +14,7 @@ import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
+import com.werewolf.repository.SheriffElectionRepository
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
 import kotlinx.coroutines.*
@@ -33,6 +34,7 @@ class NightOrchestrator(
     private val gameRepository: GameRepository,
     private val gamePlayerRepository: GamePlayerRepository,
     private val nightPhaseRepository: NightPhaseRepository,
+    private val sheriffElectionRepository: SheriffElectionRepository,
     private val eliminationHistoryRepository: EliminationHistoryRepository,
     private val winConditionChecker: WinConditionChecker,
     private val stompPublisher: StompPublisher,
@@ -243,7 +245,20 @@ class NightOrchestrator(
     }
 
     /**
-     * Resolve all night kills and transition to DAY_DISCUSSION (or GAME_OVER).
+     * End-of-night handler. Computes pending kills (wolf target unless saved
+     * by witch antidote or guard, plus witch poison) but does NOT apply them
+     * to `player.alive` yet — kills are deferred until the host clicks
+     * REVEAL_NIGHT_RESULT (via [GamePhasePipeline.revealNightResult] →
+     * [applyNightKills]).
+     *
+     * Why deferred: traditional 狼人杀 with sheriff requires the Day 1 sheriff
+     * election to run BEFORE the death announcement so N1 victims can still
+     * 上警 / use 挡刀 tactics. Decoupling the kill computation from the kill
+     * application lets the sheriff election see N1 victims as alive.
+     *
+     * Win check uses *projected* alive (current alive minus pending kills) so
+     * a wolf-parity-on-N1 short-circuit ends the game without spinning up a
+     * sheriff election that would never matter (Q1=a).
      */
     @Transactional
     fun resolveNightKills(context: GameContext, nightPhase: NightPhase) {
@@ -252,43 +267,27 @@ class NightOrchestrator(
             log.warn("[resolveNightKills] Night phase already COMPLETE for game $gameId, skipping double-resolution")
             return
         }
-        val kills = mutableListOf<String>()
 
-        val wolfTarget = nightPhase.wolfTargetUserId
-        if (wolfTarget != null) {
-            val antidoteSaved = nightPhase.witchAntidoteUsed
-            val guardSaved = nightPhase.guardTargetUserId == wolfTarget
-            if (!antidoteSaved && !guardSaved) {
-                kills.add(wolfTarget)
-            }
-        }
-
-        val poisonTarget = nightPhase.witchPoisonTargetUserId
-        if (poisonTarget != null) {
-            kills.add(poisonTarget)
-        }
-
-        for (killId in kills.distinct()) {
-            gamePlayerRepository.findByGameIdAndUserId(gameId, killId).ifPresent { player ->
-                player.alive = false
-                gamePlayerRepository.save(player)
-            }
-        }
-
-        actionLogService.recordNightDeaths(gameId, nightPhase.dayNumber, kills.distinct())
+        val pendingKills = computePendingKills(nightPhase)
 
         nightPhase.subPhase = NightSubPhase.COMPLETE
         nightPhaseRepository.save(nightPhase)
 
-        val updatedContext = contextLoader.load(gameId)
+        // Win check on PROJECTED alive (current alive minus pending kills).
+        // Important: we have NOT flipped player.alive yet, so we filter manually.
+        val projectedAlive = context.alivePlayers.filterNot { it.userId in pendingKills }
         val winner = winConditionChecker.check(
-            alivePlayers = updatedContext.alivePlayers,
-            mode = updatedContext.room.winCondition,
+            alivePlayers = projectedAlive,
+            mode = context.room.winCondition,
             trigger = WinCheckTrigger.POST_NIGHT,
-            counterplay = buildCounterplay(updatedContext),
+            counterplay = buildCounterplay(context),
         )
 
         if (winner != null) {
+            // Game over: apply kills now (deaths are real, no further sheriff
+            // election or reveal needed) and broadcast.
+            applyNightKills(gameId, pendingKills)
+            actionLogService.recordNightDeaths(gameId, nightPhase.dayNumber, pendingKills)
             context.game.apply {
                 this.winner = winner
                 phase = GamePhase.GAME_OVER
@@ -300,7 +299,7 @@ class NightOrchestrator(
                 TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
                     override fun afterCommit() {
                         try {
-                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, pendingKills))
                         } catch (e: Exception) {
                             log.error("[resolveNightKills] Failed to broadcast NightResult for game $gameId", e)
                         }
@@ -317,11 +316,50 @@ class NightOrchestrator(
                     }
                 })
             } else {
-                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
+                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, pendingKills))
                 stompPublisher.broadcastGame(gameId, DomainEvent.GameOver(gameId, winner))
             }
+        } else if (
+            context.game.dayNumber == 1 &&
+            context.room.hasSheriff &&
+            context.game.sheriffUserId == null &&
+            sheriffElectionRepository.findByGameId(gameId).isEmpty
+        ) {
+            // Day 1 + sheriff enabled + no sheriff yet: jump straight into
+            // SHERIFF_ELECTION. Kills remain deferred — N1 victims are still
+            // alive in DB and can sign up / speak / vote during the election.
+            context.game.phase = GamePhase.SHERIFF_ELECTION
+            context.game.subPhase = null
+            gameRepository.save(context.game)
+            sheriffElectionRepository.save(SheriffElection(gameId = gameId))
+
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                    override fun afterCommit() {
+                        try {
+                            stompPublisher.broadcastGame(
+                                gameId,
+                                DomainEvent.PhaseChanged(gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name),
+                            )
+                        } catch (e: Exception) {
+                            log.error("[resolveNightKills] Failed to broadcast SHERIFF_ELECTION/SIGNUP transition for game $gameId", e)
+                        }
+                    }
+                })
+            } else {
+                stompPublisher.broadcastGame(
+                    gameId,
+                    DomainEvent.PhaseChanged(gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name),
+                )
+            }
         } else {
-            val game = updatedContext.game
+            // No game-over, no sheriff election to open: transition to
+            // DAY_DISCUSSION/RESULT_HIDDEN. Kills remain deferred. The
+            // NightResult event + onDayEnter hooks are broadcast at host
+            // REVEAL_NIGHT_RESULT — broadcasting them now would leak the
+            // pending kill list to all browsers before the host has a chance
+            // to control the reveal moment.
+            val game = context.game
             game.phase = GamePhase.DAY_DISCUSSION
             game.subPhase = DaySubPhase.RESULT_HIDDEN.name
             gameRepository.save(game)
@@ -332,17 +370,12 @@ class NightOrchestrator(
                 newPhase = GamePhase.DAY_DISCUSSION,
                 oldSubPhase = null,
                 newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-                room = updatedContext.room,
+                room = context.room,
             )
 
             if (TransactionSynchronizationManager.isActualTransactionActive()) {
                 TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
                     override fun afterCommit() {
-                        try {
-                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
-                        } catch (e: Exception) {
-                            log.error("[resolveNightKills] Failed to broadcast NightResult for game $gameId", e)
-                        }
                         try {
                             stompPublisher.broadcastGame(
                                 gameId,
@@ -356,19 +389,7 @@ class NightOrchestrator(
                         } catch (e: Exception) {
                             log.error("[resolveNightKills] Failed to broadcast AudioSequence for game $gameId (non-critical)", e)
                         }
-                        try {
-                            val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
-                            handlers.filter { it.role in activeRoles }.forEach { handler ->
-                                try {
-                                    val events = handler.onDayEnter(updatedContext)
-                                    events.forEach { stompPublisher.broadcastGame(gameId, it) }
-                                } catch (e: Exception) {
-                                    log.error("[resolveNightKills] Failed to execute onDayEnter for ${handler.role}, game $gameId", e)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            log.error("[resolveNightKills] Failed to execute onDayEnter hooks for game $gameId (non-critical)", e)
-                        }
+                        fireDayEnterHooks(gameId, context)
                     }
                     override fun afterCompletion(status: Int) {
                         if (status != STATUS_COMMITTED) {
@@ -377,17 +398,79 @@ class NightOrchestrator(
                     }
                 })
             } else {
-                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, kills.distinct()))
                 stompPublisher.broadcastGame(
                     gameId,
                     DomainEvent.PhaseChanged(gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name)
                 )
                 stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+                fireDayEnterHooks(gameId, context)
+            }
+        }
+    }
 
-                val activeRoles = updatedContext.alivePlayers.map { it.role }.toSet()
-                handlers.filter { it.role in activeRoles }.forEach { handler ->
-                    val events = handler.onDayEnter(updatedContext)
+    /**
+     * Broadcast onDayEnter events for handlers whose role is currently alive.
+     * With Variant B's deferred kills, "alive" here means alive at end-of-night
+     * BEFORE the host reveal applies pending kills — so a soon-to-be-dead
+     * player's role handler still fires onDayEnter. Default handler impl is
+     * empty, so this is mostly a no-op; custom impls that want to gate on
+     * accurate alive state should re-check via context.alivePlayerById.
+     */
+    private fun fireDayEnterHooks(gameId: Int, context: GameContext) {
+        try {
+            val activeRoles = context.alivePlayers.map { it.role }.toSet()
+            handlers.filter { it.role in activeRoles }.forEach { handler ->
+                try {
+                    val events = handler.onDayEnter(context)
                     events.forEach { stompPublisher.broadcastGame(gameId, it) }
+                } catch (e: Exception) {
+                    log.error("[resolveNightKills] Failed to execute onDayEnter for ${handler.role}, game $gameId", e)
+                }
+            }
+        } catch (e: Exception) {
+            log.error("[resolveNightKills] Failed to execute onDayEnter hooks for game $gameId (non-critical)", e)
+        }
+    }
+
+    /**
+     * Compute the set of pending kills from a NightPhase row. Pure function —
+     * does not touch DB. Public so [GamePhasePipeline.revealNightResult] can
+     * call it to figure out which players to flip alive=false on the reveal
+     * click.
+     *
+     * Wolf target dies unless witch antidote was used or guard protected the
+     * same target. Witch poison target dies unconditionally.
+     */
+    fun computePendingKills(nightPhase: NightPhase): List<String> {
+        val kills = mutableListOf<String>()
+        val wolfTarget = nightPhase.wolfTargetUserId
+        if (wolfTarget != null) {
+            val antidoteSaved = nightPhase.witchAntidoteUsed
+            val guardSaved = nightPhase.guardTargetUserId == wolfTarget
+            if (!antidoteSaved && !guardSaved) {
+                kills.add(wolfTarget)
+            }
+        }
+        val poisonTarget = nightPhase.witchPoisonTargetUserId
+        if (poisonTarget != null) {
+            kills.add(poisonTarget)
+        }
+        return kills.distinct()
+    }
+
+    /**
+     * Apply pending night kills to game_players (flip alive=false). Idempotent
+     * — already-dead targets are skipped. Called at host REVEAL_NIGHT_RESULT
+     * (and during [resolveNightKills]'s game-over branch when the win check
+     * fires immediately).
+     */
+    @Transactional
+    fun applyNightKills(gameId: Int, killIds: List<String>) {
+        for (killId in killIds.distinct()) {
+            gamePlayerRepository.findByGameIdAndUserId(gameId, killId).ifPresent { player ->
+                if (player.alive) {
+                    player.alive = false
+                    gamePlayerRepository.save(player)
                 }
             }
         }

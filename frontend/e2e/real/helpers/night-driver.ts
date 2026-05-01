@@ -103,55 +103,48 @@ export async function driveMinimalNight1ViaDom(
   await guardSlot.click()
   await guardPage.getByTestId('guard-confirm-protect').click()
 
-  // ── Wait for Day 1 morning state ─────────────────────────────────────
-  // Backend transitions NIGHT → DAY_DISCUSSION/RESULT_HIDDEN once the
-  // night phase completes. Caller will then click `day-reveal-result`.
-  await waitForCondition(
-    async () => {
-      const state = await fetchPhaseAndSubPhase(hostPage, gameId)
-      return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
-    },
-    'game to reach DAY_DISCUSSION/RESULT_HIDDEN after Night 1 completes',
-    30_000,
-  )
+  // ── Wait for end-of-night transition ─────────────────────────────────
+  // Variant B (correct ordering): the backend automatically opens
+  // SHERIFF_ELECTION at end-of-night when Day 1 + hasSheriff + no sheriff
+  // yet. Otherwise it transitions to DAY_DISCUSSION/RESULT_HIDDEN. Either
+  // way, we just wait for whichever phase the game settles into.
+  await waitForSheriffOrDayDiscussion(ctx)
 }
 
 /**
- * Click `day-reveal-result` on the host browser and (when hasSheriff &&
- * dayNumber==1) wait for the auto-trigger into SHERIFF_ELECTION/SIGNUP.
- *
- * For non-sheriff games or Day 2+, callers should use the regular reveal
- * flow inline; this helper is specifically for the Variant B Day 1 trigger.
+ * Wait for the end-of-night transition to land in either:
+ *  - SHERIFF_ELECTION/SIGNUP   (Day 1 + hasSheriff: kills are still deferred,
+ *                               N1 victims are alive in DB and can 上警)
+ *  - DAY_DISCUSSION/RESULT_HIDDEN  (anything else: kills deferred until host
+ *                                   reveals)
  */
-export async function revealNightResultAndOpenSheriffElection(ctx: GameContext): Promise<void> {
-  const hostPage = ctx.hostPage
-  const gameId = ctx.gameId
-
-  const revealBtn = hostPage.getByTestId('day-reveal-result')
-  await expect(revealBtn).toBeVisible({ timeout: 15_000 })
-  await expect(revealBtn).toBeEnabled({ timeout: 10_000 })
-  await revealBtn.click()
-
-  // Backend transitions DAY_DISCUSSION/RESULT_REVEALED → SHERIFF_ELECTION
-  // immediately on Day 1 with hasSheriff. Wait for the SIGNUP sub-phase to
-  // appear in the SheriffElection state.
+export async function waitForSheriffOrDayDiscussion(
+  ctx: GameContext,
+  timeoutMs = 30_000,
+): Promise<void> {
   await waitForCondition(
     async () => {
-      const state = await fetchGameState(hostPage, gameId)
-      return (
-        state?.phase === 'SHERIFF_ELECTION' && state?.sheriffElection?.subPhase === 'SIGNUP'
-      )
+      const state = await fetchGameState(ctx.hostPage, ctx.gameId)
+      if (state?.phase === 'SHERIFF_ELECTION' && state?.sheriffElection?.subPhase === 'SIGNUP')
+        return true
+      if (state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN') return true
+      return false
     },
-    'game to reach SHERIFF_ELECTION/SIGNUP after revealNightResult on Day 1',
-    15_000,
+    'end-of-night transition to SHERIFF_ELECTION/SIGNUP (Day 1 + hasSheriff) or DAY_DISCUSSION/RESULT_HIDDEN',
+    timeoutMs,
   )
 }
 
 /**
- * Wait for the configurable post-sheriff auto-advance to land the game in
- * DAY_DISCUSSION/RESULT_REVEALED. Backed by
- * `werewolf.timing.sheriff-result-auto-advance-ms` — application-e2e.yml
- * sets it to 2_000ms; default production value is 60_000ms.
+ * Wait until the SHERIFF_ELECTION sub-game wraps and the backend auto-
+ * advances to DAY_DISCUSSION/RESULT_HIDDEN.
+ *
+ * Variant B: kills are still deferred at this point — the host must click
+ * REVEAL_NIGHT_RESULT next to apply them and flip RESULT_HIDDEN →
+ * RESULT_REVEALED. Use [waitForResultRevealed] after the host reveal click.
+ *
+ * Backed by `werewolf.timing.sheriff-result-auto-advance-ms` —
+ * application-e2e.yml sets it to 2_000ms; default production value is 60_000ms.
  */
 export async function waitForDayDiscussionAfterSheriff(
   ctx: GameContext,
@@ -160,9 +153,9 @@ export async function waitForDayDiscussionAfterSheriff(
   await waitForCondition(
     async () => {
       const state = await fetchGameState(ctx.hostPage, ctx.gameId)
-      return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_REVEALED'
+      return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
     },
-    'auto-advance from SHERIFF_ELECTION/RESULT to DAY_DISCUSSION/RESULT_REVEALED',
+    'auto-advance from SHERIFF_ELECTION/RESULT to DAY_DISCUSSION/RESULT_HIDDEN',
     timeoutMs,
   )
 }

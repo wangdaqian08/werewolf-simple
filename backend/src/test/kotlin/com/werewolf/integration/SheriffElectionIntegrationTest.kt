@@ -277,7 +277,10 @@ class SheriffElectionIntegrationTest {
 
         val savedGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(savedGame.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
-        assertThat(savedGame.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        // Variant B: post-sheriff auto-advance lands on RESULT_HIDDEN — host
+        // still needs to click REVEAL_NIGHT_RESULT to apply pending kills and
+        // flip to RESULT_REVEALED.
+        assertThat(savedGame.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
         assertThat(savedGame.dayNumber).isEqualTo(1)
         // No sheriff was elected
         assertThat(savedGame.sheriffUserId).isNull()

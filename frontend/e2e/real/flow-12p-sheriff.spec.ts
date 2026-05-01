@@ -18,7 +18,6 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, actName, type RoleName, sheriff} from './helpers/shell-runner'
 import {
   driveMinimalNight1ViaDom,
-  revealNightResultAndOpenSheriffElection,
   waitForDayDiscussionAfterSheriff,
 } from './helpers/night-driver'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
@@ -811,20 +810,23 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
     const wolfTargetSeatN1 = villagerSeats[0]
     const guardTargetSeatN1 = villagerSeats[1]
 
+    // Variant B (correct): driveMinimalNight1ViaDom drives N1 actions and
+    // waits for the auto-transition into SHERIFF_ELECTION/SIGNUP (Day 1 +
+    // hasSheriff). Kills are still deferred at this point — N1 victims
+    // are alive in DB and could 上警 if the test wanted them to.
     await driveMinimalNight1ViaDom(ctx, {
       wolfTargetSeat: wolfTargetSeatN1,
       guardTargetSeat: guardTargetSeatN1,
     })
-    await captureSnapshot(ctx.pages, testInfo, 'classic-02-night-1-done')
-
-    await revealNightResultAndOpenSheriffElection(ctx)
-    await captureSnapshot(ctx.pages, testInfo, 'classic-03-sheriff-election-opened')
+    await captureSnapshot(ctx.pages, testInfo, 'classic-02-night-1-done-sheriff-opened')
 
     await runSheriffElection(ctx, candidates)
-    await captureSnapshot(ctx.pages, testInfo, 'classic-04-sheriff-elected')
+    await captureSnapshot(ctx.pages, testInfo, 'classic-03-sheriff-elected')
 
+    // After sheriff RESULT, backend auto-advances to DAY_DISCUSSION/RESULT_HIDDEN
+    // (kills still deferred; host clicks reveal in completeDay below).
     await waitForDayDiscussionAfterSheriff(ctx)
-    await captureSnapshot(ctx.pages, testInfo, 'classic-05-day-discussion-after-sheriff')
+    await captureSnapshot(ctx.pages, testInfo, 'classic-04-day-result-hidden')
 
     // Wolves will be voted out every day. No village player dies at night if
     // we can avoid it — wolves hit a villager target we'll vote no-one for.
@@ -979,22 +981,26 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
       'HARD_MODE kit needs at least one wolf so guard can protect a non-target seat',
     ).toBeDefined()
 
+    // Variant B: drives N1 then waits for end-of-night auto-transition into
+    // SHERIFF_ELECTION/SIGNUP. Guard is the wolf-target but kills are
+    // deferred — guard is still alive in DB during sheriff election (and
+    // could 上警 if the test wanted them to).
     await driveMinimalNight1ViaDom(ctx, {
       wolfTargetSeat: guard.seat,
       seerCheckSeat: wolfBots[0]?.seat ?? guard.seat,
       guardTargetSeat: wolfSeatForGuardProtect!,
     })
-    await captureSnapshot(ctx.pages, testInfo, 'hard-02-night-1-done')
-
-    await revealNightResultAndOpenSheriffElection(ctx)
-    await captureSnapshot(ctx.pages, testInfo, 'hard-03-sheriff-election-opened')
+    await captureSnapshot(ctx.pages, testInfo, 'hard-02-night-1-done-sheriff-opened')
 
     // Sheriff election — only the seer campaigns. After speeches + votes
     // the seer holds the badge.
     await runSheriffElection(ctx, [seer.nick])
-    await captureSnapshot(ctx.pages, testInfo, 'hard-04-sheriff-elected-is-seer')
+    await captureSnapshot(ctx.pages, testInfo, 'hard-03-sheriff-elected-is-seer')
 
+    // After sheriff RESULT, backend auto-advances to DAY_DISCUSSION/RESULT_HIDDEN.
+    // Host clicks reveal in completeDay below to apply the deferred guard kill.
     await waitForDayDiscussionAfterSheriff(ctx)
+    await captureSnapshot(ctx.pages, testInfo, 'hard-04-day-result-hidden')
 
     // D1: village votes out the seer (sheriff). Backend transitions to
     // BADGE_HANDOVER — only the seer's browser page sees the pass-badge

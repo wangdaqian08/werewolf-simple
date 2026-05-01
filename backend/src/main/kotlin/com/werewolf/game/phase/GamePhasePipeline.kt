@@ -23,11 +23,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 class GamePhasePipeline(
     private val gameRepository: GameRepository,
     private val gamePlayerRepository: GamePlayerRepository,
+    private val nightPhaseRepository: com.werewolf.repository.NightPhaseRepository,
     private val sheriffElectionRepository: SheriffElectionRepository,
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
     private val sheriffService: SheriffService,
     private val nightOrchestrator: NightOrchestrator,
+    private val actionLogService: com.werewolf.service.ActionLogService,
 ) {
     val log: Logger = LoggerFactory.getLogger(GamePhasePipeline::class.java)
     // ── Phase transition actions ───────────────────────────────────────────────
@@ -49,37 +51,36 @@ class GamePhasePipeline(
             return GameActionResult.Rejected("Result already revealed")
         }
 
+        // Variant B / correct ordering: kills were *computed* at end of night
+        // but NOT applied — apply them now. This is the moment the deceased
+        // become officially dead in DB; sheriff election (already over by
+        // this point on Day 1, or never opened on Day 2+) saw them as alive.
+        val nightPhase = nightPhaseRepository
+            .findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
+            .orElse(null)
+        val pendingKills = if (nightPhase != null) {
+            nightOrchestrator.computePendingKills(nightPhase)
+        } else emptyList()
+        if (pendingKills.isNotEmpty()) {
+            nightOrchestrator.applyNightKills(context.gameId, pendingKills)
+            actionLogService.recordNightDeaths(context.gameId, context.game.dayNumber, pendingKills)
+        }
+
         context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
         gameRepository.save(context.game)
 
-        log.info("[revealNightResult] Successfully revealed night result")
+        log.info("[revealNightResult] Successfully revealed night result; applied kills=$pendingKills")
+        if (pendingKills.isNotEmpty()) {
+            stompPublisher.broadcastGameAfterCommit(
+                context.gameId,
+                DomainEvent.NightResult(context.gameId, pendingKills)
+            )
+        }
         stompPublisher.broadcastGameAfterCommit(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
         )
 
-        // Variant B sheriff election: on Day 1, after the N1 result is shown,
-        // automatically transition into SHERIFF_ELECTION/SIGNUP. Players have
-        // one night of context before the campaign begins.
-        // - Skipped if hasSheriff=false (CLASSIC-no-sheriff games go straight
-        //   to discussion → vote).
-        // - Skipped if a sheriff already exists (defensive — shouldn't happen
-        //   on Day 1, but keeps this idempotent).
-        // - Skipped on Day 2+ (sheriff election runs at most once per game).
-        if (context.room.hasSheriff
-            && context.game.dayNumber == 1
-            && context.game.sheriffUserId == null
-            && sheriffElectionRepository.findByGameId(context.gameId).isEmpty
-        ) {
-            context.game.phase = GamePhase.SHERIFF_ELECTION
-            context.game.subPhase = null
-            gameRepository.save(context.game)
-            sheriffElectionRepository.save(SheriffElection(gameId = context.gameId))
-            stompPublisher.broadcastGameAfterCommit(
-                context.gameId,
-                DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
-            )
-        }
         return GameActionResult.Success()
     }
 

@@ -226,7 +226,16 @@ class NightPhaseDeadRoleIntegrationTest {
         // Wait for night resolution (last role close eyes audio + resolveNightKills)
         Thread.sleep(5000)
 
-        // Verify seer and wolf2 are dead after night 1
+        // Variant B: kills are deferred until host reveals. Verify pending
+        // kills are computed correctly, then apply them manually so the rest
+        // of the test (which depends on actual deaths to drive N2's dead-
+        // role audio) works without driving REVEAL_NIGHT_RESULT.
+        val n1Phase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElseThrow()
+        val pendingN1 = nightOrchestrator.computePendingKills(n1Phase)
+        assertThat(pendingN1).contains(seerUserId, wolf2UserId)
+        nightOrchestrator.applyNightKills(gameId, pendingN1)
+
+        // Verify seer and wolf2 are dead after applying N1 kills
         val seerPlayer = gamePlayerRepository.findByGameIdAndUserId(gameId, seerUserId).orElseThrow()
         assertThat(seerPlayer.alive).isFalse()
         val wolf2Player = gamePlayerRepository.findByGameIdAndUserId(gameId, wolf2UserId).orElseThrow()
@@ -265,6 +274,11 @@ class NightPhaseDeadRoleIntegrationTest {
         val day2Game = gameRepository.findById(gameId).orElseThrow()
         assertThat(day2Game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
         assertThat(day2Game.dayNumber).isEqualTo(2)
+
+        // Variant B: apply N2 deferred kills so the post-N2 alive assertion
+        // matches reality (N2 kill is computed but not applied until reveal).
+        val n2Phase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2).orElseThrow()
+        nightOrchestrator.applyNightKills(gameId, nightOrchestrator.computePendingKills(n2Phase))
 
         // Verify villager is dead
         val villagerPlayer = gamePlayerRepository.findByGameIdAndUserId(gameId, night2Target.userId).orElseThrow()
@@ -331,6 +345,16 @@ class NightPhaseDeadRoleIntegrationTest {
         // After night 1: 1W + Witch + Guard + 1V alive (seer + wolf2 dead)
         val dayGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(dayGame.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+
+        // Variant B: kills are deferred until host reveals. Apply N1 kills
+        // manually so seer/wolf2 are actually dead before N2 starts (matches
+        // how the test simulates witch/guard deaths below).
+        gamePlayerRepository.findByGameIdAndUserId(gameId, seerUserId).ifPresent {
+            it.alive = false; gamePlayerRepository.save(it)
+        }
+        gamePlayerRepository.findByGameIdAndUserId(gameId, wolf2UserId).ifPresent {
+            it.alive = false; gamePlayerRepository.save(it)
+        }
 
         // ── Simulate prior rounds: mark witch and guard as dead ──
         // This lets us test the "all special roles dead" night scenario

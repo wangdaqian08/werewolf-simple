@@ -8,7 +8,9 @@ import com.werewolf.game.phase.GamePhasePipeline
 import com.werewolf.model.*
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
+import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.SheriffElectionRepository
+import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
@@ -28,11 +30,13 @@ class GamePhasePipelineDayTest {
 
     @Mock lateinit var gameRepository: GameRepository
     @Mock lateinit var gamePlayerRepository: GamePlayerRepository
+    @Mock lateinit var nightPhaseRepository: NightPhaseRepository
     @Mock lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var sheriffService: SheriffService
     @Mock lateinit var nightOrchestrator: NightOrchestrator
+    @Mock lateinit var actionLogService: ActionLogService
     @InjectMocks lateinit var pipeline: GamePhasePipeline
 
     private val gameId = 10

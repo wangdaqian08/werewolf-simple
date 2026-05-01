@@ -7,6 +7,7 @@ import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.phase.GamePhasePipeline
 import com.werewolf.model.*
 import com.werewolf.repository.*
+import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
@@ -20,21 +21,29 @@ import org.mockito.kotlin.*
 import java.util.*
 
 /**
- * Tests for the Variant B sheriff-election flow:
+ * Tests for the GamePhasePipeline contract under the corrected Variant B
+ * sheriff-election ordering:
+ *
  *  - ROLE_REVEAL → host calls START_NIGHT → NIGHT 1 (regardless of hasSheriff)
- *  - NIGHT 1 result revealed on Day 1 → if hasSheriff, auto-trigger
- *    SHERIFF_ELECTION/SIGNUP. Otherwise stay in DAY_DISCUSSION/RESULT_REVEALED.
+ *  - End of night → SHERIFF_ELECTION (Day 1 + hasSheriff) auto-opens, kills
+ *    are NOT applied yet (NightOrchestrator.resolveNightKills's job).
+ *  - revealNightResult is the moment kills are *applied* (alive=false flipped)
+ *    and the NightResult event is broadcast — it no longer triggers the
+ *    sheriff election (that already opened at end of night, hours of
+ *    gameplay ago).
  */
 @ExtendWith(MockitoExtension::class)
 class GamePipelineSheriffTest {
 
     @Mock lateinit var gameRepository: GameRepository
     @Mock lateinit var gamePlayerRepository: GamePlayerRepository
+    @Mock lateinit var nightPhaseRepository: NightPhaseRepository
     @Mock lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var sheriffService: SheriffService
     @Mock lateinit var nightOrchestrator: NightOrchestrator
+    @Mock lateinit var actionLogService: ActionLogService
     @InjectMocks lateinit var pipeline: GamePhasePipeline
 
     private val gameId = 10
@@ -57,13 +66,18 @@ class GamePipelineSheriffTest {
         gameId = gameId, userId = userId, seatIndex = seat, role = PlayerRole.VILLAGER
     ).also { it.confirmedRole = true }
 
+    private fun nightPhase(dayNumber: Int = 1) = NightPhase(gameId = gameId, dayNumber = dayNumber).also {
+        it.subPhase = NightSubPhase.COMPLETE
+    }
+
     // ── confirmRole always stays in ROLE_REVEAL ───────────────────────────────
 
     @Test
     fun `confirmRole always stays in ROLE_REVEAL (hasSheriff=true)`() {
         // Variant B: confirmRole only updates the player's confirmedRole flag.
         // It never creates a SheriffElection or transitions the game phase —
-        // the host drives the next step (START_NIGHT).
+        // the host drives the next step (START_NIGHT). The actual sheriff
+        // election triggers from end-of-night.
         val ctx = GameContext(game(), room(hasSheriff = true), emptyList())
         val player = GamePlayer(gameId = gameId, userId = guestId, seatIndex = 1, role = PlayerRole.VILLAGER)
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, guestId)).thenReturn(Optional.of(player))
@@ -109,7 +123,8 @@ class GamePipelineSheriffTest {
     @Test
     fun `startNight transitions to NIGHT when all confirmed and hasSheriff=true (Variant B)`() {
         // Variant B: sheriff election no longer gates start-of-night. Host
-        // starts Night 1, then sheriff election runs on Day 1 morning.
+        // starts Night 1, then sheriff election runs on Day 1 morning (after
+        // end-of-night, before death announcement).
         val ctx = GameContext(game(), room(hasSheriff = true), emptyList())
         val allConfirmed = listOf(confirmedPlayer(hostId, 0), confirmedPlayer(guestId, 1))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(allConfirmed)
@@ -154,28 +169,42 @@ class GamePipelineSheriffTest {
         verifyNoInteractions(nightOrchestrator)
     }
 
-    // ── revealNightResult auto-triggers SHERIFF_ELECTION on Day 1 ──────────────
+    // ── revealNightResult applies deferred kills ──────────────────────────────
 
     @Test
-    fun `revealNightResult on Day 1 with hasSheriff=true creates SheriffElection and transitions to SHERIFF_ELECTION`() {
+    fun `revealNightResult applies pending wolf-kill via NightOrchestrator and broadcasts NightResult`() {
+        // The deferred kill is wolf_target without antidote/guard save —
+        // computePendingKills returns ['victim'].
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.COMPLETE
+            it.wolfTargetUserId = "victim"
+        }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("victim"))
+
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
             room(hasSheriff = true),
             emptyList(),
         )
-        whenever(sheriffElectionRepository.findByGameId(gameId)).thenReturn(Optional.empty())
-        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
 
         val req = GameActionRequest(gameId, hostId, ActionType.REVEAL_NIGHT_RESULT)
         val result = pipeline.revealNightResult(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.phase).isEqualTo(GamePhase.SHERIFF_ELECTION)
-        verify(sheriffElectionRepository).save(any<SheriffElection>())
+        // Kills applied via the orchestrator helper (pure function for testing).
+        verify(nightOrchestrator).applyNightKills(gameId, listOf("victim"))
+        verify(actionLogService).recordNightDeaths(gameId, 1, listOf("victim"))
+        // Transitions to RESULT_REVEALED.
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
     }
 
     @Test
-    fun `revealNightResult on Day 1 with hasSheriff=false stays in DAY_DISCUSSION`() {
+    fun `revealNightResult with no pending kills does NOT call applyNightKills`() {
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.COMPLETE }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(emptyList())
+
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
             room(hasSheriff = false),
@@ -186,41 +215,32 @@ class GamePipelineSheriffTest {
         val result = pipeline.revealNightResult(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        verify(nightOrchestrator, never()).applyNightKills(any(), any())
+        verifyNoInteractions(actionLogService)
         assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
-        verifyNoInteractions(sheriffElectionRepository)
     }
 
     @Test
-    fun `revealNightResult on Day 2 with hasSheriff=true does NOT create another SheriffElection`() {
-        // Sheriff election runs at most once per game (Day 1 only).
+    fun `revealNightResult does NOT trigger sheriff election (that happens at end of night now)`() {
+        // The old Variant-B-incorrect implementation triggered SHERIFF_ELECTION
+        // from revealNightResult on Day 1. The corrected flow opens the
+        // election at end-of-night via NightOrchestrator.resolveNightKills,
+        // so by the time revealNightResult runs the sheriff election is
+        // already over.
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.COMPLETE }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(emptyList())
+
         val ctx = GameContext(
-            game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 2, subPhase = DaySubPhase.RESULT_HIDDEN.name),
+            game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
             room(hasSheriff = true),
             emptyList(),
         )
 
         val req = GameActionRequest(gameId, hostId, ActionType.REVEAL_NIGHT_RESULT)
-        val result = pipeline.revealNightResult(req, ctx)
+        pipeline.revealNightResult(req, ctx)
 
-        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
-        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
         verifyNoInteractions(sheriffElectionRepository)
-    }
-
-    @Test
-    fun `revealNightResult on Day 1 with sheriff already elected does NOT recreate SheriffElection`() {
-        // Defensive: should not happen on Day 1, but ensure idempotence.
-        val gameWithSheriff = game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name)
-            .also { it.sheriffUserId = guestId }
-        val ctx = GameContext(gameWithSheriff, room(hasSheriff = true), emptyList())
-
-        val req = GameActionRequest(gameId, hostId, ActionType.REVEAL_NIGHT_RESULT)
-        val result = pipeline.revealNightResult(req, ctx)
-
-        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
-        verifyNoInteractions(sheriffElectionRepository)
     }
 }

@@ -519,20 +519,26 @@ class SheriffService(
     }
 
     /**
-     * Transition SHERIFF_ELECTION → DAY_DISCUSSION/RESULT_REVEALED. Idempotent:
+     * Transition SHERIFF_ELECTION → DAY_DISCUSSION/RESULT_HIDDEN. Idempotent:
      * if the phase has already moved on (e.g. a fast host clicked a manual
-     * advance before the 60s timer fired) this is a no-op.
+     * advance before the timer fired) this is a no-op.
+     *
+     * Note: lands on RESULT_HIDDEN, not RESULT_REVEALED. The host still needs
+     * to click REVEAL_NIGHT_RESULT to flip the deaths into RESULT_REVEALED
+     * (and to actually apply the deferred N1 kills). This preserves the
+     * traditional 狼人杀 cadence: sheriff election happens BEFORE death
+     * announcement, so N1 victims could 上警 and use 挡刀 / 撕牌 tactics.
      */
     @Transactional
     fun advanceToDayDiscussion(gameId: Int) {
         val game = gameRepository.findById(gameId).orElse(null) ?: return
         if (game.phase != GamePhase.SHERIFF_ELECTION) return
         game.phase = GamePhase.DAY_DISCUSSION
-        game.subPhase = DaySubPhase.RESULT_REVEALED.name
+        game.subPhase = DaySubPhase.RESULT_HIDDEN.name
         gameRepository.save(game)
         broadcastAfterCommit(
             gameId,
-            DomainEvent.PhaseChanged(gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name),
+            DomainEvent.PhaseChanged(gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name),
         )
     }
 

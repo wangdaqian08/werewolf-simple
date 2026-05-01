@@ -10,7 +10,7 @@ import {actName, type RoleName, sheriff} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 import {waitForCondition} from './helpers/state-polling'
-import {driveMinimalNight1ViaDom, revealNightResultAndOpenSheriffElection} from './helpers/night-driver'
+import {driveMinimalNight1ViaDom} from './helpers/night-driver'
 
 let ctx: GameContext
 
@@ -46,15 +46,17 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
 
   // ── Test 1: N1 + reveal → SHERIFF_ELECTION ────────────────────────────
 
-  test('1. Day 1 morning — sheriff election opens after revealNightResult', async ({}, testInfo) => {
-    // Variant B: setup leaves us in ROLE_REVEAL. Drive Night 1 via DOM
-    // clicks on each role's browser, then host reveals the night result —
-    // the backend auto-transitions into SHERIFF_ELECTION/SIGNUP because
-    // hasSheriff && dayNumber == 1.
-
-    // Wolves must NOT kill the seer — Test 4 votes the seer in as sheriff,
-    // which requires the seer to be alive (and a candidate signs up in
-    // Test 2 from the seer browser). Pick a non-host VILLAGER seat.
+  test('1. Day 1 morning — sheriff election opens at end-of-night (deferred kills)', async ({}, testInfo) => {
+    // Variant B (correct order): setup leaves us in ROLE_REVEAL. Drive
+    // Night 1 via DOM clicks on each role's browser. The backend
+    // automatically opens SHERIFF_ELECTION at end-of-night when Day 1 +
+    // hasSheriff + no sheriff yet — host does NOT click reveal yet
+    // (kills are deferred until after the sheriff election so N1 victims
+    // can still 上警 / use 挡刀 tactics).
+    //
+    // Wolves can target any non-host villager — even the seer's would-be
+    // running mate works, because deferred kills mean no one is dead in
+    // DB yet during sheriff signup.
     const villagerSeats = (ctx.roleMap.VILLAGER ?? [])
       .filter((b) => b.nick !== 'Host')
       .map((b) => b.seat)
@@ -64,10 +66,12 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       'kit must include at least one non-host VILLAGER for the wolf to target',
     ).toBeDefined()
 
+    // driveMinimalNight1ViaDom drives the 4 night sub-phases via DOM and
+    // then waits for either SHERIFF_ELECTION/SIGNUP (Day 1 + hasSheriff)
+    // or DAY_DISCUSSION/RESULT_HIDDEN (other days). Here we expect SHERIFF.
     await driveMinimalNight1ViaDom(ctx, { wolfTargetSeat: wolfTargetSeat! })
-    await revealNightResultAndOpenSheriffElection(ctx)
 
-    // After the auto-trigger, all browsers must be in SHERIFF_ELECTION.
+    // After the auto-transition, all browsers must be in SHERIFF_ELECTION.
     await verifyAllBrowsersPhase(ctx.pages, 'SHERIFF_ELECTION', 20_000)
 
     // Verify the signup sub-phase UI is shown on every browser.
@@ -274,12 +278,14 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-04-result')
   })
 
-  // ── Test 5: Sheriff result → DAY_DISCUSSION auto-advance ───────────────
+  // ── Test 5: Sheriff result → DAY_DISCUSSION/RESULT_HIDDEN auto-advance ──
 
-  test('5. Sheriff result → DAY_DISCUSSION auto-advance', async ({}, testInfo) => {
-    // Variant B: after sheriff RESULT the backend auto-advances to
-    // DAY_DISCUSSION/RESULT_REVEALED via SheriffService.scheduleAutoAdvance-
-    // FromSheriffResult. The delay is configurable via
+  test('5. Sheriff result → DAY_DISCUSSION/RESULT_HIDDEN auto-advance', async ({}, testInfo) => {
+    // Variant B (correct order): after sheriff RESULT the backend auto-
+    // advances to DAY_DISCUSSION/RESULT_HIDDEN via
+    // SheriffService.scheduleAutoAdvanceFromSheriffResult. The host then
+    // clicks REVEAL_NIGHT_RESULT separately to apply pending kills and
+    // flip to RESULT_REVEALED. The delay is configurable via
     // werewolf.timing.sheriff-result-auto-advance-ms — application-e2e.yml
     // sets it to 2_000ms so this test doesn't hang for 60s.
     await waitForCondition(
@@ -291,9 +297,9 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
           })
           return res.ok ? await res.json() : null
         }, ctx.gameId)
-        return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_REVEALED'
+        return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
       },
-      'auto-advance from SHERIFF_ELECTION/RESULT to DAY_DISCUSSION/RESULT_REVEALED',
+      'auto-advance from SHERIFF_ELECTION/RESULT to DAY_DISCUSSION/RESULT_HIDDEN',
       20_000,
     )
 
