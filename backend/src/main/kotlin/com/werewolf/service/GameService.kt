@@ -316,7 +316,7 @@ class GameService(
             "dayPhase" to dayPhase,
             "votingPhase" to votingPhase,
             "nightPhase" to nightPhase,
-            "players" to players.map { p ->
+            "players" to players.sortedBy { it.seatIndex }.map { p ->
                 mapOf(
                     "userId"        to p.userId,
                     "nickname"      to (userLookup[p.userId]?.nickname ?: p.userId),

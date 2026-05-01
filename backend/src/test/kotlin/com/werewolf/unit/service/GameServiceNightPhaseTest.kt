@@ -10,6 +10,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
@@ -115,6 +117,35 @@ class GameServiceNightPhaseTest {
         val bob   = playerList.first { it["userId"] == "u2" }
         assertThat(alice["nickname"]).isEqualTo("Alice")
         assertThat(bob["nickname"]).isEqualTo("Bob")
+    }
+
+    // The dashboard renders gameStore.state.players via v-for without any
+    // client-side sort, so the contract is: getGameState must always return
+    // players[] in ascending seatIndex order. Postgres returns rows in heap
+    // order (which can shift after UPDATEs on GamePlayer.alive / .sheriff /
+    // .confirmedRole), so the API has to sort. This test runs across EVERY
+    // GamePhase to also catch a future refactor that branches the players-
+    // list construction by phase and forgets to sort in some path.
+    @ParameterizedTest
+    @EnumSource(GamePhase::class)
+    fun `getGameState - players list is always sorted by seatIndex regardless of phase`(phase: GamePhase) {
+        val players = listOf(
+            player("u3", 3, PlayerRole.VILLAGER),
+            player("u1", 1, PlayerRole.VILLAGER),
+            player("u4", 4, PlayerRole.VILLAGER),
+            player("u2", 2, PlayerRole.WEREWOLF),
+        )
+        val users = listOf(user("u1", "A"), user("u2", "B"), user("u3", "C"), user("u4", "D"))
+        val game = game(phase = phase).also { it.dayNumber = 1 }
+        setupGameAndPlayers(game, players, users)
+
+        val result = gameService.getGameState(gameId, "u1")
+
+        @Suppress("UNCHECKED_CAST")
+        val playerList = result["players"] as List<Map<String, Any?>>
+        assertThat(playerList.map { it["seatIndex"] })
+            .`as`("players[] must be in seat order during phase=$phase")
+            .containsExactly(1, 2, 3, 4)
     }
 
     @Test
