@@ -51,12 +51,35 @@ class GamePhasePipeline(
 
         context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
         gameRepository.save(context.game)
-        
+
         log.info("[revealNightResult] Successfully revealed night result")
         stompPublisher.broadcastGameAfterCommit(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
         )
+
+        // Variant B sheriff election: on Day 1, after the N1 result is shown,
+        // automatically transition into SHERIFF_ELECTION/SIGNUP. Players have
+        // one night of context before the campaign begins.
+        // - Skipped if hasSheriff=false (CLASSIC-no-sheriff games go straight
+        //   to discussion → vote).
+        // - Skipped if a sheriff already exists (defensive — shouldn't happen
+        //   on Day 1, but keeps this idempotent).
+        // - Skipped on Day 2+ (sheriff election runs at most once per game).
+        if (context.room.hasSheriff
+            && context.game.dayNumber == 1
+            && context.game.sheriffUserId == null
+            && sheriffElectionRepository.findByGameId(context.gameId).isEmpty
+        ) {
+            context.game.phase = GamePhase.SHERIFF_ELECTION
+            context.game.subPhase = null
+            gameRepository.save(context.game)
+            sheriffElectionRepository.save(SheriffElection(gameId = context.gameId))
+            stompPublisher.broadcastGameAfterCommit(
+                context.gameId,
+                DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
+            )
+        }
         return GameActionResult.Success()
     }
 
@@ -126,40 +149,23 @@ class GamePhasePipeline(
 
         stompPublisher.broadcastGameAfterCommit(context.gameId, DomainEvent.RoleConfirmed(context.gameId, request.actorUserId))
 
-        // Advance once everyone has confirmed
-        val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
-        if (allPlayers.all { it.confirmedRole }) {
-            if (context.room.hasSheriff) {
-                context.game.phase = GamePhase.SHERIFF_ELECTION
-                gameRepository.save(context.game)
-                sheriffElectionRepository.save(SheriffElection(gameId = context.gameId))
-                stompPublisher.broadcastGameAfterCommit(
-                    context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name)
-                )
-            }
-            // When hasSheriff=false, stay in ROLE_REVEAL — host will explicitly call START_NIGHT
-        }
+        // After everyone has confirmed, the host always drives the next step
+        // by calling START_NIGHT. Sheriff election (when enabled) is now run
+        // on Day 1 morning after the N1 result is revealed — see
+        // [revealNightResult] for the auto-trigger.
         return GameActionResult.Success()
     }
 
-    /** Host: start night directly after role reveal when sheriff election is disabled. */
+    /** Host: start night after all roles have been confirmed. */
     @Transactional
     fun startNight(request: GameActionRequest, context: GameContext): GameActionResult {
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only the host can start the night")
-        val fromRoleReveal = context.game.phase == GamePhase.ROLE_REVEAL
-        val fromSheriffResult = context.game.phase == GamePhase.SHERIFF_ELECTION &&
-            context.election?.subPhase == ElectionSubPhase.RESULT
-        if (!fromRoleReveal && !fromSheriffResult)
+        if (context.game.phase != GamePhase.ROLE_REVEAL)
             return GameActionResult.Rejected("Cannot start night from current phase")
-        if (fromRoleReveal) {
-            if (context.room.hasSheriff)
-                return GameActionResult.Rejected("Sheriff election is enabled for this game")
-            val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
-            if (!allPlayers.all { it.confirmedRole })
-                return GameActionResult.Rejected("Not all players have confirmed their role")
-        }
+        val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
+        if (!allPlayers.all { it.confirmedRole })
+            return GameActionResult.Rejected("Not all players have confirmed their role")
         // Cancel any scheduled auto-advance jobs
         sheriffService.cancelScheduledJob(context.gameId)
         nightOrchestrator.initNight(context.gameId, context.game.dayNumber, withWaiting = true)

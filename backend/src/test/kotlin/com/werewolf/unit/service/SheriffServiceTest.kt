@@ -4,7 +4,6 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
-import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.SheriffService
@@ -31,7 +30,6 @@ class SheriffServiceTest {
     @Mock lateinit var voteRepository: VoteRepository
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var stompPublisher: StompPublisher
-    @Mock lateinit var nightOrchestrator: NightOrchestrator
     private lateinit var sheriffService: SheriffService
 
     @BeforeEach
@@ -39,7 +37,7 @@ class SheriffServiceTest {
         sheriffService = SheriffService(
             gameRepository, gamePlayerRepository, sheriffElectionRepository,
             sheriffCandidateRepository, voteRepository, userRepository,
-            stompPublisher, nightOrchestrator, CoroutineScope(Dispatchers.Default),
+            stompPublisher, CoroutineScope(Dispatchers.Default),
         )
     }
 
@@ -366,7 +364,6 @@ class SheriffServiceTest {
         val event = eventCaptor.firstValue as DomainEvent.PhaseChanged
         assertThat(event.subPhase).isEqualTo(ElectionSubPhase.SPEECH.name)
 
-        verifyNoInteractions(nightOrchestrator)
     }
 
     @Test
@@ -397,7 +394,6 @@ class SheriffServiceTest {
         verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
         assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.RESULT.name)
         // Should NOT call startNightPhase directly — auto-advance is scheduled
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     // ── Group 4: revealResult() empty votes / all-abstain ────────────────────────
@@ -433,7 +429,6 @@ class SheriffServiceTest {
         val captor = argumentCaptor<DomainEvent>()
         verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
         assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.TIED.name)
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -459,7 +454,6 @@ class SheriffServiceTest {
         verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
         assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.RESULT.name)
         // Should NOT call startNightPhase directly — auto-advance is scheduled asynchronously
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -485,7 +479,6 @@ class SheriffServiceTest {
         val captor = argumentCaptor<DomainEvent>()
         verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
         assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.TIED.name)
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     // ── Group 5: vote() — self-vote and other vote validations ────────────────
@@ -737,7 +730,6 @@ class SheriffServiceTest {
         verify(stompPublisher, times(2)).broadcastGame(eq(gameId), captor.capture())
         assertThat(captor.allValues).anyMatch { it is DomainEvent.SheriffElected && it.sheriffUserId == winnerId }
         assertThat(captor.allValues).anyMatch { it is DomainEvent.PhaseChanged && it.subPhase == ElectionSubPhase.RESULT.name }
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -767,7 +759,6 @@ class SheriffServiceTest {
         val captor = argumentCaptor<DomainEvent>()
         verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
         assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.TIED.name)
-        verify(nightOrchestrator, never()).startNightPhase(any(), any(), anyOrNull(), any())
     }
 
     // ── Group 9: appoint() action ─────────────────────────────────────────────

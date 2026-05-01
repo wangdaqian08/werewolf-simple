@@ -1,6 +1,5 @@
 package com.werewolf.integration
 
-import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.integration.TestConstants.CREATE_ROOM_URL
 import com.werewolf.integration.TestConstants.FIELD_CONFIG
 import com.werewolf.integration.TestConstants.FIELD_ROOM_CODE
@@ -9,9 +8,12 @@ import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
+import com.werewolf.model.DaySubPhase
 import com.werewolf.model.ElectionSubPhase
 import com.werewolf.model.GamePhase
+import com.werewolf.model.NightPhase
 import com.werewolf.model.NightSubPhase
+import com.werewolf.model.SheriffElection
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
@@ -38,7 +40,6 @@ class SheriffElectionIntegrationTest {
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
-    @Autowired lateinit var nightOrchestrator: NightOrchestrator
     @Autowired lateinit var sheriffService: SheriffService
 
     companion object {
@@ -123,8 +124,14 @@ class SheriffElectionIntegrationTest {
         assertThat(election.subPhase).isEqualTo(ElectionSubPhase.VOTING)
     }
 
-    /** Start game, confirm all roles. Returns gameId. Game is now in SHERIFF_ELECTION/SIGNUP. */
-    private fun startGameAndConfirmRoles(host: TestPlayer, players: List<TestPlayer>, roomId: Int): Int {
+    /**
+     * Start game, confirm all roles, and arrange production-equivalent state
+     * for sheriff election: phase=SHERIFF_ELECTION/SIGNUP with a completed
+     * Day 1 NightPhase. Production reaches this via START_NIGHT → night
+     * actions → REVEAL_NIGHT_RESULT, but we bypass the full night here since
+     * the night flow is not under test.
+     */
+    private fun startGameAndOpenSheriffElection(host: TestPlayer, players: List<TestPlayer>, roomId: Int): Int {
         val startResp = restTemplate.postForEntity(
             START_URL, HttpEntity(mapOf("roomId" to roomId), headers(host.token)), Map::class.java
         )
@@ -136,6 +143,15 @@ class SheriffElectionIntegrationTest {
         players.forEach { player ->
             assertThat(action(player.token, gameId, "CONFIRM_ROLE").statusCode).isEqualTo(HttpStatus.OK)
         }
+
+        game.phase = GamePhase.SHERIFF_ELECTION
+        game.subPhase = null
+        game.dayNumber = 1
+        gameRepository.save(game)
+        nightPhaseRepository.save(NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.COMPLETE
+        })
+        sheriffElectionRepository.save(SheriffElection(gameId = gameId))
         return gameId
     }
 
@@ -145,7 +161,7 @@ class SheriffElectionIntegrationTest {
     fun `sheriff election - single candidate wins, sheriffUserId and sheriff flag are set, game advances to NIGHT`() {
         val (host, g1, g2, g3, g4, g5, roomId) = setupSheriffRoom("SE1")
         val allPlayers = listOf(host, g1, g2, g3, g4, g5)
-        val gameId = startGameAndConfirmRoles(host, allPlayers, roomId)
+        val gameId = startGameAndOpenSheriffElection(host, allPlayers, roomId)
 
         // SIGNUP: g1 and g2 campaign; others pass
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
@@ -191,7 +207,7 @@ class SheriffElectionIntegrationTest {
     fun `sheriff election - tied vote, host appoints, sheriffUserId is set`() {
         val (host, g1, g2, g3, g4, g5, roomId) = setupSheriffRoom("SE2")
         val allPlayers = listOf(host, g1, g2, g3, g4, g5)
-        val gameId = startGameAndConfirmRoles(host, allPlayers, roomId)
+        val gameId = startGameAndOpenSheriffElection(host, allPlayers, roomId)
 
         // SIGNUP: g1 and g2 both campaign
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
@@ -241,10 +257,13 @@ class SheriffElectionIntegrationTest {
     // ── Test 3: No-candidate shortcut ─────────────────────────────────────────
 
     @Test
-    fun `sheriff election - no candidates, SHERIFF_START_SPEECH transitions directly to NIGHT`() {
+    fun `sheriff election - no candidates, SHERIFF_START_SPEECH returns to day discussion`() {
+        // Variant B: when no one runs, sheriff election ends immediately and
+        // the game returns to DAY_DISCUSSION/RESULT_REVEALED so the host can
+        // proceed with day voting (we are still on Day 1, NOT moving to N2).
         val (host, g1, g2, g3, g4, g5, roomId) = setupSheriffRoom("SE3")
         val allPlayers = listOf(host, g1, g2, g3, g4, g5)
-        val gameId = startGameAndConfirmRoles(host, allPlayers, roomId)
+        val gameId = startGameAndOpenSheriffElection(host, allPlayers, roomId)
 
         // SIGNUP: all players pass — no candidates
         assertThat(action(host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
@@ -254,18 +273,12 @@ class SheriffElectionIntegrationTest {
         assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
 
-        // No-candidate shortcut: SHERIFF_START_SPEECH calls initNight(withWaiting=true).
-        // Night starts immediately (WAITING sub-phase) without blocking — roles advance via player actions.
         assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
 
-        // Game has transitioned from SHERIFF_ELECTION to NIGHT
         val savedGame = gameRepository.findById(gameId).orElseThrow()
-        assertThat(savedGame.phase).isEqualTo(GamePhase.NIGHT)
-
-        // Night phase record was created in WAITING sub-phase (ready for first role to act)
-        val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, savedGame.dayNumber).orElseThrow()
-        assertThat(nightPhase.subPhase).isEqualTo(NightSubPhase.WAITING)
-
+        assertThat(savedGame.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(savedGame.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(savedGame.dayNumber).isEqualTo(1)
         // No sheriff was elected
         assertThat(savedGame.sheriffUserId).isNull()
     }
