@@ -441,7 +441,7 @@
             </div>
           </div>
         </div>
-        <div v-else class="banner banner-gold">
+        <div v-else-if="isEliminatedSheriff" class="banner banner-gold">
           <span class="banner-avatar">⭐</span>
           <div>
             <div class="banner-title">你已出局 · Eliminated</div>
