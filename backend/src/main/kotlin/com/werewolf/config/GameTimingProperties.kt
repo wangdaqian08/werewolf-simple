@@ -30,6 +30,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  *                               is shown before the game auto-advances back
  *                               to DAY_DISCUSSION/RESULT_REVEALED. Defaults to
  *                               60_000ms in production; tests/e2e shrink it.
+ *   sheriffMorningCueDelayMs  — Variant B Day 1: silence pause after
+ *                               guard_close_eyes (night ended) before
+ *                               rooster_crowing + day_time (campaign begins)
+ *                               broadcasts. The delay drains the frontend
+ *                               audio queue so players perceive a brief
+ *                               silence between the night and morning cues.
  */
 @ConfigurationProperties(prefix = "werewolf.timing")
 data class GameTimingProperties(
@@ -40,6 +46,7 @@ data class GameTimingProperties(
     val nightInitAudioDelayMs: Long? = null,
     val waitingDelayMs: Long? = null,
     val sheriffResultAutoAdvanceMs: Long? = null,
+    val sheriffMorningCueDelayMs: Long? = null,
 ) {
     /**
      * Apply the configured overrides to the given role's default [RoleDelayConfig].

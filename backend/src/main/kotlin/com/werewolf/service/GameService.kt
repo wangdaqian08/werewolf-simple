@@ -299,51 +299,6 @@ class GameService(
                 "idiotRevealedNickname" to idiotRevealedUser?.nickname,
                 "idiotRevealedSeatIndex" to idiotRevealedPlayer?.seatIndex,
             )
-        } else if (
-            // Phase B: when sheriff/hunter is killed at night, the game routes
-            // through DAY_DISCUSSION/{HUNTER_SHOOT,BADGE_HANDOVER} sub-phases
-            // before landing on RESULT_REVEALED. Surface a votingPhase-shaped
-            // payload so the existing VotingPhase.vue UI can render the
-            // pass-or-destroy / shoot UI under DAY_DISCUSSION too.
-            game.phase == GamePhase.DAY_DISCUSSION &&
-            (game.subPhase == DaySubPhase.HUNTER_SHOOT.name ||
-                game.subPhase == DaySubPhase.BADGE_HANDOVER.name)
-        ) {
-            val playerMap = players.associateBy { it.userId }
-            val nightPhaseRow = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
-            // Eliminated player = the dead role driving this sub-phase.
-            //   HUNTER_SHOOT: a now-dead hunter (alive=false + role=HUNTER).
-            //   BADGE_HANDOVER: the dead sheriff (game.sheriffUserId, who is
-            //   still set on the game even though they're dead — handler
-            //   clears sheriffUserId at end of handover).
-            val eliminatedId: String? = if (game.subPhase == DaySubPhase.HUNTER_SHOOT.name) {
-                players.firstOrNull { !it.alive && it.role == PlayerRole.HUNTER }?.userId
-            } else {
-                game.sheriffUserId
-            }
-            val eliminatedPlayer = eliminatedId?.let { playerMap[it] }
-            val eliminatedUser = eliminatedId?.let { userLookup[it] }
-            mapOf(
-                "subPhase" to game.subPhase,
-                "dayNumber" to game.dayNumber,
-                "phaseDeadline" to 0L,
-                "phaseStarted" to 0L,
-                "canVote" to false, // not in voting; field kept for shape compat
-                "tallyRevealed" to false,
-                "eliminatedPlayerId" to eliminatedId,
-                "eliminatedNickname" to eliminatedUser?.nickname,
-                "eliminatedSeatIndex" to eliminatedPlayer?.seatIndex,
-                "eliminatedRole" to eliminatedPlayer?.role?.name,
-                // Used by the night-route night-result banner (frontend reads
-                // this when the eliminated role is hunter, so the UI can show
-                // "wolves killed your hunter, you may shoot one player").
-                "nightKillIds" to nightPhaseRow?.let {
-                    listOfNotNull(
-                        it.wolfTargetUserId.takeIf { _ -> !it.witchAntidoteUsed && it.guardTargetUserId != it.wolfTargetUserId },
-                        it.witchPoisonTargetUserId,
-                    )
-                },
-            )
         } else null
 
         return mapOf(

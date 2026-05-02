@@ -104,24 +104,10 @@
     </template>
 
     <!-- Voting phase -->
-    <template
-      v-else-if="
-        (gameStore.state?.phase === 'DAY_VOTING' && gameStore.state?.votingPhase) ||
-        (gameStore.state?.phase === 'DAY_DISCUSSION' &&
-          gameStore.state?.votingPhase &&
-          (gameStore.state?.dayPhase?.subPhase === 'HUNTER_SHOOT' ||
-            gameStore.state?.dayPhase?.subPhase === 'BADGE_HANDOVER'))
-      "
-    >
-      <!--
-        Phase B: VotingPhase also renders under DAY_DISCUSSION when the
-        sub-phase is HUNTER_SHOOT or BADGE_HANDOVER (sheriff/hunter killed
-        at night). The backend populates `votingPhase` with the same shape
-        in this case so the existing UI works without changes.
-      -->
+    <template v-else-if="gameStore.state?.phase === 'DAY_VOTING' && gameStore.state?.votingPhase">
       <VotingPhase
-        :key="`voting-${gameStore.state.votingPhase!.subPhase}-${gameStore.state.dayNumber}`"
-        :voting-phase="gameStore.state.votingPhase!"
+        :key="`voting-${gameStore.state.votingPhase.subPhase}-${gameStore.state.dayNumber}`"
+        :voting-phase="gameStore.state.votingPhase"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
@@ -522,10 +508,18 @@ async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) 
     const gameId = Number(route.params.gameId)
     const res = await gameService.submitAction({ ...req, gameId })
     if (res && !res.success && res.message) {
-      // Silently swallow harmless concurrent-action rejections (e.g. teammate
-      // already confirmed the wolf kill). The UI is already correct.
-      const harmless = res.message.includes('already confirmed')
-      if (harmless) {
+      // Concurrent WOLF_KILL races (two wolves both clicking confirm at the
+      // same moment) are still swallowed silently — the UI is already correct
+      // and showing an error would just confuse the second wolf.
+      //
+      // BUT: a WOLF_SELECT rejection after a teammate has already confirmed
+      // the kill DOES need to be visible. The lock (PR #88) means the second
+      // wolf's selection is silently discarded; without an error toast they
+      // wouldn't know why their re-pick didn't take effect, and might keep
+      // clicking thinking the UI is broken.
+      const isHarmlessKillRace =
+        req.actionType === 'WOLF_KILL' && res.message.includes('already confirmed')
+      if (isHarmlessKillRace) {
         console.info('[GameView] Action silently rejected:', res.message)
       } else {
         console.error('[GameView] Action failed:', res.message)

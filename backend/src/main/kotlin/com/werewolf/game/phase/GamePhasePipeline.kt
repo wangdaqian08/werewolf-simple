@@ -66,35 +66,10 @@ class GamePhasePipeline(
             actionLogService.recordNightDeaths(context.gameId, context.game.dayNumber, pendingKills)
         }
 
-        // Phase B: route through HUNTER_SHOOT and BADGE_HANDOVER if any
-        // killed player has the corresponding role/title. Order matters:
-        //  1. HUNTER_SHOOT first — the dying hunter gets to shoot before
-        //     the next sub-phase resolves. The hunter handler chains to
-        //     BADGE_HANDOVER itself if the shot target is the sheriff.
-        //  2. BADGE_HANDOVER if a sheriff was killed (and not already
-        //     routed by hunter handler). Triggers in BOTH CLASSIC and
-        //     HARD_MODE per the design decision (Q4=both modes).
-        //  3. Otherwise: RESULT_REVEALED (existing path).
-        //
-        // This mirrors the vote-out flow's ordering in VotingPipeline
-        // (HUNTER_SHOOT → BADGE_HANDOVER → continue).
-        val players = gamePlayerRepository.findByGameId(context.gameId).associateBy { it.userId }
-        val killedHunter = pendingKills.firstOrNull { players[it]?.role == PlayerRole.HUNTER }
-        val sheriffKilled = context.game.sheriffUserId != null &&
-            pendingKills.contains(context.game.sheriffUserId)
-
-        val (newSubPhase, transitionLog) = when {
-            killedHunter != null ->
-                DaySubPhase.HUNTER_SHOOT.name to "HUNTER_SHOOT (hunter=$killedHunter killed at night)"
-            sheriffKilled ->
-                DaySubPhase.BADGE_HANDOVER.name to "BADGE_HANDOVER (sheriff=${context.game.sheriffUserId} killed at night)"
-            else ->
-                DaySubPhase.RESULT_REVEALED.name to "RESULT_REVEALED (no special-role night kill)"
-        }
-        context.game.subPhase = newSubPhase
+        context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
         gameRepository.save(context.game)
 
-        log.info("[revealNightResult] Applied kills=$pendingKills; routing to $transitionLog")
+        log.info("[revealNightResult] Successfully revealed night result; applied kills=$pendingKills")
         if (pendingKills.isNotEmpty()) {
             stompPublisher.broadcastGameAfterCommit(
                 context.gameId,
@@ -103,7 +78,7 @@ class GamePhasePipeline(
         }
         stompPublisher.broadcastGameAfterCommit(
             context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, newSubPhase)
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
         )
 
         return GameActionResult.Success()

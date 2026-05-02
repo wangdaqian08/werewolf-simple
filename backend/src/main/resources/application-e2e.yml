@@ -43,3 +43,4 @@ werewolf:
     night-init-audio-delay-ms: 1000
     waiting-delay-ms: 500
     sheriff-result-auto-advance-ms: 2000
+    sheriff-morning-cue-delay-ms: 500

@@ -412,6 +412,84 @@ class AudioPhaseMappingTest {
         assertThat(sequence.audioFiles).doesNotHaveDuplicates()
     }
 
+    // ── Variant B Day-1 morning audio (the rooster + day_time placement) ─────
+
+    @Test
+    fun `Variant B - NIGHT to SHERIFF_ELECTION emits the morning cue (rooster + day_time)`() {
+        // The Variant B morning audio rides the NIGHT->SHERIFF_ELECTION
+        // transition (Day 1 only) so players get an "open eyes" cue right
+        // after guard_close_eyes finishes. Without this, the campaign starts
+        // in silence and players don't know when to look up.
+        val sequence = audioService.calculatePhaseTransition(
+            gameId = 1,
+            oldPhase = GamePhase.NIGHT,
+            newPhase = GamePhase.SHERIFF_ELECTION,
+            oldSubPhase = NightSubPhase.GUARD_PICK.name,
+            newSubPhase = "SIGNUP",
+            room = room(),
+        )
+
+        assertThat(sequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
+        assertThat(sequence.phase).isEqualTo(GamePhase.SHERIFF_ELECTION)
+        assertThat(sequence.priority).isEqualTo(10)
+    }
+
+    @Test
+    fun `Variant B - SHERIFF_ELECTION to DAY_DISCUSSION suppresses the morning cue (already played)`() {
+        // The morning cue was emitted at SHERIFF_ELECTION entry. When the
+        // election auto-advances to DAY_DISCUSSION on Day 1, repeating the
+        // cue would be a duplicate. The DAY_DISCUSSION branch must check
+        // oldPhase and skip the audio in this case.
+        val sequence = audioService.calculatePhaseTransition(
+            gameId = 1,
+            oldPhase = GamePhase.SHERIFF_ELECTION,
+            newPhase = GamePhase.DAY_DISCUSSION,
+            oldSubPhase = "RESULT",
+            newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
+            room = room(),
+        )
+
+        assertThat(sequence.audioFiles).isEmpty()
+        assertThat(sequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(sequence.priority).isEqualTo(0)
+    }
+
+    @Test
+    fun `Variant B - NIGHT to DAY_DISCUSSION (Day 2+) still emits the morning cue (regression guard)`() {
+        // Day 2+ has no sheriff election in the way, so the morning cue rides
+        // the NIGHT->DAY_DISCUSSION transition — the pre-Variant-B path.
+        // This must keep working unchanged.
+        val sequence = audioService.calculatePhaseTransition(
+            gameId = 1,
+            oldPhase = GamePhase.NIGHT,
+            newPhase = GamePhase.DAY_DISCUSSION,
+            oldSubPhase = NightSubPhase.GUARD_PICK.name,
+            newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
+            room = room(),
+        )
+
+        assertThat(sequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
+        assertThat(sequence.priority).isEqualTo(10)
+    }
+
+    @Test
+    fun `Variant B - non-NIGHT to SHERIFF_ELECTION does not emit morning cue (edge case)`() {
+        // Only the NIGHT->SHERIFF_ELECTION path triggers the morning audio.
+        // Any other entry (e.g. an unusual reconnect or test setup) stays
+        // silent so the cue isn't replayed out of context.
+        val sequence = audioService.calculatePhaseTransition(
+            gameId = 1,
+            oldPhase = GamePhase.ROLE_REVEAL,
+            newPhase = GamePhase.SHERIFF_ELECTION,
+            oldSubPhase = null,
+            newSubPhase = "SIGNUP",
+            room = room(),
+        )
+
+        assertThat(sequence.audioFiles).isEmpty()
+        assertThat(sequence.priority).isEqualTo(0)
+    }
+
     // ── Helper Functions ──────────────────────────────────────────────────────
 
     private fun room(

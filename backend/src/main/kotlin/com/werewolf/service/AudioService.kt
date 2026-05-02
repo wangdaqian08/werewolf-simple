@@ -56,12 +56,28 @@ class AudioService {
                 }
 
                 GamePhase.DAY_DISCUSSION -> {
-                    // Entering day phase - rooster crows first to signal dawn, then day_time plays
-                    audioFiles.add("rooster_crowing.mp3")
-                    audioFiles.add("day_time.mp3")
+                    // Entering day phase: rooster + day_time signals dawn / "open eyes".
+                    // Suppress on the Day-1 sheriff path (SHERIFF_ELECTION → DAY_DISCUSSION) —
+                    // the cue was already played when SHERIFF_ELECTION opened, otherwise
+                    // players would hear it twice on Day 1.
+                    if (oldPhase != GamePhase.SHERIFF_ELECTION) {
+                        audioFiles.add("rooster_crowing.mp3")
+                        audioFiles.add("day_time.mp3")
+                    }
                 }
 
-                GamePhase.ROLE_REVEAL, GamePhase.SHERIFF_ELECTION, GamePhase.DAY_VOTING, GamePhase.GAME_OVER, GamePhase.WAITING, GamePhase.DAY_PENDING -> {
+                GamePhase.SHERIFF_ELECTION -> {
+                    // Variant B Day 1: NIGHT → SHERIFF_ELECTION carries the morning cue.
+                    // Players need an "open eyes" signal after GUARD's close-eyes audio;
+                    // without this they don't know when the campaign starts. The matching
+                    // DAY_DISCUSSION → no-op above prevents a duplicate at host reveal.
+                    if (oldPhase == GamePhase.NIGHT) {
+                        audioFiles.add("rooster_crowing.mp3")
+                        audioFiles.add("day_time.mp3")
+                    }
+                }
+
+                GamePhase.ROLE_REVEAL, GamePhase.DAY_VOTING, GamePhase.GAME_OVER, GamePhase.WAITING, GamePhase.DAY_PENDING -> {
                     // No audio for these phases
                 }
             }
