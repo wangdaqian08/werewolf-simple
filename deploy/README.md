@@ -43,6 +43,34 @@ Requires `scripts/.env.vm` populated locally (copy from `.env.vm.example`).
 For one-shot commands use `./scripts/vm-ssh.sh '<cmd>'` — same auth, but
 reuses the SSH ControlMaster (~0.5s vs ~3s per call).
 
+## Database access
+
+Postgres binds to `127.0.0.1:5432` on the VM (loopback only — see
+`docker-compose.yml`), so external `psql` requires either an SSH tunnel or
+`docker exec`.
+
+### Option A — SSH tunnel + local psql (port 15432)
+
+```bash
+# Terminal 1 — leave running
+source scripts/.env.vm
+gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT" \
+  -- -L 15432:localhost:5432 -N
+
+# Terminal 2 — connect to the forwarded port
+psql -h localhost -p 15432 -U werewolf -d werewolf
+# password is in .env.prod on the VM:
+#   ./scripts/vm-ssh.sh 'sudo grep POSTGRES_PASSWORD /opt/werewolf-simple/.env.prod'
+```
+
+### Option B — psql inside the postgres container (no tunnel)
+
+```bash
+source scripts/.env.vm
+gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT" \
+  --command='sudo docker exec -it $(sudo docker ps -qf name=postgres) psql -U werewolf -d werewolf'
+```
+
 ## Deploy
 
 Images are pre-built by GitHub Actions and published to `ghcr.io` on every
