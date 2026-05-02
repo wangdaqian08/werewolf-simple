@@ -985,9 +985,16 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     // SHERIFF_ELECTION/SIGNUP. Guard is the wolf-target but kills are
     // deferred — guard is still alive in DB during sheriff election (and
     // could 上警 if the test wanted them to).
+    //
+    // seerCheckSeat: prefer a non-host wolf so we exercise the seer's
+    // cross-browser action against a bot — and guard against a stale
+    // host seat (the placeholder seat=0 in the state file is now updated
+    // post-game-start, but staying explicit keeps test intent clear).
+    const seerCheckWolfSeat =
+      wolfBots.find((b) => b.nick !== 'Host')?.seat ?? wolfBots[0]?.seat ?? guard.seat
     await driveMinimalNight1ViaDom(ctx, {
       wolfTargetSeat: guard.seat,
-      seerCheckSeat: wolfBots[0]?.seat ?? guard.seat,
+      seerCheckSeat: seerCheckWolfSeat,
       guardTargetSeat: wolfSeatForGuardProtect!,
     })
     await captureSnapshot(ctx.pages, testInfo, 'hard-02-night-1-done-sheriff-opened')

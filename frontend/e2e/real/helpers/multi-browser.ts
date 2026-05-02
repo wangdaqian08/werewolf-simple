@@ -222,13 +222,23 @@ export async function setupGame(
     throw new Error(`Invalid room code: ${roomCode}`)
   }
 
+  // Read host JWT/userId NOW, while the room view is freshly stable. Doing
+  // this AFTER joinBots used to race the STOMP-driven re-render storm that
+  // bot-joining triggers — page.evaluate intermittently saw "Execution
+  // context was destroyed, most likely because of a navigation" because
+  // a re-render happened mid-CDP-call. Capturing here, before joinBots,
+  // moves the read to a quiescent window. (Reproduced locally on this
+  // branch: flow-12p-sheriff.spec.ts CLASSIC failed at multi-browser.ts:230
+  // before any sheriff code path was reached.)
+  const hostJwt = await hostPage.evaluate(() => localStorage.getItem('jwt'))
+  const hostUserId = await hostPage.evaluate(() => localStorage.getItem('userId'))
+
   // ── Step 2: Bots join + ready ──────────────────────────────────────────
 
   joinBots(roomCode, totalPlayers - 1, true)
 
-  // Inject host into state file so scripts (roles.sh) and getRoles() can discover the host's role
-  const hostJwt = await hostPage.evaluate(() => localStorage.getItem('jwt'))
-  const hostUserId = await hostPage.evaluate(() => localStorage.getItem('userId'))
+  // Inject host into state file so scripts (roles.sh) and getRoles() can discover the host's role.
+  // Uses the JWT/userId captured BEFORE joinBots — see comment above.
   if (hostJwt) {
     const stateFilePath = path.join('/tmp', `werewolf-${roomCode.toUpperCase()}.json`)
     const stateData = JSON.parse(readFileSync(stateFilePath, 'utf-8'))
@@ -240,7 +250,7 @@ export async function setupGame(
     stateData.users.push({
       nick: 'Host',
       token: hostJwt,
-      seat: 0, // will be updated after seat claim
+      seat: 0, // placeholder; updated below after game starts
       userId: hostUserId,
     })
     writeFileSync(stateFilePath, JSON.stringify(stateData, null, 2))
@@ -295,6 +305,54 @@ export async function setupGame(
   }
 
   act('CONFIRM_ROLE', undefined, { room: roomCode })
+
+  // ── Step 5.5: Update host's seat in state file from backend ─────────────
+  //
+  // The earlier injection at Step 2 wrote seat=0 as a placeholder because
+  // the host hadn't claimed a slot yet. The backend now has the host's
+  // actual seat — fetch it once so roles.sh emits the right seat for the
+  // host (used by ctx.roleMap, which downstream tests use to drive role
+  // actions on the correct DOM player tile).
+  //
+  // No retry: act('CONFIRM_ROLE') just succeeded for every bot, which is
+  // only possible if every player row (including host) is already
+  // committed in the backend. So the next read-back from /game/{gid}/state
+  // is guaranteed to include the host with a real seat.
+  //
+  // Without this fix, ctx.roleMap.WEREWOLF[0]?.seat is a stale `0` when
+  // host rolls WEREWOLF — flow-12p-sheriff.spec.ts then asks the seer to
+  // check seat 0, which doesn't exist in the DOM grid → "seer check seat
+  // 0 must render" timeout (reproduced locally on the post-#89 main).
+  if (hostJwt && hostUserId) {
+    const stateFilePath = path.join('/tmp', `werewolf-${roomCode.toUpperCase()}.json`)
+    const res = await fetch(`http://localhost:8080/api/game/${gameId}/state`, {
+      headers: { Authorization: `Bearer ${hostJwt}` },
+    })
+    if (!res.ok) {
+      throw new Error(
+        `[setupGame] /api/game/${gameId}/state returned ${res.status} after CONFIRM_ROLE — backend should have full player rows by now`,
+      )
+    }
+    // GameStateDto.players[].seatIndex — NOT `seat`. (Verified by reading
+    // the response: every entry has `seatIndex` populated post-CONFIRM_ROLE.)
+    const data = (await res.json()) as {
+      players?: Array<{ userId: string; seatIndex?: number }>
+    }
+    const hostPlayer = data.players?.find((p) => p.userId === hostUserId)
+    if (hostPlayer?.seatIndex == null) {
+      throw new Error(
+        `[setupGame] host (userId=${hostUserId}) seatIndex missing in /game/${gameId}/state — host present? ${data.players?.some((p) => p.userId === hostUserId)} players=${JSON.stringify(data.players)}`,
+      )
+    }
+    const stateData = JSON.parse(readFileSync(stateFilePath, 'utf-8'))
+    const hostUser = (stateData.users ?? []).find(
+      (u: { userId: string; seat: number }) => u.userId === hostUserId,
+    )
+    if (hostUser) {
+      hostUser.seat = hostPlayer.seatIndex
+      writeFileSync(stateFilePath, JSON.stringify(stateData, null, 2))
+    }
+  }
 
   // ── Step 6: Host confirms role in browser (if still on reveal screen) ──
   // The script confirms roles via API, but we need to ensure the browser state
