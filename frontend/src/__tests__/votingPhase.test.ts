@@ -282,6 +282,74 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     expect(buttonLabels).not.toContain('销毁')
   })
 
+  // The "你已出局 · Eliminated · 选择警徽继承人" banner is addressed to "you"
+  // and only the dying sheriff is in fact eliminated. It must not show to
+  // alive viewers — they already see the footer hint "等待警长移交警徽".
+  it('alive non-sheriff does NOT see "you are eliminated" banner during BADGE_HANDOVER', async () => {
+    const sheriffUserId = 'sheriff-1'
+    const aliveOtherId = 'player-2'
+    const votingPhase = createVotingPhase('BADGE_HANDOVER', sheriffUserId)
+    const players = createPlayers(sheriffUserId)
+
+    const wrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        votingPhase,
+        players,
+        myUserId: aliveOtherId,
+        isHost: false,
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.html()).not.toContain('你已出局')
+    expect(wrapper.html()).not.toContain('You are eliminated')
+    expect(wrapper.html()).toContain('等待警长移交警徽')
+  })
+
+  it('alive host does NOT see "you are eliminated" banner during BADGE_HANDOVER', async () => {
+    const sheriffUserId = 'sheriff-1'
+    const hostId = 'player-2'
+    const votingPhase = createVotingPhase('BADGE_HANDOVER', sheriffUserId)
+    const players = createPlayers(sheriffUserId)
+
+    const wrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        votingPhase,
+        players,
+        myUserId: hostId,
+        isHost: true,
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.html()).not.toContain('你已出局')
+  })
+
+  it('eliminated sheriff DOES see "you are eliminated · choose heir" banner during BADGE_HANDOVER', async () => {
+    const sheriffUserId = 'sheriff-1'
+    const votingPhase = createVotingPhase('BADGE_HANDOVER', sheriffUserId)
+    const players = createPlayers(sheriffUserId)
+
+    const wrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        votingPhase,
+        players,
+        myUserId: sheriffUserId,
+        isHost: false,
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.html()).toContain('你已出局')
+    expect(wrapper.html()).toContain('选择警徽继承人')
+  })
+
   it('host can continue to night when eliminated player is not sheriff', async () => {
     // Bug fix: when a non-sheriff player is eliminated, badgeDone should be true
     // so the host can continue to night
