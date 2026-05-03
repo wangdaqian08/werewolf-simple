@@ -490,9 +490,7 @@
         </button>
       </div>
       <div v-else class="action-footer">
-        <button class="btn btn-secondary" disabled>
-          等待主持人继续 / Waiting for host…
-        </button>
+        <button class="btn btn-secondary" disabled>等待主持人继续 / Waiting for host…</button>
       </div>
     </template>
   </div>
