@@ -112,6 +112,27 @@
             <span class="toggle-thumb" />
           </button>
         </div>
+        <div class="role-row row-on">
+          <span class="role-emoji">🎵</span>
+          <div class="role-names">
+            <span class="role-name">夜晚配乐 Night BGM</span>
+            <span class="win-cond-desc">每夜循环播放，旁白时自动降低音量</span>
+          </div>
+          <select
+            v-model="bgmTrack"
+            class="bgm-select"
+            data-testid="bgm-track-select"
+            :disabled="bgmLoading"
+          >
+            <option
+              v-for="t in bgmTracks"
+              :key="t.id ?? '__none__'"
+              :value="t.filename ?? null"
+            >
+              {{ t.displayName }}
+            </option>
+          </select>
+        </div>
       </div>
 
       <button :disabled="loading" class="btn btn-primary" @click="handleCreate">
@@ -124,10 +145,11 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
+import { audioTracksService, type AudioTrack } from '@/services/audioTracksService'
 import type { WinConditionMode } from '@/types'
 
 const router = useRouter()
@@ -152,8 +174,26 @@ const enabledOptional = ref(new Set(['SEER', 'WITCH', 'HUNTER']))
 const hasSheriff = ref(true)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
+const bgmTracks = ref<AudioTrack[]>([
+  { id: null, filename: null, displayName: '无 (None)' },
+])
+const bgmTrack = ref<string | null>(null)
+const bgmLoading = ref(false)
+
 const loading = ref(false)
 const error = ref('')
+
+onMounted(async () => {
+  bgmLoading.value = true
+  try {
+    const list = await audioTracksService.fetchTracks()
+    if (list.length > 0) bgmTracks.value = list
+  } catch (e) {
+    console.warn('[CreateRoomView] failed to load BGM tracks', e)
+  } finally {
+    bgmLoading.value = false
+  }
+})
 
 function increment() {
   if (totalPlayers.value < MAX_PLAYERS) totalPlayers.value++
@@ -192,6 +232,7 @@ async function handleCreate() {
         roles,
         hasSheriff: hasSheriff.value,
         winCondition: winCondition.value,
+        bgmTrack: bgmTrack.value,
       },
     })
     roomStore.setRoom(room)
@@ -451,5 +492,23 @@ async function handleCreate() {
   font-size: 0.875rem;
   text-align: center;
   margin: 0;
+}
+
+.bgm-select {
+  flex-shrink: 0;
+  max-width: 130px;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.bgm-select:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 </style>

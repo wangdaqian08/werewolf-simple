@@ -86,7 +86,12 @@ data class GameConfig(
         PlayerRole.SEER to RoleDelayConfig.SEER_DEFAULT,
         PlayerRole.WITCH to RoleDelayConfig.WITCH_DEFAULT,
         PlayerRole.GUARD to RoleDelayConfig.GUARD_DEFAULT
-    )
+    ),
+
+    /**
+     * 选定的夜晚背景音乐文件名（在 /audio/bgm/ 下），未选则为 null。
+     */
+    val bgmTrack: String? = null,
 ) {
     /**
      * 获取指定角色的延迟配置

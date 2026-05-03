@@ -28,7 +28,13 @@ class RoomServiceTest {
     @Mock lateinit var authService: AuthService
     @Mock lateinit var stompPublisher: StompPublisher
     @org.mockito.Spy val timing: com.werewolf.config.GameTimingProperties = com.werewolf.config.GameTimingProperties()
+    @Mock(strictness = org.mockito.Mock.Strictness.LENIENT) lateinit var bgmRegistry: com.werewolf.controller.BgmTrackRegistry
     @InjectMocks lateinit var roomService: RoomService
+
+    @org.junit.jupiter.api.BeforeEach
+    fun stubBgmRegistry() {
+        whenever(bgmRegistry.isValidTrack(anyOrNull())).thenReturn(true)
+    }
 
     private val userId = "user:001"
     private val hostId = "host:001"

@@ -21,7 +21,11 @@ class RoomController(private val roomService: RoomService) {
         authentication: Authentication,
     ): ResponseEntity<Any> {
         val (userId, nickname, avatarUrl) = authentication.userClaims()
-        return ResponseEntity.ok(roomService.createRoom(userId, nickname, avatarUrl, body.config))
+        return try {
+            ResponseEntity.ok(roomService.createRoom(userId, nickname, avatarUrl, body.config))
+        } catch (e: InvalidBgmTrackException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        }
     }
 
     @PostMapping("/join")

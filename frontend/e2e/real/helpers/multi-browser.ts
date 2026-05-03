@@ -87,6 +87,14 @@ export interface GameSetupOptions {
   /** Win condition mode. Defaults to 'CLASSIC'; pass 'HARD_MODE' to flip the
    *  CreateRoom DOM toggle before submission. */
   winCondition?: 'CLASSIC' | 'HARD_MODE'
+  /**
+   * Optional BGM track filename (e.g. 'suspicion.mp3'). When set, the host
+   * picks the matching option from the BGM dropdown on the CreateRoom page
+   * before submitting. The filename must exist under
+   * backend/src/main/resources/static/audio/bgm/. If unset, no BGM is selected
+   * and no `<audio src*="/audio/bgm/">` element will be created during NIGHT.
+   */
+  bgmTrack?: string
 }
 
 // ── Setup ────────────────────────────────────────────────────────────────────
@@ -207,6 +215,22 @@ export async function setupGame(
         timeout: 5_000,
       })
     }
+  }
+
+  // Select BGM track if requested. The dropdown is populated asynchronously
+  // from GET /api/audio/tracks; if it hasn't resolved yet we wait briefly.
+  if (opts.bgmTrack) {
+    const sel = hostPage.getByTestId('bgm-track-select')
+    await expect(sel, 'BGM dropdown must be present on CreateRoomView').toBeVisible({
+      timeout: 5_000,
+    })
+    await expect
+      .poll(async () => sel.locator(`option[value="${opts.bgmTrack}"]`).count(), {
+        timeout: 5_000,
+        message: `BGM track ${opts.bgmTrack} must appear in the dropdown options`,
+      })
+      .toBeGreaterThan(0)
+    await sel.selectOption({ value: opts.bgmTrack })
   }
 
   // Create the room

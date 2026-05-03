@@ -7,10 +7,20 @@
 
 import { onUnmounted, ref, watch } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
+import { useRoomStore } from '@/stores/roomStore'
 import { audioService } from '@/services/audioService'
+
+const HIGH_VOL_NIGHT_SUBPHASES: ReadonlySet<string> = new Set([
+  'WEREWOLF_PICK',
+  'SEER_PICK',
+  'SEER_RESULT',
+  'WITCH_ACT',
+  'GUARD_PICK',
+])
 
 export function useAudioService() {
   const gameStore = useGameStore()
+  const roomStore = useRoomStore()
   const isMuted = ref(audioService.isMuted())
   const lastPlayedSequenceId = ref<string | null>(null)
 
@@ -82,11 +92,41 @@ export function useAudioService() {
     { deep: true },
   )
 
+  // ── Background music: lifecycle + level modulation ──────────────────────
+
+  // (a) Start/stop BGM on NIGHT phase boundary. immediate:true handles
+  //     mid-game reconnect where the player rejoins while already in NIGHT.
+  watch(
+    () => gameStore.state?.phase,
+    (phase) => {
+      const track = roomStore.room?.config?.bgmTrack
+      if (phase === 'NIGHT' && track) {
+        audioService.startBgm(track)
+      } else {
+        audioService.stopBgm()
+      }
+    },
+    { immediate: true },
+  )
+
+  // (b) HIGH/LOW volume tier follows the night sub-phase. Pure modulator —
+  //     never starts or stops the element, so it is safe to fire at any time.
+  watch(
+    () => gameStore.state?.nightPhase?.subPhase,
+    (sub) => {
+      audioService.setBgmLevel(
+        typeof sub === 'string' && HIGH_VOL_NIGHT_SUBPHASES.has(sub) ? 'HIGH' : 'LOW',
+      )
+    },
+    { immediate: true },
+  )
+
   /**
    * Cleanup on unmount
    */
   onUnmounted(() => {
     audioService.stopAll()
+    audioService.stopBgm()
   })
 
   function toggleMute() {
@@ -99,5 +139,7 @@ export function useAudioService() {
     toggleMute,
     setVolume: (volume: number) => audioService.setGlobalVolume(volume),
     getVolume: () => audioService.getGlobalVolume(),
+    setBgmVolume: (v: number) => audioService.setBgmVolume(v),
+    getBgmVolume: () => audioService.getBgmVolume(),
   }
 }

@@ -31,6 +31,7 @@ export interface RoomConfig {
   roles: string[] // backend decides counts based on totalPlayers
   hasSheriff?: boolean
   winCondition?: WinConditionMode
+  bgmTrack?: string | null
 }
 
 export interface Room {
