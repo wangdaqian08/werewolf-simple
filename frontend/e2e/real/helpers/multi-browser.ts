@@ -217,20 +217,27 @@ export async function setupGame(
     }
   }
 
-  // Select BGM track if requested. The dropdown is populated asynchronously
-  // from GET /api/audio/tracks; if it hasn't resolved yet we wait briefly.
+  // Select BGM track if requested. The custom dropdown is populated
+  // asynchronously from GET /api/audio/tracks; we wait for the option to
+  // appear before clicking. (Native <select> rendered its menu at a
+  // browser-controlled position that broke in mobile-emulation viewports,
+  // so the form uses a custom popover instead — interaction is click-trigger
+  // then click-option, not selectOption().)
   if (opts.bgmTrack) {
-    const sel = hostPage.getByTestId('bgm-track-select')
-    await expect(sel, 'BGM dropdown must be present on CreateRoomView').toBeVisible({
+    const trigger = hostPage.getByTestId('bgm-track-select')
+    await expect(trigger, 'BGM dropdown must be present on CreateRoomView').toBeVisible({
       timeout: 5_000,
     })
+    await trigger.click()
+    const option = hostPage.locator(`.bgm-select-option[data-filename="${opts.bgmTrack}"]`)
     await expect
-      .poll(async () => sel.locator(`option[value="${opts.bgmTrack}"]`).count(), {
+      .poll(async () => option.count(), {
         timeout: 5_000,
         message: `BGM track ${opts.bgmTrack} must appear in the dropdown options`,
       })
       .toBeGreaterThan(0)
-    await sel.selectOption({ value: opts.bgmTrack })
+    await option.first().click()
+    await expect(trigger).toHaveAttribute('data-value', opts.bgmTrack, { timeout: 2_000 })
   }
 
   // Create the room
