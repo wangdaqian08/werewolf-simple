@@ -53,10 +53,16 @@ class NightOrchestrator(
         /** Default time for night init audio (goes_dark_close_eyes ~2s + wolf_howl ~5s) to play before
          *  role audio starts. Overridable via `werewolf.timing.night-init-audio-delay-ms`. */
         private const val DEFAULT_NIGHT_INIT_AUDIO_DELAY_MS = 8_000L
+        /** Default Variant-B Day-1 silence pause after guard_close_eyes finishes, before the
+         *  morning cue (rooster_crowing + day_time) is broadcast. Lets the frontend audio
+         *  queue drain so players hear: guard_close_eyes → brief silence → rooster.
+         *  Overridable via `werewolf.timing.sheriff-morning-cue-delay-ms`. */
+        private const val DEFAULT_SHERIFF_MORNING_CUE_DELAY_MS = 2_500L
     }
 
     private val waitingDelayMs: Long get() = timing.waitingDelayMs ?: DEFAULT_WAITING_DELAY_MS
     private val nightInitAudioDelayMs: Long get() = timing.nightInitAudioDelayMs ?: DEFAULT_NIGHT_INIT_AUDIO_DELAY_MS
+    private val sheriffMorningCueDelayMs: Long get() = timing.sheriffMorningCueDelayMs ?: DEFAULT_SHERIFF_MORNING_CUE_DELAY_MS
 
     // One active night coroutine per game.
     private val activeNightJobs = ConcurrentHashMap<Int, Job>()
@@ -333,6 +339,20 @@ class NightOrchestrator(
             gameRepository.save(context.game)
             sheriffElectionRepository.save(SheriffElection(gameId = gameId))
 
+            // Day 1 morning cue: rooster + day_time travel with the
+            // NIGHT→SHERIFF_ELECTION transition (not the later
+            // SHERIFF_ELECTION→DAY_DISCUSSION). Without this cue the
+            // campaign starts in silence after GUARD's close-eyes, leaving
+            // players unsure when to open their eyes.
+            val audioSequence = audioService.calculatePhaseTransition(
+                gameId = gameId,
+                oldPhase = GamePhase.NIGHT,
+                newPhase = GamePhase.SHERIFF_ELECTION,
+                oldSubPhase = null,
+                newSubPhase = ElectionSubPhase.SIGNUP.name,
+                room = context.room,
+            )
+
             if (TransactionSynchronizationManager.isActualTransactionActive()) {
                 TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
                     override fun afterCommit() {
@@ -344,6 +364,18 @@ class NightOrchestrator(
                         } catch (e: Exception) {
                             log.error("[resolveNightKills] Failed to broadcast SHERIFF_ELECTION/SIGNUP transition for game $gameId", e)
                         }
+                        // Schedule the morning cue with a brief silence pause so players
+                        // perceive: guard_close_eyes ends → silence → rooster + day_time.
+                        // Server-side delay is the simplest way to space the two
+                        // STOMP frames apart and let the frontend audio queue drain.
+                        coroutineScope.launch {
+                            delay(sheriffMorningCueDelayMs.milliseconds)
+                            try {
+                                stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+                            } catch (e: Exception) {
+                                log.error("[resolveNightKills] Failed to broadcast AudioSequence for game $gameId (non-critical)", e)
+                            }
+                        }
                     }
                 })
             } else {
@@ -351,6 +383,10 @@ class NightOrchestrator(
                     gameId,
                     DomainEvent.PhaseChanged(gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SIGNUP.name),
                 )
+                coroutineScope.launch {
+                    delay(sheriffMorningCueDelayMs.milliseconds)
+                    stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
+                }
             }
         } else {
             // No game-over, no sheriff election to open: transition to

@@ -827,4 +827,56 @@ class SheriffServiceTest {
         assertThat(captor.allValues).anyMatch { it is DomainEvent.SheriffElected && it.sheriffUserId == targetId }
         assertThat(captor.allValues).anyMatch { it is DomainEvent.PhaseChanged && it.subPhase == ElectionSubPhase.RESULT.name }
     }
+
+    // ── Group 10: SHERIFF_END_RESULT — host dismisses RESULT screen ──────────
+
+    @Test
+    fun `endResult - host advances SHERIFF_ELECTION-RESULT to DAY_DISCUSSION-RESULT_HIDDEN`() {
+        // Replaces the old 60s auto-timer: host clicks 显示结果 to dismiss the
+        // sheriff RESULT screen and move the game forward. Lands on
+        // RESULT_HIDDEN — host still needs to click REVEAL_NIGHT_RESULT next
+        // to apply the deferred N1 kills (preserves 国标 reveal cadence).
+        val electionObj = election(subPhase = ElectionSubPhase.RESULT)
+        val ctx = context(election = electionObj)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_END_RESULT)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
+
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
+        val phaseChanged = captor.firstValue as DomainEvent.PhaseChanged
+        assertThat(phaseChanged.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(phaseChanged.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
+    }
+
+    @Test
+    fun `endResult - rejected when actor is not host`() {
+        val electionObj = election(subPhase = ElectionSubPhase.RESULT)
+        val ctx = context(election = electionObj)
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_END_RESULT)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Only host")
+    }
+
+    @Test
+    fun `endResult - rejected when election is not in RESULT sub-phase`() {
+        // Don't let the host short-circuit past VOTING by clicking 显示结果
+        // before the result has actually been computed.
+        val electionObj = election(subPhase = ElectionSubPhase.VOTING)
+        val ctx = context(election = electionObj)
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_END_RESULT)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("RESULT")
+    }
 }

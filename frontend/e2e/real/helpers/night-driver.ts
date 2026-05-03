@@ -155,26 +155,30 @@ export async function waitForSheriffOrDayDiscussion(
 }
 
 /**
- * Wait until the SHERIFF_ELECTION sub-game wraps and the backend auto-
- * advances to DAY_DISCUSSION/RESULT_HIDDEN.
+ * Drive the SHERIFF_ELECTION/RESULT screen forward to DAY_DISCUSSION/RESULT_HIDDEN.
  *
- * Variant B: kills are still deferred at this point — the host must click
+ * Variant B (no auto-timer): the host clicks 显示结果 (testid
+ * `sheriff-end-result`) which fires SHERIFF_END_RESULT and transitions the
+ * game. Kills are still deferred at this point — the host must click
  * REVEAL_NIGHT_RESULT next to apply them and flip RESULT_HIDDEN →
  * RESULT_REVEALED. Use [waitForResultRevealed] after the host reveal click.
- *
- * Backed by `werewolf.timing.sheriff-result-auto-advance-ms` —
- * application-e2e.yml sets it to 2_000ms; default production value is 60_000ms.
  */
 export async function waitForDayDiscussionAfterSheriff(
   ctx: GameContext,
   timeoutMs = 20_000,
 ): Promise<void> {
+  // Wait for RESULT sub-phase to be reachable (the backend may still be
+  // settling after the SHERIFF_REVEAL_RESULT click).
+  const endBtn = ctx.hostPage.getByTestId('sheriff-end-result')
+  await endBtn.waitFor({ state: 'visible', timeout: timeoutMs })
+  await endBtn.click()
+
   await waitForCondition(
     async () => {
       const state = await fetchGameState(ctx.hostPage, ctx.gameId)
       return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
     },
-    'auto-advance from SHERIFF_ELECTION/RESULT to DAY_DISCUSSION/RESULT_HIDDEN',
+    'SHERIFF_END_RESULT click landed on DAY_DISCUSSION/RESULT_HIDDEN',
     timeoutMs,
   )
 }

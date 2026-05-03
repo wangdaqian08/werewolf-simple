@@ -7,7 +7,19 @@ export const useGameStore = defineStore('game', () => {
 
   function setState(s: GameState) {
     const newState = JSON.parse(JSON.stringify(s))
-    state.value = { ...newState, events: s.events ?? [] }
+    // Preserve audioSequence across polled-state writes. STOMP `AudioSequence`
+    // events push the live audio onto the store; HTTP `getGameState` polls
+    // (fired after PhaseChanged / NightSubPhaseChanged) compute the field via
+    // `AudioService.calculateGameStateAudio`, which returns an empty list for
+    // most steady-states (NIGHT in a sub-phase, DAY_DISCUSSION, etc.). Letting
+    // an empty polled value overwrite the live one clobbers fast-arriving
+    // open/close pairs — e.g. witch_open_eyes / witch_close_eyes broadcast
+    // ~3s apart get coalesced to just close_eyes if the poll lands between
+    // the open frame and useAudioService's watcher flush. Only adopt the
+    // incoming audioSequence when it actually carries files.
+    const incomingHasAudio = (newState.audioSequence?.audioFiles?.length ?? 0) > 0
+    const audioSequence = incomingHasAudio ? newState.audioSequence : state.value?.audioSequence
+    state.value = { ...newState, events: s.events ?? [], audioSequence }
   }
 
   function addEvent(event: GameEvent) {

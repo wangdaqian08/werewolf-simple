@@ -278,16 +278,22 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-04-result')
   })
 
-  // ── Test 5: Sheriff result → DAY_DISCUSSION/RESULT_HIDDEN auto-advance ──
+  // ── Test 5: Sheriff result → host clicks 显示结果 → DAY_DISCUSSION/RESULT_HIDDEN ──
 
-  test('5. Sheriff result → DAY_DISCUSSION/RESULT_HIDDEN auto-advance', async ({}, testInfo) => {
-    // Variant B (correct order): after sheriff RESULT the backend auto-
-    // advances to DAY_DISCUSSION/RESULT_HIDDEN via
-    // SheriffService.scheduleAutoAdvanceFromSheriffResult. The host then
-    // clicks REVEAL_NIGHT_RESULT separately to apply pending kills and
-    // flip to RESULT_REVEALED. The delay is configurable via
-    // werewolf.timing.sheriff-result-auto-advance-ms — application-e2e.yml
-    // sets it to 2_000ms so this test doesn't hang for 60s.
+  test('5. Sheriff result → host clicks 显示结果 → DAY_DISCUSSION/RESULT_HIDDEN', async ({}, testInfo) => {
+    // Variant B (correct order): after sheriff RESULT the host has the camera
+    // and decides when to dismiss the screen. The 显示结果 button (testid
+    // "sheriff-end-result") fires SHERIFF_END_RESULT, transitioning the game
+    // to DAY_DISCUSSION/RESULT_HIDDEN. The host then clicks REVEAL_NIGHT_RESULT
+    // separately to apply pending kills and flip to RESULT_REVEALED.
+    //
+    // Replaces the old 60s auto-timer (SheriffService.scheduleAutoAdvance...)
+    // — that timer was removed so the host stays in control of pacing.
+    const endBtn = ctx.hostPage.getByTestId('sheriff-end-result')
+    await endBtn.waitFor({ state: 'visible', timeout: 10_000 })
+    await expect(endBtn).toBeEnabled({ timeout: 10_000 })
+    await endBtn.click()
+
     await waitForCondition(
       async () => {
         const state = await ctx.hostPage.evaluate(async (id: string) => {
@@ -299,8 +305,8 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
         }, ctx.gameId)
         return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
       },
-      'auto-advance from SHERIFF_ELECTION/RESULT to DAY_DISCUSSION/RESULT_HIDDEN',
-      20_000,
+      'SHERIFF_END_RESULT click landed on DAY_DISCUSSION/RESULT_HIDDEN',
+      15_000,
     )
 
     // All browsers transition to DAY (PHASE_DATA_VALUES maps "DAY" to

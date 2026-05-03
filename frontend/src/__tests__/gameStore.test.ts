@@ -73,4 +73,81 @@ describe('gameStore', () => {
     store.clearGame()
     expect(store.state).toBeNull()
   })
+
+  // ── audioSequence preservation across polled-state writes ──────────────────
+  // Backend AudioService.calculateGameStateAudio returns an empty audioSequence
+  // for steady-states (NIGHT in a sub-phase, DAY_DISCUSSION post-reveal, etc.).
+  // STOMP `AudioSequence` events push the live audio onto the store; HTTP
+  // `getGameState` polls (fired after PhaseChanged / NightSubPhaseChanged)
+  // would otherwise overwrite that live audio with empty. The tests below lock
+  // in the fix: setState only adopts incoming audioSequence when it carries
+  // files; otherwise the live one is preserved.
+
+  it('setState() preserves existing audioSequence when incoming is undefined', () => {
+    const store = useGameStore()
+    const live = {
+      id: 'g1-1234-witch_open_eyes.mp3',
+      phase: 'NIGHT' as const,
+      subPhase: '',
+      audioFiles: ['witch_open_eyes.mp3'],
+      priority: 5,
+      timestamp: 1234,
+    }
+    store.setState({ ...freshState(), audioSequence: live })
+    // Polled state arrives with NO audioSequence (steady-state poll).
+    store.setState({ ...freshState(), phase: 'NIGHT' })
+    expect(store.state?.audioSequence).toEqual(live)
+  })
+
+  it('setState() preserves existing audioSequence when incoming has empty audioFiles', () => {
+    const store = useGameStore()
+    const live = {
+      id: 'g1-1234-wolf_close_eyes.mp3',
+      phase: 'NIGHT' as const,
+      subPhase: '',
+      audioFiles: ['wolf_close_eyes.mp3'],
+      priority: 5,
+      timestamp: 1234,
+    }
+    store.setState({ ...freshState(), audioSequence: live })
+    // Polled state from calculateGameStateAudio for NIGHT in sub-phase.
+    store.setState({
+      ...freshState(),
+      phase: 'NIGHT',
+      audioSequence: {
+        id: 'g1-5678-STATE-NIGHT',
+        phase: 'NIGHT',
+        subPhase: 'WEREWOLF_PICK',
+        audioFiles: [],
+        priority: 0,
+        timestamp: 5678,
+      },
+    })
+    expect(store.state?.audioSequence).toEqual(live)
+  })
+
+  it('setState() adopts incoming audioSequence when it carries files', () => {
+    const store = useGameStore()
+    store.setState({
+      ...freshState(),
+      audioSequence: {
+        id: 'g1-1234-wolf_close_eyes.mp3',
+        phase: 'NIGHT' as const,
+        subPhase: '',
+        audioFiles: ['wolf_close_eyes.mp3'],
+        priority: 5,
+        timestamp: 1234,
+      },
+    })
+    const next = {
+      id: 'g1-5678-witch_open_eyes.mp3',
+      phase: 'NIGHT' as const,
+      subPhase: '',
+      audioFiles: ['witch_open_eyes.mp3'],
+      priority: 5,
+      timestamp: 5678,
+    }
+    store.setState({ ...freshState(), audioSequence: next })
+    expect(store.state?.audioSequence).toEqual(next)
+  })
 })
