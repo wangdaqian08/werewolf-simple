@@ -1,9 +1,5 @@
 <template>
-  <div
-    class="vc-root"
-    @mouseenter="onRootEnter"
-    @mouseleave="onRootLeave"
-  >
+  <div class="vc-root" @mouseenter="onRootEnter" @mouseleave="onRootLeave">
     <button
       type="button"
       :class="['vc-btn', { 'is-muted': isMuted }]"
@@ -45,10 +41,7 @@
       </svg>
     </button>
 
-    <div
-      :class="['vc-slider-wrap', { 'is-hidden': !sliderShown }]"
-      :aria-hidden="!sliderShown"
-    >
+    <div :class="['vc-slider-wrap', { 'is-hidden': !sliderShown }]" :aria-hidden="!sliderShown">
       <div class="vc-track">
         <div class="vc-fill" :style="{ width: fill + '%' }" />
         <div class="vc-thumb" :style="{ left: fill + '%' }" />
@@ -170,7 +163,7 @@ onUnmounted(clearIdleTimer)
   border: 1px solid var(--border);
   border-radius: 999px;
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.10),
+    0 4px 16px rgba(0, 0, 0, 0.1),
     0 1px 3px rgba(0, 0, 0, 0.06);
   transition: all 0.2s ease;
 }
@@ -188,7 +181,9 @@ onUnmounted(clearIdleTimer)
   justify-content: center;
   padding: 0;
   flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .vc-btn:hover {

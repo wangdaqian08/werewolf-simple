@@ -87,7 +87,11 @@ class AudioService {
       if (this.bgmPendingStart) {
         const fn = this.bgmPendingStart
         this.bgmPendingStart = null
-        try { fn() } catch (e) { console.warn('[AudioService] deferred bgm start failed', e) }
+        try {
+          fn()
+        } catch (e) {
+          console.warn('[AudioService] deferred bgm start failed', e)
+        }
       }
     }
 
@@ -100,7 +104,9 @@ class AudioService {
     // On returning to foreground, defensively resume the audio context.
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this.audioContext?.state === 'suspended') {
-        this.audioContext.resume().catch(() => {/* swallow */})
+        this.audioContext.resume().catch(() => {
+          /* swallow */
+        })
       }
     })
   }
@@ -468,11 +474,21 @@ class AudioService {
   }
 
   pauseBgm(): void {
-    try { this.bgmAudioEl?.pause() } catch { /* swallow */ }
+    try {
+      this.bgmAudioEl?.pause()
+    } catch {
+      /* swallow */
+    }
   }
 
   resumeBgm(): void {
-    try { this.bgmAudioEl?.play().catch(() => {/* swallow */}) } catch { /* swallow */ }
+    try {
+      this.bgmAudioEl?.play().catch(() => {
+        /* swallow */
+      })
+    } catch {
+      /* swallow */
+    }
   }
 
   /**
@@ -502,7 +518,11 @@ class AudioService {
   setBgmVolume(v: number): void {
     const clamped = Math.max(0, Math.min(1, v))
     this.bgmBaseVolume = clamped
-    try { localStorage.setItem(BGM_VOLUME_STORAGE_KEY, String(clamped)) } catch { /* swallow */ }
+    try {
+      localStorage.setItem(BGM_VOLUME_STORAGE_KEY, String(clamped))
+    } catch {
+      /* swallow */
+    }
     this.applyBgmGain()
   }
 
@@ -512,6 +532,35 @@ class AudioService {
 
   isBgmPlaying(): boolean {
     return !!this.bgmAudioEl && !this.bgmAudioEl.paused
+  }
+
+  /**
+   * E2E-only: snapshot the current BGM element state.
+   * `new Audio(url)` creates an in-memory HTMLMediaElement that is NOT
+   * attached to the document, so DOM queries can't see it. This getter
+   * returns what a test-author would otherwise look for.
+   */
+  getBgmState(): {
+    exists: boolean
+    paused: boolean
+    volume: number
+    loop: boolean
+    src: string
+    filename: string | null
+    userInteracted: boolean
+    pendingStart: boolean
+  } {
+    const el = this.bgmAudioEl
+    return {
+      exists: !!el,
+      paused: el?.paused ?? true,
+      volume: el?.volume ?? 0,
+      loop: el?.loop ?? false,
+      src: el?.src ?? '',
+      filename: this.bgmFilename,
+      userInteracted: this.userInteracted,
+      pendingStart: !!this.bgmPendingStart,
+    }
   }
 
   /** Compute the target HTMLAudioElement.volume from current state. */
@@ -542,7 +591,7 @@ class AudioService {
       el.volume = target
       return
     }
-    const startTime = (typeof performance !== 'undefined' ? performance.now() : Date.now())
+    const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now()
     const durationMs = BGM_RAMP_SEC * 1000
     const step = (now: number) => {
       const t = Math.min(1, (now - startTime) / durationMs)
@@ -573,7 +622,9 @@ class AudioService {
       }
       ms.setActionHandler?.('play', () => this.resumeBgm())
       ms.setActionHandler?.('pause', () => this.pauseBgm())
-    } catch { /* swallow */ }
+    } catch {
+      /* swallow */
+    }
   }
 
   private clearMediaSession(): void {
@@ -583,9 +634,22 @@ class AudioService {
       ms.metadata = null
       ms.setActionHandler?.('play', null)
       ms.setActionHandler?.('pause', null)
-    } catch { /* swallow */ }
+    } catch {
+      /* swallow */
+    }
   }
 }
 
 // Export singleton instance
 export const audioService = new AudioService()
+
+// E2E hook: expose to the browser context so Playwright can read live BGM
+// state without needing a DOM-attached <audio> element. `new Audio(url)`
+// creates an in-memory HTMLMediaElement that is NOT a child of document, so
+// `document.querySelectorAll('audio')` won't find it. The BGM element is
+// the only one routed via Web Audio anyway, so a singleton-reflection
+// hook is the cleanest way to expose its state.
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { __audioService?: AudioService }).__audioService =
+    audioService
+}

@@ -192,9 +192,7 @@ const enabledOptional = ref(new Set(['SEER', 'WITCH', 'HUNTER']))
 const hasSheriff = ref(true)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
-const bgmTracks = ref<AudioTrack[]>([
-  { id: null, filename: null, displayName: '无 (None)' },
-])
+const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: '无 (None)' }])
 const bgmTrack = ref<string | null>(null)
 const bgmLoading = ref(false)
 const bgmOpen = ref(false)
