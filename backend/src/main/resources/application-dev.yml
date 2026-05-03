@@ -28,7 +28,10 @@ app:
     google:
       redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:5173/auth/callback/google}
   cors:
-    allowed-origins: "http://localhost:5173,http://localhost:3000"
+    # Wildcard pattern keeps mobile-on-LAN dev simple (e.g. http://192.168.x.y:5173).
+    # Safe here because SecurityConfig sets allowCredentials=false; no cookies/session
+    # cross the boundary, only Authorization-header JWT. Prod uses ${FRONTEND_ORIGIN}.
+    allowed-origins: "*"
 
 logging:
   level:
