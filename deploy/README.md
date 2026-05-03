@@ -110,6 +110,20 @@ gh run watch                            # latest workflow run
 
 Don't proceed until both images are published.
 
+#### A2. Local — create the GitHub Release (so it shows on /releases)
+
+Pushing a tag does NOT auto-create a GitHub Release; the tag exists in
+git but the `/releases` page won't list it until you run:
+
+```bash
+gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
+```
+
+`--generate-notes` builds the body from merged PRs since the previous
+tag. Use `--notes "<one-liner>"` instead if you want a custom message.
+Verify at `https://github.com/<your>/werewolf-simple/releases` — the new
+tag should be marked **Latest**.
+
 #### B. On the VM — advance the tree, pin, pull, recreate
 
 ```bash
