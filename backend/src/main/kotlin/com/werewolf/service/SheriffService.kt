@@ -46,6 +46,7 @@ class SheriffService(
         ActionType.SHERIFF_QUIT_CAMPAIGN -> quitCampaign(request, context)
         ActionType.SHERIFF_VOTE -> vote(request, context)
         ActionType.SHERIFF_ABSTAIN -> abstain(request, context)
+        ActionType.SHERIFF_END_RESULT -> endResult(request, context)
         else -> GameActionResult.Rejected("Unknown sheriff action: ${request.actionType}")
     }
 
@@ -190,9 +191,17 @@ class SheriffService(
             .filter { it.status == CandidateStatus.RUNNING }
 
         if (candidates.isEmpty()) {
-            // No one ran — sheriff election is over before it starts.
-            // Variant B: return to day discussion (we're already on Day 1).
-            advanceToDayDiscussion(context.gameId)
+            // No one ran — sheriff election is over before it starts. There's
+            // nothing for the host to dismiss on a RESULT screen, so transition
+            // straight to DAY_DISCUSSION/RESULT_HIDDEN. Inline the same write
+            // that endResult() performs.
+            context.game.phase = GamePhase.DAY_DISCUSSION
+            context.game.subPhase = DaySubPhase.RESULT_HIDDEN.name
+            gameRepository.save(context.game)
+            broadcastAfterCommit(
+                context.gameId,
+                DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name),
+            )
             return GameActionResult.Success()
         }
 
@@ -276,7 +285,8 @@ class SheriffService(
                 sheriffElectionRepository.save(election)
                 broadcastAfterCommit(context.gameId,
                     DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
-                scheduleAutoAdvanceFromSheriffResult(context.gameId)
+                // Sheriff is shown on the RESULT screen until the host clicks
+            // 显示结果 (SHERIFF_END_RESULT) — no auto-timer.
             }
             return GameActionResult.Success()
         }
@@ -290,7 +300,8 @@ class SheriffService(
             broadcastAfterCommit(context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
             // Schedule auto-advance to day discussion (60s)
-            scheduleAutoAdvanceFromSheriffResult(context.gameId)
+            // Sheriff is shown on the RESULT screen until the host clicks
+            // 显示结果 (SHERIFF_END_RESULT) — no auto-timer.
         } else {
             election.subPhase = ElectionSubPhase.TIED
             sheriffElectionRepository.save(election)
@@ -321,8 +332,8 @@ class SheriffService(
         broadcastAfterCommit(context.gameId, DomainEvent.SheriffElected(context.gameId, targetUserId))
         broadcastAfterCommit(context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
-        // Schedule auto-advance to day discussion (60s)
-        scheduleAutoAdvanceFromSheriffResult(context.gameId)
+        // Sheriff is shown on the RESULT screen until the host clicks 显示结果
+        // (SHERIFF_END_RESULT) — no auto-timer.
         return GameActionResult.Success()
     }
 
@@ -358,7 +369,8 @@ class SheriffService(
             sheriffElectionRepository.save(election)
             broadcastAfterCommit(context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
-            scheduleAutoAdvanceFromSheriffResult(context.gameId)
+            // Sheriff is shown on the RESULT screen until the host clicks
+            // 显示结果 (SHERIFF_END_RESULT) — no auto-timer.
             return GameActionResult.Success()
         }
 
@@ -501,50 +513,44 @@ class SheriffService(
     }
 
     /**
-     * Variant B: after the sheriff RESULT is shown, auto-advance back to
-     * DAY_DISCUSSION/RESULT_REVEALED. The host then drives the regular day
-     * cadence (dayAdvance → DAY_VOTING). The game stays on the same Day 1
-     * — we are NOT starting a new night.
+     * Host action: dismiss the SHERIFF_ELECTION/RESULT screen and advance to
+     * DAY_DISCUSSION/RESULT_HIDDEN. Bound to the 显示结果 button on the host's
+     * sheriff RESULT view; replaces the old 60s auto-timer.
+     *
+     * Lands on RESULT_HIDDEN, not RESULT_REVEALED — the host still needs to
+     * click REVEAL_NIGHT_RESULT next to flip deaths into RESULT_REVEALED and
+     * apply the deferred N1 kills. This preserves the traditional 狼人杀
+     * cadence: sheriff election runs BEFORE the death announcement so N1
+     * victims could 上警 and use 挡刀 / 撕牌 tactics.
      */
-    private fun scheduleAutoAdvanceFromSheriffResult(gameId: Int): Job {
-        val delayMs = timingProperties.sheriffResultAutoAdvanceMs ?: 60_000L
-        log.info("[SheriffService] Scheduling auto-advance to day discussion for game $gameId in ${delayMs}ms")
-        return coroutineScope.launch {
-            delay(delayMs)
-            log.info("[SheriffService] Auto-advance to day discussion triggered for game $gameId")
-            advanceToDayDiscussion(gameId)
-        }.also { job ->
-            scheduledJobs[gameId] = job
-        }
+    private fun endResult(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (request.actorUserId != context.game.hostUserId)
+            return GameActionResult.Rejected("Only host can dismiss the sheriff result")
+        val election = context.election ?: return GameActionResult.Rejected("No election in progress")
+        if (election.subPhase != ElectionSubPhase.RESULT)
+            return GameActionResult.Rejected("Not in sheriff RESULT sub-phase")
+        if (context.game.phase != GamePhase.SHERIFF_ELECTION)
+            return GameActionResult.Rejected("Game is not in SHERIFF_ELECTION phase")
+
+        context.game.phase = GamePhase.DAY_DISCUSSION
+        context.game.subPhase = DaySubPhase.RESULT_HIDDEN.name
+        gameRepository.save(context.game)
+        broadcastAfterCommit(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name),
+        )
+        return GameActionResult.Success()
     }
 
     /**
-     * Transition SHERIFF_ELECTION → DAY_DISCUSSION/RESULT_HIDDEN. Idempotent:
-     * if the phase has already moved on (e.g. a fast host clicked a manual
-     * advance before the timer fired) this is a no-op.
-     *
-     * Note: lands on RESULT_HIDDEN, not RESULT_REVEALED. The host still needs
-     * to click REVEAL_NIGHT_RESULT to flip the deaths into RESULT_REVEALED
-     * (and to actually apply the deferred N1 kills). This preserves the
-     * traditional 狼人杀 cadence: sheriff election happens BEFORE death
-     * announcement, so N1 victims could 上警 and use 挡刀 / 撕牌 tactics.
+     * Cancel any scheduled auto-advance jobs for the given game. The auto-
+     * advance timer at SHERIFF/RESULT was removed in favour of the
+     * SHERIFF_END_RESULT host action, so this is now a no-op left in place
+     * for callers that defensively call it (e.g. GamePhasePipeline.startNight,
+     * a few integration tests).
      */
-    @Transactional
-    fun advanceToDayDiscussion(gameId: Int) {
-        val game = gameRepository.findById(gameId).orElse(null) ?: return
-        if (game.phase != GamePhase.SHERIFF_ELECTION) return
-        game.phase = GamePhase.DAY_DISCUSSION
-        game.subPhase = DaySubPhase.RESULT_HIDDEN.name
-        gameRepository.save(game)
-        broadcastAfterCommit(
-            gameId,
-            DomainEvent.PhaseChanged(gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name),
-        )
-    }
-
     fun cancelScheduledJob(gameId: Int) {
-        scheduledJobs[gameId]?.cancel()
-        scheduledJobs.remove(gameId)
+        // intentionally empty — timer was removed
     }
 
     /**

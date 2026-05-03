@@ -80,6 +80,7 @@
         @abstain="handleSheriffAbstain"
         @advance-speech="handleSheriffAdvanceSpeech"
         @reveal-result="handleSheriffRevealResult"
+        @end-result="handleSheriffEndResult"
         @appoint="handleSheriffAppoint"
       />
     </template>
@@ -672,6 +673,9 @@ async function handleSheriffAdvanceSpeech() {
 }
 async function handleSheriffRevealResult() {
   await action({ actionType: 'SHERIFF_REVEAL_RESULT' })
+}
+async function handleSheriffEndResult() {
+  await action({ actionType: 'SHERIFF_END_RESULT' })
 }
 async function handleSheriffAppoint(userId: string) {
   await action({ actionType: 'SHERIFF_APPOINT', targetId: userId })

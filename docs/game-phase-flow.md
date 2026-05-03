@@ -34,7 +34,7 @@ flowchart TB
     N1 -->|"wolves-parity"| GO["GAME_OVER"]
     N1 -->|"Day 1 + hasSheriff<br/>kills DEFERRED"| SE["SHERIFF_ELECTION<br/>SIGNUP → SPEECH → VOTING → RESULT"]
 
-    SE -->|"auto-advance after RESULT"| DH1["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 1"]
+    SE -->|"host clicks 显示结果 (SHERIFF_END_RESULT)"| DH1["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 1"]
     DH1 -->|"host REVEAL_NIGHT_RESULT<br/>kills APPLIED"| DR1["DAY_DISCUSSION / RESULT_REVEALED<br/>Day 1"]
     DR1 -->|"host dayAdvance"| DV1["DAY_VOTING<br/>VOTING → VOTE_RESULT"]
 
@@ -72,7 +72,7 @@ flowchart TB
 | Edge | Code | Rule |
 |---|---|---|
 | `NIGHT(D1) → SHERIFF_ELECTION` | `NightOrchestrator.kt:322-377` | Day 1 only, hasSheriff, no sheriff yet |
-| `SHERIFF_ELECTION → DAY_DISCUSSION/RESULT_HIDDEN` | `SheriffService.kt:533-543` | Auto-advance after election RESULT |
+| `SHERIFF_ELECTION → DAY_DISCUSSION/RESULT_HIDDEN` | `SheriffService.endResult` | Host clicks 显示结果 (SHERIFF_END_RESULT). Replaced the old 60s auto-timer. |
 | `DAY_DISCUSSION/RESULT_HIDDEN → /RESULT_REVEALED` | `GamePhasePipeline.kt:39-85` | Host clicks reveal; kills applied here |
 | `NIGHT → DAY_DISCUSSION/RESULT_HIDDEN` (Day 2+) | `NightOrchestrator.kt:355-408` | Day 2+, no sheriff election |
 | `NIGHT → GAME_OVER` | `NightOrchestrator.kt:286-321` | Wolves-parity short-circuit on projected alive |
@@ -98,7 +98,7 @@ flowchart TB
     N1 -->|"Day 1 + hasSheriff<br/>PhaseChanged immediate<br/>~2.5s silence pause<br/>rooster_crowing.mp3 + day_time.mp3<br/>priority 10"| SE["SHERIFF_ELECTION<br/>SIGNUP → SPEECH → VOTING → RESULT<br/>silent throughout"]
     N1 -->|"Day 2+ no sheriff<br/>rooster_crowing.mp3<br/>day_time.mp3<br/>priority 10"| DH2["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 2+"]
 
-    SE -->|"auto-advance<br/>silent — already played at SE entry"| DH1["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 1"]
+    SE -->|"host clicks 显示结果<br/>silent — morning cue already played at SE entry"| DH1["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 1"]
     DH1 -->|"host REVEAL_NIGHT_RESULT<br/>silent — already played"| DR1["DAY_DISCUSSION / RESULT_REVEALED<br/>Day 1"]
     DR1 -->|"host dayAdvance<br/>silent"| DV1["DAY_VOTING Day 1<br/>silent throughout<br/>VOTING → VOTE_RESULT → HUNTER_SHOOT / BADGE_HANDOVER"]
 

@@ -472,12 +472,28 @@
         </div>
       </div>
       <!--
-        Variant B: no manual "Start Night" button on the sheriff RESULT
-        screen. After the result is shown, the backend auto-advances to
-        DAY_DISCUSSION/RESULT_REVEALED via
-        SheriffService.scheduleAutoAdvanceFromSheriffResult — the host's
-        next manual action is "start vote" on the day-discussion screen.
+        Variant B: host dismisses the RESULT screen by clicking 显示结果.
+        That fires SHERIFF_END_RESULT, which transitions the game to
+        DAY_DISCUSSION/RESULT_HIDDEN. The host then clicks the existing
+        reveal-night-result button on the day-discussion screen to apply
+        the deferred N1 kills.
       -->
+      <div v-if="isHost" class="action-footer">
+        <button
+          class="btn btn-primary"
+          data-testid="sheriff-end-result"
+          :class="{ 'is-loading': actionPending }"
+          :disabled="actionPending"
+          @click="emit('endResult')"
+        >
+          显示结果 / Show Result
+        </button>
+      </div>
+      <div v-else class="action-footer">
+        <button class="btn btn-secondary" disabled>
+          等待主持人继续 / Waiting for host…
+        </button>
+      </div>
     </template>
   </div>
 </template>
@@ -503,6 +519,7 @@ const emit = defineEmits<{
   abstain: []
   advanceSpeech: []
   revealResult: []
+  endResult: []
   appoint: [userId: string]
 }>()
 

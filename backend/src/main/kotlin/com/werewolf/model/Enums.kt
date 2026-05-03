@@ -65,4 +65,9 @@ enum class ActionType {
     SHERIFF_CAMPAIGN, SHERIFF_QUIT, SHERIFF_START_SPEECH, SHERIFF_ADVANCE_SPEECH, SHERIFF_REVEAL_RESULT,
     SHERIFF_PASS, SHERIFF_QUIT_CAMPAIGN, SHERIFF_VOTE, SHERIFF_CONFIRM_VOTE, SHERIFF_ABSTAIN,
     SHERIFF_APPOINT,
+    // Host dismisses the SHERIFF_ELECTION/RESULT screen and advances to
+    // DAY_DISCUSSION/RESULT_HIDDEN. Replaces the old 60s auto-timer so the
+    // host controls when the camera shifts off the elected sheriff back to
+    // the day cadence.
+    SHERIFF_END_RESULT,
 }

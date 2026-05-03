@@ -669,6 +669,21 @@ export function setupMocks() {
           },
         }
         pushGameStateUpdate()
+      } else if (actionType === 'SHERIFF_END_RESULT') {
+        // Host dismisses the SHERIFF_ELECTION/RESULT screen → DAY_DISCUSSION/RESULT_HIDDEN.
+        mockGameState = {
+          ...mockGameState,
+          phase: 'DAY_DISCUSSION',
+          sheriffElection: undefined,
+          dayPhase: {
+            subPhase: 'RESULT_HIDDEN',
+            dayNumber: mockGameState.dayNumber,
+            phaseDeadline: Date.now() + 120_000,
+            phaseStarted: Date.now(),
+            canVote: false,
+          },
+        }
+        pushGameStateUpdate()
       } else if (actionType === 'START_NIGHT') {
         mockGameState = {
           ...mockGameState,
