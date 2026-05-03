@@ -799,6 +799,11 @@ class NightOrchestrator(
             priority = 5,
             timestamp = System.currentTimeMillis(),
         )
+        // Diagnostic: every audio publish leaves a trace so a missing-audio
+        // regression can be classified as either "backend never broadcast"
+        // (no line) vs "broadcast but transport/frontend lost it" (line present
+        // + matching frontend [stomp] received line).
+        log.info("[broadcastAudio] game=$gameId file=$audioFile id=${audioSequence.id}")
         stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
     }
 

@@ -942,6 +942,15 @@ onMounted(async () => {
 
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
+        // Diagnostic: every STOMP frame leaves a trace before any branch
+        // dispatch. Pairs with backend [broadcastAudio] log so missing-audio
+        // regressions can be classified as "never reached frontend" vs
+        // "reached frontend but not handled".
+        console.log(
+          '[stomp] received',
+          data.type,
+          data.audioSequence?.audioFiles ?? data.subPhase ?? data.phase ?? '',
+        )
         // Mock sends full state snapshots; real backend sends typed domain events
         if (data.type === 'GAME_STATE_UPDATE') {
           gameStore.setState(data.payload)
