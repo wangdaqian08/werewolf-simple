@@ -35,6 +35,22 @@ import { expect, type Page, test } from '@playwright/test'
 import { setupGame } from './helpers/multi-browser'
 import { act, actName, type RoleName } from './helpers/shell-runner'
 import { waitForNightSubPhase, waitForPhase } from './helpers/state-polling'
+import { readBackendLogLineCount, readBackendLogSince } from './helpers/backend-log'
+
+// ── Narration manifest ──────────────────────────────────────────────────────
+// One full N1 with all 4 special roles (no dead roles) emits these 8 files
+// in this exact order. Verifying BGM doesn't suppress any of them is the
+// "BGM doesn't affect special-role audio" guarantee the user asked for.
+const N1_ROLE_FILES = [
+  'wolf_open_eyes.mp3',
+  'wolf_close_eyes.mp3',
+  'seer_open_eyes.mp3',
+  'seer_close_eyes.mp3',
+  'witch_open_eyes.mp3',
+  'witch_close_eyes.mp3',
+  'guard_open_eyes.mp3',
+  'guard_close_eyes.mp3',
+] as const
 
 const BGM_TRACK = 'suspicion.mp3'
 
@@ -98,6 +114,19 @@ test.describe('Background music — Night 1 lifecycle', () => {
     try {
       const hostPage = ctx.hostPage
       const gameId = ctx.gameId
+
+      // Capture STOMP frames the host receives so the assertion at the end
+      // can prove every narration AudioSequence reached the frontend while
+      // BGM was playing.
+      const stompFrames: string[] = []
+      hostPage.on('console', (msg) => {
+        const t = msg.text()
+        if (t.includes('[stomp] received')) stompFrames.push(t)
+      })
+
+      // Mark the backend log position so post-night scan only counts lines
+      // emitted during this test's N1.
+      const backendLogStart = readBackendLogLineCount()
 
       // ── Resolve actor bots ─────────────────────────────────────────────
       // 6p kit = 2 wolves + 1 seer + 1 witch + 1 guard + 1 villager. Host
@@ -222,6 +251,60 @@ test.describe('Background music — Night 1 lifecycle', () => {
           },
         )
         .toBe(true)
+
+      // ── ASSERT: BGM playback did NOT suppress any role narration ───────
+      // The contract is: BGM plays continuously across NIGHT, ducks ~3.3×
+      // (DUCKED 0.15× vs HIGH 1.0×) while narration is queued, but never
+      // blocks narration from being broadcast or delivered. Verify both
+      // halves of that chain for the eight role files emitted during N1.
+
+      // Brief settle so the last [broadcastAudio] line flushes to disk
+      // (Spring Boot logger is async; the dead-role-audio specs hit this
+      // race before).
+      await hostPage.waitForTimeout(2_000)
+
+      // Backend layer: every role's [broadcastAudio] line must appear in
+      // the log. The diagnostic logs I added in the BGM PR make this
+      // assertion reliable — `[broadcastAudio] file=<X>` fires inside
+      // NightOrchestrator.broadcastAudio for every role's open + close.
+      const backendLines = readBackendLogSince(backendLogStart)
+      const backendBroadcastFiles = new Set<string>()
+      for (const line of backendLines) {
+        const m = line.match(/\[broadcastAudio\] game=\d+ file=([^\s]+\.mp3)/)
+        if (m) backendBroadcastFiles.add(m[1]!)
+      }
+      const backendMissing = N1_ROLE_FILES.filter(
+        (f) => !backendBroadcastFiles.has(f),
+      )
+      expect(
+        backendMissing,
+        `Backend MUST publish all 8 role narration files during N1, even with ` +
+          `BGM playing. Missing: ${JSON.stringify(backendMissing)}\n` +
+          `Saw [broadcastAudio]: ${JSON.stringify([...backendBroadcastFiles].sort())}`,
+      ).toEqual([])
+
+      // Frontend layer: every role's AudioSequence STOMP frame must reach
+      // the host page. The "[stomp] received AudioSequence [<file>]" log
+      // is emitted at the top of GameView's STOMP onMessage handler before
+      // any branch dispatch — so its presence proves the BGM duck/unduck
+      // path on the audio queue did not somehow drop the frame.
+      const frontendStompFiles = new Set<string>()
+      for (const frame of stompFrames) {
+        const m = frame.match(/AudioSequence \[([^\]]+)\]/)
+        if (!m) continue
+        for (const f of m[1]!.split(',').map((s) => s.trim())) {
+          if (f.endsWith('.mp3')) frontendStompFiles.add(f)
+        }
+      }
+      const frontendMissing = N1_ROLE_FILES.filter(
+        (f) => !frontendStompFiles.has(f),
+      )
+      expect(
+        frontendMissing,
+        `Frontend MUST receive an AudioSequence STOMP frame for each of the 8 ` +
+          `role narration files even with BGM playing. Missing: ${JSON.stringify(frontendMissing)}\n` +
+          `Saw STOMP audio files: ${JSON.stringify([...frontendStompFiles].sort())}`,
+      ).toEqual([])
     } finally {
       await ctx.cleanup()
     }
