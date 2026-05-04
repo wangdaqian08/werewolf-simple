@@ -1102,9 +1102,7 @@ export const MOCK_ACTION_LOG: ActionLogEntry[] = [
       winnerNickname: 'Bob',
       winnerSeatIndex: 2,
       abstainCount: 1,
-      abstainVoters: [
-        { userId: 'u7', nickname: 'Grace', seatIndex: 7 },
-      ],
+      abstainVoters: [{ userId: 'u7', nickname: 'Grace', seatIndex: 7 }],
     }),
     targetUserId: 'u2',
     createdAt: '2023-12-31T23:59:00Z',
