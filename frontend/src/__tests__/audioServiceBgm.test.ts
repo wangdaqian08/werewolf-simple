@@ -59,11 +59,13 @@ function createMockAudio(src = ''): MockAudio {
     onended: null,
     onerror: null,
   }
-  // bind play/pause to the instance so `this` is the mock
-  const boundPlay = inst.play.bind(inst)
-  const boundPause = inst.pause.bind(inst)
-  inst.play = vi.fn(boundPlay)
-  inst.pause = vi.fn(boundPause)
+  // bind play/pause to the instance so `this` is the mock. The original
+  // play/pause are vi.fn mocks; rebind via closures so their handlers can
+  // see the instance.
+  const origPlay = inst.play
+  const origPause = inst.pause
+  inst.play = vi.fn(() => (origPlay as unknown as () => Promise<void>).call(inst))
+  inst.pause = vi.fn(() => (origPause as unknown as () => void).call(inst))
   mockAudioInstances.push(inst)
   return inst
 }
@@ -166,7 +168,9 @@ describe('audioService BGM lifecycle (real implementation)', () => {
     // for legacy reasons (potential future use), so we check createGain was
     // never called (the BGM-only Web Audio entry points).
     if (audioContextCtor.mock.results.length > 0) {
-      const ctx = audioContextCtor.mock.results[0].value as {
+      const result = audioContextCtor.mock.results[0]
+      if (!result) return
+      const ctx = result.value as {
         createGain: ReturnType<typeof vi.fn>
         createMediaElementSource: ReturnType<typeof vi.fn>
       }
@@ -203,9 +207,9 @@ describe('audioService BGM lifecycle (real implementation)', () => {
   it('startBgm with a different filename stops the previous track and starts the new one', () => {
     unlockUserGesture()
     audioService.startBgm('suspicion.mp3')
-    const first = mockAudioInstances[mockAudioInstances.length - 1]
+    const first = mockAudioInstances[mockAudioInstances.length - 1]!
     audioService.startBgm('心愿便利贴.mp3')
-    const second = mockAudioInstances[mockAudioInstances.length - 1]
+    const second = mockAudioInstances[mockAudioInstances.length - 1]!
 
     expect(first).not.toBe(second)
     // The old track was stopped (paused + src cleared during stopBgm).
@@ -230,7 +234,7 @@ describe('audioService BGM lifecycle (real implementation)', () => {
     // Fire any one of the captured document listeners — that's how the real
     // browser unlocks audio on the first click/touch/keydown/etc.
     expect(documentListeners.length).toBeGreaterThan(0)
-    documentListeners[0]()
+    documentListeners[0]!()
 
     const bgm = getBgmInstance()
     expect(bgm, 'deferred BGM start must fire on first user gesture').toBeDefined()
