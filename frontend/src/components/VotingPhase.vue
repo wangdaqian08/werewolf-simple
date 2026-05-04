@@ -524,6 +524,12 @@
         </template>
       </footer>
     </template>
+
+    <!-- Floating action log button: full game record across all days -->
+    <button class="log-fab" aria-label="游戏记录" @click="showLog = true">📋</button>
+
+    <!-- Action log drawer -->
+    <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
   </div>
 </template>
 
@@ -532,8 +538,10 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { GamePlayer, PlayerRole, VoteRoundHistory, VotingState } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
+import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 
 const props = defineProps<{
+  gameId: number
   votingPhase: VotingState
   players: GamePlayer[]
   myUserId: string
@@ -720,6 +728,7 @@ const ROLE_ZH: Record<string, string> = {
 // ── Vote History panel ────────────────────────────────────────────────────────
 const showHistory = ref(false)
 const showRoleCard = ref(false)
+const showLog = ref(false)
 
 watch([showHistory, showRoleCard], ([h, r]) => {
   document.body.style.overflow = h || r ? 'hidden' : ''
@@ -1240,5 +1249,25 @@ function onBadgeTap(player: GamePlayer) {
   color: var(--gold);
   font-size: 0.8125rem;
   font-weight: 600;
+}
+
+/* Floating action log FAB — mirrors DayPhase.log-fab so the game record stays
+   reachable across the entire daytime, not just DAY_DISCUSSION. */
+.log-fab {
+  position: fixed;
+  bottom: 88px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--paper, #f5f0e8);
+  border: 1px solid var(--border, #ccc2b0);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 </style>

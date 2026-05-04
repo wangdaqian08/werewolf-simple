@@ -7,6 +7,7 @@ import com.werewolf.config.GameTimingProperties
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.model.*
 import com.werewolf.repository.*
+import com.werewolf.service.ActionLogService
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
@@ -31,6 +32,7 @@ class SheriffServiceTest {
     @Mock lateinit var voteRepository: VoteRepository
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var stompPublisher: StompPublisher
+    @Mock lateinit var actionLogService: ActionLogService
     private lateinit var sheriffService: SheriffService
 
     @BeforeEach
@@ -40,6 +42,7 @@ class SheriffServiceTest {
             sheriffCandidateRepository, voteRepository, userRepository,
             stompPublisher, CoroutineScope(Dispatchers.Default),
             GameTimingProperties(),
+            actionLogService,
         )
     }
 

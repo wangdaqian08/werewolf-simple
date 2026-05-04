@@ -94,6 +94,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         plugins: [pinia, router],
       },
       props: {
+        gameId: 1,
         votingPhase,
         players,
         myUserId: sheriffUserId, // Current user is the eliminated sheriff
@@ -121,6 +122,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         plugins: [pinia, router],
       },
       props: {
+        gameId: 1,
         votingPhase,
         players,
         myUserId: otherPlayerId, // Current user is NOT the eliminated sheriff
@@ -151,6 +153,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         plugins: [pinia, router],
       },
       props: {
+        gameId: 1,
         votingPhase,
         players,
         myUserId: hostId, // Current user is the host but NOT the eliminated sheriff
@@ -215,6 +218,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         plugins: [pinia, router],
       },
       props: {
+        gameId: 1,
         votingPhase,
         players,
         myUserId: 'player-3',
@@ -263,6 +267,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         plugins: [pinia, router],
       },
       props: {
+        gameId: 1,
         votingPhase,
         players,
         myUserId: 'player-2',
@@ -294,6 +299,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     const wrapper = mount(VotingPhase, {
       global: { plugins: [pinia, router] },
       props: {
+        gameId: 1,
         votingPhase,
         players,
         myUserId: aliveOtherId,
@@ -317,6 +323,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     const wrapper = mount(VotingPhase, {
       global: { plugins: [pinia, router] },
       props: {
+        gameId: 1,
         votingPhase,
         players,
         myUserId: hostId,
@@ -337,6 +344,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     const wrapper = mount(VotingPhase, {
       global: { plugins: [pinia, router] },
       props: {
+        gameId: 1,
         votingPhase,
         players,
         myUserId: sheriffUserId,
@@ -397,6 +405,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         plugins: [pinia, router],
       },
       props: {
+        gameId: 1,
         votingPhase,
         players,
         myUserId: 'player-3',
@@ -462,6 +471,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         plugins: [pinia, router],
       },
       props: {
+        gameId: 1,
         votingPhase: votingPhaseWithTally,
         players,
         myUserId: 'player-3',
@@ -515,6 +525,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         plugins: [pinia, router],
       },
       props: {
+        gameId: 1,
         votingPhase: votingPhaseWithTally,
         players,
         myUserId: 'player-2',

@@ -24,6 +24,45 @@
             <div v-for="round in rounds" :key="round.day" class="round-block">
               <div class="round-label">第 {{ round.day }} 天</div>
 
+              <!-- Sheriff election (only emitted on the day of the election) -->
+              <div v-if="round.sheriffResult" class="log-section">
+                <div class="section-title">⭐ 警长选举</div>
+                <div v-if="round.sheriffResult.winnerNickname" class="log-row">
+                  <span class="seat-badge">{{ round.sheriffResult.winnerSeatIndex }}号</span>
+                  <span class="log-name">{{ round.sheriffResult.winnerNickname }}</span>
+                  <span class="log-tag tag-gold">警长</span>
+                </div>
+                <div v-else class="log-row muted">无警长</div>
+                <!-- Tally — same shape as vote result so players can analyse alliances -->
+                <div v-if="round.sheriffResult.tally.length > 0" class="tally">
+                  <div
+                    v-for="entry in round.sheriffResult.tally"
+                    :key="entry.userId"
+                    class="tally-row"
+                  >
+                    <span class="tally-name">{{ entry.seatIndex }}号 {{ entry.nickname }}</span>
+                    <span class="tally-votes">{{ entry.votes }} 票</span>
+                    <span class="tally-voters">
+                      （{{ entry.voters.map((v) => v.seatIndex + '号').join('、') }}）
+                    </span>
+                  </div>
+                </div>
+                <div
+                  v-if="(round.sheriffResult.abstainCount ?? 0) > 0"
+                  class="tally-row tally-abstain"
+                >
+                  <span class="tally-name muted">弃权</span>
+                  <span class="tally-votes">{{ round.sheriffResult.abstainCount }} 票</span>
+                  <span class="tally-voters">
+                    （{{
+                      (round.sheriffResult.abstainVoters ?? [])
+                        .map((v) => v.seatIndex + '号')
+                        .join('、')
+                    }}）
+                  </span>
+                </div>
+              </div>
+
               <!-- Deaths at start of day -->
               <div v-if="round.deaths.length > 0" class="log-section">
                 <div class="section-title">☽ 昨夜出局</div>
@@ -71,6 +110,20 @@
                     </span>
                   </div>
                 </div>
+                <div
+                  v-if="(round.voteResult.abstainCount ?? 0) > 0"
+                  class="tally-row tally-abstain"
+                >
+                  <span class="tally-name muted">弃权</span>
+                  <span class="tally-votes">{{ round.voteResult.abstainCount }} 票</span>
+                  <span class="tally-voters">
+                    （{{
+                      (round.voteResult.abstainVoters ?? [])
+                        .map((v) => v.seatIndex + '号')
+                        .join('、')
+                    }}）
+                  </span>
+                </div>
               </div>
 
               <!-- Hunter shot -->
@@ -100,6 +153,7 @@ import type {
   HunterShotPayload,
   IdiotRevealPayload,
   NightDeathPayload,
+  SheriffResultPayload,
   VoteResultPayload,
 } from '@/types'
 
@@ -108,6 +162,7 @@ defineEmits<{ close: [] }>()
 
 interface Round {
   day: number
+  sheriffResult: SheriffResultPayload | null
   deaths: NightDeathPayload[]
   voteResult: VoteResultPayload | null
   hunterShot: HunterShotPayload | null
@@ -122,7 +177,14 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
 
   const getOrCreate = (day: number): Round => {
     if (!map.has(day)) {
-      map.set(day, { day, deaths: [], voteResult: null, hunterShot: null, idiotReveals: [] })
+      map.set(day, {
+        day,
+        sheriffResult: null,
+        deaths: [],
+        voteResult: null,
+        hunterShot: null,
+        idiotReveals: [],
+      })
     }
     return map.get(day)!
   }
@@ -143,6 +205,9 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         break
       case 'IDIOT_REVEAL':
         getOrCreate(day).idiotReveals.push(payload as IdiotRevealPayload)
+        break
+      case 'SHERIFF_RESULT':
+        getOrCreate(day).sheriffResult = payload as SheriffResultPayload
         break
     }
   }
@@ -332,6 +397,16 @@ watch(
   color: var(--red, #b5251a);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.tally-abstain {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-l, #ddd6c6);
+}
+
+.tally-abstain .tally-votes {
+  color: var(--muted, #8a7a65);
 }
 
 .tally-voters {
