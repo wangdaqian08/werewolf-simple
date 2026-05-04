@@ -1,6 +1,29 @@
 # E2E Integration — CI Sharding + Nickname Namespacing
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: SUPERSEDED (kept for history).**
+>
+> Patch 1 (CI sharding) was applied as proposed in this plan, but the layout
+> evolved beyond `--shard=N/3`:
+>
+>   - PR #97 (2026-05-04) — replaced `--shard=N/3` with a hand-curated
+>     5-shard matrix that pins specific spec files per shard, balanced by
+>     measured runtime. Wall-clock dropped from ~14m to ~7m24s.
+>   - PR #100 (2026-05-05) — split `flow-12p-sheriff.spec.ts` across two
+>     shards via Playwright `--grep` (one per describe block) and bumped
+>     to a 6-shard layout. Wall-clock dropped to ~6m36s.
+>
+> Patch 2 (nickname namespacing) was **not** applied. Additional shards
+> parallelize workloads that would have needed `workers > 1`, so the 30+
+> specs that depend on the literal `'Host'` nickname were left untouched.
+>
+> The current shard map and per-spec runtime budget is documented inline
+> in `.github/workflows/ci.yml` under the `e2e-integration` job.
+>
+> The blueprint below is preserved as the original 2026-04-19 proposal —
+> useful context for understanding the path the repo took, not a current
+> spec of CI behaviour.
+
+---
 
 **Goal:** Cut E2E integration wall-clock (~7 min → ~3 min) and make parallel runs safe by (1) sharding the CI job and (2) namespacing hard-coded nicknames that collide when the same backend sees concurrent sessions.
 

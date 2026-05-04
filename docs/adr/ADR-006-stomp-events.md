@@ -24,20 +24,37 @@ the simple class name (e.g. `"PhaseChanged"`, `"PlayerEliminated"`).
 
 ### Key DomainEvent types
 
-| Event                  | Fields                                              | Channel    |
-|------------------------|-----------------------------------------------------|------------|
-| `PhaseChanged`         | `gameId, phase: GamePhase, subPhase: String?`       | game topic |
-| `NightSubPhaseChanged` | `gameId, subPhase: NightSubPhase`                   | game topic |
-| `RoleAssigned`         | `gameId, userId, role: PlayerRole`                  | private    |
-| `PlayerEliminated`     | `gameId, userId, role: PlayerRole`                  | game topic |
-| `VoteTally`            | `gameId, eliminatedUserId?, tally: Map<String,Int>` | game topic |
-| `SeerResult`           | `gameId, checkedUserId, isWerewolf`                 | private    |
-| `GameOver`             | `gameId, winner: WinnerSide`                        | game topic |
-| `HunterShot`           | `gameId, hunterUserId, targetUserId`                | game topic |
-| `BadgeHandover`        | `gameId, fromUserId, toUserId?`                     | game topic |
-| `SheriffElected`       | `gameId, sheriffUserId?`                            | game topic |
-| `RoleConfirmed`        | `gameId, userId`                                    | game topic |
-| `NightResult`          | `gameId, kills: List<String>`                       | game topic |
+Source of truth: `backend/src/main/kotlin/com/werewolf/game/DomainEvent.kt`.
+All subclasses carry a `@JsonTypeName("…")` annotation so renaming the Kotlin
+class does not break the wire format — but the annotation value is the wire
+discriminator and is itself a hard contract with the frontend.
+
+| Event                   | Fields                                              | Channel    |
+|-------------------------|-----------------------------------------------------|------------|
+| `PhaseChanged`          | `gameId, phase: GamePhase, subPhase: String?`       | game topic |
+| `NightSubPhaseChanged`  | `gameId, subPhase: NightSubPhase`                   | game topic |
+| `RoleAssigned`          | `gameId, userId, role: PlayerRole`                  | private    |
+| `RoleConfirmed`         | `gameId, userId`                                    | game topic |
+| `NightResult`           | `gameId, kills: List<String>`                       | game topic |
+| `PlayerEliminated`      | `gameId, userId, role: PlayerRole`                  | game topic |
+| `VoteSubmitted`         | `gameId, voterUserId`                               | game topic |
+| `VoteTally`             | `gameId, eliminatedUserId?, tally: Map<String,Double>` | game topic |
+| `IdiotRevealed`         | `gameId, userId`                                    | game topic |
+| `WolfSelectionChanged`  | `gameId, selectedTargetUserId`                      | game topic |
+| `SeerResult`            | `gameId, checkedUserId, isWerewolf`                 | private    |
+| `HunterShot`            | `gameId, hunterUserId, targetUserId`                | game topic |
+| `BadgeHandover`         | `gameId, fromUserId, toUserId?`                     | game topic |
+| `SheriffElected`        | `gameId, sheriffUserId?`                            | game topic |
+| `GameOver`              | `gameId, winner: WinnerSide?`                       | game topic |
+| `AudioSequence`         | `gameId, audioSequence: AudioSequence`              | game topic |
+| `OpenEyes`              | `gameId, role, phase, nightNumber`                  | game topic |
+| `CloseEyes`             | `gameId, role, phase, nightNumber`                  | game topic |
+| `RoleAction`            | `gameId, userId, role, actionType, targets, canHeal?, canPoison?, timeoutMs` | game topic |
+
+`AudioSequence` is the audio contract — see `docs/adr/audio.md` for the
+server-authoritative model (cache, replay buffer, dedup gate). `tally` is
+`Map<String, Double>` because sheriff voting weight is 1.5× (ADR-009), so
+totals are not always integers.
 
 ### Private channel usage
 

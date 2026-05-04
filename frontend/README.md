@@ -101,5 +101,5 @@ CI runs these as separate jobs (see `.github/workflows/ci.yml`):
 | CI Job | Script | Notes |
 |---|---|---|
 | `checks` | `npm run test:unit:coverage` | Also runs lint, format, type-check |
-| `e2e-ui` | `npm run test:e2e:ui` | Sharded 3-way for speed |
-| `e2e-integration` | `npm run test:e2e:integration` | Runs after backend build passes |
+| `e2e-ui` | `npm run test:e2e:ui` — `--shard=N/3` | 3 parallel shards for speed |
+| `e2e-integration` | `npx playwright test --config=playwright.real.config.ts <files>` | 6 hand-curated shards, balanced by measured runtime; matrix in `.github/workflows/ci.yml` is the source of truth. Runs after backend build passes |
