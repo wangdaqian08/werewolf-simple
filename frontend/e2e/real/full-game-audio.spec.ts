@@ -1,11 +1,18 @@
 /**
- * Real-backend E2E: full 9-player game, witch + seer + guard.
+ * Real-backend E2E: full 9-player game, witch + seer + guard, with BGM.
  *
  * Drives a deterministic 2-night / 1-day-vote game until wolves reach parity
  * (wolves >= others in CLASSIC). Captures host browser console + backend log
  * for the entire run and asserts every expected audio file fires at every
  * transition: night-entry cue, all four role open/close pairs each night,
  * night→day cue between days, and the game-over phase reached at the end.
+ *
+ * BGM lifecycle (folded in from the retired bgm-flow.spec.ts) — the host
+ * room is created with a BGM track, and the test asserts the BGM
+ * HTMLAudioElement is playing during NIGHT and stopped at NIGHT→DAY. This
+ * exercises the same contract bgm-flow used to verify (Web-Audio routing
+ * regression on first NIGHT, queue interaction with role narration) without
+ * paying for a second cold-start setupGame.
  *
  * 9p (not 7p) because GameService.kt:337 assigns 3 wolves at 7-9 players;
  * with 3 wolves vs 4 others a 7p game hits CLASSIC wolf-win parity after a
@@ -39,10 +46,7 @@
 import { expect, type Page, test } from '@playwright/test'
 import { setupGame } from './helpers/multi-browser'
 import { act, actName, type BotInfo, type RoleName } from './helpers/shell-runner'
-import {
-  readBackendLogLineCount,
-  readBackendLogSince,
-} from './helpers/backend-log'
+import { readBackendLogLineCount, readBackendLogSince } from './helpers/backend-log'
 import {
   readUnvotedAlivePlayerIds,
   waitForAllVotesRegistered,
@@ -55,6 +59,46 @@ import {
 import { attachCompositeOnFailure } from './helpers/composite-screenshot'
 
 // ── Audio manifest ──────────────────────────────────────────────────────────
+
+const BGM_TRACK = 'suspicion.mp3'
+
+interface BgmSnapshot {
+  exists: boolean
+  paused: boolean
+  volume: number
+  loop: boolean
+  src: string
+  filename: string | null
+}
+
+/**
+ * Read the live BGM state from window.__audioService. The BGM element is
+ * created via `new Audio(url)` and is NOT a child of `document`, so a
+ * `document.querySelector('audio')` returns nothing for it. Routing through
+ * the singleton getBgmState() is the only reliable way to inspect the live
+ * element from a Playwright page.
+ */
+async function readBgmState(page: Page): Promise<BgmSnapshot> {
+  return page.evaluate(() => {
+    const svc = (
+      window as unknown as {
+        __audioService?: { getBgmState: () => BgmSnapshot }
+      }
+    ).__audioService
+    if (!svc) {
+      return { exists: false, paused: true, volume: 0, loop: false, src: '', filename: null }
+    }
+    const s = svc.getBgmState()
+    return {
+      exists: s.exists,
+      paused: s.paused,
+      volume: s.volume,
+      loop: s.loop,
+      src: s.src,
+      filename: s.filename,
+    }
+  })
+}
 
 const NIGHT_ENTRY_FILES = ['goes_dark_close_eyes.mp3', 'wolf_howl.mp3'] as const
 const NIGHT_ROLE_FILES = [
@@ -146,9 +190,7 @@ async function waitForAudioFile(
   budgetMs: number,
 ): Promise<boolean> {
   const seen = (): boolean =>
-    audioEvents.some(
-      (e) => e.includes('Starting playback') && e.includes(filename),
-    )
+    audioEvents.some((e) => e.includes('Starting playback') && e.includes(filename))
   const deadline = Date.now() + budgetMs
   while (Date.now() < deadline) {
     if (seen()) return true
@@ -224,6 +266,7 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
     const ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
+      bgmTrack: BGM_TRACK,
       // Explicit role kit — required so SEER, WITCH, GUARD all roll. Default
       // optional set ('SEER','WITCH','HUNTER') would skip GUARD.
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
@@ -240,10 +283,7 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
       const trackAll = (msg: { text: () => string }) => {
         const text = msg.text()
         if (text.includes('[stomp] received')) stompFrames.push(text)
-        if (
-          text.includes('[AudioService]') ||
-          text.includes('[useAudioService]')
-        ) {
+        if (text.includes('[AudioService]') || text.includes('[useAudioService]')) {
           audioEvents.push(text)
         }
       }
@@ -258,9 +298,7 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
       const seer = (ctx.roleMap.SEER ?? [])[0]
       const witch = (ctx.roleMap.WITCH ?? [])[0]
       const guard = (ctx.roleMap.GUARD ?? [])[0]
-      const villagers = (ctx.roleMap.VILLAGER ?? []).filter(
-        (b) => b.nick !== 'Host',
-      )
+      const villagers = (ctx.roleMap.VILLAGER ?? []).filter((b) => b.nick !== 'Host')
       expect(
         wolves.length >= 1 && seer && witch && guard && villagers.length >= 2,
         `Role kit must include >=1 non-host wolf + seer + witch + guard + ` +
@@ -282,6 +320,22 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
       await startNightBtn.click()
       expect(await waitForPhase(hostPage, gameId, 'NIGHT', 15_000)).toBe(true)
 
+      // ── BGM lifecycle: should be playing during NIGHT ────────────────────
+      // The phase watcher in useAudioService starts BGM on phase=NIGHT, then
+      // the sub-phase watcher tweens its level up to HIGH on WEREWOLF_PICK.
+      // Allow a short settle window for the rAF tween + STOMP round-trip.
+      // (Folded in from bgm-flow.spec.ts — see the audio-flow header comment.)
+      await expect
+        .poll(async () => readBgmState(hostPage), {
+          timeout: 10_000,
+          message: 'BGM must be playing once NIGHT 1 starts',
+        })
+        .toMatchObject({ exists: true, paused: false, loop: true })
+      const duringNight = await readBgmState(hostPage)
+      expect(duringNight.src).toContain(`/audio/bgm/${encodeURIComponent(BGM_TRACK)}`)
+      expect(duringNight.filename).toBe(BGM_TRACK)
+      expect(duringNight.volume).toBeGreaterThan(0)
+
       // Seer check target must not be self — pick a wolf so the result is
       // informative for villager team morale (irrelevant to test, just realistic).
       const seerCheckN1 = wolfBot.seat
@@ -299,6 +353,22 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
         await waitForPhase(hostPage, gameId, 'DAY_DISCUSSION', 30_000),
         'DAY_DISCUSSION not reached after N1',
       ).toBe(true)
+
+      // ── BGM lifecycle: should stop at NIGHT→DAY ──────────────────────────
+      // The phase watcher fires stopBgm() on any non-NIGHT phase. The element
+      // is either gone (src cleared) or paused; either signal is acceptable.
+      await expect
+        .poll(
+          async () => {
+            const s = await readBgmState(hostPage)
+            return !s.exists || s.paused || !s.src.includes('/audio/bgm/')
+          },
+          {
+            timeout: 5_000,
+            message: 'BGM must stop at NIGHT→DAY 1 transition',
+          },
+        )
+        .toBe(true)
 
       // ── D1: misvote out a non-wolf so wolves stay alive ───────────────────
       // Reveal first (host-only DOM action).
@@ -336,12 +406,7 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
         expectedVoterIds.push(bot.userId)
       }
       if (expectedVoterIds.length > 0) {
-        await waitForAllVotesRegistered(
-          hostPage,
-          gameId,
-          expectedVoterIds,
-          15_000,
-        )
+        await waitForAllVotesRegistered(hostPage, gameId, expectedVoterIds, 15_000)
       }
 
       await hostPage.getByTestId('voting-reveal').click()
@@ -415,11 +480,7 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
             })
             return r.ok ? (await r.json()).phase : null
           }, gameId)
-          return (
-            phase === 'GAME_OVER' ||
-            phase === 'DAY_DISCUSSION' ||
-            phase === 'DAY_PENDING'
-          )
+          return phase === 'GAME_OVER' || phase === 'DAY_DISCUSSION' || phase === 'DAY_PENDING'
         },
         'Game must reach GAME_OVER or DAY_DISCUSSION after N2',
         30_000,
@@ -439,8 +500,7 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
       const stompSettleDeadline = Date.now() + 60_000
       while (Date.now() < stompSettleDeadline) {
         const guardCloseStomps = stompFrames.filter(
-          (f) =>
-            f.includes('AudioSequence') && f.includes('guard_close_eyes.mp3'),
+          (f) => f.includes('AudioSequence') && f.includes('guard_close_eyes.mp3'),
         ).length
         if (guardCloseStomps >= 2) break
         await hostPage.waitForTimeout(500)
@@ -512,9 +572,7 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
       for (const [file, expected] of Object.entries(expectedNightInitPerFile)) {
         const actual = backendNightInitCounts[file] ?? 0
         if (actual < expected) {
-          backendMissing.push(
-            `${file}: expected ${expected} [broadcastNightInit], got ${actual}`,
-          )
+          backendMissing.push(`${file}: expected ${expected} [broadcastNightInit], got ${actual}`)
         }
       }
       expect(
