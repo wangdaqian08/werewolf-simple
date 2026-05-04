@@ -650,6 +650,5 @@ export const audioService = new AudioService()
 // the only one routed via Web Audio anyway, so a singleton-reflection
 // hook is the cleanest way to expose its state.
 if (typeof window !== 'undefined') {
-  ;(window as unknown as { __audioService?: AudioService }).__audioService =
-    audioService
+  ;(window as unknown as { __audioService?: AudioService }).__audioService = audioService
 }
