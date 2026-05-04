@@ -8,6 +8,7 @@ data class RoomConfigRequest(
     val roles: List<PlayerRole> = listOf(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER),
     val hasSheriff: Boolean = true,
     val winCondition: WinConditionMode = WinConditionMode.CLASSIC,
+    val bgmTrack: String? = null,
 )
 
 data class CreateRoomRequest(val config: RoomConfigRequest = RoomConfigRequest())
@@ -27,7 +28,7 @@ data class RoomPlayerDto(
     val isHost: Boolean,
 )
 
-data class RoomConfigDto(val totalPlayers: Int, val roles: List<PlayerRole>, val hasSheriff: Boolean = true, val winCondition: WinConditionMode = WinConditionMode.CLASSIC)
+data class RoomConfigDto(val totalPlayers: Int, val roles: List<PlayerRole>, val hasSheriff: Boolean = true, val winCondition: WinConditionMode = WinConditionMode.CLASSIC, val bgmTrack: String? = null)
 
 data class RoomDto(
     val roomId: String,

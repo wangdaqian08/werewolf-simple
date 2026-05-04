@@ -739,6 +739,15 @@ class NightOrchestrator(
             room = context.room,
         )
 
+        // Diagnostic: full visibility into the night-entry cue path. Pairs
+        // with `[broadcastAudio]` log on role audio so the backend log
+        // covers every audio frame published, not just the role-loop ones.
+        log.info(
+            "[broadcastNightInit] game=$gameId day=${context.game.dayNumber} " +
+                "withWaiting=$withWaiting initialSubPhase=${initialSubPhase.name} " +
+                "audioFiles=${audioSequence.audioFiles} priority=${audioSequence.priority}"
+        )
+
         stompPublisher.broadcastGame(gameId, DomainEvent.PhaseChanged(gameId, GamePhase.NIGHT, initialSubPhase.name))
         stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
     }
@@ -799,6 +808,11 @@ class NightOrchestrator(
             priority = 5,
             timestamp = System.currentTimeMillis(),
         )
+        // Diagnostic: every audio publish leaves a trace so a missing-audio
+        // regression can be classified as either "backend never broadcast"
+        // (no line) vs "broadcast but transport/frontend lost it" (line present
+        // + matching frontend [stomp] received line).
+        log.info("[broadcastAudio] game=$gameId file=$audioFile id=${audioSequence.id}")
         stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
     }
 

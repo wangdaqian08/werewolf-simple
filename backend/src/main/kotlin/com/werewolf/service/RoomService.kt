@@ -2,6 +2,7 @@ package com.werewolf.service
 
 import com.werewolf.auth.AuthService
 import com.werewolf.config.GameTimingProperties
+import com.werewolf.controller.BgmTrackRegistry
 import com.werewolf.dto.RoomConfigDto
 import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.dto.RoomDto
@@ -23,10 +24,15 @@ class RoomService(
     private val authService: AuthService,
     private val stompPublisher: StompPublisher,
     private val timing: GameTimingProperties,
+    private val bgmRegistry: BgmTrackRegistry,
 ) {
     @Transactional
     fun createRoom(userId: String, nickname: String, avatarUrl: String?, cfg: RoomConfigRequest): RoomDto {
         authService.loginOrRegister(userId, nickname, avatarUrl)
+
+        if (!bgmRegistry.isValidTrack(cfg.bgmTrack)) {
+            throw InvalidBgmTrackException("Unknown BGM track: ${cfg.bgmTrack}")
+        }
 
         val room = roomRepository.save(
             Room(
@@ -40,7 +46,7 @@ class RoomService(
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
-                config = buildGameConfig(),
+                config = buildGameConfig(cfg.bgmTrack),
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")
@@ -188,7 +194,7 @@ class RoomService(
             hostId = room.hostUserId,
             status = room.status.name,
             players = playerDtos,
-            config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition),
+            config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack),
             activeGameId = activeGameId,
         )
     }
@@ -203,13 +209,14 @@ class RoomService(
      * overrides. Production leaves the properties unset and gets the compile-time
      * role defaults; the test profile sets small values so CI completes quickly.
      */
-    private fun buildGameConfig(): GameConfig = GameConfig(
+    private fun buildGameConfig(bgmTrack: String?): GameConfig = GameConfig(
         roleDelays = mapOf(
             PlayerRole.WEREWOLF to timing.applyTo(PlayerRole.WEREWOLF),
             PlayerRole.SEER to timing.applyTo(PlayerRole.SEER),
             PlayerRole.WITCH to timing.applyTo(PlayerRole.WITCH),
             PlayerRole.GUARD to timing.applyTo(PlayerRole.GUARD),
-        )
+        ),
+        bgmTrack = bgmTrack,
     )
 }
 
@@ -220,3 +227,4 @@ class PlayerNotInRoomException(message: String) : RuntimeException(message)
 class SeatTakenException(message: String) : RuntimeException(message)
 class NotHostException(message: String) : RuntimeException(message)
 class CannotKickHostException(message: String) : RuntimeException(message)
+class InvalidBgmTrackException(message: String) : RuntimeException(message)

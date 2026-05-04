@@ -19,10 +19,8 @@
       gameStore.state?.nightPhase?.dayNumber ?? gameStore.state?.dayPhase?.dayNumber ?? ''
     "
   >
-    <!-- Mute/unmute floating button -->
-    <button class="audio-mute-btn" :title="isMuted ? 'Unmute' : 'Mute'" @click="toggleMute">
-      {{ isMuted ? '🔇' : '🔊' }}
-    </button>
+    <!-- Floating mute/unmute toggle with expanding volume slider -->
+    <VolumeControl />
 
     <!-- Role Reveal phase -->
     <template v-if="gameStore.state?.phase === 'ROLE_REVEAL' && gameStore.state?.myRole">
@@ -477,6 +475,7 @@ import {
 } from '@/services/stompClient'
 import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
+import VolumeControl from '@/components/VolumeControl.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
 import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
@@ -494,8 +493,8 @@ const userStore = useUserStore()
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
 
-// Initialize audio service
-const { isMuted, toggleMute } = useAudioService()
+// Initialize audio service (installs phase + sub-phase BGM watchers).
+useAudioService()
 
 const isMock = import.meta.env.VITE_MOCK === 'true'
 const hasConfirmedRole = ref(false)
@@ -943,6 +942,15 @@ onMounted(async () => {
 
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
+        // Diagnostic: every STOMP frame leaves a trace before any branch
+        // dispatch. Pairs with backend [broadcastAudio] log so missing-audio
+        // regressions can be classified as "never reached frontend" vs
+        // "reached frontend but not handled".
+        console.log(
+          '[stomp] received',
+          data.type,
+          data.audioSequence?.audioFiles ?? data.subPhase ?? data.phase ?? '',
+        )
         // Mock sends full state snapshots; real backend sends typed domain events
         if (data.type === 'GAME_STATE_UPDATE') {
           gameStore.setState(data.payload)
@@ -1085,29 +1093,7 @@ function normalizePhaseName(phase: string | undefined): string {
 </script>
 
 <style scoped>
-.audio-mute-btn {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  z-index: 100;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--card);
-  font-size: 1.25rem;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.night-mode .audio-mute-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-}
+/* Audio control lives in VolumeControl.vue. */
 
 .game-wrap {
   display: flex;

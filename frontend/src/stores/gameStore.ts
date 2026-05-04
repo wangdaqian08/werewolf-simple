@@ -19,7 +19,18 @@ export const useGameStore = defineStore('game', () => {
     // incoming audioSequence when it actually carries files.
     const incomingHasAudio = (newState.audioSequence?.audioFiles?.length ?? 0) > 0
     const audioSequence = incomingHasAudio ? newState.audioSequence : state.value?.audioSequence
-    state.value = { ...newState, events: s.events ?? [], audioSequence }
+    // audioReplayBuffer is a per-game ring buffer surfaced by the backend so
+    // a STOMP-reconnect's refreshState() can replay every cue missed during
+    // the disconnect window. Always adopt the incoming list (or undefined if
+    // the backend dropped the field, e.g. mock mode) — useAudioService dedup
+    // by sequence id ensures polls do not double-fire still-online audio.
+    const audioReplayBuffer = newState.audioReplayBuffer
+    state.value = {
+      ...newState,
+      events: s.events ?? [],
+      audioSequence,
+      audioReplayBuffer,
+    }
   }
 
   function addEvent(event: GameEvent) {

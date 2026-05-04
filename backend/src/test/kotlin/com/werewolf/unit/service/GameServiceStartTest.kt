@@ -1,5 +1,6 @@
 package com.werewolf.unit.service
 
+import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
@@ -30,6 +31,7 @@ class GameServiceStartTest {
     @Mock lateinit var nightPhaseRepository: NightPhaseRepository
     @Mock lateinit var voteRepository: VoteRepository
     @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
+    @Mock lateinit var audioReplayCache: AudioReplayCache
     @InjectMocks lateinit var gameService: GameService
 
     private val hostId = "host:001"

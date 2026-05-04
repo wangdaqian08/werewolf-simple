@@ -87,6 +87,14 @@ export interface GameSetupOptions {
   /** Win condition mode. Defaults to 'CLASSIC'; pass 'HARD_MODE' to flip the
    *  CreateRoom DOM toggle before submission. */
   winCondition?: 'CLASSIC' | 'HARD_MODE'
+  /**
+   * Optional BGM track filename (e.g. 'suspicion.mp3'). When set, the host
+   * picks the matching option from the BGM dropdown on the CreateRoom page
+   * before submitting. The filename must exist under
+   * backend/src/main/resources/static/audio/bgm/. If unset, no BGM is selected
+   * and no `<audio src*="/audio/bgm/">` element will be created during NIGHT.
+   */
+  bgmTrack?: string
 }
 
 // ── Setup ────────────────────────────────────────────────────────────────────
@@ -207,6 +215,29 @@ export async function setupGame(
         timeout: 5_000,
       })
     }
+  }
+
+  // Select BGM track if requested. The custom dropdown is populated
+  // asynchronously from GET /api/audio/tracks; we wait for the option to
+  // appear before clicking. (Native <select> rendered its menu at a
+  // browser-controlled position that broke in mobile-emulation viewports,
+  // so the form uses a custom popover instead — interaction is click-trigger
+  // then click-option, not selectOption().)
+  if (opts.bgmTrack) {
+    const trigger = hostPage.getByTestId('bgm-track-select')
+    await expect(trigger, 'BGM dropdown must be present on CreateRoomView').toBeVisible({
+      timeout: 5_000,
+    })
+    await trigger.click()
+    const option = hostPage.locator(`.bgm-select-option[data-filename="${opts.bgmTrack}"]`)
+    await expect
+      .poll(async () => option.count(), {
+        timeout: 5_000,
+        message: `BGM track ${opts.bgmTrack} must appear in the dropdown options`,
+      })
+      .toBeGreaterThan(0)
+    await option.first().click()
+    await expect(trigger).toHaveAttribute('data-value', opts.bgmTrack, { timeout: 2_000 })
   }
 
   // Create the room

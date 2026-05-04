@@ -29,6 +29,7 @@ class RoomServiceReadyTest {
     @Mock lateinit var authService: AuthService
     @Mock lateinit var stompPublisher: StompPublisher
     @org.mockito.Spy val timing: com.werewolf.config.GameTimingProperties = com.werewolf.config.GameTimingProperties()
+    @Mock lateinit var bgmRegistry: com.werewolf.controller.BgmTrackRegistry
     @InjectMocks lateinit var roomService: RoomService
 
     private val roomId = 1

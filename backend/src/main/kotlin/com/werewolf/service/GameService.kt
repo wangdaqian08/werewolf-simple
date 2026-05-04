@@ -1,5 +1,6 @@
 package com.werewolf.service
 
+import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
@@ -24,6 +25,7 @@ class GameService(
     private val nightPhaseRepository: NightPhaseRepository,
     private val voteRepository: VoteRepository,
     private val eliminationHistoryRepository: EliminationHistoryRepository,
+    private val audioReplayCache: AudioReplayCache,
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
@@ -316,6 +318,19 @@ class GameService(
             "dayPhase" to dayPhase,
             "votingPhase" to votingPhase,
             "nightPhase" to nightPhase,
+            // Audio recovery for STOMP-reconnect.
+            //
+            // `audioSequence` carries the most recent broadcast (legacy
+            // single-field contract — preserves behaviour for any consumer
+            // that already reads it). `audioReplayBuffer` carries the full
+            // recent ring buffer so the frontend can replay every cue
+            // missed during a disconnect window, not just the last one.
+            //
+            // Frontend dedup (useAudioService playedIds Set) skips
+            // sequences the client already played, so polls do not
+            // double-fire audio for still-online clients.
+            "audioSequence" to audioReplayCache.getLatest(gameId),
+            "audioReplayBuffer" to audioReplayCache.snapshot(gameId),
             "players" to players.sortedBy { it.seatIndex }.map { p ->
                 mapOf(
                     "userId"        to p.userId,

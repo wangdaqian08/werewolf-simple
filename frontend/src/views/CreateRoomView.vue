@@ -112,6 +112,45 @@
             <span class="toggle-thumb" />
           </button>
         </div>
+        <div class="role-row row-on">
+          <span class="role-emoji">🎵</span>
+          <div class="role-names">
+            <span class="role-name">夜晚配乐 Night BGM</span>
+            <span class="win-cond-desc">每夜循环播放，旁白时自动降低音量</span>
+          </div>
+          <div ref="bgmSelectRef" class="bgm-select-wrap">
+            <button
+              type="button"
+              :class="['bgm-select-trigger', { open: bgmOpen }]"
+              :disabled="bgmLoading"
+              data-testid="bgm-track-select"
+              :data-value="bgmTrack ?? ''"
+              @click="bgmOpen = !bgmOpen"
+            >
+              <span class="bgm-select-label">{{ bgmDisplayName }}</span>
+              <span class="bgm-select-caret" aria-hidden="true">▾</span>
+            </button>
+            <!--
+              Bottom-anchored menu (bottom: 100%) opens UPWARD, which is the
+              right call here: the BGM row is the last form row before the
+              Create button, so a downward-opening menu would be clipped or
+              overlap the CTA.
+            -->
+            <ul v-if="bgmOpen" class="bgm-select-menu" role="listbox">
+              <li
+                v-for="t in bgmTracks"
+                :key="t.id ?? '__none__'"
+                role="option"
+                :data-filename="t.filename ?? ''"
+                :aria-selected="bgmTrack === (t.filename ?? null)"
+                :class="['bgm-select-option', { selected: bgmTrack === (t.filename ?? null) }]"
+                @click="onSelectBgm(t.filename ?? null)"
+              >
+                {{ t.displayName }}
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       <button :disabled="loading" class="btn btn-primary" @click="handleCreate">
@@ -124,10 +163,11 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
+import { audioTracksService, type AudioTrack } from '@/services/audioTracksService'
 import type { WinConditionMode } from '@/types'
 
 const router = useRouter()
@@ -152,8 +192,49 @@ const enabledOptional = ref(new Set(['SEER', 'WITCH', 'HUNTER']))
 const hasSheriff = ref(true)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
+const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: '无 (None)' }])
+const bgmTrack = ref<string | null>(null)
+const bgmLoading = ref(false)
+const bgmOpen = ref(false)
+const bgmSelectRef = ref<HTMLElement | null>(null)
+
+const bgmDisplayName = computed(() => {
+  const match = bgmTracks.value.find((t) => (t.filename ?? null) === bgmTrack.value)
+  return match?.displayName ?? '无 (None)'
+})
+
+function onSelectBgm(filename: string | null) {
+  bgmTrack.value = filename
+  bgmOpen.value = false
+}
+
+function onDocumentClick(e: MouseEvent) {
+  if (!bgmOpen.value) return
+  const root = bgmSelectRef.value
+  if (root && !root.contains(e.target as Node)) {
+    bgmOpen.value = false
+  }
+}
+
 const loading = ref(false)
 const error = ref('')
+
+onMounted(async () => {
+  document.addEventListener('click', onDocumentClick, true)
+  bgmLoading.value = true
+  try {
+    const list = await audioTracksService.fetchTracks()
+    if (list.length > 0) bgmTracks.value = list
+  } catch (e) {
+    console.warn('[CreateRoomView] failed to load BGM tracks', e)
+  } finally {
+    bgmLoading.value = false
+  }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick, true)
+})
 
 function increment() {
   if (totalPlayers.value < MAX_PLAYERS) totalPlayers.value++
@@ -192,6 +273,7 @@ async function handleCreate() {
         roles,
         hasSheriff: hasSheriff.value,
         winCondition: winCondition.value,
+        bgmTrack: bgmTrack.value,
       },
     })
     roomStore.setRoom(room)
@@ -451,5 +533,100 @@ async function handleCreate() {
   font-size: 0.875rem;
   text-align: center;
   margin: 0;
+}
+
+/*
+ * Custom BGM dropdown.
+ * The native <select> rendered the option list at a Chrome-controlled
+ * position that broke under mobile-emulation viewports (popup floated
+ * mid-page, not anchored to the trigger). This custom component anchors
+ * the menu to the trigger and opens UPWARD because the BGM row is the
+ * last item before the Create button — opening downward would clip
+ * against the viewport bottom on portrait mobile.
+ */
+.bgm-select-wrap {
+  position: relative;
+  flex-shrink: 0;
+  max-width: 140px;
+}
+
+.bgm-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4375rem 0.625rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.bgm-select-trigger:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.bgm-select-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bgm-select-caret {
+  font-size: 0.625rem;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.bgm-select-trigger.open .bgm-select-caret {
+  transform: rotate(180deg);
+}
+
+.bgm-select-menu {
+  position: absolute;
+  bottom: calc(100% + 0.25rem);
+  right: 0;
+  min-width: 100%;
+  max-width: 200px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  z-index: 50;
+}
+
+.bgm-select-option {
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bgm-select-option:hover,
+.bgm-select-option:active {
+  background: var(--paper);
+}
+
+.bgm-select-option.selected {
+  background: rgba(45, 106, 63, 0.1);
+  color: var(--green);
+  font-weight: 500;
 }
 </style>

@@ -14,7 +14,15 @@ export interface AudioOptions {
   volume?: number
 }
 
+export type BgmLevel = 'HIGH' | 'LOW'
+
 const MUTE_STORAGE_KEY = 'audio-muted'
+const BGM_VOLUME_STORAGE_KEY = 'bgm-volume'
+
+const BGM_GAIN_HIGH = 1.0
+const BGM_GAIN_LOW = 0.45
+const BGM_GAIN_DUCKED = 0.15
+const BGM_RAMP_SEC = 0.15
 
 class AudioService {
   private audioCache = new Map<string, HTMLAudioElement>()
@@ -23,9 +31,28 @@ class AudioService {
   private userInteracted = false
   private audioContext: AudioContext | null = null
 
+  // ── BGM (background music) state ─────────────────────────────────────────
+  // BGM uses plain HTMLAudioElement.volume (no Web Audio routing). A
+  // requestAnimationFrame-based tween does the 150 ms duck/unduck ramp.
+  // Web Audio routing was removed because createMediaElementSource captures
+  // the element's output exclusively through the AudioContext, which renders
+  // BGM silent until ctx.resume() resolves — easily missed on the first NIGHT.
+  private bgmAudioEl: HTMLAudioElement | null = null
+  private bgmFilename: string | null = null
+  private bgmBaseVolume = 0.5
+  private bgmLevel: BgmLevel = 'LOW'
+  private bgmNarrationActive = false
+  private bgmPendingStart: (() => void) | null = null
+  private bgmTweenHandle: number | null = null
+
   constructor() {
     try {
       this.muted = localStorage.getItem(MUTE_STORAGE_KEY) === 'true'
+      const v = localStorage.getItem(BGM_VOLUME_STORAGE_KEY)
+      if (v !== null) {
+        const parsed = Number.parseFloat(v)
+        if (Number.isFinite(parsed)) this.bgmBaseVolume = Math.max(0, Math.min(1, parsed))
+      }
     } catch {
       // localStorage unavailable (SSR, privacy mode)
     }
@@ -55,12 +82,32 @@ class AudioService {
           }
         }
       }
+
+      // If a BGM start was deferred until first interaction, run it now.
+      if (this.bgmPendingStart) {
+        const fn = this.bgmPendingStart
+        this.bgmPendingStart = null
+        try {
+          fn()
+        } catch (e) {
+          console.warn('[AudioService] deferred bgm start failed', e)
+        }
+      }
     }
 
     // Listen for various user interactions
     const events = ['click', 'touchstart', 'keydown', 'mousedown', 'pointerdown']
     events.forEach((eventName) => {
-      document.addEventListener(eventName, enableAudio, { once: true, capture: true })
+      document.addEventListener(eventName, enableAudio, { capture: true })
+    })
+
+    // On returning to foreground, defensively resume the audio context.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.audioContext?.state === 'suspended') {
+        this.audioContext.resume().catch(() => {
+          /* swallow */
+        })
+      }
     })
   }
 
@@ -91,6 +138,8 @@ class AudioService {
 
     // Start playing queue if not already playing
     if (!this.isPlayingQueue) {
+      // Duck BGM BEFORE first play call so narration is immediately in the foreground.
+      this.duckBgm()
       this.playNextInQueue()
     }
   }
@@ -102,6 +151,7 @@ class AudioService {
   private playNextInQueue(): void {
     if (this.audioQueue.length === 0) {
       this.isPlayingQueue = false
+      this.unduckBgm()
       console.log('[AudioService] Queue empty, playback complete')
       return
     }
@@ -276,7 +326,12 @@ class AudioService {
 
     this.muted = !this.muted
     this.persistMute()
-    if (this.muted) this.stopAll()
+    if (this.muted) {
+      this.stopAll()
+    }
+    // Recompute BGM target — applyBgmGain reads `this.muted` and ramps the
+    // element's volume to 0 (mute) or to the level-aware target (unmute).
+    this.applyBgmGain()
     return this.muted
   }
 
@@ -315,8 +370,24 @@ class AudioService {
    */
   clearQueue(): void {
     this.audioQueue = []
-    this.stopAll()
+    this.stopAllNarration()
     this.isPlayingQueue = false
+    this.unduckBgm()
+  }
+
+  /**
+   * Stop only narration audio elements; never touch the BGM element.
+   * Replaces the previous stopAll() semantics in queue-clearing paths.
+   */
+  private stopAllNarration(): void {
+    try {
+      for (const audio of this.audioCache.values()) {
+        audio.pause()
+        audio.currentTime = 0
+      }
+    } catch (error) {
+      console.warn('[AudioService] Error stopping narration:', error)
+    }
   }
 
   /**
@@ -328,7 +399,256 @@ class AudioService {
   isQueueActive(): boolean {
     return this.isPlayingQueue || this.audioQueue.length > 0
   }
+
+  // ── BGM API ──────────────────────────────────────────────────────────────
+
+  /**
+   * Start playing a background music track on loop. Idempotent: re-starting
+   * the same filename is a no-op while it's already playing. Switching to a
+   * different filename stops the previous track first.
+   *
+   * If the user has not interacted with the page yet (browser autoplay
+   * policy), the start is deferred until the first interaction.
+   */
+  startBgm(filename: string, displayName?: string): void {
+    if (!filename) return
+    if (this.bgmFilename === filename && this.bgmAudioEl && !this.bgmAudioEl.paused) {
+      return
+    }
+    if (this.bgmFilename && this.bgmFilename !== filename) {
+      this.stopBgm()
+    }
+
+    if (!this.userInteracted) {
+      // Defer until first interaction — exactly one start is queued.
+      this.bgmPendingStart = () => this.startBgm(filename, displayName)
+      return
+    }
+
+    try {
+      const url = `/audio/bgm/${encodeURIComponent(filename)}`
+      const el = new Audio(url)
+      el.loop = true
+      el.preload = 'auto'
+      // Initial volume: silent if muted, otherwise the level-aware target.
+      // Set BEFORE play() so the first frame isn't loud.
+      el.volume = this.computeBgmTargetVolume()
+
+      el.onerror = () => {
+        console.warn('[AudioService] BGM error, stopping', filename)
+        this.stopBgm()
+      }
+
+      this.bgmAudioEl = el
+      this.bgmFilename = filename
+
+      el.play().catch((err) => {
+        console.warn('[AudioService] BGM play() rejected:', err)
+      })
+
+      this.applyMediaSession(displayName ?? filename)
+    } catch (err) {
+      console.warn('[AudioService] startBgm failed:', err)
+      this.stopBgm()
+    }
+  }
+
+  stopBgm(): void {
+    this.bgmPendingStart = null
+    this.cancelBgmTween()
+    try {
+      if (this.bgmAudioEl) {
+        this.bgmAudioEl.pause()
+        this.bgmAudioEl.currentTime = 0
+        this.bgmAudioEl.onerror = null
+        this.bgmAudioEl.src = ''
+      }
+    } catch (err) {
+      console.warn('[AudioService] stopBgm cleanup error:', err)
+    }
+    this.bgmAudioEl = null
+    this.bgmFilename = null
+    this.bgmLevel = 'LOW'
+    this.bgmNarrationActive = false
+    this.clearMediaSession()
+  }
+
+  pauseBgm(): void {
+    try {
+      this.bgmAudioEl?.pause()
+    } catch {
+      /* swallow */
+    }
+  }
+
+  resumeBgm(): void {
+    try {
+      this.bgmAudioEl?.play().catch(() => {
+        /* swallow */
+      })
+    } catch {
+      /* swallow */
+    }
+  }
+
+  /**
+   * Set the BGM volume tier. The composable should call this in response to
+   * sub-phase changes within NIGHT.
+   */
+  setBgmLevel(level: BgmLevel): void {
+    if (this.bgmLevel === level) return
+    this.bgmLevel = level
+    this.applyBgmGain()
+  }
+
+  /** Mark narration as active so BGM stays at DUCKED until unduck. */
+  duckBgm(): void {
+    if (this.bgmNarrationActive) return
+    this.bgmNarrationActive = true
+    this.applyBgmGain()
+  }
+
+  unduckBgm(): void {
+    if (!this.bgmNarrationActive) return
+    this.bgmNarrationActive = false
+    this.applyBgmGain()
+  }
+
+  /** User-facing volume control (0..1), persisted. */
+  setBgmVolume(v: number): void {
+    const clamped = Math.max(0, Math.min(1, v))
+    this.bgmBaseVolume = clamped
+    try {
+      localStorage.setItem(BGM_VOLUME_STORAGE_KEY, String(clamped))
+    } catch {
+      /* swallow */
+    }
+    this.applyBgmGain()
+  }
+
+  getBgmVolume(): number {
+    return this.bgmBaseVolume
+  }
+
+  isBgmPlaying(): boolean {
+    return !!this.bgmAudioEl && !this.bgmAudioEl.paused
+  }
+
+  /**
+   * E2E-only: snapshot the current BGM element state.
+   * `new Audio(url)` creates an in-memory HTMLMediaElement that is NOT
+   * attached to the document, so DOM queries can't see it. This getter
+   * returns what a test-author would otherwise look for.
+   */
+  getBgmState(): {
+    exists: boolean
+    paused: boolean
+    volume: number
+    loop: boolean
+    src: string
+    filename: string | null
+    userInteracted: boolean
+    pendingStart: boolean
+  } {
+    const el = this.bgmAudioEl
+    return {
+      exists: !!el,
+      paused: el?.paused ?? true,
+      volume: el?.volume ?? 0,
+      loop: el?.loop ?? false,
+      src: el?.src ?? '',
+      filename: this.bgmFilename,
+      userInteracted: this.userInteracted,
+      pendingStart: !!this.bgmPendingStart,
+    }
+  }
+
+  /** Compute the target HTMLAudioElement.volume from current state. */
+  private computeBgmTargetVolume(): number {
+    const multiplier = this.muted
+      ? 0
+      : this.bgmNarrationActive
+        ? BGM_GAIN_DUCKED
+        : this.bgmLevel === 'HIGH'
+          ? BGM_GAIN_HIGH
+          : BGM_GAIN_LOW
+    return Math.max(0, Math.min(1, this.bgmBaseVolume * multiplier))
+  }
+
+  /**
+   * Smoothly tween the BGM element's volume toward the current target over
+   * BGM_RAMP_SEC. Uses requestAnimationFrame instead of Web Audio so we don't
+   * need an AudioContext (which would require explicit resume() and was the
+   * root cause of "BGM only plays from the second night onward").
+   */
+  private applyBgmGain(): void {
+    const el = this.bgmAudioEl
+    if (!el) return
+    this.cancelBgmTween()
+    const target = this.computeBgmTargetVolume()
+    const start = el.volume
+    if (Math.abs(target - start) < 0.001) {
+      el.volume = target
+      return
+    }
+    const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    const durationMs = BGM_RAMP_SEC * 1000
+    const step = (now: number) => {
+      const t = Math.min(1, (now - startTime) / durationMs)
+      const v = Math.max(0, Math.min(1, start + (target - start) * t))
+      if (this.bgmAudioEl) this.bgmAudioEl.volume = v
+      if (t < 1 && this.bgmAudioEl) {
+        this.bgmTweenHandle = requestAnimationFrame(step)
+      } else {
+        this.bgmTweenHandle = null
+      }
+    }
+    this.bgmTweenHandle = requestAnimationFrame(step)
+  }
+
+  private cancelBgmTween(): void {
+    if (this.bgmTweenHandle !== null) {
+      cancelAnimationFrame(this.bgmTweenHandle)
+      this.bgmTweenHandle = null
+    }
+  }
+
+  private applyMediaSession(title: string): void {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    try {
+      const ms = (navigator as any).mediaSession
+      if (typeof MediaMetadata !== 'undefined') {
+        ms.metadata = new MediaMetadata({ title, artist: 'Werewolf Game' })
+      }
+      ms.setActionHandler?.('play', () => this.resumeBgm())
+      ms.setActionHandler?.('pause', () => this.pauseBgm())
+    } catch {
+      /* swallow */
+    }
+  }
+
+  private clearMediaSession(): void {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    try {
+      const ms = (navigator as any).mediaSession
+      ms.metadata = null
+      ms.setActionHandler?.('play', null)
+      ms.setActionHandler?.('pause', null)
+    } catch {
+      /* swallow */
+    }
+  }
 }
 
 // Export singleton instance
 export const audioService = new AudioService()
+
+// E2E hook: expose to the browser context so Playwright can read live BGM
+// state without needing a DOM-attached <audio> element. `new Audio(url)`
+// creates an in-memory HTMLMediaElement that is NOT a child of document, so
+// `document.querySelectorAll('audio')` won't find it. The BGM element is
+// the only one routed via Web Audio anyway, so a singleton-reflection
+// hook is the cleanest way to expose its state.
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { __audioService?: AudioService }).__audioService = audioService
+}
