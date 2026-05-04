@@ -91,11 +91,12 @@ test('drawer shows 昨夜出局 section with night death data', async ({ page })
   const round = page.locator('.round-block').first()
   await expect(round.locator('.round-label')).toHaveText('第 1 天')
 
-  // Night death section header
-  await expect(round.locator('.section-title').first()).toContainText('昨夜出局')
+  // Night death section — locate by title text so reorderings don't break us
+  const deathSection = round.locator('.log-section').filter({ hasText: '昨夜出局' })
+  await expect(deathSection.locator('.section-title')).toContainText('昨夜出局')
 
   // Charlie died at seat 3
-  const deathRow = round.locator('.log-section').first().locator('.log-row').first()
+  const deathRow = deathSection.locator('.log-row').first()
   await expect(deathRow.locator('.seat-badge')).toHaveText('3号')
   await expect(deathRow.locator('.log-name')).toHaveText('Charlie')
 })
@@ -104,7 +105,11 @@ test('night death row has no cause or killedBy text', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
   await page.locator('button.log-fab').click()
 
-  const deathSection = page.locator('.round-block').first().locator('.log-section').first()
+  const deathSection = page
+    .locator('.round-block')
+    .first()
+    .locator('.log-section')
+    .filter({ hasText: '昨夜出局' })
   const text = await deathSection.textContent()
   expect(text).not.toContain('cause')
   expect(text).not.toContain('killedBy')
@@ -113,14 +118,64 @@ test('night death row has no cause or killedBy text', async ({ page }) => {
   expect(text).not.toContain('WEREWOLF')
 })
 
+// ── Content: sheriff election ─────────────────────────────────────────────────
+
+test('drawer shows ⭐ 警长选举 section at the top of day 1 when game has a sheriff', async ({ page }) => {
+  await goToDayScenario(page, 'HOST_REVEALED')
+  await page.locator('button.log-fab').click()
+
+  // Sheriff section is the FIRST section inside the day-1 round-block — before
+  // 昨夜出局 — so players see who became sheriff before reading the round.
+  const round = page.locator('.round-block').first()
+  const firstSection = round.locator('.log-section').first()
+  await expect(firstSection.locator('.section-title')).toContainText('警长选举')
+
+  // Bob (seat 2) won the mock sheriff election
+  const winnerRow = firstSection.locator('.log-row').first()
+  await expect(winnerRow.locator('.seat-badge')).toHaveText('2号')
+  await expect(winnerRow.locator('.log-name')).toHaveText('Bob')
+  await expect(winnerRow.locator('.log-tag.tag-gold')).toHaveText('警长')
+})
+
+test('drawer shows sheriff election tally so players can analyse alliances', async ({ page }) => {
+  await goToDayScenario(page, 'HOST_REVEALED')
+  await page.locator('button.log-fab').click()
+
+  const sheriffSection = page.locator('.round-block').first().locator('.log-section').first()
+  // Bob got 4 votes (winning row of the tally)
+  const winnerTally = sheriffSection.locator('.tally-row').first()
+  await expect(winnerTally.locator('.tally-votes')).toHaveText('4 票')
+  await expect(winnerTally.locator('.tally-voters')).toContainText('1号')
+  await expect(winnerTally.locator('.tally-voters')).toContainText('3号')
+  await expect(winnerTally.locator('.tally-voters')).toContainText('5号')
+  await expect(winnerTally.locator('.tally-voters')).toContainText('6号')
+})
+
+test('sheriff section surfaces abstain voters so analysts can flag silent wolves', async ({ page }) => {
+  await goToDayScenario(page, 'HOST_REVEALED')
+  await page.locator('button.log-fab').click()
+
+  const sheriffSection = page.locator('.round-block').first().locator('.log-section').first()
+  const abstainRow = sheriffSection.locator('.tally-abstain')
+  await expect(abstainRow).toBeVisible()
+  await expect(abstainRow.locator('.tally-name')).toHaveText('弃权')
+  await expect(abstainRow.locator('.tally-votes')).toHaveText('1 票')
+  // Mock seeds Grace (seat 7) as the lone abstainer
+  await expect(abstainRow.locator('.tally-voters')).toContainText('7号')
+})
+
 // ── Content: vote results ─────────────────────────────────────────────────────
 
 test('drawer shows 投票结果 section with eliminated player', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
   await page.locator('button.log-fab').click()
 
-  // Vote result section — "☀ 投票结果"
-  const voteSection = page.locator('.round-block').first().locator('.log-section').nth(1)
+  // Vote result section — locate by title text so it survives reorderings
+  const voteSection = page
+    .locator('.round-block')
+    .first()
+    .locator('.log-section')
+    .filter({ hasText: '投票结果' })
   await expect(voteSection.locator('.section-title')).toContainText('投票结果')
 
   // Eve (seat 5) was eliminated
@@ -134,12 +189,62 @@ test('drawer shows vote tally breakdown', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
   await page.locator('button.log-fab').click()
 
-  const voteSection = page.locator('.round-block').first().locator('.log-section').nth(1)
-  const tallyRow = voteSection.locator('.tally-row').first()
+  const voteSection = page
+    .locator('.round-block')
+    .first()
+    .locator('.log-section')
+    .filter({ hasText: '投票结果' })
+  // tally rows include the abstain row, so target the candidate row by class
+  const tallyRow = voteSection
+    .locator('.tally-row')
+    .filter({ hasNotText: '弃权' })
+    .first()
 
   // Eve got 3 votes from seats 1, 2, 4
   await expect(tallyRow.locator('.tally-votes')).toHaveText('3 票')
   await expect(tallyRow.locator('.tally-voters')).toContainText('1号')
   await expect(tallyRow.locator('.tally-voters')).toContainText('2号')
   await expect(tallyRow.locator('.tally-voters')).toContainText('4号')
+})
+
+test('vote-result section surfaces abstain voters', async ({ page }) => {
+  await goToDayScenario(page, 'HOST_REVEALED')
+  await page.locator('button.log-fab').click()
+
+  const voteSection = page
+    .locator('.round-block')
+    .first()
+    .locator('.log-section')
+    .filter({ hasText: '投票结果' })
+  const abstainRow = voteSection.locator('.tally-abstain')
+  await expect(abstainRow).toBeVisible()
+  await expect(abstainRow.locator('.tally-votes')).toHaveText('2 票')
+  // Mock seeds Frank (seat 6) and Henry (seat 8) as abstainers
+  await expect(abstainRow.locator('.tally-voters')).toContainText('6号')
+  await expect(abstainRow.locator('.tally-voters')).toContainText('8号')
+})
+
+// ── VotingPhase coverage ──────────────────────────────────────────────────────
+// The FAB is mirrored into VotingPhase.vue so the game record stays reachable
+// for the entire daytime, not only during DAY_DISCUSSION.
+
+async function goToVotingScenario(page: Page) {
+  await goToDayScenario(page, 'HOST_REVEALED')
+  await page.locator('[data-testid="debug-voting"]').click()
+  await expect(page.locator('.voting-wrap')).toBeVisible({ timeout: 3000 })
+}
+
+test('📋 FAB is visible in voting phase', async ({ page }) => {
+  await goToVotingScenario(page)
+  const fab = page.locator('button.log-fab')
+  await expect(fab).toBeVisible()
+  await expect(fab).toHaveAttribute('aria-label', '游戏记录')
+})
+
+test('clicking FAB opens the drawer in voting phase', async ({ page }) => {
+  await goToVotingScenario(page)
+  await expect(page.locator('.action-log-drawer')).not.toBeVisible()
+  await page.locator('button.log-fab').click()
+  await expect(page.locator('.action-log-drawer')).toBeVisible()
+  await expect(page.locator('.drawer-title')).toHaveText('游戏记录')
 })

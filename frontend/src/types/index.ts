@@ -365,7 +365,7 @@ export interface NightPhaseState {
 
 export interface ActionLogEntry {
   id: number
-  eventType: 'NIGHT_DEATH' | 'VOTE_RESULT' | 'HUNTER_SHOT' | 'IDIOT_REVEAL'
+  eventType: 'NIGHT_DEATH' | 'VOTE_RESULT' | 'HUNTER_SHOT' | 'IDIOT_REVEAL' | 'SHERIFF_RESULT'
   message: string // raw JSON — parse per eventType
   targetUserId: string | null
   createdAt: string | null
@@ -392,6 +392,12 @@ export interface VoteResultTallyEntry {
   voters: VoteResultVoter[]
 }
 
+export interface AbstainVoter {
+  userId: string
+  nickname: string
+  seatIndex: number
+}
+
 export interface VoteResultPayload {
   dayNumber: number
   tally: VoteResultTallyEntry[]
@@ -399,6 +405,8 @@ export interface VoteResultPayload {
   eliminatedNickname: string | null
   eliminatedSeatIndex: number | null
   eliminatedRole: string | null
+  abstainCount?: number
+  abstainVoters?: AbstainVoter[]
 }
 
 export interface HunterShotPayload {
@@ -416,6 +424,16 @@ export interface IdiotRevealPayload {
   userId: string
   nickname: string
   seatIndex: number
+}
+
+export interface SheriffResultPayload {
+  dayNumber: number
+  tally: VoteResultTallyEntry[]
+  winnerUserId: string | null
+  winnerNickname: string | null
+  winnerSeatIndex: number | null
+  abstainCount?: number
+  abstainVoters?: AbstainVoter[]
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

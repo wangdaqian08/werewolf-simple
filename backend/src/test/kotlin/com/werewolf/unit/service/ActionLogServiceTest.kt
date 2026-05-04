@@ -110,6 +110,40 @@ class ActionLogServiceTest {
     }
 
     @Test
+    fun `recordVoteResult - records abstain voters in payload`() {
+        val votes = listOf(
+            Vote(gameId = gameId, voteContext = VoteContext.ELIMINATION, dayNumber = 1,
+                voterUserId = "u1", targetUserId = "u3"),
+            Vote(gameId = gameId, voteContext = VoteContext.ELIMINATION, dayNumber = 1,
+                voterUserId = "u2", targetUserId = null),
+            Vote(gameId = gameId, voteContext = VoteContext.ELIMINATION, dayNumber = 1,
+                voterUserId = "u4", targetUserId = null),
+        )
+        whenever(userRepository.findAllById(any())).thenReturn(
+            listOf(user("u1", "Alice"), user("u2", "Bob"), user("u3", "Carol"), user("u4", "Dave"))
+        )
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(
+            listOf(player("u1", 1), player("u2", 2), player("u3", 3), player("u4", 4))
+        )
+
+        service.recordVoteResult(
+            gameId = gameId, dayNumber = 1,
+            votes = votes, tally = mapOf("u3" to 1.0),
+            sheriffUserId = null, eliminatedUserId = "u3", eliminatedRole = PlayerRole.VILLAGER,
+        )
+
+        val captor = argumentCaptor<GameEvent>()
+        verify(gameEventRepository).save(captor.capture())
+        @Suppress("UNCHECKED_CAST")
+        val payload = mapper.readValue(captor.firstValue.message, Map::class.java) as Map<String, Any>
+        assertThat(payload["abstainCount"]).isEqualTo(2)
+        @Suppress("UNCHECKED_CAST")
+        val abstainers = payload["abstainVoters"] as List<Map<String, Any>>
+        assertThat(abstainers.map { it["seatIndex"] }).containsExactlyInAnyOrder(2, 4)
+        assertThat(abstainers.map { it["nickname"] }).containsExactlyInAnyOrder("Bob", "Dave")
+    }
+
+    @Test
     fun `recordVoteResult - saves row with null eliminatedUserId for tie`() {
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(emptyList())
@@ -123,6 +157,97 @@ class ActionLogServiceTest {
         val captor = argumentCaptor<GameEvent>()
         verify(gameEventRepository).save(captor.capture())
         assertThat(captor.firstValue.eventType).isEqualTo("VOTE_RESULT")
+        assertThat(captor.firstValue.targetUserId).isNull()
+    }
+
+    // ── recordSheriffResult ─────────────────────────────────────────────────
+
+    @Test
+    fun `recordSheriffResult - saves SHERIFF_RESULT row with winner and tally`() {
+        val votes = listOf(
+            Vote(gameId = gameId, voteContext = VoteContext.SHERIFF_ELECTION, dayNumber = 1,
+                voterUserId = "u2", targetUserId = "u1"),
+            Vote(gameId = gameId, voteContext = VoteContext.SHERIFF_ELECTION, dayNumber = 1,
+                voterUserId = "u3", targetUserId = "u1"),
+        )
+        whenever(userRepository.findAllById(any())).thenReturn(
+            listOf(user("u1", "Alice"), user("u2", "Bob"), user("u3", "Carol"))
+        )
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(
+            listOf(player("u1", 1), player("u2", 2), player("u3", 3))
+        )
+
+        service.recordSheriffResult(
+            gameId = gameId, dayNumber = 1,
+            winnerUserId = "u1", votes = votes, tally = mapOf("u1" to 2),
+        )
+
+        val captor = argumentCaptor<GameEvent>()
+        verify(gameEventRepository).save(captor.capture())
+        val event = captor.firstValue
+        assertThat(event.eventType).isEqualTo("SHERIFF_RESULT")
+        assertThat(event.targetUserId).isEqualTo("u1")
+        @Suppress("UNCHECKED_CAST")
+        val payload = mapper.readValue(event.message, Map::class.java) as Map<String, Any>
+        assertThat(payload["dayNumber"]).isEqualTo(1)
+        assertThat(payload["winnerUserId"]).isEqualTo("u1")
+        assertThat(payload["winnerNickname"]).isEqualTo("Alice")
+        assertThat(payload["winnerSeatIndex"]).isEqualTo(1)
+        @Suppress("UNCHECKED_CAST")
+        val tally = payload["tally"] as List<Map<String, Any>>
+        assertThat(tally).hasSize(1)
+        assertThat(tally[0]["userId"]).isEqualTo("u1")
+        assertThat(tally[0]["votes"]).isEqualTo(2)
+        @Suppress("UNCHECKED_CAST")
+        val voters = tally[0]["voters"] as List<Map<String, Any>>
+        assertThat(voters.map { it["userId"] }).containsExactlyInAnyOrder("u2", "u3")
+    }
+
+    @Test
+    fun `recordSheriffResult - records abstain voters in payload`() {
+        val votes = listOf(
+            Vote(gameId = gameId, voteContext = VoteContext.SHERIFF_ELECTION, dayNumber = 1,
+                voterUserId = "u1", targetUserId = "u2"),
+            Vote(gameId = gameId, voteContext = VoteContext.SHERIFF_ELECTION, dayNumber = 1,
+                voterUserId = "u3", targetUserId = null),
+        )
+        whenever(userRepository.findAllById(any())).thenReturn(
+            listOf(user("u1", "Alice"), user("u2", "Bob"), user("u3", "Carol"))
+        )
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(
+            listOf(player("u1", 1), player("u2", 2), player("u3", 3))
+        )
+
+        service.recordSheriffResult(
+            gameId = gameId, dayNumber = 1,
+            winnerUserId = "u2", votes = votes, tally = mapOf("u2" to 1),
+        )
+
+        val captor = argumentCaptor<GameEvent>()
+        verify(gameEventRepository).save(captor.capture())
+        @Suppress("UNCHECKED_CAST")
+        val payload = mapper.readValue(captor.firstValue.message, Map::class.java) as Map<String, Any>
+        assertThat(payload["abstainCount"]).isEqualTo(1)
+        @Suppress("UNCHECKED_CAST")
+        val abstainers = payload["abstainVoters"] as List<Map<String, Any>>
+        assertThat(abstainers).hasSize(1)
+        assertThat(abstainers[0]["seatIndex"]).isEqualTo(3)
+        assertThat(abstainers[0]["nickname"]).isEqualTo("Carol")
+    }
+
+    @Test
+    fun `recordSheriffResult - saves row with null winner when nobody is elected`() {
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(emptyList())
+
+        service.recordSheriffResult(
+            gameId = gameId, dayNumber = 1,
+            winnerUserId = null, votes = emptyList(), tally = emptyMap(),
+        )
+
+        val captor = argumentCaptor<GameEvent>()
+        verify(gameEventRepository).save(captor.capture())
+        assertThat(captor.firstValue.eventType).isEqualTo("SHERIFF_RESULT")
         assertThat(captor.firstValue.targetUserId).isNull()
     }
 
