@@ -243,7 +243,19 @@ class AudioService {
   }
 
   /**
-   * Stop all playing audio
+   * Stop all playing audio AND drain the queue / reset queue state.
+   *
+   * Pausing a mid-narration HTMLAudioElement does NOT fire its `onended`
+   * handler, so [playNextInQueue] is never called and `isPlayingQueue`
+   * would otherwise stay stuck at true. The next [playSequential] then
+   * queues files but skips processing because of its `!isPlayingQueue`
+   * gate, leaving every subsequent narration silent forever.
+   *
+   * Reproduced when a game ends mid-narration: GameView unmount fires
+   * useAudioService.onUnmounted → stopAll() while witch_close_eyes is
+   * still playing → next game's NIGHT init audio is queued but never
+   * starts. Surface symptom is the host hearing nothing for the entire
+   * second game.
    */
   stopAll(): void {
     try {
@@ -251,6 +263,8 @@ class AudioService {
         audio.pause()
         audio.currentTime = 0
       }
+      this.audioQueue = []
+      this.isPlayingQueue = false
     } catch (error) {
       console.warn('[AudioService] Error stopping all audio:', error)
     }

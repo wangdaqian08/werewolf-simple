@@ -103,6 +103,32 @@ describe('audioService', () => {
     expect(mockAudioInstances).toHaveLength(1)
   })
 
+  // ── stopAll mid-playback resets queue state ─────────────────────────────
+  //
+  // Regression: pausing an HTMLAudioElement does NOT fire its `onended`
+  // handler, so playNextInQueue is never invoked and `isPlayingQueue`
+  // stayed stuck at true. The next playSequential queued files but
+  // skipped processing because of the `!isPlayingQueue` gate, leaving
+  // the next game's audio silent forever. Reproduced 2026-05-04 when
+  // game 23 ended mid-witch_close_eyes; game 24 played no audio.
+
+  it('stopAll mid-playback resets isPlayingQueue so the next playSequential plays', () => {
+    audioService.playSequential(['a.mp3', 'b.mp3'])
+    expect(audioService.isQueueActive()).toBe(true)
+    expect(mockAudioInstances[0]?.play).toHaveBeenCalledTimes(1)
+
+    // Simulate component unmount mid-playback (a.mp3 is still playing,
+    // never received onended). useAudioService.onUnmounted does this.
+    audioService.stopAll()
+    expect(mockAudioInstances[0]?.pause).toHaveBeenCalled()
+    expect(audioService.isQueueActive()).toBe(false)
+
+    // Next mount → next playSequential MUST start a new playback.
+    audioService.playSequential(['c.mp3'])
+    expect(mockAudioInstances).toHaveLength(2)
+    expect(mockAudioInstances[1]?.play).toHaveBeenCalledTimes(1)
+  })
+
   // ── Mute ────────────────────────────────────────────────────────────────
 
   it('toggleMute toggles state and persists to localStorage', () => {
