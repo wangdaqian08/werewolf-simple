@@ -74,6 +74,16 @@ class ActionLogService(
                 )
             }
 
+        val abstainVoters = votes
+            .filter { it.targetUserId == null }
+            .map { v ->
+                mapOf(
+                    "userId"    to v.voterUserId,
+                    "nickname"  to (users[v.voterUserId]?.nickname ?: v.voterUserId),
+                    "seatIndex" to (players[v.voterUserId]?.seatIndex ?: 0),
+                )
+            }
+
         val payload = mapOf(
             "dayNumber"           to dayNumber,
             "tally"               to tallyList,
@@ -81,6 +91,8 @@ class ActionLogService(
             "eliminatedNickname"  to eliminatedUserId?.let { users[it]?.nickname ?: it },
             "eliminatedSeatIndex" to eliminatedUserId?.let { players[it]?.seatIndex },
             "eliminatedRole"      to eliminatedRole?.name,
+            "abstainCount"        to abstainVoters.size,
+            "abstainVoters"       to abstainVoters,
         )
         gameEventRepository.save(
             GameEvent(
@@ -110,6 +122,69 @@ class ActionLogService(
                 eventType    = "HUNTER_SHOT",
                 message      = mapper.writeValueAsString(payload),
                 targetUserId = targetUserId,
+            )
+        )
+    }
+
+    fun recordSheriffResult(
+        gameId: Int,
+        dayNumber: Int,
+        winnerUserId: String?,
+        votes: List<Vote>,
+        tally: Map<String, Int>,
+    ) {
+        val allUserIds = (votes.map { it.voterUserId } +
+            votes.mapNotNull { it.targetUserId } +
+            listOfNotNull(winnerUserId)).distinct()
+        val users = userRepository.findAllById(allUserIds).associateBy { it.userId }
+        val players = gamePlayerRepository.findByGameId(gameId).associateBy { it.userId }
+
+        val tallyList = tally.entries
+            .sortedByDescending { it.value }
+            .map { (targetId, count) ->
+                val voters = votes
+                    .filter { it.targetUserId == targetId }
+                    .map { v ->
+                        mapOf(
+                            "userId"    to v.voterUserId,
+                            "nickname"  to (users[v.voterUserId]?.nickname ?: v.voterUserId),
+                            "seatIndex" to (players[v.voterUserId]?.seatIndex ?: 0),
+                        )
+                    }
+                mapOf(
+                    "userId"    to targetId,
+                    "nickname"  to (users[targetId]?.nickname ?: targetId),
+                    "seatIndex" to (players[targetId]?.seatIndex ?: 0),
+                    "votes"     to count,
+                    "voters"    to voters,
+                )
+            }
+
+        val abstainVoters = votes
+            .filter { it.targetUserId == null }
+            .map { v ->
+                mapOf(
+                    "userId"    to v.voterUserId,
+                    "nickname"  to (users[v.voterUserId]?.nickname ?: v.voterUserId),
+                    "seatIndex" to (players[v.voterUserId]?.seatIndex ?: 0),
+                )
+            }
+
+        val payload = mapOf(
+            "dayNumber"        to dayNumber,
+            "tally"            to tallyList,
+            "winnerUserId"     to winnerUserId,
+            "winnerNickname"   to winnerUserId?.let { users[it]?.nickname ?: it },
+            "winnerSeatIndex"  to winnerUserId?.let { players[it]?.seatIndex },
+            "abstainCount"     to abstainVoters.size,
+            "abstainVoters"    to abstainVoters,
+        )
+        gameEventRepository.save(
+            GameEvent(
+                gameId       = gameId,
+                eventType    = "SHERIFF_RESULT",
+                message      = mapper.writeValueAsString(payload),
+                targetUserId = winnerUserId,
             )
         )
     }

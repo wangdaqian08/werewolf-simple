@@ -1070,6 +1070,44 @@ export const MOCK_STOMP_EVENTS = {
 
 export const MOCK_ACTION_LOG: ActionLogEntry[] = [
   {
+    id: 0,
+    eventType: 'SHERIFF_RESULT',
+    message: JSON.stringify({
+      dayNumber: 1,
+      tally: [
+        {
+          userId: 'u2',
+          nickname: 'Bob',
+          seatIndex: 2,
+          votes: 4,
+          voters: [
+            { userId: 'u1', nickname: 'You', seatIndex: 1 },
+            { userId: 'u3', nickname: 'Charlie', seatIndex: 3 },
+            { userId: 'u5', nickname: 'Eve', seatIndex: 5 },
+            { userId: 'u6', nickname: 'Frank', seatIndex: 6 },
+          ],
+        },
+        {
+          userId: 'u4',
+          nickname: 'Dave',
+          seatIndex: 4,
+          votes: 2,
+          voters: [
+            { userId: 'u2', nickname: 'Bob', seatIndex: 2 },
+            { userId: 'u4', nickname: 'Dave', seatIndex: 4 },
+          ],
+        },
+      ],
+      winnerUserId: 'u2',
+      winnerNickname: 'Bob',
+      winnerSeatIndex: 2,
+      abstainCount: 1,
+      abstainVoters: [{ userId: 'u7', nickname: 'Grace', seatIndex: 7 }],
+    }),
+    targetUserId: 'u2',
+    createdAt: '2023-12-31T23:59:00Z',
+  },
+  {
     id: 1,
     eventType: 'NIGHT_DEATH',
     message: JSON.stringify({ dayNumber: 1, userId: 'u3', nickname: 'Charlie', seatIndex: 3 }),
@@ -1098,6 +1136,11 @@ export const MOCK_ACTION_LOG: ActionLogEntry[] = [
       eliminatedNickname: 'Eve',
       eliminatedSeatIndex: 5,
       eliminatedRole: 'VILLAGER',
+      abstainCount: 2,
+      abstainVoters: [
+        { userId: 'u6', nickname: 'Frank', seatIndex: 6 },
+        { userId: 'u8', nickname: 'Henry', seatIndex: 8 },
+      ],
     }),
     targetUserId: 'u5',
     createdAt: '2024-01-01T12:00:00Z',

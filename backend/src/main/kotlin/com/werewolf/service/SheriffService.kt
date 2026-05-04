@@ -28,6 +28,7 @@ class SheriffService(
     private val stompPublisher: StompPublisher,
     private val coroutineScope: CoroutineScope,
     private val timingProperties: GameTimingProperties,
+    private val actionLogService: ActionLogService,
 ) {
     val log = LoggerFactory.getLogger(SheriffService::class.java)
     private val scheduledJobs = mutableMapOf<Int, Job>()
@@ -296,6 +297,9 @@ class SheriffService(
             election.electedSheriffUserId = winnerUserId
             sheriffElectionRepository.save(election)
             electSheriff(winnerUserId, context)
+            actionLogService.recordSheriffResult(
+                context.gameId, context.game.dayNumber, winnerUserId, votes, tally,
+            )
             broadcastAfterCommit(context.gameId, DomainEvent.SheriffElected(context.gameId, winnerUserId))
             broadcastAfterCommit(context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
@@ -328,6 +332,16 @@ class SheriffService(
         election.electedSheriffUserId = targetUserId
         sheriffElectionRepository.save(election)
         electSheriff(targetUserId, context)
+
+        // Persist the appoint outcome with whatever sheriff-election votes were
+        // already cast so the action log shows the host's pick was a tie-break.
+        val priorVotes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
+            context.gameId, VoteContext.SHERIFF_ELECTION, context.game.dayNumber,
+        )
+        val priorTally = priorVotes.mapNotNull { it.targetUserId }.groupingBy { it }.eachCount()
+        actionLogService.recordSheriffResult(
+            context.gameId, context.game.dayNumber, targetUserId, priorVotes, priorTally,
+        )
 
         broadcastAfterCommit(context.gameId, DomainEvent.SheriffElected(context.gameId, targetUserId))
         broadcastAfterCommit(context.gameId,

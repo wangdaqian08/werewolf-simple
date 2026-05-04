@@ -183,44 +183,75 @@ jobs:
 
   # ── E2E Integration (real backend) ──────────────────────────────────────────
   #
-  # Shard map is hand-curated by measured spec runtime, not Playwright's
-  # default --shard=N/M (which alphabetically partitions and produced
-  # 14m/4m/7m wall-clock — flow-12p-sheriff alone took ~343s on shard 1).
-  # Re-balance whenever a new spec lands or runtime drifts ≥30%.
+  # Shard map is hand-curated by measured spec runtime. Re-balance whenever a
+  # new spec lands or runtime drifts ≥30%.
   #
-  #   Last measurement (run 25315290671, commit 5a4a760, 2026-05-04):
-  #     flow-12p-sheriff.spec.ts        ~343s  (2 12p tests, biggest single)
-  #     revote-flow.spec.ts              ~98s
-  #     dead-role-audio.spec.ts          ~74s
-  #     idiot-flow.spec.ts               ~70s
-  #     full-game-audio.spec.ts          ~42s
-  #     game-flow.spec.ts (10 seq)      ~145s  (after split, was 13)
-  #     game-flow-d1-outcomes.spec.ts    ~80s  (split-out)
-  #     sheriff-flow.spec.ts            ~100s  (mostly setupGame; tests quick)
-  #     werewolf-win.spec.ts             ~91s
-  #     bgm-flow.spec.ts                 ~40s
-  #     audio-reconnect-recovery.spec.ts ~45s
-  #     witch-audio.spec.ts              ~80s
-  #     login.spec.ts                    ~10s
-  #     guard-audio-sequence.spec.ts      ~0s  (skipped)
+  # The biggest single spec — flow-12p-sheriff.spec.ts — has 2 long
+  # independent describe blocks (CLASSIC + HARD_MODE) that each setupGame
+  # their own 12p game. Cannot use Playwright's `workers: 2` to run them in
+  # parallel within a shard because every spec's setupGame logs in as
+  # nickname "Host", and parallel /api/user/login calls with the same
+  # nickname race in AuthService.loginOrRegister (TOCTOU between findById
+  # and the INSERT). Instead, drive parallelism via additional shards: each
+  # describe block lives on its own shard, selected via Playwright `--grep`.
+  # That keeps `workers: 1` everywhere and avoids touching the 30+ specs
+  # that depend on the literal "Host" nickname.
+  #
+  # Idiot-flow moved off shard 4 (was the new long pole at ~6m46s after the
+  # 5-shard rebalance) onto shard 4 still, kept revote + d1-outcomes there;
+  # the heavier mix lands inside the same wall-clock budget as shard 5/6.
+  #
+  #   Last measurement (run on PR #98, 2026-05-05) — 5-shard layout:
+  #     shard 1 (flow-12p-sheriff)             7m24s ← long pole
+  #     shard 2 (game-flow + sheriff-flow)     3m30s
+  #     shard 3 (revote + idiot + d1-outcomes) 6m29s
+  #     shard 4 (dead-role + werewolf + full)  5m22s
+  #     shard 5 (audio + login + guard)        4m15s
+  #
+  #   Per-spec runtime (from blob reports):
+  #     flow-12p-sheriff CLASSIC          ~200s
+  #     flow-12p-sheriff HARD_MODE        ~143s
+  #     game-flow.spec.ts (10 seq)        ~145s
+  #     game-flow-d1-outcomes.spec.ts      ~80s
+  #     sheriff-flow.spec.ts              ~100s  (mostly setupGame)
+  #     revote-flow.spec.ts                ~98s
+  #     werewolf-win.spec.ts               ~91s
+  #     witch-audio.spec.ts                ~80s
+  #     dead-role-audio.spec.ts            ~74s
+  #     idiot-flow.spec.ts                 ~70s
+  #     audio-reconnect-recovery.spec.ts   ~45s
+  #     full-game-audio.spec.ts            ~42s
+  #     bgm-flow.spec.ts                   ~40s
+  #     login.spec.ts                      ~10s
+  #     guard-audio-sequence.spec.ts        ~0s  (skipped)
   e2e-integration:
-    name: E2E · Integration (${{ matrix.shard.id }}/5)
+    name: E2E · Integration (${{ matrix.shard.id }}/6)
     runs-on: ubuntu-latest
     needs: backend
     strategy:
       fail-fast: false
       matrix:
         shard:
+          # Shard 1 + 2 split flow-12p-sheriff via --grep on the describe
+          # title. If you rename either describe, update the grep here.
           - id: 1
             specs: e2e/real/flow-12p-sheriff.spec.ts
+            grep: 'CLASSIC villager win'
           - id: 2
-            specs: e2e/real/game-flow.spec.ts e2e/real/sheriff-flow.spec.ts
+            specs: e2e/real/flow-12p-sheriff.spec.ts
+            grep: 'HARD_MODE wolf win'
           - id: 3
-            specs: e2e/real/revote-flow.spec.ts e2e/real/idiot-flow.spec.ts e2e/real/game-flow-d1-outcomes.spec.ts
+            specs: e2e/real/game-flow.spec.ts e2e/real/sheriff-flow.spec.ts
+            grep: ''
           - id: 4
-            specs: e2e/real/dead-role-audio.spec.ts e2e/real/werewolf-win.spec.ts e2e/real/full-game-audio.spec.ts
+            specs: e2e/real/revote-flow.spec.ts e2e/real/idiot-flow.spec.ts e2e/real/game-flow-d1-outcomes.spec.ts
+            grep: ''
           - id: 5
+            specs: e2e/real/dead-role-audio.spec.ts e2e/real/werewolf-win.spec.ts e2e/real/full-game-audio.spec.ts
+            grep: ''
+          - id: 6
             specs: e2e/real/bgm-flow.spec.ts e2e/real/witch-audio.spec.ts e2e/real/audio-reconnect-recovery.spec.ts e2e/real/login.spec.ts e2e/real/guard-audio-sequence.spec.ts
+            grep: ''
 
     steps:
       - uses: actions/checkout@v4
@@ -268,8 +299,16 @@ jobs:
         run: npx playwright install-deps chromium
         working-directory: frontend
 
-      - name: E2E integration tests (shard ${{ matrix.shard.id }}/5)
-        run: npx playwright test --config=playwright.real.config.ts ${{ matrix.shard.specs }}
+      - name: E2E integration tests (shard ${{ matrix.shard.id }}/6)
+        env:
+          SPECS: ${{ matrix.shard.specs }}
+          GREP: ${{ matrix.shard.grep }}
+        run: |
+          if [ -n "$GREP" ]; then
+            npx playwright test --config=playwright.real.config.ts $SPECS --grep="$GREP"
+          else
+            npx playwright test --config=playwright.real.config.ts $SPECS
+          fi
         working-directory: frontend
 
       - name: Upload blob report
