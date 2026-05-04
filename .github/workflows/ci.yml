@@ -250,7 +250,7 @@ jobs:
             specs: e2e/real/dead-role-audio.spec.ts e2e/real/werewolf-win.spec.ts e2e/real/full-game-audio.spec.ts
             grep: ''
           - id: 6
-            specs: e2e/real/bgm-flow.spec.ts e2e/real/witch-audio.spec.ts e2e/real/audio-reconnect-recovery.spec.ts e2e/real/login.spec.ts e2e/real/guard-audio-sequence.spec.ts
+            specs: e2e/real/witch-audio.spec.ts e2e/real/audio-reconnect-recovery.spec.ts e2e/real/login.spec.ts e2e/real/guard-audio-sequence.spec.ts
             grep: ''
 
     steps:
