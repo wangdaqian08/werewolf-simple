@@ -32,9 +32,7 @@ export function createStompClient(token: string): Client {
     },
     onWebSocketClose: (evt) => {
       const tag = evt.wasClean ? 'close-clean' : 'close-DIRTY'
-      console.warn(
-        `[stompClient] ${tag} code=${evt.code} reason=${evt.reason} ts=${Date.now()}`,
-      )
+      console.warn(`[stompClient] ${tag} code=${evt.code} reason=${evt.reason} ts=${Date.now()}`)
     },
     onStompError: (frame) => {
       console.error('[stompClient] STOMP错误:', frame)
