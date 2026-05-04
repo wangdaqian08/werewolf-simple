@@ -1,5 +1,6 @@
 package com.werewolf.integration
 
+import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.*
 import com.werewolf.repository.*
@@ -34,6 +35,7 @@ class DayPhaseResultRevealTest {
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var sheriffService: SheriffService
+    @Mock lateinit var audioReplayCache: AudioReplayCache
 
     private lateinit var gameService: GameService
 
@@ -57,6 +59,7 @@ class DayPhaseResultRevealTest {
             nightPhaseRepository = nightPhaseRepository,
             voteRepository = voteRepository,
             eliminationHistoryRepository = eliminationHistoryRepository,
+            audioReplayCache = audioReplayCache,
         )
     }
 

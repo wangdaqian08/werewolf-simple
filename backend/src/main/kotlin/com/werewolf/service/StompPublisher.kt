@@ -1,5 +1,6 @@
 package com.werewolf.service
 
+import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.DomainEvent
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Service
@@ -10,10 +11,20 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 class StompPublisher(
     private val template: SimpMessagingTemplate,
     private val gameStateLogger: GameStateLogger,
+    private val audioReplayCache: AudioReplayCache,
 ) {
 
     /** Broadcast a public game event to all subscribers of this game. */
     fun broadcastGame(gameId: Int, event: Any) {
+        // Cache the latest AudioSequence per game so reconnecting clients can
+        // recover frames missed during a transient WebSocket disconnect.
+        // GameService.getGameState reads this back; useAudioService dedup on
+        // sequence id keeps still-online clients from double-playing.
+        when (event) {
+            is DomainEvent.AudioSequence -> audioReplayCache.put(gameId, event.audioSequence)
+            is DomainEvent.GameOver -> audioReplayCache.clear(gameId)
+            else -> {}
+        }
         template.convertAndSend("/topic/game/$gameId", event)
         // After every state-change broadcast, fire-and-forget a one-line state
         // snapshot for server-side debugging. logSnapshot is @Async so its DB

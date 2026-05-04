@@ -9,6 +9,7 @@ import { onUnmounted, ref, watch } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { audioService } from '@/services/audioService'
+import type { AudioSequence } from '@/types'
 
 const HIGH_VOL_NIGHT_SUBPHASES: ReadonlySet<string> = new Set([
   'WEREWOLF_PICK',
@@ -18,76 +19,91 @@ const HIGH_VOL_NIGHT_SUBPHASES: ReadonlySet<string> = new Set([
   'GUARD_PICK',
 ])
 
+// Bound for the dedup set — keep memory finite even on long games.
+// 50 covers ~6 nights' worth of role audio plus init/transition cues with
+// margin; older entries roll out of the window and would replay if the
+// same id is ever broadcast again (which it never is, ids are timestamped).
+const PLAYED_IDS_LIMIT = 50
+
 export function useAudioService() {
   const gameStore = useGameStore()
   const roomStore = useRoomStore()
   const isMuted = ref(audioService.isMuted())
-  const lastPlayedSequenceId = ref<string | null>(null)
+  // Set of AudioSequence ids already played by this composable. Replaces the
+  // single lastPlayedSequenceId because the audioReplayBuffer can deliver
+  // several missed cues at once (in chronological order), and we need to
+  // dedup per-id rather than just against the most recent live frame.
+  const playedIds = new Set<string>()
+
+  function tryPlay(seq: AudioSequence, source: 'live' | 'replay'): void {
+    if (playedIds.has(seq.id)) {
+      console.log(`[useAudioService] Skipping duplicate sequence (${source}, same ID):`, seq.id)
+      return
+    }
+    if (seq.audioFiles.length === 0) return
+
+    console.log(`[useAudioService] AudioSequence (${source}):`, {
+      id: seq.id,
+      audioFiles: seq.audioFiles,
+      phase: seq.phase,
+      subPhase: seq.subPhase,
+    })
+
+    // Phase-level audio (priority >= 10) is meant to replace the queue —
+    // e.g. DAY→NIGHT rooster_crowing should interrupt any lingering night
+    // audio. But an unconditional clearQueue() drops role-owned audio that
+    // is queued but hasn't started yet — the most common offender:
+    // guard_close_eyes.mp3 gets queued ~15ms before the DAY AudioSequence
+    // arrives, and clearQueue wipes it before audio.play() ever fires.
+    //
+    // Fix: only clear when the queue is idle (no harm done). When it is
+    // still draining low-priority role audio, APPEND the high-priority
+    // files so they play after the role-narrative audio finishes —
+    // preserves narrative integrity while still ensuring the high-priority
+    // sequence eventually plays.
+    //
+    // Replay-buffer items are by definition stale — never let them clear
+    // the queue, only ever append, otherwise a recovery poll racing a live
+    // frame would clobber the live frame.
+    const isHighPriority = (seq.priority ?? 0) >= 10
+    if (source === 'live' && isHighPriority && !audioService.isQueueActive()) {
+      audioService.clearQueue()
+    }
+
+    audioService.playSequential(seq.audioFiles)
+    playedIds.add(seq.id)
+    if (playedIds.size > PLAYED_IDS_LIMIT) {
+      // Sets in JS preserve insertion order — drop the oldest id.
+      const oldest = playedIds.values().next().value
+      if (oldest !== undefined) playedIds.delete(oldest)
+    }
+  }
 
   /**
-   * Watch audio sequence changes from backend
+   * Watch audio sequence changes from backend (live STOMP path).
    */
   watch(
     () => gameStore.state?.audioSequence,
-    (newSequence, oldSequence) => {
-      if (!newSequence) return
+    (newSequence) => {
+      if (newSequence) tryPlay(newSequence, 'live')
+    },
+    { deep: true },
+  )
 
-      // Log all audio sequence changes for debugging
-      console.log('[useAudioService] AudioSequence changed:', {
-        oldId: oldSequence?.id,
-        newId: newSequence.id,
-        audioFiles: newSequence.audioFiles,
-        phase: newSequence.phase,
-        subPhase: newSequence.subPhase,
-      })
-
-      // Prevent duplicate playback of the same sequence
-      if (newSequence.id === lastPlayedSequenceId.value) {
-        console.log('[useAudioService] Skipping duplicate sequence (same ID):', newSequence.id)
-        return
-      }
-
-      // Phase-level audio (priority >= 10) is meant to replace the queue —
-      // e.g. DAY→NIGHT rooster_crowing should interrupt any lingering night
-      // audio. But an unconditional clearQueue() drops role-owned audio that
-      // is queued but hasn't started yet — the most common offender:
-      // guard_close_eyes.mp3 gets queued ~15ms before the DAY AudioSequence
-      // arrives, and clearQueue wipes it before audio.play() ever fires.
-      // Result: the audible role-narrative ("all roles done → day breaks")
-      // is silently truncated.
-      //
-      // Fix: only clear when the queue is idle (no harm done). When it is
-      // still draining low-priority role audio, APPEND the high-priority
-      // files so they play after the role-narrative audio finishes —
-      // preserves narrative integrity while still ensuring the high-priority
-      // sequence eventually plays.
-      const isHighPriority = (newSequence.priority ?? 0) >= 10
-      if (isHighPriority) {
-        if (audioService.isQueueActive()) {
-          console.log(
-            '[useAudioService] High-priority sequence — queue active, appending after current items:',
-            newSequence.audioFiles,
-          )
-        } else {
-          console.log(
-            '[useAudioService] High-priority sequence — clearing idle queue:',
-            newSequence.audioFiles,
-          )
-          audioService.clearQueue()
-        }
-      } else {
-        console.log(
-          '[useAudioService] Low-priority sequence — appending to queue:',
-          newSequence.audioFiles,
-        )
-      }
-
-      // Play (or append) all audio files in sequence
-      if (newSequence.audioFiles.length > 0) {
-        console.log('[useAudioService] Playing audio files:', newSequence.audioFiles)
-        audioService.playSequential(newSequence.audioFiles)
-        lastPlayedSequenceId.value = newSequence.id
-      }
+  /**
+   * Watch audioReplayBuffer changes (HTTP recovery path).
+   *
+   * The backend's AudioReplayCache surfaces recent AudioSequence frames in
+   * the getGameState response so a STOMP-reconnect's refreshState() can
+   * replay every cue missed during the disconnect window. Iterate the
+   * buffer in chronological order; tryPlay's playedIds dedup ensures we
+   * never double-play a frame the live path already handled.
+   */
+  watch(
+    () => gameStore.state?.audioReplayBuffer,
+    (buffer) => {
+      if (!buffer || buffer.length === 0) return
+      for (const seq of buffer) tryPlay(seq, 'replay')
     },
     { deep: true },
   )

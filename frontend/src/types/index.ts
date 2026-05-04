@@ -128,6 +128,12 @@ export interface GameState {
   nightPhase?: NightPhaseState
   voteHistory?: VoteRoundHistory[]
   audioSequence?: AudioSequence // 🎯 Backend-calculated audio sequence
+  // Recent AudioSequence frames cached on the backend, surfaced in
+  // getGameState responses so a STOMP-reconnect's refreshState() picks up
+  // every cue missed during the disconnect window — not just the latest.
+  // Frontend de-dupes by sequence id; live STOMP frames go through the
+  // same gate, so polls do not double-fire audio for still-online clients.
+  audioReplayBuffer?: AudioSequence[]
 }
 
 export interface GameEvent {
