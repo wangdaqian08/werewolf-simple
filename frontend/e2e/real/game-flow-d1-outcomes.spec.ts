@@ -12,7 +12,14 @@
 import { expect, test } from '@playwright/test'
 import { setupGame } from './helpers/multi-browser'
 import { act, actName, type RoleName } from './helpers/shell-runner'
-import { waitForPhase } from './helpers/state-polling'
+import { captureSnapshot } from './helpers/composite-screenshot'
+import {
+  readUnvotedAlivePlayerIds,
+  waitForCondition,
+  waitForNightSubPhase,
+  waitForPhase,
+  waitForVotingSubPhase,
+} from './helpers/state-polling'
 
 test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
   test.setTimeout(180_000)
