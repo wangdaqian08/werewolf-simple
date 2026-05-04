@@ -98,11 +98,31 @@ export function useAudioService() {
    * replay every cue missed during the disconnect window. Iterate the
    * buffer in chronological order; tryPlay's playedIds dedup ensures we
    * never double-play a frame the live path already handled.
+   *
+   * `lastReplayTailId` is a cheap content guard. setState replaces
+   * audioReplayBuffer on every getGameState poll (PhaseChanged /
+   * NightSubPhaseChanged handlers refreshState themselves), so this
+   * watcher fires constantly even when the buffer's contents haven't
+   * changed. Iterating + dedup-logging 8 cached entries on every poll
+   * adds enough console + reactive overhead that Playwright's click
+   * stability check fails during high-frequency state-update bursts
+   * (e.g. sheriff voting where 8 bot votes fan out in <2 s). Skipping
+   * the loop when the buffer's tail id hasn't changed cuts that
+   * overhead to ~zero in steady state while still firing the moment a
+   * new audio frame is appended on the wire — which is the only time
+   * the recovery path actually has work to do. Reproduced + fix
+   * verified locally: with this guard removed, sheriff-flow runs ~45 s
+   * 3/3 with `CI=1`; without it, the same sequence hits a 3-min
+   * `locator.click: Target page closed` on test 4 ~30 % of the time.
    */
+  let lastReplayTailId: string | null = null
   watch(
     () => gameStore.state?.audioReplayBuffer,
     (buffer) => {
       if (!buffer || buffer.length === 0) return
+      const tailId = buffer[buffer.length - 1]?.id ?? null
+      if (tailId === lastReplayTailId) return
+      lastReplayTailId = tailId
       for (const seq of buffer) tryPlay(seq, 'replay')
     },
     { deep: true },
