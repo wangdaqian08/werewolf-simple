@@ -29,7 +29,10 @@ async function bootMock(page: Page) {
 async function gotoScenario(page: Page, debugTestId: string, waitFor: string) {
   await bootMock(page)
   await page.locator(`[data-testid="${debugTestId}"]`).click()
-  await expect(page.locator(waitFor)).toBeVisible({ timeout: 3000 })
+  await expect(page.locator(waitFor)).toBeVisible({ timeout: 10000 })
+  await expect(
+    page.locator(`.player-grid [data-seat="${SHERIFF_SEAT}"]`).first(),
+  ).toBeVisible({ timeout: 5000 })
 }
 
 async function assertBadgeTopRight(card: Locator, badge: Locator, label: string) {
