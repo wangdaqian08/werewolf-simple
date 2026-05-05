@@ -47,14 +47,17 @@ describe('userService', () => {
     expect(result).toEqual(expected)
   })
 
-  it('getProviders fetches /auth/providers and returns the provider flags', async () => {
-    mockedHttp.get.mockResolvedValueOnce({
-      data: { google: true, wechat: false, guest: true },
-    })
+  it('getProviders fetches /auth/providers and returns the provider configs', async () => {
+    const expected = {
+      google: { clientId: 'g.apps.googleusercontent.com' },
+      wechat: null,
+      guest: true,
+    }
+    mockedHttp.get.mockResolvedValueOnce({ data: expected })
 
     const result = await userService.getProviders()
 
     expect(mockedHttp.get).toHaveBeenCalledWith('/auth/providers')
-    expect(result).toEqual({ google: true, wechat: false, guest: true })
+    expect(result).toEqual(expected)
   })
 })

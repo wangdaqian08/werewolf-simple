@@ -9,10 +9,13 @@ data class AuthRequest(
 )
 
 data class ProvidersResponse(
-    val google: Boolean,
-    val wechat: Boolean,
+    val google: GoogleProvider?,
+    val wechat: WeChatProvider?,
     val guest: Boolean,
 )
+
+data class GoogleProvider(val clientId: String)
+data class WeChatProvider(val appId: String)
 
 data class UserLoginRequest(
     @field:NotBlank(message = "Nickname must not be blank")

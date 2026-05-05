@@ -2,7 +2,9 @@ package com.werewolf.auth
 
 import com.werewolf.dto.AuthRequest
 import com.werewolf.dto.AuthResponse
+import com.werewolf.dto.GoogleProvider
 import com.werewolf.dto.ProvidersResponse
+import com.werewolf.dto.WeChatProvider
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -33,8 +35,8 @@ class AuthController(
     @GetMapping("/providers")
     fun providers(): ResponseEntity<ProvidersResponse> = ResponseEntity.ok(
         ProvidersResponse(
-            google = googleClientId.isNotBlank(),
-            wechat = wechatAppId.isNotBlank(),
+            google = if (googleClientId.isNotBlank()) GoogleProvider(googleClientId) else null,
+            wechat = if (wechatAppId.isNotBlank()) WeChatProvider(wechatAppId) else null,
             guest = true,
         ),
     )

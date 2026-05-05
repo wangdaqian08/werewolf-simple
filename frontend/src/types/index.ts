@@ -12,9 +12,17 @@ export interface LoginResponse {
 }
 
 export interface ProvidersResponse {
-  google: boolean
-  wechat: boolean
+  google: GoogleProvider | null
+  wechat: WeChatProvider | null
   guest: boolean
+}
+
+export interface GoogleProvider {
+  clientId: string
+}
+
+export interface WeChatProvider {
+  appId: string
 }
 
 export type OAuthProvider = 'google' | 'wechat'
