@@ -3,12 +3,21 @@
 export interface User {
   userId: string
   nickname: string
+  avatarUrl?: string | null
 }
 
 export interface LoginResponse {
   token: string
   user: User
 }
+
+export interface ProvidersResponse {
+  google: boolean
+  wechat: boolean
+  guest: boolean
+}
+
+export type OAuthProvider = 'google' | 'wechat'
 
 // ── Room ──────────────────────────────────────────────────────────────────────
 
