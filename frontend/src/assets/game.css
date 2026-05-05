@@ -90,12 +90,21 @@
 
 .player-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
   column-gap: 0.5rem;
   row-gap: 0.375rem;
   align-content: start;
   padding: 0 0.875rem 0.5rem;
   flex: 1;
+}
+
+.sheriff-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.75rem;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .dead-overlay {
