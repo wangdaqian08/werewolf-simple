@@ -3,7 +3,16 @@ package com.werewolf.dto
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
-data class AuthRequest(val code: String)
+data class AuthRequest(
+    @field:NotBlank(message = "OAuth authorization code must not be blank")
+    val code: String,
+)
+
+data class ProvidersResponse(
+    val google: Boolean,
+    val wechat: Boolean,
+    val guest: Boolean,
+)
 
 data class UserLoginRequest(
     @field:NotBlank(message = "Nickname must not be blank")

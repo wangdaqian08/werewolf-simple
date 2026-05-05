@@ -2,9 +2,12 @@ package com.werewolf.auth
 
 import com.werewolf.dto.AuthRequest
 import com.werewolf.dto.AuthResponse
+import com.werewolf.dto.ProvidersResponse
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -16,8 +19,25 @@ class AuthController(
     private val authService: AuthService,
     private val googleOAuthService: GoogleOAuthService,
     private val weChatOAuthService: WeChatOAuthService,
+    @Value("\${app.oauth.google.client-id:}") private val googleClientId: String,
+    @Value("\${app.oauth.wechat.app-id:}") private val wechatAppId: String,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * GET /api/auth/providers
+     * Returns which login providers are enabled in this deployment so the
+     * frontend can hide buttons that have no corresponding env-var configured.
+     * Guest is always available.
+     */
+    @GetMapping("/providers")
+    fun providers(): ResponseEntity<ProvidersResponse> = ResponseEntity.ok(
+        ProvidersResponse(
+            google = googleClientId.isNotBlank(),
+            wechat = wechatAppId.isNotBlank(),
+            guest = true,
+        ),
+    )
 
     /**
      * POST /api/auth/google
