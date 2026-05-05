@@ -1,30 +1,32 @@
 <template>
   <div class="result-wrap" :class="{ 'result-wolves': winner === 'WEREWOLF' }">
     <div class="result-card">
-      <div class="outcome-icon">{{ outcomeIcon }}</div>
+      <p class="game-over-label">GAME OVER</p>
       <h1 class="outcome-title serif">{{ outcomeTitle }}</h1>
       <p class="outcome-sub">{{ outcomeSub }}</p>
-      <p class="outcome-desc">{{ outcomeDesc }}</p>
 
-      <!-- Role reveal section -->
-      <div v-if="gameStore.state?.players?.length" class="divider-label">
-        <span>身份揭露 · ROLES REVEALED</span>
+      <div v-if="sortedPlayers.length" class="divider-label">
+        <span>ROLES REVEALED</span>
       </div>
-      <div v-if="gameStore.state?.players?.length" class="role-pills">
+
+      <section v-if="sortedPlayers.length" class="reveal-grid">
         <div
-          v-for="player in gameStore.state.players"
+          v-for="player in sortedPlayers"
           :key="player.userId"
-          class="role-pill"
-          :class="rolePillClass(player.role)"
+          class="reveal-card"
+          :class="{ 'reveal-wolf': player.role === 'WEREWOLF' }"
+          :data-testid="`role-reveal-${player.seatIndex}`"
         >
-          <span class="pill-avatar">{{ roleIcon(player.role) }}</span>
-          <span class="pill-name">{{ displayName(player) }}</span>
-          <span class="pill-sep">—</span>
-          <span class="pill-role">{{ roleZh(player.role) }}</span>
+          <div class="reveal-meta">
+            {{ String(player.seatIndex).padStart(2, '0') }} · {{ displayName(player) }}
+          </div>
+          <div class="reveal-role serif">{{ roleZh(player.role) }}</div>
         </div>
-      </div>
+      </section>
 
-      <button class="btn btn-success play-again-btn" @click="goLobby">再来一局 / Play Again</button>
+      <button class="btn btn-danger play-again-btn" data-testid="play-again" @click="goLobby">
+        Play Again
+      </button>
     </div>
   </div>
 </template>
@@ -35,6 +37,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { gameService } from '@/services/gameService'
+import type { GamePlayer } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,7 +45,6 @@ const gameStore = useGameStore()
 const userStore = useUserStore()
 
 onMounted(async () => {
-  // Always fetch fresh state to ensure all player roles are revealed
   const gameId = Number(route.params.gameId)
   if (gameId) {
     const state = await gameService.getState(gameId.toString())
@@ -62,20 +64,6 @@ const ROLE_ZH: Record<string, string> = {
   IDIOT: '白痴',
 }
 
-const ROLE_ICON: Record<string, string> = {
-  WEREWOLF: '🐺',
-  VILLAGER: '👤',
-  SEER: '🔮',
-  WITCH: '🌿',
-  HUNTER: '🏹',
-  GUARD: '🛡',
-  IDIOT: '🃏',
-}
-
-function roleIcon(role?: string): string {
-  return role ? (ROLE_ICON[role] ?? '❓') : '❓'
-}
-
 function displayName(player: { userId: string; nickname: string }): string {
   return player.userId === userStore.userId ? '我' : player.nickname
 }
@@ -84,36 +72,19 @@ function roleZh(role?: string): string {
   return role ? (ROLE_ZH[role] ?? role) : '?'
 }
 
-function rolePillClass(role?: string): string {
-  if (!role) return 'rp-default'
-  if (role === 'WEREWOLF') return 'rp-wolf'
-  if (role === 'GUARD') return 'rp-guard'
-  if (role === 'HUNTER') return 'rp-hunter'
-  if (['SEER', 'WITCH', 'IDIOT'].includes(role)) return 'rp-special'
-  return 'rp-default'
-}
-
-const outcomeIcon = computed(() => {
-  if (!winner.value) return '⏸️'
-  return winner.value === 'WEREWOLF' ? '🌕' : '🌅'
+const sortedPlayers = computed<GamePlayer[]>(() => {
+  const players = gameStore.state?.players ?? []
+  return [...players].sort((a, b) => a.seatIndex - b.seatIndex)
 })
 
 const outcomeTitle = computed(() => {
   if (!winner.value) return '比赛取消'
-  return winner.value === 'WEREWOLF' ? '狼人胜利' : '村民胜利'
+  return winner.value === 'WEREWOLF' ? '狼人胜' : '好人胜'
 })
 
 const outcomeSub = computed(() => {
   if (!winner.value) return 'Game Cancelled'
-  return winner.value === 'WEREWOLF' ? 'Wolves Win' : 'Village Wins'
-})
-
-const outcomeDesc = computed(() => {
-  if (!winner.value)
-    return '服务器已重启，请回到房间重新开始 / Server restarted — return to your room and start a new game'
-  return winner.value === 'WEREWOLF'
-    ? '狼人数量超过村民 / Wolves outnumber the village'
-    : '所有狼人已被消灭 / All werewolves eliminated'
+  return winner.value === 'WEREWOLF' ? 'WOLVES WIN' : 'VILLAGE WINS'
 })
 
 function goLobby() {
@@ -152,16 +123,23 @@ function goLobby() {
   border-color: rgba(255, 255, 255, 0.12);
 }
 
-.outcome-icon {
-  font-size: 3rem;
-  margin-bottom: 0.5rem;
+.game-over-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  margin: 0 0 0.25rem;
+}
+
+.result-wolves .game-over-label {
+  color: rgba(245, 240, 232, 0.55);
 }
 
 .outcome-title {
   font-family: 'Noto Serif SC', serif;
-  font-size: 2rem;
-  color: var(--ink);
+  font-size: 2.5rem;
+  color: var(--green);
   margin: 0 0 0.25rem;
+  letter-spacing: 0.1em;
 }
 
 .result-wolves .outcome-title {
@@ -169,24 +147,15 @@ function goLobby() {
 }
 
 .outcome-sub {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: var(--green);
-  margin: 0 0 0.25rem;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  margin: 0 0 1.5rem;
 }
 
 .result-wolves .outcome-sub {
-  color: var(--red);
-}
-
-.outcome-desc {
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin: 0 0 1.25rem;
-}
-
-.result-wolves .outcome-desc {
-  color: rgba(245, 240, 232, 0.6);
+  color: rgba(245, 240, 232, 0.55);
 }
 
 .divider-label {
@@ -195,7 +164,7 @@ function goLobby() {
   gap: 0.5rem;
   margin-bottom: 0.875rem;
   font-size: 0.7rem;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.15em;
   color: var(--muted);
 }
 
@@ -216,79 +185,69 @@ function goLobby() {
   background: rgba(255, 255, 255, 0.15);
 }
 
-.role-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  justify-content: center;
+.reveal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
+  gap: 0.5rem;
   margin-bottom: 1.5rem;
 }
 
-.role-pill {
+.reveal-card {
+  border: 1px solid rgba(45, 106, 63, 0.4);
+  background: rgba(45, 106, 63, 0.08);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.25rem;
+  text-align: center;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.25rem;
-  padding: 0.3rem 0.625rem;
-  border-radius: 2rem;
-  font-size: 0.75rem;
-  border: 1px solid;
+  min-width: 0;
 }
 
-.rp-wolf {
-  background: rgba(181, 37, 26, 0.1);
+.reveal-meta {
+  font-size: 0.625rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reveal-role {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  font-family: 'Noto Serif SC', serif;
+}
+
+.reveal-wolf {
   border-color: var(--red);
+  background: rgba(181, 37, 26, 0.1);
+}
+
+.reveal-wolf .reveal-role {
   color: var(--red);
 }
 
-.result-wolves .rp-wolf {
-  background: rgba(181, 37, 26, 0.25);
+.result-wolves .reveal-card {
+  background: rgba(45, 106, 63, 0.16);
+  border-color: rgba(45, 106, 63, 0.55);
 }
 
-.rp-special {
-  background: rgba(160, 120, 48, 0.1);
-  border-color: var(--gold);
-  color: var(--gold);
+.result-wolves .reveal-card .reveal-meta {
+  color: rgba(245, 240, 232, 0.55);
 }
 
-.result-wolves .rp-special {
-  background: rgba(160, 120, 48, 0.2);
+.result-wolves .reveal-card .reveal-role {
+  color: rgba(245, 240, 232, 0.92);
 }
 
-.rp-guard {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: #3b82f6;
-  color: #3b82f6;
+.result-wolves .reveal-wolf {
+  background: rgba(181, 37, 26, 0.22);
+  border-color: var(--red);
 }
 
-.result-wolves .rp-guard {
-  background: rgba(59, 130, 246, 0.2);
-}
-
-.rp-hunter {
-  background: rgba(120, 80, 40, 0.1);
-  border-color: #7c5230;
-  color: #7c5230;
-}
-
-.result-wolves .rp-hunter {
-  background: rgba(180, 130, 80, 0.2);
-  border-color: #b48250;
-  color: #b48250;
-}
-
-.rp-default {
-  background: transparent;
-  border-color: var(--border);
-  color: var(--muted);
-}
-
-.result-wolves .rp-default {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(245, 240, 232, 0.6);
-}
-
-.pill-sep {
-  opacity: 0.5;
+.result-wolves .reveal-wolf .reveal-role {
+  color: #ff8a80;
 }
 
 .play-again-btn {
