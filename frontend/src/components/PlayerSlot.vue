@@ -9,8 +9,13 @@
       <template v-if="nickname">
         <!-- Seat number always visible so players can identify themselves -->
         <span class="slot-index">{{ seat }}</span>
-        <div class="av">{{ avatar }}</div>
-        <span class="av-name">{{ nickname }}</span>
+        <Avatar
+          :nickname="nickname ?? ''"
+          :avatar-url="avatarAsUrl"
+          :emoji="avatarAsEmoji"
+          size="md"
+        />
+        <span class="av-name">{{ truncateNickname(nickname ?? '', 12) }}</span>
         <slot name="badge" />
       </template>
       <template v-else>
@@ -24,7 +29,9 @@
     <template v-else>
       <slot name="top" />
       <div :class="{ muted: !nickname }" class="seat-num">{{ seat }}</div>
-      <div :class="{ muted: !nickname }" class="seat-name">{{ nickname ?? '—' }}</div>
+      <div :class="{ muted: !nickname }" class="seat-name">
+        {{ nickname ? truncateNickname(nickname, 12) : '—' }}
+      </div>
       <slot name="badge" />
       <slot name="overlay" />
     </template>
@@ -33,6 +40,8 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
+import Avatar from '@/components/Avatar.vue'
+import { truncateNickname } from '@/utils/truncate'
 
 type SlotVariant =
   | 'empty'
@@ -52,8 +61,19 @@ const props = defineProps<{
   nickname?: string | null
   variant?: SlotVariant
   mode?: 'room' | 'game' // default 'game'
+  // `avatar` is overloaded: backend sends an https avatar URL when the user
+  // signed in via OAuth; mock data uses emoji glyphs (e.g. '🐺'). Avatar.vue
+  // discriminates by checking the https:// prefix, so the consumer just
+  // forwards the raw value.
   avatar?: string
 }>()
+
+const avatarAsUrl = computed(() =>
+  props.avatar && props.avatar.startsWith('https://') ? props.avatar : undefined,
+)
+const avatarAsEmoji = computed(() =>
+  props.avatar && !props.avatar.startsWith('https://') ? props.avatar : undefined,
+)
 
 defineEmits<{ click: [] }>()
 
@@ -192,18 +212,6 @@ const variantClass = computed(() => {
   color: inherit;
   opacity: 0.6;
   line-height: 1;
-}
-
-.av {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  flex-shrink: 0;
 }
 
 .av-name {
