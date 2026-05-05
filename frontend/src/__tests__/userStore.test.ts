@@ -9,6 +9,22 @@ vi.mock('@/services/userService', () => ({
       token: 'test-token-xyz',
       user: { userId: 'u1', nickname: 'TestUser' },
     }),
+    loginWithGoogle: vi.fn().mockResolvedValue({
+      token: 'oauth-google-token',
+      user: {
+        userId: 'google:abc',
+        nickname: 'Daniel Wang',
+        avatarUrl: 'https://lh3.googleusercontent.com/a/x',
+      },
+    }),
+    loginWithWechat: vi.fn().mockResolvedValue({
+      token: 'oauth-wechat-token',
+      user: {
+        userId: 'wechat:xyz',
+        nickname: '微信用户',
+        avatarUrl: 'https://thirdwx.qlogo.cn/x.jpg',
+      },
+    }),
     logout: vi.fn().mockResolvedValue(undefined),
   },
 }))
@@ -77,5 +93,55 @@ describe('userStore', () => {
     expect(localStorage.getItem('jwt')).toBeNull()
     expect(localStorage.getItem('userId')).toBeNull()
     expect(localStorage.getItem('nickname')).toBeNull()
+  })
+
+  // ── OAuth + avatarUrl ─────────────────────────────────────────────────────
+
+  it('loginWithCode("google", code) sets token, userId, nickname, avatarUrl in store', async () => {
+    const store = useUserStore()
+    await store.loginWithCode('google', 'the-code')
+    expect(store.token).toBe('oauth-google-token')
+    expect(store.userId).toBe('google:abc')
+    expect(store.nickname).toBe('Daniel Wang')
+    expect(store.avatarUrl).toBe('https://lh3.googleusercontent.com/a/x')
+    expect(store.isLoggedIn).toBe(true)
+  })
+
+  it('loginWithCode persists avatarUrl to localStorage', async () => {
+    const store = useUserStore()
+    await store.loginWithCode('google', 'the-code')
+    expect(localStorage.getItem('avatarUrl')).toBe('https://lh3.googleusercontent.com/a/x')
+  })
+
+  it('loginWithCode("wechat", code) routes to wechat endpoint', async () => {
+    const store = useUserStore()
+    await store.loginWithCode('wechat', 'wechat-code')
+    expect(store.userId).toBe('wechat:xyz')
+    expect(store.nickname).toBe('微信用户')
+    expect(store.avatarUrl).toBe('https://thirdwx.qlogo.cn/x.jpg')
+  })
+
+  it('restores avatarUrl from localStorage on init', () => {
+    localStorage.setItem('jwt', 'saved')
+    localStorage.setItem('userId', 'google:abc')
+    localStorage.setItem('nickname', 'Saved')
+    localStorage.setItem('avatarUrl', 'https://example.com/saved.png')
+    const store = useUserStore()
+    expect(store.avatarUrl).toBe('https://example.com/saved.png')
+  })
+
+  it('logout() clears avatarUrl from store and localStorage', async () => {
+    const store = useUserStore()
+    await store.loginWithCode('google', 'code')
+    expect(store.avatarUrl).toBeTruthy()
+    await store.logout()
+    expect(store.avatarUrl).toBeNull()
+    expect(localStorage.getItem('avatarUrl')).toBeNull()
+  })
+
+  it('avatarUrl is null when not provided by guest login', async () => {
+    const store = useUserStore()
+    await store.login('TestUser')
+    expect(store.avatarUrl).toBeNull()
   })
 })

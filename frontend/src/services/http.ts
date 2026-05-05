@@ -23,6 +23,7 @@ http.interceptors.response.use(
       localStorage.removeItem('jwt')
       localStorage.removeItem('userId')
       localStorage.removeItem('nickname')
+      localStorage.removeItem('avatarUrl')
     }
     return Promise.reject(err)
   },
