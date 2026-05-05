@@ -199,7 +199,7 @@ token() {
   echo "$1: $R" >&2
   [ -z "$R" ] && { echo "ERROR: empty response — is the backend running? (cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev')" >&2; return 1; }
   echo "$R" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])"
-}f
+}
 T_ALICE=$(token Alice); T_BOB=$(token Bob); T_CAROL=$(token Carol)
 T_DAVE=$(token Dave);   T_EVE=$(token Eve); T_FRANK=$(token Frank)
 
