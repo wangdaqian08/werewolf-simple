@@ -713,7 +713,7 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 
 .player-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
   column-gap: 0.5rem;
   row-gap: 0.375rem;
   align-content: start;
@@ -1049,13 +1049,5 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   background: rgba(245, 240, 232, 0.1);
   color: rgba(245, 240, 232, 0.72);
   border: 1px solid rgba(245, 240, 232, 0.14);
-}
-
-/* ── Sheriff badge ─────────────────────────────────────────────────────────── */
-.sheriff-badge {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  font-size: 0.75rem;
 }
 </style>
