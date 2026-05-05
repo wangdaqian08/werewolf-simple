@@ -46,9 +46,10 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function loginWithCode(provider: OAuthProvider, code: string) {
-    const res = provider === 'google'
-      ? await userService.loginWithGoogle(code)
-      : await userService.loginWithWechat(code)
+    const res =
+      provider === 'google'
+        ? await userService.loginWithGoogle(code)
+        : await userService.loginWithWechat(code)
     applySession(res.token, res.user.userId, res.user.nickname, res.user.avatarUrl)
   }
 

@@ -429,7 +429,9 @@ function signInWithWechat() {
   font-size: 0.9375rem;
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.15s, background 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
   min-height: 48px;
   border: 1px solid var(--border);
   width: 100%;

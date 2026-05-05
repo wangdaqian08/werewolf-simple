@@ -70,7 +70,12 @@ describe('LobbyView OAuth UI', () => {
     // assert the value was set).
     Object.defineProperty(window, 'location', {
       writable: true,
-      value: { ...window.location, href: 'http://localhost/', assign: vi.fn(), origin: 'http://localhost' },
+      value: {
+        ...window.location,
+        href: 'http://localhost/',
+        assign: vi.fn(),
+        origin: 'http://localhost',
+      },
     })
   })
 

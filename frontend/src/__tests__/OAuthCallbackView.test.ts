@@ -18,7 +18,9 @@ vi.mock('@/services/userService', () => ({
   },
 }))
 
-async function mountAt(path: string): Promise<{ wrapper: ReturnType<typeof mount>; router: Router }> {
+async function mountAt(
+  path: string,
+): Promise<{ wrapper: ReturnType<typeof mount>; router: Router }> {
   const pinia = createPinia()
   setActivePinia(pinia)
 
@@ -94,7 +96,10 @@ describe('OAuthCallbackView', () => {
   it('shows a loading indicator while the exchange is in flight', async () => {
     let resolveLogin: () => void = () => {}
     loginWithCodeMock.mockImplementationOnce(
-      () => new Promise<void>((resolve) => { resolveLogin = resolve }),
+      () =>
+        new Promise<void>((resolve) => {
+          resolveLogin = resolve
+        }),
     )
     sessionStorage.setItem(OAUTH_STATE_KEY, 'st')
 

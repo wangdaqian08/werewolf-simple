@@ -4,9 +4,7 @@
       <h1 class="title">登录中…</h1>
       <p class="subtitle">Signing you in</p>
 
-      <p v-if="loading" class="status" data-testid="oauth-loading">
-        正在验证 / Verifying…
-      </p>
+      <p v-if="loading" class="status" data-testid="oauth-loading">正在验证 / Verifying…</p>
 
       <div v-else-if="error" class="error" data-testid="oauth-error">
         <p class="error-msg">{{ error }}</p>

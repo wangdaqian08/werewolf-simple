@@ -9,7 +9,10 @@ vi.mock('@/services/http', () => ({
   },
 }))
 
-const mockedHttp = http as unknown as { post: ReturnType<typeof vi.fn>; get: ReturnType<typeof vi.fn> }
+const mockedHttp = http as unknown as {
+  post: ReturnType<typeof vi.fn>
+  get: ReturnType<typeof vi.fn>
+}
 
 describe('userService', () => {
   beforeEach(() => {

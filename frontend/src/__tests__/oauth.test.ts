@@ -70,7 +70,9 @@ describe('oauth helpers', () => {
     expect(parsed.origin + parsed.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth')
     expect(parsed.searchParams.get('response_type')).toBe('code')
     expect(parsed.searchParams.get('client_id')).toBe('my-client.apps.googleusercontent.com')
-    expect(parsed.searchParams.get('redirect_uri')).toBe('http://localhost:5173/auth/callback/google')
+    expect(parsed.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:5173/auth/callback/google',
+    )
     expect(parsed.searchParams.get('scope')).toBe('openid email profile')
     expect(parsed.searchParams.get('state')).toBe('abc123')
   })
@@ -81,6 +83,8 @@ describe('oauth helpers', () => {
       redirectUri: 'https://werewolf.example/auth/callback/google?x=1',
       clientId: 'c',
     })
-    expect(url).toContain('redirect_uri=https%3A%2F%2Fwerewolf.example%2Fauth%2Fcallback%2Fgoogle%3Fx%3D1')
+    expect(url).toContain(
+      'redirect_uri=https%3A%2F%2Fwerewolf.example%2Fauth%2Fcallback%2Fgoogle%3Fx%3D1',
+    )
   })
 })
