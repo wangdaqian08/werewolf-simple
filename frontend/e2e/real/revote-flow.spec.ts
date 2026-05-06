@@ -634,9 +634,9 @@ test.describe('Voting tie → revote → game proceeds', () => {
     await expect(hostPage.locator('.outcome-title')).toBeVisible({ timeout: 5_000 })
 
     // Verify all roles are revealed
-    const rolePills = hostPage.locator('.role-pill')
-    const pillCount = await rolePills.count()
-    expect(pillCount).toBe(9)
+    const revealCards = hostPage.locator('.reveal-card')
+    const cardCount = await revealCards.count()
+    expect(cardCount).toBe(9)
 
     await captureSnapshot(ctx.pages, testInfo, '04-game-complete')
   })

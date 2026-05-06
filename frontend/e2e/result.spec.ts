@@ -11,14 +11,17 @@ async function setup(page: Page) {
   await page.getByRole('button', { name: /Create Room/i }).click()
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)
-  await page.evaluate(() => (window as any).__debug.gameStart())
+  await page.evaluate(() => (window as unknown as { __debug: { gameStart: () => void } }).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
   await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
   await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 }
 
 async function goToResult(page: Page, winner: 'VILLAGER' | 'WEREWOLF') {
-  await page.evaluate((w) => (window as any).__debug.gameOver(w), winner)
+  await page.evaluate(
+    (w) => (window as unknown as { __debug: { gameOver: (w: string) => void } }).__debug.gameOver(w),
+    winner,
+  )
   await page.waitForURL(/\/result\//, { timeout: 5000 })
 }
 
@@ -28,24 +31,26 @@ test('result: Village Wins — title and subtitle visible', async ({ page }) => 
   await setup(page)
   await goToResult(page, 'VILLAGER')
 
-  await expect(page.getByRole('heading', { name: '村民胜利' })).toBeVisible()
-  await expect(page.getByText('Village Wins')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '好人胜' })).toBeVisible()
+  await expect(page.getByText('VILLAGE WINS')).toBeVisible()
+  await expect(page.getByText('GAME OVER')).toBeVisible()
 })
 
-test('result: Village Wins — role pills show all players', async ({ page }) => {
+test('result: Village Wins — reveal cards show all players', async ({ page }) => {
   await setup(page)
   await goToResult(page, 'VILLAGER')
 
-  const pills = page.locator('.role-pill')
-  await expect(pills).toHaveCount(9)
+  const cards = page.locator('.reveal-card')
+  await expect(cards).toHaveCount(9)
 })
 
-test('result: Village Wins — wolf roles styled as red pills', async ({ page }) => {
+test('result: Village Wins — only wolves carry .reveal-wolf class', async ({ page }) => {
   await setup(page)
   await goToResult(page, 'VILLAGER')
 
-  const wolfPills = page.locator('.rp-wolf')
-  await expect(wolfPills).toHaveCount(2)
+  // Per MOCK_ROLE_ASSIGNMENTS: u2 + u6 are WEREWOLF → 2 wolves out of 9 players
+  const wolves = page.locator('.reveal-card.reveal-wolf')
+  await expect(wolves).toHaveCount(2)
 })
 
 // ── Wolves Win ────────────────────────────────────────────────────────────────
@@ -61,8 +66,23 @@ test('result: Wolves Win — title and subtitle visible', async ({ page }) => {
   await setup(page)
   await goToResult(page, 'WEREWOLF')
 
-  await expect(page.getByRole('heading', { name: '狼人胜利' })).toBeVisible()
-  await expect(page.getByText('Wolves Win')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '狼人胜' })).toBeVisible()
+  await expect(page.getByText('WOLVES WIN')).toBeVisible()
+})
+
+// ── Sort + format ─────────────────────────────────────────────────────────────
+
+test('result: cards rendered in seat-index order', async ({ page }) => {
+  await setup(page)
+  await goToResult(page, 'VILLAGER')
+
+  // MOCK_GAME_STATE has 9 players seats 1..9. Cards must render in 1..9 order.
+  const seats = await page
+    .locator('.reveal-card')
+    .evaluateAll((els) =>
+      els.map((el) => Number(el.getAttribute('data-testid')?.split('-').pop())),
+    )
+  expect(seats).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
 })
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -71,6 +91,6 @@ test('result: Play Again — navigates to lobby', async ({ page }) => {
   await setup(page)
   await goToResult(page, 'VILLAGER')
 
-  await page.getByRole('button', { name: /再来一局.*Play Again/i }).click()
+  await page.locator('[data-testid="play-again"]').click()
   await page.waitForURL(/\/$/, { timeout: 5000 })
 })

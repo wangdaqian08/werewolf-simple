@@ -365,17 +365,17 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     await expect(hostPage.getByText(/身份揭露|ROLES REVEALED/i)).toBeVisible({ timeout: 5_000 })
 
     // All 9 players' roles shown
-    const rolePills = hostPage.locator('.role-pill')
-    const pillCount = await rolePills.count()
-    expect(pillCount).toBe(9)
+    const revealCards = hostPage.locator('.reveal-card')
+    const cardCount = await revealCards.count()
+    expect(cardCount).toBe(9)
 
-    // Wolf roles visible
-    const wolfPills = hostPage.locator('.role-pill').filter({ hasText: /狼人/ })
-    expect(await wolfPills.count()).toBeGreaterThanOrEqual(1)
+    // Wolf roles visible (red-styled cards carry .reveal-wolf)
+    const wolfCards = hostPage.locator('.reveal-card.reveal-wolf')
+    expect(await wolfCards.count()).toBeGreaterThanOrEqual(1)
 
-    // Village roles visible
-    const villagePills = hostPage.locator('.role-pill').filter({ hasText: /村民|预言家|女巫|守卫/ })
-    expect(await villagePills.count()).toBeGreaterThanOrEqual(1)
+    // Village/god roles visible (everything not .reveal-wolf, filtered by Chinese role text)
+    const villageCards = hostPage.locator('.reveal-card').filter({ hasText: /村民|预言家|女巫|守卫/ })
+    expect(await villageCards.count()).toBeGreaterThanOrEqual(1)
 
     await captureSnapshot(ctx.pages, testInfo, '02-result-roles-revealed')
   })
