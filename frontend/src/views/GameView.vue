@@ -1133,17 +1133,10 @@ function normalizePhaseName(phase: string | undefined): string {
 
 .player-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
   gap: 0.625rem;
   padding: 1rem;
   flex: 1;
-}
-
-.sheriff-badge {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  font-size: 0.75rem;
 }
 
 .dead-overlay {

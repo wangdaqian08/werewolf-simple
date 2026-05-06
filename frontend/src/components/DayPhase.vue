@@ -306,7 +306,7 @@ function onTap(player: GamePlayer) {
 
 .player-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
   gap: 0.5rem;
   padding: 0 1rem 1rem;
 }
