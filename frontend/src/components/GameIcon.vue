@@ -1,10 +1,5 @@
 <template>
-  <img
-    :src="resolvedSrc"
-    :alt="alt ?? name"
-    class="game-icon"
-    @error="onError"
-  />
+  <img :src="resolvedSrc" :alt="alt ?? name" class="game-icon" @error="onError" />
 </template>
 
 <script setup lang="ts">

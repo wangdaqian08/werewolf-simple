@@ -104,7 +104,7 @@ test('flow: sheriffCandidate is a no-op when candidate already exists', async ({
   })
 
   // Adding Alice again should be a no-op
-  await page.evaluate(() => (window as any).__debug.sheriffCandidate('u2', 'Alice', '😊'))
+  await page.evaluate(() => (window as any).__debug.sheriffCandidate('u2', 'Alice', ''))
   await page.waitForTimeout(70)
 
   const after = await page.evaluate(() => document.querySelectorAll('.cand-name').length)
@@ -127,7 +127,7 @@ test('flow: correct candidate controls sequence — remove then re-add', async (
   await page.evaluate(() => (window as any).__debug.sheriffRemove('u2'))
   await page.waitForTimeout(70)
 
-  await page.evaluate(() => (window as any).__debug.sheriffCandidate('u2', 'Alice', '😊'))
+  await page.evaluate(() => (window as any).__debug.sheriffCandidate('u2', 'Alice', ''))
   await page.waitForTimeout(70)
 
   await expect(page.getByText('Alice', { exact: true }).first()).toBeVisible()
