@@ -35,6 +35,9 @@ const resolvedSrc = computed(() => {
 <style scoped>
 .player-avatar {
   display: inline-block;
+  width: 1em;
+  height: 1em;
   object-fit: cover;
+  border-radius: 50%;
 }
 </style>

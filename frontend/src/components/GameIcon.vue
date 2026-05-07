@@ -33,6 +33,8 @@ const resolvedSrc = computed(() => {
 <style scoped>
 .game-icon {
   display: inline-block;
+  width: 1em;
+  height: 1em;
   object-fit: contain;
   vertical-align: middle;
 }
