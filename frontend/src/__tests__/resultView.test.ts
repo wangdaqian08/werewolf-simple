@@ -6,394 +6,219 @@ import ResultView from '@/views/ResultView.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { gameService } from '@/services/gameService'
-import type { GameState } from '@/types'
+import type { GamePlayer, GameState, PlayerRole } from '@/types'
 
-// Mock services
 vi.mock('@/services/gameService', () => ({
   gameService: {
     getState: vi.fn(),
   },
 }))
 
-describe('ResultView - Game Over Role Reveal Bug', () => {
-  let router: ReturnType<typeof createRouter>
-  let pinia: ReturnType<typeof createPinia>
+function makePlayer(
+  seatIndex: number,
+  userId: string,
+  nickname: string,
+  role: PlayerRole,
+  isAlive = true,
+): GamePlayer {
+  return { userId, nickname, seatIndex, isAlive, isSheriff: false, role }
+}
 
+async function mountResultView(state: GameState, options: { authedUserId?: string } = {}) {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', name: 'lobby', component: { template: '<div>Lobby</div>' } },
+      { path: '/result/:gameId', name: 'result', component: ResultView },
+    ],
+  })
+
+  const userStore = useUserStore()
+  userStore.token = 'test-token'
+  userStore.userId = options.authedUserId ?? 'user-1'
+  userStore.nickname = 'Alice'
+
+  const gameStore = useGameStore()
+  gameStore.setState(state)
+  vi.mocked(gameService.getState).mockResolvedValue(state)
+
+  await router.push(`/result/${state.gameId}`)
+  const wrapper = mount(ResultView, { global: { plugins: [pinia, router] } })
+  await wrapper.vm.$nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  await wrapper.vm.$nextTick()
+  return { wrapper, router, gameStore }
+}
+
+describe('ResultView - new dashboard-style gameover screen', () => {
   beforeEach(() => {
-    pinia = createPinia()
-    setActivePinia(pinia)
-
-    // Create router with memory history
-    router = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        { path: '/game/:gameId', name: 'game', component: { template: '<div>Game</div>' } },
-        { path: '/result/:gameId', name: 'result', component: ResultView },
-      ],
-    })
-
     vi.clearAllMocks()
   })
 
-  /**
-   * BUG FIX TEST
-   *
-   * This test verifies that when the game ends, the ResultView correctly
-   * displays all players' roles, not just the current user's role.
-   *
-   * The bug occurred because:
-   * 1. GameOver event only contained winner info, not player roles
-   * 2. Frontend navigated to result page immediately without re-fetching state
-   * 3. Result page showed empty roles for other players
-   *
-   * The fix:
-   * - When GameOver event is received, re-fetch full game state before navigation
-   * - Backend returns all player roles when phase is GAME_OVER
-   */
-  it('displays all player roles when game ends', async () => {
-    const gameStore = useGameStore()
-    const userStore = useUserStore()
-
-    // Setup: Set current user
-    userStore.token = 'test-token'
-    userStore.userId = 'user-1'
-    userStore.nickname = 'Alice'
-
-    // Simulate: State without winner (like when navigating from GameView's GameOver handler)
-    // The GameOver handler in GameView should re-fetch state before navigation
-    const stateBeforeRefetch: GameState = {
-      gameId: '1',
-      phase: 'DAY_VOTING', // Phase before GameOver
-      dayNumber: 7,
-      players: [
-        {
-          userId: 'user-1',
-          nickname: 'Alice',
-          seatIndex: 1,
-          isAlive: true,
-          isSheriff: false,
-          role: 'VILLAGER', // Only current user's role is visible during game
-        },
-        {
-          userId: 'user-2',
-          nickname: 'Bob',
-          seatIndex: 2,
-          isAlive: false,
-          isSheriff: false,
-          // Other players' roles are hidden during game
-        },
-        {
-          userId: 'user-3',
-          nickname: 'Charlie',
-          seatIndex: 3,
-          isAlive: false,
-          isSheriff: false,
-        },
-      ],
-      events: [],
-    }
-
-    // Set initial state without winner
-    gameStore.setState(stateBeforeRefetch)
-
-    // Mock gameService.getState to return the game over state with all roles
-    const gameOverState: GameState = {
-      gameId: '1',
-      phase: 'GAME_OVER',
-      dayNumber: 7,
-      winner: 'VILLAGER',
-      players: [
-        {
-          userId: 'user-1',
-          nickname: 'Alice',
-          seatIndex: 1,
-          isAlive: true,
-          isSheriff: false,
-          role: 'VILLAGER',
-        },
-        {
-          userId: 'user-2',
-          nickname: 'Bob',
-          seatIndex: 2,
-          isAlive: false,
-          isSheriff: false,
-          role: 'WEREWOLF', // Now visible at game end
-        },
-        {
-          userId: 'user-3',
-          nickname: 'Charlie',
-          seatIndex: 3,
-          isAlive: false,
-          isSheriff: false,
-          role: 'SEER', // Now visible at game end
-        },
-      ],
-      events: [],
-    }
-
-    vi.mocked(gameService.getState).mockResolvedValue(gameOverState)
-
-    // Navigate to result page
-    await router.push('/result/1')
-
-    // Mount ResultView
-    const wrapper = mount(ResultView, {
-      global: {
-        plugins: [pinia, router],
-      },
-    })
-
-    // Wait for component to load and fetch state
-    await wrapper.vm.$nextTick()
-    // Wait for the async onMounted to complete
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    await wrapper.vm.$nextTick()
-
-    // Verify: gameService.getState was called to fetch full state (because no winner in state)
-    expect(gameService.getState).toHaveBeenCalledWith('1')
-
-    // Verify: All player roles are displayed
-    const rolePills = wrapper.findAll('.role-pill')
-    expect(rolePills).toHaveLength(3)
-
-    // Verify: Each role pill contains the role name
-    const roleTexts = rolePills.map((pill) => pill.text())
-    expect(roleTexts[0]).toContain('村民') // Alice - VILLAGER
-    expect(roleTexts[1]).toContain('狼人') // Bob - WEREWOLF
-    expect(roleTexts[2]).toContain('预言家') // Charlie - SEER
-
-    // Verify: Winner information is displayed
-    expect(wrapper.text()).toContain('村民胜利')
-    expect(wrapper.text()).toContain('Village Wins')
-  })
-
-  /**
-   * EDGE CASE: Winner is WEREWOLF
-   */
-  it('displays all roles when werewolves win', async () => {
-    const gameStore = useGameStore()
-    const userStore = useUserStore()
-
-    userStore.token = 'test-token'
-    userStore.userId = 'user-1'
-    userStore.nickname = 'Alice'
-
-    // Set initial state without winner
-    const stateBeforeRefetch: GameState = {
-      gameId: '2',
-      phase: 'DAY_VOTING',
-      dayNumber: 5,
-      players: [
-        {
-          userId: 'user-1',
-          nickname: 'Alice',
-          seatIndex: 1,
-          isAlive: true,
-          isSheriff: false,
-          role: 'VILLAGER',
-        },
-        {
-          userId: 'user-2',
-          nickname: 'Bob',
-          seatIndex: 2,
-          isAlive: true,
-          isSheriff: false,
-        },
-        {
-          userId: 'user-3',
-          nickname: 'Charlie',
-          seatIndex: 3,
-          isAlive: true,
-          isSheriff: false,
-        },
-      ],
-      events: [],
-    }
-
-    gameStore.setState(stateBeforeRefetch)
-
-    const gameOverState: GameState = {
-      gameId: '2',
+  it('renders title 好人胜 + WOLVES → 狼人胜 with sub WOLVES WIN', async () => {
+    const wolvesWin: GameState = {
+      gameId: 'g-wolves',
       phase: 'GAME_OVER',
       dayNumber: 5,
       winner: 'WEREWOLF',
-      players: [
-        {
-          userId: 'user-1',
-          nickname: 'Alice',
-          seatIndex: 1,
-          isAlive: true,
-          isSheriff: false,
-          role: 'VILLAGER',
-        },
-        {
-          userId: 'user-2',
-          nickname: 'Bob',
-          seatIndex: 2,
-          isAlive: true,
-          isSheriff: false,
-          role: 'WEREWOLF',
-        },
-        {
-          userId: 'user-3',
-          nickname: 'Charlie',
-          seatIndex: 3,
-          isAlive: true,
-          isSheriff: false,
-          role: 'WEREWOLF',
-        },
-      ],
+      players: [makePlayer(1, 'user-1', 'Alice', 'VILLAGER')],
       events: [],
     }
-
-    vi.mocked(gameService.getState).mockResolvedValue(gameOverState)
-
-    await router.push('/result/2')
-
-    const wrapper = mount(ResultView, {
-      global: {
-        plugins: [pinia, router],
-      },
-    })
-
-    await wrapper.vm.$nextTick()
-    // Wait for the async onMounted to complete
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    await wrapper.vm.$nextTick()
-
-    // Verify: Wolf winner message is displayed
-    expect(wrapper.text()).toContain('狼人胜利')
-    expect(wrapper.text()).toContain('Wolves Win')
-
-    // Verify: All roles are still displayed
-    const rolePills = wrapper.findAll('.role-pill')
-    expect(rolePills).toHaveLength(3)
+    const { wrapper } = await mountResultView(wolvesWin)
+    expect(wrapper.text()).toContain('狼人胜')
+    expect(wrapper.text()).not.toContain('狼人胜利')
+    expect(wrapper.text()).toContain('WOLVES WIN')
+    expect(wrapper.find('.result-wolves').exists()).toBe(true)
   })
 
-  /**
-   * EDGE CASE: Game state already has winner (from previous navigation)
-   * This tests the onMounted logic that skips re-fetching if winner is already set
-   */
-  it('skips re-fetching if winner is already in game state', async () => {
-    const gameStore = useGameStore()
-    const userStore = useUserStore()
-
-    userStore.token = 'test-token'
-    userStore.userId = 'user-1'
-    userStore.nickname = 'Alice'
-
-    const gameOverState: GameState = {
-      gameId: '3',
+  it('renders title 好人胜 + sub VILLAGE WINS for villager win', async () => {
+    const villageWin: GameState = {
+      gameId: 'g-village',
       phase: 'GAME_OVER',
-      dayNumber: 3,
+      dayNumber: 5,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Alice', 'VILLAGER')],
+      events: [],
+    }
+    const { wrapper } = await mountResultView(villageWin)
+    expect(wrapper.text()).toContain('好人胜')
+    expect(wrapper.text()).not.toContain('村民胜利')
+    expect(wrapper.text()).toContain('VILLAGE WINS')
+    expect(wrapper.find('.result-wolves').exists()).toBe(false)
+  })
+
+  it('shows GAME OVER label and ROLES REVEALED section header', async () => {
+    const state: GameState = {
+      gameId: 'g-1',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Alice', 'VILLAGER')],
+      events: [],
+    }
+    const { wrapper } = await mountResultView(state)
+    expect(wrapper.text()).toContain('GAME OVER')
+    expect(wrapper.text()).toContain('ROLES REVEALED')
+  })
+
+  it('renders one .reveal-card per player (no .role-pill any more)', async () => {
+    const state: GameState = {
+      gameId: 'g-2',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
       winner: 'VILLAGER',
       players: [
-        {
-          userId: 'user-1',
-          nickname: 'Alice',
-          seatIndex: 1,
-          isAlive: true,
-          isSheriff: false,
-          role: 'VILLAGER',
-        },
-        {
-          userId: 'user-2',
-          nickname: 'Bob',
-          seatIndex: 2,
-          isAlive: false,
-          isSheriff: false,
-          role: 'WEREWOLF',
-        },
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER'),
+        makePlayer(2, 'user-2', 'Bob', 'WEREWOLF'),
+        makePlayer(3, 'user-3', 'Charlie', 'SEER'),
       ],
       events: [],
     }
-
-    // Set state with winner already
-    gameStore.setState(gameOverState)
-
-    await router.push('/result/3')
-
-    const wrapper = mount(ResultView, {
-      global: {
-        plugins: [pinia, router],
-      },
-    })
-
-    await wrapper.vm.$nextTick()
-
-    // Verify: gameService.getState was called to get fresh state
-    expect(gameService.getState).toHaveBeenCalledWith('3')
-
-    // Verify: Roles are still displayed from existing state
-    const rolePills = wrapper.findAll('.role-pill')
-    expect(rolePills).toHaveLength(2)
+    const { wrapper } = await mountResultView(state)
+    expect(wrapper.findAll('.reveal-card')).toHaveLength(3)
+    expect(wrapper.findAll('.role-pill')).toHaveLength(0)
   })
 
-  /**
-   * BUG REPRODUCTION: Missing roles (what the bug looked like)
-   */
-  it('BUG: would fail if state was fetched before GameOver (roles hidden)', async () => {
-    const gameStore = useGameStore()
-    const userStore = useUserStore()
-
-    userStore.token = 'test-token'
-    userStore.userId = 'user-1'
-    userStore.nickname = 'Alice'
-
-    // This simulates the bug: state was fetched during VOTING phase
-    // where other players' roles are hidden
-    const votingState: GameState = {
-      gameId: '4',
-      phase: 'DAY_VOTING',
-      dayNumber: 7,
+  it('sorts cards by seatIndex ascending regardless of input order', async () => {
+    const state: GameState = {
+      gameId: 'g-3',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
+      winner: 'VILLAGER',
       players: [
-        {
-          userId: 'user-1',
-          nickname: 'Alice',
-          seatIndex: 1,
-          isAlive: true,
-          isSheriff: false,
-          role: 'VILLAGER', // Only current user's role is visible
-        },
-        {
-          userId: 'user-2',
-          nickname: 'Bob',
-          seatIndex: 2,
-          isAlive: false,
-          isSheriff: false,
-          // Other players' roles are hidden during game
-        },
-        {
-          userId: 'user-3',
-          nickname: 'Charlie',
-          seatIndex: 3,
-          isAlive: false,
-          isSheriff: false,
-        },
+        // intentionally shuffled
+        makePlayer(7, 'user-7', 'Gina', 'WITCH'),
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER'),
+        makePlayer(4, 'user-4', 'Dan', 'WEREWOLF'),
+        makePlayer(2, 'user-2', 'Bob', 'WEREWOLF'),
+        makePlayer(3, 'user-3', 'Charlie', 'SEER'),
       ],
       events: [],
     }
+    const { wrapper } = await mountResultView(state)
+    const cards = wrapper.findAll('.reveal-card')
+    const seats = cards.map((c) => Number(c.attributes('data-testid')?.split('-').pop()))
+    expect(seats).toEqual([1, 2, 3, 4, 7])
+  })
 
-    // Mock to return voting state first (bug scenario)
-    vi.mocked(gameService.getState).mockResolvedValueOnce(votingState)
+  it('marks ONLY WEREWOLF cards with .reveal-wolf', async () => {
+    const state: GameState = {
+      gameId: 'g-4',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
+      winner: 'WEREWOLF',
+      players: [
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER'),
+        makePlayer(2, 'user-2', 'Bob', 'WEREWOLF'),
+        makePlayer(3, 'user-3', 'Charlie', 'SEER'),
+        makePlayer(4, 'user-4', 'Dan', 'WEREWOLF'),
+        makePlayer(5, 'user-5', 'Eve', 'GUARD'),
+      ],
+      events: [],
+    }
+    const { wrapper } = await mountResultView(state)
+    const cards = wrapper.findAll('.reveal-card')
+    const wolfStates = cards.map((c) => c.classes().includes('reveal-wolf'))
+    expect(wolfStates).toEqual([false, true, false, true, false])
+  })
 
-    // Set state without winner
-    gameStore.setState(votingState)
+  it('formats meta line as "{paddedSeat} · {nickname}"', async () => {
+    const state: GameState = {
+      gameId: 'g-5',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
+      winner: 'VILLAGER',
+      players: [
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER'),
+        makePlayer(10, 'user-10', 'Jay', 'WEREWOLF'),
+      ],
+      events: [],
+    }
+    // authed as a non-player to avoid the "我" alias replacing the nickname
+    const { wrapper } = await mountResultView(state, { authedUserId: 'spectator-x' })
+    const texts = wrapper.findAll('.reveal-card').map((c) => c.text())
+    expect(texts[0]).toContain('01 · Alice')
+    expect(texts[1]).toContain('10 · Jay')
+  })
 
-    await router.push('/result/4')
+  it('renders Chinese role name in each card', async () => {
+    const state: GameState = {
+      gameId: 'g-6',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
+      winner: 'VILLAGER',
+      players: [
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER'),
+        makePlayer(2, 'user-2', 'Bob', 'WEREWOLF'),
+        makePlayer(3, 'user-3', 'Charlie', 'SEER'),
+        makePlayer(4, 'user-4', 'Dan', 'WITCH'),
+        makePlayer(5, 'user-5', 'Eve', 'HUNTER'),
+      ],
+      events: [],
+    }
+    const { wrapper } = await mountResultView(state)
+    const texts = wrapper.findAll('.reveal-card').map((c) => c.text())
+    expect(texts[0]).toContain('村民')
+    expect(texts[1]).toContain('狼人')
+    expect(texts[2]).toContain('预言家')
+    expect(texts[3]).toContain('女巫')
+    expect(texts[4]).toContain('猎人')
+  })
 
-    const wrapper = mount(ResultView, {
-      global: {
-        plugins: [pinia, router],
-      },
-    })
-
-    await wrapper.vm.$nextTick()
-
-    // Verify: getState was called (no winner in state)
-    expect(gameService.getState).toHaveBeenCalledWith('4')
-
-    // After this, the fix would re-fetch with winner
-    // In the bug scenario, this would show "❓" for other roles
+  it('Play Again button triggers router push to lobby', async () => {
+    const state: GameState = {
+      gameId: 'g-7',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Alice', 'VILLAGER')],
+      events: [],
+    }
+    const { wrapper, router } = await mountResultView(state)
+    const pushSpy = vi.spyOn(router, 'push')
+    await wrapper.find('[data-testid="play-again"]').trigger('click')
+    expect(pushSpy).toHaveBeenCalledWith({ name: 'lobby' })
   })
 })

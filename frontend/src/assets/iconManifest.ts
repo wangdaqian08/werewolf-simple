@@ -35,11 +35,6 @@ export const ICON_MANIFEST: Record<string, string> = {
   'status-eliminated': '/images/status/eliminated.png',
   'status-medal': '/images/status/medal.png',
 
-  // ── Outcomes (game-over screen) ────────────────────
-  'outcome-wolves-win': '/images/status/wolves-win.png',
-  'outcome-village-win': '/images/status/village-win.png',
-  'outcome-cancelled': '/images/status/cancelled.png',
-
   // ── Actions ────────────────────────────────────────
   'action-vote': '/images/actions/vote.png',
   'action-battle': '/images/actions/battle.png',
