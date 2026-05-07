@@ -26,7 +26,10 @@
 
               <!-- Sheriff election (only emitted on the day of the election) -->
               <div v-if="round.sheriffResult" class="log-section">
-                <div class="section-title">⭐ 警长选举</div>
+                <div class="section-title">
+                  <GameIcon name="status-sheriff" alt="sheriff" class="section-icon" />
+                  警长选举
+                </div>
                 <div v-if="round.sheriffResult.winnerNickname" class="log-row">
                   <span class="seat-badge">{{ round.sheriffResult.winnerSeatIndex }}号</span>
                   <span class="log-name">{{ round.sheriffResult.winnerNickname }}</span>
@@ -65,7 +68,10 @@
 
               <!-- Deaths at start of day -->
               <div v-if="round.deaths.length > 0" class="log-section">
-                <div class="section-title">☽ 昨夜出局</div>
+                <div class="section-title">
+                  <GameIcon name="phase-deaths" alt="deaths" class="section-icon" />
+                  昨夜出局
+                </div>
                 <div v-for="d in round.deaths" :key="d.userId" class="log-row">
                   <span class="seat-badge">{{ d.seatIndex }}号</span>
                   <span class="log-name">{{ d.nickname }}</span>
@@ -73,13 +79,19 @@
                 <div v-if="round.deaths.length === 0" class="log-row muted">平安夜</div>
               </div>
               <div v-else class="log-section">
-                <div class="section-title">☽ 昨夜出局</div>
+                <div class="section-title">
+                  <GameIcon name="phase-deaths" alt="deaths" class="section-icon" />
+                  昨夜出局
+                </div>
                 <div class="log-row muted">平安夜</div>
               </div>
 
               <!-- Idiot reveals -->
               <div v-if="round.idiotReveals.length > 0" class="log-section">
-                <div class="section-title">🃏 白痴身份揭示</div>
+                <div class="section-title">
+                  <GameIcon name="role-idiot" alt="idiot" class="section-icon" />
+                  白痴身份揭示
+                </div>
                 <div v-for="r in round.idiotReveals" :key="r.userId" class="log-row">
                   <span class="seat-badge">{{ r.seatIndex }}号</span>
                   <span class="log-name">{{ r.nickname }}</span>
@@ -89,7 +101,10 @@
 
               <!-- Vote result -->
               <div v-if="round.voteResult" class="log-section">
-                <div class="section-title">☀ 投票结果</div>
+                <div class="section-title">
+                  <GameIcon name="phase-day" alt="day" class="section-icon" />
+                  投票结果
+                </div>
                 <div v-if="round.voteResult.eliminatedNickname" class="log-row">
                   <span class="seat-badge">{{ round.voteResult.eliminatedSeatIndex }}号</span>
                   <span class="log-name">{{ round.voteResult.eliminatedNickname }}</span>
@@ -128,7 +143,10 @@
 
               <!-- Hunter shot -->
               <div v-if="round.hunterShot" class="log-section">
-                <div class="section-title">🔫 猎人开枪</div>
+                <div class="section-title">
+                  <GameIcon name="action-shoot" alt="hunter shot" class="section-icon" />
+                  猎人开枪
+                </div>
                 <div class="log-row">
                   <span class="seat-badge">{{ round.hunterShot.hunterSeatIndex }}号</span>
                   <span class="log-name">{{ round.hunterShot.hunterNickname }}</span>
@@ -148,6 +166,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { gameService } from '@/services/gameService'
+import GameIcon from '@/components/GameIcon.vue'
 import type {
   ActionLogEntry,
   HunterShotPayload,

@@ -1,7 +1,7 @@
 <template>
   <div class="result-wrap" :class="{ 'result-wolves': winner === 'WEREWOLF' }">
     <div class="result-card">
-      <div class="outcome-icon">{{ outcomeIcon }}</div>
+      <GameIcon :name="outcomeIconName" :alt="outcomeTitle" class="outcome-icon" />
       <h1 class="outcome-title serif">{{ outcomeTitle }}</h1>
       <p class="outcome-sub">{{ outcomeSub }}</p>
       <p class="outcome-desc">{{ outcomeDesc }}</p>
@@ -17,7 +17,13 @@
           class="role-pill"
           :class="rolePillClass(player.role)"
         >
-          <span class="pill-avatar">{{ roleIcon(player.role) }}</span>
+          <GameIcon
+            v-if="player.role"
+            :name="`role-${player.role.toLowerCase()}`"
+            :alt="player.role"
+            class="pill-avatar"
+          />
+          <span v-else class="pill-avatar">?</span>
           <span class="pill-name">{{ displayName(player) }}</span>
           <span class="pill-sep">—</span>
           <span class="pill-role">{{ roleZh(player.role) }}</span>
@@ -32,6 +38,7 @@
 <script lang="ts" setup>
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import GameIcon from '@/components/GameIcon.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { gameService } from '@/services/gameService'
@@ -62,20 +69,6 @@ const ROLE_ZH: Record<string, string> = {
   IDIOT: '白痴',
 }
 
-const ROLE_ICON: Record<string, string> = {
-  WEREWOLF: '🐺',
-  VILLAGER: '👤',
-  SEER: '🔮',
-  WITCH: '🌿',
-  HUNTER: '🏹',
-  GUARD: '🛡',
-  IDIOT: '🃏',
-}
-
-function roleIcon(role?: string): string {
-  return role ? (ROLE_ICON[role] ?? '❓') : '❓'
-}
-
 function displayName(player: { userId: string; nickname: string }): string {
   return player.userId === userStore.userId ? '我' : player.nickname
 }
@@ -93,9 +86,9 @@ function rolePillClass(role?: string): string {
   return 'rp-default'
 }
 
-const outcomeIcon = computed(() => {
-  if (!winner.value) return '⏸️'
-  return winner.value === 'WEREWOLF' ? '🌕' : '🌅'
+const outcomeIconName = computed(() => {
+  if (!winner.value) return 'outcome-cancelled'
+  return winner.value === 'WEREWOLF' ? 'outcome-wolves-win' : 'outcome-village-win'
 })
 
 const outcomeTitle = computed(() => {
@@ -153,7 +146,8 @@ function goLobby() {
 }
 
 .outcome-icon {
-  font-size: 3rem;
+  width: 3rem;
+  height: 3rem;
   margin-bottom: 0.5rem;
 }
 

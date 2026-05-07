@@ -9,7 +9,9 @@
       <template v-if="nickname">
         <!-- Seat number always visible so players can identify themselves -->
         <span class="slot-index">{{ seat }}</span>
-        <div class="av">{{ avatar }}</div>
+        <div class="av">
+          <PlayerAvatar :src="avatar" :alt="nickname" />
+        </div>
         <span class="av-name">{{ nickname }}</span>
         <slot name="badge" />
       </template>
@@ -33,6 +35,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
+import PlayerAvatar from '@/components/PlayerAvatar.vue'
 
 type SlotVariant =
   | 'empty'
@@ -204,6 +207,13 @@ const variantClass = computed(() => {
   justify-content: center;
   font-size: 13px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.av :deep(.player-avatar) {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
 }
 
 .av-name {

@@ -31,7 +31,7 @@ frontend/public/images/
 ├── _default-avatar.svg    (shipped — default user avatar)
 ├── roles/                 (7 PNGs — werewolf, villager, seer, witch, hunter, guard, idiot)
 ├── phases/                (3 PNGs — night, day, deaths)
-├── status/                (9 PNGs — sheriff, dead, peaceful, quit, speaking, waiting, good, eliminated, medal)
+├── status/                (12 PNGs — sheriff, dead, peaceful, quit, speaking, waiting, good, eliminated, medal, wolves-win, village-win, cancelled)
 └── actions/               (8 PNGs — vote, battle, music, shoot, revote, list, locked, officer)
 ```
 
@@ -42,15 +42,17 @@ frontend/public/images/
 
 ### Roles
 
+> Also used in ResultView's role pills (one of each role on the gameover screen).
+
 | Filename | Path | Replaces emoji | Renders at | Used in |
 |---|---|---|---|---|
-| `werewolf.png` | `public/images/roles/werewolf.png` | 🐺 | up to 80 px | RoleRevealCard, NightPhase (badge + seer-result), VotingPhase (history banner, role card sheet), CreateRoomView |
-| `villager.png` | `public/images/roles/villager.png` | 🌾 / 🧑‍🌾 | up to 80 px | RoleRevealCard, VotingPhase role card sheet, CreateRoomView |
-| `seer.png` | `public/images/roles/seer.png` | 🔭 | up to 80 px | RoleRevealCard, VotingPhase role card sheet, CreateRoomView |
-| `witch.png` | `public/images/roles/witch.png` | 🔮 / 🧙‍♀️ | up to 80 px | RoleRevealCard, VotingPhase role card sheet, CreateRoomView |
-| `hunter.png` | `public/images/roles/hunter.png` | 🏹 | up to 80 px | RoleRevealCard, VotingPhase (history banner + role card), CreateRoomView |
-| `guard.png` | `public/images/roles/guard.png` | 🛡️ | up to 80 px | RoleRevealCard, VotingPhase role card sheet, CreateRoomView |
-| `idiot.png` | `public/images/roles/idiot.png` | 🃏 | up to 80 px | RoleRevealCard, VotingPhase (banner + slot overlay + footer hints), ActionLogDrawer (section title), CreateRoomView |
+| `werewolf.png` | `public/images/roles/werewolf.png` | 🐺 | up to 80 px | RoleRevealCard, NightPhase (badge + seer-result), VotingPhase (history banner, role card sheet), CreateRoomView, ResultView |
+| `villager.png` | `public/images/roles/villager.png` | 🌾 / 🧑‍🌾 / 👤 | up to 80 px | RoleRevealCard, VotingPhase role card sheet, CreateRoomView, ResultView |
+| `seer.png` | `public/images/roles/seer.png` | 🔭 / 🔮 | up to 80 px | RoleRevealCard, VotingPhase role card sheet, CreateRoomView, ResultView |
+| `witch.png` | `public/images/roles/witch.png` | 🔮 / 🧙‍♀️ / 🌿 | up to 80 px | RoleRevealCard, VotingPhase role card sheet, CreateRoomView, ResultView |
+| `hunter.png` | `public/images/roles/hunter.png` | 🏹 | up to 80 px | RoleRevealCard, VotingPhase (history banner + role card), CreateRoomView, ResultView |
+| `guard.png` | `public/images/roles/guard.png` | 🛡️ / 🛡 | up to 80 px | RoleRevealCard, VotingPhase role card sheet, CreateRoomView, ResultView |
+| `idiot.png` | `public/images/roles/idiot.png` | 🃏 | up to 80 px | RoleRevealCard, VotingPhase (banner + slot overlay + footer hints), ActionLogDrawer (section title), CreateRoomView, ResultView |
 
 ### Phases
 
@@ -73,6 +75,9 @@ frontend/public/images/
 | `good.png` | `public/images/status/good.png` | ✅ | ~20 px | NightPhase (seer "good camp" verdict) |
 | `eliminated.png` | `public/images/status/eliminated.png` | ☑ | ~16 px | DayPhase (self-eliminated banner) |
 | `medal.png` | `public/images/status/medal.png` | 🏅 | ~32 px | SheriffElection (RESULT screen medal) |
+| `wolves-win.png` | `public/images/status/wolves-win.png` | 🌕 | ~48 px | ResultView (game-over icon when wolves win) |
+| `village-win.png` | `public/images/status/village-win.png` | 🌅 | ~48 px | ResultView (game-over icon when village wins) |
+| `cancelled.png` | `public/images/status/cancelled.png` | ⏸️ | ~48 px | ResultView (game-over icon when game is cancelled / server restart) |
 
 ### Actions
 
