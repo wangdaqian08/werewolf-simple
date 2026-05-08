@@ -103,6 +103,11 @@ class GameService(
 
         // Always look up user nicknames — used by players map, roleReveal, nightPhase, votingPhase
         val userLookup = userRepository.findAllById(players.map { it.userId }).associateBy { it.userId }
+        // Per-room nickname overrides come from the RoomPlayer row (carry through
+        // for the lifetime of the game). Avatar URLs come from the User row.
+        val roomPlayerLookup = roomPlayerRepository.findByRoomId(game.roomId).associateBy { it.userId }
+        fun displayNameFor(userId: String): String =
+            roomPlayerLookup[userId]?.displayName ?: userLookup[userId]?.nickname ?: userId
 
         val roleReveal = if (game.phase == GamePhase.ROLE_REVEAL) {
             val confirmedCount = players.count { it.confirmedRole }
@@ -334,7 +339,8 @@ class GameService(
             "players" to players.sortedBy { it.seatIndex }.map { p ->
                 mapOf(
                     "userId"        to p.userId,
-                    "nickname"      to (userLookup[p.userId]?.nickname ?: p.userId),
+                    "nickname"      to displayNameFor(p.userId),
+                    "avatar"        to userLookup[p.userId]?.avatarUrl,
                     "seatIndex"     to p.seatIndex,
                     "isAlive"       to p.alive,
                     "isSheriff"     to p.sheriff,
