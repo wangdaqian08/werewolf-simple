@@ -19,7 +19,13 @@
       <div class="section-label">Candidates so far ({{ runningCandidates.length }})</div>
       <div class="candidate-list">
         <div v-for="c in runningCandidates" :key="c.userId" class="cand-row-running">
-          <span class="cand-avatar">{{ c.avatar ?? '😊' }}</span>
+          <Avatar
+            class="cand-avatar"
+            :avatar="c.avatar"
+            :nickname="c.nickname"
+            emoji="😊"
+            size="sm"
+          />
           <span class="cand-name">{{ c.nickname }}</span>
           <span class="running-badge">RUNNING</span>
         </div>
@@ -145,7 +151,13 @@
     <!-- ── SPEECH - Audience ── -->
     <template v-else-if="election.subPhase === 'SPEECH'">
       <div v-if="currentSpeaker" class="speaker-hero">
-        <div class="speaker-avatar-big">{{ currentSpeaker.avatar ?? '😊' }}</div>
+        <Avatar
+          class="speaker-avatar-big"
+          :avatar="currentSpeaker.avatar"
+          :nickname="currentSpeaker.nickname"
+          emoji="😊"
+          size="lg"
+        />
         <div class="speaker-name-big">{{ currentSpeaker.nickname }}</div>
         <div class="speaker-now-label">SPEAKING NOW</div>
       </div>
@@ -218,7 +230,13 @@
           class="vote-row"
           @click="canSelectVote(c.userId) && (selectedId = c.userId)"
         >
-          <span class="cand-avatar">{{ c.avatar ?? '😊' }}</span>
+          <Avatar
+            class="cand-avatar"
+            :avatar="c.avatar"
+            :nickname="c.nickname"
+            emoji="😊"
+            size="sm"
+          />
           <div class="cand-info-col">
             <span class="cand-name">{{ c.nickname }}</span>
             <span class="cand-sub-status">{{
@@ -313,9 +331,13 @@
           :class="t.votes === maxVotes ? 'vote-col-winner' : ''"
         >
           <div class="vote-col-head">
-            <div class="vote-col-avatar">
-              {{ election.candidates.find((c) => c.userId === t.candidateId)?.avatar ?? '😊' }}
-            </div>
+            <Avatar
+              class="vote-col-avatar"
+              :avatar="election.candidates.find((c) => c.userId === t.candidateId)?.avatar"
+              :nickname="t.nickname"
+              emoji="😊"
+              size="sm"
+            />
             <div class="vote-col-cname">{{ t.nickname }}</div>
             <div
               class="vote-col-count"
@@ -326,7 +348,13 @@
           </div>
           <div class="vote-col-body">
             <div v-for="v in t.voters" :key="v.userId" class="vcol-row">
-              <span class="vcol-avatar">{{ v.avatar ?? '😊' }}</span>
+              <Avatar
+                class="vcol-avatar"
+                :avatar="v.avatar"
+                :nickname="v.nickname"
+                emoji="😊"
+                size="sm"
+              />
               <span class="vcol-seat">{{ v.seatIndex }}</span>
               <span class="vcol-name">{{ v.nickname }}</span>
             </div>
@@ -340,7 +368,13 @@
           </div>
           <div class="vote-col-body">
             <div v-for="v in election.result.abstainVoters" :key="v.userId" class="vcol-row">
-              <span class="vcol-avatar">{{ v.avatar ?? '😊' }}</span>
+              <Avatar
+                class="vcol-avatar"
+                :avatar="v.avatar"
+                :nickname="v.nickname"
+                emoji="😊"
+                size="sm"
+              />
               <span class="vcol-seat">{{ v.seatIndex }}</span>
               <span class="vcol-name">{{ v.nickname }}</span>
             </div>
@@ -355,7 +389,13 @@
           </div>
           <div class="vote-col-body">
             <div v-for="c in quitCandidates" :key="c.userId" class="vcol-row">
-              <span class="vcol-avatar">{{ c.avatar ?? '😊' }}</span>
+              <Avatar
+                class="vcol-avatar"
+                :avatar="c.avatar"
+                :nickname="c.nickname"
+                emoji="😊"
+                size="sm"
+              />
               <span class="vcol-name">{{ c.nickname }}</span>
             </div>
           </div>
@@ -373,7 +413,13 @@
             class="vote-row"
             @click="appointTarget = c.userId"
           >
-            <span class="cand-avatar">{{ c.avatar ?? '😊' }}</span>
+            <Avatar
+              class="cand-avatar"
+              :avatar="c.avatar"
+              :nickname="c.nickname"
+              emoji="😊"
+              size="sm"
+            />
             <div class="cand-info-col">
               <span class="cand-name">{{ c.nickname }}</span>
             </div>
@@ -403,7 +449,13 @@
         <div class="result-title-cn">警长当选</div>
         <div class="result-title-en">Sheriff Elected</div>
         <div class="winner-card">
-          <span class="winner-avatar">{{ election.result.sheriffAvatar ?? '😊' }}</span>
+          <Avatar
+            class="winner-avatar"
+            :avatar="election.result.sheriffAvatar"
+            :nickname="election.result.sheriffNickname"
+            emoji="😊"
+            size="lg"
+          />
           <div class="winner-info">
             <div class="winner-name">{{ election.result.sheriffNickname }}</div>
             <div class="winner-badge-label">⭐ SHERIFF</div>
@@ -421,9 +473,13 @@
             :class="t.votes === maxVotes ? 'vote-col-winner' : ''"
           >
             <div class="vote-col-head">
-              <div class="vote-col-avatar">
-                {{ election.candidates.find((c) => c.userId === t.candidateId)?.avatar ?? '😊' }}
-              </div>
+              <Avatar
+                class="vote-col-avatar"
+                :avatar="election.candidates.find((c) => c.userId === t.candidateId)?.avatar"
+                :nickname="t.nickname"
+                emoji="😊"
+                size="sm"
+              />
               <div class="vote-col-cname">{{ t.nickname }}</div>
               <div
                 class="vote-col-count"
@@ -434,7 +490,13 @@
             </div>
             <div class="vote-col-body">
               <div v-for="v in t.voters" :key="v.userId" class="vcol-row">
-                <span class="vcol-avatar">{{ v.avatar ?? '😊' }}</span>
+                <Avatar
+                  class="vcol-avatar"
+                  :avatar="v.avatar"
+                  :nickname="v.nickname"
+                  emoji="😊"
+                  size="sm"
+                />
                 <span class="vcol-seat">{{ v.seatIndex }}</span>
                 <span class="vcol-name">{{ v.nickname }}</span>
               </div>
@@ -449,7 +511,13 @@
             </div>
             <div class="vote-col-body">
               <div v-for="v in election.result.abstainVoters" :key="v.userId" class="vcol-row">
-                <span class="vcol-avatar">{{ v.avatar ?? '😊' }}</span>
+                <Avatar
+                  class="vcol-avatar"
+                  :avatar="v.avatar"
+                  :nickname="v.nickname"
+                  emoji="😊"
+                  size="sm"
+                />
                 <span class="vcol-seat">{{ v.seatIndex }}</span>
                 <span class="vcol-name">{{ v.nickname }}</span>
               </div>
@@ -464,7 +532,13 @@
             </div>
             <div class="vote-col-body">
               <div v-for="c in quitCandidates" :key="c.userId" class="vcol-row">
-                <span class="vcol-avatar">{{ c.avatar ?? '😊' }}</span>
+                <Avatar
+                  class="vcol-avatar"
+                  :avatar="c.avatar"
+                  :nickname="c.nickname"
+                  emoji="😊"
+                  size="sm"
+                />
                 <span class="vcol-name">{{ c.nickname }}</span>
               </div>
             </div>
@@ -498,6 +572,7 @@
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
+import Avatar from '@/components/Avatar.vue'
 import type { SheriffCandidate, SheriffElectionState } from '@/types'
 
 const props = defineProps<{

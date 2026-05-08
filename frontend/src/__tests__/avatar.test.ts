@@ -59,4 +59,45 @@ describe('Avatar', () => {
     const wrapper = mount(Avatar, { props: { nickname: 'D', size: 'lg' } })
     expect(wrapper.classes()).toContain('avatar-lg')
   })
+
+  // ── Single `avatar` prop (auto-discriminating URL or emoji) ───────────────
+
+  it('avatar prop: https URL renders as <img>', () => {
+    const wrapper = mount(Avatar, {
+      props: { nickname: 'Daniel', avatar: 'https://lh3.googleusercontent.com/a/x' },
+    })
+    const img = wrapper.find('img')
+    expect(img.exists()).toBe(true)
+    expect(img.attributes('src')).toBe('https://lh3.googleusercontent.com/a/x')
+  })
+
+  it('avatar prop: emoji glyph renders as text fallback', () => {
+    const wrapper = mount(Avatar, { props: { nickname: 'Daniel', avatar: '🐺' } })
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.text()).toBe('🐺')
+  })
+
+  it('avatar prop: null/undefined falls back to nickname initial', () => {
+    const wrapper = mount(Avatar, { props: { nickname: 'Daniel', avatar: null } })
+    expect(wrapper.text()).toBe('D')
+  })
+
+  it('explicit avatarUrl wins over avatar prop when both are provided', () => {
+    const wrapper = mount(Avatar, {
+      props: {
+        nickname: 'Daniel',
+        avatar: '🐺',
+        avatarUrl: 'https://example.com/y.png',
+      },
+    })
+    const img = wrapper.find('img')
+    expect(img.attributes('src')).toBe('https://example.com/y.png')
+  })
+
+  it('explicit emoji prop wins over emoji-flavoured avatar prop', () => {
+    const wrapper = mount(Avatar, {
+      props: { nickname: 'Daniel', avatar: '🦊', emoji: '🐺' },
+    })
+    expect(wrapper.text()).toBe('🐺')
+  })
 })
