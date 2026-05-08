@@ -11,8 +11,15 @@
           <span v-else>{{ (userStore.nickname ?? '?').charAt(0) }}</span>
         </div>
         <div class="identity-text">
-          <div class="signed-as">已登录 / Signed in as</div>
-          <div class="identity-name">{{ userStore.nickname }}</div>
+          <div class="signed-as">本场昵称 / Nickname for this game</div>
+          <input
+            v-model="displayNameInput"
+            class="identity-name-input"
+            data-testid="display-name-input"
+            maxlength="32"
+            type="text"
+            :placeholder="userStore.nickname ?? ''"
+          />
         </div>
         <button class="logout-link" data-testid="logout-link" @click="handleLogout">
           登出 / Logout
@@ -184,14 +191,14 @@
 
 <script lang="ts" setup>
 import axios from 'axios'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import { userService } from '@/services/userService'
 import { buildGoogleAuthUrl, generateOAuthState } from '@/utils/oauth'
-import type { ProvidersResponse } from '@/types'
+import type { JoinRoomRequest, ProvidersResponse } from '@/types'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -204,6 +211,22 @@ const error = ref('')
 const showGuest = ref(false)
 const providers = ref<ProvidersResponse>({ google: null, wechat: null, guest: true })
 const avatarFailed = ref(false)
+
+// Per-room nickname override input. Pre-filled with the OAuth-provided
+// nickname so it looks normal; only treated as an override when the user
+// actually changes the value.
+const displayNameInput = ref(userStore.displayName ?? userStore.nickname ?? '')
+
+watch(displayNameInput, (val) => {
+  const trimmed = val.trim()
+  // Equal to the OAuth nickname or empty → no override (let backend fall
+  // back to User.nickname). Anything else is the user's per-room handle.
+  if (trimmed.length === 0 || trimmed === (userStore.nickname ?? '')) {
+    userStore.setDisplayName(null)
+  } else {
+    userStore.setDisplayName(trimmed)
+  }
+})
 
 const safeAvatarUrl = computed(() => {
   const url = userStore.avatarUrl
@@ -251,7 +274,9 @@ async function handleJoinRoom() {
   loading.value = true
   try {
     await ensureGuestSession()
-    const room = await roomService.joinRoom({ roomCode: roomCode.value.trim().toUpperCase() })
+    const req: JoinRoomRequest = { roomCode: roomCode.value.trim().toUpperCase() }
+    if (userStore.displayName) req.nickname = userStore.displayName
+    const room = await roomService.joinRoom(req)
     roomStore.setRoom(room)
     router.push({ name: 'room', params: { roomId: room.roomId } })
   } catch (e: unknown) {
@@ -272,6 +297,7 @@ async function handleLogout() {
   roomCode.value = ''
   showGuest.value = false
   avatarFailed.value = false
+  displayNameInput.value = ''
 }
 
 function signInWithGoogle() {
@@ -393,6 +419,29 @@ function signInWithWechat() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.identity-name-input {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1rem;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed transparent;
+  padding: 0.125rem 0;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.identity-name-input:hover,
+.identity-name-input:focus {
+  border-bottom-color: var(--border);
+}
+
+.identity-name-input::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
 }
 
 .logout-link {

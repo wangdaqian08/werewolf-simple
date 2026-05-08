@@ -21,6 +21,13 @@ export const useUserStore = defineStore('user', () => {
   const nickname = ref<string | null>(localStorage.getItem('nickname'))
   const avatarUrl = ref<string | null>(localStorage.getItem('avatarUrl'))
 
+  // Per-room nickname override (Option A from the OAuth follow-up). Lives in
+  // sessionStorage — survives a Lobby → CreateRoom navigation refresh, but
+  // resets when the tab/window closes (which matches the "this game session"
+  // semantics). Backend stores it on RoomPlayer.display_name; the User row's
+  // nickname is left intact so the next OAuth login re-syncs from provider.
+  const displayName = ref<string | null>(sessionStorage.getItem('displayName'))
+
   const isLoggedIn = computed(() => !!token.value && !!userId.value)
 
   function hasValidSession(nick: string): boolean {
@@ -37,6 +44,26 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('nickname', nick)
     if (avatar) localStorage.setItem('avatarUrl', avatar)
     else localStorage.removeItem('avatarUrl')
+    // Drop any leftover override from a previous session — the new account
+    // gets a fresh display-name slate, defaulting to the provider nickname
+    // until the user types something.
+    clearDisplayName()
+  }
+
+  function setDisplayName(value: string | null) {
+    const trimmed = value?.trim() ?? ''
+    if (trimmed.length === 0) {
+      displayName.value = null
+      sessionStorage.removeItem('displayName')
+    } else {
+      displayName.value = trimmed
+      sessionStorage.setItem('displayName', trimmed)
+    }
+  }
+
+  function clearDisplayName() {
+    displayName.value = null
+    sessionStorage.removeItem('displayName')
   }
 
   async function login(nick: string) {
@@ -65,6 +92,7 @@ export const useUserStore = defineStore('user', () => {
       localStorage.removeItem('userId')
       localStorage.removeItem('nickname')
       localStorage.removeItem('avatarUrl')
+      clearDisplayName()
     }
   }
 
@@ -73,9 +101,11 @@ export const useUserStore = defineStore('user', () => {
     userId,
     nickname,
     avatarUrl,
+    displayName,
     isLoggedIn,
     login,
     loginWithCode,
     logout,
+    setDisplayName,
   }
 })

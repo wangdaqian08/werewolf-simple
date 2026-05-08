@@ -63,10 +63,18 @@ export interface Room {
 
 export interface CreateRoomRequest {
   config: RoomConfig
+  /**
+   * Optional per-room nickname override. When present, used as the host's
+   * display name in this room only — does NOT change the User row's
+   * nickname (which is auto-refreshed on every OAuth login).
+   */
+  nickname?: string
 }
 
 export interface JoinRoomRequest {
   roomCode: string
+  /** Same semantics as CreateRoomRequest.nickname — guest's display name. */
+  nickname?: string
 }
 
 // ── Audio ───────────────────────────────────────────────────────────────────────

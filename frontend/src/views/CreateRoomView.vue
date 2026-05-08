@@ -166,12 +166,14 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'
+import { useUserStore } from '@/stores/userStore'
 import { roomService } from '@/services/roomService'
 import { audioTracksService, type AudioTrack } from '@/services/audioTracksService'
 import type { WinConditionMode } from '@/types'
 
 const router = useRouter()
 const roomStore = useRoomStore()
+const userStore = useUserStore()
 
 const MIN_PLAYERS = 6
 const MAX_PLAYERS = 12
@@ -267,7 +269,7 @@ async function handleCreate() {
   error.value = ''
   try {
     const roles = ROLE_DEFINITIONS.filter((r) => isEnabled(r.id)).map((r) => r.id)
-    const room = await roomService.createRoom({
+    const req: import('@/types').CreateRoomRequest = {
       config: {
         totalPlayers: totalPlayers.value,
         roles,
@@ -275,7 +277,10 @@ async function handleCreate() {
         winCondition: winCondition.value,
         bgmTrack: bgmTrack.value,
       },
-    })
+    }
+    // Carry the per-room display-name override that the lobby may have set.
+    if (userStore.displayName) req.nickname = userStore.displayName
+    const room = await roomService.createRoom(req)
     roomStore.setRoom(room)
     router.push({ name: 'room', params: { roomId: room.roomId } })
   } catch (e: unknown) {

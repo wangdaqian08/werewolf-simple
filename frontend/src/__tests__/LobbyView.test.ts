@@ -7,6 +7,7 @@ import { useUserStore } from '@/stores/userStore'
 
 const getProvidersMock = vi.fn()
 const loginMock = vi.fn()
+const joinRoomMock = vi.fn()
 
 vi.mock('@/services/userService', () => ({
   userService: {
@@ -21,7 +22,7 @@ vi.mock('@/services/userService', () => ({
 vi.mock('@/services/roomService', () => ({
   roomService: {
     createRoom: vi.fn(),
-    joinRoom: vi.fn(),
+    joinRoom: (...args: unknown[]) => joinRoomMock(...args),
     leaveRoom: vi.fn(),
     getRoom: vi.fn(),
     getRoomList: vi.fn(),
@@ -65,6 +66,8 @@ describe('LobbyView OAuth UI', () => {
     sessionStorage.clear()
     getProvidersMock.mockReset()
     loginMock.mockReset()
+    joinRoomMock.mockReset()
+    joinRoomMock.mockResolvedValue({ roomId: '99', roomCode: 'ABCD' })
     // Stub window.location.href so click handlers can read/write without
     // navigating away (jsdom-like default would also work but we want to
     // assert the value was set).
@@ -167,7 +170,9 @@ describe('LobbyView OAuth UI', () => {
     const { wrapper } = await mountLobby()
 
     expect(wrapper.find('[data-testid="signed-in-as"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="signed-in-as"]').text()).toContain('Daniel Wang')
+    // The OAuth nickname is shown in the editable display-name input.
+    const input = wrapper.find('[data-testid="display-name-input"]')
+    expect((input.element as HTMLInputElement).value).toBe('Daniel Wang')
     // OAuth buttons are hidden once logged in (no need to re-auth).
     expect(wrapper.find('[data-testid="oauth-google"]').exists()).toBe(false)
   })
@@ -192,5 +197,81 @@ describe('LobbyView OAuth UI', () => {
     // navigate straight to /create-room.
     expect(loginMock).not.toHaveBeenCalled()
     expect(pushSpy).toHaveBeenCalledWith({ name: 'create-room' })
+  })
+
+  // ── Per-room nickname override (Option A) ─────────────────────────────────
+
+  it('logged-in identity card has an editable nickname input pre-filled with OAuth nickname', async () => {
+    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('userId', 'google:abc')
+    localStorage.setItem('nickname', 'Daniel Wang')
+    getProvidersMock.mockResolvedValue({
+      google: { clientId: 'g' },
+      wechat: null,
+      guest: true,
+    })
+
+    const { wrapper } = await mountLobby()
+    const input = wrapper.find('[data-testid="display-name-input"]')
+    expect(input.exists()).toBe(true)
+    expect((input.element as HTMLInputElement).value).toBe('Daniel Wang')
+  })
+
+  it('typing in the display-name input writes to userStore.displayName', async () => {
+    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('userId', 'google:abc')
+    localStorage.setItem('nickname', 'Daniel Wang')
+    getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
+
+    const { wrapper, store } = await mountLobby()
+    const input = wrapper.find('[data-testid="display-name-input"]')
+    await input.setValue('DW')
+
+    expect(store.displayName).toBe('DW')
+  })
+
+  it('Join Room sends displayName as nickname to roomService.joinRoom when overridden', async () => {
+    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('userId', 'google:abc')
+    localStorage.setItem('nickname', 'Daniel Wang')
+    getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
+
+    const { wrapper } = await mountLobby()
+    await wrapper.find('[data-testid="display-name-input"]').setValue('DW')
+    await wrapper.find('[data-testid="room-code-input"]').setValue('ABCD')
+    await wrapper.find('[data-testid="join-room-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(joinRoomMock).toHaveBeenCalledWith({ roomCode: 'ABCD', nickname: 'DW' })
+  })
+
+  it('Join Room omits nickname when display-name was not changed (sends just roomCode)', async () => {
+    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('userId', 'google:abc')
+    localStorage.setItem('nickname', 'Daniel Wang')
+    getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
+
+    const { wrapper } = await mountLobby()
+    await wrapper.find('[data-testid="room-code-input"]').setValue('ABCD')
+    await wrapper.find('[data-testid="join-room-btn"]').trigger('click')
+    await flushPromises()
+
+    // No edit happened — displayName stayed null. roomService.joinRoom should
+    // get just the room code (no `nickname` key).
+    expect(joinRoomMock).toHaveBeenCalledWith({ roomCode: 'ABCD' })
+  })
+
+  it('Create Room saves displayName to userStore for CreateRoomView to pick up', async () => {
+    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('userId', 'google:abc')
+    localStorage.setItem('nickname', 'Daniel Wang')
+    getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
+
+    const { wrapper, store } = await mountLobby()
+    await wrapper.find('[data-testid="display-name-input"]').setValue('DW')
+    await wrapper.find('[data-testid="create-room-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(store.displayName).toBe('DW')
   })
 })
