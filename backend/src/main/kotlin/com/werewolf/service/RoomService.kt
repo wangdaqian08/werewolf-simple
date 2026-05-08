@@ -27,7 +27,13 @@ class RoomService(
     private val bgmRegistry: BgmTrackRegistry,
 ) {
     @Transactional
-    fun createRoom(userId: String, nickname: String, avatarUrl: String?, cfg: RoomConfigRequest): RoomDto {
+    fun createRoom(
+        userId: String,
+        nickname: String,
+        avatarUrl: String?,
+        cfg: RoomConfigRequest,
+        displayNameOverride: String? = null,
+    ): RoomDto {
         authService.loginOrRegister(userId, nickname, avatarUrl)
 
         if (!bgmRegistry.isValidTrack(cfg.bgmTrack)) {
@@ -50,13 +56,26 @@ class RoomService(
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")
-        roomPlayerRepository.save(RoomPlayer(roomId = roomId, userId = userId, host = true))
+        roomPlayerRepository.save(
+            RoomPlayer(
+                roomId = roomId,
+                userId = userId,
+                host = true,
+                displayName = sanitizeDisplayName(displayNameOverride),
+            )
+        )
 
         return buildRoomDto(room)
     }
 
     @Transactional
-    fun joinRoom(userId: String, nickname: String, avatarUrl: String?, roomCode: String): RoomDto {
+    fun joinRoom(
+        userId: String,
+        nickname: String,
+        avatarUrl: String?,
+        roomCode: String,
+        displayNameOverride: String? = null,
+    ): RoomDto {
         authService.loginOrRegister(userId, nickname, avatarUrl)
 
         val room = roomRepository.findByRoomCode(roomCode).orElse(null)
@@ -70,6 +89,9 @@ class RoomService(
         //   3. Kick + re-add: a kicked player's row is deleted (kickPlayer below),
         //      so they fall through to the "new player" branch and are bound
         //      by the WAITING + full guards just like a brand-new joiner.
+        // Re-join is idempotent — we deliberately do NOT update displayName here
+        // so a refresh / mobile reconnect can't accidentally rename a player
+        // mid-game from a stale form value.
         if (roomPlayerRepository.findByRoomIdAndUserId(roomId, userId).isPresent) {
             return buildRoomDto(room)
         }
@@ -79,10 +101,23 @@ class RoomService(
             throw RoomNotOpenException("Room is not open")
         val count = roomPlayerRepository.findByRoomId(roomId).size
         if (count >= room.totalPlayers) throw RoomFullException("Room is full")
-        roomPlayerRepository.save(RoomPlayer(roomId = roomId, userId = userId))
+        roomPlayerRepository.save(
+            RoomPlayer(
+                roomId = roomId,
+                userId = userId,
+                displayName = sanitizeDisplayName(displayNameOverride),
+            )
+        )
 
         return buildRoomDto(room)
     }
+
+    /**
+     * Trim, then null out blanks. Bean Validation already caps the length at
+     * 50 chars at the controller boundary; this is the storage-side normaliser.
+     */
+    private fun sanitizeDisplayName(raw: String?): String? =
+        raw?.trim()?.takeIf { it.isNotBlank() }
 
     /**
      * Host removes a player from the room. Only valid during the WAITING stage
@@ -166,7 +201,9 @@ class RoomService(
             val user = userMap[rp.userId]
             RoomPlayerDto(
                 userId = rp.userId,
-                nickname = user?.nickname ?: rp.userId,
+                // Per-room override wins over the User row's nickname (which is
+                // the OAuth-provided / guest-typed identity name).
+                nickname = rp.displayName ?: user?.nickname ?: rp.userId,
                 avatar = user?.avatarUrl,
                 seatIndex = rp.seatIndex,
                 status = rp.status.name,

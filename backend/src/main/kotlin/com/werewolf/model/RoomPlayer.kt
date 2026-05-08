@@ -30,6 +30,15 @@ class RoomPlayer(
 
     @Column(name = "is_host", nullable = false)
     var host: Boolean = false,
+
+    /**
+     * Optional per-room nickname override. NULL means "use User.nickname";
+     * non-null wins for any RoomPlayerDto.nickname rendering. Set on first
+     * createRoom/joinRoom for this user; subsequent re-joins are idempotent
+     * (no update on this column — see RoomService.joinRoom).
+     */
+    @Column(name = "display_name", length = 50)
+    var displayName: String? = null,
 ) {
     init {
         require(roomId > 0) { "roomId must be a valid ID, got $roomId" }

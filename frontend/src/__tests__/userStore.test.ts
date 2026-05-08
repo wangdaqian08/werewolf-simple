@@ -33,6 +33,7 @@ describe('userStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
+    sessionStorage.clear()
   })
 
   it('starts logged out when localStorage is empty', () => {
@@ -143,5 +144,65 @@ describe('userStore', () => {
     const store = useUserStore()
     await store.login('TestUser')
     expect(store.avatarUrl).toBeNull()
+  })
+
+  // ── Per-room nickname override (displayName) ─────────────────────────────
+
+  it('displayName starts as null', () => {
+    const store = useUserStore()
+    expect(store.displayName).toBeNull()
+  })
+
+  it('setDisplayName stores trimmed value and persists to sessionStorage', () => {
+    const store = useUserStore()
+    store.setDisplayName('  DW  ')
+    expect(store.displayName).toBe('DW')
+    expect(sessionStorage.getItem('displayName')).toBe('DW')
+  })
+
+  it('setDisplayName treats whitespace-only as null', () => {
+    const store = useUserStore()
+    store.setDisplayName('Real')
+    store.setDisplayName('   ')
+    expect(store.displayName).toBeNull()
+    expect(sessionStorage.getItem('displayName')).toBeNull()
+  })
+
+  it('setDisplayName(null) clears the override', () => {
+    const store = useUserStore()
+    store.setDisplayName('DW')
+    store.setDisplayName(null)
+    expect(store.displayName).toBeNull()
+    expect(sessionStorage.getItem('displayName')).toBeNull()
+  })
+
+  it('restores displayName from sessionStorage on init', () => {
+    sessionStorage.setItem('displayName', 'PersistedNick')
+    const store = useUserStore()
+    expect(store.displayName).toBe('PersistedNick')
+  })
+
+  it('logout clears displayName', async () => {
+    const store = useUserStore()
+    await store.loginWithCode('google', 'code')
+    store.setDisplayName('Custom')
+    await store.logout()
+    expect(store.displayName).toBeNull()
+    expect(sessionStorage.getItem('displayName')).toBeNull()
+  })
+
+  it('logging in via OAuth clears any leftover displayName from a previous session', async () => {
+    sessionStorage.setItem('displayName', 'StaleFromLastUser')
+    const store = useUserStore()
+    await store.loginWithCode('google', 'code')
+    expect(store.displayName).toBeNull()
+    expect(sessionStorage.getItem('displayName')).toBeNull()
+  })
+
+  it('logging in via guest clears any leftover displayName from a previous session', async () => {
+    sessionStorage.setItem('displayName', 'Stale')
+    const store = useUserStore()
+    await store.login('TestUser')
+    expect(store.displayName).toBeNull()
   })
 })
