@@ -82,3 +82,12 @@ test('invalid room code does not navigate away', async ({page}) => {
     await page.getByRole('button', {name: /Join/i}).click()
     await expect(page).not.toHaveURL(/\/room\//)
 })
+
+// Note on OAuth: the mocked-backend suite uses axios-mock-adapter which
+// intercepts requests at the axios adapter layer (not the browser network),
+// so Playwright's page.route cannot stub /api/auth/providers. With no
+// providers entry mocked, the LobbyView's onMounted catch falls back to
+// guest-only — which is what the tests above already exercise. OAuth UI
+// behavior is covered by frontend/src/__tests__/LobbyView.test.ts (vitest)
+// where we control the mock at the userService level. Real-backend e2e
+// (e2e/real/) would need separate fixtures and is out of scope for this PR.

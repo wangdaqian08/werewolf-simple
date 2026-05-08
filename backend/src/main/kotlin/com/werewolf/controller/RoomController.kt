@@ -7,6 +7,7 @@ import com.werewolf.dto.JoinRoomRequest
 import com.werewolf.dto.KickPlayerRequest
 import com.werewolf.dto.SetReadyRequest
 import com.werewolf.service.*
+import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -17,12 +18,14 @@ class RoomController(private val roomService: RoomService) {
 
     @PostMapping("/create")
     fun createRoom(
-        @RequestBody body: CreateRoomRequest,
+        @Valid @RequestBody body: CreateRoomRequest,
         authentication: Authentication,
     ): ResponseEntity<Any> {
         val (userId, nickname, avatarUrl) = authentication.userClaims()
         return try {
-            ResponseEntity.ok(roomService.createRoom(userId, nickname, avatarUrl, body.config))
+            ResponseEntity.ok(
+                roomService.createRoom(userId, nickname, avatarUrl, body.config, body.nickname),
+            )
         } catch (e: InvalidBgmTrackException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         }
@@ -30,14 +33,16 @@ class RoomController(private val roomService: RoomService) {
 
     @PostMapping("/join")
     fun joinRoom(
-        @RequestBody body: JoinRoomRequest,
+        @Valid @RequestBody body: JoinRoomRequest,
         authentication: Authentication,
     ): ResponseEntity<Any> {
         if (body.roomCode.isBlank())
             return ResponseEntity.badRequest().body(mapOf("error" to "roomCode must not be blank"))
         val (userId, nickname, avatarUrl) = authentication.userClaims()
         return try {
-            ResponseEntity.ok(roomService.joinRoom(userId, nickname, avatarUrl, body.roomCode))
+            ResponseEntity.ok(
+                roomService.joinRoom(userId, nickname, avatarUrl, body.roomCode, body.nickname),
+            )
         } catch (e: RoomNotFoundException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         } catch (e: RoomNotOpenException) {

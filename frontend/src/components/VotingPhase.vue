@@ -48,14 +48,13 @@
       <div v-else class="vote-columns-wrap">
         <!-- Eliminated player banner -->
         <div v-if="votingPhase.eliminatedPlayerId" class="banner banner-kill">
-          <span class="elim-banner-avatar">
-            <PlayerAvatar
-              v-if="votingPhase.eliminatedAvatar"
-              :src="votingPhase.eliminatedAvatar"
-              :alt="votingPhase.eliminatedNickname ?? 'eliminated'"
-            />
-            <GameIcon v-else name="status-dead" alt="eliminated" />
-          </span>
+          <Avatar
+            class="elim-banner-avatar"
+            :avatar="votingPhase.eliminatedAvatar"
+            :nickname="votingPhase.eliminatedNickname ?? ''"
+            emoji="💀"
+            size="md"
+          />
           <div class="elim-banner-body">
             <span class="elim-banner-tag">出局 · ELIMINATED</span>
             <span class="elim-banner-name">
@@ -85,7 +84,13 @@
             :class="{ 'vote-col-winner': i === 0 }"
           >
             <div class="vote-col-head" :class="{ 'tally-chip-top': i === 0 }">
-              <PlayerAvatar :src="entry.avatar" :alt="entry.nickname" class="vote-col-avatar" />
+              <Avatar
+                class="vote-col-avatar"
+                :avatar="entry.avatar"
+                :nickname="entry.nickname"
+                emoji="😊"
+                size="sm"
+              />
               <div class="vote-col-cname">{{ entry.nickname }}</div>
               <div class="vote-col-count" :class="i === 0 ? 'tally-winner' : 'tally-muted'">
                 {{ entry.votes }}
@@ -93,7 +98,13 @@
             </div>
             <div class="vote-col-body">
               <div v-for="v in entry.voters" :key="v.userId" class="vcol-row">
-                <PlayerAvatar :src="v.avatar" :alt="v.nickname" class="vcol-avatar" />
+                <Avatar
+                  class="vcol-avatar"
+                  :avatar="v.avatar"
+                  :nickname="v.nickname"
+                  emoji="😊"
+                  size="sm"
+                />
                 <span class="vcol-seat">{{ v.seatIndex }}</span>
                 <span class="vcol-name">{{ v.nickname }}</span>
               </div>
@@ -309,14 +320,13 @@
                 </div>
                 <!-- Vote-out banner -->
                 <div v-if="round.eliminatedPlayerId" class="banner banner-kill history-banner">
-                  <span class="banner-avatar">
-                    <PlayerAvatar
-                      v-if="round.eliminatedAvatar"
-                      :src="round.eliminatedAvatar"
-                      :alt="round.eliminatedNickname ?? 'eliminated'"
-                    />
-                    <GameIcon v-else name="status-dead" alt="eliminated" />
-                  </span>
+                  <Avatar
+                    class="banner-avatar"
+                    :avatar="round.eliminatedAvatar"
+                    :nickname="round.eliminatedNickname ?? ''"
+                    emoji="💀"
+                    size="md"
+                  />
                   <div>
                     <div class="banner-title">
                       出局 · 座位{{ round.eliminatedSeatIndex }} {{ round.eliminatedNickname }}
@@ -346,10 +356,12 @@
                     :class="{ 'vote-col-winner': i === 0 }"
                   >
                     <div class="vote-col-head" :class="{ 'tally-chip-top': i === 0 }">
-                      <PlayerAvatar
-                        :src="entry.avatar"
-                        :alt="entry.nickname"
+                      <Avatar
                         class="vote-col-avatar"
+                        :avatar="entry.avatar"
+                        :nickname="entry.nickname"
+                        emoji="😊"
+                        size="sm"
                       />
                       <div class="vote-col-cname">{{ entry.nickname }}</div>
                       <div class="vote-col-count" :class="i === 0 ? 'tally-winner' : 'tally-muted'">
@@ -358,7 +370,13 @@
                     </div>
                     <div class="vote-col-body">
                       <div v-for="v in entry.voters" :key="v.userId" class="vcol-row">
-                        <PlayerAvatar :src="v.avatar" :alt="v.nickname" class="vcol-avatar" />
+                        <Avatar
+                          class="vcol-avatar"
+                          :avatar="v.avatar"
+                          :nickname="v.nickname"
+                          emoji="😊"
+                          size="sm"
+                        />
                         <span class="vcol-seat">#{{ v.seatIndex }}</span>
                         <span class="vcol-name">{{ v.nickname }}</span>
                       </div>
@@ -571,11 +589,11 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { GamePlayer, PlayerRole, VoteRoundHistory, VotingState } from '@/types'
+import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
+import Avatar from '@/components/Avatar.vue'
 import GameIcon from '@/components/GameIcon.vue'
-import PlayerAvatar from '@/components/PlayerAvatar.vue'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
-import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 
 const props = defineProps<{
   gameId: number

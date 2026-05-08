@@ -160,6 +160,7 @@
           :key="player.userId"
           :seat="player.seatIndex"
           :nickname="player.nickname"
+          :avatar="player.avatar"
           :variant="playerSlotVariant(player)"
           @click="onPlayerTap(player)"
         >
