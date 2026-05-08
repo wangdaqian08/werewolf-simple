@@ -2,7 +2,10 @@
   <div class="sheriff-wrap">
     <!-- Header: phase chip + timer -->
     <div class="sheriff-header">
-      <div class="phase-chip">{{ phaseChipLabel }}</div>
+      <div class="phase-chip">
+        <GameIcon name="action-officer" alt="sheriff election" class="inline-icon" />
+        {{ phaseChipLabel }}
+      </div>
       <div class="timer">{{ election.subPhase !== 'RESULT' ? election.timeRemaining : '' }}</div>
       <div v-if="election.subPhase === 'RESULT'" class="timer-result">Result</div>
     </div>
@@ -96,7 +99,25 @@
           :class="speakingRowClass(uid, idx)"
           class="speaking-row"
         >
-          <span class="speak-icon-cell">{{ speakingIcon(uid) }}</span>
+          <span class="speak-icon-cell">
+            <template v-if="speakingIconInfo(uid).kind === 'quit'">
+              <GameIcon name="status-quit" alt="quit" />
+            </template>
+            <template v-else-if="speakingIconInfo(uid).kind === 'current'">
+              <GameIcon name="status-speaking" alt="speaking" />
+            </template>
+            <template v-else-if="speakingIconInfo(uid).kind === 'pending'">
+              <GameIcon name="status-waiting" alt="waiting" />
+            </template>
+            <template v-else>
+              <Avatar
+                :avatar="(speakingIconInfo(uid) as { src?: string }).src"
+                :nickname="(speakingIconInfo(uid) as { alt: string }).alt"
+                emoji="😊"
+                size="sm"
+              />
+            </template>
+          </span>
           <span
             class="speak-name-cell"
             :class="{ 'speak-active': uid === election.currentSpeakerId }"
@@ -170,7 +191,25 @@
           :class="speakingRowClass(uid, idx)"
           class="speaking-row"
         >
-          <span class="speak-icon-cell">{{ speakingIcon(uid) }}</span>
+          <span class="speak-icon-cell">
+            <template v-if="speakingIconInfo(uid).kind === 'quit'">
+              <GameIcon name="status-quit" alt="quit" />
+            </template>
+            <template v-else-if="speakingIconInfo(uid).kind === 'current'">
+              <GameIcon name="status-speaking" alt="speaking" />
+            </template>
+            <template v-else-if="speakingIconInfo(uid).kind === 'pending'">
+              <GameIcon name="status-waiting" alt="waiting" />
+            </template>
+            <template v-else>
+              <Avatar
+                :avatar="(speakingIconInfo(uid) as { src?: string }).src"
+                :nickname="(speakingIconInfo(uid) as { alt: string }).alt"
+                emoji="😊"
+                size="sm"
+              />
+            </template>
+          </span>
           <span
             class="speak-name-cell"
             :class="{ 'speak-active': uid === election.currentSpeakerId }"
@@ -383,7 +422,7 @@
 
         <div v-if="quitCandidates.length" class="vote-col vote-col-quit">
           <div class="vote-col-head">
-            <div class="vote-col-avatar">❌</div>
+            <GameIcon name="status-quit" alt="quit" class="vote-col-avatar" />
             <div class="vote-col-cname">退出竞选</div>
             <div class="vote-col-count tally-muted">—</div>
           </div>
@@ -445,7 +484,7 @@
     <!-- ── RESULT ── -->
     <template v-else-if="election.subPhase === 'RESULT' && election.result">
       <div class="result-content">
-        <div class="result-medal">🏅</div>
+        <GameIcon name="status-medal" alt="medal" class="result-medal" />
         <div class="result-title-cn">警长当选</div>
         <div class="result-title-en">Sheriff Elected</div>
         <div class="winner-card">
@@ -458,7 +497,10 @@
           />
           <div class="winner-info">
             <div class="winner-name">{{ election.result.sheriffNickname }}</div>
-            <div class="winner-badge-label">⭐ SHERIFF</div>
+            <div class="winner-badge-label">
+              <GameIcon name="status-sheriff" alt="sheriff" class="inline-icon" />
+              SHERIFF
+            </div>
           </div>
         </div>
         <div class="power-note">
@@ -526,7 +568,7 @@
 
           <div v-if="quitCandidates.length" class="vote-col vote-col-quit">
             <div class="vote-col-head">
-              <div class="vote-col-avatar">❌</div>
+              <GameIcon name="status-quit" alt="quit" class="vote-col-avatar" />
               <div class="vote-col-cname">退出竞选</div>
               <div class="vote-col-count tally-muted">—</div>
             </div>
@@ -573,6 +615,7 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import Avatar from '@/components/Avatar.vue'
+import GameIcon from '@/components/GameIcon.vue'
 import type { SheriffCandidate, SheriffElectionState } from '@/types'
 
 const props = defineProps<{
@@ -653,17 +696,17 @@ const currentSpeaker = computed(() =>
 const phaseChipLabel = computed(() => {
   switch (props.election.subPhase) {
     case 'SIGNUP':
-      return '👮‍♂️ 竞选警长'
+      return '竞选警长'
     case 'SPEECH':
-      return '👮‍♂️ 竞选演讲'
+      return '竞选演讲'
     case 'VOTING':
-      return '👮‍ 投票选警长'
+      return '投票选警长'
     case 'RESULT':
-      return '👮‍ 警长产生'
+      return '警长产生'
     case 'TIED':
-      return '👮‍ 平票 — 主持人指定'
+      return '平票 — 主持人指定'
     default:
-      return '👮‍ 警长竞选'
+      return '警长竞选'
   }
 })
 
@@ -685,16 +728,23 @@ function speakingRowClass(uid: string, idx: number) {
   }
 }
 
-function speakingIcon(uid: string) {
+type SpeakingIconInfo =
+  | { kind: 'quit' }
+  | { kind: 'current' }
+  | { kind: 'pending' }
+  | { kind: 'avatar'; src?: string; alt: string }
+
+function speakingIconInfo(uid: string): SpeakingIconInfo {
   const isQuit = candidateStatus(uid) === 'QUIT'
   const isCurrent = uid === props.election.currentSpeakerId
   const currentIdx = props.election.speakingOrder.indexOf(props.election.currentSpeakerId ?? '')
   const myIdx = props.election.speakingOrder.indexOf(uid)
 
-  if (isQuit) return '❌'
-  if (isCurrent) return '🎤'
-  if (myIdx > currentIdx) return '⏳'
-  return candidateMap.value.get(uid)?.avatar ?? '😊'
+  if (isQuit) return { kind: 'quit' }
+  if (isCurrent) return { kind: 'current' }
+  if (myIdx > currentIdx) return { kind: 'pending' }
+  const c = candidateMap.value.get(uid)
+  return { kind: 'avatar', src: c?.avatar, alt: c?.nickname ?? uid }
 }
 
 function speakerLabel(uid: string, idx: number) {

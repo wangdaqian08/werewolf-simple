@@ -17,7 +17,7 @@
 
     <!-- Revealed card -->
     <div v-else class="role-card">
-      <div class="role-emoji">{{ meta.emoji }}</div>
+      <GameIcon :name="`role-${role.toLowerCase()}`" :alt="meta.nameEn" class="role-icon" />
       <div class="role-name-zh">{{ meta.nameZh }}</div>
       <div :class="`role-label-${meta.team}`" class="role-label">{{ meta.nameEn }}</div>
       <p class="role-desc">{{ meta.description }}</p>
@@ -52,6 +52,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
+import GameIcon from '@/components/GameIcon.vue'
 import type { PlayerRole } from '@/types'
 
 const props = withDefaults(
@@ -70,7 +71,6 @@ const teammates = computed(() => props.teammates)
 interface RoleMeta {
   nameZh: string
   nameEn: string
-  emoji: string
   team: 'wolf' | 'village' | 'special'
   description: string
 }
@@ -79,49 +79,42 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
   WEREWOLF: {
     nameZh: '狼人',
     nameEn: 'WEREWOLF',
-    emoji: '🐺',
     team: 'wolf',
     description: '每晚与狼队商议，袭击一名村民。',
   },
   VILLAGER: {
     nameZh: '村民',
     nameEn: 'VILLAGER',
-    emoji: '🌾',
     team: 'village',
     description: '通过讨论和投票找出狼人，保护村庄。你没有特殊技能。',
   },
   SEER: {
     nameZh: '预言家',
     nameEn: 'SEER',
-    emoji: '🔭',
     team: 'special',
     description: '每晚可查验一名玩家，得知其是否为狼人。',
   },
   WITCH: {
     nameZh: '女巫',
     nameEn: 'WITCH',
-    emoji: '🔮',
     team: 'special',
     description: '拥有一瓶解药和一瓶毒药，各可使用一次。',
   },
   HUNTER: {
     nameZh: '猎人',
     nameEn: 'HUNTER',
-    emoji: '🏹',
     team: 'special',
     description: '死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。',
   },
   GUARD: {
     nameZh: '守卫',
     nameEn: 'GUARD',
-    emoji: '🛡️',
     team: 'special',
     description: '每晚保护一名玩家免受狼人袭击，不可连续守护同一人。',
   },
   IDIOT: {
     nameZh: '白痴',
     nameEn: 'IDIOT',
-    emoji: '🃏',
     team: 'special',
     description: '被投票驱逐时揭示出白痴身份，可免于出局（但失去投票权）。',
   },
@@ -175,9 +168,9 @@ const meta = computed(() => ROLE_META[props.role])
   text-align: center;
 }
 
-.role-emoji {
-  font-size: 5rem;
-  line-height: 1;
+.role-icon {
+  width: 5rem;
+  height: 5rem;
   margin-bottom: 1.25rem;
 }
 

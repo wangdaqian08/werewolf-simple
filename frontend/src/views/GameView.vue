@@ -34,7 +34,7 @@
         @confirm="handleRoleConfirm"
       />
       <div v-else class="waiting-screen">
-        <div class="waiting-icon">⏳</div>
+        <GameIcon name="status-waiting" alt="waiting" class="waiting-icon" />
         <div class="waiting-title">等待其他玩家确认</div>
         <div class="waiting-subtitle">Waiting for others…</div>
         <div class="waiting-count">
@@ -165,7 +165,7 @@
           @click="onPlayerTap(player)"
         >
           <template v-if="player.isSheriff" #top>
-            <div class="sheriff-badge">⭐</div>
+            <GameIcon name="status-sheriff" alt="sheriff" class="sheriff-badge" />
           </template>
           <template v-if="!player.isAlive" #overlay>
             <div class="slot-overlay dead-overlay">✕</div>
@@ -449,11 +449,11 @@
       >
         <div class="debug-title" style="margin-top: 0.5rem">Candidates</div>
         <div class="debug-btns">
-          <button class="debug-btn" @click="debugCandidateRun('u2', 'Alice', '😊')">+ Alice</button>
+          <button class="debug-btn" @click="debugCandidateRun('u2', 'Alice', '')">+ Alice</button>
           <button class="debug-btn" @click="debugCandidateRemove('u2')">− Alice</button>
-          <button class="debug-btn" @click="debugCandidateRun('u3', 'Bob', '🎭')">+ Bob</button>
+          <button class="debug-btn" @click="debugCandidateRun('u3', 'Bob', '')">+ Bob</button>
           <button class="debug-btn" @click="debugCandidateRemove('u3')">− Bob</button>
-          <button class="debug-btn" @click="debugCandidateRun('u6', 'Tom', '🐯')">+ Tom</button>
+          <button class="debug-btn" @click="debugCandidateRun('u6', 'Tom', '')">+ Tom</button>
           <button class="debug-btn" @click="debugCandidateRemove('u6')">− Tom</button>
         </div>
       </template>
@@ -476,6 +476,7 @@ import {
   subscribeToTopic,
 } from '@/services/stompClient'
 import http from '@/services/http'
+import GameIcon from '@/components/GameIcon.vue'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import VolumeControl from '@/components/VolumeControl.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'

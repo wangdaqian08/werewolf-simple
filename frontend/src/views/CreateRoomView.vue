@@ -45,7 +45,7 @@
           :class="roleRowClass(role)"
           class="role-row"
         >
-          <span class="role-emoji">{{ role.emoji }}</span>
+          <GameIcon :name="`role-${role.id.toLowerCase()}`" :alt="role.nameEn" class="role-emoji" />
           <div class="role-names">
             <span
               :class="{ 'role-name-muted': !role.required && !isEnabled(role.id) }"
@@ -78,7 +78,7 @@
       <div class="field-lbl">游戏设置 / Game Settings</div>
       <div class="role-list">
         <div class="role-row row-on">
-          <span class="role-emoji">⭐</span>
+          <GameIcon name="status-sheriff" alt="sheriff" class="role-emoji" />
           <div class="role-names">
             <span class="role-name">警长竞选 Sheriff Election</span>
           </div>
@@ -91,7 +91,7 @@
           </button>
         </div>
         <div class="role-row" :class="winCondition === 'HARD_MODE' ? 'row-wolf' : 'row-on'">
-          <span class="role-emoji">⚔️</span>
+          <GameIcon name="action-battle" alt="win condition" class="role-emoji" />
           <div class="role-names">
             <span class="role-name">胜利条件 Win Condition</span>
             <span class="win-cond-desc">
@@ -113,7 +113,7 @@
           </button>
         </div>
         <div class="role-row row-on">
-          <span class="role-emoji">🎵</span>
+          <GameIcon name="action-music" alt="bgm" class="role-emoji" />
           <div class="role-names">
             <span class="role-name">夜晚配乐 Night BGM</span>
             <span class="win-cond-desc">每夜循环播放，旁白时自动降低音量</span>
@@ -165,6 +165,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import GameIcon from '@/components/GameIcon.vue'
 import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { roomService } from '@/services/roomService'
@@ -179,13 +180,13 @@ const MIN_PLAYERS = 6
 const MAX_PLAYERS = 12
 
 const ROLE_DEFINITIONS = [
-  { id: 'WEREWOLF', nameZh: '狼人', nameEn: 'Werewolf', emoji: '🐺', required: true },
-  { id: 'VILLAGER', nameZh: '村民', nameEn: 'Villager', emoji: '🧑‍🌾', required: true },
-  { id: 'SEER', nameZh: '预言家', nameEn: 'Seer', emoji: '🔮', required: false },
-  { id: 'WITCH', nameZh: '女巫', nameEn: 'Witch', emoji: '🧙‍♀️', required: false },
-  { id: 'HUNTER', nameZh: '猎人', nameEn: 'Hunter', emoji: '🏹', required: false },
-  { id: 'GUARD', nameZh: '守卫', nameEn: 'Guard', emoji: '🛡️', required: false },
-  { id: 'IDIOT', nameZh: '白痴', nameEn: 'Idiot', emoji: '🃏', required: false },
+  { id: 'WEREWOLF', nameZh: '狼人', nameEn: 'Werewolf', required: true },
+  { id: 'VILLAGER', nameZh: '村民', nameEn: 'Villager', required: true },
+  { id: 'SEER', nameZh: '预言家', nameEn: 'Seer', required: false },
+  { id: 'WITCH', nameZh: '女巫', nameEn: 'Witch', required: false },
+  { id: 'HUNTER', nameZh: '猎人', nameEn: 'Hunter', required: false },
+  { id: 'GUARD', nameZh: '守卫', nameEn: 'Guard', required: false },
+  { id: 'IDIOT', nameZh: '白痴', nameEn: 'Idiot', required: false },
 ]
 
 const totalPlayers = ref(9)

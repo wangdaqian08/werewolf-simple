@@ -18,16 +18,19 @@
 
       <!-- RE_VOTING banner -->
       <div v-if="votingPhase.subPhase === 'RE_VOTING'" class="revote-banner">
-        🔁 第二轮投票 · Round 2
+        <GameIcon name="action-revote" alt="re-vote" class="revote-icon" />
+        第二轮投票 · Round 2
       </div>
 
       <!-- Role + history row -->
       <div v-if="myRole || voteHistory?.length" class="role-history-row">
         <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
-          🔒 身份 · Tap to reveal
+          <GameIcon name="action-locked" alt="locked" class="chip-icon" />
+          身份 · Tap to reveal
         </button>
         <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
-          📋 历史
+          <GameIcon name="action-list" alt="history" class="chip-icon" />
+          历史
         </button>
       </div>
 
@@ -62,7 +65,7 @@
 
         <!-- Idiot reveal banner (survived vote, loses voting right) -->
         <div v-else-if="votingPhase.idiotRevealedId" class="banner banner-idiot">
-          <span class="elim-banner-avatar">🃏</span>
+          <GameIcon name="role-idiot" alt="idiot" class="elim-banner-avatar" />
           <div class="elim-banner-body">
             <span class="elim-banner-tag">白痴翻牌 · IDIOT REVEALED</span>
             <span class="elim-banner-name">
@@ -123,10 +126,12 @@
           @click="onVotingTap(player)"
         >
           <template v-if="player.isSheriff" #badge>
-            <div class="sheriff-badge">⭐</div>
+            <GameIcon name="status-sheriff" alt="sheriff" class="sheriff-badge" />
           </template>
           <template v-if="player.idiotRevealed" #overlay>
-            <div class="slot-overlay idiot-overlay">🃏</div>
+            <div class="slot-overlay idiot-overlay">
+              <GameIcon name="role-idiot" alt="idiot" />
+            </div>
           </template>
           <template v-else-if="!player.isAlive" #overlay>
             <div class="slot-overlay dead-overlay">✕</div>
@@ -164,7 +169,10 @@
             <template v-if="hostIsAlive">
               <!-- Idiot revealed: host lost voting right -->
               <template v-if="!myCanVote">
-                <p class="footer-hint idiot-no-vote">🃏 已揭示白痴 · 无投票权</p>
+                <p class="footer-hint idiot-no-vote">
+                  <GameIcon name="role-idiot" alt="idiot" class="inline-icon" />
+                  已揭示白痴 · 无投票权
+                </p>
               </template>
               <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
                 <button
@@ -221,7 +229,10 @@
           <!-- ALIVE: vote/skip or unvote (or no vote right if idiot revealed) -->
           <template v-else-if="viewRole === 'ALIVE'">
             <template v-if="!myCanVote">
-              <button class="btn btn-secondary" disabled>🃏 已揭示白痴 · 无投票权</button>
+              <button class="btn btn-secondary" disabled>
+                <GameIcon name="role-idiot" alt="idiot" class="inline-icon" />
+                已揭示白痴 · 无投票权
+              </button>
             </template>
             <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
               <button
@@ -274,7 +285,11 @@
               <button class="history-close" @click="showRoleCard = false">✕</button>
             </div>
             <div v-if="myRole && ROLE_META[myRole]" class="role-card-body">
-              <div class="rc-emoji">{{ ROLE_META[myRole]?.emoji }}</div>
+              <GameIcon
+                :name="`role-${myRole.toLowerCase()}`"
+                :alt="ROLE_META[myRole]?.nameEn"
+                class="rc-icon"
+              />
               <div class="rc-name-zh">{{ ROLE_META[myRole]?.nameZh }}</div>
               <div class="rc-label" :class="`rc-label-${ROLE_META[myRole]?.team}`">
                 {{ ROLE_META[myRole]?.nameEn }}
@@ -323,7 +338,7 @@
                 </div>
                 <!-- Hunter-shot banner -->
                 <div v-if="round.hunterShotPlayerId" class="banner banner-kill history-banner">
-                  <span class="banner-avatar">🏹</span>
+                  <GameIcon name="role-hunter" alt="hunter" class="banner-avatar" />
                   <div>
                     <div class="banner-title">
                       猎人开枪 · 座位{{ round.hunterShotSeatIndex }} {{ round.hunterShotNickname }}
@@ -390,7 +405,7 @@
 
       <div class="banner-area">
         <div class="banner banner-kill">
-          <span class="banner-avatar">🔫</span>
+          <GameIcon name="action-shoot" alt="hunter shot" class="banner-avatar" />
           <div>
             <div class="banner-title">猎人出局 · Hunter Eliminated</div>
             <div class="banner-sub">你可以选择射杀一名玩家 — may fire one shot</div>
@@ -410,7 +425,7 @@
           @click="onHunterTap(player)"
         >
           <template v-if="player.isSheriff" #badge>
-            <div class="sheriff-badge">⭐</div>
+            <GameIcon name="status-sheriff" alt="sheriff" class="sheriff-badge" />
           </template>
           <template
             v-if="!player.isAlive || player.userId === votingPhase.eliminatedPlayerId"
@@ -464,13 +479,13 @@
       <!-- Destroyed message replaces banner when badge is burned -->
       <div class="banner-area">
         <div v-if="votingPhase.badgeDestroyed" class="banner badge-status-burned">
-          <span class="banner-avatar">⚔️</span>
+          <GameIcon name="action-battle" alt="badge destroyed" class="banner-avatar" />
           <div>
             <div class="banner-title">警徽已销毁 · Badge Destroyed</div>
           </div>
         </div>
         <div v-else-if="newSheriffInfo" class="banner badge-status-passed">
-          <span class="banner-avatar">⭐</span>
+          <GameIcon name="status-sheriff" alt="sheriff" class="banner-avatar" />
           <div>
             <div class="banner-title">
               警徽已移交给 {{ newSheriffInfo.nickname }} · Badge Passed
@@ -478,7 +493,7 @@
           </div>
         </div>
         <div v-else-if="isEliminatedSheriff" class="banner banner-gold">
-          <span class="banner-avatar">⭐</span>
+          <GameIcon name="status-sheriff" alt="sheriff" class="banner-avatar" />
           <div>
             <div class="banner-title">你已出局 · Eliminated</div>
             <div class="banner-sub">选择警徽继承人 / Choose badge heir</div>
@@ -499,7 +514,7 @@
         >
           <!-- Star on sheriff's card -->
           <template v-if="player.isSheriff" #badge>
-            <span class="sheriff-pin">⭐</span>
+            <GameIcon name="status-sheriff" alt="sheriff" class="sheriff-pin" />
           </template>
           <template
             v-if="!player.isAlive || player.userId === votingPhase.eliminatedPlayerId"
@@ -562,7 +577,9 @@
     </template>
 
     <!-- Floating action log button: full game record across all days -->
-    <button class="log-fab" aria-label="游戏记录" @click="showLog = true">📋</button>
+    <button class="log-fab" aria-label="游戏记录" @click="showLog = true">
+      <GameIcon name="action-list" alt="game log" />
+    </button>
 
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
@@ -572,10 +589,11 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { GamePlayer, PlayerRole, VoteRoundHistory, VotingState } from '@/types'
-import PlayerSlot from '@/components/PlayerSlot.vue'
-import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 import Avatar from '@/components/Avatar.vue'
+import GameIcon from '@/components/GameIcon.vue'
+import PlayerSlot from '@/components/PlayerSlot.vue'
+import SunArc from '@/components/SunArc.vue'
 
 const props = defineProps<{
   gameId: number
@@ -775,7 +793,6 @@ watch([showHistory, showRoleCard], ([h, r]) => {
 interface RoleMeta {
   nameZh: string
   nameEn: string
-  emoji: string
   team: string
   description: string
 }
@@ -783,49 +800,42 @@ const ROLE_META: Record<string, RoleMeta> = {
   WEREWOLF: {
     nameZh: '狼人',
     nameEn: 'WEREWOLF',
-    emoji: '🐺',
     team: 'wolf',
     description: '每晚与狼队商议，袭击一名村民。',
   },
   VILLAGER: {
     nameZh: '村民',
     nameEn: 'VILLAGER',
-    emoji: '🌾',
     team: 'village',
     description: '通过讨论和投票找出狼人，保护村庄。',
   },
   SEER: {
     nameZh: '预言家',
     nameEn: 'SEER',
-    emoji: '🔭',
     team: 'special',
     description: '每晚可查验一名玩家，得知其是否为狼人。',
   },
   WITCH: {
     nameZh: '女巫',
     nameEn: 'WITCH',
-    emoji: '🔮',
     team: 'special',
     description: '拥有一瓶解药和一瓶毒药，各可使用一次。',
   },
   HUNTER: {
     nameZh: '猎人',
     nameEn: 'HUNTER',
-    emoji: '🏹',
     team: 'special',
     description: '死亡时可开枪带走一名玩家。',
   },
   GUARD: {
     nameZh: '守卫',
     nameEn: 'GUARD',
-    emoji: '🛡️',
     team: 'special',
     description: '每晚保护一名玩家免受狼人袭击。',
   },
   IDIOT: {
     nameZh: '白痴',
     nameEn: 'IDIOT',
-    emoji: '🃏',
     team: 'special',
     description: '被投票驱逐时揭示身份，免于出局但失去投票权。',
   },
@@ -1221,9 +1231,9 @@ function onBadgeTap(player: GamePlayer) {
   padding: 1.75rem 1.5rem 2rem;
 }
 
-.rc-emoji {
-  font-size: 3.5rem;
-  line-height: 1;
+.rc-icon {
+  width: 3.5rem;
+  height: 3.5rem;
   margin-bottom: 0.5rem;
 }
 .rc-name-zh {

@@ -13,7 +13,7 @@
     <div class="banner-area">
       <template v-if="viewRole === 'DEAD'">
         <div class="banner banner-info" data-testid="day-banner-self-eliminated">
-          <span class="banner-icon">☑</span>
+          <GameIcon name="status-eliminated" alt="eliminated" class="banner-icon" />
           <div>
             <div class="banner-title">你在上一晚被淘汰</div>
             <div class="banner-sub">You were eliminated last night</div>
@@ -24,7 +24,7 @@
           class="banner banner-kill"
           data-testid="day-banner-kill"
         >
-          <span class="banner-avatar">💀</span>
+          <GameIcon name="status-dead" alt="dead" class="banner-avatar" />
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
             <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
@@ -50,7 +50,7 @@
           class="banner banner-kill"
           data-testid="day-banner-kill"
         >
-          <span class="banner-avatar">💀</span>
+          <GameIcon name="status-dead" alt="dead" class="banner-avatar" />
           <div class="banner-kill-text">
             <span class="banner-kill-muted">昨晚</span>
             <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
@@ -65,7 +65,7 @@
           </div>
         </div>
         <div v-else class="banner banner-info" data-testid="day-banner-peaceful">
-          <span class="banner-icon">❤️</span>
+          <GameIcon name="status-peaceful" alt="peaceful" class="banner-icon" />
           <div>
             <div class="banner-title">昨晚平安夜</div>
             <div class="banner-sub">Peaceful night — no one was eliminated</div>
@@ -87,7 +87,7 @@
         @click="onTap(player)"
       >
         <template v-if="player.isSheriff" #badge>
-          <div class="sheriff-badge">⭐</div>
+          <GameIcon name="status-sheriff" alt="sheriff" class="sheriff-badge" />
         </template>
         <template v-if="!player.isAlive && dayPhase.subPhase === 'RESULT_REVEALED'" #overlay>
           <div class="slot-overlay dead-overlay">✕</div>
@@ -102,7 +102,7 @@
       aria-label="游戏记录"
       @click="showLog = true"
     >
-      📋
+      <GameIcon name="action-list" alt="game log" />
     </button>
 
     <!-- Action log drawer -->
@@ -158,6 +158,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { DayPhaseState, GamePlayer } from '@/types'
+import GameIcon from '@/components/GameIcon.vue'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'

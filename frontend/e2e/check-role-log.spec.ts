@@ -45,7 +45,7 @@ test('role chip shows locked state by default', async ({ page }) => {
   await goToVotingScenario(page, 'Voting')
   const chip = page.locator('.my-role-chip')
   await expect(chip).toBeVisible()
-  await expect(chip).toContainText('🔒')
+  await expect(chip.locator('img[alt="locked"]')).toBeVisible()
   await expect(chip).toContainText('身份')
   await expect(chip).toContainText('Tap to reveal')
 })

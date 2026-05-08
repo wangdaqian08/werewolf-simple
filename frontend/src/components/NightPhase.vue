@@ -2,7 +2,7 @@
   <div class="nw">
     <!-- ── Header ──────────────────────────────────────────────────────── -->
     <header class="nh">
-      <div class="nh-moon">🌙</div>
+      <GameIcon name="phase-night" alt="night" class="nh-moon" />
       <div class="nh-title">
         {{ subPhase === 'SEER_RESULT' ? '查验结果' : '夜晚降临' }}
         <span class="nh-en">{{ subPhase === 'SEER_RESULT' ? 'Seer Result' : 'Night Falls' }}</span>
@@ -13,8 +13,8 @@
     </header>
 
     <!-- ── Role badge (hidden for WAITING) ────────────────────────────── -->
-    <div v-if="isMyTurn && meta" class="rb">
-      <span class="rb-emoji">{{ meta.emoji }}</span>
+    <div v-if="isMyTurn && meta && myRole" class="rb">
+      <GameIcon :name="`role-${myRole.toLowerCase()}`" :alt="meta.nameEn" class="rb-emoji" />
       <div class="rb-body">
         <div class="rb-names">
           {{ meta.nameZh }}
@@ -27,7 +27,7 @@
     <!-- ── Dead player banner ─────────────────────────────────────────── -->
     <div v-if="me && !me.isAlive" class="banner-area">
       <div class="banner banner-info">
-        <span class="banner-icon"> 👤 </span>
+        <GameIcon name="status-dead" alt="dead" class="banner-icon" />
         <div>
           <div class="srh-title">你已经出局</div>
           <div class="banner-sub">You are eliminated</div>
@@ -53,13 +53,13 @@
           mode="room"
           :seat="p.seatIndex"
           :nickname="p.nickname"
-          :avatar="p.avatar ?? '👤'"
+          :avatar="p.avatar"
           :variant="wolfVariantFn(p)"
           :aria-disabled="!isWolfTargetFn(p) ? 'true' : undefined"
           @click="isWolfTargetFn(p) && selectPlayer(p.userId)"
         >
           <template v-if="p.isSheriff" #badge>
-            <div class="sheriff-badge">⭐</div>
+            <GameIcon name="status-sheriff" alt="sheriff" class="sheriff-badge" />
           </template>
           <template v-if="!p.isAlive" #overlay>
             <div class="slot-overlay np-dead-x">✕</div>
@@ -89,13 +89,13 @@
           mode="room"
           :seat="p.seatIndex"
           :nickname="p.nickname"
-          :avatar="p.avatar ?? '👤'"
+          :avatar="p.avatar"
           :variant="seerVariantFn(p)"
           :aria-disabled="!isSeerTargetFn(p) ? 'true' : undefined"
           @click="isSeerTargetFn(p) && selectPlayer(p.userId)"
         >
           <template v-if="p.isSheriff" #badge>
-            <div class="sheriff-badge">⭐</div>
+            <GameIcon name="status-sheriff" alt="sheriff" class="sheriff-badge" />
           </template>
           <template v-if="!p.isAlive" #overlay>
             <div class="slot-overlay np-dead-x">✕</div>
@@ -137,9 +137,12 @@
             {{ nightPhase.seerResult.checkedNickname }}
           </div>
           <div class="sr-verdict">
-            {{
-              nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 平民阵营 · Good Camp'
-            }}
+            <GameIcon
+              :name="nightPhase.seerResult.isWerewolf ? 'role-werewolf' : 'status-good'"
+              :alt="nightPhase.seerResult.isWerewolf ? 'werewolf' : 'good'"
+              class="sr-verdict-icon"
+            />
+            {{ nightPhase.seerResult.isWerewolf ? '是狼人！· Werewolf' : '平民阵营 · Good Camp' }}
           </div>
         </div>
         <div class="sr-hist">
@@ -233,13 +236,13 @@
               mode="room"
               :seat="p.seatIndex"
               :nickname="p.nickname"
-              :avatar="p.avatar ?? '👤'"
+              :avatar="p.avatar"
               :variant="poisonVariantFn(p)"
               :aria-disabled="!isPoisonTargetFn(p) ? 'true' : undefined"
               @click="isPoisonTargetFn(p) && selectPlayer(p.userId)"
             >
               <template v-if="p.isSheriff" #badge>
-                <div class="sheriff-badge">⭐</div>
+                <GameIcon name="status-sheriff" alt="sheriff" class="sheriff-badge" />
               </template>
               <template v-if="!p.isAlive" #overlay>
                 <div class="slot-overlay np-dead-x">✕</div>
@@ -325,14 +328,14 @@
           mode="room"
           :seat="p.seatIndex"
           :nickname="p.nickname"
-          :avatar="p.avatar ?? '👤'"
+          :avatar="p.avatar"
           :variant="guardVariantFn(p)"
           :data-prev-guard="p.userId === nightPhase.previousGuardTargetId ? 'true' : undefined"
           :aria-disabled="!isGuardTargetFn(p) ? 'true' : undefined"
           @click="isGuardTargetFn(p) && selectPlayer(p.userId)"
         >
           <template v-if="p.isSheriff" #badge>
-            <div class="sheriff-badge">⭐</div>
+            <GameIcon name="status-sheriff" alt="sheriff" class="sheriff-badge" />
           </template>
           <template v-if="!p.isAlive" #overlay>
             <div class="slot-overlay np-dead-x">✕</div>
@@ -356,7 +359,7 @@
     <!-- ── Sleep screen — non-actor during any active phase ──────────── -->
     <template v-else-if="subPhase !== 'WAITING'">
       <div class="sleep-screen">
-        <div class="ss-emoji">🌙</div>
+        <GameIcon name="phase-night" alt="night" class="ss-emoji" />
         <div class="ss-title" data-testid="sleep-screen-title">
           {{ me && !me.isAlive ? '夜晚降临' : '请闭眼' }}
         </div>
@@ -376,7 +379,7 @@
     <!-- ── WAITING ────────────────────────────────────────────────────── -->
     <template v-else-if="subPhase === 'WAITING'">
       <div class="sleep-screen">
-        <div class="ss-emoji">🌙</div>
+        <GameIcon name="phase-night" alt="night" class="ss-emoji" />
         <div class="ss-title" data-testid="sleep-screen-title">夜晚即将开始</div>
         <div class="ss-en">Night is beginning...</div>
         <div class="ss-sub">所有人请闭眼 / Everyone please close your eyes</div>
@@ -389,6 +392,7 @@
 import { computed, ref, watch } from 'vue'
 
 import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
+import GameIcon from '@/components/GameIcon.vue'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import {
   guardVariant,
@@ -515,18 +519,17 @@ function selectPlayer(userId: string) {
 interface RoleMeta {
   nameZh: string
   nameEn: string
-  emoji: string
   team: 'wolf' | 'village' | 'special'
 }
 
 const ROLE_META: Record<PlayerRole, RoleMeta> = {
-  WEREWOLF: { nameZh: '狼人', nameEn: 'WEREWOLF', emoji: '🐺', team: 'wolf' },
-  VILLAGER: { nameZh: '村民', nameEn: 'VILLAGER', emoji: '🌾', team: 'village' },
-  SEER: { nameZh: '预言家', nameEn: 'SEER', emoji: '🔭', team: 'special' },
-  WITCH: { nameZh: '女巫', nameEn: 'WITCH', emoji: '🔮', team: 'special' },
-  HUNTER: { nameZh: '猎人', nameEn: 'HUNTER', emoji: '🏹', team: 'special' },
-  GUARD: { nameZh: '守卫', nameEn: 'GUARD', emoji: '🛡️', team: 'special' },
-  IDIOT: { nameZh: '白痴', nameEn: 'IDIOT', emoji: '🃏', team: 'special' },
+  WEREWOLF: { nameZh: '狼人', nameEn: 'WEREWOLF', team: 'wolf' },
+  VILLAGER: { nameZh: '村民', nameEn: 'VILLAGER', team: 'village' },
+  SEER: { nameZh: '预言家', nameEn: 'SEER', team: 'special' },
+  WITCH: { nameZh: '女巫', nameEn: 'WITCH', team: 'special' },
+  HUNTER: { nameZh: '猎人', nameEn: 'HUNTER', team: 'special' },
+  GUARD: { nameZh: '守卫', nameEn: 'GUARD', team: 'special' },
+  IDIOT: { nameZh: '白痴', nameEn: 'IDIOT', team: 'special' },
 }
 
 const meta = computed(() => (props.myRole ? ROLE_META[props.myRole] : null))

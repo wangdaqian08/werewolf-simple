@@ -202,17 +202,17 @@ test('idiot reveal banner shows correct content', async ({ page }) => {
   await expect(page.locator('.elim-banner-role')).toContainText('Survives, loses vote')
 })
 
-test('idiot card shows 🃏 overlay', async ({ page }) => {
+test('idiot card shows idiot overlay', async ({ page }) => {
   await goToGame(page)
   await loadDayScenario(page, 'Host·Hidden')
   await loadVotingScenario(page, 'Idiot Reveal')
 
-  // Verify 🃏 overlay is visible on the idiot player card
+  // Verify the idiot overlay is visible on the idiot player card
   const idiotOverlay = page.locator('.slot-overlay.idiot-overlay')
   await expect(idiotOverlay).toBeVisible()
-  
-  // Verify the overlay contains the 🃏 emoji
-  await expect(idiotOverlay.getByText('🃏')).toBeVisible()
+
+  // Verify the overlay renders the role-idiot image
+  await expect(idiotOverlay.locator('img[alt="idiot"]')).toBeVisible()
 })
 
 test('idiot voting button shows disabled state', async ({ page }) => {
