@@ -1,39 +1,44 @@
 # Image Resources
 
-All in-game iconography is loaded from this directory. The frontend references
-images by path via `<GameIcon>` and `<PlayerAvatar>` components — never by
-emoji. To swap in a new look, drop a PNG file at the listed path with the
-listed name. No code change needed.
+Static iconography (roles, phases, status indicators, action icons) is loaded from
+this directory via the `<GameIcon>` component. To swap in a new look, drop a PNG
+file at the listed path with the listed name — no code change needed.
+
+> **Player avatars are handled separately.** The `<Avatar>` component
+> (`src/components/Avatar.vue`) takes a URL or emoji and falls back to the first
+> character of the nickname. It does not consult this directory or the icon
+> manifest, so the table below covers static iconography only.
 
 ## Loading & fallbacks
 
-- Each icon name resolves through `src/assets/iconManifest.ts`.
-- If a manifest entry is missing or the PNG fails to load, the renderer falls
-  back to `_placeholder.svg`.
-- Player avatars (which come from user-supplied URLs, not the manifest) fall
-  back to `_default-avatar.svg` when missing, blank, or broken.
-- The two `.svg` fallbacks ship with the repo so the UI never shows a broken
-  image. Replace them with PNGs of the same name (or keep them).
+- Each icon name resolves through `src/assets/iconManifest.ts` (`ICON_MANIFEST`).
+- `<GameIcon name="...">` renders the manifest path. If the PNG 404s or the
+  name is unknown, the renderer falls back to `_placeholder.svg`.
+- `_placeholder.svg` ships with the repo so the UI never shows a broken
+  image, even before any PNGs land. Replace it with your own PNG of the same
+  name (and update `FALLBACK_ICON` in `iconManifest.ts` if you want a
+  different path) — or keep it.
 
 ## Recommended format
 
 - **PNG**, 256 × 256, transparent background. Browser scales down for smaller
-  use sites.
-- Square aspect ratio — assets are rendered into circles (avatars) or
-  square-ish slots (icons), so anything off-square will be cropped.
+  sites.
+- Square aspect ratio — assets render into square-ish slots, so off-square
+  sources get cropped.
 - Keep file size small (< 30 KB each). PNGs compress well at this resolution.
 
 ## Directory layout
 
 ```
 frontend/public/images/
-├── _placeholder.svg       (shipped — generic fallback)
-├── _default-avatar.svg    (shipped — default user avatar)
+├── _placeholder.svg       (shipped — generic fallback for any missing icon)
 ├── roles/                 (7 PNGs — werewolf, villager, seer, witch, hunter, guard, idiot)
 ├── phases/                (3 PNGs — night, day, deaths)
 ├── status/                (9 PNGs — sheriff, dead, peaceful, quit, speaking, waiting, good, eliminated, medal)
 └── actions/               (8 PNGs — vote, battle, music, shoot, revote, list, locked, officer)
 ```
+
+**27 PNGs total.**
 
 ## Image table — drop these PNGs into the listed paths
 
@@ -65,7 +70,7 @@ frontend/public/images/
 | Filename | Path | Replaces emoji | Renders at | Used in |
 |---|---|---|---|---|
 | `sheriff.png` | `public/images/status/sheriff.png` | ⭐ | 12 – 24 px | NightPhase / DayPhase / VotingPhase / GameView (sheriff badge), VotingPhase (badge banners), CreateRoomView (sheriff toggle), ActionLogDrawer (section title), SheriffElection (winner badge label) |
-| `dead.png` | `public/images/status/dead.png` | 💀 | up to 32 px | NightPhase (dead self banner), DayPhase (kill banner), VotingPhase (eliminated banner fallback) |
+| `dead.png` | `public/images/status/dead.png` | 💀 | up to 32 px | NightPhase (dead self banner), DayPhase (kill banner) |
 | `peaceful.png` | `public/images/status/peaceful.png` | ❤️ | ~16 px | DayPhase (peaceful-night banner) |
 | `quit.png` | `public/images/status/quit.png` | ❌ | ~14 – 24 px | SheriffElection (speaking-row icon, vote-col-quit head) |
 | `speaking.png` | `public/images/status/speaking.png` | 🎤 | ~14 px | SheriffElection (speaking-row icon when this row is active) |
@@ -87,13 +92,12 @@ frontend/public/images/
 | `locked.png` | `public/images/actions/locked.png` | 🔒 | ~14 px | VotingPhase (my-role chip) |
 | `officer.png` | `public/images/actions/officer.png` | 👮 | ~14 px | SheriffElection (phase chip) |
 
-### Pre-shipped fallbacks (already present)
+### Pre-shipped fallback
 
 | Filename | Path | Purpose |
 |---|---|---|
-| `_placeholder.svg` | `public/images/_placeholder.svg` | Shown when an icon path 404s or a name isn't in the manifest |
-| `_default-avatar.svg` | `public/images/_default-avatar.svg` | Shown for users with no avatar URL or when an avatar fails to load |
+| `_placeholder.svg` | `public/images/_placeholder.svg` | Shown when an icon path 404s or its name isn't in `ICON_MANIFEST` |
 
-You may overwrite either fallback with your own PNG (renaming to `.svg` →
-`.png` requires also updating the `FALLBACK_ICON` / `DEFAULT_AVATAR`
-constants in `src/assets/iconManifest.ts`).
+You may overwrite the fallback with your own PNG (renaming `.svg` → `.png`
+requires updating the `FALLBACK_ICON` constant in
+`src/assets/iconManifest.ts` to match).

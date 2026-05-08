@@ -1,13 +1,15 @@
-// Icon manifest — semantic-key → image-path map.
+// Icon manifest — semantic-key → image-path map for static iconography
+// (roles, phases, status, actions). Player avatars are handled separately
+// by `<Avatar>` (src/components/Avatar.vue), which discriminates URL vs
+// emoji and falls back to the first nickname char — it does not consult
+// this manifest.
+//
 // Images live under frontend/public/images/ and are served as static URLs.
-// Missing files (404) trigger the @error path on <img> and the consumer
-// component falls back to FALLBACK_ICON or DEFAULT_AVATAR.
+// A missing file (404) triggers the @error path on <img> in <GameIcon>,
+// which then renders FALLBACK_ICON. The pre-shipped placeholder SVG
+// guarantees the UI never shows a broken image, even before any PNGs land.
 
-// Pre-shipped SVG fallbacks ensure the UI never shows a broken image.
-// Override these by replacing the files at the paths above with PNGs and
-// updating the constants — but the SVGs work as-is on first run.
 export const FALLBACK_ICON = '/images/_placeholder.svg'
-export const DEFAULT_AVATAR = '/images/_default-avatar.svg'
 
 export const ICON_MANIFEST: Record<string, string> = {
   // ── Roles ──────────────────────────────────────────
