@@ -16,6 +16,11 @@ const router = createRouter({
       component: () => import('@/views/LobbyView.vue'),
     },
     {
+      path: '/demo',
+      name: 'demo',
+      component: () => import('@/views/DemoView.vue'),
+    },
+    {
       path: '/auth/callback/:provider',
       name: 'auth-callback',
       component: () => import('@/views/OAuthCallbackView.vue'),
@@ -64,6 +69,7 @@ router.beforeEach((to) => {
   // can still preview those in any browser.
   if (
     to.name !== 'unsupported' &&
+    to.name !== 'demo' &&
     !String(to.name ?? '').startsWith('dev-') &&
     !isSupportedBrowser()
   ) {
