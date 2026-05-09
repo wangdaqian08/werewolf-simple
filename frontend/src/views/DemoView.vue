@@ -701,6 +701,7 @@ const endPlayers = computed<GamePlayer[]>(() =>
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow-x: clip;
 }
 
 /* ── Hero ──────────────────────────────────────────────────────────────── */
@@ -936,6 +937,7 @@ const endPlayers = computed<GamePlayer[]>(() =>
 .lp-code-input {
   flex: 1;
   width: auto;
+  min-width: 0;
   letter-spacing: 0.15em;
   font-weight: 600;
 }
@@ -1141,7 +1143,9 @@ const endPlayers = computed<GamePlayer[]>(() =>
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  flex-shrink: 0;
+  max-width: 5.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Room ────────────────────────────────────────────────────────────── */
