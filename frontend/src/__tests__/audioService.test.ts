@@ -188,4 +188,35 @@ describe('audioService', () => {
     })
     expect(mockAudioInstances[1]?.play).toHaveBeenCalled()
   })
+
+  // ── Stuck-queue watchdog ─────────────────────────────────────────────────
+  //
+  // Documented failure mode (audioService.ts:246–259): if a prior playback's
+  // onended never fires (paused mid-stream, AudioContext suspended in a
+  // background tab, play() promise hung), isPlayingQueue stays true forever.
+  // The next playSequential queues files but skips processing because of the
+  // !isPlayingQueue gate, leaving the host's phone silent for the rest of the
+  // game. Reproduced indirectly: game 17, room 21, 2026-05-09 — seer/witch
+  // audio played on their phones but the host heard nothing.
+
+  it('playSequential recovers from a stuck queue when no playback has started in >15s', () => {
+    // Simulate a stuck state: isPlayingQueue = true but lastPlaybackStartTime
+    // is 16 seconds in the past (as if play() hung and onended never fired).
+    ;(audioService as any).isPlayingQueue = true
+    ;(audioService as any).lastPlaybackStartTime = performance.now() - 16000
+
+    const warnSpy = vi.spyOn(console, 'warn')
+
+    audioService.playSequential(['seer_open_eyes.mp3'])
+
+    // The watchdog should have reset the stuck state so play() is called.
+    expect(mockAudioInstances).toHaveLength(1)
+    expect(mockAudioInstances[0]?.play).toHaveBeenCalledTimes(1)
+
+    // The watchdog warn must fire to help with future debugging.
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[AudioService] Stuck queue detected'),
+      expect.any(Object),
+    )
+  })
 })

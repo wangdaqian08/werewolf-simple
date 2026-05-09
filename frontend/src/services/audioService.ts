@@ -63,6 +63,7 @@ class AudioService {
 
   private audioQueue: Array<{ filename: string; options: AudioOptions }> = []
   private isPlayingQueue = false
+  private lastPlaybackStartTime = 0
 
   /**
    * Setup tracking for user interaction to enable audio playback
@@ -131,6 +132,22 @@ class AudioService {
   playSequential(filenames: string[], options: AudioOptions = {}): void {
     if (this.muted || filenames.length === 0) return
 
+    // Stuck-queue self-heal. Documented failure (see stopAll() comment): if
+    // a prior playback's onended never fires (paused mid-stream, AudioContext
+    // suspended in background tab, play() promise hung), isPlayingQueue stays
+    // true forever and every subsequent playSequential is silently dropped
+    // because of the !isPlayingQueue gate. Detect via wall-clock: if we are
+    // "playing" but no item has started for >15s, the queue is stuck — drain
+    // and reset so this call gets to play.
+    if (this.isPlayingQueue && performance.now() - this.lastPlaybackStartTime > 15000) {
+      console.warn(
+        '[AudioService] Stuck queue detected (no playback start in >15s) — force-recovering',
+        { queueLen: this.audioQueue.length, lastStart: this.lastPlaybackStartTime },
+      )
+      this.audioQueue = []
+      this.isPlayingQueue = false
+    }
+
     // Add to queue with options
     filenames.forEach((filename) => {
       this.audioQueue.push({ filename, options })
@@ -192,6 +209,9 @@ class AudioService {
         this.playNextInQueue() // Continue to next audio
         return
       }
+
+      // Record start time for stuck-queue watchdog in playSequential.
+      this.lastPlaybackStartTime = performance.now()
 
       // Handle play errors and continue to next
       audio.play().catch((error) => {
