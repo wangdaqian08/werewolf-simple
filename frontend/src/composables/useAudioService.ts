@@ -123,6 +123,15 @@ export function useAudioService() {
       const tailId = buffer[buffer.length - 1]?.id ?? null
       if (tailId === lastReplayTailId) return
       lastReplayTailId = tailId
+      // If the tab was backgrounded, pre-dedup the entire incoming buffer before
+      // iterating. This suppresses any cues that accumulated during suspension —
+      // replaying them would duplicate audio other players already heard.
+      // Forward-only recovery: only live audioSequence events (new ids) play.
+      if (wasHidden) {
+        wasHidden = false
+        for (const seq of buffer) playedIds.add(seq.id)
+        return
+      }
       for (const seq of buffer) tryPlay(seq, 'replay')
     },
     { deep: true },
@@ -157,10 +166,35 @@ export function useAudioService() {
     { immediate: true },
   )
 
+  // On tab background: snapshot every id in the current audioReplayBuffer into
+  // playedIds. When the tab resumes and refreshState() delivers the same buffer
+  // (or a buffer with additional missed cues) via a STOMP reconnect's setState,
+  // the audioReplayBuffer watcher's tryPlay calls are all dedup-skipped.
+  //
+  // Constraint (from plan): "If a player resumes their phone during the game,
+  // audio cues that already played on other players' phones must NOT replay on
+  // the resumed phone." Audio recovery is forward-only: only subsequent live
+  // audioSequence STOMP events (new ids never in the buffer) play normally.
+  //
+  // wasHidden tracks a pending resume: when the next audioReplayBuffer state
+  // change arrives after wake, we pre-dedup its contents before tryPlay runs,
+  // suppressing any cues that accumulated in the buffer during suspension.
+  let wasHidden = false
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      wasHidden = true
+      // Pre-dedup the buffer as it stands now.
+      const buf = gameStore.state?.audioReplayBuffer
+      if (buf) for (const seq of buf) playedIds.add(seq.id)
+    }
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+
   /**
    * Cleanup on unmount
    */
   onUnmounted(() => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
     audioService.stopAll()
     audioService.stopBgm()
   })

@@ -102,12 +102,24 @@ class AudioService {
       document.addEventListener(eventName, enableAudio, { capture: true })
     })
 
-    // On returning to foreground, defensively resume the audio context.
+    // On returning to foreground: resume the audio context, then drain any queue
+    // that got stuck during suspension. Do NOT replay stale narration — playing
+    // audio that other players already heard would confuse the resumed player.
+    // PR #113's stuck-queue watchdog (in playSequential) remains as the backstop.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && this.audioContext?.state === 'suspended') {
+      if (document.visibilityState !== 'visible') return
+      if (this.audioContext?.state === 'suspended') {
         this.audioContext.resume().catch(() => {
           /* swallow */
         })
+      }
+      // Drain queue stuck from suspension. Do NOT replay — playing stale narration
+      // on a freshly-woken device duplicates what other players already heard
+      // (the action is over). Just reset state so subsequent live STOMP cues play.
+      if (this.isPlayingQueue) {
+        console.warn('[AudioService] Tab resumed with stuck queue — draining without replay')
+        this.audioQueue = []
+        this.isPlayingQueue = false
       }
     })
   }

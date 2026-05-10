@@ -690,4 +690,117 @@ describe('useAudioService', () => {
     expect(mockPlaySequential).toHaveBeenCalledTimes(1)
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['new_audio.mp3'])
   })
+
+  // ── Tab-wake no-side-effect recovery (PR C) ──────────────────────────────
+
+  /**
+   * Test A — "no stale replay after tab wake"
+   *
+   * Constraint (from plan): If a player resumes their phone during the game,
+   * audio cues that already played on other players' phones must NOT replay
+   * on the resumed phone.
+   *
+   * Mechanism: on visibilitychange→hidden the composable pre-dedupes every id
+   * in the current audioReplayBuffer into playedIds. When refreshState() lands
+   * the same buffer after reconnect, the audioReplayBuffer watcher's tryPlay
+   * calls are all dedup-skipped. Only ids that arrive AFTER the wake (new ids)
+   * are absent from playedIds and will play normally.
+   */
+  it('does not replay stale buffer cues after tab wake (pre-dedup on hidden)', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    // 1. Populate the replay buffer with 3 cues before the composable mounts.
+    const buf = [
+      makeSequence(['seer_open_eyes.mp3'], 'seq-1'),
+      makeSequence(['witch_open_eyes.mp3'], 'seq-2'),
+      makeSequence(['guard_open_eyes.mp3'], 'seq-3'),
+    ]
+    gameStore.setState(makeState({ audioReplayBuffer: buf }))
+    await nextTick()
+
+    // 2. Trigger one live audioSequence so the composable has at least one
+    //    played id (proves the composable is active / watchers are running).
+    const liveSeq = makeSequence(['goes_dark_close_eyes.mp3'], 'seq-live-pre')
+    gameStore.setState(makeState({ audioSequence: liveSeq, audioReplayBuffer: buf }))
+    await nextTick()
+    expect(mockPlaySequential).toHaveBeenCalledWith(['goes_dark_close_eyes.mp3'])
+
+    // 3. Tab goes to background — composable should pre-dedup buffer ids.
+    mockPlaySequential.mockClear()
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true,
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    // 4. Simulate refreshState() landing after STOMP reconnect on resume.
+    //    Same 3 cues + 1 new one (seq-4). The 3 stale cues must NOT play.
+    const bufAfterResume = [
+      ...buf,
+      makeSequence(['wolf_open_eyes.mp3'], 'seq-4'),
+    ]
+    gameStore.setState(makeState({ audioReplayBuffer: bufAfterResume }))
+    await nextTick()
+
+    // 5. Tab becomes visible.
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'visible',
+      configurable: true,
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await nextTick()
+
+    // Assert: zero new play() calls — all 3 stale cues were pre-deduped.
+    // (seq-4 is in the buffer but not in a separate audioSequence broadcast,
+    // so it also won't play here — it would only play if a live audioSequence
+    // or a new-tail-id replay watcher triggers tryPlay with seq-4.)
+    expect(mockPlaySequential).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Test B — "live cue after tab wake plays"
+   *
+   * After the tab wakes and the stale buffer is pre-deduped, a brand-new
+   * audioSequence broadcast (new id, never seen by this device) must still
+   * play normally. This proves the fix doesn't over-suppress future audio.
+   */
+  it('plays a live cue that arrives after tab wake (new id not in playedIds)', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    // 1. Set up buffer with 3 stale cues.
+    const buf = [
+      makeSequence(['seer_open_eyes.mp3'], 'seq-1'),
+      makeSequence(['witch_open_eyes.mp3'], 'seq-2'),
+      makeSequence(['guard_open_eyes.mp3'], 'seq-3'),
+    ]
+    gameStore.setState(makeState({ audioReplayBuffer: buf }))
+    await nextTick()
+
+    // 2. Tab goes hidden → pre-dedup triggered.
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true,
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    // 3. Tab becomes visible again.
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'visible',
+      configurable: true,
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await nextTick()
+    mockPlaySequential.mockClear()
+
+    // 4. A fresh live audioSequence arrives after wake (new id — not in playedIds).
+    const liveAfterWake = makeSequence(['wolf_howl.mp3'], 'seq-live-after-wake')
+    gameStore.setState(makeState({ audioSequence: liveAfterWake, audioReplayBuffer: buf }))
+    await nextTick()
+
+    // Assert: exactly this one cue plays — the live post-wake cue.
+    expect(mockPlaySequential).toHaveBeenCalledTimes(1)
+    expect(mockPlaySequential).toHaveBeenCalledWith(['wolf_howl.mp3'])
+  })
 })
