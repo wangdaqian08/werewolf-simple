@@ -378,13 +378,19 @@ class SheriffService(
         val allCandidates = sheriffCandidateRepository.findByElectionId(election.id)
         val anyRunningLeft = allCandidates.any { it.status == CandidateStatus.RUNNING && speakingOrderIds.contains(it.userId) }
         if (!anyRunningLeft) {
-            // No running candidates remain → show RESULT phase with auto-advance to night
-            election.subPhase = ElectionSubPhase.RESULT
-            sheriffElectionRepository.save(election)
-            broadcastAfterCommit(context.gameId,
-                DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.RESULT.name))
-            // Sheriff is shown on the RESULT screen until the host clicks
-            // 显示结果 (SHERIFF_END_RESULT) — no auto-timer.
+            // No running candidates remain — mirrors startSpeech's empty-candidates
+            // branch: advance straight to DAY_DISCUSSION/RESULT_HIDDEN instead of
+            // landing on SHERIFF_ELECTION/RESULT. The RESULT screen would show an
+            // empty winner card and empty tally (no sheriff was elected), leaving
+            // the host with nothing to dismiss — a dead-end (game 18 / room 22,
+            // 2026-05-09). endResult() performs the identical write; inline it here.
+            context.game.phase = GamePhase.DAY_DISCUSSION
+            context.game.subPhase = DaySubPhase.RESULT_HIDDEN.name
+            gameRepository.save(context.game)
+            broadcastAfterCommit(
+                context.gameId,
+                DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name),
+            )
             return GameActionResult.Success()
         }
 

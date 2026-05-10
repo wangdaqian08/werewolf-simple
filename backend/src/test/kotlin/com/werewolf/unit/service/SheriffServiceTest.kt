@@ -372,33 +372,76 @@ class SheriffServiceTest {
     }
 
     @Test
-    fun `quitCampaign - transitions to RESULT when last running candidate quits`() {
+    fun `quitCampaign - auto-advances to DAY_DISCUSSION when last running candidate quits`() {
+        // Updated: old behavior was SHERIFF_ELECTION/RESULT (a dead-end — nothing
+        // for the host to dismiss on the RESULT screen when there's no winner).
+        // Fixed behavior mirrors startSpeech's empty-candidates branch: advance
+        // directly to DAY_DISCUSSION/RESULT_HIDDEN. See quitCampaign_lastCandidateInSpeech
+        // test for the canonical regression test covering game 18 / room 22.
         val speakingOrder = guestId
         val election = election(subPhase = ElectionSubPhase.SPEECH, speakingOrder = speakingOrder)
         val ctx = context(election = election)
 
         val guestCandidate = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
 
-        // After save, the candidate is QUIT and there are no more RUNNING candidates in the speaking order
         whenever(sheriffCandidateRepository.findByElectionId(electionId))
             .thenReturn(listOf(guestCandidate))
             .thenReturn(listOf(
                 SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.QUIT),
             ))
         whenever(sheriffCandidateRepository.save(any<SheriffCandidate>())).thenAnswer { it.arguments[0] }
-        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
         val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_QUIT_CAMPAIGN)
         val result = sheriffService.handle(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        // Should transition to RESULT, not directly to night
-        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.RESULT)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
 
         val captor = argumentCaptor<DomainEvent>()
         verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
-        assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.RESULT.name)
-        // Should NOT call startNightPhase directly — auto-advance is scheduled
+        assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
+    }
+
+    @Test
+    fun `quitCampaign_lastCandidateInSpeech_advancesToDayDiscussionRESULT_HIDDEN`() {
+        // Regression: game 18 / room 22 (2026-05-09) got stuck 14+ hours in
+        // SHERIFF_ELECTION/RESULT because all 8 candidates quit during SPEECH.
+        // The quitCampaign path landed on ELECTION/RESULT (waiting for host to
+        // click 显示结果), but the host screen showed an empty winner card and
+        // empty tally — a dead-end with nothing to dismiss.
+        //
+        // Fix: mirror startSpeech's empty-candidates branch — when the last
+        // running candidate quits during SPEECH, auto-advance directly to
+        // DAY_DISCUSSION/RESULT_HIDDEN (same as SHERIFF_END_RESULT would do).
+        val speakingOrder = guestId
+        val election = election(subPhase = ElectionSubPhase.SPEECH, speakingOrder = speakingOrder)
+        val ctx = context(election = election)
+
+        val guestCandidate = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
+
+        whenever(sheriffCandidateRepository.findByElectionId(electionId))
+            .thenReturn(listOf(guestCandidate))
+            .thenReturn(listOf(
+                SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.QUIT),
+            ))
+        whenever(sheriffCandidateRepository.save(any<SheriffCandidate>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_QUIT_CAMPAIGN)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        // Game phase must advance — NOT stay in SHERIFF_ELECTION/RESULT
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
+
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
+        val phaseChanged = captor.firstValue as DomainEvent.PhaseChanged
+        assertThat(phaseChanged.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(phaseChanged.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
     }
 
     // ── Group 4: revealResult() empty votes / all-abstain ────────────────────────
