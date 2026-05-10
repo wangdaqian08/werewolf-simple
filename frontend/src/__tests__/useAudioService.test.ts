@@ -736,10 +736,7 @@ describe('useAudioService', () => {
 
     // 4. Simulate refreshState() landing after STOMP reconnect on resume.
     //    Same 3 cues + 1 new one (seq-4). The 3 stale cues must NOT play.
-    const bufAfterResume = [
-      ...buf,
-      makeSequence(['wolf_open_eyes.mp3'], 'seq-4'),
-    ]
+    const bufAfterResume = [...buf, makeSequence(['wolf_open_eyes.mp3'], 'seq-4')]
     gameStore.setState(makeState({ audioReplayBuffer: bufAfterResume }))
     await nextTick()
 
