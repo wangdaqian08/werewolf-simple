@@ -294,19 +294,33 @@ export function setupMocks() {
           sheriffElection: {
             ...e,
             candidates: [...e.candidates, { userId, nickname, avatar, status: 'RUNNING' as const }],
+            // Treat the added player as a fresh decision so the SIGNUP
+            // progress indicator advances visibly in dev tools.
+            decisionProgress: e.decisionProgress
+              ? { ...e.decisionProgress, decided: e.decisionProgress.decided + 1 }
+              : undefined,
           },
         }
         pushGameStateUpdate()
       }
     } else if (action === 'REMOVE') {
-      mockGameState = {
-        ...mockGameState,
-        sheriffElection: {
-          ...e,
-          candidates: e.candidates.filter((c) => c.userId !== userId),
-        },
+      const exists = e.candidates.some((c) => c.userId === userId)
+      if (exists) {
+        mockGameState = {
+          ...mockGameState,
+          sheriffElection: {
+            ...e,
+            candidates: e.candidates.filter((c) => c.userId !== userId),
+            decisionProgress: e.decisionProgress
+              ? {
+                  ...e.decisionProgress,
+                  decided: Math.max(0, e.decisionProgress.decided - 1),
+                }
+              : undefined,
+          },
+        }
+        pushGameStateUpdate()
       }
-      pushGameStateUpdate()
     }
     return [200]
   })
