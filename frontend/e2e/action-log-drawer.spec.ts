@@ -17,7 +17,7 @@ import type { Page } from '@playwright/test'
 async function goToDayScenario(page: Page, scenario: 'HOST_HIDDEN' | 'HOST_REVEALED' | 'ALIVE_HIDDEN' | 'ALIVE_REVEALED') {
   await page.goto('/')
   await page.evaluate(() => {
-    localStorage.setItem('jwt', 'mock-jwt-token-abc123')
+    localStorage.setItem('jwt', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjQwNzA5MDg4MDB9.mock-sig')
     localStorage.setItem('userId', 'u1')
     localStorage.setItem('nickname', 'You')
   })
