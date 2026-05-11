@@ -48,9 +48,7 @@ export const useUserStore = defineStore('user', () => {
   // nickname is left intact so the next OAuth login re-syncs from provider.
   const displayName = ref<string | null>(sessionStorage.getItem('displayName'))
 
-  const isLoggedIn = computed(
-    () => !!token.value && !!userId.value && !isTokenExpired(token.value),
-  )
+  const isLoggedIn = computed(() => !!token.value && !!userId.value && !isTokenExpired(token.value))
 
   function hasValidSession(nick: string): boolean {
     return !!token.value && nickname.value === nick && !isTokenExpired(token.value)
