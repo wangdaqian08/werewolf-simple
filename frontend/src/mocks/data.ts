@@ -29,8 +29,7 @@ import type {
 // The store treats undecodable tokens as expired and purges them on init,
 // which would log mock-mode E2E specs out and trip the router auth guard.
 // Payload: { "exp": 4070908800 } → 2099-01-01.
-export const MOCK_JWT =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjQwNzA5MDg4MDB9.mock-sig'
+export const MOCK_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjQwNzA5MDg4MDB9.mock-sig'
 
 export const MOCK_LOGIN: LoginResponse = {
   token: MOCK_JWT,
