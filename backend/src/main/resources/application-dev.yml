@@ -13,8 +13,8 @@ spring:
       client:
         registration:
           google:
-            client-id: dev-placeholder
-            client-secret: dev-placeholder
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
 
 websocket:
   allowed-origins: "*"
