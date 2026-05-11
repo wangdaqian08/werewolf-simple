@@ -260,30 +260,24 @@ async function runSheriffElection(ctx: GameContext, pickNickCampaign: string[]):
   // 2026-05-11: SIGNUP→SPEECH is now backend-auto-triggered when every alive
   // player has decided. The host's `sheriff-start-campaign` button is gone.
   // Drive every alive player who didn't campaign to pass so the auto-trigger
-  // fires.
-  const hostUserId = await hostPage.evaluate(() => localStorage.getItem('userId'))
-  const snapshot = await hostPage.evaluate(async (id: string) => {
-    const token = localStorage.getItem('jwt')
-    const res = await fetch(`/api/game/${id}/state`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) return { alive: [] as string[], decided: [] as string[] }
-    const state = await res.json()
-    const alive = ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
-      .filter((p) => p.isAlive)
-      .map((p) => p.userId)
-    const decided = ((state?.sheriffElection?.candidates ?? []) as Array<{ userId: string }>)
-      .map((c) => c.userId)
-    return { alive, decided }
-  }, gameId)
-  const decidedSet = new Set(snapshot.decided)
-  const undecidedIds = snapshot.alive.filter((id) => !decidedSet.has(id))
+  // fires. We can't read the candidate list back from state to "find the
+  // undecided" — the SIGNUP state response deliberately hides other players'
+  // candidacies — so use the test's known campaigner list (pickNickCampaign)
+  // as the ground truth.
+  const campaignerNicks = new Set(pickNickCampaign)
   const allBots = Object.values(ctx.roleMap).flatMap((b) => b ?? [])
-  for (const userId of undecidedIds) {
-    const selector = userId === hostUserId ? 'HOST' : allBots.find((b) => b.userId === userId)?.nick
+  const aliveIds = await readAlivePlayerIds(hostPage, gameId)
+  const hostUserId = await readHostUserId(hostPage)
+  let drivenCount = 0
+  for (const userId of aliveIds) {
+    const bot = allBots.find((b) => b.userId === userId)
+    const nick = bot?.nick
+    if (nick && campaignerNicks.has(nick)) continue // campaigner — leave RUNNING
+    const selector = userId === hostUserId ? 'HOST' : nick
     if (!selector) continue
     try {
       sheriff('pass', { player: selector, room: ctx.roomCode })
+      drivenCount++
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn(`[sheriff] pass ${selector} threw: ${(e as Error).message}`)
@@ -291,7 +285,7 @@ async function runSheriffElection(ctx: GameContext, pickNickCampaign: string[]):
   }
   // eslint-disable-next-line no-console
   console.warn(
-    `[sheriff] drove ${undecidedIds.length} undecided players to pass — ` +
+    `[sheriff] drove ${drivenCount} non-campaigners to pass — ` +
       `subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
   )
 

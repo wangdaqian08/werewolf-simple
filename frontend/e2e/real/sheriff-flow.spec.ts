@@ -14,6 +14,13 @@ import {driveMinimalNight1ViaDom} from './helpers/night-driver'
 
 let ctx: GameContext
 
+// Tests within this describe run serially (Playwright config workers:1) and
+// share game state. Test 2 records which userIds entered the campaign so
+// test 3 can drive every other alive player to pass. The SIGNUP state
+// response deliberately hides other candidates' identities (2026-05-11),
+// so we can't recover this from the state itself.
+let test2CampaignerUserIds = new Set<string>()
+
 test.describe('Sheriff election — multi-browser STOMP verification', () => {
   test.setTimeout(180_000)
 
@@ -162,6 +169,15 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       { timeout: 10_000 },
     )
 
+    // Record campaigner userIds so test 3 can leave them alone when driving
+    // remaining alive players to pass. The seer's own userId comes from
+    // ctx.roleMap.SEER[0] (the same browser that just clicked sheriff-run).
+    const seerForCtx = ctx.roleMap.SEER?.[0]
+    test2CampaignerUserIds = new Set<string>([
+      ...(seerForCtx?.userId ? [seerForCtx.userId] : []),
+      ...campaigners.map((b) => b.userId),
+    ])
+
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-02-signup-done')
   })
 
@@ -184,33 +200,37 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // 2026-05-11: SIGNUP→SPEECH is now backend-auto-triggered when every
     // alive player has decided (signed up or passed). The host's manual
     // `sheriff-start-campaign` button is gone. Drive every remaining
-    // undecided alive player to pass via sheriff.sh, then wait for the
-    // backend to flip the sub-phase.
+    // undecided alive player to pass via sheriff.sh, using test 2's
+    // recorded campaigner list as ground truth (the SIGNUP state response
+    // hides other candidates' identities, so we can't recover the set from
+    // a state poll).
     await waitForCondition(
       async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'SIGNUP',
       'sheriff election to reach SIGNUP before driving remaining passes',
       15_000,
     )
+    expect(
+      test2CampaignerUserIds.size,
+      'test 2 must have populated test2CampaignerUserIds before test 3 runs',
+    ).toBeGreaterThan(0)
+
     const hostUserId = await ctx.hostPage.evaluate(() => localStorage.getItem('userId'))
-    const decidedSnapshot = await ctx.hostPage.evaluate(async (id: string) => {
+    const aliveIds = await ctx.hostPage.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
       const res = await fetch(`/api/game/${id}/state`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) return { alive: [] as string[], decided: [] as string[] }
+      if (!res.ok) return [] as string[]
       const state = await res.json()
-      const alive = ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
+      return ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
         .filter((p) => p.isAlive)
         .map((p) => p.userId)
-      const decided = ((state?.sheriffElection?.candidates ?? []) as Array<{ userId: string }>)
-        .map((c) => c.userId)
-      return { alive, decided }
     }, ctx.gameId)
-    const decidedSet = new Set(decidedSnapshot.decided)
-    const undecidedIds = decidedSnapshot.alive.filter((id) => !decidedSet.has(id))
     const allBots = Object.values(ctx.roleMap).flatMap((b) => b ?? [])
-    for (const userId of undecidedIds) {
-      const selector = userId === hostUserId ? 'HOST' : allBots.find((b) => b.userId === userId)?.nick
+    for (const userId of aliveIds) {
+      if (test2CampaignerUserIds.has(userId)) continue // campaigner — leave RUNNING
+      const selector =
+        userId === hostUserId ? 'HOST' : allBots.find((b) => b.userId === userId)?.nick
       if (!selector) continue
       try {
         sheriff('pass', { player: selector, room: ctx.roomCode })
