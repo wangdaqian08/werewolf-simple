@@ -239,7 +239,13 @@ export interface SheriffVoteTally {
 export interface SheriffElectionState {
   subPhase: SheriffSubPhase
   timeRemaining: number
+  // During SIGNUP, identities are hidden from everyone except the requesting
+  // player — `candidates` contains only the viewer's own row (if they decided)
+  // so `iAmCandidate` / `hasPassed` keep working. Outside SIGNUP, the full
+  // candidate list is exposed.
   candidates: SheriffCandidate[]
+  /** Decision progress during SIGNUP — backs the "X / Y 已选择" indicator. */
+  decisionProgress?: { decided: number; total: number }
   speakingOrder: string[] // userIds in order
   currentSpeakerId?: string
   hasPassed?: boolean // true if I chose to pass on signup

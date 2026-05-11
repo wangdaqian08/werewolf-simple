@@ -8,6 +8,13 @@
     </div>
 
     <!-- ── SIGNUP ── -->
+    <!--
+      Identities are deliberately hidden during SIGNUP: who joined the campaign
+      affects everyone's decision (especially werewolves piling on a known
+      strong claim). Players see only the aggregate count + decision progress.
+      The campaign auto-advances to SPEECH once every alive player has decided —
+      there is no host "Start Campaign" button anymore.
+    -->
     <template v-if="election.subPhase === 'SIGNUP'">
       <div class="info-banner">
         <div class="info-title">警长竞选开始 · Sheriff Election</div>
@@ -16,18 +23,13 @@
         </p>
       </div>
 
-      <div class="section-label">Candidates so far ({{ runningCandidates.length }})</div>
-      <div class="candidate-list">
-        <div v-for="c in runningCandidates" :key="c.userId" class="cand-row-running">
-          <Avatar
-            class="cand-avatar"
-            :avatar="c.avatar"
-            :nickname="c.nickname"
-            emoji="😊"
-            size="sm"
-          />
-          <span class="cand-name">{{ c.nickname }}</span>
-          <span class="running-badge">RUNNING</span>
+      <div class="signup-stats">
+        <div class="stat-row">
+          <span class="stat-label">已选择 / Decided</span>
+          <span class="stat-value gold" data-testid="sheriff-decision-progress"
+            >{{ election.decisionProgress?.decided ?? 0 }} /
+            {{ election.decisionProgress?.total ?? 0 }}</span
+          >
         </div>
       </div>
 
@@ -63,18 +65,6 @@
             @click="emit('pass')"
           >
             放弃 / Pass
-          </button>
-        </template>
-        <template v-if="isHost">
-          <div class="host-divider" />
-          <button
-            class="btn btn-primary"
-            data-testid="sheriff-start-campaign"
-            :class="{ 'is-loading': actionPending }"
-            :disabled="runningCandidates.length === 0 || actionPending"
-            @click="emit('startCampaign')"
-          >
-            开始演讲 / Start Campaign
           </button>
         </template>
       </div>
@@ -586,7 +576,6 @@ const emit = defineEmits<{
   run: []
   pass: []
   withdraw: []
-  startCampaign: []
   quit: []
   vote: [userId: string]
   abstain: []
@@ -818,6 +807,45 @@ function speakerLabel(uid: string, idx: number) {
   font-size: 0.625rem;
   letter-spacing: 0.1em;
   color: var(--gold);
+}
+
+/* SIGNUP stats — count + decision progress, no per-candidate rows */
+.signup-stats {
+  background: var(--paper);
+  border: 1px solid var(--border-l);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.stat-hint {
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  text-align: center;
+  border-top: 1px dashed var(--border-l);
+  padding-top: 0.5rem;
 }
 
 /* Action footer */

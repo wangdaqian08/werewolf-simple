@@ -14,7 +14,10 @@
           v-for="player in sortedPlayers"
           :key="player.userId"
           class="reveal-card"
-          :class="{ 'reveal-wolf': player.role === 'WEREWOLF' }"
+          :class="{
+            'reveal-wolf': player.role === 'WEREWOLF',
+            'reveal-dead': !player.isAlive,
+          }"
           :data-testid="`role-reveal-${player.seatIndex}`"
         >
           <div class="reveal-meta">
@@ -226,6 +229,17 @@ function goLobby() {
 
 .reveal-wolf .reveal-role {
   color: var(--red);
+}
+
+/* Killed-during-game indicator: desaturate the card and overlay grey.
+   Sits on top of the role-team colour so the team is still readable. */
+.reveal-dead {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.reveal-dead .reveal-role {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
 }
 
 .result-wolves .reveal-card {

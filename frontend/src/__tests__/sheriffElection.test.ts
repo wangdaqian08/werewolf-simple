@@ -22,6 +22,7 @@ function makeElection(overrides: Partial<SheriffElectionState>): SheriffElection
     subPhase: 'SIGNUP',
     timeRemaining: 60,
     candidates: CANDIDATES,
+    decisionProgress: { decided: CANDIDATES.length, total: 8 },
     speakingOrder: ['u2', 'u3'],
     canVote: true,
     allVoted: false,
@@ -41,13 +42,99 @@ describe('SheriffElection — sub-phase rendering', () => {
     setActivePinia(createPinia())
   })
 
-  it('SIGNUP: renders sign-up banner and candidate list', () => {
+  it('SIGNUP: renders only decision progress, no candidate identities', () => {
+    // 2026-05-11 behaviour change: during SIGNUP, players see only "X / Y
+    // decided" — no per-candidate names, no aggregate candidate count, no
+    // explanatory text.
     const wrapper = mount(SheriffElection, {
-      props: { election: makeElection({ subPhase: 'SIGNUP' }), ...DEFAULT_PROPS },
+      props: {
+        election: makeElection({
+          subPhase: 'SIGNUP',
+          candidates: [],
+          decisionProgress: { decided: 5, total: 8 },
+        }),
+        ...DEFAULT_PROPS,
+      },
     })
     expect(wrapper.find('.sheriff-wrap').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Sheriff Election')
-    expect(wrapper.find('.candidate-list').exists()).toBe(true)
+    // Decision progress is the only metric shown
+    expect(wrapper.find('[data-testid="sheriff-decision-progress"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="sheriff-decision-progress"]').text()).toContain('5')
+    expect(wrapper.find('[data-testid="sheriff-decision-progress"]').text()).toContain('8')
+    // No nicknames leak through
+    expect(wrapper.text()).not.toContain('Alice')
+    expect(wrapper.text()).not.toContain('Bob')
+  })
+
+  it('SIGNUP: never renders the candidate-list with names — even if the backend leaks them', () => {
+    // Defence-in-depth: if a backend regression sends names back during SIGNUP,
+    // the frontend still hides them. Pulls the rug on any stale snapshot.
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({
+          subPhase: 'SIGNUP',
+          candidates: CANDIDATES, // backend leaked names
+          decisionProgress: { decided: 2, total: 8 },
+        }),
+        ...DEFAULT_PROPS,
+      },
+    })
+    // The old per-candidate list rendering must be gone from SIGNUP.
+    expect(wrapper.find('.candidate-list').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Alice')
+    expect(wrapper.text()).not.toContain('Bob')
+  })
+
+  it('SIGNUP: does not render a host "Start Campaign" button (auto-transition handles it)', () => {
+    // The campaign now only begins once every player has decided, via a backend
+    // auto-trigger. The host has no information to base an early-start decision
+    // on, so the manual button is removed entirely.
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({
+          subPhase: 'SIGNUP',
+          candidates: [],
+          decisionProgress: { decided: 4, total: 8 },
+        }),
+        ...DEFAULT_PROPS,
+        isHost: true,
+      },
+    })
+    expect(wrapper.find('[data-testid="sheriff-start-campaign"]').exists()).toBe(false)
+  })
+
+  it('SIGNUP: shows Withdraw button when I am running (self-row preserved in candidates)', () => {
+    // The backend includes the requesting player's own candidate row in SIGNUP
+    // so the UI knows whether to show Run-for-Sheriff or Withdraw.
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({
+          subPhase: 'SIGNUP',
+          candidates: [{ userId: 'u1', nickname: 'Me', avatar: '🙂', status: 'RUNNING' }],
+          decisionProgress: { decided: 5, total: 8 },
+        }),
+        ...DEFAULT_PROPS,
+        myUserId: 'u1',
+      },
+    })
+    expect(wrapper.find('[data-testid="sheriff-withdraw"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="sheriff-run"]').exists()).toBe(false)
+  })
+
+  it('SIGNUP: shows Run/Pass buttons when I have not decided yet', () => {
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({
+          subPhase: 'SIGNUP',
+          candidates: [],
+          decisionProgress: { decided: 3, total: 8 },
+        }),
+        ...DEFAULT_PROPS,
+        myUserId: 'u1',
+      },
+    })
+    expect(wrapper.find('[data-testid="sheriff-run"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="sheriff-pass"]').exists()).toBe(true)
   })
 
   it('SPEECH (not current speaker): renders speech UI', () => {
