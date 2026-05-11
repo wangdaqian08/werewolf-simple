@@ -2,38 +2,56 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/userStore'
 
+// Build a JWT-shaped token with the given `exp` (seconds since epoch). The
+// store decodes the payload to check expiry, so test fixtures need to look
+// like real JWTs — opaque strings get treated as expired and purged.
+function makeJwt(expSecondsFromNow: number): string {
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expSecondsFromNow }))
+  return `${header}.${payload}.sig`
+}
+const FUTURE = 60 * 60 // 1h from now — well within validity
+const PAST = -60 * 60 // 1h ago — expired
+
 // Mock the userService so tests don't make real HTTP calls
 vi.mock('@/services/userService', () => ({
   userService: {
-    login: vi.fn().mockResolvedValue({
-      token: 'test-token-xyz',
-      user: { userId: 'u1', nickname: 'TestUser' },
-    }),
-    loginWithGoogle: vi.fn().mockResolvedValue({
-      token: 'oauth-google-token',
-      user: {
-        userId: 'google:abc',
-        nickname: 'Daniel Wang',
-        avatarUrl: 'https://lh3.googleusercontent.com/a/x',
-      },
-    }),
-    loginWithWechat: vi.fn().mockResolvedValue({
-      token: 'oauth-wechat-token',
-      user: {
-        userId: 'wechat:xyz',
-        nickname: '微信用户',
-        avatarUrl: 'https://thirdwx.qlogo.cn/x.jpg',
-      },
-    }),
+    login: vi.fn(),
+    loginWithGoogle: vi.fn(),
+    loginWithWechat: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
   },
 }))
+
+// Re-seed userService mocks each test so JWT `exp` is computed at test time
+// (avoids fixtures that "expire" if the suite is slow).
+import { userService } from '@/services/userService'
 
 describe('userStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
     sessionStorage.clear()
+    vi.mocked(userService.login).mockResolvedValue({
+      token: makeJwt(FUTURE),
+      user: { userId: 'u1', nickname: 'TestUser' },
+    })
+    vi.mocked(userService.loginWithGoogle).mockResolvedValue({
+      token: makeJwt(FUTURE),
+      user: {
+        userId: 'google:abc',
+        nickname: 'Daniel Wang',
+        avatarUrl: 'https://lh3.googleusercontent.com/a/x',
+      },
+    })
+    vi.mocked(userService.loginWithWechat).mockResolvedValue({
+      token: makeJwt(FUTURE),
+      user: {
+        userId: 'wechat:xyz',
+        nickname: '微信用户',
+        avatarUrl: 'https://thirdwx.qlogo.cn/x.jpg',
+      },
+    })
   })
 
   it('starts logged out when localStorage is empty', () => {
@@ -53,7 +71,7 @@ describe('userStore', () => {
   it('login() sets state in store', async () => {
     const store = useUserStore()
     await store.login('TestUser')
-    expect(store.token).toBe('test-token-xyz')
+    expect(store.token).toBeTruthy()
     expect(store.userId).toBe('u1')
     expect(store.nickname).toBe('TestUser')
     expect(store.isLoggedIn).toBe(true)
@@ -62,13 +80,13 @@ describe('userStore', () => {
   it('login() persists token, userId, nickname to localStorage', async () => {
     const store = useUserStore()
     await store.login('TestUser')
-    expect(localStorage.getItem('jwt')).toBe('test-token-xyz')
+    expect(localStorage.getItem('jwt')).toBeTruthy()
     expect(localStorage.getItem('userId')).toBe('u1')
     expect(localStorage.getItem('nickname')).toBe('TestUser')
   })
 
   it('restores session from localStorage on init', () => {
-    localStorage.setItem('jwt', 'saved-token')
+    localStorage.setItem('jwt', makeJwt(FUTURE))
     localStorage.setItem('userId', 'u42')
     localStorage.setItem('nickname', 'Saved')
     const store = useUserStore()
@@ -101,7 +119,7 @@ describe('userStore', () => {
   it('loginWithCode("google", code) sets token, userId, nickname, avatarUrl in store', async () => {
     const store = useUserStore()
     await store.loginWithCode('google', 'the-code')
-    expect(store.token).toBe('oauth-google-token')
+    expect(store.token).toBeTruthy()
     expect(store.userId).toBe('google:abc')
     expect(store.nickname).toBe('Daniel Wang')
     expect(store.avatarUrl).toBe('https://lh3.googleusercontent.com/a/x')
@@ -123,7 +141,7 @@ describe('userStore', () => {
   })
 
   it('restores avatarUrl from localStorage on init', () => {
-    localStorage.setItem('jwt', 'saved')
+    localStorage.setItem('jwt', makeJwt(FUTURE))
     localStorage.setItem('userId', 'google:abc')
     localStorage.setItem('nickname', 'Saved')
     localStorage.setItem('avatarUrl', 'https://example.com/saved.png')
@@ -204,5 +222,42 @@ describe('userStore', () => {
     const store = useUserStore()
     await store.login('TestUser')
     expect(store.displayName).toBeNull()
+  })
+
+  // ── JWT expiry detection ────────────────────────────────────────────────
+
+  it('isLoggedIn is false when the persisted JWT is expired', () => {
+    localStorage.setItem('jwt', makeJwt(PAST))
+    localStorage.setItem('userId', 'u42')
+    localStorage.setItem('nickname', 'Stale')
+    const store = useUserStore()
+    expect(store.isLoggedIn).toBe(false)
+  })
+
+  it('purges expired session from localStorage on store init', () => {
+    localStorage.setItem('jwt', makeJwt(PAST))
+    localStorage.setItem('userId', 'u42')
+    localStorage.setItem('nickname', 'Stale')
+    localStorage.setItem('avatarUrl', 'https://example.com/x.png')
+    useUserStore()
+    expect(localStorage.getItem('jwt')).toBeNull()
+    expect(localStorage.getItem('userId')).toBeNull()
+    expect(localStorage.getItem('nickname')).toBeNull()
+    expect(localStorage.getItem('avatarUrl')).toBeNull()
+  })
+
+  it('clearSession() empties refs and localStorage without hitting the network', async () => {
+    vi.mocked(userService.logout).mockClear()
+    const store = useUserStore()
+    await store.loginWithCode('google', 'code')
+    expect(store.isLoggedIn).toBe(true)
+    store.clearSession()
+    expect(store.token).toBeNull()
+    expect(store.userId).toBeNull()
+    expect(store.nickname).toBeNull()
+    expect(store.avatarUrl).toBeNull()
+    expect(store.isLoggedIn).toBe(false)
+    expect(localStorage.getItem('jwt')).toBeNull()
+    expect(vi.mocked(userService.logout)).not.toHaveBeenCalled()
   })
 })

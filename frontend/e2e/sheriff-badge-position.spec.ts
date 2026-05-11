@@ -18,7 +18,7 @@ const SHERIFF_SEAT = 2
 async function bootMock(page: Page) {
   await page.goto('/')
   await page.evaluate(() => {
-    localStorage.setItem('jwt', 'mock-jwt-token-abc123')
+    localStorage.setItem('jwt', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjQwNzA5MDg4MDB9.mock-sig')
     localStorage.setItem('userId', 'u1')
     localStorage.setItem('nickname', 'You')
   })

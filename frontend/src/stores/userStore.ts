@@ -14,12 +14,32 @@ function isTokenExpired(token: string): boolean {
   }
 }
 
+// Drop persisted session if the stored JWT is already expired, so the store
+// never boots into a half-valid "looks logged in but every request 401s" state.
+function loadPersistedSession() {
+  const token = localStorage.getItem('jwt')
+  if (token && isTokenExpired(token)) {
+    localStorage.removeItem('jwt')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('nickname')
+    localStorage.removeItem('avatarUrl')
+    return { token: null, userId: null, nickname: null, avatarUrl: null }
+  }
+  return {
+    token,
+    userId: localStorage.getItem('userId'),
+    nickname: localStorage.getItem('nickname'),
+    avatarUrl: localStorage.getItem('avatarUrl'),
+  }
+}
+
 export const useUserStore = defineStore('user', () => {
   // All four values are persisted so they survive page refresh
-  const token = ref<string | null>(localStorage.getItem('jwt'))
-  const userId = ref<string | null>(localStorage.getItem('userId'))
-  const nickname = ref<string | null>(localStorage.getItem('nickname'))
-  const avatarUrl = ref<string | null>(localStorage.getItem('avatarUrl'))
+  const persisted = loadPersistedSession()
+  const token = ref<string | null>(persisted.token)
+  const userId = ref<string | null>(persisted.userId)
+  const nickname = ref<string | null>(persisted.nickname)
+  const avatarUrl = ref<string | null>(persisted.avatarUrl)
 
   // Per-room nickname override (Option A from the OAuth follow-up). Lives in
   // sessionStorage — survives a Lobby → CreateRoom navigation refresh, but
@@ -28,7 +48,7 @@ export const useUserStore = defineStore('user', () => {
   // nickname is left intact so the next OAuth login re-syncs from provider.
   const displayName = ref<string | null>(sessionStorage.getItem('displayName'))
 
-  const isLoggedIn = computed(() => !!token.value && !!userId.value)
+  const isLoggedIn = computed(() => !!token.value && !!userId.value && !isTokenExpired(token.value))
 
   function hasValidSession(nick: string): boolean {
     return !!token.value && nickname.value === nick && !isTokenExpired(token.value)
@@ -80,19 +100,25 @@ export const useUserStore = defineStore('user', () => {
     applySession(res.token, res.user.userId, res.user.nickname, res.user.avatarUrl)
   }
 
+  // Wipe both in-memory refs and persisted storage. Called from logout() and
+  // from the 401 interceptor when the backend rejects an expired token.
+  function clearSession() {
+    token.value = null
+    userId.value = null
+    nickname.value = null
+    avatarUrl.value = null
+    localStorage.removeItem('jwt')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('nickname')
+    localStorage.removeItem('avatarUrl')
+    clearDisplayName()
+  }
+
   async function logout() {
     try {
       await userService.logout()
     } finally {
-      token.value = null
-      userId.value = null
-      nickname.value = null
-      avatarUrl.value = null
-      localStorage.removeItem('jwt')
-      localStorage.removeItem('userId')
-      localStorage.removeItem('nickname')
-      localStorage.removeItem('avatarUrl')
-      clearDisplayName()
+      clearSession()
     }
   }
 
@@ -106,6 +132,7 @@ export const useUserStore = defineStore('user', () => {
     login,
     loginWithCode,
     logout,
+    clearSession,
     setDisplayName,
   }
 })
