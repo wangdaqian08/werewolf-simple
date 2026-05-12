@@ -111,6 +111,7 @@
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
         :my-role="gameStore.state?.myRole"
+        :current-sheriff-user-id="gameStore.state?.sheriff ?? null"
         :vote-history="gameStore.state?.voteHistory"
         :action-pending="actionPending"
         @select-player="handleVotingSelect"

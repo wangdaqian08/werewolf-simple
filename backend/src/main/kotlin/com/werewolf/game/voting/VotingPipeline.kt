@@ -194,11 +194,11 @@ class VotingPipeline(
                     .orElse(null) ?: return GameActionResult.Rejected("Target not found")
                 if (!targetPlayer.alive) return GameActionResult.Rejected("Target is already dead")
 
-                targetPlayer.alive = false
-                gamePlayerRepository.save(targetPlayer)
                 actionLogService.recordHunterShot(context.gameId, context.game.dayNumber, actor.userId, target)
 
-                // Record in elimination history
+                // Record in elimination history. `hunterShotUserId` doubles as
+                // the deferred-kill signal for BADGE_PASS / BADGE_DESTROY when
+                // the target is the sheriff (see below).
                 eliminationHistoryRepository.findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
                     .ifPresent { history ->
                         history.hunterShotUserId = target
@@ -210,12 +210,11 @@ class VotingPipeline(
                     context.gameId,
                     DomainEvent.HunterShot(context.gameId, actor.userId, target)
                 )
-                stompPublisher.broadcastGameAfterCommit(
-                    context.gameId,
-                    DomainEvent.PlayerEliminated(context.gameId, target, targetPlayer.role)
-                )
 
-                // If hunted player was the sheriff, need badge handover
+                // Sheriff target: defer the kill (国标 rule — the dying sheriff
+                // performs the badge handover BEFORE being marked dead).
+                // handleBadge.BADGE_PASS / BADGE_DESTROY commits the kill once
+                // the heir is chosen.
                 if (target == context.game.sheriffUserId) {
                     context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
                     gameRepository.save(context.game)
@@ -226,7 +225,13 @@ class VotingPipeline(
                     return GameActionResult.Success()
                 }
 
-                // No badge handover needed — check win then go to night
+                // Non-sheriff target: kill immediately and proceed to night.
+                targetPlayer.alive = false
+                gamePlayerRepository.save(targetPlayer)
+                stompPublisher.broadcastGameAfterCommit(
+                    context.gameId,
+                    DomainEvent.PlayerEliminated(context.gameId, target, targetPlayer.role)
+                )
                 afterHunterAct(context)
             }
 
@@ -273,6 +278,8 @@ class VotingPipeline(
                 context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
                 gameRepository.save(context.game)
 
+                commitDeferredHunterShotIfAny(context, actor.userId)
+
                 // Update sheriff flags
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
                     it.sheriff = false; gamePlayerRepository.save(it)
@@ -295,6 +302,7 @@ class VotingPipeline(
                 context.game.sheriffUserId = null
                 context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
                 gameRepository.save(context.game)
+                commitDeferredHunterShotIfAny(context, actor.userId)
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
                     it.sheriff = false; gamePlayerRepository.save(it)
                 }
@@ -321,6 +329,31 @@ class VotingPipeline(
                     return GameActionResult.Success()
 
                 }
+
+    /**
+     * Commit the deferred hunter-shot kill on the dying sheriff, if there is
+     * one. We discriminate by elimHistory.hunterShotUserId == actor — that's
+     * the signal HUNTER_SHOOT left behind when it deferred the kill. Other
+     * paths into BADGE_HANDOVER (revealed-idiot sheriff, voted-out sheriff)
+     * either have the actor already dead (vote-out) or must stay alive
+     * (revealed idiot), and this guard leaves them untouched.
+     */
+    private fun commitDeferredHunterShotIfAny(context: GameContext, actorUserId: String) {
+        val hunterShotUserId = eliminationHistoryRepository
+            .findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
+            .orElse(null)
+            ?.hunterShotUserId
+        if (hunterShotUserId != actorUserId) return
+        gamePlayerRepository.findByGameIdAndUserId(context.gameId, actorUserId).ifPresent { p ->
+            if (!p.alive) return@ifPresent // already dead — nothing to commit
+            p.alive = false
+            gamePlayerRepository.save(p)
+            stompPublisher.broadcastGameAfterCommit(
+                context.gameId,
+                DomainEvent.PlayerEliminated(context.gameId, actorUserId, p.role),
+            )
+        }
+    }
 
     /** Check win condition; if no winner, stay in VOTE_RESULT for host to proceed to night. */
     private fun afterElimination(context: GameContext) {
