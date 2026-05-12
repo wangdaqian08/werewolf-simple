@@ -404,6 +404,20 @@ class AudioService {
   }
 
   /**
+   * Set mute state to a specific value.
+   * No-op if the value is already set.
+   */
+  setMuted(value: boolean): void {
+    if (this.muted === value) return
+    this.muted = value
+    this.persistMute()
+    if (this.muted) {
+      this.stopAll()
+    }
+    this.applyBgmGain()
+  }
+
+  /**
    * Check if audio is muted
    */
   isMuted(): boolean {

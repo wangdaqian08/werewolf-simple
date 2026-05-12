@@ -180,12 +180,12 @@ class SheriffElectionIntegrationTest {
         assertThat(action(g2.token, gameId, "SHERIFF_QUIT_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         advanceSpeechUntilVoting(host.token, gameId)
 
-        // VOTING: host, g3, g4, g5 vote for g1; g1 abstains (can't self-vote); g2 cannot vote (quit during speech)
+        // VOTING: host, g3, g4, g5 vote for g1.
+        // g1 (RUNNING candidate) and g2 (quit during speech) cannot vote — auto-counted as ineligible.
         assertThat(action(host.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g1.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
 
         // RESULT: host reveals → single winner → g1 elected
         assertThat(action(host.token, gameId, "SHERIFF_REVEAL_RESULT").statusCode).isEqualTo(HttpStatus.OK)
@@ -228,12 +228,11 @@ class SheriffElectionIntegrationTest {
         assertThat(action(host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
 
-        // VOTING: split votes → g1 gets 3, g2 gets 3 → TIE
-        // host→g1, g3→g2, g1→g2, g2→g1, g4→g1, g5→g2
+        // VOTING: split votes → g1 gets 2, g2 gets 2 → TIE
+        // g1 and g2 are RUNNING candidates and cannot vote — they are auto-counted as ineligible.
+        // Eligible voters: host, g3, g4, g5. host→g1, g3→g2, g4→g1, g5→g2.
         assertThat(action(host.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_VOTE", g2.userId).statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g1.token, gameId, "SHERIFF_VOTE", g2.userId).statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g2.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_VOTE", g2.userId).statusCode).isEqualTo(HttpStatus.OK)
 

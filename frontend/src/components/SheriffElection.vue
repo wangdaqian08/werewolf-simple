@@ -284,8 +284,18 @@
             放弃投票 / Give Up Vote
           </button>
         </template>
-        <!-- Forfeited (quit during speech) -->
-        <button v-else class="btn btn-secondary" disabled>已放弃投票 / Vote forfeited</button>
+        <!-- Cannot vote: RUNNING candidate or speech-quitter -->
+        <button
+          v-else-if="cannotVoteReason === 'CANDIDATE'"
+          class="btn btn-secondary"
+          data-testid="sheriff-candidate-no-vote"
+          disabled
+        >
+          候选人不参与投票 / Candidates can't vote
+        </button>
+        <button v-else class="btn btn-secondary" data-testid="sheriff-vote-forfeited" disabled>
+          已放弃投票 / Vote forfeited
+        </button>
 
         <template v-if="isHost">
           <div class="host-divider" />
@@ -588,6 +598,15 @@ const emit = defineEmits<{
 const iAmCandidate = computed(() =>
   props.election.candidates.some((c) => c.userId === props.myUserId && c.status === 'RUNNING'),
 )
+
+const myCandidateStatus = computed(
+  () => props.election.candidates.find((c) => c.userId === props.myUserId)?.status ?? null,
+)
+
+const cannotVoteReason = computed<'CANDIDATE' | 'QUIT_SPEECH' | null>(() => {
+  if (props.election.canVote !== false) return null
+  return myCandidateStatus.value === 'RUNNING' ? 'CANDIDATE' : 'QUIT_SPEECH'
+})
 
 const runningCandidates = computed(() =>
   props.election.candidates.filter((c) => c.status === 'RUNNING'),

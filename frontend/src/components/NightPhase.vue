@@ -138,7 +138,7 @@
           </div>
           <div class="sr-verdict">
             {{
-              nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 平民阵营 · Good Camp'
+              nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 好人阵营 · Good Camp'
             }}
           </div>
         </div>
@@ -155,7 +155,7 @@
               <span class="srh-name">{{ h.nickname }}</span>
               <span class="srh-arrow">→</span>
               <span :class="h.isWerewolf ? 'srh-wolf' : 'srh-ok'">
-                {{ h.isWerewolf ? '狼人 ✗' : '平民 ✓' }}
+                {{ h.isWerewolf ? '狼人 ✗' : '好人 ✓' }}
               </span>
             </div>
           </template>

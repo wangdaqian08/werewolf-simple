@@ -190,12 +190,13 @@ class SheriffElectionEdgeCaseIntegrationTest {
         val g3AbstainBody = g3AbstainResp.body as Map<String, Any?>
         assertThat(g3AbstainBody["error"] as String).contains("quit")
 
-        // Other eligible players vote → g1 wins
+        // Other eligible players vote → g1 wins.
+        // g1 and g2 are RUNNING candidates (cannot vote/abstain — auto-counted as ineligible).
+        // g3 quit during speech (also cannot vote).
+        // Eligible voters: host, g4, g5.
         assertThat(action(host.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_VOTE", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g1.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g2.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
 
         // Host reveals → single winner g1
         assertThat(action(host.token, gameId, "SHERIFF_REVEAL_RESULT").statusCode).isEqualTo(HttpStatus.OK)
@@ -275,11 +276,9 @@ class SheriffElectionEdgeCaseIntegrationTest {
         // SPEECH: advance through all speeches → VOTING
         advanceSpeechUntilVoting(host.token, gameId)
 
-        // All eligible voters abstain
+        // Eligible voters abstain: host, g4, g5.
+        // g1, g2, g3 are RUNNING candidates and cannot vote/abstain — they are auto-counted as ineligible.
         assertThat(action(host.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g1.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g2.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(action(g3.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_ABSTAIN").statusCode).isEqualTo(HttpStatus.OK)
 

@@ -16,6 +16,7 @@ const mockClearQueue = vi.fn()
 const mockStopAll = vi.fn()
 const mockIsMuted = vi.fn().mockReturnValue(false)
 const mockToggleMute = vi.fn()
+const mockSetMuted = vi.fn()
 const mockIsQueueActive = vi.fn().mockReturnValue(false)
 const mockStartBgm = vi.fn()
 const mockStopBgm = vi.fn()
@@ -30,6 +31,7 @@ vi.mock('@/services/audioService', () => ({
     stopAll: () => mockStopAll(),
     isMuted: () => mockIsMuted(),
     toggleMute: () => mockToggleMute(),
+    setMuted: (...args: unknown[]) => mockSetMuted(...args),
     isQueueActive: () => mockIsQueueActive(),
     setGlobalVolume: vi.fn(),
     getGlobalVolume: vi.fn().mockReturnValue(1),

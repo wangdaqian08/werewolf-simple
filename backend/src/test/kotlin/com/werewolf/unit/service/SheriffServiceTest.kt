@@ -533,15 +533,14 @@ class SheriffServiceTest {
 
     @Test
     fun `vote - rejected when player votes for themselves`() {
-        // Bug: backend had no guard against actorUserId == targetUserId.
-        // A candidate could cast their own vote for themselves.
-        // Fix: explicit self-vote rejection before any DB write.
-        val election = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = "other:001")
+        // Voters cannot vote for themselves. hostId (not a candidate) votes for hostId.
+        // Self-vote guard fires before the "target not running" guard.
+        val election = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = guestId)
         val ctx = context(election = election)
-        val selfCandidate = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
-        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(selfCandidate))
+        val runningGuest = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(runningGuest))
 
-        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_VOTE, targetUserId = guestId)
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_VOTE, targetUserId = hostId)
         val result = sheriffService.handle(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
@@ -623,24 +622,29 @@ class SheriffServiceTest {
 
     @Test
     fun `buildState - allVoted false when submitted votes are fewer than eligible voters`() {
+        // 4 alive players: hostId (no record), guestId (no record), candId (RUNNING), thirdId (no record).
+        // RUNNING candidate (candId) cannot vote → eligible voters = 4 - 1 = 3.
+        // Submitted = 1 (guestId voted for candId). allVoted = false (1 < 3).
+        // voteProgress.voted = 1 submitted + 1 running (auto-counted) = 2.
         val myPlayer = player(guestId, 1)
+        val candId = "cand:001"
         val thirdId = "other:002"
-        val electionObj = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = "cand:001")
-        val runningCandidate = SheriffCandidate(electionId = electionId, userId = "cand:001", status = CandidateStatus.RUNNING)
+        val electionObj = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = candId)
+        val runningCandidate = SheriffCandidate(electionId = electionId, userId = candId, status = CandidateStatus.RUNNING)
         val submittedVotes = listOf(
             Vote(gameId = gameId, voteContext = VoteContext.SHERIFF_ELECTION, dayNumber = 1,
-                voterUserId = guestId, targetUserId = "cand:001"),
+                voterUserId = guestId, targetUserId = candId),
         )
         setupBuildState(electionObj, listOf(runningCandidate), submittedVotes, myPlayer)
 
-        val players = listOf(player(hostId, 0), myPlayer, player(thirdId, 2))
+        val players = listOf(player(hostId, 0), myPlayer, player(candId, 2), player(thirdId, 3))
         val state = sheriffService.buildState(gameId, game(), myPlayer, players)
 
         assertThat(state["allVoted"]).isEqualTo(false)
         @Suppress("UNCHECKED_CAST")
         val vp = state["voteProgress"] as Map<String, Int>
-        assertThat(vp["voted"]).isEqualTo(1)   // 1 submitted + 0 quitters
-        assertThat(vp["total"]).isEqualTo(3)   // 3 alive players
+        assertThat(vp["voted"]).isEqualTo(2)   // 1 submitted + 1 running candidate auto-counted
+        assertThat(vp["total"]).isEqualTo(4)   // 4 alive players
     }
 
     @Test
@@ -1169,5 +1173,71 @@ class SheriffServiceTest {
         val candidatesOut = state["candidates"] as List<Map<String, Any?>>
         assertThat(candidatesOut).hasSize(2)
         assertThat(candidatesOut.map { it["userId"] }).contains(guestId, otherRunningId)
+    }
+
+    // ── Group 13: Feature 1 — candidates cannot vote ──────────────────────────
+
+    @Test
+    fun `vote - rejected when actor is a RUNNING candidate`() {
+        val targetId = "other:001"
+        val election = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = "$guestId,$targetId")
+        val ctx = context(election = election)
+        val runningCandidate = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
+        val runningTarget = SheriffCandidate(electionId = electionId, userId = targetId, status = CandidateStatus.RUNNING)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(runningCandidate, runningTarget))
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_VOTE, targetUserId = targetId)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Candidates cannot vote")
+        verify(voteRepository, never()).save(any<Vote>())
+    }
+
+    @Test
+    fun `abstain - rejected when actor is a RUNNING candidate`() {
+        val election = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = "$guestId,other:001")
+        val ctx = context(election = election)
+        val runningCandidate = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(runningCandidate))
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_ABSTAIN)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Candidates cannot vote")
+        verify(voteRepository, never()).save(any<Vote>())
+    }
+
+    @Test
+    fun `revealResult - all alive players are running candidates and no votes cast transitions to DAY_DISCUSSION`() {
+        // Every alive player ran → nobody was eligible to vote → no votes possible.
+        // revealResult should bypass TIED (host-appoint) and go straight to DAY_DISCUSSION/RESULT_HIDDEN.
+        val electionObj = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = "$hostId,$guestId")
+        val ctx = context(election = electionObj)
+
+        // No votes cast at all
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(
+            gameId, VoteContext.SHERIFF_ELECTION, 1
+        )).thenReturn(emptyList())
+
+        // Both alive players are running candidates
+        val runningHost = SheriffCandidate(electionId = electionId, userId = hostId, status = CandidateStatus.RUNNING)
+        val runningGuest = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(runningHost, runningGuest))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_REVEAL_RESULT)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
+
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
+        val phaseChanged = captor.firstValue as DomainEvent.PhaseChanged
+        assertThat(phaseChanged.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(phaseChanged.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
     }
 }
