@@ -257,28 +257,39 @@ async function runSheriffElection(ctx: GameContext, pickNickCampaign: string[]):
   // eslint-disable-next-line no-console
   console.warn(`[sheriff] after campaign scripts — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`)
 
-  // Host UI click: SIGNUP → SPEECH via `sheriff-start-campaign`. The button
-  // is disabled while `runningCandidates.length === 0` (SheriffElection.vue:64)
-  // so poll briefly for enabled state to let the campaign scripts' STOMP
-  // events land on the host page.
-  const startBtn = hostPage.getByTestId('sheriff-start-campaign')
-  const startVisible = await startBtn
-    .waitFor({ state: 'visible', timeout: 10_000 })
-    .then(() => true)
-    .catch(() => false)
-  const startEnabled = await expect(startBtn)
-    .toBeEnabled({ timeout: 10_000 })
-    .then(() => true)
-    .catch(() => false)
-  // eslint-disable-next-line no-console
-  console.warn(`[sheriff] sheriff-start-campaign: visible=${startVisible} enabled=${startEnabled}`)
-  if (startVisible && startEnabled) {
-    await startBtn.click()
-    // eslint-disable-next-line no-console
-    console.warn('[sheriff] clicked sheriff-start-campaign')
+  // 2026-05-11: SIGNUP→SPEECH is now backend-auto-triggered when every alive
+  // player has decided. The host's `sheriff-start-campaign` button is gone.
+  // Drive every alive player who didn't campaign to pass so the auto-trigger
+  // fires. We can't read the candidate list back from state to "find the
+  // undecided" — the SIGNUP state response deliberately hides other players'
+  // candidacies — so use the test's known campaigner list (pickNickCampaign)
+  // as the ground truth.
+  const campaignerNicks = new Set(pickNickCampaign)
+  const allBots = Object.values(ctx.roleMap).flatMap((b) => b ?? [])
+  const aliveIds = await readAlivePlayerIds(hostPage, gameId)
+  const hostUserId = await readHostUserId(hostPage)
+  let drivenCount = 0
+  for (const userId of aliveIds) {
+    const bot = allBots.find((b) => b.userId === userId)
+    const nick = bot?.nick
+    if (nick && campaignerNicks.has(nick)) continue // campaigner — leave RUNNING
+    const selector = userId === hostUserId ? 'HOST' : nick
+    if (!selector) continue
+    try {
+      sheriff('pass', { player: selector, room: ctx.roomCode })
+      drivenCount++
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[sheriff] pass ${selector} threw: ${(e as Error).message}`)
+    }
   }
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] drove ${drivenCount} non-campaigners to pass — ` +
+      `subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
 
-  // Wait for backend to register the SIGNUP→SPEECH transition.
+  // Wait for backend to auto-transition SIGNUP → SPEECH.
   const reachedSpeech = await waitForSheriffSubPhase(hostPage, gameId, 'SPEECH', 15_000)
   // eslint-disable-next-line no-console
   console.warn(`[sheriff] reachedSpeech=${reachedSpeech} current=${await readSheriffSubPhase(hostPage, gameId)}`)

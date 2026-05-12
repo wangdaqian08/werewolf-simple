@@ -14,6 +14,13 @@ import {driveMinimalNight1ViaDom} from './helpers/night-driver'
 
 let ctx: GameContext
 
+// Tests within this describe run serially (Playwright config workers:1) and
+// share game state. Test 2 records which userIds entered the campaign so
+// test 3 can drive every other alive player to pass. The SIGNUP state
+// response deliberately hides other candidates' identities (2026-05-11),
+// so we can't recover this from the state itself.
+let test2CampaignerUserIds = new Set<string>()
+
 test.describe('Sheriff election — multi-browser STOMP verification', () => {
   test.setTimeout(180_000)
 
@@ -152,13 +159,24 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       sheriff('campaign', { player: actName(bot), room: ctx.roomCode })
     }
 
-    // Candidate count on the seer's UI = 1 (self) + campaigners.length,
-    // propagated via STOMP. toHaveCount retries until the count matches
-    // or the timeout expires, so this naturally waits for STOMP delivery.
-    await expect(seerPage.locator('.cand-row-running')).toHaveCount(
-      1 + campaigners.length,
+    // 2026-05-11 behaviour: SIGNUP no longer renders per-candidate rows
+    // (identities are hidden). The observable signal that the bot fan-out
+    // landed is the decision-progress counter on the seer's UI: it must
+    // reflect the count of decided alive players. The seer signed up via
+    // (b) above, so the expected `decided` is 1 (seer) + campaigners.length.
+    await expect(seerPage.getByTestId('sheriff-decision-progress')).toContainText(
+      new RegExp(`${1 + campaigners.length}\\s*/`),
       { timeout: 10_000 },
     )
+
+    // Record campaigner userIds so test 3 can leave them alone when driving
+    // remaining alive players to pass. The seer's own userId comes from
+    // ctx.roleMap.SEER[0] (the same browser that just clicked sheriff-run).
+    const seerForCtx = ctx.roleMap.SEER?.[0]
+    test2CampaignerUserIds = new Set<string>([
+      ...(seerForCtx?.userId ? [seerForCtx.userId] : []),
+      ...campaigners.map((b) => b.userId),
+    ])
 
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-02-signup-done')
   })
@@ -179,23 +197,53 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
   // ── Test 3: Speeches — host advances, speaker shown ────────────────────
 
   test('3. Sheriff speeches — host advances, current speaker updates', async ({}, testInfo) => {
-    // Host starts speeches via the dedicated UI button (DOM-driven, no act.sh
-    // fan-out). The button is visible only in SIGNUP — wait for that
-    // sub-phase before clicking so the action lands cleanly.
+    // 2026-05-11: SIGNUP→SPEECH is now backend-auto-triggered when every
+    // alive player has decided (signed up or passed). The host's manual
+    // `sheriff-start-campaign` button is gone. Drive every remaining
+    // undecided alive player to pass via sheriff.sh, using test 2's
+    // recorded campaigner list as ground truth (the SIGNUP state response
+    // hides other candidates' identities, so we can't recover the set from
+    // a state poll).
     await waitForCondition(
       async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'SIGNUP',
-      'sheriff election to reach SIGNUP before starting speeches',
+      'sheriff election to reach SIGNUP before driving remaining passes',
       15_000,
     )
-    const startBtn = ctx.hostPage.getByTestId('sheriff-start-campaign')
-    await expect(startBtn).toBeVisible({ timeout: 10_000 })
-    await expect(startBtn).toBeEnabled({ timeout: 10_000 })
-    await startBtn.click()
+    expect(
+      test2CampaignerUserIds.size,
+      'test 2 must have populated test2CampaignerUserIds before test 3 runs',
+    ).toBeGreaterThan(0)
 
-    // Backend transitions SIGNUP → SPEECH. Assert it.
+    const hostUserId = await ctx.hostPage.evaluate(() => localStorage.getItem('userId'))
+    const aliveIds = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return [] as string[]
+      const state = await res.json()
+      return ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
+        .filter((p) => p.isAlive)
+        .map((p) => p.userId)
+    }, ctx.gameId)
+    const allBots = Object.values(ctx.roleMap).flatMap((b) => b ?? [])
+    for (const userId of aliveIds) {
+      if (test2CampaignerUserIds.has(userId)) continue // campaigner — leave RUNNING
+      const selector =
+        userId === hostUserId ? 'HOST' : allBots.find((b) => b.userId === userId)?.nick
+      if (!selector) continue
+      try {
+        sheriff('pass', { player: selector, room: ctx.roomCode })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn(`[sheriff] pass ${selector} threw: ${(e as Error).message}`)
+      }
+    }
+
+    // Backend auto-transitions SIGNUP → SPEECH once all alive players have decided.
     await waitForCondition(
       async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'SPEECH',
-      'sheriff election to reach SPEECH after sheriff-start-campaign click',
+      'sheriff election to auto-transition to SPEECH after every alive player decides',
       15_000,
     )
 

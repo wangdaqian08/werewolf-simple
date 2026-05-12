@@ -88,10 +88,13 @@ class SheriffService(
         // If eligibleVoterCount == 0 (all players are speech-quitters), voting is trivially complete.
         val allVoted = eligibleVoterCount == 0 || submittedVoteCount >= eligibleVoterCount
 
-        return mapOf(
-            "subPhase" to election.subPhase.name,
-            "timeRemaining" to 0,
-            "candidates" to candidates.map { c ->
+        // During SIGNUP, hide WHO joined the campaign — players must decide
+        // without that information influencing their pick. The state still
+        // exposes the requesting player's own candidacy row so the UI can show
+        // Withdraw / Run-for-Sheriff correctly; everybody else sees only the
+        // candidateCount + decisionProgress aggregates below.
+        val candidatesOut: List<Map<String, Any?>> = if (election.subPhase == ElectionSubPhase.SIGNUP) {
+            candidates.filter { it.userId == myPlayer?.userId }.map { c ->
                 val user = userMap[c.userId]
                 mapOf(
                     "userId" to c.userId,
@@ -99,7 +102,30 @@ class SheriffService(
                     "avatar" to user?.avatarUrl,
                     "status" to c.status.name,
                 )
-            },
+            }
+        } else {
+            candidates.map { c ->
+                val user = userMap[c.userId]
+                mapOf(
+                    "userId" to c.userId,
+                    "nickname" to (user?.nickname ?: c.userId),
+                    "avatar" to user?.avatarUrl,
+                    "status" to c.status.name,
+                )
+            }
+        }
+
+        val decisionProgress: Map<String, Int>? = if (election.subPhase == ElectionSubPhase.SIGNUP) {
+            val aliveUserIds = players.filter { it.alive }.map { it.userId }.toSet()
+            val decidedCount = candidates.count { it.userId in aliveUserIds }
+            mapOf("decided" to decidedCount, "total" to aliveUserIds.size)
+        } else null
+
+        return mapOf(
+            "subPhase" to election.subPhase.name,
+            "timeRemaining" to 0,
+            "candidates" to candidatesOut,
+            "decisionProgress" to decisionProgress,
             "speakingOrder" to speakingOrderIds,
             "currentSpeakerId" to currentSpeakerId,
             // hasPassed: player explicitly chose not to run (QUIT but was never in the speaking order)
@@ -129,16 +155,18 @@ class SheriffService(
         if (!player.alive) return GameActionResult.Rejected("Dead players cannot run for sheriff")
 
         val electionId = election.id ?: error("Election has no ID")
-        val existing = sheriffCandidateRepository.findByElectionId(electionId)
-            .firstOrNull { it.userId == request.actorUserId }
-        if (existing != null) {
+        val priorCandidates = sheriffCandidateRepository.findByElectionId(electionId)
+        val existing = priorCandidates.firstOrNull { it.userId == request.actorUserId }
+        val updatedCandidates: List<SheriffCandidate> = if (existing != null) {
             existing.status = CandidateStatus.RUNNING
             sheriffCandidateRepository.save(existing)
+            priorCandidates
         } else {
-            sheriffCandidateRepository.save(SheriffCandidate(electionId = electionId, userId = request.actorUserId))
+            val fresh = SheriffCandidate(electionId = electionId, userId = request.actorUserId)
+            sheriffCandidateRepository.save(fresh)
+            priorCandidates + fresh
         }
-        broadcastSignupUpdate(context.gameId)
-        return GameActionResult.Success()
+        return finishSignupDecision(election, updatedCandidates, context)
     }
 
     private fun pass(request: GameActionRequest, context: GameContext): GameActionResult {
@@ -149,18 +177,72 @@ class SheriffService(
             return GameActionResult.Rejected("Sign-up period is over")
 
         val electionId = election.id ?: error("Election has no ID")
-        val existing = sheriffCandidateRepository.findByElectionId(electionId)
-            .firstOrNull { it.userId == request.actorUserId }
-        if (existing == null) {
-            // Record the pass so hasPassed can be returned correctly
-            sheriffCandidateRepository.save(
-                SheriffCandidate(electionId = electionId, userId = request.actorUserId, status = CandidateStatus.QUIT)
+        val priorCandidates = sheriffCandidateRepository.findByElectionId(electionId)
+        val existing = priorCandidates.firstOrNull { it.userId == request.actorUserId }
+        val updatedCandidates: List<SheriffCandidate> = if (existing == null) {
+            val fresh = SheriffCandidate(
+                electionId = electionId, userId = request.actorUserId, status = CandidateStatus.QUIT
             )
-        } else if (existing.status == CandidateStatus.RUNNING) {
-            existing.status = CandidateStatus.QUIT
-            sheriffCandidateRepository.save(existing)
+            sheriffCandidateRepository.save(fresh)
+            priorCandidates + fresh
+        } else {
+            if (existing.status == CandidateStatus.RUNNING) {
+                existing.status = CandidateStatus.QUIT
+                sheriffCandidateRepository.save(existing)
+            }
+            priorCandidates
         }
-        broadcastSignupUpdate(context.gameId)
+        return finishSignupDecision(election, updatedCandidates, context)
+    }
+
+    /**
+     * After a signUp or pass updates the candidate list, decide whether the
+     * SIGNUP sub-phase is complete. The campaign auto-advances to SPEECH once
+     * every alive player has either signed up or passed. If everyone passed,
+     * skip straight to DAY_DISCUSSION/RESULT_HIDDEN (same dead-end avoidance
+     * as startSpeech's empty-candidates branch).
+     *
+     * Behavioural change (2026-05-11): replaces the host's manual 开始演讲
+     * button as the SIGNUP→SPEECH trigger. Players must not see who joined
+     * the campaign — only how many — so the host has nothing to base an
+     * early-start decision on.
+     */
+    private fun finishSignupDecision(
+        election: SheriffElection,
+        updatedCandidates: List<SheriffCandidate>,
+        context: GameContext,
+    ): GameActionResult {
+        val aliveUserIds = context.players.filter { it.alive }.map { it.userId }.toSet()
+        val decidedUserIds = updatedCandidates.map { it.userId }.toSet()
+        val allDecided = aliveUserIds.all { it in decidedUserIds }
+
+        if (!allDecided) {
+            broadcastSignupUpdate(context.gameId)
+            return GameActionResult.Success()
+        }
+
+        val running = updatedCandidates.filter { it.status == CandidateStatus.RUNNING }
+        if (running.isEmpty()) {
+            // Nobody ran — same fall-through that startSpeech() uses to avoid
+            // a RESULT screen with no winner and no votes.
+            context.game.phase = GamePhase.DAY_DISCUSSION
+            context.game.subPhase = DaySubPhase.RESULT_HIDDEN.name
+            gameRepository.save(context.game)
+            broadcastAfterCommit(
+                context.gameId,
+                DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name),
+            )
+            return GameActionResult.Success()
+        }
+
+        election.subPhase = ElectionSubPhase.SPEECH
+        election.speakingOrder = running.map { it.userId }.shuffled().joinToString(",")
+        election.currentSpeakerIdx = 0
+        sheriffElectionRepository.save(election)
+        broadcastAfterCommit(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name),
+        )
         return GameActionResult.Success()
     }
 

@@ -122,26 +122,26 @@ test('POST /debug/sheriff/phase RESULT — shows result screen', async ({ page }
 
 test('POST /debug/sheriff/candidate RUN — adds a candidate', async ({ page }) => {
   await goToSheriffView(page)
-  // Ensure we're on SIGNUP
   await page.getByRole('button', { name: 'Sign-up' }).click()
   await page.waitForTimeout(70)
+  // SIGNUP UI hides identities (2026-05-11). The visible signal that the
+  // helper added a candidate is the decision-progress counter advancing.
+  const progress = page.getByTestId('sheriff-decision-progress')
+  await expect(progress).toContainText(/5\s*\/\s*8/)
   await page.getByRole('button', { name: '+ Alice' }).click()
-  await page.waitForTimeout(70)
-  await expect(page.getByText('Alice', { exact: true }).first()).toBeVisible()
+  await expect(progress).toContainText(/6\s*\/\s*8/)
 })
 
 test('POST /debug/sheriff/candidate REMOVE — removes a candidate', async ({ page }) => {
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Sign-up' }).click()
   await page.waitForTimeout(70)
-  // Add then remove Alice
+  const progress = page.getByTestId('sheriff-decision-progress')
+  // Add then remove Alice — the counter should bump up then back down.
   await page.getByRole('button', { name: '+ Alice' }).click()
-  await page.waitForTimeout(70)
+  await expect(progress).toContainText(/6\s*\/\s*8/)
   await page.getByRole('button', { name: '− Alice' }).click()
-  await page.waitForTimeout(70)
-  // Candidate list should not show Alice as a running candidate
-  // (she may still appear in other UI elements — just verify no error)
-  await expect(page.locator('.game-wrap')).toBeVisible()
+  await expect(progress).toContainText(/5\s*\/\s*8/)
 })
 
 test('POST /debug/sheriff/exit — exits sheriff to day phase', async ({ page }) => {

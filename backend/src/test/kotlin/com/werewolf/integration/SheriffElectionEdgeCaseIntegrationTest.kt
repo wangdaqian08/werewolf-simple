@@ -161,19 +161,19 @@ class SheriffElectionEdgeCaseIntegrationTest {
         val g4 = players[4]; val g5 = players[5]
         val gameId = startGameAndOpenSheriffElection(players, roomId)
 
-        // SIGNUP: g1, g2, g3 campaign; others pass
+        // SIGNUP: g1, g2, g3 campaign; others pass. Auto-transition fires on
+        // the last decision.
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(sheriffElectionRepository.findByGameId(gameId).orElseThrow().subPhase)
+            .isEqualTo(ElectionSubPhase.SPEECH)
 
-        // SPEECH: host starts, g3 quits during speech
-        assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
+        // SPEECH: g3 quits during speech, then advance to VOTING (handles random order)
         assertThat(action(g3.token, gameId, "SHERIFF_QUIT_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
-
-        // Advance through remaining speeches → VOTING (handles random order)
         advanceSpeechUntilVoting(host.token, gameId)
 
         // g3's vote should be REJECTED (quit during speech → forfeited vote)
@@ -228,16 +228,16 @@ class SheriffElectionEdgeCaseIntegrationTest {
         val g4 = players[4]; val g5 = players[5]
         val gameId = startGameAndOpenSheriffElection(players, roomId)
 
-        // SIGNUP: g1, g2, g3 campaign; others pass
+        // SIGNUP: g1, g2, g3 campaign; others pass. Auto-transition fires on
+        // the last decision → game lands in SPEECH directly.
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
-
-        // SPEECH: host starts
-        assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(sheriffElectionRepository.findByGameId(gameId).orElseThrow().subPhase)
+            .isEqualTo(ElectionSubPhase.SPEECH)
 
         // All three quit during speech
         assertThat(action(g1.token, gameId, "SHERIFF_QUIT_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
@@ -261,16 +261,18 @@ class SheriffElectionEdgeCaseIntegrationTest {
         val g4 = players[4]; val g5 = players[5]
         val gameId = startGameAndOpenSheriffElection(players, roomId)
 
-        // SIGNUP: g1, g2, g3 campaign; others pass
+        // SIGNUP: g1, g2, g3 campaign; others pass. Auto-transition fires on
+        // the last decision.
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(sheriffElectionRepository.findByGameId(gameId).orElseThrow().subPhase)
+            .isEqualTo(ElectionSubPhase.SPEECH)
 
         // SPEECH: advance through all speeches → VOTING
-        assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
         advanceSpeechUntilVoting(host.token, gameId)
 
         // All eligible voters abstain

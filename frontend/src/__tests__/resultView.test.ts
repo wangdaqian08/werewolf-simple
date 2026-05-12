@@ -207,6 +207,46 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(texts[4]).toContain('猎人')
   })
 
+  it('greys out reveal-cards for players who died during the game', async () => {
+    // 2026-05-11 behaviour change: the GAME_OVER reveal grid must indicate
+    // which players were killed during the game. Dead players' cards get a
+    // `reveal-dead` class so they render desaturated/grey.
+    const state: GameState = {
+      gameId: 'g-dead',
+      phase: 'GAME_OVER',
+      dayNumber: 3,
+      winner: 'VILLAGER',
+      players: [
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER', true),
+        makePlayer(2, 'user-2', 'Bob', 'WEREWOLF', false), // killed
+        makePlayer(3, 'user-3', 'Charlie', 'SEER', false), // killed
+        makePlayer(4, 'user-4', 'Dan', 'WEREWOLF', true),
+      ],
+      events: [],
+    }
+    const { wrapper } = await mountResultView(state)
+    const cards = wrapper.findAll('.reveal-card')
+    const deadStates = cards.map((c) => c.classes().includes('reveal-dead'))
+    expect(deadStates).toEqual([false, true, true, false])
+  })
+
+  it('dead WEREWOLF keeps reveal-wolf class so wolf identity stays readable beneath the grey', async () => {
+    // Death is rendered as a grey overlay/desaturation; the role-team colour
+    // underneath is still meaningful (e.g. for "who was on which team").
+    const state: GameState = {
+      gameId: 'g-dead-wolf',
+      phase: 'GAME_OVER',
+      dayNumber: 3,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Wolfie', 'WEREWOLF', false)],
+      events: [],
+    }
+    const { wrapper } = await mountResultView(state)
+    const card = wrapper.find('.reveal-card')
+    expect(card.classes()).toContain('reveal-wolf')
+    expect(card.classes()).toContain('reveal-dead')
+  })
+
   it('Play Again button triggers router push to lobby', async () => {
     const state: GameState = {
       gameId: 'g-7',

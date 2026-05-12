@@ -72,7 +72,6 @@
         @run="handleSheriffRun"
         @pass="handleSheriffPass"
         @withdraw="handleSheriffWithdraw"
-        @start-campaign="handleSheriffStartCampaign"
         @quit="handleSheriffQuit"
         @vote="handleSheriffVote"
         @abstain="handleSheriffAbstain"
@@ -656,9 +655,6 @@ async function handleSheriffPass() {
 }
 async function handleSheriffWithdraw() {
   await action({ actionType: 'SHERIFF_QUIT' })
-}
-async function handleSheriffStartCampaign() {
-  await action({ actionType: 'SHERIFF_START_SPEECH' })
 }
 async function handleSheriffQuit() {
   await action({ actionType: 'SHERIFF_QUIT_CAMPAIGN' })

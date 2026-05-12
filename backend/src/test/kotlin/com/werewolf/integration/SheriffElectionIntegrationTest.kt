@@ -163,16 +163,20 @@ class SheriffElectionIntegrationTest {
         val allPlayers = listOf(host, g1, g2, g3, g4, g5)
         val gameId = startGameAndOpenSheriffElection(host, allPlayers, roomId)
 
-        // SIGNUP: g1 and g2 campaign; others pass
+        // SIGNUP: g1 and g2 campaign; others pass. After the 6th decision lands,
+        // the backend auto-transitions to SPEECH (no host SHERIFF_START_SPEECH
+        // needed — players must not see who joined, so the host has no basis
+        // for an early-start button).
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(sheriffElectionRepository.findByGameId(gameId).orElseThrow().subPhase)
+            .isEqualTo(ElectionSubPhase.SPEECH)
 
         // SPEECH: g2 quits, advance until VOTING (handles random speaking order)
-        assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_QUIT_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         advanceSpeechUntilVoting(host.token, gameId)
 
@@ -209,16 +213,18 @@ class SheriffElectionIntegrationTest {
         val allPlayers = listOf(host, g1, g2, g3, g4, g5)
         val gameId = startGameAndOpenSheriffElection(host, allPlayers, roomId)
 
-        // SIGNUP: g1 and g2 both campaign
+        // SIGNUP: g1 and g2 both campaign. Auto-transition fires once all 6
+        // decide — no SHERIFF_START_SPEECH needed.
         assertThat(action(g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(sheriffElectionRepository.findByGameId(gameId).orElseThrow().subPhase)
+            .isEqualTo(ElectionSubPhase.SPEECH)
 
-        // SPEECH: host starts → 2 candidates → 2 advances to reach VOTING
-        assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
+        // SPEECH: 2 candidates → 2 advances to reach VOTING
         assertThat(action(host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
 
@@ -257,23 +263,23 @@ class SheriffElectionIntegrationTest {
     // ── Test 3: No-candidate shortcut ─────────────────────────────────────────
 
     @Test
-    fun `sheriff election - no candidates, SHERIFF_START_SPEECH returns to day discussion`() {
+    fun `sheriff election - no candidates auto-advances to day discussion`() {
         // Variant B: when no one runs, sheriff election ends immediately and
-        // the game returns to DAY_DISCUSSION/RESULT_REVEALED so the host can
-        // proceed with day voting (we are still on Day 1, NOT moving to N2).
+        // the game returns to DAY_DISCUSSION/RESULT_HIDDEN. With the SIGNUP
+        // auto-transition (2026-05-11), this fires the moment the last player
+        // passes — no host SHERIFF_START_SPEECH is required (or accepted).
         val (host, g1, g2, g3, g4, g5, roomId) = setupSheriffRoom("SE3")
         val allPlayers = listOf(host, g1, g2, g3, g4, g5)
         val gameId = startGameAndOpenSheriffElection(host, allPlayers, roomId)
 
-        // SIGNUP: all players pass — no candidates
+        // SIGNUP: all players pass — no candidates. The 6th pass triggers the
+        // auto-advance.
         assertThat(action(host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g1.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g2.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g3.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g4.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(g5.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
-
-        assertThat(action(host.token, gameId, "SHERIFF_START_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
 
         val savedGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(savedGame.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
