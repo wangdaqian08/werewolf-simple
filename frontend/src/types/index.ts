@@ -144,6 +144,11 @@ export interface GameState {
   sheriff?: string // userId of current sheriff
   hostId?: string // userId of the room host
   hasSheriff?: boolean // whether sheriff election is enabled for this game
+  // Track filename from Room.config.bgmTrack, surfaced on the game state so
+  // useAudioService can start BGM after a mid-game page reload (when
+  // roomStore is empty). Source of truth lives in roomStore for the lobby
+  // flow; mirror here for the game flow.
+  bgmTrack?: string | null
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
   events: GameEvent[]
   roleReveal?: RoleRevealState
