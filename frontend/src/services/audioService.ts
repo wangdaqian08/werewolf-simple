@@ -130,12 +130,7 @@ class AudioService {
       // cue calls play() fresh on a new (or cached + user-unlocked) element;
       // BGM does not, since it's a single long-lived element. Re-issue play()
       // here so the music resumes on unlock without waiting for a manual tap.
-      if (
-        this.bgmAudioEl &&
-        this.bgmFilename &&
-        this.bgmAudioEl.paused &&
-        !this.muted
-      ) {
+      if (this.bgmAudioEl && this.bgmFilename && this.bgmAudioEl.paused && !this.muted) {
         const bgmFilename = this.bgmFilename
         this.bgmAudioEl.play().catch(() => {
           // If the resume itself needs user-activation (no recent gesture),
@@ -522,10 +517,7 @@ class AudioService {
         // a user click. Re-arm bgmPendingStart so the very next gesture
         // (any click / touch / keydown via setupUserInteractionTracking)
         // retries the start. Keeps retrying until one sticks.
-        console.warn(
-          '[AudioService] BGM play() rejected — will retry on next user gesture',
-          err,
-        )
+        console.warn('[AudioService] BGM play() rejected — will retry on next user gesture', err)
         this.bgmPendingStart = () => this.startBgm(filename, displayName)
       })
 

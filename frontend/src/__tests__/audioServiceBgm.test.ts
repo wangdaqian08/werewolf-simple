@@ -352,28 +352,25 @@ describe('audioService BGM defensive recovery (mobile Chrome)', () => {
     // First BGM element's play() rejects with NotAllowedError (the mobile
     // autoplay-policy signature). Subsequent Audio() calls go through the
     // default mock and succeed.
-    ;(Audio as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(
-      function (src?: string) {
-        const inst = createMockAudio(src ?? '')
-        inst.play = vi.fn(() => {
-          // paused stays true (the default) since play() rejected
-          const err: Error & { name?: string } = new Error('autoplay-blocked')
-          err.name = 'NotAllowedError'
-          return Promise.reject(err)
-        })
-        return inst
-      },
-    )
+    ;(Audio as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(function (src?: string) {
+      const inst = createMockAudio(src ?? '')
+      inst.play = vi.fn(() => {
+        // paused stays true (the default) since play() rejected
+        const err: Error & { name?: string } = new Error('autoplay-blocked')
+        err.name = 'NotAllowedError'
+        return Promise.reject(err)
+      })
+      return inst
+    })
 
     audioService.startBgm('suspicion.mp3')
     // Let the rejection promise settle so the catch handler runs.
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(
-      audioService.getBgmState().pendingStart,
-      'rejection should re-arm bgmPendingStart',
-    ).toBe(true)
+    expect(audioService.getBgmState().pendingStart, 'rejection should re-arm bgmPendingStart').toBe(
+      true,
+    )
 
     // Fire a gesture listener (one of the captured click/touchstart/etc).
     // setupUserInteractionTracking consumes pendingStart on every gesture, so
@@ -383,10 +380,9 @@ describe('audioService BGM defensive recovery (mobile Chrome)', () => {
     documentListeners[0]!()
 
     const bgmInstances = mockAudioInstances.filter((a) => a.src.includes('/audio/bgm/'))
-    expect(
-      bgmInstances.length,
-      'retry should create a fresh Audio element',
-    ).toBeGreaterThanOrEqual(2)
+    expect(bgmInstances.length, 'retry should create a fresh Audio element').toBeGreaterThanOrEqual(
+      2,
+    )
     const latest = bgmInstances[bgmInstances.length - 1]!
     expect(latest.paused, 'retry play() should have succeeded').toBe(false)
     expect(audioService.getBgmState().pendingStart).toBe(false)
