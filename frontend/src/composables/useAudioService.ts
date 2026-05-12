@@ -141,10 +141,16 @@ export function useAudioService() {
 
   // (a) Start/stop BGM on NIGHT phase boundary. immediate:true handles
   //     mid-game reconnect where the player rejoins while already in NIGHT.
+  //
+  //     Read the track from gameStore first; fall back to roomStore for the
+  //     pre-game flow when game state isn't loaded yet. roomStore is
+  //     in-memory only and is wiped by a page reload, so mid-game refreshes
+  //     would lose the track without the gameStore fallback (which the
+  //     backend now mirrors from Room.config.bgmTrack in /api/game/{id}/state).
   watch(
     () => gameStore.state?.phase,
     (phase) => {
-      const track = roomStore.room?.config?.bgmTrack
+      const track = gameStore.state?.bgmTrack ?? roomStore.room?.config?.bgmTrack ?? null
       if (phase === 'NIGHT' && track) {
         audioService.startBgm(track)
       } else {

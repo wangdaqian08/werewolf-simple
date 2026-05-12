@@ -4,7 +4,8 @@ import { createPinia, setActivePinia } from 'pinia'
 // Vue watchers need an active effect scope
 import { effectScope, nextTick } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
-import type { AudioSequence, GameState } from '@/types'
+import { useRoomStore } from '@/stores/roomStore'
+import type { AudioSequence, GameState, Room } from '@/types'
 // Must import after mock
 import { useAudioService } from '@/composables/useAudioService'
 
@@ -799,5 +800,76 @@ describe('useAudioService', () => {
     // Assert: exactly this one cue plays — the live post-wake cue.
     expect(mockPlaySequential).toHaveBeenCalledTimes(1)
     expect(mockPlaySequential).toHaveBeenCalledWith(['wolf_howl.mp3'])
+  })
+
+  // ── BGM track source (gameStore primary, roomStore fallback) ────────────
+  //
+  // roomStore is in-memory only and is wiped by a page reload. Without the
+  // gameStore fallback below, a mid-game refresh entering NIGHT would never
+  // call startBgm because roomStore.room is null. The backend now mirrors
+  // Room.config.bgmTrack onto the /api/game/{id}/state response so
+  // gameStore.state.bgmTrack survives the reload.
+  //
+  // Helper: build a minimal Room with a bgmTrack on config.
+  function makeRoom(track: string | null): Room {
+    return {
+      roomId: 'r1',
+      roomCode: 'ABCD',
+      hostId: 'host',
+      status: 'IN_GAME',
+      players: [],
+      config: {
+        totalPlayers: 9,
+        roles: [],
+        bgmTrack: track,
+      },
+    }
+  }
+
+  it('NIGHT phase starts BGM from gameStore.state.bgmTrack (post-reload path)', async () => {
+    const gameStore = useGameStore()
+    // roomStore is empty — simulates a mid-game page reload where the lobby
+    // state never re-hydrated.
+    setupComposable()
+
+    gameStore.setState(makeState({ phase: 'NIGHT', bgmTrack: 'suspicion.mp3' }))
+    await nextTick()
+
+    expect(mockStartBgm).toHaveBeenCalledWith('suspicion.mp3')
+  })
+
+  it('NIGHT phase falls back to roomStore.room.config.bgmTrack when gameStore has no track', async () => {
+    const gameStore = useGameStore()
+    const roomStore = useRoomStore()
+    roomStore.setRoom(makeRoom('心愿便利贴.mp3'))
+    setupComposable()
+
+    gameStore.setState(makeState({ phase: 'NIGHT' })) // no bgmTrack
+    await nextTick()
+
+    expect(mockStartBgm).toHaveBeenCalledWith('心愿便利贴.mp3')
+  })
+
+  it('NIGHT phase with no track in either store does not start BGM', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    gameStore.setState(makeState({ phase: 'NIGHT' })) // no bgmTrack anywhere
+    await nextTick()
+
+    expect(mockStartBgm).not.toHaveBeenCalled()
+  })
+
+  it('gameStore.state.bgmTrack takes precedence over roomStore (the wire is authoritative)', async () => {
+    const gameStore = useGameStore()
+    const roomStore = useRoomStore()
+    roomStore.setRoom(makeRoom('心愿便利贴.mp3'))
+    setupComposable()
+
+    gameStore.setState(makeState({ phase: 'NIGHT', bgmTrack: 'suspicion.mp3' }))
+    await nextTick()
+
+    expect(mockStartBgm).toHaveBeenCalledWith('suspicion.mp3')
+    expect(mockStartBgm).not.toHaveBeenCalledWith('心愿便利贴.mp3')
   })
 })

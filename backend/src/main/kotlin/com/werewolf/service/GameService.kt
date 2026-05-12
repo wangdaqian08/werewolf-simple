@@ -316,6 +316,12 @@ class GameService(
             "dayNumber" to game.dayNumber,
             "sheriffUserId" to game.sheriffUserId,
             "hasSheriff" to room?.hasSheriff,
+            // bgmTrack lives in Room.config (JSONB GameConfig). roomStore on
+            // the frontend is in-memory only, so a mid-game page reload loses
+            // it. Surfacing the track here lets useAudioService recover BGM
+            // after a refresh — the existing per-phase startBgm watcher reads
+            // it from gameStore as a fallback when roomStore is empty.
+            "bgmTrack" to room?.config?.bgmTrack,
             "winner" to game.winner?.name,
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,
