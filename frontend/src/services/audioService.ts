@@ -120,6 +120,29 @@ class AudioService {
         console.warn('[AudioService] Tab resumed with stuck queue — draining without replay')
         this.audioQueue = []
         this.isPlayingQueue = false
+        // The queue drained mid-narration without firing the unduck path in
+        // playNextInQueue's "queue empty" branch. Restore BGM gain so the
+        // music isn't left clamped at BGM_GAIN_DUCKED forever.
+        this.unduckBgm()
+      }
+      // Mobile Chrome / iOS pause the BGM <audio> element implicitly when the
+      // screen locks or the tab backgrounds. Narration recovers because each
+      // cue calls play() fresh on a new (or cached + user-unlocked) element;
+      // BGM does not, since it's a single long-lived element. Re-issue play()
+      // here so the music resumes on unlock without waiting for a manual tap.
+      if (
+        this.bgmAudioEl &&
+        this.bgmFilename &&
+        this.bgmAudioEl.paused &&
+        !this.muted
+      ) {
+        const bgmFilename = this.bgmFilename
+        this.bgmAudioEl.play().catch(() => {
+          // If the resume itself needs user-activation (no recent gesture),
+          // re-arm pendingStart so the next click retries — same recovery
+          // path as the startBgm rejection branch above.
+          this.bgmPendingStart = () => this.startBgm(bgmFilename)
+        })
       }
     })
   }
@@ -158,6 +181,10 @@ class AudioService {
       )
       this.audioQueue = []
       this.isPlayingQueue = false
+      // Note: we deliberately do NOT call unduckBgm() here. The watchdog only
+      // fires from playSequential, which immediately re-enqueues narration
+      // and re-ducks. The visibility-resume drain (in setupUserInteractionTracking)
+      // does call unduckBgm because no new narration is guaranteed to follow.
     }
 
     // Add to queue with options
@@ -489,7 +516,17 @@ class AudioService {
       this.bgmFilename = filename
 
       el.play().catch((err) => {
-        console.warn('[AudioService] BGM play() rejected:', err)
+        // Mobile Chrome rejects autoplay if no user-activation is on the
+        // document at the moment play() is called — which is exactly the
+        // case for BGM, since startBgm fires from a STOMP phase change, not
+        // a user click. Re-arm bgmPendingStart so the very next gesture
+        // (any click / touch / keydown via setupUserInteractionTracking)
+        // retries the start. Keeps retrying until one sticks.
+        console.warn(
+          '[AudioService] BGM play() rejected — will retry on next user gesture',
+          err,
+        )
+        this.bgmPendingStart = () => this.startBgm(filename, displayName)
       })
 
       this.applyMediaSession(displayName ?? filename)

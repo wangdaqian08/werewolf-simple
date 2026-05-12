@@ -100,9 +100,14 @@ vi.stubGlobal(
   'requestAnimationFrame',
   vi.fn((cb: (t: number) => void) => {
     // Run synchronously at "end of tween" so volume settles immediately. The
-    // tween is a self-iterating rAF; passing a large `now` makes t === 1 on
-    // the first call so applyBgmGain settles to target in one frame.
-    cb(1_000_000)
+    // tween is a self-iterating rAF; we want t === 1 on the first call so
+    // applyBgmGain settles to target in one frame and does NOT recurse.
+    //
+    // Using Number.MAX_SAFE_INTEGER (not a 1e6 sentinel) makes the math
+    // resilient when a test also mocks `performance.now()` to a large value
+    // — e.g. the fix #3a watchdog test sets performance.now() to 1e6, which
+    // would otherwise drive startTime == now and t == 0 → infinite recursion.
+    cb(Number.MAX_SAFE_INTEGER)
     return 1
   }),
 )
@@ -313,5 +318,118 @@ describe('audioService BGM lifecycle (real implementation)', () => {
     narration!.onended?.()
 
     expect(bgm.volume).toBeCloseTo(highVol, 5)
+  })
+})
+
+// ── Defensive recovery for mobile-Chrome BGM failure modes ──────────────────
+//
+// Mobile Chrome rejects HTMLAudioElement.play() that isn't directly inside a
+// user-activation event. BGM is started from a STOMP phase change (no gesture
+// context), so the first attempt typically rejects. The original code
+// swallowed that rejection. These tests pin the recovery contract:
+//   #1 a rejected play() re-arms bgmPendingStart so the next gesture retries
+//   #2 a paused BGM resumes on visibilitychange→visible (lock-screen recovery)
+//   #3 the stuck-queue watchdog and the visibility-resume drain both call
+//      unduckBgm so BGM is not left clamped at BGM_GAIN_DUCKED forever
+describe('audioService BGM defensive recovery (mobile Chrome)', () => {
+  beforeEach(async () => {
+    localStorage.clear()
+    await reloadService()
+  })
+
+  function getBgmInstance(): MockAudio | undefined {
+    return mockAudioInstances.find((a) => a.src.includes('/audio/bgm/'))
+  }
+
+  function unlockUserGesture(): void {
+    audioService.toggleMute()
+    audioService.toggleMute()
+  }
+
+  it('fix #1: BGM play() rejection re-arms bgmPendingStart for the next gesture', async () => {
+    unlockUserGesture()
+
+    // First BGM element's play() rejects with NotAllowedError (the mobile
+    // autoplay-policy signature). Subsequent Audio() calls go through the
+    // default mock and succeed.
+    ;(Audio as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      function (src?: string) {
+        const inst = createMockAudio(src ?? '')
+        inst.play = vi.fn(() => {
+          // paused stays true (the default) since play() rejected
+          const err: Error & { name?: string } = new Error('autoplay-blocked')
+          err.name = 'NotAllowedError'
+          return Promise.reject(err)
+        })
+        return inst
+      },
+    )
+
+    audioService.startBgm('suspicion.mp3')
+    // Let the rejection promise settle so the catch handler runs.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(
+      audioService.getBgmState().pendingStart,
+      'rejection should re-arm bgmPendingStart',
+    ).toBe(true)
+
+    // Fire a gesture listener (one of the captured click/touchstart/etc).
+    // setupUserInteractionTracking consumes pendingStart on every gesture, so
+    // this should re-invoke startBgm with the same filename. The default mock
+    // is back in play() so the retry succeeds.
+    expect(documentListeners.length).toBeGreaterThan(0)
+    documentListeners[0]!()
+
+    const bgmInstances = mockAudioInstances.filter((a) => a.src.includes('/audio/bgm/'))
+    expect(
+      bgmInstances.length,
+      'retry should create a fresh Audio element',
+    ).toBeGreaterThanOrEqual(2)
+    const latest = bgmInstances[bgmInstances.length - 1]!
+    expect(latest.paused, 'retry play() should have succeeded').toBe(false)
+    expect(audioService.getBgmState().pendingStart).toBe(false)
+  })
+
+  it('fix #2: visibilitychange→visible resumes a paused BGM element', () => {
+    unlockUserGesture()
+    audioService.startBgm('suspicion.mp3')
+    const bgm = getBgmInstance()!
+    expect(bgm.paused).toBe(false)
+
+    // Simulate mobile lock-screen: the element pauses implicitly.
+    bgm.paused = true
+    bgm.play.mockClear()
+
+    // visibilitychange handler reads document.visibilityState; set it on the
+    // stubbed document and fire the handler. It's the last listener captured
+    // (registered after the 5 gesture handlers in setupUserInteractionTracking).
+    ;(document as unknown as { visibilityState: string }).visibilityState = 'visible'
+    expect(documentListeners.length).toBeGreaterThanOrEqual(6)
+    documentListeners[documentListeners.length - 1]!()
+
+    expect(bgm.play, 'visibility-resume must re-issue play() on the BGM element').toHaveBeenCalled()
+  })
+
+  it('fix #3: visibility-resume drain unducks BGM when narration was mid-stream', () => {
+    unlockUserGesture()
+    audioService.startBgm('suspicion.mp3')
+    audioService.setBgmLevel('HIGH')
+    const bgm = getBgmInstance()!
+    const highVol = bgm.volume
+
+    // Kick off narration → BGM ducks; queue is now "playing".
+    audioService.playSequential(['wolf_open_eyes.mp3'])
+    expect(bgm.volume).toBeLessThan(highVol)
+
+    // Tab goes hidden then comes back visible while narration was still in-flight.
+    ;(document as unknown as { visibilityState: string }).visibilityState = 'visible'
+    documentListeners[documentListeners.length - 1]!()
+
+    expect(
+      bgm.volume,
+      'visibility drain must unduck BGM, restoring it to the HIGH target',
+    ).toBeCloseTo(highVol, 5)
   })
 })
