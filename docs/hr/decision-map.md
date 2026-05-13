@@ -52,21 +52,57 @@ flowchart TD
 
 ---
 
-## Cost-efficiency ladder — cheapest leverage first
+## TODAY in detail — the two anchor actions
 
-| # | Move | Your cost | Your effort | Leverage gained |
-|---|---|---|---|---|
-| 1 | Handwritten notes + HR confirmation email | $0 | 1 hour | ⭐⭐⭐⭐⭐ |
-| 2 | Get Kevin onside | $0 | 1 meeting | ⭐⭐⭐⭐⭐ |
-| 3 | Fair Work Ombudsman chat | $0 | 30 min | ⭐⭐ (info only) |
-| 4 | Free employment lawyer consult | $0 | 30 min | ⭐⭐⭐⭐ |
-| 5 | Join Finance Sector Union | $20/wk | 10 min | ⭐⭐⭐ |
-| 6 | Escalate to MD (with Kevin) | $0 | 1 meeting | ⭐⭐⭐⭐ |
-| 7 | Anonymous SafeWork NSW tip | $0 | 15 min | ⭐⭐⭐ (deterrent, not personal win) |
-| 8 | File FWC general protections (no dismissal) | $0 file, ~$5k legal | High | ⭐⭐ — tips your hand, median payout $4-6k |
-| 9 | Federal Court adverse action case | $30k–$100k | 1–3 years | ⭐ — only worth it if dismissed |
+These two tasks are the ones that quietly build your file. They cost an hour total and determine the strength of every later step.
 
-**Stop at the lowest step that resolves the problem.** Each step preserves the next as leverage — don't skip ahead.
+### 1. Handwritten contemporaneous notes
+
+**Why:** Courts and the Fair Work Commission give significant weight to **contemporaneous notes** — notes written at the time, or as soon as practical afterwards. They are admissible evidence and treated as more reliable than later recollection. Typed notes on a work device are weak (employer-controlled, no clear timestamp). Handwritten notes on paper are strong, and they work around the CFO's no-laptop rule.
+
+**How (do this today, before memory fades):**
+
+1. Take a notebook (or any blank paper).
+2. For each meeting (yesterday's CFO meeting, today's HR meeting), write on a fresh page:
+   - **Date and time** the meeting started and ended
+   - **Location** (room, Teams, phone)
+   - **Attendees** by name and role
+   - **Exact quotes in quotation marks** for anything significant — e.g. *"you're paid high"*, *"prove your value"*, *"I've reviewed your contracts"*, *"the contract says you have to do overtime"*, *"no laptops in finance meetings"*
+   - Your own questions and the responses (or non-responses)
+   - Anything physical: who walked out, who raised their voice, who interrupted
+3. **Sign and date each page** at the bottom — *"[Your name], [date], [time written]"*.
+4. **Photograph each page** with your phone. Upload to **personal cloud** (iCloud / personal Gmail Drive), not OneDrive or anything company-issued.
+5. Keep the originals at home, not at the office.
+
+**Rule:** Facts only — what was said, what was done. **No adjectives, no speculation about motive.** *"He stated that…"* not *"He aggressively…"*. The professionalism of the notes is part of what makes them credible later.
+
+### 2. HR follow-up email — same day
+
+**Why:** A verbal HR meeting leaves no record and can be reinterpreted by either side later. A short factual confirmation email converts the meeting into written evidence, locks in HR's stated position, and forces them to correct you in writing if your understanding is wrong (either way you win — silence means tacit agreement, correction means you have their written version too). Sending it within 24 hours is what makes it "contemporaneous".
+
+**Template — adapt and send today:**
+
+> **To:** [HR partner]
+> **Subject:** Confirming our discussion today
+>
+> Hi [HR partner first name],
+>
+> Thank you for meeting with me today. To make sure I've understood correctly, I'd like to confirm in writing what we discussed:
+>
+> 1. I raised the events of 24 April – 8 May and the discussion with the CFO yesterday regarding my salary, my contract, and after-hours contact.
+> 2. You advised / your position was that [summarise exactly what HR said — verbatim if possible].
+> 3. We agreed the next steps would be [list].
+> 4. You confirmed that [any policy clarifications HR gave you].
+>
+> If any of the above is inaccurate, please let me know in writing so I can correct my record. Otherwise, I'd appreciate written acknowledgement and an indication of expected timing for the next steps.
+>
+> Kind regards,
+> [Your name]
+
+**Don't:**
+- Don't editorialise. Don't say *"I was upset"* or *"HR didn't take it seriously"*. Just record.
+- Don't escalate in this email (no MD, no legal references). It's a confirmation, not a position.
+- Don't BCC anyone. If you want a personal record, forward to a personal email **after** sending — never BCC personal accounts on the original (some companies treat that as data exfiltration).
 
 ---
 
