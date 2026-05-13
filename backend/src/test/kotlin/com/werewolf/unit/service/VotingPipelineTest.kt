@@ -223,7 +223,10 @@ class VotingPipelineTest {
     }
 
     @Test
-    fun `handleHunterShoot - hunter shoots sheriff, transitions to BADGE_HANDOVER`() {
+    fun `handleHunterShoot - hunter shoots sheriff, transitions to BADGE_HANDOVER and defers the kill`() {
+        // 国标 rule: the dying sheriff performs the badge handover BEFORE
+        // being marked dead. handleBadge commits the deferred kill once the
+        // heir is chosen (see BADGE_PASS / BADGE_DESTROY tests below).
         val hunter = player(hostId, 0, PlayerRole.HUNTER)
         val sheriff = player("u2", 2).also { it.sheriff = true }
         val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = "u2"), hunter, sheriff)
@@ -237,7 +240,131 @@ class VotingPipelineTest {
         val captor = argumentCaptor<Game>()
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+        // Deferred kill: sheriff must still be alive at the end of HUNTER_SHOOT.
+        assertThat(sheriff.alive)
+            .withFailMessage("sheriff must stay alive during BADGE_HANDOVER; kill is deferred to BADGE_PASS/DESTROY")
+            .isTrue()
+        verify(gamePlayerRepository, never()).save(sheriff)
+        // PlayerEliminated must NOT be broadcast yet — only HunterShot + PhaseChanged.
+        val eventCaptor = argumentCaptor<com.werewolf.game.DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), eventCaptor.capture())
+        assertThat(eventCaptor.allValues).noneMatch {
+            it is com.werewolf.game.DomainEvent.PlayerEliminated && it.userId == "u2"
+        }
         verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+    }
+
+    @Test
+    fun `handleBadge BADGE_PASS - commits deferred hunter-shot kill on the dying sheriff`() {
+        val dyingSheriff = player("u2", 2).also { it.sheriff = true; it.alive = true } // deferred from HUNTER_SHOOT
+        val heir = player("u3", 3)
+        val context = ctx(
+            game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = "u2"),
+            dyingSheriff, heir,
+        )
+
+        // The discriminator for "commit deferred kill" is the elimination
+        // history's hunterShotUserId, which HUNTER_SHOOT wrote before
+        // transitioning to BADGE_HANDOVER.
+        val history = EliminationHistory(gameId = gameId, dayNumber = 1).also {
+            it.hunterShotUserId = "u2"
+            it.hunterShotRole = PlayerRole.VILLAGER
+        }
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1))
+            .thenReturn(Optional.of(history))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u3")).thenReturn(Optional.of(heir))
+        stubLoader(heir) // post-elimination roster (sheriff dead, heir alive)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        // Kill committed AFTER the heir is chosen.
+        assertThat(dyingSheriff.alive)
+            .withFailMessage("BADGE_PASS must commit the deferred kill on the dying sheriff")
+            .isFalse()
+        assertThat(dyingSheriff.sheriff).isFalse()
+        assertThat(heir.sheriff).isTrue()
+
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.allValues).anyMatch {
+            it.sheriffUserId == "u3" && it.subPhase == VotingSubPhase.VOTE_RESULT.name
+        }
+        // PlayerEliminated must now be broadcast for the sheriff.
+        val eventCaptor = argumentCaptor<com.werewolf.game.DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), eventCaptor.capture())
+        assertThat(eventCaptor.allValues).anyMatch {
+            it is com.werewolf.game.DomainEvent.PlayerEliminated && it.userId == "u2"
+        }
+    }
+
+    @Test
+    fun `handleBadge BADGE_DESTROY - commits deferred hunter-shot kill on the dying sheriff`() {
+        val dyingSheriff = player("u2", 2).also { it.sheriff = true; it.alive = true }
+        val context = ctx(
+            game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = "u2"),
+            dyingSheriff,
+        )
+
+        val history = EliminationHistory(gameId = gameId, dayNumber = 1).also {
+            it.hunterShotUserId = "u2"
+            it.hunterShotRole = PlayerRole.VILLAGER
+        }
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1))
+            .thenReturn(Optional.of(history))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
+        stubLoader()
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_DESTROY), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(dyingSheriff.alive)
+            .withFailMessage("BADGE_DESTROY must also commit the deferred kill")
+            .isFalse()
+        assertThat(dyingSheriff.sheriff).isFalse()
+
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.allValues).anyMatch {
+            it.sheriffUserId == null && it.subPhase == VotingSubPhase.VOTE_RESULT.name
+        }
+        val eventCaptor = argumentCaptor<com.werewolf.game.DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), eventCaptor.capture())
+        assertThat(eventCaptor.allValues).anyMatch {
+            it is com.werewolf.game.DomainEvent.PlayerEliminated && it.userId == "u2"
+        }
+    }
+
+    @Test
+    fun `handleBadge BADGE_PASS - vote-out path (actor already dead) does NOT re-broadcast PlayerEliminated`() {
+        // Voted-out sheriff path: the sheriff was killed during revealTally's
+        // applyElimination, so alive=false BEFORE BADGE_HANDOVER. handleBadge
+        // must not fire a second PlayerEliminated event for them.
+        val deadSheriff = player("u2", 2, alive = false).also { it.sheriff = true }
+        val heir = player("u3", 3)
+        val context = ctx(
+            game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = "u2"),
+            deadSheriff, heir,
+        )
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(deadSheriff))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u3")).thenReturn(Optional.of(heir))
+        stubLoader(heir)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
+
+        val eventCaptor = argumentCaptor<com.werewolf.game.DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), eventCaptor.capture())
+        assertThat(eventCaptor.allValues).noneMatch {
+            it is com.werewolf.game.DomainEvent.PlayerEliminated && it.userId == "u2"
+        }
     }
 
     @Test

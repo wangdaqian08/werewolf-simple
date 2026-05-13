@@ -141,7 +141,11 @@ export interface GameState {
   dayNumber: number
   players: GamePlayer[]
   myRole?: PlayerRole
-  sheriff?: string // userId of current sheriff
+  // The backend response key is `sheriffUserId` (see GameService.getGameState).
+  // The legacy `sheriff` field below was declared but never populated by the
+  // wire — keep both in sync; `sheriffUserId` is the source of truth.
+  sheriffUserId?: string | null
+  sheriff?: string // legacy alias — DO NOT use; will be removed
   hostId?: string // userId of the room host
   hasSheriff?: boolean // whether sheriff election is enabled for this game
   // Track filename from Room.config.bgmTrack, surfaced on the game state so

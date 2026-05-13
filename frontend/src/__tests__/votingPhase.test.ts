@@ -97,7 +97,8 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         gameId: 1,
         votingPhase,
         players,
-        myUserId: sheriffUserId, // Current user is the eliminated sheriff
+        myUserId: sheriffUserId, // Current user is the dying sheriff
+        currentSheriffUserId: sheriffUserId,
         isHost: false,
       },
     })
@@ -125,7 +126,8 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         gameId: 1,
         votingPhase,
         players,
-        myUserId: otherPlayerId, // Current user is NOT the eliminated sheriff
+        myUserId: otherPlayerId, // Current user is NOT the dying sheriff
+        currentSheriffUserId: sheriffUserId,
         isHost: false,
       },
     })
@@ -156,7 +158,8 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         gameId: 1,
         votingPhase,
         players,
-        myUserId: hostId, // Current user is the host but NOT the eliminated sheriff
+        myUserId: hostId, // Current user is the host but NOT the dying sheriff
+        currentSheriffUserId: sheriffUserId,
         isHost: true,
       },
     })
@@ -173,66 +176,15 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     expect(wrapper.html()).toContain('等待警长移交警徽')
   })
 
-  it('shows badge passed message after badge is handed over', async () => {
-    const sheriffUserId = 'sheriff-1'
-    const newSheriffUserId = 'player-2'
-    const votingPhase = createVotingPhase('BADGE_HANDOVER', sheriffUserId)
-    const players = [
-      {
-        userId: sheriffUserId,
-        nickname: 'Sheriff',
-        avatar: '⭐',
-        seatIndex: 1,
-        role: 'VILLAGER' as const,
-        isAlive: false,
-        isSheriff: false, // Badge has been handed over
-        canVote: true,
-        idiotRevealed: false,
-      },
-      {
-        userId: newSheriffUserId,
-        nickname: 'NewSheriff',
-        avatar: '😊',
-        seatIndex: 2,
-        role: 'VILLAGER' as const,
-        isAlive: true,
-        isSheriff: true, // New sheriff
-        canVote: true,
-        idiotRevealed: false,
-      },
-      {
-        userId: 'player-3',
-        nickname: 'Player3',
-        avatar: '😊',
-        seatIndex: 3,
-        role: 'VILLAGER' as const,
-        isAlive: true,
-        isSheriff: false,
-        canVote: true,
-        idiotRevealed: false,
-      },
-    ]
-
-    const wrapper = mount(VotingPhase, {
-      global: {
-        plugins: [pinia, router],
-      },
-      props: {
-        gameId: 1,
-        votingPhase,
-        players,
-        myUserId: 'player-3',
-        isHost: false,
-      },
-    })
-
-    await wrapper.vm.$nextTick()
-
-    // Check that badge passed message is visible
-    expect(wrapper.html()).toContain('警徽已移交给 NewSheriff')
-    expect(wrapper.html()).not.toContain('移交警徽')
-    expect(wrapper.html()).not.toContain('销毁')
-  })
+  // Removed: "shows badge passed message after badge is handed over".
+  // The previous test set subPhase=BADGE_HANDOVER while the player flags
+  // already reflected a completed pass — a state the backend never actually
+  // emits. handleBadge atomically updates both player.sheriff flags AND
+  // sub-phase=VOTE_RESULT in the same transaction, and `broadcastGameAfterCommit`
+  // defers STOMP fan-out until the commit lands, so by the time any client
+  // observes the new flags subPhase is already VOTE_RESULT (covered by the
+  // "host can continue to night after badge is handed over (VOTE_RESULT phase)"
+  // test below).
 
   it('shows badge destroyed message when badge is destroyed', async () => {
     const sheriffUserId = 'sheriff-1'
@@ -271,6 +223,8 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         votingPhase,
         players,
         myUserId: 'player-2',
+        // After destroy, backend cleared game.sheriffUserId.
+        currentSheriffUserId: null,
         isHost: false,
       },
     })
@@ -303,6 +257,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         votingPhase,
         players,
         myUserId: aliveOtherId,
+        currentSheriffUserId: sheriffUserId,
         isHost: false,
       },
     })
@@ -327,6 +282,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         votingPhase,
         players,
         myUserId: hostId,
+        currentSheriffUserId: sheriffUserId,
         isHost: true,
       },
     })
@@ -348,6 +304,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         votingPhase,
         players,
         myUserId: sheriffUserId,
+        currentSheriffUserId: sheriffUserId,
         isHost: false,
       },
     })
@@ -358,67 +315,77 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     expect(wrapper.html()).toContain('选择警徽继承人')
   })
 
-  it('host can continue to night when eliminated player is not sheriff', async () => {
-    // Bug fix: when a non-sheriff player is eliminated, badgeDone should be true
-    // so the host can continue to night
-    const sheriffUserId = 'sheriff-1'
-    const eliminatedNonSheriffId = 'player-2'
-    const votingPhase = createVotingPhase('BADGE_HANDOVER', eliminatedNonSheriffId, false) // eliminatedPlayerId is not sheriff
+  it('hunter shoots sheriff: the dying sheriff (not the voted-out hunter) sees the pass-badge UI', async () => {
+    // 2026-05-12 bug repro (game 23 in production): hunter was voted out and
+    // shot the sheriff. Frontend previously gated `isEliminatedSheriff` on
+    // `eliminatedPlayerId === myUserId`, which is the *hunter's* id in this
+    // path — so the sheriff (the actual badge-holder who must pass) never saw
+    // the pass-badge button and the host was offered the Night button
+    // prematurely. backend then rejected VOTING_CONTINUE with
+    // "Not in VOTE_RESULT sub-phase".
+    const hunterUserId = 'hunter-1' // voted out → eliminatedPlayerId
+    const sheriffUserId = 'sheriff-1' // shot by hunter → currentSheriffUserId
+    const votingPhase = createVotingPhase('BADGE_HANDOVER', hunterUserId)
     const players = [
+      {
+        userId: hunterUserId,
+        nickname: 'Hunter',
+        avatar: '🏹',
+        seatIndex: 1,
+        role: 'HUNTER' as const,
+        isAlive: false,
+        isSheriff: false,
+        canVote: true,
+        idiotRevealed: false,
+      },
       {
         userId: sheriffUserId,
         nickname: 'Sheriff',
         avatar: '⭐',
-        seatIndex: 1,
+        seatIndex: 2,
         role: 'VILLAGER' as const,
+        // Deferred-kill: still alive during BADGE_HANDOVER per the 国标 cadence
+        // the backend now implements.
         isAlive: true,
         isSheriff: true,
         canVote: true,
         idiotRevealed: false,
       },
-      {
-        userId: eliminatedNonSheriffId,
-        nickname: 'Eliminated',
-        avatar: '😊',
-        seatIndex: 2,
-        role: 'VILLAGER' as const,
-        isAlive: false,
-        isSheriff: false, // Eliminated player is NOT sheriff
-        canVote: true,
-        idiotRevealed: false,
-      },
-      {
-        userId: 'player-3',
-        nickname: 'Player3',
-        avatar: '😊',
-        seatIndex: 3,
-        role: 'VILLAGER' as const,
-        isAlive: true,
-        isSheriff: false,
-        canVote: true,
-        idiotRevealed: false,
-      },
     ]
 
-    const wrapper = mount(VotingPhase, {
-      global: {
-        plugins: [pinia, router],
-      },
+    // Mount as the dying sheriff: they must see Pass + Destroy buttons.
+    const sheriffWrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
       props: {
         gameId: 1,
         votingPhase,
         players,
-        myUserId: 'player-3',
-        isHost: true, // Current user is host
+        myUserId: sheriffUserId,
+        currentSheriffUserId: sheriffUserId,
+        isHost: false,
       },
     })
+    await sheriffWrapper.vm.$nextTick()
+    const sheriffButtons = sheriffWrapper.findAll('button').map((b) => b.text())
+    expect(sheriffButtons).toContain('移交警徽 / Pass Badge')
+    expect(sheriffButtons).toContain('销毁')
 
-    await wrapper.vm.$nextTick()
-
-    // Check that host can see the continue button
-    const buttons = wrapper.findAll('button')
-    const buttonLabels = buttons.map((btn) => btn.text())
-    expect(buttonLabels).toContain('→ 进入夜晚 / Night')
+    // And the host must NOT yet see "Night" — badge handover blocks it.
+    const hostWrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        gameId: 1,
+        votingPhase,
+        players,
+        myUserId: 'host-x',
+        currentSheriffUserId: sheriffUserId,
+        isHost: true,
+      },
+    })
+    await hostWrapper.vm.$nextTick()
+    const hostButtons = hostWrapper.findAll('button').map((b) => b.text())
+    expect(hostButtons).not.toContain('→ 进入夜晚 / Night')
+    expect(hostWrapper.html()).toContain('等待警长移交警徽')
   })
 
   it('host can continue to night after badge is handed over (VOTE_RESULT phase)', async () => {

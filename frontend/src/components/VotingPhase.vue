@@ -584,6 +584,12 @@ const props = defineProps<{
   myUserId: string
   isHost: boolean
   myRole?: PlayerRole
+  // userId of the game's current sheriff (null after BADGE_DESTROY).
+  // Drives badge-handover UI: the dying sheriff to pass is whoever holds
+  // the badge right now — could be the voted-out player, the hunter-shot
+  // sheriff, or a revealed-idiot sheriff. `eliminatedPlayerId` only
+  // identifies the voted-out player and gets the hunter-shot case wrong.
+  currentSheriffUserId?: string | null
   voteHistory?: VoteRoundHistory[]
   actionPending?: boolean
 }>()
@@ -633,21 +639,26 @@ const isRevealed = computed(
 // )
 
 // Badge screen: post-action states
+//
+// We tie this to the backend's authoritative `subPhase`, NOT to player flag
+// inspection (the previous approach guessed by looking at who's still flagged
+// `isSheriff`, which got the hunter-shot-sheriff case wrong — the eliminated
+// player there is the hunter, not the sheriff). The backend transitions
+// BADGE_HANDOVER → VOTE_RESULT atomically with the player-flag updates and
+// then `isBadgeScreen` flips false, so any UI inside the badge screen runs
+// only while we're genuinely waiting for the dying sheriff to act.
 const badgeDone = computed(() => {
   if (props.votingPhase.badgeDestroyed) return true
-  // Check if eliminated player is a sheriff
-  const eliminatedSheriff = props.players.find(
-    (p) => p.userId === props.votingPhase.eliminatedPlayerId && p.isSheriff,
-  )
-  // If eliminated player is not a sheriff, no badge handover is needed
-  if (!eliminatedSheriff) return true
-  // Sheriff has handed over the badge (isSheriff is now false)
-  return !eliminatedSheriff.isSheriff
+  return props.votingPhase.subPhase !== 'BADGE_HANDOVER'
 })
 
-// Check if current player is the eliminated sheriff (only they can pass the badge)
+// Check if current player is the dying sheriff (only they can pass the badge).
+// Previously this was `votingPhase.eliminatedPlayerId === myUserId` — wrong
+// when the hunter is voted out and shoots a different player who happens to be
+// the sheriff: the eliminated player is the hunter, but the sheriff (the
+// shot victim) is the one who must hand over the badge.
 const isEliminatedSheriff = computed(() => {
-  return props.votingPhase.eliminatedPlayerId === props.myUserId
+  return props.currentSheriffUserId === props.myUserId
 })
 
 // Get new sheriff info (alive player with isSheriff=true in BADGE_HANDOVER)
