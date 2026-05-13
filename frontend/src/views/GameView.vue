@@ -68,6 +68,10 @@
         :election="gameStore.state.sheriffElection"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :my-role="gameStore.state?.myRole"
+        :is-alive="
+          gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
+        "
         :action-pending="actionPending"
         @run="handleSheriffRun"
         @pass="handleSheriffPass"
@@ -79,6 +83,7 @@
         @reveal-result="handleSheriffRevealResult"
         @end-result="handleSheriffEndResult"
         @appoint="handleSheriffAppoint"
+        @self-destruct="handleSelfDestruct"
       />
     </template>
 
@@ -111,6 +116,9 @@
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
         :my-role="gameStore.state?.myRole"
+        :is-alive="
+          gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
+        "
         :current-sheriff-user-id="gameStore.state?.sheriffUserId ?? null"
         :vote-history="gameStore.state?.voteHistory"
         :action-pending="actionPending"
@@ -124,6 +132,7 @@
         @hunter-pass="handleHunterPass"
         @pass-badge="handlePassBadge"
         @destroy-badge="handleDestroyBadge"
+        @self-destruct="handleSelfDestruct"
       />
     </template>
 
@@ -136,12 +145,19 @@
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :my-role="gameStore.state?.myRole"
+        :is-alive="
+          gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
+        "
+        :day-skip-voting="gameStore.state?.daySkipVoting ?? false"
         :action-pending="actionPending"
         @reveal-result="handleRevealResult"
         @start-vote="handleStartVote"
         @vote="handleDayVote"
         @skip="handleDaySkip"
         @select-player="handleDaySelectPlayer"
+        @self-destruct="handleSelfDestruct"
+        @continue-to-night="handleVotingContinue"
       />
     </template>
 
@@ -854,6 +870,9 @@ async function handlePassBadge(userId: string) {
 }
 async function handleDestroyBadge() {
   await action({ actionType: 'BADGE_DESTROY' })
+}
+async function handleSelfDestruct() {
+  await action({ actionType: 'WOLF_SELF_DESTRUCT' })
 }
 
 async function debugVoting(scenario: string) {

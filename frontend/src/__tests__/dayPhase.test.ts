@@ -116,3 +116,35 @@ describe('DayPhase — observability testids (action-observability sentinel)', (
     expect(wrapper.find('[data-testid="day-banner-kill"]').exists()).toBe(false)
   })
 })
+
+describe('DayPhase — daySkipVoting host footer', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const hostProps = { ...BASE_PROPS, isHost: true }
+
+  it('RESULT_REVEALED + daySkipVoting=false → host sees "开始投票" button', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...hostProps, dayPhase: makeDay('RESULT_REVEALED'), daySkipVoting: false },
+    })
+    expect(wrapper.find('[data-testid="day-start-vote"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-enter-night"]').exists()).toBe(false)
+  })
+
+  it('RESULT_REVEALED + daySkipVoting=true → host sees "进入夜晚" button, not "开始投票"', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...hostProps, dayPhase: makeDay('RESULT_REVEALED'), daySkipVoting: true },
+    })
+    expect(wrapper.find('[data-testid="day-enter-night"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-start-vote"]').exists()).toBe(false)
+  })
+
+  it('RESULT_REVEALED + daySkipVoting=true → clicking "进入夜晚" emits continueToNight', async () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...hostProps, dayPhase: makeDay('RESULT_REVEALED'), daySkipVoting: true },
+    })
+    await wrapper.find('[data-testid="day-enter-night"]').trigger('click')
+    expect(wrapper.emitted('continueToNight')).toBeTruthy()
+  })
+})

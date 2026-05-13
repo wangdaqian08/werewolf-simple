@@ -7,6 +7,15 @@
       <div v-if="election.subPhase === 'RESULT'" class="timer-result">Result</div>
     </div>
 
+    <!-- Action menu (wolf self-destruct) -->
+    <ActionMenu
+      phase="SHERIFF_ELECTION"
+      :sub-phase="election.subPhase"
+      :my-role="myRole"
+      :is-alive="isAlive ?? false"
+      @self-destruct="emit('self-destruct')"
+    />
+
     <!-- ── SIGNUP ── -->
     <!--
       Identities are deliberately hidden during SIGNUP: who joined the campaign
@@ -573,12 +582,15 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import Avatar from '@/components/Avatar.vue'
-import type { SheriffCandidate, SheriffElectionState } from '@/types'
+import ActionMenu from '@/components/ActionMenu.vue'
+import type { PlayerRole, SheriffCandidate, SheriffElectionState } from '@/types'
 
 const props = defineProps<{
   election: SheriffElectionState
   myUserId: string
   isHost: boolean
+  myRole?: PlayerRole
+  isAlive?: boolean
   actionPending?: boolean
 }>()
 
@@ -593,6 +605,7 @@ const emit = defineEmits<{
   revealResult: []
   endResult: []
   appoint: [userId: string]
+  'self-destruct': []
 }>()
 
 const iAmCandidate = computed(() =>

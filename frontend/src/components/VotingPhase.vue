@@ -23,11 +23,23 @@
 
       <!-- Role + history row -->
       <div v-if="myRole || voteHistory?.length" class="role-history-row">
-        <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
-          🔒 身份 · Tap to reveal
-        </button>
-        <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
-          📋 历史
+        <!-- Left column: my-role-chip + ActionMenu stacked -->
+        <div class="role-action-col">
+          <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
+            🔒 身份 · Tap to reveal
+          </button>
+          <ActionMenu
+            phase="DAY_VOTING"
+            :sub-phase="votingPhase.subPhase"
+            :my-role="myRole"
+            :is-alive="isAlive ?? false"
+            @self-destruct="emit('self-destruct')"
+          />
+        </div>
+        <!-- Right: relocated log-fab -->
+        <button class="log-fab" aria-label="游戏记录" data-testid="log-fab" @click="showLog = true">
+          <span class="log-fab-icon" aria-hidden="true">📋</span>
+          <span class="log-fab-label">游戏记录</span>
         </button>
       </div>
 
@@ -561,9 +573,6 @@
       </footer>
     </template>
 
-    <!-- Floating action log button: full game record across all days -->
-    <button class="log-fab" aria-label="游戏记录" @click="showLog = true">📋</button>
-
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
   </div>
@@ -576,6 +585,7 @@ import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 import Avatar from '@/components/Avatar.vue'
+import ActionMenu from '@/components/ActionMenu.vue'
 
 const props = defineProps<{
   gameId: number
@@ -584,6 +594,7 @@ const props = defineProps<{
   myUserId: string
   isHost: boolean
   myRole?: PlayerRole
+  isAlive?: boolean
   // userId of the game's current sheriff (null after BADGE_DESTROY).
   // Drives badge-handover UI: the dying sheriff to pass is whoever holds
   // the badge right now — could be the voted-out player, the hunter-shot
@@ -605,6 +616,7 @@ const emit = defineEmits<{
   hunterPass: []
   passBadge: [userId: string]
   destroyBadge: []
+  'self-destruct': []
 }>()
 
 // ── Screen grouping ───────────────────────────────────────────────────────────
@@ -1299,23 +1311,37 @@ function onBadgeTap(player: GamePlayer) {
   font-weight: 600;
 }
 
-/* Floating action log FAB — mirrors DayPhase.log-fab so the game record stays
-   reachable across the entire daytime, not just DAY_DISCUSSION. */
+/* Floating action log pill — top-right, pill shape with label.
+   Placed inside role-history-row on the right side. */
 .log-fab {
-  position: fixed;
-  bottom: 88px;
-  right: 16px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  width: auto;
+  border-radius: 999px;
   background: var(--paper, #f5f0e8);
   border: 1px solid var(--border, #ccc2b0);
-  font-size: 20px;
+  font-size: 14px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 100;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  margin-left: auto;
+}
+.log-fab-icon {
+  font-size: 16px;
+}
+.log-fab-label {
+  font-size: 13px;
+  color: var(--text, #1a140c);
+  font-weight: 500;
+}
+
+/* Left column: my-role-chip + ActionMenu */
+.role-action-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 </style>
