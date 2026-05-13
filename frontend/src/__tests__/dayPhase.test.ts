@@ -148,3 +148,57 @@ describe('DayPhase — daySkipVoting host footer', () => {
     expect(wrapper.emitted('continueToNight')).toBeTruthy()
   })
 })
+
+describe('DayPhase — below-arch layout (my-role-chip left, log-fab + ActionMenu right-stack)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  // Layout regression: a previous iteration stacked the Action chip BELOW my-role-chip on
+  // the left. The intended layout is my-role-chip on the left at its original spot, and
+  // log-fab + ActionMenu stacked on the right side of the same below-arch row.
+  const wolfProps = { ...BASE_PROPS, myRole: 'WEREWOLF' as const, isAlive: true }
+
+  it('renders a below-arch-row sibling between SunArc and the player grid', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...wolfProps, dayPhase: makeDay('RESULT_REVEALED') },
+    })
+    expect(wrapper.find('.below-arch-row').exists()).toBe(true)
+  })
+
+  it('my-role-chip is a direct child of below-arch-row (left side, original position)', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...wolfProps, dayPhase: makeDay('RESULT_REVEALED') },
+    })
+    const chip = wrapper.find('.below-arch-row > .my-role-chip')
+    expect(chip.exists()).toBe(true)
+  })
+
+  it('log-fab and ActionMenu live inside .right-stack on the right of below-arch-row', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...wolfProps, dayPhase: makeDay('RESULT_REVEALED') },
+    })
+    const rightStack = wrapper.find('.below-arch-row > .right-stack')
+    expect(rightStack.exists()).toBe(true)
+    expect(rightStack.find('.log-fab').exists()).toBe(true)
+    expect(rightStack.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
+  })
+
+  it('Action chip is NOT placed under my-role-chip (defensive: ensures left col was unbundled)', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...wolfProps, dayPhase: makeDay('RESULT_REVEALED') },
+    })
+    // The deprecated .day-role-action-col / .role-action-col wrappers must not stack chip+menu together.
+    expect(wrapper.find('.day-role-action-col').exists()).toBe(false)
+    expect(wrapper.find('.role-action-col').exists()).toBe(false)
+  })
+
+  it('RESULT_HIDDEN: ActionMenu still rendered (wolves can self-destruct before reveal)', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...wolfProps, dayPhase: makeDay('RESULT_HIDDEN') },
+    })
+    expect(wrapper.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
+    // log-fab is hidden in RESULT_HIDDEN to prevent spoilers, ActionMenu is not
+    expect(wrapper.find('.log-fab').exists()).toBe(false)
+  })
+})

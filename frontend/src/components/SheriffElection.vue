@@ -7,14 +7,17 @@
       <div v-if="election.subPhase === 'RESULT'" class="timer-result">Result</div>
     </div>
 
-    <!-- Action menu (wolf self-destruct) -->
-    <ActionMenu
-      phase="SHERIFF_ELECTION"
-      :sub-phase="election.subPhase"
-      :my-role="myRole"
-      :is-alive="isAlive ?? false"
-      @self-destruct="emit('self-destruct')"
-    />
+    <!-- Below-header row: Action chip on the right (wolf self-destruct) -->
+    <div class="below-header-row">
+      <div />
+      <ActionMenu
+        phase="SHERIFF_ELECTION"
+        :sub-phase="election.subPhase"
+        :my-role="myRole"
+        :is-alive="isAlive ?? false"
+        @self-destruct="emit('self-destruct')"
+      />
+    </div>
 
     <!-- ── SIGNUP ── -->
     <!--
@@ -747,6 +750,12 @@ function speakerLabel(uid: string, idx: number) {
 }
 
 /* Header */
+.below-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0 1rem 0.5rem;
+}
 .sheriff-header {
   display: flex;
   align-items: center;

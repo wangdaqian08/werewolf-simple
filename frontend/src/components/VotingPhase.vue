@@ -21,14 +21,22 @@
         🔁 第二轮投票 · Round 2
       </div>
 
-      <!-- Role + history row -->
+      <!-- Below-arch row: my-role-chip on left, right-stack (history / log-fab / Action) on right -->
       <div v-if="myRole || voteHistory?.length" class="role-history-row">
-        <!-- Left column: my-role-chip + ActionMenu stacked -->
-        <div class="role-action-col">
-          <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
-            🔒 身份 · Tap to reveal
+        <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
+          🔒 身份 · Tap to reveal
+        </button>
+        <div v-else />
+        <div class="right-stack">
+          <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
+            📋 历史
+          </button>
+          <button class="log-fab" aria-label="游戏记录" data-testid="log-fab" @click="showLog = true">
+            <span class="log-fab-icon" aria-hidden="true">📋</span>
+            <span class="log-fab-label">游戏记录</span>
           </button>
           <ActionMenu
+            v-if="myRole"
             phase="DAY_VOTING"
             :sub-phase="votingPhase.subPhase"
             :my-role="myRole"
@@ -36,10 +44,6 @@
             @self-destruct="emit('self-destruct')"
           />
         </div>
-        <!-- Right: vote-history button (kept for the round-by-round tally view) -->
-        <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
-          📋 历史
-        </button>
       </div>
 
       <!-- Before reveal: simple vote count -->
@@ -571,12 +575,6 @@
         </template>
       </footer>
     </template>
-
-    <!-- Floating game-record pill: top-right, always reachable regardless of sub-phase -->
-    <button class="log-fab" aria-label="游戏记录" data-testid="log-fab" @click="showLog = true">
-      <span class="log-fab-icon" aria-hidden="true">📋</span>
-      <span class="log-fab-label">游戏记录</span>
-    </button>
 
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
@@ -1316,12 +1314,15 @@ function onBadgeTap(player: GamePlayer) {
   font-weight: 600;
 }
 
-/* Floating action log pill — top-right, pill shape with label.
-   Placed inside role-history-row on the right side. */
+/* Right-side stack inside role-history-row: history-btn, log-fab, ActionMenu */
+.right-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 .log-fab {
-  position: fixed;
-  top: max(1rem, env(safe-area-inset-top));
-  right: max(1rem, env(safe-area-inset-right));
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1332,7 +1333,6 @@ function onBadgeTap(player: GamePlayer) {
   border: 1px solid var(--border, #ccc2b0);
   font-size: 14px;
   cursor: pointer;
-  z-index: 100;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 .log-fab-icon {
@@ -1342,13 +1342,5 @@ function onBadgeTap(player: GamePlayer) {
   font-size: 13px;
   color: var(--text, #1a140c);
   font-weight: 500;
-}
-
-/* Left column: my-role-chip + ActionMenu */
-.role-action-col {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
 }
 </style>

@@ -309,3 +309,49 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
     expect(wrapper.find('[data-testid="sheriff-candidate-no-vote"]').exists()).toBe(false)
   })
 })
+
+// ── Layout regression: Action chip lives below the header row, right-aligned ───
+describe('SheriffElection — below-header layout (Action chip on the right)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('renders .below-header-row right after the .sheriff-header in SIGNUP', () => {
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({ subPhase: 'SIGNUP' }),
+        ...DEFAULT_PROPS,
+        myRole: 'WEREWOLF',
+        isAlive: true,
+      },
+    })
+    expect(wrapper.find('.below-header-row').exists()).toBe(true)
+    expect(wrapper.find('.below-header-row [data-testid="action-menu-btn"]').exists()).toBe(true)
+  })
+
+  it('ActionMenu remains rendered in every sheriff sub-phase (SIGNUP/SPEECH/VOTING/RESULT/TIED)', () => {
+    for (const sub of ['SIGNUP', 'SPEECH', 'VOTING', 'RESULT', 'TIED'] as const) {
+      const wrapper = mount(SheriffElection, {
+        props: {
+          election: makeElection({ subPhase: sub }),
+          ...DEFAULT_PROPS,
+          myRole: 'WEREWOLF',
+          isAlive: true,
+        },
+      })
+      expect(wrapper.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
+    }
+  })
+
+  it('non-wolf still gets the universal Action chip (with 暂无操作 inside on tap)', () => {
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({ subPhase: 'SIGNUP' }),
+        ...DEFAULT_PROPS,
+        myRole: 'VILLAGER',
+        isAlive: true,
+      },
+    })
+    expect(wrapper.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
+  })
+})

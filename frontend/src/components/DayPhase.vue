@@ -9,6 +9,34 @@
     <!-- Sun arc -->
     <SunArc :phase-deadline="dayPhase.phaseDeadline" :phase-started="dayPhase.phaseStarted" />
 
+    <!-- Below-arch row: my-role-chip on left, log-fab + Action stacked on right -->
+    <div class="below-arch-row">
+      <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
+        🔒 身份 · Tap to reveal
+      </button>
+      <div v-else />
+      <div class="right-stack">
+        <button
+          v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
+          class="log-fab"
+          aria-label="游戏记录"
+          data-testid="log-fab"
+          @click="showLog = true"
+        >
+          <span class="log-fab-icon" aria-hidden="true">📋</span>
+          <span class="log-fab-label">游戏记录</span>
+        </button>
+        <ActionMenu
+          v-if="myRole"
+          phase="DAY_DISCUSSION"
+          :sub-phase="dayPhase.subPhase"
+          :my-role="myRole"
+          :is-alive="isAlive"
+          @self-destruct="emit('self-destruct')"
+        />
+      </div>
+    </div>
+
     <!-- Fixed-height banner area — always rendered so grid position stays consistent -->
     <div class="banner-area">
       <template v-if="viewRole === 'DEAD'">
@@ -94,32 +122,6 @@
         </template>
       </PlayerSlot>
     </section>
-
-    <!-- My role chip + action menu (stacked, left side) -->
-    <div v-if="myRole" class="day-role-action-col">
-      <button class="my-role-chip my-role-locked" @click="showRoleCard = true">
-        🔒 身份 · Tap to reveal
-      </button>
-      <ActionMenu
-        phase="DAY_DISCUSSION"
-        :sub-phase="dayPhase.subPhase"
-        :my-role="myRole"
-        :is-alive="isAlive"
-        @self-destruct="emit('self-destruct')"
-      />
-    </div>
-
-    <!-- Floating action log button: top-right pill, hidden until host reveals result to prevent spoilers -->
-    <button
-      v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
-      class="log-fab"
-      aria-label="游戏记录"
-      data-testid="log-fab"
-      @click="showLog = true"
-    >
-      <span class="log-fab-icon" aria-hidden="true">📋</span>
-      <span class="log-fab-label">游戏记录</span>
-    </button>
 
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
@@ -346,10 +348,21 @@ function onTap(player: GamePlayer) {
   padding: 0 1rem 1rem;
 }
 
+.below-arch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0 1rem 0.5rem;
+}
+
+.right-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 .log-fab {
-  position: fixed;
-  top: max(1rem, env(safe-area-inset-top));
-  right: max(1rem, env(safe-area-inset-right));
   width: auto;
   padding: 6px 12px;
   gap: 6px;
@@ -361,7 +374,6 @@ function onTap(player: GamePlayer) {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 .log-fab-icon {
@@ -371,17 +383,6 @@ function onTap(player: GamePlayer) {
   font-size: 13px;
   color: var(--text, #1a140c);
   font-weight: 500;
-}
-
-.day-role-action-col {
-  position: fixed;
-  bottom: 100px;
-  left: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  z-index: 50;
 }
 
 .my-role-chip {
