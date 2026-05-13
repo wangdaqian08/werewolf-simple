@@ -24,7 +24,6 @@ function makeEntry(
 ): ActionLogEntry {
   return {
     id: 1,
-    gameId: 42,
     eventType,
     message: JSON.stringify(payload),
     targetUserId: null,
