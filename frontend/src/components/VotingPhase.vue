@@ -31,7 +31,12 @@
           <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
             📋 历史
           </button>
-          <button class="log-fab" aria-label="游戏记录" data-testid="log-fab" @click="showLog = true">
+          <button
+            class="log-fab"
+            aria-label="游戏记录"
+            data-testid="log-fab"
+            @click="showLog = true"
+          >
             <span class="log-fab-icon" aria-hidden="true">📋</span>
             <span class="log-fab-label">游戏记录</span>
           </button>
