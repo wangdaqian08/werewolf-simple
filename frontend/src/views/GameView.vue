@@ -487,6 +487,7 @@ import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import { useAudioService } from '@/composables/useAudioService'
 import { useConnectionLifecycle } from '@/composables/useConnectionLifecycle'
 import { useWakeLock } from '@/composables/useWakeLock'
+import { audioService } from '@/services/audioService'
 import type { GamePlayer } from '@/types'
 
 const route = useRoute()
@@ -543,6 +544,20 @@ const isHost = computed(() => {
   const hostId = gameStore.state?.hostId ?? roomStore.room?.hostId
   return hostId === userStore.userId
 })
+
+// Default mute for non-host players on every page load.
+// Applied once when both userId and hostId are known; manual toggles are not overridden.
+let appliedDefaultMute = false
+watch(
+  () => [userStore.userId, gameStore.state?.hostId] as const,
+  ([uid, hostId]) => {
+    if (appliedDefaultMute) return
+    if (!uid || !hostId) return
+    appliedDefaultMute = true
+    audioService.setMuted(uid !== hostId)
+  },
+  { immediate: true },
+)
 
 useNavigationGuard()
 

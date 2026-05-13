@@ -261,4 +261,51 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
     // Confirm Vote button should NOT appear (self-select blocked)
     expect(wrapper.find('[data-testid="sheriff-confirm-vote"]').exists()).toBe(false)
   })
+
+  it('VOTING: RUNNING candidate sees "候选人不参与投票" banner (not speech-quitter copy)', () => {
+    // Feature 1: when canVote===false AND the player is a RUNNING candidate,
+    // show the new "candidates can't vote" message instead of "已放弃投票".
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({
+          subPhase: 'VOTING',
+          canVote: false,
+          candidates: [
+            { userId: 'u1', nickname: 'Me', avatar: '🙂', status: 'RUNNING' }, // I am a running candidate
+            { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' },
+          ],
+        }),
+        ...DEFAULT_PROPS,
+        myUserId: 'u1',
+        isHost: false,
+      },
+    })
+    expect(wrapper.find('[data-testid="sheriff-candidate-no-vote"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('候选人不参与投票')
+    expect(wrapper.find('[data-testid="sheriff-vote-forfeited"]').exists()).toBe(false)
+  })
+
+  it('VOTING: speech-quitter (QUIT in speaking order) still sees "已放弃投票"', () => {
+    // Feature 1: when canVote===false AND the player is a speech-quitter (not RUNNING),
+    // keep the existing "已放弃投票" copy.
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({
+          subPhase: 'VOTING',
+          canVote: false,
+          speakingOrder: ['u1', 'u2'],
+          candidates: [
+            { userId: 'u1', nickname: 'Me', avatar: '🙂', status: 'QUIT' }, // I quit during speech
+            { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' },
+          ],
+        }),
+        ...DEFAULT_PROPS,
+        myUserId: 'u1',
+        isHost: false,
+      },
+    })
+    expect(wrapper.find('[data-testid="sheriff-vote-forfeited"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('已放弃投票')
+    expect(wrapper.find('[data-testid="sheriff-candidate-no-vote"]').exists()).toBe(false)
+  })
 })
