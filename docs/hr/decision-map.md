@@ -1,10 +1,10 @@
 # Decision Map — Strategic Next Move
 
-## Assessment
+## My read
 
 The CFO has escalated. His comments yesterday (salary, "prove your value", contract review, no-laptop rule) are textbook **adverse action territory** under Fair Work Act s.340 — he is altering your position to your prejudice *because* you exercised a workplace right. That is a **stronger** legal position for you than the original incident. Don't waste it by escalating emotionally.
 
-## The numbers, in one line
+## My read on the leverage
 
 > CFO costs the company **~$250k–$600k** to replace. You cost **~$30k–$80k**. Median FWC settlement is **$4k–$6k**. → **Internal leverage > litigation. Always.**
 
@@ -12,59 +12,42 @@ The CFO has escalated. His comments yesterday (salary, "prove your value", contr
 
 ## What to do — flowchart
 
-```
-                    ┌─────────────────────────┐
-                    │  TODAY (next 6 hours)   │
-                    └────────────┬────────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                  │                  │
-       Handwrite notes      Confirm HR        DO NOT contact
-       of yesterday's      meeting in        the MD yet
-       CFO meeting         writing (email
-       + today's HR        within 24h)
-       meeting
-              │                  │                  │
-              └──────────────────┼──────────────────┘
-                                 ▼
-                    ┌─────────────────────────┐
-                    │   TOMORROW: KEVIN       │
-                    │ (in person, door shut)  │
-                    └────────────┬────────────┘
-                                 │
-                  "The CFO is questioning your
-                   promotion decision in front of me.
-                   I need your advice."
-                                 │
-              ┌──────────────────┼──────────────────┐
-              ▼                  ▼                  ▼
-        Kevin backs        Kevin says          Kevin distances
-        you, will          escalate            himself
-        handle it          together
-              │                  │                  │
-              ▼                  ▼                  ▼
-        Give him 2          JOINT meeting       RED FLAG
-        weeks. Document     with MD next        → Job search now
-        everything.         week.               → Free lawyer consult
-                                                → Don't resign
-              │                  │                  │
-              └──────────────────┼──────────────────┘
-                                 ▼
-                    ┌─────────────────────────┐
-                    │   THIS WEEK (parallel)  │
-                    └────────────┬────────────┘
-                                 │
-        ┌────────────────────────┼────────────────────────┐
-        ▼                        ▼                        ▼
-  Fair Work             Free 30-min                Update CV +
-  Ombudsman             employment lawyer          quiet job search
-  online chat           consult (Sydney)           (insurance only)
-  (free, 30 min)
-        │                        │                        │
-  Save transcript.        Ask: "Do these          Don't tell anyone.
-  Ask about s.340         facts support a         Don't resign.
-  + s.62 + Right          GP claim if I'm
-  to Disconnect.          dismissed?"
+```mermaid
+flowchart TD
+    classDef today fill:#fde68a,stroke:#b45309,color:#1a140c,font-weight:bold
+    classDef kevin fill:#bfdbfe,stroke:#1d4ed8,color:#0c1a2a,font-weight:bold
+    classDef week fill:#bbf7d0,stroke:#15803d,color:#0c1f0c,font-weight:bold
+    classDef good fill:#dcfce7,stroke:#15803d,color:#0c1f0c
+    classDef warn fill:#fee2e2,stroke:#b91c1c,color:#1a0c0c
+    classDef action fill:#f5f0e8,stroke:#8a7a65,color:#1a140c
+
+    T([TODAY — next 6 hours]):::today
+    T --> T1[Handwrite notes:<br/>yesterday's CFO meeting<br/>+ today's HR meeting]:::action
+    T --> T2[Confirm HR meeting<br/>in writing, within 24h]:::action
+    T --> T3[DO NOT contact<br/>the MD yet]:::warn
+
+    T1 --> K
+    T2 --> K
+    T3 --> K
+
+    K([TOMORROW — Kevin, in person, door shut<br/>“The CFO is questioning your promotion decision<br/>in front of me. I need your advice.”]):::kevin
+
+    K --> K1[Kevin backs you,<br/>will handle it]:::good
+    K --> K2[Kevin says<br/>escalate together]:::good
+    K --> K3[Kevin distances<br/>himself]:::warn
+
+    K1 --> K1a[Give him 2 weeks.<br/>Keep documenting.]
+    K2 --> K2a[JOINT meeting<br/>with MD next week]
+    K3 --> K3a[RED FLAG<br/>• Quiet job search now<br/>• Free lawyer consult<br/>• DO NOT resign]:::warn
+
+    K1a --> W
+    K2a --> W
+    K3a --> W
+
+    W([THIS WEEK — in parallel]):::week
+    W --> W1[Fair Work Ombudsman chat<br/>30 min, free<br/>Save transcript]:::action
+    W --> W2[Free 30-min employment<br/>lawyer consult — Sydney]:::action
+    W --> W3[Update CV +<br/>quiet job search<br/>insurance only]:::action
 ```
 
 ---
@@ -121,7 +104,7 @@ The CFO has escalated. His comments yesterday (salary, "prove your value", contr
 
 ---
 
-## Best historical outcome for someone in your spot
+## My read on the best path — based on similar cases
 
 > **Documented + Kevin onside + either retained with explicit protection, or quiet exit with severance.**
 >
@@ -144,6 +127,6 @@ The CFO has escalated. His comments yesterday (salary, "prove your value", contr
 
 ---
 
-## One thing to remember
+## The one thing I want you to remember
 
 > **Slow is fast. Quiet is loud.** Every email asking for the company's position in writing, every Kevin conversation, every handwritten note — silently builds your file. You don't need to say anything threatening. The paper trail does the talking later, if it ever needs to.
