@@ -14,56 +14,68 @@ The CFO has escalated. His comments yesterday (salary, "prove your value", contr
 
 ```mermaid
 flowchart TD
-    classDef today fill:#fde68a,stroke:#b45309,color:#1a140c,font-weight:bold
+    classDef done fill:#e5e7eb,stroke:#6b7280,color:#374151
+    classDef tonight fill:#fde68a,stroke:#b45309,color:#1a140c,font-weight:bold
     classDef kevin fill:#bfdbfe,stroke:#1d4ed8,color:#0c1a2a,font-weight:bold
     classDef week fill:#bbf7d0,stroke:#15803d,color:#0c1f0c,font-weight:bold
     classDef good fill:#dcfce7,stroke:#15803d,color:#0c1f0c
     classDef warn fill:#fee2e2,stroke:#b91c1c,color:#1a0c0c
     classDef action fill:#f5f0e8,stroke:#8a7a65,color:#1a140c
 
-    T([TODAY — next 6 hours]):::today
-    T --> T1[Handwrite notes:<br/>yesterday's CFO meeting<br/>+ today's HR meeting]:::action
-    T --> T2[Confirm HR meeting<br/>in writing, within 24h]:::action
+    D([ALREADY DONE TODAY]):::done
+    D --> D1[CFO meeting yesterday]:::done
+    D --> D2[HR meeting earlier today]:::done
+    D --> D3[Kevin meeting<br/>~7 hours ago — outcome unknown]:::done
+
+    D1 --> T
+    D2 --> T
+    D3 --> T
+
+    T([TONIGHT — before bed]):::tonight
+    T --> T1[Handwrite notes for all 3 meetings:<br/>CFO, HR, Kevin<br/>exact quotes, sign + date]:::action
+    T --> T2[Send HR confirmation email<br/>within 24h of HR meeting]:::action
     T --> T3[DO NOT contact<br/>the MD yet]:::warn
 
     T1 --> K
     T2 --> K
     T3 --> K
 
-    K([TOMORROW — Kevin, in person, door shut<br/>“The CFO is questioning your promotion decision<br/>in front of me. I need your advice.”]):::kevin
+    K([NEXT — depends on what Kevin said today]):::kevin
 
-    K --> K1[Kevin backs you,<br/>will handle it]:::good
-    K --> K2[Kevin says<br/>escalate together]:::good
-    K --> K3[Kevin distances<br/>himself]:::warn
+    K --> K1[Kevin backs you,<br/>will handle CFO himself]:::good
+    K --> K2[Kevin says<br/>escalate together to MD]:::good
+    K --> K3[Kevin distances himself<br/>or non-committal]:::warn
 
-    K1 --> K1a[Give him 2 weeks.<br/>Keep documenting.]
-    K2 --> K2a[JOINT meeting<br/>with MD next week]
-    K3 --> K3a[RED FLAG<br/>• Quiet job search now<br/>• Free lawyer consult<br/>• DO NOT resign]:::warn
+    K1 --> K1a[Give him 2 weeks.<br/>Keep documenting.<br/>Don't escalate above him.]
+    K2 --> K2a[Agree joint MD meeting.<br/>Bring written timeline.<br/>Let Kevin lead the framing.]
+    K3 --> K3a[RED FLAG<br/>• Quiet job search now<br/>• Free lawyer consult<br/>• DO NOT resign<br/>• DO NOT confront Kevin]:::warn
 
     K1a --> W
     K2a --> W
     K3a --> W
 
-    W([THIS WEEK — in parallel]):::week
+    W([THIS WEEK — in parallel, regardless of Kevin]):::week
     W --> W1[Fair Work Ombudsman chat<br/>30 min, free<br/>Save transcript]:::action
     W --> W2[Free 30-min employment<br/>lawyer consult — Sydney]:::action
     W --> W3[Update CV +<br/>quiet job search<br/>insurance only]:::action
 ```
 
+**Where you are right now:** All three meetings (CFO yesterday, HR today, Kevin today) have already happened. The Kevin meeting was ~7 hours ago and the outcome isn't in yet. The first move is **tonight** — lock down the record (handwritten notes for all three meetings, HR confirmation email). Everything after that branches on what Kevin came back with.
+
 ---
 
-## TODAY in detail — the two anchor actions
+## TONIGHT in detail — the two anchor actions
 
-These two tasks are the ones that quietly build your file. They cost an hour total and determine the strength of every later step.
+These two tasks are the ones that quietly build your file. They cost an hour total and determine the strength of every later step. **Do both before you go to sleep tonight** — memory of three same-day meetings will not survive overnight intact.
 
 ### 1. Handwritten contemporaneous notes
 
 **Why:** Courts and the Fair Work Commission give significant weight to **contemporaneous notes** — notes written at the time, or as soon as practical afterwards. They are admissible evidence and treated as more reliable than later recollection. Typed notes on a work device are weak (employer-controlled, no clear timestamp). Handwritten notes on paper are strong, and they work around the CFO's no-laptop rule.
 
-**How (do this today, before memory fades):**
+**How (do this tonight, before memory fades):**
 
 1. Take a notebook (or any blank paper).
-2. For each meeting (yesterday's CFO meeting, today's HR meeting), write on a fresh page:
+2. For each of the three meetings (yesterday's CFO meeting, today's HR meeting, today's Kevin meeting), write on a fresh page:
    - **Date and time** the meeting started and ended
    - **Location** (room, Teams, phone)
    - **Attendees** by name and role
