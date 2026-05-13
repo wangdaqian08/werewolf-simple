@@ -6,7 +6,7 @@ The CFO has escalated. His comments yesterday (salary, "prove your value", contr
 
 ## My read on the leverage
 
-> CFO costs the company **~$250k–$600k** to replace. You cost **~$30k–$80k**. Median FWC settlement is **$4k–$6k**. → **Internal leverage > litigation. Always.**
+> CFO costs the company **~$250k–$600k** to replace. → **Internal leverage > litigation. Always.**
 
 ---
 
@@ -127,6 +127,6 @@ flowchart TD
 
 ---
 
-## The one thing I want you to remember
+## The one thing I highly recommend
 
 > **Slow is fast. Quiet is loud.** Every email asking for the company's position in writing, every Kevin conversation, every handwritten note — silently builds your file. You don't need to say anything threatening. The paper trail does the talking later, if it ever needs to.
