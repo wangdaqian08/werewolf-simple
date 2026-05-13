@@ -153,13 +153,14 @@ class SelfDestructServiceTest {
 
     @Test
     fun `wolf-sheriff in DAY_DISCUSSION RESULT_REVEALED destroys badge and broadcasts BadgeHandover`() {
+        val sheriffWolf = wolfPlayer().also { it.sheriff = true }
         val ctx = context(
             game = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, sheriffUserId = wolfId),
-            players = listOf(wolfPlayer(), villagePlayer()),
+            players = listOf(sheriffWolf, villagePlayer()),
         )
 
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId))
-            .thenReturn(Optional.of(wolfPlayer()))
+            .thenReturn(Optional.of(sheriffWolf))
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
@@ -169,6 +170,9 @@ class SelfDestructServiceTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(ctx.game.sheriffUserId).isNull()
+        // Badge burned on the wolf's GamePlayer row too — otherwise the ⭐ stays on
+        // every player slot because PlayerSlot reads GamePlayer.sheriff, not game.sheriffUserId.
+        assertThat(sheriffWolf.sheriff).isFalse()
 
         val captor = argumentCaptor<DomainEvent>()
         verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())

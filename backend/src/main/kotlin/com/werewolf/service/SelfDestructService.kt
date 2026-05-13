@@ -55,17 +55,18 @@ class SelfDestructService(
         val user = userRepository.findById(request.actorUserId).orElse(null)
         val nickname = user?.nickname ?: request.actorUserId
 
-        // Mark wolf dead
+        // Mark wolf dead. If they were the sheriff, also burn the badge so the
+        // ⭐ disappears from every player slot (game.sheriffUserId alone is not
+        // enough — PlayerSlot reads GamePlayer.sheriff).
         val wolfPlayer = gamePlayerRepository.findByGameIdAndUserId(context.gameId, request.actorUserId)
             .orElse(null) ?: return GameActionResult.Rejected("Player not found in DB")
         wolfPlayer.alive = false
-        gamePlayerRepository.save(wolfPlayer)
-
-        // If wolf was the sheriff, destroy the badge
         val wasSheriff = context.game.sheriffUserId == request.actorUserId
         if (wasSheriff) {
+            wolfPlayer.sheriff = false
             context.game.sheriffUserId = null
         }
+        gamePlayerRepository.save(wolfPlayer)
 
         // Set daySkipVoting flag
         context.game.daySkipVoting = true
