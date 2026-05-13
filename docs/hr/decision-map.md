@@ -78,7 +78,7 @@ These two tasks are the ones that quietly build your file. They cost an hour tot
 
 ### 2. HR follow-up email — same day
 
-**Why:** A verbal HR meeting leaves no record and can be reinterpreted by either side later. A short factual confirmation email converts the meeting into written evidence, locks in HR's stated position, and forces them to correct you in writing if your understanding is wrong (either way you win — silence means tacit agreement, correction means you have their written version too). Sending it within 24 hours is what makes it "contemporaneous".
+**Why:** HR already has their own record of today's meeting — their notes, written in their words, framed their way. Without a written contribution from you, **theirs is the only version on file**, and over time it can be softened, reinterpreted, or used to downplay the facts you raised. A short same-day confirmation email puts **your version** on record in **your words**, locks in HR's stated position (silence means tacit agreement; any correction means you also get their written version), and makes the record contemporaneous — which is what gives it weight later.
 
 **Template — adapt and send today:**
 
