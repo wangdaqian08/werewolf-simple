@@ -327,6 +327,7 @@ class GameService(
             "roleReveal" to roleReveal,
             "sheriffElection" to sheriffElection,
             "dayPhase" to dayPhase,
+            "daySkipVoting" to game.daySkipVoting,
             "votingPhase" to votingPhase,
             "nightPhase" to nightPhase,
             // Audio recovery for STOMP-reconnect.

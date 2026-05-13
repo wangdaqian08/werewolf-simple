@@ -758,9 +758,24 @@ class VotingPipelineTest {
     }
 
     @Test
-    fun `continueToNight - rejected when not in VOTING phase`() {
-        val game = game().also { it.phase = GamePhase.DAY_DISCUSSION }
+    fun `continueToNight - rejected when in DAY_DISCUSSION without daySkipVoting`() {
+        val game = game().also { it.phase = GamePhase.DAY_DISCUSSION; it.daySkipVoting = false }
         val context = ctx(game)
+
+        val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        // daySkipVoting is false so voting was not skipped — cannot advance to night
+        assertThat((result as GameActionResult.Rejected).reason).contains("skipped")
+    }
+
+    @Test
+    fun `continueToNight - rejected when in an unrelated phase (NIGHT)`() {
+        val g = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.NIGHT
+        }
+        val context = ctx(g)
 
         val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
 
@@ -787,6 +802,42 @@ class VotingPipelineTest {
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         // dayNumber is 1, so next night should be day 2
         verify(nightOrchestrator).initNight(eq(gameId), eq(2), anyOrNull(), any())
+    }
+
+    // ── continueToNight skip-voting path (wolf self-destruct) ──────────────────
+
+    @Test
+    fun `continueToNight - DAY_DISCUSSION with daySkipVoting true succeeds and calls goToNight`() {
+        val g = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.DAY_DISCUSSION
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
+            it.dayNumber = 1
+            it.daySkipVoting = true
+        }
+        val context = ctx(g)
+
+        val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        verify(nightOrchestrator).initNight(eq(gameId), eq(2), anyOrNull(), any())
+    }
+
+    @Test
+    fun `continueToNight - DAY_DISCUSSION with daySkipVoting false is rejected`() {
+        val g = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.DAY_DISCUSSION
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
+            it.dayNumber = 1
+            it.daySkipVoting = false
+        }
+        val context = ctx(g)
+
+        val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("skipped")
     }
 
     // ── WinConditionMode ──────────────────────────────────────────────────────

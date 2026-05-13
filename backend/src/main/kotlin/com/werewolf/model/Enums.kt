@@ -70,4 +70,7 @@ enum class ActionType {
     // host controls when the camera shifts off the elected sheriff back to
     // the day cadence.
     SHERIFF_END_RESULT,
+
+    // Wolf self-destruction (day action)
+    WOLF_SELF_DESTRUCT,
 }

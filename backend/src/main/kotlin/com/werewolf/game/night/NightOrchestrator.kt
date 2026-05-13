@@ -718,6 +718,7 @@ class NightOrchestrator(
         game.phase = GamePhase.NIGHT
         game.subPhase = null
         game.dayNumber = newDayNumber
+        game.daySkipVoting = false
         gameRepository.save(game)
     }
 

@@ -11,6 +11,7 @@ import com.werewolf.game.role.RoleHandler
 import com.werewolf.game.voting.VotingPipeline
 import com.werewolf.model.*
 import com.werewolf.service.GameContextLoader
+import com.werewolf.service.SelfDestructService
 import com.werewolf.service.StompPublisher
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -27,6 +28,7 @@ class GameActionDispatcherTest {
     @Mock lateinit var gamePhasePipeline: GamePhasePipeline
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var stompPublisher: StompPublisher
+    @Mock lateinit var selfDestructService: SelfDestructService
 
     private val gameId = 1
     private val hostId = "host:001"
@@ -65,6 +67,7 @@ class GameActionDispatcherTest {
         gamePhasePipeline = gamePhasePipeline,
         contextLoader = contextLoader,
         stompPublisher = stompPublisher,
+        selfDestructService = selfDestructService,
     )
 
     // ── WOLF_KILL routing ─────────────────────────────────────────────────────

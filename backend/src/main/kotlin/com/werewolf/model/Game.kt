@@ -43,6 +43,9 @@ class Game(
 
     @Column(name = "ended_at")
     var endedAt: LocalDateTime? = null,
+
+    @Column(name = "day_skip_voting", nullable = false)
+    var daySkipVoting: Boolean = false,
 ) {
     init {
         require(roomId > 0) { "roomId must be a valid ID, got $roomId" }

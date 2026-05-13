@@ -7,6 +7,7 @@ import com.werewolf.game.voting.VotingPipeline
 import com.werewolf.model.ActionType
 import com.werewolf.model.PlayerRole
 import com.werewolf.service.GameContextLoader
+import com.werewolf.service.SelfDestructService
 import com.werewolf.service.StompPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -19,6 +20,7 @@ class GameActionDispatcher(
     private val gamePhasePipeline: GamePhasePipeline,
     private val contextLoader: GameContextLoader,
     private val stompPublisher: StompPublisher,
+    private val selfDestructService: SelfDestructService,
 ) {
     @Transactional
     fun dispatch(request: GameActionRequest): GameActionResult {
@@ -108,6 +110,9 @@ class GameActionDispatcher(
             ActionType.SHERIFF_VOTE, ActionType.SHERIFF_CONFIRM_VOTE,
             ActionType.SHERIFF_ABSTAIN, ActionType.SHERIFF_END_RESULT
                 -> gamePhasePipeline.handleSheriffElection(request, context)
+
+            // ── Wolf self-destruction (day action) ─────────────────────────────
+            ActionType.WOLF_SELF_DESTRUCT -> selfDestructService.selfDestruct(request, context)
         }
     }
 }
