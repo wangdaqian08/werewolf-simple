@@ -36,10 +36,9 @@
             @self-destruct="emit('self-destruct')"
           />
         </div>
-        <!-- Right: relocated log-fab -->
-        <button class="log-fab" aria-label="游戏记录" data-testid="log-fab" @click="showLog = true">
-          <span class="log-fab-icon" aria-hidden="true">📋</span>
-          <span class="log-fab-label">游戏记录</span>
+        <!-- Right: vote-history button (kept for the round-by-round tally view) -->
+        <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
+          📋 历史
         </button>
       </div>
 
@@ -572,6 +571,12 @@
         </template>
       </footer>
     </template>
+
+    <!-- Floating game-record pill: top-right, always reachable regardless of sub-phase -->
+    <button class="log-fab" aria-label="游戏记录" data-testid="log-fab" @click="showLog = true">
+      <span class="log-fab-icon" aria-hidden="true">📋</span>
+      <span class="log-fab-label">游戏记录</span>
+    </button>
 
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
@@ -1314,6 +1319,9 @@ function onBadgeTap(player: GamePlayer) {
 /* Floating action log pill — top-right, pill shape with label.
    Placed inside role-history-row on the right side. */
 .log-fab {
+  position: fixed;
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(1rem, env(safe-area-inset-right));
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1326,7 +1334,6 @@ function onBadgeTap(player: GamePlayer) {
   cursor: pointer;
   z-index: 100;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  margin-left: auto;
 }
 .log-fab-icon {
   font-size: 16px;
