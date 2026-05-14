@@ -16,16 +16,17 @@ The CFO has escalated. His comments yesterday (salary, "prove your value", contr
 flowchart TD
     classDef done fill:#e5e7eb,stroke:#6b7280,color:#374151
     classDef tonight fill:#fde68a,stroke:#b45309,color:#1a140c,font-weight:bold
-    classDef kevin fill:#bfdbfe,stroke:#1d4ed8,color:#0c1a2a,font-weight:bold
+    classDef active fill:#bfdbfe,stroke:#1d4ed8,color:#0c1a2a,font-weight:bold
     classDef week fill:#bbf7d0,stroke:#15803d,color:#0c1f0c,font-weight:bold
     classDef good fill:#dcfce7,stroke:#15803d,color:#0c1f0c
     classDef warn fill:#fee2e2,stroke:#b91c1c,color:#1a0c0c
     classDef action fill:#f5f0e8,stroke:#8a7a65,color:#1a140c
+    classDef inactive fill:#f3f4f6,stroke:#d1d5db,color:#9ca3af
 
     D([ALREADY DONE TODAY]):::done
     D --> D1[CFO meeting yesterday]:::done
     D --> D2[HR meeting earlier today]:::done
-    D --> D3[Kevin meeting<br/>~7 hours ago — outcome unknown]:::done
+    D --> D3[Kevin meeting<br/>Kevin will talk to CFO + HR ✅]:::done
 
     D1 --> T
     D2 --> T
@@ -36,31 +37,34 @@ flowchart TD
     T --> T2[Send HR confirmation email<br/>within 24h of HR meeting]:::action
     T --> T3[DO NOT contact<br/>the MD yet]:::warn
 
-    T1 --> K
-    T2 --> K
-    T3 --> K
+    T1 --> N
+    T2 --> N
+    T3 --> N
 
-    K([NEXT — depends on what Kevin said today]):::kevin
+    N([NEXT 2 WEEKS — Kevin's window]):::active
+    N --> N1[Let Kevin work the CFO + HR.<br/>Do not escalate above him.]:::good
+    N --> N2[Stay normal with the CFO.<br/>Don't avoid. Don't confront.]:::good
+    N --> N3[Keep documenting any new<br/>incidents, same way as tonight.]:::good
+    N --> N4[Day-7 + Day-14 check-in with Kevin:<br/>“Any update? What can I do to help?”]:::good
+    N --> N5[Watch for retaliation signals:<br/>sidelining, exclusion from meetings,<br/>“performance management”, scope cuts]:::warn
 
-    K --> K1[Kevin backs you,<br/>will handle CFO himself]:::good
-    K --> K2[Kevin says<br/>escalate together to MD]:::good
-    K --> K3[Kevin distances himself<br/>or non-committal]:::warn
+    N1 --> W
+    N2 --> W
+    N3 --> W
+    N4 --> W
+    N5 --> W
 
-    K1 --> K1a[Give him 2 weeks.<br/>Keep documenting.<br/>Don't escalate above him.]
-    K2 --> K2a[Agree joint MD meeting.<br/>Bring written timeline.<br/>Let Kevin lead the framing.]
-    K3 --> K3a[RED FLAG<br/>• Quiet job search now<br/>• Free lawyer consult<br/>• DO NOT resign<br/>• DO NOT confront Kevin]:::warn
-
-    K1a --> W
-    K2a --> W
-    K3a --> W
-
-    W([THIS WEEK — in parallel, regardless of Kevin]):::week
+    W([THIS WEEK — quiet insurance, in parallel]):::week
     W --> W1[Fair Work Ombudsman chat<br/>30 min, free<br/>Save transcript]:::action
     W --> W2[Free 30-min employment<br/>lawyer consult — Sydney]:::action
     W --> W3[Update CV +<br/>quiet job search<br/>insurance only]:::action
+
+    %% Inactive branches — kept visible as future paths if needed
+    N -.->|If Kevin's path fails at 2 weeks| F1[Escalate to MD<br/>jointly with Kevin]:::inactive
+    N -.->|If retaliation appears| F2[Lawyer consult →<br/>consider severance negotiation]:::inactive
 ```
 
-**Where you are right now:** All three meetings (CFO yesterday, HR today, Kevin today) have already happened. The Kevin meeting was ~7 hours ago and the outcome isn't in yet. The first move is **tonight** — lock down the record (handwritten notes for all three meetings, HR confirmation email). Everything after that branches on what Kevin came back with.
+**Where you are right now:** Kevin has agreed to talk to the CFO and HR. That puts you on the **best of the three branches** — internal sponsor working the problem at his level. Your job for the next 2 weeks is **stay quiet, stay professional, keep documenting, and let Kevin operate**. The 2-week clock starts from his commitment. The greyed branches at the bottom are *future paths only if his approach doesn't land* — don't activate them yet.
 
 ---
 
@@ -115,6 +119,53 @@ These two tasks are the ones that quietly build your file. They cost an hour tot
 - Don't editorialise. Don't say *"I was upset"* or *"HR didn't take it seriously"*. Just record.
 - Don't escalate in this email (no MD, no legal references). It's a confirmation, not a position.
 - Don't BCC anyone. If you want a personal record, forward to a personal email **after** sending — never BCC personal accounts on the original (some companies treat that as data exfiltration).
+
+---
+
+## Next 2 weeks — Kevin's window
+
+Kevin owns the next move. Your role for the next 14 days is to **stay quiet, professional, and observant**. Do not undermine him by acting in parallel. Do not pre-empt him by going to HR or the MD. The single fastest way to lose Kevin as a sponsor is to make him feel you don't trust him to handle it.
+
+### Do
+
+- **Stay normal with the CFO.** Reply to legitimate work emails inside business hours. Be professional, neutral, short. Don't avoid him, don't seek him out.
+- **Keep documenting any new incidents** — same handwritten format as tonight, signed and dated. If nothing happens, you've still built the habit.
+- **Day-7 and Day-14 check-in with Kevin**, in person, 5 minutes:
+
+  > *"Hi Kevin — just checking in on where things landed with the CFO and HR. Is there anything you need from me, or anything I should be aware of?"*
+
+  Don't push. Don't ask for details he doesn't volunteer. The point of the check-in is to make sure the matter hasn't been forgotten and to keep your file showing active engagement.
+- **Forward routine work emails to yourself with timestamps** if anything feels unusual — meeting cancellations, scope removals, exclusion from recurring meetings.
+
+### Don't
+
+- ❌ **Don't contact the MD.** Going above Kevin while he's working it = sabotaging your own sponsor.
+- ❌ **Don't go back to HR with anything new** unless Kevin asks you to.
+- ❌ **Don't mention the FWO chat, lawyer consult, or job search to anyone.** Especially not Kevin. These are private insurance.
+- ❌ **Don't tell colleagues.** Anything said in the kitchen reaches the CFO inside a week.
+- ❌ **Don't sign anything new** in the next 2 weeks — new contracts, performance plans, KPI changes, "letters of expectation". Ask for time to review and have a lawyer look first.
+- ❌ **Don't resign**, even if you feel like it. Resigning destroys the leverage Kevin is building for you.
+
+### Retaliation watch — what to flag immediately
+
+If any of the following happens while Kevin is working the problem, write it down (handwritten, signed, dated) and tell Kevin within 24 hours:
+
+- You're excluded from a recurring meeting you'd normally attend.
+- Your scope or reporting line is changed without consultation.
+- You receive a "performance improvement plan", written warning, or "letter of expectation".
+- The CFO contacts you outside hours again, or via a third party.
+- A formal HR meeting is scheduled you didn't ask for.
+- You hear from colleagues that the CFO has spoken about you.
+
+Each of these, if it follows your raising of concerns, is a fact pattern an employment lawyer would call **adverse action**. Documenting them is what makes them useful later — silently noting them in your head is not enough.
+
+### The 2-week deadline
+
+At **Day 14**, you need a clear answer from Kevin on what happened. If by then you have:
+
+- **A concrete resolution** (CFO has been spoken to, behaviour change, written acknowledgement) → done. Stay. Keep documenting quietly for the next 90 days in case it restarts.
+- **No movement, vague answers, or Kevin avoiding you** → that's information. Move to the *"Kevin can't move the CFO"* row in the decision triggers below.
+- **Active retaliation against you** → escalate to MD jointly with Kevin and do the lawyer consult this week, not next.
 
 ---
 
