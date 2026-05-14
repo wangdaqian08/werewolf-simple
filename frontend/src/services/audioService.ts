@@ -400,6 +400,7 @@ class AudioService {
     // Recompute BGM target — applyBgmGain reads `this.muted` and ramps the
     // element's volume to 0 (mute) or to the level-aware target (unmute).
     this.applyBgmGain()
+    this.notifyMuteListeners()
     return this.muted
   }
 
@@ -415,6 +416,7 @@ class AudioService {
       this.stopAll()
     }
     this.applyBgmGain()
+    this.notifyMuteListeners()
   }
 
   /**
@@ -422,6 +424,24 @@ class AudioService {
    */
   isMuted(): boolean {
     return this.muted
+  }
+
+  // Mute-change subscription. VolumeControl and similar UI read `muted` once
+  // at mount; without this, a later setMuted call (e.g. the host-aware default
+  // in GameView, which fires only after gameStore.hostId arrives via HTTP)
+  // would update audioService state but leave the icon stuck on the initial
+  // value. Subscribe in setup, unsubscribe on unmount.
+  private muteListeners = new Set<(muted: boolean) => void>()
+
+  onMuteChange(listener: (muted: boolean) => void): () => void {
+    this.muteListeners.add(listener)
+    return () => {
+      this.muteListeners.delete(listener)
+    }
+  }
+
+  private notifyMuteListeners(): void {
+    for (const fn of this.muteListeners) fn(this.muted)
   }
 
   /**

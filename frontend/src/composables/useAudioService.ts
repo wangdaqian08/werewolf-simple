@@ -29,6 +29,12 @@ export function useAudioService() {
   const gameStore = useGameStore()
   const roomStore = useRoomStore()
   const isMuted = ref(audioService.isMuted())
+  // Subscribe so external setMuted calls (e.g. the host-aware default in
+  // GameView) propagate to consumers of this composable. See the matching
+  // comment in VolumeControl.vue.
+  const unsubscribeMute = audioService.onMuteChange((m) => {
+    isMuted.value = m
+  })
   // Set of AudioSequence ids already played by this composable. Replaces the
   // single lastPlayedSequenceId because the audioReplayBuffer can deliver
   // several missed cues at once (in chronological order), and we need to
@@ -203,6 +209,7 @@ export function useAudioService() {
     document.removeEventListener('visibilitychange', handleVisibilityChange)
     audioService.stopAll()
     audioService.stopBgm()
+    unsubscribeMute()
   })
 
   function toggleMute() {

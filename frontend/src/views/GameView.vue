@@ -562,13 +562,23 @@ const isHost = computed(() => {
 })
 
 // Default mute for non-host players on every page load.
-// Applied once when both userId and hostId are known; manual toggles are not overridden.
+//
+// Apply once when the game phase has loaded — gating on `phase` (not just
+// `hostId`) means the trigger only fires after the full game payload from
+// /api/game/{id}/state has populated the store, not on intermediate STOMP
+// frames or partial room data. hostId and phase land together in that
+// response, so the check is redundant on the happy path but documents the
+// "wait for game state to be detected" intent and is robust to any future
+// path that sets hostId without phase.
+//
+// VolumeControl subscribes to audioService.onMuteChange (see VolumeControl.vue)
+// so its icon reflects this setMuted call regardless of mount order.
 let appliedDefaultMute = false
 watch(
-  () => [userStore.userId, gameStore.state?.hostId] as const,
-  ([uid, hostId]) => {
+  () => [userStore.userId, gameStore.state?.hostId, gameStore.state?.phase] as const,
+  ([uid, hostId, phase]) => {
     if (appliedDefaultMute) return
-    if (!uid || !hostId) return
+    if (!uid || !hostId || !phase) return
     appliedDefaultMute = true
     audioService.setMuted(uid !== hostId)
   },
