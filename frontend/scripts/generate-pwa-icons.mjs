@@ -8,13 +8,10 @@
  * Usage: node scripts/generate-pwa-icons.mjs
  */
 
-import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { readFileSync } from 'fs'
-
-const require = createRequire(import.meta.url)
-const sharp = require('sharp')
+import sharp from 'sharp'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const publicDir = join(__dirname, '..', 'public')
