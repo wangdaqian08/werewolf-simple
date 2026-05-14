@@ -1,6 +1,8 @@
 <template>
   <div class="lobby-wrap">
     <div class="lobby-card">
+      <InstallToHomeScreenPrompt />
+
       <h1 class="title">狼人杀</h1>
       <p class="subtitle">Werewolf</p>
 
@@ -199,6 +201,7 @@ import { roomService } from '@/services/roomService'
 import { userService } from '@/services/userService'
 import { buildGoogleAuthUrl, generateOAuthState } from '@/utils/oauth'
 import type { JoinRoomRequest, ProvidersResponse } from '@/types'
+import InstallToHomeScreenPrompt from '@/components/InstallToHomeScreenPrompt.vue'
 
 const router = useRouter()
 const userStore = useUserStore()

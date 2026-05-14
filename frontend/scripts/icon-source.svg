@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Parchment background -->
+  <rect width="512" height="512" fill="#ede8df"/>
+  <!-- Vermillion glyph: 狼 centered -->
+  <text
+    x="256"
+    y="360"
+    font-family="Noto Serif SC, Songti SC, STSong, serif"
+    font-size="320"
+    font-weight="700"
+    fill="#b5251a"
+    text-anchor="middle"
+    dominant-baseline="auto"
+  >狼</text>
+</svg>
