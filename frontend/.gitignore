@@ -13,6 +13,9 @@ dist-ssr
 *.local
 .vite
 
+# Obscura headless browser binary (downloaded locally, not committed)
+.obscura/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
