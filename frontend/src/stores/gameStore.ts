@@ -59,6 +59,16 @@ export const useGameStore = defineStore('game', () => {
     state.value = { ...state.value, myRole: role }
   }
 
+  /**
+   * Update daySkipVoting via a store action to guarantee Vue reactivity.
+   * Per pinia-nested-mutation memory: NEVER mutate this directly from STOMP
+   * callbacks — always go through this action with object spread.
+   */
+  function setDaySkipVoting(value: boolean) {
+    if (!state.value) return
+    state.value = { ...state.value, daySkipVoting: value }
+  }
+
   return {
     state,
     setState,
@@ -67,5 +77,6 @@ export const useGameStore = defineStore('game', () => {
     clearGame,
     updateNightPhaseSelection,
     setMyRole,
+    setDaySkipVoting,
   }
 })

@@ -40,6 +40,7 @@ vi.mock('@/services/audioService', () => ({
     setBgmLevel: (...args: unknown[]) => mockSetBgmLevel(...args),
     setBgmVolume: (...args: unknown[]) => mockSetBgmVolume(...args),
     getBgmVolume: () => mockGetBgmVolume(),
+    onMuteChange: () => () => {},
   },
 }))
 

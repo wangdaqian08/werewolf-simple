@@ -508,3 +508,91 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     expect(buttonLabels).toContain('继续 / Continue')
   })
 })
+
+// ── Layout regression: my-role-chip left, log-fab + ActionMenu in right-stack ────
+describe('VotingPhase — below-arch layout', () => {
+  let pinia: ReturnType<typeof createPinia>
+  let router: ReturnType<typeof createRouter>
+
+  beforeEach(() => {
+    pinia = createPinia()
+    setActivePinia(pinia)
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+  })
+
+  const baseVoting: VotingState = {
+    dayNumber: 1,
+    subPhase: 'VOTING',
+    phaseStarted: Date.now() - 10000,
+    phaseDeadline: Date.now() + 60000,
+    canVote: true,
+    votesSubmitted: 0,
+    totalVoters: 6,
+    tallyRevealed: false,
+    tally: [],
+    badgeDestroyed: false,
+  } as unknown as VotingState
+
+  const wolfPlayers: GamePlayer[] = [
+    {
+      userId: 'wolf-1',
+      nickname: 'Wolf',
+      avatar: '🐺',
+      seatIndex: 1,
+      role: 'WEREWOLF' as const,
+      isAlive: true,
+      isSheriff: false,
+      canVote: true,
+      idiotRevealed: false,
+    },
+    {
+      userId: 'p-2',
+      nickname: 'P2',
+      avatar: '😊',
+      seatIndex: 2,
+      role: 'VILLAGER' as const,
+      isAlive: true,
+      isSheriff: false,
+      canVote: true,
+      idiotRevealed: false,
+    },
+  ]
+
+  function mountVoting() {
+    return mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        gameId: 1,
+        votingPhase: baseVoting,
+        players: wolfPlayers,
+        myUserId: 'wolf-1',
+        isHost: false,
+        myRole: 'WEREWOLF',
+        isAlive: true,
+      },
+    })
+  }
+
+  it('my-role-chip is a direct child of role-history-row (left side, original spot)', () => {
+    const wrapper = mountVoting()
+    const chip = wrapper.find('.role-history-row > .my-role-chip')
+    expect(chip.exists()).toBe(true)
+  })
+
+  it('log-fab + ActionMenu live inside .right-stack inside role-history-row', () => {
+    const wrapper = mountVoting()
+    const rightStack = wrapper.find('.role-history-row > .right-stack')
+    expect(rightStack.exists()).toBe(true)
+    expect(rightStack.find('.log-fab').exists()).toBe(true)
+    expect(rightStack.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
+  })
+
+  it('Action chip is NOT bundled under my-role-chip on the left', () => {
+    const wrapper = mountVoting()
+    // The old role-action-col wrapper must be gone — ActionMenu lives on the right now.
+    expect(wrapper.find('.role-action-col').exists()).toBe(false)
+  })
+})

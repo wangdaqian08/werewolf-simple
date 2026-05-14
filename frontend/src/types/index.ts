@@ -154,6 +154,8 @@ export interface GameState {
   // flow; mirror here for the game flow.
   bgmTrack?: string | null
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
+  /** True when a wolf self-destructed this day — host sees "进入夜晚" instead of voting. */
+  daySkipVoting?: boolean
   events: GameEvent[]
   roleReveal?: RoleRevealState
   sheriffElection?: SheriffElectionState
@@ -405,7 +407,13 @@ export interface NightPhaseState {
 
 export interface ActionLogEntry {
   id: number
-  eventType: 'NIGHT_DEATH' | 'VOTE_RESULT' | 'HUNTER_SHOT' | 'IDIOT_REVEAL' | 'SHERIFF_RESULT'
+  eventType:
+    | 'NIGHT_DEATH'
+    | 'VOTE_RESULT'
+    | 'HUNTER_SHOT'
+    | 'IDIOT_REVEAL'
+    | 'SHERIFF_RESULT'
+    | 'SELF_DESTRUCT'
   message: string // raw JSON — parse per eventType
   targetUserId: string | null
   createdAt: string | null
@@ -474,6 +482,13 @@ export interface SheriffResultPayload {
   winnerSeatIndex: number | null
   abstainCount?: number
   abstainVoters?: AbstainVoter[]
+}
+
+export interface SelfDestructPayload {
+  dayNumber: number
+  userId: string
+  nickname: string
+  seatIndex: number
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

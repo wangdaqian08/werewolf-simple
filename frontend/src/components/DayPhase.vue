@@ -9,6 +9,34 @@
     <!-- Sun arc -->
     <SunArc :phase-deadline="dayPhase.phaseDeadline" :phase-started="dayPhase.phaseStarted" />
 
+    <!-- Below-arch row: my-role-chip on left, log-fab + Action stacked on right -->
+    <div class="below-arch-row">
+      <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
+        🔒 身份 · Tap to reveal
+      </button>
+      <div v-else />
+      <div class="right-stack">
+        <button
+          v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
+          class="log-fab"
+          aria-label="游戏记录"
+          data-testid="log-fab"
+          @click="showLog = true"
+        >
+          <span class="log-fab-icon" aria-hidden="true">📋</span>
+          <span class="log-fab-label">游戏记录</span>
+        </button>
+        <ActionMenu
+          v-if="myRole"
+          phase="DAY_DISCUSSION"
+          :sub-phase="dayPhase.subPhase"
+          :my-role="myRole"
+          :is-alive="isAlive"
+          @self-destruct="emit('self-destruct')"
+        />
+      </div>
+    </div>
+
     <!-- Fixed-height banner area — always rendered so grid position stays consistent -->
     <div class="banner-area">
       <template v-if="viewRole === 'DEAD'">
@@ -95,16 +123,6 @@
       </PlayerSlot>
     </section>
 
-    <!-- Floating action log button: hidden until host reveals result to prevent spoilers -->
-    <button
-      v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
-      class="log-fab"
-      aria-label="游戏记录"
-      @click="showLog = true"
-    >
-      📋
-    </button>
-
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
 
@@ -123,7 +141,19 @@
           </button>
         </div>
         <div v-else-if="dayPhase.subPhase === 'RESULT_REVEALED'" class="vote-actions">
+          <!-- When a wolf self-destructed, skip voting and go to night -->
           <button
+            v-if="daySkipVoting"
+            class="btn btn-primary vote-btn"
+            data-testid="day-enter-night"
+            :class="{ 'is-loading': actionPending }"
+            :disabled="actionPending"
+            @click="emit('continueToNight')"
+          >
+            进入夜晚 · Night
+          </button>
+          <button
+            v-else
             class="btn btn-gold vote-btn"
             data-testid="day-start-vote"
             :class="{ 'is-loading': actionPending }"
@@ -157,10 +187,11 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { DayPhaseState, GamePlayer } from '@/types'
+import type { DayPhaseState, GamePlayer, PlayerRole } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
+import ActionMenu from '@/components/ActionMenu.vue'
 
 const props = defineProps<{
   gameId: number
@@ -168,10 +199,14 @@ const props = defineProps<{
   players: GamePlayer[]
   myUserId: string
   isHost: boolean
+  myRole?: PlayerRole
+  isAlive?: boolean
+  daySkipVoting?: boolean
   actionPending?: boolean
 }>()
 
 const showLog = ref(false)
+const showRoleCard = ref(false)
 
 const emit = defineEmits<{
   revealResult: []
@@ -179,6 +214,8 @@ const emit = defineEmits<{
   vote: [targetId: string]
   skip: []
   selectPlayer: [userId: string]
+  'self-destruct': []
+  continueToNight: []
 }>()
 
 type ViewRole = 'HOST' | 'DEAD' | 'ALIVE' | 'GUEST'
@@ -311,21 +348,57 @@ function onTap(player: GamePlayer) {
   padding: 0 1rem 1rem;
 }
 
+.below-arch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0 1rem 0.5rem;
+}
+
+.right-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 .log-fab {
-  position: fixed;
-  bottom: 88px;
-  right: 16px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  width: auto;
+  padding: 6px 12px;
+  gap: 6px;
+  border-radius: 999px;
   background: var(--paper, #f5f0e8);
   border: 1px solid var(--border, #ccc2b0);
-  font-size: 20px;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.log-fab-icon {
+  font-size: 16px;
+}
+.log-fab-label {
+  font-size: 13px;
+  color: var(--text, #1a140c);
+  font-weight: 500;
+}
+
+.my-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: var(--paper, #f5f0e8);
+  border: 1px solid var(--border, #ccc2b0);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted, #8a7a65);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.my-role-locked {
+  font-style: italic;
 }
 </style>

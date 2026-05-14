@@ -85,6 +85,16 @@ const expanded = ref(false)
 const fill = computed(() => Math.round(volume.value * 100))
 const sliderShown = computed(() => expanded.value && !isMuted.value)
 
+// audioService.muted is a plain class field — not a Vue ref — so the initial
+// ref(audioService.isMuted()) only captures the value at mount time. The
+// host-aware default-mute watcher in GameView fires AFTER VolumeControl
+// mounts (gameStore.state.hostId arrives via HTTP), so without this
+// subscription the icon stays at the initial value while the real mute state
+// flips underneath. Reproduced: PR #122 non-host audio not muted by default.
+const unsubscribeMute = audioService.onMuteChange((m) => {
+  isMuted.value = m
+})
+
 let idleTimer: ReturnType<typeof setTimeout> | null = null
 
 function clearIdleTimer() {
@@ -140,7 +150,10 @@ function onVolumeInput(e: Event) {
   startIdleTimer()
 }
 
-onUnmounted(clearIdleTimer)
+onUnmounted(() => {
+  clearIdleTimer()
+  unsubscribeMute()
+})
 </script>
 
 <style scoped>

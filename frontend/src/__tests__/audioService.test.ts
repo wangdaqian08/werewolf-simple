@@ -155,6 +155,31 @@ describe('audioService', () => {
     expect(mod.audioService.isMuted()).toBe(true)
   })
 
+  // Regression: VolumeControl mounts BEFORE the GameView watcher fires
+  // setMuted (gameStore.hostId arrives via HTTP after the component tree is
+  // mounted). Without an observer, the icon stayed stuck at the initial
+  // value while audioService.muted flipped under it. PR #122 surfaced this.
+  it('onMuteChange fires when setMuted changes the value', () => {
+    const seen: boolean[] = []
+    const unsub = audioService.onMuteChange((m) => seen.push(m))
+    audioService.setMuted(true)
+    audioService.setMuted(false)
+    audioService.setMuted(false) // no-op, no event
+    expect(seen).toEqual([true, false])
+    unsub()
+    audioService.setMuted(true)
+    expect(seen).toEqual([true, false]) // unsubscribed → no further events
+  })
+
+  it('onMuteChange also fires on toggleMute', () => {
+    const seen: boolean[] = []
+    const unsub = audioService.onMuteChange((m) => seen.push(m))
+    audioService.toggleMute() // false → true
+    audioService.toggleMute() // true → false
+    expect(seen).toEqual([true, false])
+    unsub()
+  })
+
   // ── Volume ──────────────────────────────────────────────────────────────
 
   it('setGlobalVolume clamps to 0-1', () => {

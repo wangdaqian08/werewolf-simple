@@ -68,6 +68,10 @@
         :election="gameStore.state.sheriffElection"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :my-role="gameStore.state?.myRole"
+        :is-alive="
+          gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
+        "
         :action-pending="actionPending"
         @run="handleSheriffRun"
         @pass="handleSheriffPass"
@@ -79,6 +83,7 @@
         @reveal-result="handleSheriffRevealResult"
         @end-result="handleSheriffEndResult"
         @appoint="handleSheriffAppoint"
+        @self-destruct="handleSelfDestruct"
       />
     </template>
 
@@ -111,6 +116,9 @@
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
         :my-role="gameStore.state?.myRole"
+        :is-alive="
+          gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
+        "
         :current-sheriff-user-id="gameStore.state?.sheriffUserId ?? null"
         :vote-history="gameStore.state?.voteHistory"
         :action-pending="actionPending"
@@ -124,6 +132,7 @@
         @hunter-pass="handleHunterPass"
         @pass-badge="handlePassBadge"
         @destroy-badge="handleDestroyBadge"
+        @self-destruct="handleSelfDestruct"
       />
     </template>
 
@@ -136,12 +145,19 @@
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :my-role="gameStore.state?.myRole"
+        :is-alive="
+          gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
+        "
+        :day-skip-voting="gameStore.state?.daySkipVoting ?? false"
         :action-pending="actionPending"
         @reveal-result="handleRevealResult"
         @start-vote="handleStartVote"
         @vote="handleDayVote"
         @skip="handleDaySkip"
         @select-player="handleDaySelectPlayer"
+        @self-destruct="handleSelfDestruct"
+        @continue-to-night="handleVotingContinue"
       />
     </template>
 
@@ -546,13 +562,23 @@ const isHost = computed(() => {
 })
 
 // Default mute for non-host players on every page load.
-// Applied once when both userId and hostId are known; manual toggles are not overridden.
+//
+// Apply once when the game phase has loaded — gating on `phase` (not just
+// `hostId`) means the trigger only fires after the full game payload from
+// /api/game/{id}/state has populated the store, not on intermediate STOMP
+// frames or partial room data. hostId and phase land together in that
+// response, so the check is redundant on the happy path but documents the
+// "wait for game state to be detected" intent and is robust to any future
+// path that sets hostId without phase.
+//
+// VolumeControl subscribes to audioService.onMuteChange (see VolumeControl.vue)
+// so its icon reflects this setMuted call regardless of mount order.
 let appliedDefaultMute = false
 watch(
-  () => [userStore.userId, gameStore.state?.hostId] as const,
-  ([uid, hostId]) => {
+  () => [userStore.userId, gameStore.state?.hostId, gameStore.state?.phase] as const,
+  ([uid, hostId, phase]) => {
     if (appliedDefaultMute) return
-    if (!uid || !hostId) return
+    if (!uid || !hostId || !phase) return
     appliedDefaultMute = true
     audioService.setMuted(uid !== hostId)
   },
@@ -854,6 +880,9 @@ async function handlePassBadge(userId: string) {
 }
 async function handleDestroyBadge() {
   await action({ actionType: 'BADGE_DESTROY' })
+}
+async function handleSelfDestruct() {
+  await action({ actionType: 'WOLF_SELF_DESTRUCT' })
 }
 
 async function debugVoting(scenario: string) {

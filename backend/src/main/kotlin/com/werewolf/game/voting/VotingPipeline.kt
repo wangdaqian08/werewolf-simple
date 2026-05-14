@@ -166,12 +166,26 @@ class VotingPipeline(
     fun continueToNight(request: GameActionRequest, context: GameContext): GameActionResult {
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can advance")
-        if (context.game.phase != GamePhase.DAY_VOTING)
-            return GameActionResult.Rejected("Not in voting phase")
-        if (context.game.subPhase != VotingSubPhase.VOTE_RESULT.name)
-            return GameActionResult.Rejected("Not in VOTE_RESULT sub-phase")
-        goToNight(context)
-        return GameActionResult.Success()
+
+        // Normal path: DAY_VOTING/VOTE_RESULT
+        if (context.game.phase == GamePhase.DAY_VOTING) {
+            if (context.game.subPhase != VotingSubPhase.VOTE_RESULT.name)
+                return GameActionResult.Rejected("Not in VOTE_RESULT sub-phase")
+            goToNight(context)
+            return GameActionResult.Success()
+        }
+
+        // Skip-voting path: DAY_DISCUSSION when daySkipVoting=true (wolf self-destructed)
+        if (context.game.phase == GamePhase.DAY_DISCUSSION) {
+            if (!context.game.daySkipVoting)
+                return GameActionResult.Rejected("Voting was not skipped — cannot advance to night from DAY_DISCUSSION")
+            if (context.game.subPhase !in setOf(DaySubPhase.RESULT_HIDDEN.name, DaySubPhase.RESULT_REVEALED.name))
+                return GameActionResult.Rejected("Not in a day discussion sub-phase")
+            goToNight(context)
+            return GameActionResult.Success()
+        }
+
+        return GameActionResult.Rejected("Not in voting phase")
     }
 
     @Transactional
