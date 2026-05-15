@@ -84,8 +84,8 @@ function neverShow() {
 .install-prompt-steps {
   font-size: 13px;
   color: var(--text, #1a140c);
-  margin: 0 0 12px 16px;
-  padding: 0;
+  margin: 0 0 12px 0;
+  padding: 0 0 0 22px;
   line-height: 1.7;
 }
 
