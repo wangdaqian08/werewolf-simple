@@ -53,3 +53,19 @@ export function isSupportedBrowser(): boolean {
   // 4. Firefox, desktop Safari, anything else.
   return false
 }
+
+export function isIosSafari(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent ?? ''
+  if (!/iPhone|iPad|iPod/.test(ua)) return false
+  // CriOS = Chrome iOS, FxiOS = Firefox iOS, EdgiOS = Edge iOS.
+  // All are WKWebView wrappers without Add-to-Home-Screen self-install.
+  return !/CriOS|FxiOS|EdgiOS/.test(ua) && /Safari/.test(ua)
+}
+
+export function isStandalonePwa(): boolean {
+  if (typeof navigator === 'undefined') return false
+  if ((navigator as { standalone?: boolean }).standalone === true) return true
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(display-mode: standalone)').matches
+}
