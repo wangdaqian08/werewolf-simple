@@ -87,6 +87,10 @@ function neverShow() {
   margin: 0 0 12px 0;
   padding: 0 0 0 22px;
   line-height: 1.7;
+  /* Tailwind v4's preflight sets `list-style: none` on all ol/ul. Re-enable
+     the decimal markers explicitly so the three install steps render as
+     1. / 2. / 3. */
+  list-style: decimal outside;
 }
 
 .install-prompt-actions {
