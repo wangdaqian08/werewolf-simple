@@ -8,6 +8,7 @@ import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.EliminationModifier
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.voting.VotingPipeline
 import com.werewolf.model.*
 import com.werewolf.repository.*
@@ -34,6 +35,7 @@ class HookInvocationTest {
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var audioService: com.werewolf.service.AudioService
     @Mock lateinit var nightOrchestrator: NightOrchestrator
+    @Mock lateinit var hostTimerService: HostTimerService
 
     private val gameId = 1
     private val hostId = "host:001"
@@ -115,6 +117,7 @@ class HookInvocationTest {
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
         actionLogService = mock(),
+        hostTimerService = hostTimerService,
     )
 
     // ── onDayEnter ───────────────────────────────────────────────────────────

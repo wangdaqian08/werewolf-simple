@@ -46,6 +46,15 @@ class Game(
 
     @Column(name = "day_skip_voting", nullable = false)
     var daySkipVoting: Boolean = false,
+
+    @Column(name = "timer_started_at")
+    var timerStartedAt: Long? = null,
+
+    @Column(name = "timer_duration_ms", nullable = false)
+    var timerDurationMs: Long = 0,
+
+    @Column(name = "timer_running", nullable = false)
+    var timerRunning: Boolean = false,
 ) {
     init {
         require(roomId > 0) { "roomId must be a valid ID, got $roomId" }

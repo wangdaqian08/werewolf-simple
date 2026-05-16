@@ -6,6 +6,7 @@ import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.voting.VotingPipeline
 import com.werewolf.model.*
 import com.werewolf.repository.EliminationHistoryRepository
@@ -35,6 +36,7 @@ class VotingPipelineSheriffWeightTest {
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var nightOrchestrator: NightOrchestrator
+    @Mock lateinit var hostTimerService: HostTimerService
 
     private lateinit var votingPipeline: VotingPipeline
 
@@ -54,6 +56,7 @@ class VotingPipelineSheriffWeightTest {
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
         actionLogService = mock(),
+        hostTimerService = hostTimerService,
     )
 
     private val gameId = 1

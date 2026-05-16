@@ -5,6 +5,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.config.GameTimingProperties
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,7 @@ class SheriffService(
     private val coroutineScope: CoroutineScope,
     private val timingProperties: GameTimingProperties,
     private val actionLogService: ActionLogService,
+    private val hostTimerService: HostTimerService,
 ) {
     val log = LoggerFactory.getLogger(SheriffService::class.java)
     private val scheduledJobs = mutableMapOf<Int, Job>()
@@ -312,6 +314,9 @@ class SheriffService(
         if (election.subPhase != ElectionSubPhase.SPEECH)
             return GameActionResult.Rejected("Not in SPEECH sub-phase")
 
+        // Cancel any running timer for the departing candidate before advancing
+        hostTimerService.cancel(context.gameId)
+
         val order = election.speakingOrder?.split(",") ?: emptyList()
         val candidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
         val candidateStatusMap = candidates.associateBy { it.userId }.mapValues { it.value.status }
@@ -478,6 +483,7 @@ class SheriffService(
         val allCandidates = sheriffCandidateRepository.findByElectionId(election.id)
         val anyRunningLeft = allCandidates.any { it.status == CandidateStatus.RUNNING && speakingOrderIds.contains(it.userId) }
         if (!anyRunningLeft) {
+            hostTimerService.cancel(context.gameId)
             // No running candidates remain — mirrors startSpeech's empty-candidates
             // branch: advance straight to DAY_DISCUSSION/RESULT_HIDDEN instead of
             // landing on SHERIFF_ELECTION/RESULT. The RESULT screen would show an

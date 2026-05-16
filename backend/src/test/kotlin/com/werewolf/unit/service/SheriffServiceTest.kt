@@ -5,6 +5,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.config.GameTimingProperties
 import com.werewolf.game.action.GameActionResult
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.ActionLogService
@@ -33,6 +34,7 @@ class SheriffServiceTest {
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var actionLogService: ActionLogService
+    @Mock lateinit var hostTimerService: HostTimerService
     private lateinit var sheriffService: SheriffService
 
     @BeforeEach
@@ -43,6 +45,7 @@ class SheriffServiceTest {
             stompPublisher, CoroutineScope(Dispatchers.Default),
             GameTimingProperties(),
             actionLogService,
+            hostTimerService,
         )
     }
 
@@ -1239,5 +1242,68 @@ class SheriffServiceTest {
         val phaseChanged = captor.firstValue as DomainEvent.PhaseChanged
         assertThat(phaseChanged.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
         assertThat(phaseChanged.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
+    }
+
+    // ── Timer cancel hooks ─────────────────────────────────────────────────────
+
+    @Test
+    fun `advanceSpeech - cancels timer before advancing to next candidate`() {
+        val order = "$hostId,$guestId"
+        val ctx = context(
+            election = election(subPhase = ElectionSubPhase.SPEECH, speakingOrder = order, currentSpeakerIdx = 0),
+            players = listOf(player(hostId), player(guestId)),
+        )
+        val candidateHost = SheriffCandidate(electionId = electionId, userId = hostId, status = CandidateStatus.RUNNING)
+        val candidateGuest = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(candidateHost, candidateGuest))
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_ADVANCE_SPEECH)
+        sheriffService.handle(req, ctx)
+
+        // hostTimerService.cancel must have been called
+        verify(hostTimerService).cancel(gameId)
+    }
+
+    @Test
+    fun `advanceSpeech - cancels timer when transitioning to VOTING (all spoke)`() {
+        val order = "$guestId"
+        val ctx = context(
+            election = election(subPhase = ElectionSubPhase.SPEECH, speakingOrder = order, currentSpeakerIdx = 0),
+            players = listOf(player(hostId), player(guestId)),
+        )
+        val candidate = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(candidate))
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_ADVANCE_SPEECH)
+        sheriffService.handle(req, ctx)
+
+        verify(hostTimerService).cancel(gameId)
+
+        val eventCaptor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher).broadcastGame(eq(gameId), eventCaptor.capture())
+        assertThat((eventCaptor.firstValue as DomainEvent.PhaseChanged).subPhase)
+            .isEqualTo(ElectionSubPhase.VOTING.name)
+    }
+
+    @Test
+    fun `quitCampaign - cancels timer when last candidate quits (SPEECH exits to DAY_DISCUSSION)`() {
+        val order = "$guestId"
+        val ctx = context(
+            election = election(subPhase = ElectionSubPhase.SPEECH, speakingOrder = order, currentSpeakerIdx = 0),
+            players = listOf(player(hostId), player(guestId)),
+        )
+        val candidate = SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(candidate))
+        whenever(sheriffCandidateRepository.save(any<SheriffCandidate>())).thenAnswer {
+            (it.arguments[0] as SheriffCandidate).also { c -> c.status = CandidateStatus.QUIT }
+        }
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, guestId, ActionType.SHERIFF_QUIT_CAMPAIGN)
+        sheriffService.handle(req, ctx)
+
+        verify(hostTimerService).cancel(gameId)
     }
 }

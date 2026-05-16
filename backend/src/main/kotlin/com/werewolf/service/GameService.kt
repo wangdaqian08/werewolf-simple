@@ -4,6 +4,7 @@ import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.voting.TallyCalculator
 import com.werewolf.model.*
 import com.werewolf.repository.*
@@ -26,6 +27,7 @@ class GameService(
     private val voteRepository: VoteRepository,
     private val eliminationHistoryRepository: EliminationHistoryRepository,
     private val audioReplayCache: AudioReplayCache,
+    private val hostTimerService: HostTimerService,
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
@@ -308,9 +310,15 @@ class GameService(
             )
         } else null
 
+        val timerSnapshot = hostTimerService.snapshot(gameId)
         return mapOf(
             "gameId" to gameId,
             "hostId" to game.hostUserId,
+            "timer" to mapOf(
+                "remainingMs" to timerSnapshot.remainingMs,
+                "durationMs"  to timerSnapshot.durationMs,
+                "running"     to timerSnapshot.running,
+            ),
             "phase" to game.phase.name,
             "subPhase" to game.subPhase,
             "dayNumber" to game.dayNumber,

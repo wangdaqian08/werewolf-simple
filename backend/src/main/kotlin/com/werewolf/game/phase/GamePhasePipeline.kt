@@ -5,6 +5,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
@@ -30,6 +31,7 @@ class GamePhasePipeline(
     private val sheriffService: SheriffService,
     private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: com.werewolf.service.ActionLogService,
+    private val hostTimerService: HostTimerService,
 ) {
     val log: Logger = LoggerFactory.getLogger(GamePhasePipeline::class.java)
     // ── Phase transition actions ───────────────────────────────────────────────
@@ -101,6 +103,7 @@ class GamePhasePipeline(
             return GameActionResult.Rejected("Reveal the night result before starting the vote")
         }
 
+        hostTimerService.cancel(context.gameId)
         context.game.phase = GamePhase.DAY_VOTING
         context.game.subPhase = VotingSubPhase.VOTING.name
         gameRepository.save(context.game)

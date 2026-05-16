@@ -30,4 +30,12 @@ export const gameService = {
     const { data } = await http.get<ActionLogEntry[]>(`/game/${gameId}/events`)
     return data
   },
+
+  async startTimer(gameId: number, durationSeconds: number): Promise<void> {
+    await http.post(`/game/${gameId}/timer/start`, { durationSeconds })
+  },
+
+  async stopTimer(gameId: number): Promise<void> {
+    await http.post(`/game/${gameId}/timer/stop`)
+  },
 }
