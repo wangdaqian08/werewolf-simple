@@ -55,6 +55,7 @@ class VotingPipelineTest {
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
         actionLogService = mock(),
+        hostTimerService = mock(),
     )
 
     private val gameId = 1
@@ -939,6 +940,7 @@ class VotingPipelineTest {
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
         actionLogService = actionLogService,
+        hostTimerService = mock(),
     )
 
     @Test

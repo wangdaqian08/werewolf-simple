@@ -6,6 +6,7 @@ import com.werewolf.game.action.GameActionDispatcher
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameService
 import org.slf4j.Logger
@@ -14,6 +15,8 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 
+data class TimerStartRequest(val durationSeconds: Long)
+
 @RestController
 @RequestMapping("/api/game")
 class GameController(
@@ -21,6 +24,7 @@ class GameController(
     private val gameActionDispatcher: GameActionDispatcher,
     private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: ActionLogService,
+    private val hostTimerService: HostTimerService,
 ) {
     val log: Logger = LoggerFactory.getLogger(GameController::class.java)
     @PostMapping("/start")
@@ -86,6 +90,35 @@ class GameController(
         @PathVariable gameId: Int,
         authentication: Authentication,
     ) = ResponseEntity.ok(actionLogService.getLog(gameId))
+
+    @PostMapping("/{gameId}/timer/start")
+    fun startTimer(
+        @PathVariable gameId: Int,
+        @RequestBody req: TimerStartRequest,
+        authentication: Authentication,
+    ): ResponseEntity<Map<String, Any?>> {
+        val userId = authentication.principal as String
+        return when (val result = hostTimerService.start(userId, gameId, req.durationSeconds)) {
+            is GameActionResult.Success ->
+                ResponseEntity.ok(mapOf("success" to true))
+            is GameActionResult.Rejected ->
+                ResponseEntity.badRequest().body(mapOf("success" to false, "error" to result.reason))
+        }
+    }
+
+    @PostMapping("/{gameId}/timer/stop")
+    fun stopTimer(
+        @PathVariable gameId: Int,
+        authentication: Authentication,
+    ): ResponseEntity<Map<String, Any?>> {
+        val userId = authentication.principal as String
+        return when (val result = hostTimerService.stop(userId, gameId)) {
+            is GameActionResult.Success ->
+                ResponseEntity.ok(mapOf("success" to true))
+            is GameActionResult.Rejected ->
+                ResponseEntity.badRequest().body(mapOf("success" to false, "error" to result.reason))
+        }
+    }
 
     // DEBUG ONLY: Manually advance night from WAITING to WEREWOLF_PICK
     @PostMapping("/{gameId}/debug/advance-night")

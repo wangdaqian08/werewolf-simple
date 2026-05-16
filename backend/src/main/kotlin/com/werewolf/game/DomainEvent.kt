@@ -82,4 +82,12 @@ sealed class DomainEvent {
         val canPoison: Boolean? = null,
         val timeoutMs: Long
     ) : DomainEvent()
+
+    @JsonTypeName("TimerUpdated")
+    data class TimerUpdated(
+        val gameId: Int,
+        val remainingMs: Long,
+        val durationMs: Long,
+        val running: Boolean,
+    ) : DomainEvent()
 }

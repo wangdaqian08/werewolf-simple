@@ -9,6 +9,7 @@ import com.werewolf.game.phase.HardModeCounterplay
 import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
@@ -35,6 +36,7 @@ class VotingPipeline(
     private val contextLoader: GameContextLoader,
     private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: ActionLogService,
+    private val hostTimerService: HostTimerService,
 ) {
     private val log = LoggerFactory.getLogger(VotingPipeline::class.java)
 
@@ -181,6 +183,7 @@ class VotingPipeline(
                 return GameActionResult.Rejected("Voting was not skipped — cannot advance to night from DAY_DISCUSSION")
             if (context.game.subPhase !in setOf(DaySubPhase.RESULT_HIDDEN.name, DaySubPhase.RESULT_REVEALED.name))
                 return GameActionResult.Rejected("Not in a day discussion sub-phase")
+            hostTimerService.cancel(context.gameId)
             goToNight(context)
             return GameActionResult.Success()
         }

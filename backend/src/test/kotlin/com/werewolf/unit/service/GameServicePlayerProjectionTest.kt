@@ -2,12 +2,15 @@ package com.werewolf.unit.service
 
 import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.timer.HostTimerService
+import com.werewolf.game.timer.TimerSnapshot
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.GameService
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
@@ -25,6 +28,7 @@ import java.util.*
  * the OAuth login → User row → RoomPlayer override.
  */
 @ExtendWith(MockitoExtension::class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 @Suppress("UNCHECKED_CAST")
 class GameServicePlayerProjectionTest {
 
@@ -40,6 +44,7 @@ class GameServicePlayerProjectionTest {
     @Mock lateinit var voteRepository: VoteRepository
     @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
     @Mock lateinit var audioReplayCache: AudioReplayCache
+    @Mock lateinit var hostTimerService: HostTimerService
     @InjectMocks lateinit var gameService: GameService
 
     private val gameId = 1
@@ -62,6 +67,11 @@ class GameServicePlayerProjectionTest {
 
     private fun roomPlayer(userId: String, displayName: String?) =
         RoomPlayer(roomId = roomId, userId = userId, displayName = displayName)
+
+    @BeforeEach
+    fun setupCommon() {
+        whenever(hostTimerService.snapshot(any())).thenReturn(TimerSnapshot(0L, 0L, false))
+    }
 
     @Test
     fun `getGameState includes avatar URL on every player from User_avatarUrl`() {

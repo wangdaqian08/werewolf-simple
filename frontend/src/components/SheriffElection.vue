@@ -1,10 +1,17 @@
 <template>
   <div class="sheriff-wrap">
-    <!-- Header: phase chip + timer -->
+    <!-- Header: phase chip + countdown arc (SPEECH only) -->
     <div class="sheriff-header">
       <div class="phase-chip">{{ phaseChipLabel }}</div>
-      <div class="timer">{{ election.subPhase !== 'RESULT' ? election.timeRemaining : '' }}</div>
-      <div v-if="election.subPhase === 'RESULT'" class="timer-result">Result</div>
+      <CountdownArc
+        v-if="election.subPhase === 'SPEECH'"
+        :remaining-ms="timer?.remainingMs ?? 0"
+        :duration-ms="timer?.durationMs ?? 0"
+        :running="timer?.running ?? false"
+        :is-host="isHost"
+        @start-timer="(s) => emit('start-timer', s)"
+        @stop-timer="emit('stop-timer')"
+      />
     </div>
 
     <!-- Below-header row: Action chip on the right (wolf self-destruct) -->
@@ -586,12 +593,14 @@
 import { computed, ref } from 'vue'
 import Avatar from '@/components/Avatar.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
-import type { PlayerRole, SheriffCandidate, SheriffElectionState } from '@/types'
+import CountdownArc from '@/components/CountdownArc.vue'
+import type { PlayerRole, SheriffCandidate, SheriffElectionState, TimerState } from '@/types'
 
 const props = defineProps<{
   election: SheriffElectionState
   myUserId: string
   isHost: boolean
+  timer?: TimerState | null
   myRole?: PlayerRole
   isAlive?: boolean
   actionPending?: boolean
@@ -609,6 +618,8 @@ const emit = defineEmits<{
   endResult: []
   appoint: [userId: string]
   'self-destruct': []
+  'start-timer': [seconds: number]
+  'stop-timer': []
 }>()
 
 const iAmCandidate = computed(() =>

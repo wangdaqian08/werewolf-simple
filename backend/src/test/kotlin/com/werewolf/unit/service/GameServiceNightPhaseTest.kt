@@ -2,6 +2,8 @@ package com.werewolf.unit.service
 
 import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.timer.HostTimerService
+import com.werewolf.game.timer.TimerSnapshot
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.GameService
@@ -37,6 +39,7 @@ class GameServiceNightPhaseTest {
     @Mock lateinit var voteRepository: VoteRepository
     @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
     @Mock lateinit var audioReplayCache: AudioReplayCache
+    @Mock lateinit var hostTimerService: HostTimerService
     @InjectMocks lateinit var gameService: GameService
 
     private val gameId = 1
@@ -78,6 +81,7 @@ class GameServiceNightPhaseTest {
     @BeforeEach
     fun setupCommon() {
         whenever(roomRepository.findById(1)).thenReturn(Optional.of(room()))
+        whenever(hostTimerService.snapshot(any())).thenReturn(TimerSnapshot(0L, 0L, false))
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

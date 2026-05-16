@@ -88,6 +88,14 @@ export interface AudioSequence {
   timestamp: number
 }
 
+// ── Timer ─────────────────────────────────────────────────────────────────────
+
+export interface TimerState {
+  remainingMs: number
+  durationMs: number
+  running: boolean
+}
+
 // ── Game ──────────────────────────────────────────────────────────────────────
 
 export type GamePhase =
@@ -157,6 +165,7 @@ export interface GameState {
   /** True when a wolf self-destructed this day — host sees "进入夜晚" instead of voting. */
   daySkipVoting?: boolean
   events: GameEvent[]
+  timer?: TimerState
   roleReveal?: RoleRevealState
   sheriffElection?: SheriffElectionState
   dayPhase?: DayPhaseState

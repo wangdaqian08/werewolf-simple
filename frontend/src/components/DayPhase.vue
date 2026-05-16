@@ -1,9 +1,16 @@
 <template>
   <div class="day-wrap">
-    <!-- Header: pill badge left | large timer right -->
+    <!-- Header: pill badge left | countdown arc right -->
     <header class="day-header">
       <div class="day-pill">第 {{ dayPhase.dayNumber }} 天 · Day {{ dayPhase.dayNumber }}</div>
-      <div class="day-timer">{{ formattedTime }}</div>
+      <CountdownArc
+        :remaining-ms="timer?.remainingMs ?? 0"
+        :duration-ms="timer?.durationMs ?? 0"
+        :running="timer?.running ?? false"
+        :is-host="isHost"
+        @start-timer="(s) => emit('start-timer', s)"
+        @stop-timer="emit('stop-timer')"
+      />
     </header>
 
     <!-- Sun arc -->
@@ -186,12 +193,13 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { DayPhaseState, GamePlayer, PlayerRole } from '@/types'
+import { computed, ref, watch } from 'vue'
+import type { DayPhaseState, GamePlayer, PlayerRole, TimerState } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
+import CountdownArc from '@/components/CountdownArc.vue'
 
 const props = defineProps<{
   gameId: number
@@ -199,6 +207,7 @@ const props = defineProps<{
   players: GamePlayer[]
   myUserId: string
   isHost: boolean
+  timer?: TimerState | null
   myRole?: PlayerRole
   isAlive?: boolean
   daySkipVoting?: boolean
@@ -216,6 +225,8 @@ const emit = defineEmits<{
   selectPlayer: [userId: string]
   'self-destruct': []
   continueToNight: []
+  'start-timer': [seconds: number]
+  'stop-timer': []
 }>()
 
 type ViewRole = 'HOST' | 'DEAD' | 'ALIVE' | 'GUEST'
@@ -226,26 +237,6 @@ const viewRole = computed<ViewRole>(() => {
   if (!me) return 'GUEST'
   if (!me.isAlive) return 'DEAD'
   return 'ALIVE'
-})
-
-const now = ref(Date.now())
-let intervalId = 0
-
-onMounted(() => {
-  intervalId = window.setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
-})
-
-onUnmounted(() => {
-  clearInterval(intervalId)
-})
-
-const formattedTime = computed(() => {
-  const remaining = Math.max(0, props.dayPhase.phaseDeadline - now.value) / 1000
-  const m = Math.floor(remaining / 60)
-  const s = Math.floor(remaining % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
 })
 
 // Selection is local UI state — server is notified but not authoritative for display

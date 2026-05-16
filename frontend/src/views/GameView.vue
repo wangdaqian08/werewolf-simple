@@ -68,6 +68,7 @@
         :election="gameStore.state.sheriffElection"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :timer="gameStore.state?.timer ?? null"
         :my-role="gameStore.state?.myRole"
         :is-alive="
           gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
@@ -84,6 +85,8 @@
         @end-result="handleSheriffEndResult"
         @appoint="handleSheriffAppoint"
         @self-destruct="handleSelfDestruct"
+        @start-timer="(s) => handleTimerStart(Number(route.params.gameId), s)"
+        @stop-timer="() => handleTimerStop(Number(route.params.gameId))"
       />
     </template>
 
@@ -145,6 +148,7 @@
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :timer="gameStore.state?.timer ?? null"
         :my-role="gameStore.state?.myRole"
         :is-alive="
           gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
@@ -158,6 +162,8 @@
         @select-player="handleDaySelectPlayer"
         @self-destruct="handleSelfDestruct"
         @continue-to-night="handleVotingContinue"
+        @start-timer="(s) => handleTimerStart(Number(route.params.gameId), s)"
+        @stop-timer="() => handleTimerStop(Number(route.params.gameId))"
       />
     </template>
 
@@ -760,6 +766,22 @@ async function handleDaySelectPlayer(userId: string) {
   await action({ actionType: 'SELECT_PLAYER', targetId: userId })
 }
 
+async function handleTimerStart(gameId: number, durationSeconds: number) {
+  try {
+    await gameService.startTimer(gameId, durationSeconds)
+  } catch {
+    /* host sees no feedback — timer state arrives via STOMP TimerUpdated */
+  }
+}
+
+async function handleTimerStop(gameId: number) {
+  try {
+    await gameService.stopTimer(gameId)
+  } catch {
+    /* same as above */
+  }
+}
+
 async function handleNightSelect(userId: string) {
   // Wolf selection is shared with teammates in real-time; other roles select locally only
   if (gameStore.state?.nightPhase?.subPhase === 'WEREWOLF_PICK') {
@@ -1092,6 +1114,14 @@ onMounted(async () => {
         // This is the main event that should trigger UI update; PhaseChanged is also sent but VoteTally is more complete
         if (data.type === 'VoteTally') {
           await refreshState()
+        }
+        // Timer update from host: update timer state in store directly (no state refetch needed)
+        if (data.type === 'TimerUpdated') {
+          gameStore.setTimer({
+            remainingMs: data.remainingMs,
+            durationMs: data.durationMs,
+            running: data.running,
+          })
         }
         // Both mock (GAME_OVER) and real backend (GameOver) navigate to result
         if (data.type === 'GAME_OVER' || data.type === 'GameOver') {

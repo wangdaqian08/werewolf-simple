@@ -5,6 +5,7 @@ import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.phase.GamePhasePipeline
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
@@ -37,6 +38,7 @@ class GamePhasePipelineDayTest {
     @Mock lateinit var sheriffService: SheriffService
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var actionLogService: ActionLogService
+    @Mock lateinit var hostTimerService: HostTimerService
     @InjectMocks lateinit var pipeline: GamePhasePipeline
 
     private val gameId = 10
