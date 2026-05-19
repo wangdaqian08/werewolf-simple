@@ -14,7 +14,7 @@ import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
-@Order(2)
+@Order(3)
 @Component
 class SeerHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
 

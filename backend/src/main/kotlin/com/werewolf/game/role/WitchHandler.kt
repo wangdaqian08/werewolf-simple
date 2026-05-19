@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
-@Order(3)
+@Order(2)
 @Component
 class WitchHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
 
