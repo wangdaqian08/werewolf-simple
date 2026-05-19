@@ -278,10 +278,7 @@ describe('GameView Audio Event Order Bug', () => {
     await nextTick()
 
     // AudioSequence
-    const newSeq = makeSequence(
-      ['witch_close_eyes.mp3', 'seer_open_eyes.mp3'],
-      'seq-witch-to-seer',
-    )
+    const newSeq = makeSequence(['witch_close_eyes.mp3', 'seer_open_eyes.mp3'], 'seq-witch-to-seer')
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
