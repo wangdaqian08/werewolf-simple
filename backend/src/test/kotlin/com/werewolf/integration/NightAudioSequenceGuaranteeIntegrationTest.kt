@@ -179,7 +179,7 @@ class NightAudioSequenceGuaranteeIntegrationTest {
     }
 
     @Test
-    fun `full night with wolf-seer-witch-guard broadcasts every role's open and close audio in order`() {
+    fun `full night with wolf-witch-seer-guard broadcasts every role's open and close audio in order`() {
         // This test locks in the complete decoupled audio flow for a full-roles night.
         // Each role owns its own open-eyes and close-eyes files. The role loop drives
         // them in sequence. The player hears, in order:
@@ -188,10 +188,10 @@ class NightAudioSequenceGuaranteeIntegrationTest {
         //   wolf_howl.mp3              (phase transition)
         //   wolf_open_eyes.mp3         (werewolf role start)
         //   wolf_close_eyes.mp3        (werewolf role end)
-        //   seer_open_eyes.mp3         (seer role start)
-        //   seer_close_eyes.mp3        (seer role end)
         //   witch_open_eyes.mp3        (witch role start)
         //   witch_close_eyes.mp3       (witch role end)
+        //   seer_open_eyes.mp3         (seer role start)
+        //   seer_close_eyes.mp3        (seer role end)
         //   guard_open_eyes.mp3        (guard role start)
         //   guard_close_eyes.mp3       (guard role end)
         //
@@ -210,16 +210,16 @@ class NightAudioSequenceGuaranteeIntegrationTest {
             .first { it.role != PlayerRole.WEREWOLF && it.role != PlayerRole.SEER && it.role != PlayerRole.WITCH && it.role != PlayerRole.GUARD }
         assertThat(submitWith(wolfToken, gameId, "WOLF_KILL", firstVillager.userId).statusCode).isEqualTo(HttpStatus.OK)
 
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WITCH_ACT)
+        val witchToken = findRoleToken(gameId, setup.tokensByUserId, PlayerRole.WITCH)
+        assertThat(submitWithPayload(witchToken, gameId, "WITCH_ACT", mapOf("useAntidote" to false)).statusCode).isEqualTo(HttpStatus.OK)
+
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_PICK)
         val seerToken = findRoleToken(gameId, setup.tokensByUserId, PlayerRole.SEER)
         assertThat(submitWith(seerToken, gameId, "SEER_CHECK", firstVillager.userId).statusCode).isEqualTo(HttpStatus.OK)
 
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_RESULT)
         assertThat(action(seerToken, gameId, "SEER_CONFIRM").statusCode).isEqualTo(HttpStatus.OK)
-
-        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WITCH_ACT)
-        val witchToken = findRoleToken(gameId, setup.tokensByUserId, PlayerRole.WITCH)
-        assertThat(submitWithPayload(witchToken, gameId, "WITCH_ACT", mapOf("useAntidote" to false)).statusCode).isEqualTo(HttpStatus.OK)
 
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.GUARD_PICK)
         val guardToken = findRoleToken(gameId, setup.tokensByUserId, PlayerRole.GUARD)
@@ -235,10 +235,10 @@ class NightAudioSequenceGuaranteeIntegrationTest {
             "wolf_howl.mp3",
             "wolf_open_eyes.mp3",
             "wolf_close_eyes.mp3",
-            "seer_open_eyes.mp3",
-            "seer_close_eyes.mp3",
             "witch_open_eyes.mp3",
             "witch_close_eyes.mp3",
+            "seer_open_eyes.mp3",
+            "seer_close_eyes.mp3",
             "guard_open_eyes.mp3",
             "guard_close_eyes.mp3",
         )
@@ -257,35 +257,35 @@ class NightAudioSequenceGuaranteeIntegrationTest {
 
         assertThat(action(setup.hostToken, gameId, "START_NIGHT").statusCode).isEqualTo(HttpStatus.OK)
 
-        // Drive wolves + seer to force at least one wolf_close → seer_open transition.
+        // Drive wolves + witch to force at least one wolf_close → witch_open transition.
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WEREWOLF_PICK)
         val wolfToken = findRoleToken(gameId, setup.tokensByUserId, PlayerRole.WEREWOLF)
         val victim = gamePlayerRepository.findByGameId(gameId)
             .first { it.role != PlayerRole.WEREWOLF && it.role != PlayerRole.SEER && it.role != PlayerRole.WITCH && it.role != PlayerRole.GUARD }
         assertThat(submitWith(wolfToken, gameId, "WOLF_KILL", victim.userId).statusCode).isEqualTo(HttpStatus.OK)
 
-        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_PICK)
-        // SEER_PICK reached means: wolf_close_eyes has already been broadcast AND
-        // seer_open_eyes has been broadcast right before the deferred-await. Both
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WITCH_ACT)
+        // WITCH_ACT reached means: wolf_close_eyes has already been broadcast AND
+        // witch_open_eyes has been broadcast right before the deferred-await. Both
         // broadcasts are already in the spy.
 
         val timestamps = capturedAudioBroadcastsInOrder(gameId)
         val wolfClose = timestamps.first { it.first == "wolf_close_eyes.mp3" }.second
-        val seerOpen = timestamps.first { it.first == "seer_open_eyes.mp3" }.second
+        val witchOpen = timestamps.first { it.first == "witch_open_eyes.mp3" }.second
 
-        val gapMs = seerOpen - wolfClose
+        val gapMs = witchOpen - wolfClose
         // Expected minimum gap = configured interRoleGapMs (the pause after one role's
         // close-eyes cooldown and before the next role's open-eyes). Reading it from
         // properties makes the test work for both prod defaults (3s) and the test
         // profile's shrunk values, while still failing if the gap regresses to zero.
         val expectedGapFloorMs = timing.interRoleGapMs ?: 3_000L
         assertThat(gapMs)
-            .describedAs("Gap between wolf_close_eyes and seer_open_eyes should be ≥ ${expectedGapFloorMs}ms, was ${gapMs}ms")
+            .describedAs("Gap between wolf_close_eyes and witch_open_eyes should be ≥ ${expectedGapFloorMs}ms, was ${gapMs}ms")
             .isGreaterThanOrEqualTo(expectedGapFloorMs)
 
         // Resolve the night so the test cleans up cleanly.
-        val seerToken = findRoleToken(gameId, setup.tokensByUserId, PlayerRole.SEER)
-        action(seerToken, gameId, "SEER_CONFIRM") // best-effort; ignore rejection if subphase moved
+        val witchToken = findRoleToken(gameId, setup.tokensByUserId, PlayerRole.WITCH)
+        submitWithPayload(witchToken, gameId, "WITCH_ACT", mapOf("useAntidote" to false)) // best-effort; ignore rejection if subphase moved
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

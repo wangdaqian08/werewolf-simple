@@ -18,9 +18,9 @@ import org.springframework.transaction.annotation.Transactional
 
 /**
  * Test to reproduce the seer audio bug reported by the user:
- * - SEER_PICK -> SEER_RESULT plays "seer_close_eyes.mp3"
- * - SEER_RESULT -> WITCH_ACT should play "seer_close_eyes.mp3" and "witch_open_eyes.mp3",
- *   but user reports only hearing "seer_close_eyes.mp3"
+ * - SEER_PICK -> SEER_RESULT plays no audio (seer stays awake)
+ * - SEER_RESULT -> GUARD_PICK should play "seer_close_eyes.mp3" and "guard_open_eyes.mp3",
+ *   but the historical bug only emitted "seer_close_eyes.mp3"
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -103,17 +103,17 @@ class SeerAudioBugTest {
     }
 
     @Test
-    fun `SEER_RESULT to WITCH_ACT transition - generates correct audio sequence`() {
+    fun `SEER_RESULT to GUARD_PICK transition - generates correct audio sequence`() {
         // Given: AudioService.calculateNightSubPhaseTransition
         val audioSequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_RESULT,
-            newSubPhase = NightSubPhase.WITCH_ACT,
+            newSubPhase = NightSubPhase.GUARD_PICK,
         )
 
-        // Then: Should contain both "seer_close_eyes.mp3" and "witch_open_eyes.mp3"
-        assertThat(audioSequence.audioFiles).containsExactly("seer_close_eyes.mp3", "witch_open_eyes.mp3")
-        println("SEER_RESULT -> WITCH_ACT: ${audioSequence.audioFiles}")
+        // Then: Should contain both "seer_close_eyes.mp3" and "guard_open_eyes.mp3"
+        assertThat(audioSequence.audioFiles).containsExactly("seer_close_eyes.mp3", "guard_open_eyes.mp3")
+        println("SEER_RESULT -> GUARD_PICK: ${audioSequence.audioFiles}")
     }
 
     // TODO unable to pass
@@ -151,9 +151,9 @@ class SeerAudioBugTest {
         val nightPhase1 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("  Initial sub-phase: ${nightPhase1?.subPhase}")
 
-        // Step 2: Simulate WEREWOLF_PICK -> SEER_PICK
-        println("\nStep 2: WEREWOLF_PICK -> SEER_PICK")
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_PICK)
+        // Step 2: Simulate WEREWOLF_PICK -> WITCH_ACT
+        println("\nStep 2: WEREWOLF_PICK -> WITCH_ACT")
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.WITCH_ACT)
         val nightPhase2 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
         println("  Sub-phase after WEREWOLF_PICK: ${nightPhase2?.subPhase}")
         assertThat(nightPhase2).isNotNull()
@@ -162,63 +162,78 @@ class SeerAudioBugTest {
         val audio1 = audioService.calculateNightSubPhaseTransition(
             gameId = gameId,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
-            newSubPhase = NightSubPhase.SEER_PICK,
+            newSubPhase = NightSubPhase.WITCH_ACT,
         )
         println("  Audio: ${audio1.audioFiles}")
-        assertThat(audio1.audioFiles).containsExactly("wolf_close_eyes.mp3", "seer_open_eyes.mp3")
+        assertThat(audio1.audioFiles).containsExactly("wolf_close_eyes.mp3", "witch_open_eyes.mp3")
 
-        // Step 3: Simulate SEER_PICK -> SEER_RESULT (seer checks a player)
-        println("\nStep 3: SEER_PICK -> SEER_RESULT (seer checks a player)")
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_RESULT)
+        // Step 3: Simulate WITCH_ACT -> SEER_PICK (witch acts and seer wakes)
+        println("\nStep 3: WITCH_ACT -> SEER_PICK (witch acts and seer wakes)")
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_PICK)
         val nightPhase3 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
-        println("  Sub-phase after SEER_PICK: ${nightPhase3?.subPhase}")
+        println("  Sub-phase after WITCH_ACT: ${nightPhase3?.subPhase}")
         assertThat(nightPhase3).isNotNull()
 
         // Calculate audio for this transition
         val audio2 = audioService.calculateNightSubPhaseTransition(
             gameId = gameId,
+            oldSubPhase = NightSubPhase.WITCH_ACT,
+            newSubPhase = NightSubPhase.SEER_PICK,
+        )
+        println("  Audio: ${audio2.audioFiles}")
+        assertThat(audio2.audioFiles).containsExactly("witch_close_eyes.mp3", "seer_open_eyes.mp3")
+
+        // Step 4: Simulate SEER_PICK -> SEER_RESULT (seer checks a player; stays awake)
+        println("\nStep 4: SEER_PICK -> SEER_RESULT (seer checks a player)")
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_RESULT)
+        val nightPhase4 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
+        println("  Sub-phase after SEER_PICK: ${nightPhase4?.subPhase}")
+        assertThat(nightPhase4).isNotNull()
+
+        val audio3 = audioService.calculateNightSubPhaseTransition(
+            gameId = gameId,
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
-        println("  Audio: ${audio2.audioFiles}")
-        assertThat(audio2.audioFiles).isEmpty()
+        println("  Audio: ${audio3.audioFiles}")
+        assertThat(audio3.audioFiles).isEmpty()
 
-        // Step 4: Simulate SEER_RESULT -> WITCH_ACT (seer confirms and advances)
-        println("\nStep 4: SEER_RESULT -> WITCH_ACT (seer confirms and advances)")
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.WITCH_ACT)
-        val nightPhase4 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
-        println("  Sub-phase after SEER_RESULT: ${nightPhase4?.subPhase}")
-        assertThat(nightPhase4).isNotNull()
+        // Step 5: Simulate SEER_RESULT -> GUARD_PICK (seer confirms and advances)
+        println("\nStep 5: SEER_RESULT -> GUARD_PICK (seer confirms and advances)")
+        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.GUARD_PICK)
+        val nightPhase5 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
+        println("  Sub-phase after SEER_RESULT: ${nightPhase5?.subPhase}")
+        assertThat(nightPhase5).isNotNull()
 
-        // Calculate audio for this transition - THIS IS WHERE THE BUG IS REPORTED
-        val audio3 = audioService.calculateNightSubPhaseTransition(
+        // Calculate audio for this transition - THIS IS WHERE THE BUG WAS REPORTED
+        val audio4 = audioService.calculateNightSubPhaseTransition(
             gameId = gameId,
             oldSubPhase = NightSubPhase.SEER_RESULT,
-            newSubPhase = NightSubPhase.WITCH_ACT,
+            newSubPhase = NightSubPhase.GUARD_PICK,
         )
-        println("  Audio: ${audio3.audioFiles}")
+        println("  Audio: ${audio4.audioFiles}")
 
-        // This should contain both "seer_close_eyes.mp3" and "witch_open_eyes.mp3"
+        // This should contain both "seer_close_eyes.mp3" and "guard_open_eyes.mp3"
         // If the bug exists, it will only contain "seer_close_eyes.mp3"
-        assertThat(audio3.audioFiles)
-            .describedAs("SEER_RESULT -> WITCH_ACT should play both seer close and witch open")
-            .containsExactly("seer_close_eyes.mp3", "witch_open_eyes.mp3")
+        assertThat(audio4.audioFiles)
+            .describedAs("SEER_RESULT -> GUARD_PICK should play both seer close and guard open")
+            .containsExactly("seer_close_eyes.mp3", "guard_open_eyes.mp3")
 
         println("\n=== Test Completed Successfully ===")
     }
 
     @Test
-    fun `WITCH_ACT to GUARD_PICK transition - generates correct audio sequence`() {
+    fun `WITCH_ACT to SEER_PICK transition - generates correct audio sequence`() {
         // Given: AudioService.calculateNightSubPhaseTransition
         val audioSequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WITCH_ACT,
-            newSubPhase = NightSubPhase.GUARD_PICK,
+            newSubPhase = NightSubPhase.SEER_PICK,
         )
 
-        // Then: Should contain both "witch_close_eyes.mp3" and "guard_open_eyes.mp3"
-        assertThat(audioSequence.audioFiles).containsExactly("witch_close_eyes.mp3", "guard_open_eyes.mp3")
-        println("WITCH_ACT -> GUARD_PICK: ${audioSequence.audioFiles}")
+        // Then: Should contain both "witch_close_eyes.mp3" and "seer_open_eyes.mp3"
+        assertThat(audioSequence.audioFiles).containsExactly("witch_close_eyes.mp3", "seer_open_eyes.mp3")
+        println("WITCH_ACT -> SEER_PICK: ${audioSequence.audioFiles}")
     }
 
     @Test

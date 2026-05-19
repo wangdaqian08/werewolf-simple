@@ -125,52 +125,52 @@ class AudioGameStateConsistencyTest {
     }
 
     @Test
-    fun `Audio sequence subPhase must match night phase subPhase - WEREWOLF_PICK to SEER_PICK`() {
+    fun `Audio sequence subPhase must match night phase subPhase - WEREWOLF_PICK to WITCH_ACT`() {
         // Setup: Create game in NIGHT phase with WEREWOLF_PICK
-        val room = createRoom(hasSeer = true)
+        val room = createRoom(hasWitch = true)
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
         createNightPhase(game.gameId!!, 1, NightSubPhase.WEREWOLF_PICK)
 
-        // Execute: Generate audio sequence for WEREWOLF_PICK to SEER_PICK transition
+        // Execute: Generate audio sequence for WEREWOLF_PICK to WITCH_ACT transition
         val audioSequence = audioService.calculateNightSubPhaseTransition(
             gameId = game.gameId!!,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
-            newSubPhase = NightSubPhase.SEER_PICK,
-        )
-
-        // Verify: Audio sequence phase and subPhase match new game state
-        assertThat(audioSequence.phase).isEqualTo(GamePhase.NIGHT)
-        assertThat(audioSequence.subPhase).isEqualTo(NightSubPhase.SEER_PICK.name)
-        
-        // Verify: Audio files are appropriate for the transition
-        assertThat(audioSequence.audioFiles).containsExactly(
-            "wolf_close_eyes.mp3",
-            "seer_open_eyes.mp3"
-        )
-    }
-
-    @Test
-    fun `Audio sequence subPhase must match night phase subPhase - SEER_RESULT to WITCH_ACT`() {
-        // Setup: Create game in NIGHT phase with SEER_RESULT
-        val room = createRoom(hasSeer = true, hasWitch = true)
-        val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
-        createNightPhase(game.gameId!!, 1, NightSubPhase.SEER_RESULT)
-
-        // Execute: Generate audio sequence for SEER_RESULT to WITCH_ACT transition
-        val audioSequence = audioService.calculateNightSubPhaseTransition(
-            gameId = game.gameId!!,
-            oldSubPhase = NightSubPhase.SEER_RESULT,
             newSubPhase = NightSubPhase.WITCH_ACT,
         )
 
         // Verify: Audio sequence phase and subPhase match new game state
         assertThat(audioSequence.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(audioSequence.subPhase).isEqualTo(NightSubPhase.WITCH_ACT.name)
-        
+
+        // Verify: Audio files are appropriate for the transition
+        assertThat(audioSequence.audioFiles).containsExactly(
+            "wolf_close_eyes.mp3",
+            "witch_open_eyes.mp3"
+        )
+    }
+
+    @Test
+    fun `Audio sequence subPhase must match night phase subPhase - SEER_RESULT to GUARD_PICK`() {
+        // Setup: Create game in NIGHT phase with SEER_RESULT
+        val room = createRoom(hasSeer = true, hasGuard = true)
+        val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
+        createNightPhase(game.gameId!!, 1, NightSubPhase.SEER_RESULT)
+
+        // Execute: Generate audio sequence for SEER_RESULT to GUARD_PICK transition
+        val audioSequence = audioService.calculateNightSubPhaseTransition(
+            gameId = game.gameId!!,
+            oldSubPhase = NightSubPhase.SEER_RESULT,
+            newSubPhase = NightSubPhase.GUARD_PICK,
+        )
+
+        // Verify: Audio sequence phase and subPhase match new game state
+        assertThat(audioSequence.phase).isEqualTo(GamePhase.NIGHT)
+        assertThat(audioSequence.subPhase).isEqualTo(NightSubPhase.GUARD_PICK.name)
+
         // Verify: Audio files are appropriate for the transition
         assertThat(audioSequence.audioFiles).containsExactly(
             "seer_close_eyes.mp3",
-            "witch_open_eyes.mp3"
+            "guard_open_eyes.mp3"
         )
     }
 
@@ -211,60 +211,60 @@ class AudioGameStateConsistencyTest {
         assertThat(waitingToWerewolf.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK.name)
         assertThat(waitingToWerewolf.audioFiles).containsExactly("wolf_open_eyes.mp3")
 
-        // Step 3: WEREWOLF_PICK -> SEER_PICK
-        val werewolfToSeer = audioService.calculateNightSubPhaseTransition(
+        // Step 3: WEREWOLF_PICK -> WITCH_ACT
+        val werewolfToWitch = audioService.calculateNightSubPhaseTransition(
             gameId = game.gameId!!,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
+            newSubPhase = NightSubPhase.WITCH_ACT,
+        )
+
+        // Verify: Audio sequence matches new game state
+        assertThat(werewolfToWitch.phase).isEqualTo(GamePhase.NIGHT)
+        assertThat(werewolfToWitch.subPhase).isEqualTo(NightSubPhase.WITCH_ACT.name)
+        assertThat(werewolfToWitch.audioFiles).containsExactly(
+            "wolf_close_eyes.mp3",
+            "witch_open_eyes.mp3"
+        )
+
+        // Step 4: WITCH_ACT -> SEER_PICK
+        val witchToSeer = audioService.calculateNightSubPhaseTransition(
+            gameId = game.gameId!!,
+            oldSubPhase = NightSubPhase.WITCH_ACT,
             newSubPhase = NightSubPhase.SEER_PICK,
         )
-        
+
         // Verify: Audio sequence matches new game state
-        assertThat(werewolfToSeer.phase).isEqualTo(GamePhase.NIGHT)
-        assertThat(werewolfToSeer.subPhase).isEqualTo(NightSubPhase.SEER_PICK.name)
-        assertThat(werewolfToSeer.audioFiles).containsExactly(
-            "wolf_close_eyes.mp3",
+        assertThat(witchToSeer.phase).isEqualTo(GamePhase.NIGHT)
+        assertThat(witchToSeer.subPhase).isEqualTo(NightSubPhase.SEER_PICK.name)
+        assertThat(witchToSeer.audioFiles).containsExactly(
+            "witch_close_eyes.mp3",
             "seer_open_eyes.mp3"
         )
 
-        // Step 4: SEER_PICK -> SEER_RESULT
+        // Step 5: SEER_PICK -> SEER_RESULT
         val seerToResult = audioService.calculateNightSubPhaseTransition(
             gameId = game.gameId!!,
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
-        
+
         // Verify: Audio sequence matches new game state
         assertThat(seerToResult.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(seerToResult.subPhase).isEqualTo(NightSubPhase.SEER_RESULT.name)
         assertThat(seerToResult.audioFiles).isEmpty()
 
-        // Step 5: SEER_RESULT -> WITCH_ACT
-        val resultToWitch = audioService.calculateNightSubPhaseTransition(
+        // Step 6: SEER_RESULT -> GUARD_PICK
+        val resultToGuard = audioService.calculateNightSubPhaseTransition(
             gameId = game.gameId!!,
             oldSubPhase = NightSubPhase.SEER_RESULT,
-            newSubPhase = NightSubPhase.WITCH_ACT,
-        )
-        
-        // Verify: Audio sequence matches new game state
-        assertThat(resultToWitch.phase).isEqualTo(GamePhase.NIGHT)
-        assertThat(resultToWitch.subPhase).isEqualTo(NightSubPhase.WITCH_ACT.name)
-        assertThat(resultToWitch.audioFiles).containsExactly(
-            "seer_close_eyes.mp3",
-            "witch_open_eyes.mp3"
-        )
-
-        // Step 6: WITCH_ACT -> GUARD_PICK
-        val witchToGuard = audioService.calculateNightSubPhaseTransition(
-            gameId = game.gameId!!,
-            oldSubPhase = NightSubPhase.WITCH_ACT,
             newSubPhase = NightSubPhase.GUARD_PICK,
         )
-        
+
         // Verify: Audio sequence matches new game state
-        assertThat(witchToGuard.phase).isEqualTo(GamePhase.NIGHT)
-        assertThat(witchToGuard.subPhase).isEqualTo(NightSubPhase.GUARD_PICK.name)
-        assertThat(witchToGuard.audioFiles).containsExactly(
-            "witch_close_eyes.mp3",
+        assertThat(resultToGuard.phase).isEqualTo(GamePhase.NIGHT)
+        assertThat(resultToGuard.subPhase).isEqualTo(NightSubPhase.GUARD_PICK.name)
+        assertThat(resultToGuard.audioFiles).containsExactly(
+            "seer_close_eyes.mp3",
             "guard_open_eyes.mp3"
         )
 

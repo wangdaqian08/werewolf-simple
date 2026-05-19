@@ -27,8 +27,8 @@
  *
  * Audio expected (24 files total):
  *   N1 entry:   goes_dark_close_eyes, wolf_howl
- *   N1 roles:   wolf_open, wolf_close, seer_open, seer_close,
- *               witch_open, witch_close, guard_open, guard_close
+ *   N1 roles:   wolf_open, wolf_close, witch_open, witch_close,
+ *               seer_open, seer_close, guard_open, guard_close
  *   N1 → D1:    rooster_crowing, day_time
  *   D1 → N2:    goes_dark_close_eyes, wolf_howl
  *   N2 roles:   (same eight files as N1)
@@ -104,10 +104,10 @@ const NIGHT_ENTRY_FILES = ['goes_dark_close_eyes.mp3', 'wolf_howl.mp3'] as const
 const NIGHT_ROLE_FILES = [
   'wolf_open_eyes.mp3',
   'wolf_close_eyes.mp3',
-  'seer_open_eyes.mp3',
-  'seer_close_eyes.mp3',
   'witch_open_eyes.mp3',
   'witch_close_eyes.mp3',
+  'seer_open_eyes.mp3',
+  'seer_close_eyes.mp3',
   'guard_open_eyes.mp3',
   'guard_close_eyes.mp3',
 ] as const
@@ -224,6 +224,15 @@ async function driveNight(
   })
 
   expect(
+    await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 25_000),
+    'WITCH_ACT not reached',
+  ).toBe(true)
+  await act('WITCH_ACT', actName(roles.witch), {
+    payload: '{"useAntidote":false}',
+    room: roomCode,
+  })
+
+  expect(
     await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 15_000),
     'SEER_PICK not reached',
   ).toBe(true)
@@ -236,15 +245,6 @@ async function driveNight(
     'SEER_RESULT not reached',
   ).toBe(true)
   await act('SEER_CONFIRM', actName(roles.seer), { room: roomCode })
-
-  expect(
-    await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 25_000),
-    'WITCH_ACT not reached',
-  ).toBe(true)
-  await act('WITCH_ACT', actName(roles.witch), {
-    payload: '{"useAntidote":false}',
-    room: roomCode,
-  })
 
   expect(
     await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000),

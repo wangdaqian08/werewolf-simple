@@ -91,7 +91,7 @@ class AudioPhaseMappingTest {
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
-            newSubPhase = NightSubPhase.SEER_PICK,
+            newSubPhase = NightSubPhase.WITCH_ACT,
         )
 
         assertThat(sequence.audioFiles).contains("wolf_close_eyes.mp3")
@@ -103,7 +103,7 @@ class AudioPhaseMappingTest {
         // Test: seer_open_eyes.mp3 should only appear for SEER_PICK
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
-            oldSubPhase = NightSubPhase.WEREWOLF_PICK,
+            oldSubPhase = NightSubPhase.WITCH_ACT,
             newSubPhase = NightSubPhase.SEER_PICK,
         )
 
@@ -125,7 +125,7 @@ class AudioPhaseMappingTest {
         val sequence2 = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_RESULT,
-            newSubPhase = NightSubPhase.WITCH_ACT,
+            newSubPhase = NightSubPhase.GUARD_PICK,
         )
         assertThat(sequence2.audioFiles).contains("seer_close_eyes.mp3")
     }
@@ -135,7 +135,7 @@ class AudioPhaseMappingTest {
         // Test: witch_open_eyes.mp3 should only appear for WITCH_ACT
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
-            oldSubPhase = NightSubPhase.SEER_RESULT,
+            oldSubPhase = NightSubPhase.WEREWOLF_PICK,
             newSubPhase = NightSubPhase.WITCH_ACT,
         )
 
@@ -149,7 +149,7 @@ class AudioPhaseMappingTest {
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WITCH_ACT,
-            newSubPhase = NightSubPhase.GUARD_PICK,
+            newSubPhase = NightSubPhase.SEER_PICK,
         )
 
         assertThat(sequence.audioFiles).contains("witch_close_eyes.mp3")
@@ -160,7 +160,7 @@ class AudioPhaseMappingTest {
         // Test: guard_open_eyes.mp3 should only appear for GUARD_PICK
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
-            oldSubPhase = NightSubPhase.WITCH_ACT,
+            oldSubPhase = NightSubPhase.SEER_RESULT,
             newSubPhase = NightSubPhase.GUARD_PICK,
         )
 
@@ -192,10 +192,10 @@ class AudioPhaseMappingTest {
     fun `Audio sequence correctness - must have consistent close eye then open eye pattern`() {
         // Test: All night sub-phase transitions should follow the pattern: close eyes → open eyes
         val transitions = listOf(
-            Pair(NightSubPhase.WEREWOLF_PICK, NightSubPhase.SEER_PICK),
+            Pair(NightSubPhase.WEREWOLF_PICK, NightSubPhase.WITCH_ACT),
+            Pair(NightSubPhase.WITCH_ACT, NightSubPhase.SEER_PICK),
             Pair(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT),
-            Pair(NightSubPhase.SEER_RESULT, NightSubPhase.WITCH_ACT),
-            Pair(NightSubPhase.WITCH_ACT, NightSubPhase.GUARD_PICK),
+            Pair(NightSubPhase.SEER_RESULT, NightSubPhase.GUARD_PICK),
         )
 
         transitions.forEach { (oldSubPhase, newSubPhase) ->
@@ -222,13 +222,13 @@ class AudioPhaseMappingTest {
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
-            newSubPhase = NightSubPhase.SEER_PICK,
+            newSubPhase = NightSubPhase.WITCH_ACT,
         )
 
-        // Sequence should be: ["wolf_close_eyes.mp3", "seer_open_eyes.mp3"]
+        // Sequence should be: ["wolf_close_eyes.mp3", "witch_open_eyes.mp3"]
         // Not: ["wolf_close_eyes.mp3", "wolf_open_eyes.mp3"]
         assertThat(sequence.audioFiles).doesNotContain("wolf_open_eyes.mp3")
-        assertThat(sequence.audioFiles).doesNotContain("seer_close_eyes.mp3")
+        assertThat(sequence.audioFiles).doesNotContain("witch_close_eyes.mp3")
     }
 
     @Test
@@ -246,7 +246,7 @@ class AudioPhaseMappingTest {
         val subPhaseSequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
-            newSubPhase = NightSubPhase.SEER_PICK,
+            newSubPhase = NightSubPhase.WITCH_ACT,
         )
 
         // Main phase transitions have priority 10, sub-phase transitions have priority 5
@@ -379,16 +379,16 @@ class AudioPhaseMappingTest {
                 gameId = 1, oldSubPhase = NightSubPhase.WAITING, newSubPhase = NightSubPhase.WEREWOLF_PICK,
             ),
             audioService.calculateNightSubPhaseTransition(
-                gameId = 1, oldSubPhase = NightSubPhase.WEREWOLF_PICK, newSubPhase = NightSubPhase.SEER_PICK,
+                gameId = 1, oldSubPhase = NightSubPhase.WEREWOLF_PICK, newSubPhase = NightSubPhase.WITCH_ACT,
+            ),
+            audioService.calculateNightSubPhaseTransition(
+                gameId = 1, oldSubPhase = NightSubPhase.WITCH_ACT, newSubPhase = NightSubPhase.SEER_PICK,
             ),
             audioService.calculateNightSubPhaseTransition(
                 gameId = 1, oldSubPhase = NightSubPhase.SEER_PICK, newSubPhase = NightSubPhase.SEER_RESULT,
             ),
             audioService.calculateNightSubPhaseTransition(
-                gameId = 1, oldSubPhase = NightSubPhase.SEER_RESULT, newSubPhase = NightSubPhase.WITCH_ACT,
-            ),
-            audioService.calculateNightSubPhaseTransition(
-                gameId = 1, oldSubPhase = NightSubPhase.WITCH_ACT, newSubPhase = NightSubPhase.GUARD_PICK,
+                gameId = 1, oldSubPhase = NightSubPhase.SEER_RESULT, newSubPhase = NightSubPhase.GUARD_PICK,
             ),
         )
 
@@ -405,7 +405,7 @@ class AudioPhaseMappingTest {
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.WEREWOLF_PICK,
-            newSubPhase = NightSubPhase.SEER_PICK,
+            newSubPhase = NightSubPhase.WITCH_ACT,
         )
 
         // Verify no duplicate audio files

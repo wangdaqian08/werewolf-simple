@@ -119,22 +119,8 @@ test.describe('Witch audio — open_eyes must play during WITCH_ACT', () => {
         room: ctx.roomCode,
       })
 
-      // ── Step 3: Seer checks (any non-self target) ────────────────────────
-      expect(
-        await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 15_000),
-      ).toBe(true)
-      // Seer must not self-check; pick wolf as target — verifies the role.
-      await act('SEER_CHECK', actName(seer), {
-        target: String(wolfBot.seat),
-        room: ctx.roomCode,
-      })
-      expect(
-        await waitForNightSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000),
-      ).toBe(true)
-      await act('SEER_CONFIRM', actName(seer), { room: ctx.roomCode })
-
-      // ── Step 4: Wait for WITCH_ACT — the moment under test ───────────────
-      // After SEER_RESULT completes there is interRoleGapMs (~3s) +
+      // ── Step 3: Wait for WITCH_ACT — the moment under test ───────────────
+      // After WEREWOLF_PICK completes there is interRoleGapMs (~3s) +
       // audioCooldownMs (~2s) before WITCH_ACT enters. That window is when
       // the backend SHOULD broadcast witch_open_eyes.mp3.
       expect(
@@ -220,6 +206,17 @@ test.describe('Witch audio — open_eyes must play during WITCH_ACT', () => {
         room: ctx.roomCode,
         payload: '{"useAntidote":false}',
       })
+      expect(
+        await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 15_000),
+      ).toBe(true)
+      await act('SEER_CHECK', actName(seer), {
+        target: String(wolfBot.seat),
+        room: ctx.roomCode,
+      })
+      expect(
+        await waitForNightSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000),
+      ).toBe(true)
+      await act('SEER_CONFIRM', actName(seer), { room: ctx.roomCode })
       expect(
         await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000),
       ).toBe(true)

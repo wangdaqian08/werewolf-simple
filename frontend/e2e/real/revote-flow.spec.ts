@@ -193,6 +193,43 @@ test.describe('Voting tie → revote → game proceeds', () => {
       }
     }
 
+    // ── Witch ──
+    const reachedWitch = await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 10_000)
+    if (reachedWitch && witchPage) {
+      await witchPage
+        .locator('.w-section')
+        .first()
+        .waitFor({ state: 'visible', timeout: 10_000 })
+        .catch(() => {})
+    }
+    let witchDone = false
+    const antidotePayload = opts.witchUseAntidote
+      ? '{"useAntidote":true}'
+      : '{"useAntidote":false}'
+    if (reachedWitch) {
+      for (const wb of aliveWitches) {
+        witchDone = tryAct('WITCH_ACT', actName(wb), { payload: antidotePayload, room: ctx.roomCode })
+        if (witchDone) break
+      }
+    }
+    if (!witchDone && witchPage) {
+      if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
+        if (opts.witchUseAntidote) {
+          const useBtn = witchPage.getByTestId('witch-antidote')
+          if (await useBtn.isVisible().catch(() => false)) {
+            await useBtn.click()
+            await witchPage.waitForTimeout(500)
+          }
+        } else {
+          const passBtn = witchPage.getByTestId('switch-pass-antidote')
+          if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
+          await witchPage.waitForTimeout(500)
+        }
+        const skipBtn = witchPage.getByTestId('witch-skip')
+        if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
+      }
+    }
+
     // ── Seer ──
     // Gate on SEER_PICK before iterating — same race-rejection rationale as
     // the wolf gate above. If the seer is dead / skipped, waitForNightSubPhase
@@ -236,43 +273,6 @@ test.describe('Voting tie → revote → game proceeds', () => {
         await seerPage.getByTestId('seer-check').click()
         await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
         await seerPage.getByTestId('seer-done').click()
-      }
-    }
-
-    // ── Witch ──
-    const reachedWitch = await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 10_000)
-    if (reachedWitch && witchPage) {
-      await witchPage
-        .locator('.w-section')
-        .first()
-        .waitFor({ state: 'visible', timeout: 10_000 })
-        .catch(() => {})
-    }
-    let witchDone = false
-    const antidotePayload = opts.witchUseAntidote
-      ? '{"useAntidote":true}'
-      : '{"useAntidote":false}'
-    if (reachedWitch) {
-      for (const wb of aliveWitches) {
-        witchDone = tryAct('WITCH_ACT', actName(wb), { payload: antidotePayload, room: ctx.roomCode })
-        if (witchDone) break
-      }
-    }
-    if (!witchDone && witchPage) {
-      if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
-        if (opts.witchUseAntidote) {
-          const useBtn = witchPage.getByTestId('witch-antidote')
-          if (await useBtn.isVisible().catch(() => false)) {
-            await useBtn.click()
-            await witchPage.waitForTimeout(500)
-          }
-        } else {
-          const passBtn = witchPage.getByTestId('switch-pass-antidote')
-          if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
-          await witchPage.waitForTimeout(500)
-        }
-        const skipBtn = witchPage.getByTestId('witch-skip')
-        if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
       }
     }
 

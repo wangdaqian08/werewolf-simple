@@ -210,15 +210,15 @@ class NightPhaseDeadRoleIntegrationTest {
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WEREWOLF_PICK)
         assertThat(action(wolfToken, gameId, "WOLF_KILL", seerUserId).statusCode).isEqualTo(HttpStatus.OK)
 
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WITCH_ACT)
+        // Witch poisons wolf2 so that at N1 resolve: seer dies (wolf kill) + wolf2 dies (poison).
+        assertThat(action(witchToken, gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false, "poisonTargetUserId" to wolf2UserId)).statusCode).isEqualTo(HttpStatus.OK)
+
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_PICK)
         assertThat(action(seerToken, gameId, "SEER_CHECK", villagerUserId).statusCode).isEqualTo(HttpStatus.OK)
 
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_RESULT)
         assertThat(action(seerToken, gameId, "SEER_CONFIRM").statusCode).isEqualTo(HttpStatus.OK)
-
-        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WITCH_ACT)
-        // Witch poisons wolf2 so that at N1 resolve: seer dies (wolf kill) + wolf2 dies (poison).
-        assertThat(action(witchToken, gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false, "poisonTargetUserId" to wolf2UserId)).statusCode).isEqualTo(HttpStatus.OK)
 
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.GUARD_PICK)
         assertThat(action(guardToken, gameId, "GUARD_SKIP").statusCode).isEqualTo(HttpStatus.OK)
@@ -259,8 +259,9 @@ class NightPhaseDeadRoleIntegrationTest {
         waitForNightSubPhaseReady(gameId, 2, NightSubPhase.WEREWOLF_PICK)
         assertThat(action(wolfToken, gameId, "WOLF_KILL", night2Target.userId).statusCode).isEqualTo(HttpStatus.OK)
 
-        // With seer dead, the role loop plays the dead-role audio chain and advances
-        // directly through SEER_PICK / SEER_RESULT to the next live role (witch).
+        // Witch runs first in the new night order; with seer dead the role
+        // loop then plays the dead-role audio chain for SEER_PICK/SEER_RESULT
+        // before reaching GUARD_PICK.
         waitForNightSubPhaseReady(gameId, 2, NightSubPhase.WITCH_ACT)
         assertThat(action(witchToken, gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false)).statusCode).isEqualTo(HttpStatus.OK)
 
@@ -327,14 +328,14 @@ class NightPhaseDeadRoleIntegrationTest {
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WEREWOLF_PICK)
         assertThat(action(wolfToken, gameId, "WOLF_KILL", seerUserId).statusCode).isEqualTo(HttpStatus.OK)
 
+        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WITCH_ACT)
+        assertThat(action(witchToken, gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false, "poisonTargetUserId" to wolf2UserId)).statusCode).isEqualTo(HttpStatus.OK)
+
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_PICK)
         assertThat(action(seerToken, gameId, "SEER_CHECK", villagerUserId).statusCode).isEqualTo(HttpStatus.OK)
 
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.SEER_RESULT)
         assertThat(action(seerToken, gameId, "SEER_CONFIRM").statusCode).isEqualTo(HttpStatus.OK)
-
-        waitForNightSubPhaseReady(gameId, 1, NightSubPhase.WITCH_ACT)
-        assertThat(action(witchToken, gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false, "poisonTargetUserId" to wolf2UserId)).statusCode).isEqualTo(HttpStatus.OK)
 
         waitForNightSubPhaseReady(gameId, 1, NightSubPhase.GUARD_PICK)
         assertThat(action(guardToken, gameId, "GUARD_SKIP").statusCode).isEqualTo(HttpStatus.OK)

@@ -131,35 +131,12 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       await wolfPage.getByTestId('wolf-confirm-kill').click()
     }
 
-    // Wait for coroutine to advance to SEER_PICK before firing seer.
-    await waitForSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
-    await captureSnapshot(ctx.pages, testInfo, '02-wolf-completed')
-
-    // ── Step 3: Seer completes action ─────────────────────────────────────
-    const seerBots = ctx.roleMap.SEER ?? []
-    const guardBots = ctx.roleMap.GUARD ?? []
-    const seerBot = seerBots[0]
-
-    if (seerBot) {
-      const checkTarget = guardBots[0]?.seat ?? villagerBots[1]?.seat ?? 1
-      await act('SEER_CHECK', actName(seerBot), { target: String(checkTarget), room: ctx.roomCode })
-      // Wait for coroutine to advance to SEER_RESULT before firing confirm.
-      await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
-      await act('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
-    } else if (ctx.isHostRole('SEER')) {
-      const seerPage = ctx.pages.get('SEER')!
-      await seerPage.locator('.player-grid .slot-alive').first().click()
-      await seerPage.getByTestId('seer-check').click()
-      await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
-      await seerPage.getByTestId('seer-done').click()
-    }
-
     // Wait for coroutine to advance to WITCH_ACT before witch acts.
     await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
     const witchPage = ctx.pages.get('WITCH')
-    await captureSnapshot(ctx.pages, testInfo, '03-seer-completed')
+    await captureSnapshot(ctx.pages, testInfo, '02-wolf-completed')
 
-    // ── Step 4: Witch completes action ────────────────────────────────────
+    // ── Step 3: Witch completes action ────────────────────────────────────
     // Prefer the bot-script path (reliable regardless of browser render
     // timing). Only fall back to browser clicks when the host is the witch
     // OR when no bot has the WITCH role and a dedicated witch page exists.
@@ -186,10 +163,33 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     // else: no witch in this game — coroutine will time out and auto-
     // advance. Not an error the test should block on.
 
+    // Wait for coroutine to advance to SEER_PICK before firing seer.
+    await waitForSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
+    await captureSnapshot(ctx.pages, testInfo, '03-witch-completed')
+
+    // ── Step 4: Seer completes action ─────────────────────────────────────
+    const seerBots = ctx.roleMap.SEER ?? []
+    const guardBots = ctx.roleMap.GUARD ?? []
+    const seerBot = seerBots[0]
+
+    if (seerBot) {
+      const checkTarget = guardBots[0]?.seat ?? villagerBots[1]?.seat ?? 1
+      await act('SEER_CHECK', actName(seerBot), { target: String(checkTarget), room: ctx.roomCode })
+      // Wait for coroutine to advance to SEER_RESULT before firing confirm.
+      await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
+      await act('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
+    } else if (ctx.isHostRole('SEER')) {
+      const seerPage = ctx.pages.get('SEER')!
+      await seerPage.locator('.player-grid .slot-alive').first().click()
+      await seerPage.getByTestId('seer-check').click()
+      await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
+      await seerPage.getByTestId('seer-done').click()
+    }
+
     // Wait for coroutine to advance to GUARD_PICK before guard acts.
     await waitForSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
     const guardPage = ctx.pages.get('GUARD')
-    await captureSnapshot(ctx.pages, testInfo, '04-witch-completed')
+    await captureSnapshot(ctx.pages, testInfo, '04-seer-completed')
 
     // ── Step 5: Guard completes action (LAST special role) ────────────────
     // This is the critical moment - guard is the last special role to complete
@@ -330,16 +330,16 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       await act('WOLF_KILL', actName(wolfBot), { target: String(villagerBots[0]?.seat ?? 1), room: ctx.roomCode })
     }
 
+    if (witchBot) {
+      await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
+      await act('WITCH_ACT', actName(witchBot), { payload: JSON.stringify({ useAntidote: false, usePoison: false }), room: ctx.roomCode })
+    }
+
     if (seerBot) {
       await waitForSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
       await act('SEER_CHECK', actName(seerBot), { target: String(villagerBots[1]?.seat ?? 2), room: ctx.roomCode })
       await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
       await act('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
-    }
-
-    if (witchBot) {
-      await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
-      await act('WITCH_ACT', actName(witchBot), { payload: JSON.stringify({ useAntidote: false, usePoison: false }), room: ctx.roomCode })
     }
 
     if (guardBot) {
