@@ -68,6 +68,7 @@
         :election="gameStore.state.sheriffElection"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :players="gameStore.state.players"
         :timer="gameStore.state?.timer ?? null"
         :my-role="gameStore.state?.myRole"
         :is-alive="

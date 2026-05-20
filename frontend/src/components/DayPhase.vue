@@ -189,6 +189,26 @@
         <p class="footer-hint">等待房主公布结果 · Waiting for host to reveal the result</p>
       </template>
     </footer>
+
+    <!-- Role card bottom sheet — same as VotingPhase so the my-role-chip works during DAY_DISCUSSION -->
+    <Teleport to="body">
+      <div v-if="showRoleCard" class="role-card-overlay" @click.self="showRoleCard = false">
+        <div class="role-card-sheet">
+          <div class="role-card-header">
+            <span>你的身份 · My Role</span>
+            <button class="history-close" @click="showRoleCard = false">✕</button>
+          </div>
+          <div v-if="myRole && ROLE_META[myRole]" class="role-card-body">
+            <div class="rc-emoji">{{ ROLE_META[myRole]?.emoji }}</div>
+            <div class="rc-name-zh">{{ ROLE_META[myRole]?.nameZh }}</div>
+            <div class="rc-label" :class="`rc-label-${ROLE_META[myRole]?.team}`">
+              {{ ROLE_META[myRole]?.nameEn }}
+            </div>
+            <p class="rc-desc">{{ ROLE_META[myRole]?.description }}</p>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -216,6 +236,65 @@ const props = defineProps<{
 
 const showLog = ref(false)
 const showRoleCard = ref(false)
+
+interface RoleMeta {
+  nameZh: string
+  nameEn: string
+  emoji: string
+  team: string
+  description: string
+}
+const ROLE_META: Record<string, RoleMeta> = {
+  WEREWOLF: {
+    nameZh: '狼人',
+    nameEn: 'WEREWOLF',
+    emoji: '🐺',
+    team: 'wolf',
+    description: '每晚与狼队商议，袭击一名村民。',
+  },
+  VILLAGER: {
+    nameZh: '村民',
+    nameEn: 'VILLAGER',
+    emoji: '🌾',
+    team: 'village',
+    description: '通过讨论和投票找出狼人，保护村庄。',
+  },
+  SEER: {
+    nameZh: '预言家',
+    nameEn: 'SEER',
+    emoji: '🔭',
+    team: 'special',
+    description: '每晚可查验一名玩家，得知其是否为狼人。',
+  },
+  WITCH: {
+    nameZh: '女巫',
+    nameEn: 'WITCH',
+    emoji: '🔮',
+    team: 'special',
+    description: '拥有一瓶解药和一瓶毒药，各可使用一次。',
+  },
+  HUNTER: {
+    nameZh: '猎人',
+    nameEn: 'HUNTER',
+    emoji: '🏹',
+    team: 'special',
+    description: '死亡时可开枪带走一名玩家。',
+  },
+  GUARD: {
+    nameZh: '守卫',
+    nameEn: 'GUARD',
+    emoji: '🛡️',
+    team: 'special',
+    description: '每晚保护一名玩家免受狼人袭击。',
+  },
+  IDIOT: {
+    nameZh: '白痴',
+    nameEn: 'IDIOT',
+    emoji: '🃏',
+    team: 'special',
+    description: '被投票驱逐时揭示身份，免于出局但失去投票权。',
+  },
+}
 
 const emit = defineEmits<{
   revealResult: []
@@ -391,5 +470,84 @@ function onTap(player: GamePlayer) {
 }
 .my-role-locked {
   font-style: italic;
+}
+
+/* Role card bottom sheet — mirrors VotingPhase.vue so the my-role-chip works during DAY_DISCUSSION */
+.role-card-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 20, 12, 0.55);
+  z-index: 201;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  touch-action: none;
+}
+.role-card-sheet {
+  width: 100%;
+  max-width: 320px;
+  background: var(--paper);
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(26, 20, 12, 0.3);
+}
+.role-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--border-l);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.history-close {
+  background: transparent;
+  border: none;
+  font-size: 1.125rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+.role-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.75rem 1.5rem 2rem;
+}
+.rc-emoji {
+  font-size: 3.5rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.rc-name-zh {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.rc-label {
+  font-size: 0.625rem;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.rc-label-wolf {
+  color: var(--red);
+}
+.rc-label-village {
+  color: var(--green);
+}
+.rc-label-special {
+  color: var(--gold);
+}
+.rc-desc {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.6;
+  text-align: center;
+  margin: 0;
 }
 </style>
