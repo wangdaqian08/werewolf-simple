@@ -123,6 +123,37 @@ test.describe('Werewolf win — result screen shows all roles', () => {
         .catch(() => {})
     }
 
+    // Wait for witch sub-phase (or timeout if dead/skipped)
+    if (witchPage) {
+      await witchPage
+        .locator('.w-section')
+        .first()
+        .waitFor({ state: 'visible', timeout: 8_000 })
+        .catch(() => {})
+    }
+
+    // ── Witch ── (may be dead in later rounds)
+    const reachedWitch = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 10_000)
+    let witchDone = false
+    if (reachedWitch) {
+      for (const wb of aliveWitchBots) {
+        witchDone = tryAct('WITCH_ACT', actName(wb), {
+          payload: '{"useAntidote":false}',
+          room: ctx.roomCode,
+        })
+        if (witchDone) break
+      }
+    }
+    if (!witchDone && witchPage) {
+      if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
+        const passBtn = witchPage.getByTestId('switch-pass-antidote')
+        if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
+        await witchPage.waitForTimeout(500)
+        const skipBtn = witchPage.getByTestId('witch-skip')
+        if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
+      }
+    }
+
     // ── Seer ── (may be dead in later rounds)
     // Gate on SEER_PICK before CHECK, SEER_RESULT before CONFIRM. Short-circuit
     // via waitForNightSubPhase returning false if the seer is dead and the
@@ -163,37 +194,6 @@ test.describe('Werewolf win — result screen shows all roles', () => {
         await seerPage.getByTestId('seer-check').click()
         await expect(seerPage.locator('.sr-wrap').first()).toBeVisible({ timeout: 10_000 })
         await seerPage.getByTestId('seer-done').click()
-      }
-    }
-
-    // Wait for witch sub-phase (or timeout if dead/skipped)
-    if (witchPage) {
-      await witchPage
-        .locator('.w-section')
-        .first()
-        .waitFor({ state: 'visible', timeout: 8_000 })
-        .catch(() => {})
-    }
-
-    // ── Witch ── (may be dead in later rounds)
-    const reachedWitch = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 10_000)
-    let witchDone = false
-    if (reachedWitch) {
-      for (const wb of aliveWitchBots) {
-        witchDone = tryAct('WITCH_ACT', actName(wb), {
-          payload: '{"useAntidote":false}',
-          room: ctx.roomCode,
-        })
-        if (witchDone) break
-      }
-    }
-    if (!witchDone && witchPage) {
-      if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
-        const passBtn = witchPage.getByTestId('switch-pass-antidote')
-        if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
-        await witchPage.waitForTimeout(500)
-        const skipBtn = witchPage.getByTestId('witch-skip')
-        if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
       }
     }
 

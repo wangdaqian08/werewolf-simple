@@ -31,7 +31,7 @@
  *    host over STOMP — proves transport is working.
  * 3. Toggle the host page's network to offline for ~5 s. Under the e2e
  *    timing profile (cooldown=200, gap=500), the role loop schedules
- *    seer_open / seer_close / witch_open well within that window, so
+ *    witch_open / witch_close / seer_open well within that window, so
  *    several cues land while the WebSocket is closed. STOMP-JS reconnects
  *    after `reconnectDelay: 3000` ms.
  * 4. Restore the network. The next refreshState() (fired by GameView's
@@ -132,7 +132,7 @@ test.describe('Audio reconnect recovery', () => {
       })
 
       // Settle on wolf_close_eyes arriving live so we know the next role
-      // transition is imminent. The backend's role-loop schedules SEER_PICK
+      // transition is imminent. The backend's role-loop schedules WITCH_ACT
       // ~(audio-cooldown-ms + inter-role-gap-ms) after wolf_close, so the
       // 5 s offline window straddles that broadcast cleanly under e2e
       // timing (cooldown=200, gap=500).
@@ -146,9 +146,9 @@ test.describe('Audio reconnect recovery', () => {
         )
         .toBe(true)
 
-      // ── Force host offline through the seer_open_eyes broadcast ────────
+      // ── Force host offline through the witch_open_eyes broadcast ──────
       // 5 s is comfortably longer than (audio-cooldown-ms + inter-role-gap-ms)
-      // under any test profile, so seer_open is guaranteed to land while
+      // under any test profile, so witch_open is guaranteed to land while
       // the WebSocket is closed. STOMP-JS reconnects on `setOffline(false)`
       // (`reconnectDelay: 3000` ms means the next attempt fires within ~3 s).
       await ctx.hostPage.context().setOffline(true)
@@ -156,22 +156,22 @@ test.describe('Audio reconnect recovery', () => {
       await ctx.hostPage.context().setOffline(false)
 
       // ── Drive the rest of N1 through DAY_DISCUSSION ────────────────────
-      // SEER_PICK reaches via state polling (the host has come back online
+      // WITCH_ACT reaches via state polling (the host has come back online
       // and refreshState has fired by the time waitForNightSubPhase resolves).
       // 60 s timeout handles the worst-case reconnect cascade.
-      expect(await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 60_000)).toBe(true)
+      expect(await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 60_000)).toBe(true)
+      await act('WITCH_ACT', actName(witch), {
+        room: ctx.roomCode,
+        payload: '{"useAntidote":false}',
+      })
+
+      expect(await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 30_000)).toBe(true)
       await act('SEER_CHECK', actName(seer), {
         target: String(wolfBot.seat),
         room: ctx.roomCode,
       })
       expect(await waitForNightSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)).toBe(true)
       await act('SEER_CONFIRM', actName(seer), { room: ctx.roomCode })
-
-      expect(await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 30_000)).toBe(true)
-      await act('WITCH_ACT', actName(witch), {
-        room: ctx.roomCode,
-        payload: '{"useAntidote":false}',
-      })
 
       expect(await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 30_000)).toBe(true)
       await act('GUARD_SKIP', actName(guard), { room: ctx.roomCode })
@@ -252,10 +252,10 @@ test.describe('Audio reconnect recovery', () => {
       const N1_ROLE_FILES = [
         'wolf_open_eyes.mp3',
         'wolf_close_eyes.mp3',
-        'seer_open_eyes.mp3',
-        'seer_close_eyes.mp3',
         'witch_open_eyes.mp3',
         'witch_close_eyes.mp3',
+        'seer_open_eyes.mp3',
+        'seer_close_eyes.mp3',
         'guard_open_eyes.mp3',
         'guard_close_eyes.mp3',
       ]

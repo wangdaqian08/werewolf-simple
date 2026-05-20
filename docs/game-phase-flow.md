@@ -29,7 +29,7 @@ full game across **Night 1 → Day 1 (with sheriff election) → Night 2 → Day
 ```mermaid
 flowchart TB
     START([game start]) --> RR["ROLE_REVEAL"]
-    RR -->|"host START_NIGHT"| N1["NIGHT D1<br/>WEREWOLF_PICK → SEER_PICK → SEER_RESULT<br/>→ WITCH_ACT → GUARD_PICK → COMPLETE"]
+    RR -->|"host START_NIGHT"| N1["NIGHT D1<br/>WEREWOLF_PICK → WITCH_ACT → SEER_PICK<br/>→ SEER_RESULT → GUARD_PICK → COMPLETE"]
 
     N1 -->|"wolves-parity"| GO["GAME_OVER"]
     N1 -->|"Day 1 + hasSheriff<br/>kills DEFERRED"| SE["SHERIFF_ELECTION<br/>SIGNUP → SPEECH → VOTING → RESULT"]

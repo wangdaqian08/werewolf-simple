@@ -310,43 +310,43 @@ describe('useAudioService', () => {
     ])
   })
 
-  it('WEREWOLF_PICK → SEER_PICK: backend sends close + open eyes', async () => {
+  it('WEREWOLF_PICK → WITCH_ACT: backend sends close + open eyes', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['wolf_close_eyes.mp3', 'seer_open_eyes.mp3'], 'wolf-to-seer')
-    seq.phase = 'NIGHT'
-    seq.subPhase = 'SEER_PICK'
-    gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
-    await nextTick()
-
-    expect(mockPlaySequential).toHaveBeenCalledWith(['wolf_close_eyes.mp3', 'seer_open_eyes.mp3'])
-  })
-
-  it('SEER_RESULT → WITCH_ACT: backend sends close + open eyes', async () => {
-    const gameStore = useGameStore()
-    setupComposable()
-
-    const seq = makeSequence(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'], 'seer-to-witch')
+    const seq = makeSequence(['wolf_close_eyes.mp3', 'witch_open_eyes.mp3'], 'wolf-to-witch')
     seq.phase = 'NIGHT'
     seq.subPhase = 'WITCH_ACT'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['wolf_close_eyes.mp3', 'witch_open_eyes.mp3'])
   })
 
-  it('WITCH_ACT → GUARD_PICK: backend sends close + open eyes', async () => {
+  it('WITCH_ACT → SEER_PICK: backend sends close + open eyes', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'], 'witch-to-guard')
+    const seq = makeSequence(['witch_close_eyes.mp3', 'seer_open_eyes.mp3'], 'witch-to-seer')
+    seq.phase = 'NIGHT'
+    seq.subPhase = 'SEER_PICK'
+    gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
+    await nextTick()
+
+    expect(mockPlaySequential).toHaveBeenCalledWith(['witch_close_eyes.mp3', 'seer_open_eyes.mp3'])
+  })
+
+  it('SEER_RESULT → GUARD_PICK: backend sends close + open eyes', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    const seq = makeSequence(['seer_close_eyes.mp3', 'guard_open_eyes.mp3'], 'seer-to-guard')
     seq.phase = 'NIGHT'
     seq.subPhase = 'GUARD_PICK'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3', 'guard_open_eyes.mp3'])
   })
 
   it('SEER_PICK → SEER_RESULT: close eyes only (no open-eyes for SEER_RESULT)', async () => {
@@ -426,39 +426,39 @@ describe('useAudioService', () => {
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['wolf_open_eyes.mp3'])
 
-    // 3. WEREWOLF_PICK → SEER_PICK (close wolf + open seer)
+    // 3. WEREWOLF_PICK → WITCH_ACT (close wolf + open witch)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['wolf_close_eyes.mp3', 'seer_open_eyes.mp3'], 'wolf-seer'),
+        audioSequence: makeSequence(['wolf_close_eyes.mp3', 'witch_open_eyes.mp3'], 'wolf-witch'),
       }),
     )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith([
       'wolf_close_eyes.mp3',
-      'seer_open_eyes.mp3',
-    ])
-
-    // 4. SEER → WITCH (close seer + open witch)
-    gameStore.setState(
-      makeState({
-        audioSequence: makeSequence(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'], 'seer-witch'),
-      }),
-    )
-    await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith([
-      'seer_close_eyes.mp3',
       'witch_open_eyes.mp3',
     ])
 
-    // 5. WITCH → GUARD (close witch + open guard)
+    // 4. WITCH → SEER (close witch + open seer)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'], 'witch-guard'),
+        audioSequence: makeSequence(['witch_close_eyes.mp3', 'seer_open_eyes.mp3'], 'witch-seer'),
       }),
     )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith([
       'witch_close_eyes.mp3',
+      'seer_open_eyes.mp3',
+    ])
+
+    // 5. SEER → GUARD (close seer + open guard)
+    gameStore.setState(
+      makeState({
+        audioSequence: makeSequence(['seer_close_eyes.mp3', 'guard_open_eyes.mp3'], 'seer-guard'),
+      }),
+    )
+    await nextTick()
+    expect(mockPlaySequential).toHaveBeenLastCalledWith([
+      'seer_close_eyes.mp3',
       'guard_open_eyes.mp3',
     ])
 
@@ -579,26 +579,26 @@ describe('useAudioService', () => {
     setupComposable()
 
     // Full sequence when guard is last role:
-    // 1. WITCH_ACT → GUARD_PICK: witch_close_eyes.mp3 + guard_open_eyes.mp3
+    // 1. SEER_RESULT → GUARD_PICK: seer_close_eyes.mp3 + guard_open_eyes.mp3
     // 2. GUARD_PICK completion: guard_close_eyes.mp3 (ONCE)
     // 3. DAY transition: rooster_crowing.mp3 + day_time.mp3
 
-    // Step 1: Witch to Guard transition
-    const witchToGuardSeq = makeSequence(
-      ['witch_close_eyes.mp3', 'guard_open_eyes.mp3'],
-      'seq-witch-to-guard-001',
+    // Step 1: Seer to Guard transition
+    const seerToGuardSeq = makeSequence(
+      ['seer_close_eyes.mp3', 'guard_open_eyes.mp3'],
+      'seq-seer-to-guard-001',
     )
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
         nightPhase: { subPhase: 'GUARD_PICK', dayNumber: 1 },
-        audioSequence: witchToGuardSeq,
+        audioSequence: seerToGuardSeq,
       }),
     )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenCalledTimes(1)
     expect(mockPlaySequential).toHaveBeenLastCalledWith([
-      'witch_close_eyes.mp3',
+      'seer_close_eyes.mp3',
       'guard_open_eyes.mp3',
     ])
 

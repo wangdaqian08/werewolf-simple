@@ -543,10 +543,10 @@ class NightOrchestratorTest {
     @Test
     fun `nightSequence - full role room returns correct ordering`() {
         val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
         val witchHandler = stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT)
+        val seerHandler = stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT)
         val guardHandler = stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler, seerHandler, witchHandler, guardHandler))
+        val orchestrator = makeOrchestrator(listOf(wolfHandler, witchHandler, seerHandler, guardHandler))
 
         val fullRoom = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
             hasSeer = true, hasWitch = true, hasGuard = true)
@@ -555,9 +555,9 @@ class NightOrchestratorTest {
 
         assertThat(sequence).containsExactly(
             NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.WITCH_ACT,
             NightSubPhase.SEER_PICK,
             NightSubPhase.SEER_RESULT,
-            NightSubPhase.WITCH_ACT,
             NightSubPhase.GUARD_PICK,
         )
     }
@@ -692,7 +692,7 @@ class NightOrchestratorTest {
     @Test
     fun `advanceToSubPhase - broadcasts AudioSequence when advancing to WITCH_ACT`() {
         val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.SEER_RESULT
+            it.subPhase = NightSubPhase.WEREWOLF_PICK
         }
         val wolf = player("u1", 1, PlayerRole.WEREWOLF)
         val r = room(hasSeer = true, hasWitch = true)
@@ -701,18 +701,18 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(ctx)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
-        // Setup correct audio files for SEER_RESULT to WITCH_ACT transition
+        // Setup correct audio files for WEREWOLF_PICK to WITCH_ACT transition
         val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-NIGHT-TRANSITION",
             phase = GamePhase.NIGHT,
             subPhase = NightSubPhase.WITCH_ACT.name,
-            audioFiles = listOf("seer_close_eyes.mp3", "witch_open_eyes.mp3"),
+            audioFiles = listOf("wolf_close_eyes.mp3", "witch_open_eyes.mp3"),
             priority = 5,
             timestamp = System.currentTimeMillis()
         )
         whenever(audioService.calculateNightSubPhaseTransition(
             eq(gameId),
-            eq(NightSubPhase.SEER_RESULT),
+            eq(NightSubPhase.WEREWOLF_PICK),
             eq(NightSubPhase.WITCH_ACT)
         )).thenReturn(audioSequence)
 
@@ -726,7 +726,7 @@ class NightOrchestratorTest {
         val audioEvent = events.find { it is DomainEvent.AudioSequence }
         assertThat(audioEvent).isNotNull()
         assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
-            .containsExactly("seer_close_eyes.mp3", "witch_open_eyes.mp3")
+            .containsExactly("wolf_close_eyes.mp3", "witch_open_eyes.mp3")
     }
 
     // ── Action log recording ─────────────────────────────────────────────────
@@ -971,8 +971,8 @@ class NightOrchestratorTest {
 
     private val allHandlers = listOf(
         stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK),
-        stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT),
         stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT),
+        stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT),
         stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK),
     )
 
@@ -1063,10 +1063,10 @@ class NightOrchestratorTest {
             "goes_dark_close_eyes.mp3", "wolf_howl.mp3",       // night init
             "wolf_open_eyes.mp3",                                // wolf open
             "wolf_close_eyes.mp3",                               // wolf close
-            "seer_open_eyes.mp3",                                // seer open
-            "seer_close_eyes.mp3",                               // seer close
             "witch_open_eyes.mp3",                               // witch open
             "witch_close_eyes.mp3",                              // witch close
+            "seer_open_eyes.mp3",                                // seer open
+            "seer_close_eyes.mp3",                               // seer close
             "guard_open_eyes.mp3",                               // guard open
             "guard_close_eyes.mp3",                              // guard close
             "rooster_crowing.mp3", "day_time.mp3",              // day transition
@@ -1075,9 +1075,9 @@ class NightOrchestratorTest {
         // Phases: alive seer gets both SEER_PICK and SEER_RESULT
         assertThat(subPhases(events)).containsExactly(
             NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.WITCH_ACT,
             NightSubPhase.SEER_PICK,
             NightSubPhase.SEER_RESULT,
-            NightSubPhase.WITCH_ACT,
             NightSubPhase.GUARD_PICK,
         )
     }
@@ -1098,8 +1098,8 @@ class NightOrchestratorTest {
         assertThat(audioFiles(events)).containsExactly(
             "goes_dark_close_eyes.mp3", "wolf_howl.mp3",
             "wolf_open_eyes.mp3", "wolf_close_eyes.mp3",
-            "seer_open_eyes.mp3", "seer_close_eyes.mp3",        // dead seer: still plays
             "witch_open_eyes.mp3", "witch_close_eyes.mp3",
+            "seer_open_eyes.mp3", "seer_close_eyes.mp3",        // dead seer: still plays
             "guard_open_eyes.mp3", "guard_close_eyes.mp3",
             "rooster_crowing.mp3", "day_time.mp3",
         )
@@ -1107,8 +1107,8 @@ class NightOrchestratorTest {
         // Phases: dead seer only broadcasts SEER_PICK (first sub-phase), NOT SEER_RESULT
         assertThat(subPhases(events)).containsExactly(
             NightSubPhase.WEREWOLF_PICK,
-            NightSubPhase.SEER_PICK,                             // dead: first sub-phase only
             NightSubPhase.WITCH_ACT,
+            NightSubPhase.SEER_PICK,                             // dead: first sub-phase only
             NightSubPhase.GUARD_PICK,
         )
     }
@@ -1128,16 +1128,16 @@ class NightOrchestratorTest {
         assertThat(audioFiles(events)).containsExactly(
             "goes_dark_close_eyes.mp3", "wolf_howl.mp3",
             "wolf_open_eyes.mp3", "wolf_close_eyes.mp3",
-            "seer_open_eyes.mp3", "seer_close_eyes.mp3",
             "witch_open_eyes.mp3", "witch_close_eyes.mp3",      // dead witch: still plays
+            "seer_open_eyes.mp3", "seer_close_eyes.mp3",
             "guard_open_eyes.mp3", "guard_close_eyes.mp3",
             "rooster_crowing.mp3", "day_time.mp3",
         )
 
         assertThat(subPhases(events)).containsExactly(
             NightSubPhase.WEREWOLF_PICK,
-            NightSubPhase.SEER_PICK,
             NightSubPhase.WITCH_ACT,
+            NightSubPhase.SEER_PICK,
             NightSubPhase.GUARD_PICK,
         )
     }
@@ -1157,16 +1157,16 @@ class NightOrchestratorTest {
         assertThat(audioFiles(events)).containsExactly(
             "goes_dark_close_eyes.mp3", "wolf_howl.mp3",
             "wolf_open_eyes.mp3", "wolf_close_eyes.mp3",
-            "seer_open_eyes.mp3", "seer_close_eyes.mp3",
             "witch_open_eyes.mp3", "witch_close_eyes.mp3",
+            "seer_open_eyes.mp3", "seer_close_eyes.mp3",
             "guard_open_eyes.mp3", "guard_close_eyes.mp3",      // dead guard: still plays
             "rooster_crowing.mp3", "day_time.mp3",
         )
 
         assertThat(subPhases(events)).containsExactly(
             NightSubPhase.WEREWOLF_PICK,
-            NightSubPhase.SEER_PICK,
             NightSubPhase.WITCH_ACT,
+            NightSubPhase.SEER_PICK,
             NightSubPhase.GUARD_PICK,
         )
     }
@@ -1188,8 +1188,8 @@ class NightOrchestratorTest {
         assertThat(audioFiles(events)).containsExactly(
             "goes_dark_close_eyes.mp3", "wolf_howl.mp3",
             "wolf_open_eyes.mp3", "wolf_close_eyes.mp3",        // wolf alive
-            "seer_open_eyes.mp3", "seer_close_eyes.mp3",        // seer dead
             "witch_open_eyes.mp3", "witch_close_eyes.mp3",      // witch dead
+            "seer_open_eyes.mp3", "seer_close_eyes.mp3",        // seer dead
             "guard_open_eyes.mp3", "guard_close_eyes.mp3",      // guard dead
             "rooster_crowing.mp3", "day_time.mp3",
         )
@@ -1197,8 +1197,8 @@ class NightOrchestratorTest {
         // All dead special roles broadcast only their first sub-phase
         assertThat(subPhases(events)).containsExactly(
             NightSubPhase.WEREWOLF_PICK,
-            NightSubPhase.SEER_PICK,
             NightSubPhase.WITCH_ACT,
+            NightSubPhase.SEER_PICK,
             NightSubPhase.GUARD_PICK,
         )
     }

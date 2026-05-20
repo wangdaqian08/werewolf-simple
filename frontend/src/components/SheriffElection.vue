@@ -594,12 +594,19 @@ import { computed, ref } from 'vue'
 import Avatar from '@/components/Avatar.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
 import CountdownArc from '@/components/CountdownArc.vue'
-import type { PlayerRole, SheriffCandidate, SheriffElectionState, TimerState } from '@/types'
+import type {
+  GamePlayer,
+  PlayerRole,
+  SheriffCandidate,
+  SheriffElectionState,
+  TimerState,
+} from '@/types'
 
 const props = defineProps<{
   election: SheriffElectionState
   myUserId: string
   isHost: boolean
+  players?: GamePlayer[]
   timer?: TimerState | null
   myRole?: PlayerRole
   isAlive?: boolean
@@ -648,6 +655,12 @@ const quitCandidates = computed(() =>
 const candidateMap = computed(() => {
   const m = new Map<string, SheriffCandidate>()
   props.election.candidates.forEach((c) => m.set(c.userId, c))
+  return m
+})
+
+const seatByUserId = computed(() => {
+  const m = new Map<string, number>()
+  props.players?.forEach((p) => m.set(p.userId, p.seatIndex))
   return m
 })
 
@@ -735,14 +748,19 @@ function speakingIcon(uid: string) {
 function speakerLabel(uid: string, idx: number) {
   const c = candidateMap.value.get(uid)
   const name = uid === props.myUserId ? '我' : (c?.nickname ?? uid)
+  const seat = seatByUserId.value.get(uid)
+  const seatPrefix = seat != null ? `${seat}号 ` : ''
   const isCurrent = uid === props.election.currentSpeakerId
   const isQuit = candidateStatus(uid) === 'QUIT'
   const currentIdx = props.election.speakingOrder.indexOf(props.election.currentSpeakerId ?? '')
 
-  if (isCurrent) return uid === props.myUserId ? '我 · speaking now' : `${name} · speaking`
-  if (isQuit) return `${name} · Quit`
-  if (idx === currentIdx + 1) return `${name} · next`
-  return name
+  if (isCurrent)
+    return uid === props.myUserId
+      ? `${seatPrefix}我 · speaking now`
+      : `${seatPrefix}${name} · speaking`
+  if (isQuit) return `${seatPrefix}${name} · Quit`
+  if (idx === currentIdx + 1) return `${seatPrefix}${name} · next`
+  return `${seatPrefix}${name}`
 }
 </script>
 

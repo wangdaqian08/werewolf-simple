@@ -171,7 +171,7 @@ In each human browser: click **Reveal Role** → **Got it**.
 
 ## Complete NIGHT phase walkthrough
 
-Night sub-phases run in strict order: **WEREWOLF_PICK → SEER_PICK → SEER_RESULT → WITCH_ACT → GUARD_PICK**
+Night sub-phases run in strict order: **WEREWOLF_PICK → WITCH_ACT → SEER_PICK → SEER_RESULT → GUARD_PICK**
 
 ```bash
 # Verify phase before starting

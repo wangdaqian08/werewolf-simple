@@ -39,14 +39,14 @@ class AudioSequenceBroadcastTest {
 
     /**
      * Test Case: First night with all roles alive
-     * 
+     *
      * Expected Audio Sequence:
      * 1. DAY → NIGHT: goes_dark_close_eyes.mp3, wolf_howl.mp3
      * 2. WAITING → WEREWOLF_PICK: wolf_open_eyes.mp3
-     * 3. WEREWOLF_PICK → SEER_PICK: wolf_close_eyes.mp3, [gap], seer_open_eyes.mp3
-     * 4. SEER_PICK → SEER_RESULT: (empty - viewing result)
-     * 5. SEER_RESULT → WITCH_ACT: seer_close_eyes.mp3, [gap], witch_open_eyes.mp3
-     * 6. WITCH_ACT → GUARD_PICK: witch_close_eyes.mp3, [gap], guard_open_eyes.mp3
+     * 3. WEREWOLF_PICK → WITCH_ACT: wolf_close_eyes.mp3, [gap], witch_open_eyes.mp3
+     * 4. WITCH_ACT → SEER_PICK: witch_close_eyes.mp3, [gap], seer_open_eyes.mp3
+     * 5. SEER_PICK → SEER_RESULT: (empty - viewing result)
+     * 6. SEER_RESULT → GUARD_PICK: seer_close_eyes.mp3, [gap], guard_open_eyes.mp3
      * 7. GUARD_PICK → DAY: guard_close_eyes.mp3, [then] rooster_crowing.mp3, day_time.mp3
      */
     @Test
@@ -71,30 +71,30 @@ class AudioSequenceBroadcastTest {
         val wolfOpen = audioService.calculateOpenEyesAudio(NightSubPhase.WEREWOLF_PICK)
         assertThat(wolfOpen).isEqualTo("wolf_open_eyes.mp3")
         
-        // 3. WEREWOLF_PICK → SEER_PICK (separate sequences with gap)
+        // 3. WEREWOLF_PICK → WITCH_ACT (separate sequences with gap)
         val wolfClose = audioService.calculateCloseEyesAudio(NightSubPhase.WEREWOLF_PICK)
-        val seerOpen = audioService.calculateOpenEyesAudio(NightSubPhase.SEER_PICK)
+        val witchOpen = audioService.calculateOpenEyesAudio(NightSubPhase.WITCH_ACT)
         assertThat(wolfClose).isEqualTo("wolf_close_eyes.mp3")
+        assertThat(witchOpen).isEqualTo("witch_open_eyes.mp3")
+
+        // 4. WITCH_ACT → SEER_PICK (separate sequences with gap)
+        val witchClose = audioService.calculateCloseEyesAudio(NightSubPhase.WITCH_ACT)
+        val seerOpen = audioService.calculateOpenEyesAudio(NightSubPhase.SEER_PICK)
+        assertThat(witchClose).isEqualTo("witch_close_eyes.mp3")
         assertThat(seerOpen).isEqualTo("seer_open_eyes.mp3")
-        
-        // 4. SEER_PICK → SEER_RESULT (no audio change)
+
+        // 5. SEER_PICK → SEER_RESULT (no audio change)
         val seerPickToResult = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_PICK,
             newSubPhase = NightSubPhase.SEER_RESULT,
         )
         assertThat(seerPickToResult.audioFiles).isEmpty()
-        
-        // 5. SEER_RESULT → WITCH_ACT (separate sequences with gap)
+
+        // 6. SEER_RESULT → GUARD_PICK (separate sequences with gap)
         val seerClose = audioService.calculateCloseEyesAudio(NightSubPhase.SEER_RESULT)
-        val witchOpen = audioService.calculateOpenEyesAudio(NightSubPhase.WITCH_ACT)
-        assertThat(seerClose).isEqualTo("seer_close_eyes.mp3")
-        assertThat(witchOpen).isEqualTo("witch_open_eyes.mp3")
-        
-        // 6. WITCH_ACT → GUARD_PICK (separate sequences with gap)
-        val witchClose = audioService.calculateCloseEyesAudio(NightSubPhase.WITCH_ACT)
         val guardOpen = audioService.calculateOpenEyesAudio(NightSubPhase.GUARD_PICK)
-        assertThat(witchClose).isEqualTo("witch_close_eyes.mp3")
+        assertThat(seerClose).isEqualTo("seer_close_eyes.mp3")
         assertThat(guardOpen).isEqualTo("guard_open_eyes.mp3")
         
         // 7. GUARD_PICK → DAY
@@ -132,14 +132,14 @@ class AudioSequenceBroadcastTest {
         val sequence = audioService.calculateDeadRoleAudioSequence(
             gameId = 1,
             skippedRoles = listOf(NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT),
-            targetSubPhase = NightSubPhase.WITCH_ACT,
+            targetSubPhase = NightSubPhase.GUARD_PICK,
         )
-        
-        // Should play: seer_open_eyes → seer_close_eyes → witch_open_eyes
+
+        // Should play: seer_open_eyes → seer_close_eyes → guard_open_eyes
         assertThat(sequence.audioFiles).containsExactly(
             "seer_open_eyes.mp3",
             "seer_close_eyes.mp3",
-            "witch_open_eyes.mp3"
+            "guard_open_eyes.mp3"
         )
     }
 
@@ -147,17 +147,17 @@ class AudioSequenceBroadcastTest {
      * Test Case: Witch is dead
      */
     @Test
-    fun `dead witch - plays complete sequence then advances to guard`() {
+    fun `dead witch - plays complete sequence then advances to seer`() {
         val sequence = audioService.calculateDeadRoleAudioSequence(
             gameId = 1,
             skippedRoles = listOf(NightSubPhase.WITCH_ACT),
-            targetSubPhase = NightSubPhase.GUARD_PICK,
+            targetSubPhase = NightSubPhase.SEER_PICK,
         )
-        
+
         assertThat(sequence.audioFiles).containsExactly(
             "witch_open_eyes.mp3",
             "witch_close_eyes.mp3",
-            "guard_open_eyes.mp3"
+            "seer_open_eyes.mp3"
         )
     }
 
@@ -184,22 +184,22 @@ class AudioSequenceBroadcastTest {
      */
     @Test
     fun `multiple dead roles - each plays complete sequence`() {
-        // Seer and Witch are both dead
+        // Witch and Seer are both dead — witch runs first in the new night order.
         val sequence = audioService.calculateDeadRoleAudioSequence(
             gameId = 1,
             skippedRoles = listOf(
+                NightSubPhase.WITCH_ACT,
                 NightSubPhase.SEER_PICK,
-                NightSubPhase.SEER_RESULT,
-                NightSubPhase.WITCH_ACT
+                NightSubPhase.SEER_RESULT
             ),
             targetSubPhase = NightSubPhase.GUARD_PICK,
         )
-        
+
         assertThat(sequence.audioFiles).containsExactly(
-            "seer_open_eyes.mp3",
-            "seer_close_eyes.mp3",
             "witch_open_eyes.mp3",
             "witch_close_eyes.mp3",
+            "seer_open_eyes.mp3",
+            "seer_close_eyes.mp3",
             "guard_open_eyes.mp3"
         )
     }
@@ -259,24 +259,24 @@ class AudioSequenceBroadcastTest {
 
     /**
      * Test Case: Guard completes as last special role
-     * 
+     *
      * REGRESSION TEST: guard_close_eyes.mp3 was playing twice.
-     * 
+     *
      * Expected sequence when guard completes:
-     * 1. WITCH_ACT → GUARD_PICK: witch_close_eyes.mp3 → [gap] → guard_open_eyes.mp3
+     * 1. SEER_RESULT → GUARD_PICK: seer_close_eyes.mp3 → [gap] → guard_open_eyes.mp3
      * 2. GUARD_PICK completion: guard_close_eyes.mp3 (only ONCE)
      * 3. DAY transition: rooster_crowing.mp3 → day_time.mp3
-     * 
+     *
      * The guard_close_eyes.mp3 must play exactly ONCE, not twice.
      */
     @Test
     fun `guard completes as last role - guard_close_eyes plays exactly once`() {
-        // Simulate the WITCH_ACT → GUARD_PICK transition
+        // Simulate the SEER_RESULT → GUARD_PICK transition
         // This is what scheduleAliveRoleTransition plays
-        val witchClose = audioService.calculateCloseEyesAudio(NightSubPhase.WITCH_ACT)
+        val seerClose = audioService.calculateCloseEyesAudio(NightSubPhase.SEER_RESULT)
         val guardOpen = audioService.calculateOpenEyesAudio(NightSubPhase.GUARD_PICK)
-        
-        assertThat(witchClose).isEqualTo("witch_close_eyes.mp3")
+
+        assertThat(seerClose).isEqualTo("seer_close_eyes.mp3")
         assertThat(guardOpen).isEqualTo("guard_open_eyes.mp3")
         
         // When guard completes, ONLY guard_close_eyes.mp3 should play
@@ -309,19 +309,19 @@ class AudioSequenceBroadcastTest {
      */
     @Test
     fun `night sub-phase transition - no duplicate close_eyes audio`() {
-        // SEER_RESULT → WITCH_ACT transition
+        // SEER_RESULT → GUARD_PICK transition
         val sequence = audioService.calculateNightSubPhaseTransition(
             gameId = 1,
             oldSubPhase = NightSubPhase.SEER_RESULT,
-            newSubPhase = NightSubPhase.WITCH_ACT,
+            newSubPhase = NightSubPhase.GUARD_PICK,
         )
-        
-        // Should contain: seer_close_eyes, witch_open_eyes
+
+        // Should contain: seer_close_eyes, guard_open_eyes
         assertThat(sequence.audioFiles).containsExactly(
             "seer_close_eyes.mp3",
-            "witch_open_eyes.mp3"
+            "guard_open_eyes.mp3"
         )
-        
+
         // Should NOT contain duplicate close_eyes
         val closeEyesCount = sequence.audioFiles.count { it.contains("close_eyes") }
         assertThat(closeEyesCount).isEqualTo(1)

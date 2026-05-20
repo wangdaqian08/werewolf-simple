@@ -474,6 +474,17 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
     await hostPage.getByTestId('wolf-confirm-kill').click().catch(() => {})
   }
 
+  // ── WITCH_ACT ──
+  if (witchBots.length > 0) {
+    const reached = await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
+    if (reached && witchBot) {
+      tryAct('WITCH_ACT', actName(witchBot), {
+        payload: '{"useAntidote":false}',
+        room: ctx.roomCode,
+      })
+    }
+  }
+
   // ── SEER_PICK ──
   if (seerBots.length > 0) {
     const reached = await waitForSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
@@ -490,17 +501,6 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
       // SEER_RESULT next
       await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
       tryAct('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
-    }
-  }
-
-  // ── WITCH_ACT ──
-  if (witchBots.length > 0) {
-    const reached = await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
-    if (reached && witchBot) {
-      tryAct('WITCH_ACT', actName(witchBot), {
-        payload: '{"useAntidote":false}',
-        room: ctx.roomCode,
-      })
     }
   }
 

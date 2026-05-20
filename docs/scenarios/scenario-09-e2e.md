@@ -147,7 +147,7 @@ Deterministic seat ordering so test fixtures map directly:
 ## Night Subphase Sequence
 
 ```
-WEREWOLF_PICK → SEER_PICK → SEER_RESULT → WITCH_ACT → GUARD_PICK → COMPLETE
+WEREWOLF_PICK → WITCH_ACT → SEER_PICK → SEER_RESULT → GUARD_PICK → COMPLETE
 ```
 
 Confirmed against `NightOrchestrator.nightSequence()`

@@ -194,11 +194,12 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     await wolfTargetSlot.click()
     await wolfPage.getByTestId('wolf-confirm-kill').click()
 
-    // STOMP verify: seer browser should transition to SEER_PICK
-    // (seer-check button is rendered inside the SEER_PICK template)
-    const seerPage = ctx.pages.get('SEER')
-    if (seerPage && seerPage !== wolfPage) {
-      await expect(seerPage.getByTestId('seer-check')).toBeVisible({ timeout: 15_000 })
+    // STOMP verify: witch browser should transition to WITCH_ACT
+    // (witch panel is rendered inside the WITCH_ACT template, which is the
+    // first role to wake after the wolves in the new night order)
+    const witchPageEarly = ctx.pages.get('WITCH')
+    if (witchPageEarly && witchPageEarly !== wolfPage) {
+      await expect(witchPageEarly.locator('.w-section').first()).toBeVisible({ timeout: 15_000 })
     }
 
     await captureSnapshot(ctx.pages, testInfo, '03-wolf-kill')
@@ -206,44 +207,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
 
   // ── Test 4: Complete night via scripts, verify DAY transition ─────────
 
-  test('4. Night — seer/witch/guard complete night, all browsers show DAY', async ({}, testInfo) => {
-    // ── Seer ── DOM-driven via seer's browser regardless of bot vs host.
-    // Gate on SEER_PICK before clicking — without this we race the Kotlin
-    // role-loop coroutine (memory: e2e-ci-vs-local-env-differences item 1).
-    const seerPage = ctx.pages.get('SEER')!
-    await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 15_000)
-    const seerCheckBtn = seerPage.getByTestId('seer-check')
-    await expect(seerCheckBtn).toBeVisible({ timeout: 10_000 })
-
-    const seerTargetSlot = seerPage.locator('.player-grid .slot-alive').first()
-    await seerTargetSlot.waitFor({ state: 'visible', timeout: 5_000 })
-    // Action observability: record which seat the seer is about to check
-    // so we can verify the result card shows the correct alignment for
-    // that seat's actual role (cross-referenced via ctx.roleMap).
-    const seerCheckedSeatAttr = await seerTargetSlot.getAttribute('data-seat')
-    expect(seerCheckedSeatAttr, 'seer target slot must expose data-seat').not.toBeNull()
-    const seerCheckedSeat = Number(seerCheckedSeatAttr)
-    await seerTargetSlot.click()
-    await seerCheckBtn.click()
-
-    // Result card surfaces with data-alignment ('wolf' | 'village') and
-    // data-checked-seat. Verify those match the actual role of the
-    // checked player. A bug here means the seer is being LIED to.
-    const resultCard = seerPage.getByTestId('seer-result-card')
-    await expect(resultCard).toBeVisible({ timeout: 10_000 })
-    const resultSeat = Number(await resultCard.getAttribute('data-checked-seat'))
-    const resultAlignment = await resultCard.getAttribute('data-alignment')
-    expect(resultSeat).toBe(seerCheckedSeat)
-    const actualRole = roleOfSeat(seerCheckedSeat)
-    const expectedAlignment = actualRole === 'WEREWOLF' ? 'wolf' : 'village'
-    expect(
-      resultAlignment,
-      `seer-result-card alignment for seat ${seerCheckedSeat} (role=${actualRole})`,
-    ).toBe(expectedAlignment)
-
-    await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
-    await seerPage.getByTestId('seer-done').click()
-
+  test('4. Night — witch/seer/guard complete night, all browsers show DAY', async ({}, testInfo) => {
     // ── Witch (always via browser to capture UI at each step) ──
     // Both antidote and poison sections are visible simultaneously.
     // We interact with poison FIRST (since passing antidote may auto-complete the turn).
@@ -317,6 +281,43 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       await witchSkipBtn.click()
       await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
     }
+
+    // ── Seer ── DOM-driven via seer's browser regardless of bot vs host.
+    // Gate on SEER_PICK before clicking — without this we race the Kotlin
+    // role-loop coroutine (memory: e2e-ci-vs-local-env-differences item 1).
+    const seerPage = ctx.pages.get('SEER')!
+    await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 15_000)
+    const seerCheckBtn = seerPage.getByTestId('seer-check')
+    await expect(seerCheckBtn).toBeVisible({ timeout: 10_000 })
+
+    const seerTargetSlot = seerPage.locator('.player-grid .slot-alive').first()
+    await seerTargetSlot.waitFor({ state: 'visible', timeout: 5_000 })
+    // Action observability: record which seat the seer is about to check
+    // so we can verify the result card shows the correct alignment for
+    // that seat's actual role (cross-referenced via ctx.roleMap).
+    const seerCheckedSeatAttr = await seerTargetSlot.getAttribute('data-seat')
+    expect(seerCheckedSeatAttr, 'seer target slot must expose data-seat').not.toBeNull()
+    const seerCheckedSeat = Number(seerCheckedSeatAttr)
+    await seerTargetSlot.click()
+    await seerCheckBtn.click()
+
+    // Result card surfaces with data-alignment ('wolf' | 'village') and
+    // data-checked-seat. Verify those match the actual role of the
+    // checked player. A bug here means the seer is being LIED to.
+    const resultCard = seerPage.getByTestId('seer-result-card')
+    await expect(resultCard).toBeVisible({ timeout: 10_000 })
+    const resultSeat = Number(await resultCard.getAttribute('data-checked-seat'))
+    const resultAlignment = await resultCard.getAttribute('data-alignment')
+    expect(resultSeat).toBe(seerCheckedSeat)
+    const actualRole = roleOfSeat(seerCheckedSeat)
+    const expectedAlignment = actualRole === 'WEREWOLF' ? 'wolf' : 'village'
+    expect(
+      resultAlignment,
+      `seer-result-card alignment for seat ${seerCheckedSeat} (role=${actualRole})`,
+    ).toBe(expectedAlignment)
+
+    await captureSnapshot(ctx.pages, testInfo, '04-seer-check-result')
+    await seerPage.getByTestId('seer-done').click()
 
     // ── Guard ── DOM-driven via guard's browser. The UI has no "skip" button
     // (memory: game-rules-clarifications — guard self-protect is allowed),
@@ -616,6 +617,57 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
 
+    // ── Witch — DOM-first via witch browser. ONE click only.
+    //   Each witch button submits a complete WITCH_ACT (useAntidote +
+    //   poisonTargetUserId in one payload). Clicking a second button
+    //   sends a SECOND WITCH_ACT during the inter-role-gap window,
+    //   which races queuedActionSignals[gameId] and auto-completes
+    //   the next role's sub-phase in 2 ms — the bug that was failing
+    //   GUARD_PICK on Night 1. Pick whichever pass button is visible
+    //   and stop there.
+    const witchPage = ctx.pages.get('WITCH')
+    let witchDone = false
+    if (witchPage) {
+      const sectionReady = await witchPage
+        .locator('.w-section')
+        .first()
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (sectionReady) {
+        const passAntidote = witchPage.getByTestId('switch-pass-antidote')
+        const passPoison = witchPage.getByTestId('switch-pass-poison')
+        const witchSkip = witchPage.getByTestId('witch-skip')
+        const visibleSoon = (loc: ReturnType<typeof witchPage.getByTestId>) =>
+          loc
+            .waitFor({ state: 'visible', timeout: 2_000 })
+            .then(() => true)
+            .catch(() => false)
+
+        if (await visibleSoon(passAntidote)) {
+          await passAntidote.click()
+        } else if (await visibleSoon(passPoison)) {
+          await passPoison.click()
+        } else if (await visibleSoon(witchSkip)) {
+          await witchSkip.click()
+        }
+        await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
+        witchDone = true
+      }
+    }
+    if (!witchDone) {
+      // Browser-witch is dead. Try API on remaining witch bots.
+      for (const wb of witchBots) {
+        if (
+          tryAct('WITCH_ACT', actName(wb), { payload: '{"useAntidote":false}', room: ctx.roomCode })
+        ) {
+          await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
+          witchDone = true
+          break
+        }
+      }
+    }
+
     // ── Seer — DOM-first via seer browser ──
     const seerPage = ctx.pages.get('SEER')
     let seerDone = false
@@ -677,57 +729,6 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
           }
         }
         if (seerDone) break
-      }
-    }
-
-    // ── Witch — DOM-first via witch browser. ONE click only.
-    //   Each witch button submits a complete WITCH_ACT (useAntidote +
-    //   poisonTargetUserId in one payload). Clicking a second button
-    //   sends a SECOND WITCH_ACT during the inter-role-gap window,
-    //   which races queuedActionSignals[gameId] and auto-completes
-    //   the next role's sub-phase in 2 ms — the bug that was failing
-    //   GUARD_PICK on Night 1. Pick whichever pass button is visible
-    //   and stop there.
-    const witchPage = ctx.pages.get('WITCH')
-    let witchDone = false
-    if (witchPage) {
-      const sectionReady = await witchPage
-        .locator('.w-section')
-        .first()
-        .waitFor({ state: 'visible', timeout: 5_000 })
-        .then(() => true)
-        .catch(() => false)
-      if (sectionReady) {
-        const passAntidote = witchPage.getByTestId('switch-pass-antidote')
-        const passPoison = witchPage.getByTestId('switch-pass-poison')
-        const witchSkip = witchPage.getByTestId('witch-skip')
-        const visibleSoon = (loc: ReturnType<typeof witchPage.getByTestId>) =>
-          loc
-            .waitFor({ state: 'visible', timeout: 2_000 })
-            .then(() => true)
-            .catch(() => false)
-
-        if (await visibleSoon(passAntidote)) {
-          await passAntidote.click()
-        } else if (await visibleSoon(passPoison)) {
-          await passPoison.click()
-        } else if (await visibleSoon(witchSkip)) {
-          await witchSkip.click()
-        }
-        await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
-        witchDone = true
-      }
-    }
-    if (!witchDone) {
-      // Browser-witch is dead. Try API on remaining witch bots.
-      for (const wb of witchBots) {
-        if (
-          tryAct('WITCH_ACT', actName(wb), { payload: '{"useAntidote":false}', room: ctx.roomCode })
-        ) {
-          await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 8_000)
-          witchDone = true
-          break
-        }
       }
     }
 
@@ -1024,6 +1025,17 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
 
+    // ── Witch act: by N3 the antidote is spent (test 4 used it). Just decline. ──
+    if (witchBot) {
+      const reached = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 10_000)
+      if (reached) {
+        tryAct('WITCH_ACT', actName(witchBot), {
+          room: ctx.roomCode,
+          payload: '{"useAntidote":false}',
+        })
+      }
+    }
+
     // ── Seer check (just to advance the phase) ──
     if (seerBot) {
       const reached = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 10_000)
@@ -1039,17 +1051,6 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
           await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_RESULT', 8_000)
           tryAct('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
         }
-      }
-    }
-
-    // ── Witch act: by N3 the antidote is spent (test 4 used it). Just decline. ──
-    if (witchBot) {
-      const reached = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 10_000)
-      if (reached) {
-        tryAct('WITCH_ACT', actName(witchBot), {
-          room: ctx.roomCode,
-          payload: '{"useAntidote":false}',
-        })
       }
     }
 
