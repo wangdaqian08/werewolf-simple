@@ -409,18 +409,27 @@ import {
   wolfVariant,
 } from '@/utils/nightPhaseHelpers'
 
-const props = defineProps<{
-  nightPhase: NightPhaseState
-  players: GamePlayer[]
-  myUserId: string
-  myRole?: PlayerRole
-  actionPending?: boolean
-  witchSelfSaveAllowed?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    nightPhase: NightPhaseState
+    players: GamePlayer[]
+    myUserId: string
+    myRole?: PlayerRole
+    actionPending?: boolean
+    witchSelfSaveAllowed?: boolean
+  }>(),
+  {
+    // Vue 3 coerces a missing boolean prop to `false`, but the safe default
+    // here is `true` — self-save was the historical behavior; only the new
+    // room-config opt-in disables it. Pin the default so callers that omit
+    // the prop (older mocks, tests, demo data) don't accidentally block
+    // self-save for every witch.
+    witchSelfSaveAllowed: true,
+  },
+)
 
 const witchSelfSaveBlocked = computed(
-  () =>
-    props.witchSelfSaveAllowed === false && props.nightPhase.attackedPlayerId === props.myUserId,
+  () => !props.witchSelfSaveAllowed && props.nightPhase.attackedPlayerId === props.myUserId,
 )
 
 const emit = defineEmits<{
