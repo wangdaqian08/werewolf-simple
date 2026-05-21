@@ -270,18 +270,33 @@ describe('audioService BGM lifecycle (real implementation)', () => {
     expect(bgm.volume).toBeCloseTo(lowVol, 5)
   })
 
-  it('duckBgm reduces element.volume; unduckBgm restores it', () => {
+  it('duckBgm targets absolute 0.10 (user at default 0.5/HIGH); unduckBgm restores', () => {
     unlockUserGesture()
+    audioService.setBgmVolume(0.5)
     audioService.startBgm('suspicion.mp3')
     audioService.setBgmLevel('HIGH')
     const bgm = getBgmInstance()!
     const highVol = bgm.volume
 
     audioService.duckBgm()
-    expect(bgm.volume).toBeLessThan(highVol)
+    expect(bgm.volume).toBeCloseTo(0.1, 5)
 
     audioService.unduckBgm()
     expect(bgm.volume).toBeCloseTo(highVol, 5)
+  })
+
+  it('duckBgm never loudens — caps at unducked volume when user is below 10%', () => {
+    unlockUserGesture()
+    audioService.setBgmVolume(0.05)
+    audioService.startBgm('suspicion.mp3')
+    audioService.setBgmLevel('HIGH')
+    const bgm = getBgmInstance()!
+    const unduckedVol = bgm.volume
+    expect(unduckedVol).toBeLessThan(0.1)
+
+    audioService.duckBgm()
+    // No loudening: stay at (or below) the already-quiet unducked level.
+    expect(bgm.volume).toBeLessThanOrEqual(unduckedVol + 1e-6)
   })
 
   // ── Mute integration ─────────────────────────────────────────────────────
@@ -330,7 +345,7 @@ describe('audioService BGM lifecycle (real implementation)', () => {
 //   #1 a rejected play() re-arms bgmPendingStart so the next gesture retries
 //   #2 a paused BGM resumes on visibilitychange→visible (lock-screen recovery)
 //   #3 the stuck-queue watchdog and the visibility-resume drain both call
-//      unduckBgm so BGM is not left clamped at BGM_GAIN_DUCKED forever
+//      unduckBgm so BGM is not left clamped at the duck level forever
 describe('audioService BGM defensive recovery (mobile Chrome)', () => {
   beforeEach(async () => {
     localStorage.clear()
