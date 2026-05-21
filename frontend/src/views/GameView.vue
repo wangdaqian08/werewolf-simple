@@ -100,6 +100,7 @@
         :my-user-id="userStore.userId ?? ''"
         :my-role="gameStore.state.myRole"
         :action-pending="actionPending"
+        :witch-self-save-allowed="gameStore.state.witchSelfSaveAllowed"
         @select-player="handleNightSelect"
         @confirm="handleNightConfirm"
         @witch-antidote="handleWitchAntidote"

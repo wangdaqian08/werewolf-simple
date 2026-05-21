@@ -90,6 +90,28 @@
             <span class="toggle-thumb" />
           </button>
         </div>
+        <div class="role-row" :class="witchSelfSaveAllowed ? 'row-on' : 'row-off'">
+          <span class="role-emoji">🧙‍♀️</span>
+          <div class="role-names">
+            <span class="role-name">女巫自救 Witch Self-Save</span>
+            <span class="win-cond-desc">
+              {{
+                witchSelfSaveAllowed
+                  ? '允许女巫使用解药救自己 (Allowed)'
+                  : '禁止女巫使用解药救自己 (Disallowed)'
+              }}
+            </span>
+          </div>
+          <button
+            :class="witchSelfSaveAllowed ? 'toggle-on' : 'toggle-off'"
+            class="toggle"
+            data-testid="witchSelfSave-toggle"
+            :data-witch-self-save="witchSelfSaveAllowed"
+            @click="witchSelfSaveAllowed = !witchSelfSaveAllowed"
+          >
+            <span class="toggle-thumb" />
+          </button>
+        </div>
         <div class="role-row" :class="winCondition === 'HARD_MODE' ? 'row-wolf' : 'row-on'">
           <span class="role-emoji">⚔️</span>
           <div class="role-names">
@@ -192,6 +214,7 @@ const totalPlayers = ref(9)
 // Optional roles enabled by default
 const enabledOptional = ref(new Set(['SEER', 'WITCH', 'HUNTER']))
 const hasSheriff = ref(true)
+const witchSelfSaveAllowed = ref(true)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
 const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: '无 (None)' }])
@@ -276,6 +299,7 @@ async function handleCreate() {
         hasSheriff: hasSheriff.value,
         winCondition: winCondition.value,
         bgmTrack: bgmTrack.value,
+        witchSelfSaveAllowed: witchSelfSaveAllowed.value,
       },
     }
     // Carry the per-room display-name override that the lobby may have set.

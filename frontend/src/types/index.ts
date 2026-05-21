@@ -49,6 +49,7 @@ export interface RoomConfig {
   hasSheriff?: boolean
   winCondition?: WinConditionMode
   bgmTrack?: string | null
+  witchSelfSaveAllowed?: boolean
 }
 
 export interface Room {
@@ -161,6 +162,8 @@ export interface GameState {
   // roomStore is empty). Source of truth lives in roomStore for the lobby
   // flow; mirror here for the game flow.
   bgmTrack?: string | null
+  /** Whether the witch may use her antidote to save herself (room config). */
+  witchSelfSaveAllowed?: boolean
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
   /** True when a wolf self-destructed this day — host sees "进入夜晚" instead of voting. */
   daySkipVoting?: boolean

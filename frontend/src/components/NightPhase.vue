@@ -194,8 +194,16 @@
           </span>
           被狼人袭击，是否使用解药？
         </p>
+        <p
+          v-if="witchSelfSaveBlocked"
+          class="ws-desc ws-blocked-note"
+          data-testid="witch-self-save-blocked"
+        >
+          本局禁止自救 / Self-save disabled this game
+        </p>
         <div class="ws-row">
           <button
+            v-if="!witchSelfSaveBlocked"
             class="btn btn-primary ws-btn"
             data-testid="witch-antidote"
             :class="{ 'is-loading': actionPending }"
@@ -407,7 +415,14 @@ const props = defineProps<{
   myUserId: string
   myRole?: PlayerRole
   actionPending?: boolean
+  witchSelfSaveAllowed?: boolean
 }>()
+
+const witchSelfSaveBlocked = computed(
+  () =>
+    props.witchSelfSaveAllowed === false &&
+    props.nightPhase.attackedPlayerId === props.myUserId,
+)
 
 const emit = defineEmits<{
   selectPlayer: [userId: string]
