@@ -368,6 +368,81 @@ class VotingPipelineTest {
         }
     }
 
+    // ── Night-reveal badge handover path ──────────────────────────────────────
+
+    /**
+     * Game state for the night-reveal handover branch: phase=DAY_DISCUSSION,
+     * subPhase=DaySubPhase.BADGE_HANDOVER (set by GamePhasePipeline.revealNightResult
+     * when sheriff is among pending kills).
+     */
+    private fun nightRevealGame(sheriff: String) = Game(roomId = 1, hostUserId = hostId).also {
+        val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+        it.phase = GamePhase.DAY_DISCUSSION
+        it.subPhase = DaySubPhase.BADGE_HANDOVER.name
+        it.dayNumber = 2
+        it.sheriffUserId = sheriff
+    }
+
+    @Test
+    fun `handleBadge BADGE_PASS from night-reveal transitions to RESULT_REVEALED and does NOT run afterElimination`() {
+        // Night-killed sheriff hands the badge to an heir. Post-handover the
+        // game must land on DAY_DISCUSSION/RESULT_REVEALED so the host can run
+        // dayAdvance into voting. No elimination happened, so afterElimination
+        // (and its win-condition check via contextLoader) must NOT fire.
+        val dyingSheriff = player("u2", 2, alive = false).also { it.sheriff = true }
+        val heir = player("u3", 3)
+        val game = nightRevealGame(sheriff = "u2")
+        val context = GameContext(game, room(), listOf(dyingSheriff, heir))
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u3")).thenReturn(Optional.of(heir))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(game.sheriffUserId).isEqualTo("u3")
+        assertThat(game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        // No afterElimination — contextLoader.load must NOT be called.
+        verify(contextLoader, never()).load(any())
+        verify(winConditionChecker, never()).check(any(), any(), any(), any())
+    }
+
+    @Test
+    fun `handleBadge BADGE_DESTROY from night-reveal transitions to RESULT_REVEALED with sheriff cleared`() {
+        val dyingSheriff = player("u2", 2, alive = false).also { it.sheriff = true }
+        val game = nightRevealGame(sheriff = "u2")
+        val context = GameContext(game, room(), listOf(dyingSheriff))
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_DESTROY), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(game.sheriffUserId).isNull()
+        assertThat(game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        verify(contextLoader, never()).load(any())
+    }
+
+    @Test
+    fun `handleBadge rejected when not in any BADGE_HANDOVER sub-phase`() {
+        val sheriff = player("u2", 2)
+        val game = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.DAY_DISCUSSION
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
+            it.sheriffUserId = "u2"
+        }
+        val context = GameContext(game, room(), listOf(sheriff))
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("BADGE_HANDOVER")
+    }
+
     @Test
     fun `handleHunterShoot - hunter shoots last wolf, game ends with VILLAGER win`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER)

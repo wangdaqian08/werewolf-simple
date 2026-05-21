@@ -249,13 +249,16 @@ class GamePipelineSheriffTest {
     // ── Night-kill = no last action contract (regression guard for Phase B) ──
 
     @Test
-    fun `revealNightResult with sheriff among the killed lands on RESULT_REVEALED, NOT BADGE_HANDOVER`() {
-        // Contract: a sheriff killed at night silently loses the badge — no
-        // BADGE_HANDOVER sub-phase fires. Last actions only happen on vote-out
-        // (国标 rule: only voted-out players retain agency at the moment of
-        // elimination). An earlier Phase B prototype routed night-killed
-        // sheriffs to DAY_DISCUSSION/BADGE_HANDOVER; that was reverted because
-        // it ships the wrong rule. This test guards against re-introducing it.
+    fun `revealNightResult with sheriff among the killed lands on BADGE_HANDOVER`() {
+        // Contract (updated): a sheriff killed at night gets one last action —
+        // pass the badge to an heir or destroy it. revealNightResult lands the
+        // game on DAY_DISCUSSION/BADGE_HANDOVER (new DaySubPhase value); the
+        // dying sheriff then dispatches BADGE_PASS / BADGE_DESTROY through
+        // VotingPipeline.handleBadge, which transitions back to RESULT_REVEALED
+        // so the host can advance to voting. Earlier prototype: night-killed
+        // sheriffs silently lost the badge — that contract was reversed at the
+        // product owner's request because losing the badge with no farewell
+        // was unsatisfying gameplay.
         val np = NightPhase(gameId = gameId, dayNumber = 2).also {
             it.subPhase = NightSubPhase.COMPLETE
             it.wolfTargetUserId = "sheriff_victim"
@@ -271,10 +274,31 @@ class GamePipelineSheriffTest {
         val result = pipeline.revealNightResult(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+    }
+
+    @Test
+    fun `revealNightResult with non-sheriff among the killed lands on RESULT_REVEALED`() {
+        // Counterpart to the above: the BADGE_HANDOVER branch must trigger only
+        // when the dying player IS the sheriff. A non-sheriff night death lands
+        // on RESULT_REVEALED as before.
+        val np = NightPhase(gameId = gameId, dayNumber = 2).also {
+            it.subPhase = NightSubPhase.COMPLETE
+            it.wolfTargetUserId = "non_sheriff_victim"
+        }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("non_sheriff_victim"))
+
+        val game = game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 2, subPhase = DaySubPhase.RESULT_HIDDEN.name)
+        game.sheriffUserId = "different_sheriff"
+        val ctx = GameContext(game, room(hasSheriff = true), emptyList())
+
+        val req = GameActionRequest(gameId, hostId, ActionType.REVEAL_NIGHT_RESULT)
+        val result = pipeline.revealNightResult(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
-        // Crucially: NOT BADGE_HANDOVER — the contract says the badge
-        // silently disappears when the sheriff dies at night.
-        assertThat(ctx.game.subPhase).isNotEqualTo("BADGE_HANDOVER")
     }
 
     @Test
@@ -307,12 +331,11 @@ class GamePipelineSheriffTest {
     }
 
     @Test
-    fun `revealNightResult with sheriff AND hunter killed lands on RESULT_REVEALED, NOT BADGE_HANDOVER nor HUNTER_SHOOT`() {
-        // The doubly-special-role night-kill: both sheriff and hunter are
-        // among the killed (e.g. wolves' WOLF_KILL targets the sheriff; witch
-        // poisons the hunter). Neither last-action sub-phase fires — both
-        // players just die. The contract's symmetry: "killed at night = no
-        // last action" applies regardless of which / how many specials died.
+    fun `revealNightResult with sheriff AND hunter killed lands on BADGE_HANDOVER but skips HUNTER_SHOOT`() {
+        // Asymmetric mixed case: sheriff gets a last action (badge handover);
+        // hunter night-death still does NOT trigger HUNTER_SHOOT — that
+        // privilege remains a day-voting exclusive. Sheriff-handover takes
+        // precedence and is the only last-action that fires at reveal.
         val np = NightPhase(gameId = gameId, dayNumber = 2).also {
             it.subPhase = NightSubPhase.COMPLETE
             it.wolfTargetUserId = "sheriff_victim"
@@ -330,6 +353,7 @@ class GamePipelineSheriffTest {
         val result = pipeline.revealNightResult(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(ctx.game.subPhase).isNotEqualTo("HUNTER_SHOOT")
     }
 }

@@ -68,10 +68,18 @@ class GamePhasePipeline(
             actionLogService.recordNightDeaths(context.gameId, context.game.dayNumber, pendingKills)
         }
 
-        context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
+        // If the sheriff is among the night kills, transition into the new
+        // BADGE_HANDOVER sub-phase so the dying sheriff can pass on or destroy
+        // the badge before discussion begins. Otherwise land on RESULT_REVEALED
+        // and let the host advance to voting as usual.
+        val sheriffKilledAtNight =
+            context.game.sheriffUserId != null && context.game.sheriffUserId in pendingKills
+        val nextSubPhase =
+            if (sheriffKilledAtNight) DaySubPhase.BADGE_HANDOVER else DaySubPhase.RESULT_REVEALED
+        context.game.subPhase = nextSubPhase.name
         gameRepository.save(context.game)
 
-        log.info("[revealNightResult] Successfully revealed night result; applied kills=$pendingKills")
+        log.info("[revealNightResult] Successfully revealed night result; applied kills=$pendingKills nextSubPhase=$nextSubPhase")
         if (pendingKills.isNotEmpty()) {
             stompPublisher.broadcastGameAfterCommit(
                 context.gameId,
@@ -80,7 +88,7 @@ class GamePhasePipeline(
         }
         stompPublisher.broadcastGameAfterCommit(
             context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, nextSubPhase.name)
         )
 
         return GameActionResult.Success()

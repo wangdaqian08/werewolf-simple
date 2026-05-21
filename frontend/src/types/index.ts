@@ -289,7 +289,7 @@ export interface SheriffElectionState {
 
 // ── Day Phase ─────────────────────────────────────────────────────────────────
 
-export type DaySubPhase = 'RESULT_HIDDEN' | 'RESULT_REVEALED'
+export type DaySubPhase = 'RESULT_HIDDEN' | 'RESULT_REVEALED' | 'BADGE_HANDOVER'
 
 export interface KilledPlayer {
   killedPlayerId: string
