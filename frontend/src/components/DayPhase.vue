@@ -149,9 +149,7 @@
           <div class="sheriff-badge">⭐</div>
         </template>
         <template
-          v-if="
-            !player.isAlive && (dayPhase.subPhase === 'RESULT_REVEALED' || isBadgeHandover)
-          "
+          v-if="!player.isAlive && (dayPhase.subPhase === 'RESULT_REVEALED' || isBadgeHandover)"
           #overlay
         >
           <div class="slot-overlay dead-overlay">✕</div>

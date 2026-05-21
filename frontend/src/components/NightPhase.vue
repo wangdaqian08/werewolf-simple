@@ -420,8 +420,7 @@ const props = defineProps<{
 
 const witchSelfSaveBlocked = computed(
   () =>
-    props.witchSelfSaveAllowed === false &&
-    props.nightPhase.attackedPlayerId === props.myUserId,
+    props.witchSelfSaveAllowed === false && props.nightPhase.attackedPlayerId === props.myUserId,
 )
 
 const emit = defineEmits<{
