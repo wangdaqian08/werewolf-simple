@@ -13,20 +13,18 @@
  * the Playwright report so the evidence is viewable at:
  *   docs/e2e-evidence/<run>/index.html  (after npx playwright show-report)
  */
-import {expect, type Page, test} from '@playwright/test'
-import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act, actName, type RoleName, sheriff} from './helpers/shell-runner'
-import {
-  driveMinimalNight1ViaDom,
-  waitForDayDiscussionAfterSheriff,
-} from './helpers/night-driver'
-import {verifyAllBrowsersPhase} from './helpers/assertions'
-import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import { expect, type Page, test } from '@playwright/test'
+import { type GameContext, setupGame } from './helpers/multi-browser'
+import { act, actName, type RoleName, sheriff } from './helpers/shell-runner'
+import { driveMinimalNight1ViaDom, waitForDayDiscussionAfterSheriff } from './helpers/night-driver'
+import { verifyAllBrowsersPhase } from './helpers/assertions'
+import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-screenshot'
 import {
   readAlivePlayerIds,
   readHostSeat,
   readHostUserId,
   readUnvotedAlivePlayerIds,
+  waitForCondition,
   waitForVotingSubPhase,
 } from './helpers/state-polling'
 
@@ -53,10 +51,7 @@ function assertNonNull<T>(value: T | null | undefined, msg: string): asserts val
  * Resolve `role` to its bot OR to the host (whoever holds it). Returns null
  * only if neither holds the role (impossible if the role is in the kit).
  */
-async function resolveRolePlayer(
-  ctx: GameContext,
-  role: RoleName,
-): Promise<RolePlayer | null> {
+async function resolveRolePlayer(ctx: GameContext, role: RoleName): Promise<RolePlayer | null> {
   if (ctx.isHostRole(role)) {
     const hostSeat = await readHostSeat(ctx.hostPage, ctx.gameId)
     const hostUserId = await readHostUserId(ctx.hostPage)
@@ -255,7 +250,9 @@ async function runSheriffElection(ctx: GameContext, pickNickCampaign: string[]):
     }
   }
   // eslint-disable-next-line no-console
-  console.warn(`[sheriff] after campaign scripts — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`)
+  console.warn(
+    `[sheriff] after campaign scripts — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
 
   // 2026-05-11: SIGNUP→SPEECH is now backend-auto-triggered when every alive
   // player has decided. The host's `sheriff-start-campaign` button is gone.
@@ -292,10 +289,14 @@ async function runSheriffElection(ctx: GameContext, pickNickCampaign: string[]):
   // Wait for backend to auto-transition SIGNUP → SPEECH.
   const reachedSpeech = await waitForSheriffSubPhase(hostPage, gameId, 'SPEECH', 15_000)
   // eslint-disable-next-line no-console
-  console.warn(`[sheriff] reachedSpeech=${reachedSpeech} current=${await readSheriffSubPhase(hostPage, gameId)}`)
+  console.warn(
+    `[sheriff] reachedSpeech=${reachedSpeech} current=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
   await advanceAllSheriffSpeeches(hostPage, gameId)
   // eslint-disable-next-line no-console
-  console.warn(`[sheriff] advanceAllSpeeches done — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`)
+  console.warn(
+    `[sheriff] advanceAllSpeeches done — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
 
   const reachedVoting = await waitForSheriffSubPhase(hostPage, gameId, 'VOTING', 15_000)
   // eslint-disable-next-line no-console
@@ -393,7 +394,9 @@ async function runSheriffElection(ctx: GameContext, pickNickCampaign: string[]):
   }
   await hostPage.waitForTimeout(1_500)
   // eslint-disable-next-line no-console
-  console.warn(`[sheriff] leaving runSheriffElection — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`)
+  console.warn(
+    `[sheriff] leaving runSheriffElection — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
 }
 
 /**
@@ -401,7 +404,11 @@ async function runSheriffElection(ctx: GameContext, pickNickCampaign: string[]):
  * seerCheckSeat = optional target for seer's check. Returns silently; rejected
  * actions are ignored (roles may be dead / skipped).
  */
-async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat?: number): Promise<void> {
+async function completeNight(
+  ctx: GameContext,
+  targetSeat: number,
+  seerCheckSeat?: number,
+): Promise<void> {
   const wolfBots = ctx.roleMap.WEREWOLF ?? []
   const seerBots = ctx.roleMap.SEER ?? []
   const witchBots = ctx.roleMap.WITCH ?? []
@@ -439,7 +446,9 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   const seatToUserId = await hostPage.evaluate(async (id: string) => {
     const token = localStorage.getItem('jwt')
     if (!token) return {} as Record<string, string>
-    const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
     if (!res.ok) return {} as Record<string, string>
     const state = await res.json()
     return Object.fromEntries(
@@ -455,7 +464,8 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
     : (Object.entries(seatToUserId).find(
         ([s, uid]) => !wolfSeats.has(Number(s)) && isAlive(uid),
       )?.[0] ?? targetSeat)
-  const resolvedTargetSeatNum = typeof resolvedTargetSeat === 'string' ? Number(resolvedTargetSeat) : resolvedTargetSeat
+  const resolvedTargetSeatNum =
+    typeof resolvedTargetSeat === 'string' ? Number(resolvedTargetSeat) : resolvedTargetSeat
 
   // ── WEREWOLF_PICK ──
   // Only fire the kill if the backend actually reached the WEREWOLF_PICK
@@ -467,11 +477,21 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
   const reachedWolfPick = await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 20_000)
   if (!reachedWolfPick) return
   if (wolfBot) {
-    tryAct('WOLF_KILL', actName(wolfBot), { target: String(resolvedTargetSeatNum), room: ctx.roomCode })
+    tryAct('WOLF_KILL', actName(wolfBot), {
+      target: String(resolvedTargetSeatNum),
+      room: ctx.roomCode,
+    })
   } else {
     // host is the sole alive wolf — drive via host UI
-    await hostPage.locator('.player-grid .slot-alive').first().click().catch(() => {})
-    await hostPage.getByTestId('wolf-confirm-kill').click().catch(() => {})
+    await hostPage
+      .locator('.player-grid .slot-alive')
+      .first()
+      .click()
+      .catch(() => {})
+    await hostPage
+      .getByTestId('wolf-confirm-kill')
+      .click()
+      .catch(() => {})
   }
 
   // ── WITCH_ACT ──
@@ -494,9 +514,12 @@ async function completeNight(ctx: GameContext, targetSeat: number, seerCheckSeat
       // the self-check prohibition (game-rules memory).
       const candidateSeat = seerCheckSeat ?? 1
       const candidateBot = ctx.allBots.find((b) => b.seat === candidateSeat && isAlive(b.userId))
-      const checkSeat = candidateBot && candidateBot.userId !== seerBot.userId
-        ? candidateSeat
-        : ctx.allBots.find((b) => b.userId !== seerBot.userId && b.nick !== 'Host' && isAlive(b.userId))?.seat ?? candidateSeat
+      const checkSeat =
+        candidateBot && candidateBot.userId !== seerBot.userId
+          ? candidateSeat
+          : (ctx.allBots.find(
+              (b) => b.userId !== seerBot.userId && b.nick !== 'Host' && isAlive(b.userId),
+            )?.seat ?? candidateSeat)
       tryAct('SEER_CHECK', actName(seerBot), { target: String(checkSeat), room: ctx.roomCode })
       // SEER_RESULT next
       await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
@@ -564,24 +587,29 @@ async function completeDay(
   // would otherwise resolve to undefined and the fan-out would silently
   // abstain instead of voting.
   const aliveIds = await readAlivePlayerIds(hostPage, gameId)
-  const targetUserId = targetSeat >= 0
-    ? await hostPage.evaluate(
-        async ({ id, seat }) => {
-          const token = localStorage.getItem('jwt')
-          if (!token) return null as string | null
-          const res = await fetch(`/api/game/${id}/state`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          if (!res.ok) return null as string | null
-          const state = await res.json()
-          const match = ((state?.players ?? []) as Array<{ seatIndex: number; userId: string }>)
-            .find((p) => p.seatIndex === seat)
-          return match?.userId ?? null
-        },
-        { id: gameId, seat: targetSeat },
-      )
-    : null
-  const targetBot = targetUserId && aliveIds.has(targetUserId) ? { seat: targetSeat, userId: targetUserId } : undefined
+  const targetUserId =
+    targetSeat >= 0
+      ? await hostPage.evaluate(
+          async ({ id, seat }) => {
+            const token = localStorage.getItem('jwt')
+            if (!token) return null as string | null
+            const res = await fetch(`/api/game/${id}/state`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (!res.ok) return null as string | null
+            const state = await res.json()
+            const match = (
+              (state?.players ?? []) as Array<{ seatIndex: number; userId: string }>
+            ).find((p) => p.seatIndex === seat)
+            return match?.userId ?? null
+          },
+          { id: gameId, seat: targetSeat },
+        )
+      : null
+  const targetBot =
+    targetUserId && aliveIds.has(targetUserId)
+      ? { seat: targetSeat, userId: targetUserId }
+      : undefined
   // eslint-disable-next-line no-console
   console.warn(
     `[completeDay] targetSeat=${targetSeat} → targetUserId=${targetUserId ?? 'null'} alive=${targetUserId ? aliveIds.has(targetUserId) : false}`,
@@ -627,7 +655,9 @@ async function completeDay(
 
     const revealTallyBtn = hostPage.getByTestId('voting-reveal')
     await revealTallyBtn.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {})
-    await expect(revealTallyBtn).toBeEnabled({ timeout: 15_000 }).catch(() => {})
+    await expect(revealTallyBtn)
+      .toBeEnabled({ timeout: 15_000 })
+      .catch(() => {})
     if (await revealTallyBtn.isVisible().catch(() => false)) {
       await revealTallyBtn.click()
       await hostPage.waitForTimeout(1_500)
@@ -635,7 +665,11 @@ async function completeDay(
       tryAct('VOTING_REVEAL_TALLY', 'Host', { room: ctx.roomCode })
       await hostPage.waitForTimeout(1_500)
     }
-    await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-day-tally-revealed-r${attempt + 1}`)
+    await captureSnapshot(
+      ctx.pages,
+      testInfo,
+      `${evidenceLabel}-day-tally-revealed-r${attempt + 1}`,
+    )
 
     // If the backend has left voting (VOTE_RESULT / BADGE_HANDOVER /
     // HUNTER_SHOOT) or the top-level phase changed (e.g. GAME_OVER), stop.
@@ -719,9 +753,12 @@ async function completeDay(
       // keeps it sticky for the remainder of the test. Otherwise pick the
       // first alive slot. Click is on the page where `isEliminatedSheriff`
       // is true (resolvedSheriffPage) — only that page renders the buttons.
-      const slot = resolvedRecipientSeat !== undefined
-        ? resolvedSheriffPage.locator(`.player-grid [data-seat="${resolvedRecipientSeat}"].slot-alive`)
-        : resolvedSheriffPage.locator('.player-grid .slot-alive').first()
+      const slot =
+        resolvedRecipientSeat !== undefined
+          ? resolvedSheriffPage.locator(
+              `.player-grid [data-seat="${resolvedRecipientSeat}"].slot-alive`,
+            )
+          : resolvedSheriffPage.locator('.player-grid .slot-alive').first()
       await slot.waitFor({ state: 'visible', timeout: 10_000 })
       await slot.click()
       await resolvedSheriffPage.waitForTimeout(300)
@@ -986,7 +1023,8 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     // Park the guard's protect on a wolf — wolves don't kill each other,
     // so the protection is wasted but doesn't block the planned death.
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
-    const wolfSeatForGuardProtect = wolfBots.find((b) => b.nick !== 'Host')?.seat ?? wolfBots[0]?.seat
+    const wolfSeatForGuardProtect =
+      wolfBots.find((b) => b.nick !== 'Host')?.seat ?? wolfBots[0]?.seat
     expect(
       wolfSeatForGuardProtect,
       'HARD_MODE kit needs at least one wolf so guard can protect a non-target seat',
@@ -1037,14 +1075,7 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
       badgeWolfBot,
       'a non-host wolf is needed as the badge recipient so the badge stays put for the rest of the test',
     )
-    await completeDay(
-      ctx,
-      testInfo,
-      seer.seat,
-      'hard-05-day-1',
-      seerPage,
-      badgeWolfBot.seat,
-    )
+    await completeDay(ctx, testInfo, seer.seat, 'hard-05-day-1', seerPage, badgeWolfBot.seat)
     await ctx.hostPage.waitForTimeout(2_000)
 
     // Plan needs 2 nights: D1 vote-out fires BADGE_HANDOVER + post-vote win
@@ -1116,5 +1147,178 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     await expect(ctx.hostPage.locator('.outcome-title')).toBeVisible({ timeout: 10_000 })
     const winner = (await ctx.hostPage.locator('.outcome-title').textContent()) ?? ''
     expect(winner).toMatch(/狼人|Werewolf|WOLF/i)
+  })
+})
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Scenario 3 — 12 players, sheriff killed AT NIGHT on N2.
+// New contract (2026-05-22): night-killed sheriff gets one last action — pass
+// the badge to an heir OR destroy it — landed in the new
+// DaySubPhase.BADGE_HANDOVER value at day reveal, BEFORE discussion. This
+// exercises the new flow end-to-end: real STOMP broadcasts, REST endpoints,
+// DAY_DISCUSSION-side badge UI in DayPhase.vue (separate from VotingPhase's
+// badge UI which covers vote-out elimination).
+// ───────────────────────────────────────────────────────────────────────────────
+test.describe('12p sheriff — night-killed sheriff hands over badge at day reveal', () => {
+  test.setTimeout(600_000)
+
+  let ctx: GameContext
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(process.env.CI ? 360_000 : 180_000)
+    ctx = await setupGame(browser, {
+      totalPlayers: 12,
+      hasSheriff: true,
+      roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
+      browserRoles: BROWSER_ROLES,
+    })
+  })
+
+  test.afterAll(async () => {
+    await ctx?.cleanup()
+  })
+
+  test.afterEach(async ({}, testInfo) => {
+    if (testInfo.status === 'failed' && ctx?.pages) {
+      await attachCompositeOnFailure(ctx.pages, testInfo)
+    }
+  })
+
+  test('N1 normal → sheriff elected → D1 vote-out wolf → N2 wolves kill sheriff → BADGE_HANDOVER at reveal → pass to heir', async ({}, testInfo) => {
+    // Resolve roles. Seer becomes sheriff (matches HARD_MODE pattern).
+    const seer = await resolveRolePlayer(ctx, 'SEER')
+    const guard = await resolveRolePlayer(ctx, 'GUARD')
+    assertNonNull(seer, `kit must have a SEER (bot or host=${ctx.hostRole})`)
+    assertNonNull(guard, `kit must have a GUARD (bot or host=${ctx.hostRole})`)
+
+    const wolfSeats = new Set((ctx.roleMap.WEREWOLF ?? []).map((b) => b.seat))
+    const villagerSeats = (ctx.roleMap.VILLAGER ?? [])
+      .filter((b) => b.nick !== 'Host')
+      .map((b) => b.seat)
+      .filter((s) => !wolfSeats.has(s))
+    expect(
+      villagerSeats.length,
+      'plan needs a non-host non-wolf villager seat for N1 kill + D1 wolf vote-out target',
+    ).toBeGreaterThanOrEqual(1)
+
+    // ── N1: wolves kill a villager (not the seer — seer needs to become sheriff)
+    const wolfBots = ctx.roleMap.WEREWOLF ?? []
+    const guardSafeWolfSeat = wolfBots.find((b) => b.nick !== 'Host')?.seat ?? wolfBots[0]?.seat
+    expect(
+      guardSafeWolfSeat,
+      'need a wolf seat so guard can protect a wolf without blocking the planned kill',
+    ).toBeDefined()
+
+    await driveMinimalNight1ViaDom(ctx, {
+      wolfTargetSeat: villagerSeats[0],
+      seerCheckSeat: guardSafeWolfSeat,
+      guardTargetSeat: guardSafeWolfSeat!,
+    })
+    await captureSnapshot(ctx.pages, testInfo, 'sndh-01-n1-done')
+
+    // ── Sheriff election: seer campaigns and wins
+    await runSheriffElection(ctx, [seer.nick])
+    await captureSnapshot(ctx.pages, testInfo, 'sndh-02-sheriff-elected-is-seer')
+    await waitForDayDiscussionAfterSheriff(ctx)
+
+    // Confirm: seer is now sheriffUserId.
+    const sheriffAfterElection = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.ok ? (await res.json())?.sheriffUserId : null
+    }, ctx.gameId)
+    expect(sheriffAfterElection, 'seer should hold the badge after election').toBe(seer.userId)
+
+    // ── D1: vote out any non-sheriff wolf (keep sheriff alive for the N2 plan)
+    const wolfToKill = wolfBots.find((b) => b.nick !== 'Host') ?? wolfBots[0]
+    assertNonNull(wolfToKill, 'need a wolf to vote out on D1')
+    await completeDay(ctx, testInfo, wolfToKill.seat, 'sndh-03-d1')
+    await ctx.hostPage.waitForTimeout(2_000)
+
+    // ── N2: wolves target the SHERIFF (the seer). Witch+guard pass via
+    //         completeNight defaults (witch declines antidote → kill stands;
+    //         guard skips).
+    await completeNight(ctx, seer.seat)
+    await captureSnapshot(ctx.pages, testInfo, 'sndh-04-n2-done')
+
+    // ── Day 2 reveal: backend should transition to DAY_DISCUSSION/BADGE_HANDOVER
+    //         because the sheriff died at night.
+    const revealBtn = ctx.hostPage.getByTestId('day-reveal-result')
+    await revealBtn.waitFor({ state: 'visible', timeout: 30_000 })
+    await revealBtn.click()
+
+    // Authoritative subPhase check via API (not DOM): the backend should be
+    // in BADGE_HANDOVER, not RESULT_REVEALED.
+    await waitForCondition(
+      async () => {
+        const state = await ctx.hostPage.evaluate(async (id: string) => {
+          const token = localStorage.getItem('jwt')
+          const res = await fetch(`/api/game/${id}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          return res.ok ? await res.json() : null
+        }, ctx.gameId)
+        return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'BADGE_HANDOVER'
+      },
+      'BADGE_HANDOVER at day-2 reveal (night-killed sheriff)',
+      15_000,
+    )
+    await captureSnapshot(ctx.pages, testInfo, 'sndh-05-badge-handover-fired')
+
+    // ── Sheriff's browser must render the dying-sheriff banner + pass button.
+    //         When host is the seer, ctx.pages.get('SEER') === hostPage by
+    //         setupGame's mapping — host's own page renders the badge UI.
+    const seerPage = ctx.pages.get('SEER')
+    assertNonNull(
+      seerPage,
+      'badge-handover needs the SEER browser page — only the night-killed sheriff sees the pass-badge UI',
+    )
+    await expect(seerPage.getByTestId('day-badge-eliminated-banner')).toBeVisible({
+      timeout: 10_000,
+    })
+    const passBtn = seerPage.getByTestId('day-badge-pass')
+    await expect(passBtn).toBeVisible({ timeout: 5_000 })
+    // Disabled until an heir is selected.
+    await expect(passBtn).toBeDisabled()
+
+    // ── Non-sheriff browsers see the waiting banner, not the pass UI.
+    const witchPage = ctx.pages.get('WITCH')
+    if (witchPage) {
+      await expect(witchPage.getByTestId('day-badge-wait-banner')).toBeVisible({ timeout: 10_000 })
+      expect(await witchPage.getByTestId('day-badge-pass').count()).toBe(0)
+    }
+
+    // ── Pass the badge to an alive non-host non-wolf villager. The sheriff
+    //         page's player grid is tap-to-select; click the heir then click pass.
+    const heirSeat = villagerSeats.find((s) => s !== seer.seat) ?? villagerSeats[0]
+    const heirSlot = seerPage.locator(`.player-grid [data-seat="${heirSeat}"]`)
+    await heirSlot.click()
+    await expect(passBtn).toBeEnabled({ timeout: 5_000 })
+    await passBtn.click()
+
+    // ── Backend transitions to DAY_DISCUSSION/RESULT_REVEALED with the new
+    //         sheriff in place.
+    await waitForCondition(
+      async () => {
+        const state = await ctx.hostPage.evaluate(async (id: string) => {
+          const token = localStorage.getItem('jwt')
+          const res = await fetch(`/api/game/${id}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          return res.ok ? await res.json() : null
+        }, ctx.gameId)
+        return (
+          state?.phase === 'DAY_DISCUSSION' &&
+          state?.subPhase === 'RESULT_REVEALED' &&
+          state?.sheriffUserId !== seer.userId &&
+          state?.sheriffUserId != null
+        )
+      },
+      'badge transferred → DAY_DISCUSSION/RESULT_REVEALED with new sheriff',
+      15_000,
+    )
+    await captureSnapshot(ctx.pages, testInfo, 'sndh-06-badge-passed-result-revealed')
   })
 })
