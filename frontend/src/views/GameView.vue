@@ -100,6 +100,7 @@
         :my-user-id="userStore.userId ?? ''"
         :my-role="gameStore.state.myRole"
         :action-pending="actionPending"
+        :witch-self-save-allowed="gameStore.state.witchSelfSaveAllowed"
         @select-player="handleNightSelect"
         @confirm="handleNightConfirm"
         @witch-antidote="handleWitchAntidote"
@@ -155,6 +156,7 @@
           gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
         "
         :day-skip-voting="gameStore.state?.daySkipVoting ?? false"
+        :sheriff-user-id="gameStore.state?.sheriffUserId ?? null"
         :action-pending="actionPending"
         @reveal-result="handleRevealResult"
         @start-vote="handleStartVote"
@@ -163,6 +165,8 @@
         @select-player="handleDaySelectPlayer"
         @self-destruct="handleSelfDestruct"
         @continue-to-night="handleVotingContinue"
+        @pass-badge="handlePassBadge"
+        @destroy-badge="handleDestroyBadge"
         @start-timer="(s) => handleTimerStart(Number(route.params.gameId), s)"
         @stop-timer="() => handleTimerStop(Number(route.params.gameId))"
       />

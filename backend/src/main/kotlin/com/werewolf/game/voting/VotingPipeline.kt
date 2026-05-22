@@ -273,10 +273,22 @@ class VotingPipeline(
 
     @Transactional
     fun handleBadge(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.DAY_VOTING)
-            return GameActionResult.Rejected("Not in voting phase")
-        if (context.game.subPhase != VotingSubPhase.BADGE_HANDOVER.name)
+        // Two entry points share this handler:
+        //   (A) Voting elimination: DAY_VOTING + VotingSubPhase.BADGE_HANDOVER
+        //       — sheriff voted out → after handover, continue elimination via
+        //         afterElimination() and land on VotingSubPhase.VOTE_RESULT.
+        //   (B) Night kill reveal:  DAY_DISCUSSION + DaySubPhase.BADGE_HANDOVER
+        //       — sheriff killed at night → after handover, land back on
+        //         DaySubPhase.RESULT_REVEALED so host can advance to voting.
+        val fromVoting = context.game.phase == GamePhase.DAY_VOTING &&
+            context.game.subPhase == VotingSubPhase.BADGE_HANDOVER.name
+        val fromNightReveal = context.game.phase == GamePhase.DAY_DISCUSSION &&
+            context.game.subPhase == DaySubPhase.BADGE_HANDOVER.name
+        if (!fromVoting && !fromNightReveal)
             return GameActionResult.Rejected("Not in BADGE_HANDOVER sub-phase")
+
+        val postPhase = if (fromVoting) GamePhase.DAY_VOTING else GamePhase.DAY_DISCUSSION
+        val postSubPhase = if (fromVoting) VotingSubPhase.VOTE_RESULT.name else DaySubPhase.RESULT_REVEALED.name
 
         val actor = context.playerById(request.actorUserId)
             ?: return GameActionResult.Rejected("Actor not found")
@@ -292,10 +304,10 @@ class VotingPipeline(
 
                 // Update sheriff
                 context.game.sheriffUserId = targetPlayer.userId
-                context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
+                context.game.subPhase = postSubPhase
                 gameRepository.save(context.game)
 
-                commitDeferredHunterShotIfAny(context, actor.userId)
+                if (fromVoting) commitDeferredHunterShotIfAny(context, actor.userId)
 
                 // Update sheriff flags
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
@@ -310,16 +322,16 @@ class VotingPipeline(
                 )
                 stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
+                    DomainEvent.PhaseChanged(context.gameId, postPhase, postSubPhase)
                 )
             }
 
             ActionType.BADGE_DESTROY -> {
                 // Update sheriff
                 context.game.sheriffUserId = null
-                context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
+                context.game.subPhase = postSubPhase
                 gameRepository.save(context.game)
-                commitDeferredHunterShotIfAny(context, actor.userId)
+                if (fromVoting) commitDeferredHunterShotIfAny(context, actor.userId)
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
                     it.sheriff = false; gamePlayerRepository.save(it)
                 }
@@ -329,23 +341,16 @@ class VotingPipeline(
                 )
                 stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
+                    DomainEvent.PhaseChanged(context.gameId, postPhase, postSubPhase)
                 )
             }
 
             else -> return GameActionResult.Rejected("Unknown action: ${request.actionType}")
+        }
 
-            
-
-                    }
-
-            
-
-                    afterElimination(context)
-
-                    return GameActionResult.Success()
-
-                }
+        if (fromVoting) afterElimination(context)
+        return GameActionResult.Success()
+    }
 
     /**
      * Commit the deferred hunter-shot kill on the dying sheriff, if there is

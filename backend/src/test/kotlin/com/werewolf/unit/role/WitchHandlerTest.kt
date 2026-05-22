@@ -239,4 +239,57 @@ class WitchHandlerTest {
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
         assertThat((result as GameActionResult.Rejected).reason).contains("Poison target not found or dead")
     }
+
+    // ── Witch self-save config gate ─────────────────────────────────────────
+
+    private fun roomWithSelfSave(allowed: Boolean) = Room(
+        roomCode = "ABCD",
+        hostUserId = hostId,
+        totalPlayers = 6,
+        config = GameConfig(witchSelfSaveAllowed = allowed),
+    )
+
+    private fun ctxWithRoom(room: Room, vararg players: GamePlayer, nightPhase: NightPhase = nightPhase()) =
+        GameContext(game(), room, players.toList(), nightPhase = nightPhase, allNightPhases = emptyList())
+
+    @Test
+    fun `Self-save allowed (default) - witch antidoting herself succeeds when wolves attacked her`() {
+        val witch = player(witchId, 1, PlayerRole.WITCH)
+        val np = nightPhase().also { it.wolfTargetUserId = witchId }
+        val context = ctxWithRoom(roomWithSelfSave(allowed = true), witch, nightPhase = np)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+        val result = witchHandler.handle(req(payload = mapOf("useAntidote" to true)), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(np.witchAntidoteUsed).isTrue()
+    }
+
+    @Test
+    fun `Self-save disabled - witch antidoting herself rejected when wolves attacked her`() {
+        val witch = player(witchId, 1, PlayerRole.WITCH)
+        val np = nightPhase().also { it.wolfTargetUserId = witchId }
+        val context = ctxWithRoom(roomWithSelfSave(allowed = false), witch, nightPhase = np)
+
+        val result = witchHandler.handle(req(payload = mapOf("useAntidote" to true)), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("Witch cannot self-save")
+        assertThat(np.witchAntidoteUsed).isFalse()
+    }
+
+    @Test
+    fun `Self-save disabled - witch antidoting someone else still succeeds`() {
+        val witch = player(witchId, 1, PlayerRole.WITCH)
+        val attacked = player(targetId, 2)
+        // Wolves attacked the OTHER player, not the witch.
+        val np = nightPhase().also { it.wolfTargetUserId = targetId }
+        val context = ctxWithRoom(roomWithSelfSave(allowed = false), witch, attacked, nightPhase = np)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+        val result = witchHandler.handle(req(payload = mapOf("useAntidote" to true)), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(np.witchAntidoteUsed).isTrue()
+    }
 }

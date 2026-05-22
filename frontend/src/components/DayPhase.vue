@@ -46,7 +46,31 @@
 
     <!-- Fixed-height banner area — always rendered so grid position stays consistent -->
     <div class="banner-area">
-      <template v-if="viewRole === 'DEAD'">
+      <!-- Badge handover (sheriff killed at night): show this on top of the
+           normal reveal banners. The dying sheriff sees the heir prompt; all
+           other viewers see a "waiting for sheriff" hint. -->
+      <template v-if="isBadgeHandover">
+        <div
+          v-if="isDyingSheriff"
+          class="banner banner-gold"
+          data-testid="day-badge-eliminated-banner"
+        >
+          <span class="banner-avatar">⭐</span>
+          <div>
+            <div class="banner-title">你已出局 · Eliminated</div>
+            <div class="banner-sub">选择警徽继承人 / Choose badge heir</div>
+          </div>
+        </div>
+        <div v-else class="banner banner-info" data-testid="day-badge-wait-banner">
+          <span class="banner-avatar">⭐</span>
+          <div>
+            <div class="banner-title">警长正在移交警徽</div>
+            <div class="banner-sub">Sheriff is choosing an heir…</div>
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="viewRole === 'DEAD'">
         <div class="banner banner-info" data-testid="day-banner-self-eliminated">
           <span class="banner-icon">☑</span>
           <div>
@@ -124,7 +148,10 @@
         <template v-if="player.isSheriff" #badge>
           <div class="sheriff-badge">⭐</div>
         </template>
-        <template v-if="!player.isAlive && dayPhase.subPhase === 'RESULT_REVEALED'" #overlay>
+        <template
+          v-if="!player.isAlive && (dayPhase.subPhase === 'RESULT_REVEALED' || isBadgeHandover)"
+          #overlay
+        >
           <div class="slot-overlay dead-overlay">✕</div>
         </template>
       </PlayerSlot>
@@ -135,7 +162,39 @@
 
     <!-- Footer -->
     <footer class="day-footer">
-      <template v-if="viewRole === 'HOST'">
+      <!-- BADGE_HANDOVER (sheriff killed at night): dying sheriff sees
+           pass/destroy; everyone else (including host) waits. Takes precedence
+           over the regular host/dead/alive footer templates because the dying
+           sheriff may also be the host. -->
+      <template v-if="isBadgeHandover">
+        <template v-if="isDyingSheriff">
+          <div class="vote-actions">
+            <button
+              class="btn btn-gold vote-btn"
+              data-testid="day-badge-pass"
+              :class="{ 'is-loading': actionPending }"
+              :disabled="!badgeSelectedId || actionPending"
+              @click="badgeSelectedId && emit('passBadge', badgeSelectedId)"
+            >
+              移交警徽 · Pass Badge
+            </button>
+            <button
+              class="btn btn-secondary skip-btn"
+              data-testid="day-badge-destroy"
+              :class="{ 'is-loading': actionPending }"
+              :disabled="actionPending"
+              @click="emit('destroyBadge')"
+            >
+              销毁
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <p class="footer-hint">等待警长移交警徽 · Waiting for sheriff to pass badge…</p>
+        </template>
+      </template>
+
+      <template v-else-if="viewRole === 'HOST'">
         <div v-if="dayPhase.subPhase === 'RESULT_HIDDEN'" class="vote-actions">
           <button
             class="btn btn-primary vote-btn"
@@ -231,8 +290,21 @@ const props = defineProps<{
   myRole?: PlayerRole
   isAlive?: boolean
   daySkipVoting?: boolean
+  sheriffUserId?: string | null
   actionPending?: boolean
 }>()
+
+const isBadgeHandover = computed(() => props.dayPhase.subPhase === 'BADGE_HANDOVER')
+const isDyingSheriff = computed(
+  () => isBadgeHandover.value && !!props.sheriffUserId && props.sheriffUserId === props.myUserId,
+)
+const badgeSelectedId = ref<string | null>(null)
+function onBadgeTap(player: GamePlayer) {
+  if (!isDyingSheriff.value) return
+  if (!player.isAlive) return
+  if (player.userId === props.myUserId) return
+  badgeSelectedId.value = player.userId
+}
 
 const showLog = ref(false)
 const showRoleCard = ref(false)
@@ -304,6 +376,8 @@ const emit = defineEmits<{
   selectPlayer: [userId: string]
   'self-destruct': []
   continueToNight: []
+  passBadge: [userId: string]
+  destroyBadge: []
   'start-timer': [seconds: number]
   'stop-timer': []
 }>()
@@ -340,6 +414,11 @@ function isKilledAndVisible(player: GamePlayer) {
 }
 
 function slotVariant(player: GamePlayer) {
+  if (isBadgeHandover.value) {
+    if (!player.isAlive) return 'dead' as const
+    if (player.userId === badgeSelectedId.value) return 'selected' as const
+    return 'alive' as const
+  }
   if (props.dayPhase.subPhase === 'RESULT_REVEALED') {
     if (isKilledAndVisible(player)) return 'killed' as const
     if (!player.isAlive) return 'dead' as const
@@ -355,6 +434,10 @@ function slotVariant(player: GamePlayer) {
 }
 
 function onTap(player: GamePlayer) {
+  if (isBadgeHandover.value) {
+    onBadgeTap(player)
+    return
+  }
   if (viewRole.value !== 'ALIVE') return
   if (!props.dayPhase.canVote) return
   if (!player.isAlive) return

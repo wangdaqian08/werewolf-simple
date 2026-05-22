@@ -330,6 +330,7 @@ class GameService(
             // after a refresh — the existing per-phase startBgm watcher reads
             // it from gameStore as a fallback when roomStore is empty.
             "bgmTrack" to room?.config?.bgmTrack,
+            "witchSelfSaveAllowed" to (room?.config?.witchSelfSaveAllowed ?: true),
             "winner" to game.winner?.name,
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,

@@ -52,7 +52,7 @@ class RoomService(
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
-                config = buildGameConfig(cfg.bgmTrack),
+                config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed),
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")
@@ -231,7 +231,7 @@ class RoomService(
             hostId = room.hostUserId,
             status = room.status.name,
             players = playerDtos,
-            config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack),
+            config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack, witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true),
             activeGameId = activeGameId,
         )
     }
@@ -246,7 +246,7 @@ class RoomService(
      * overrides. Production leaves the properties unset and gets the compile-time
      * role defaults; the test profile sets small values so CI completes quickly.
      */
-    private fun buildGameConfig(bgmTrack: String?): GameConfig = GameConfig(
+    private fun buildGameConfig(bgmTrack: String?, witchSelfSaveAllowed: Boolean): GameConfig = GameConfig(
         roleDelays = mapOf(
             PlayerRole.WEREWOLF to timing.applyTo(PlayerRole.WEREWOLF),
             PlayerRole.SEER to timing.applyTo(PlayerRole.SEER),
@@ -254,6 +254,7 @@ class RoomService(
             PlayerRole.GUARD to timing.applyTo(PlayerRole.GUARD),
         ),
         bgmTrack = bgmTrack,
+        witchSelfSaveAllowed = witchSelfSaveAllowed,
     )
 }
 

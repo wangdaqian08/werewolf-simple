@@ -27,7 +27,7 @@ enum class VoteContext { SHERIFF_ELECTION, ELIMINATION }
 
 enum class WinnerSide { WEREWOLF, VILLAGER }
 
-enum class DaySubPhase { RESULT_HIDDEN, RESULT_REVEALED }
+enum class DaySubPhase { RESULT_HIDDEN, RESULT_REVEALED, BADGE_HANDOVER }
 
 enum class VotingSubPhase { VOTING, RE_VOTING, VOTE_RESULT, HUNTER_SHOOT, BADGE_HANDOVER }
 

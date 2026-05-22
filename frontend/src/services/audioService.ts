@@ -21,7 +21,9 @@ const BGM_VOLUME_STORAGE_KEY = 'bgm-volume'
 
 const BGM_GAIN_HIGH = 1.0
 const BGM_GAIN_LOW = 0.45
-const BGM_GAIN_DUCKED = 0.15
+// Absolute BGM volume during narration cues. Capped at the unducked target so
+// users listening at < 10% never get loudened mid-cue.
+const BGM_DUCK_ABSOLUTE = 0.1
 const BGM_RAMP_SEC = 0.15
 
 class AudioService {
@@ -122,7 +124,7 @@ class AudioService {
         this.isPlayingQueue = false
         // The queue drained mid-narration without firing the unduck path in
         // playNextInQueue's "queue empty" branch. Restore BGM gain so the
-        // music isn't left clamped at BGM_GAIN_DUCKED forever.
+        // music isn't left clamped at the duck level forever.
         this.unduckBgm()
       }
       // Mobile Chrome / iOS pause the BGM <audio> element implicitly when the
@@ -674,14 +676,16 @@ class AudioService {
 
   /** Compute the target HTMLAudioElement.volume from current state. */
   private computeBgmTargetVolume(): number {
-    const multiplier = this.muted
-      ? 0
-      : this.bgmNarrationActive
-        ? BGM_GAIN_DUCKED
-        : this.bgmLevel === 'HIGH'
-          ? BGM_GAIN_HIGH
-          : BGM_GAIN_LOW
-    return Math.max(0, Math.min(1, this.bgmBaseVolume * multiplier))
+    if (this.muted) return 0
+    const levelMult = this.bgmLevel === 'HIGH' ? BGM_GAIN_HIGH : BGM_GAIN_LOW
+    const unducked = this.bgmBaseVolume * levelMult
+    if (this.bgmNarrationActive) {
+      // Absolute target during cue narration; never louder than what the
+      // user picked unducked (otherwise a 5%-listener would hear the BGM
+      // jump UP to 10% during cues).
+      return Math.max(0, Math.min(unducked, BGM_DUCK_ABSOLUTE))
+    }
+    return Math.max(0, Math.min(1, unducked))
   }
 
   /**

@@ -15,7 +15,7 @@ const PLAYERS: GamePlayer[] = [
   { userId: 'u2', nickname: 'Bob', seatIndex: 2, isAlive: false, isSheriff: false },
 ]
 
-function makeDay(subPhase: 'RESULT_HIDDEN' | 'RESULT_REVEALED'): DayPhaseState {
+function makeDay(subPhase: 'RESULT_HIDDEN' | 'RESULT_REVEALED' | 'BADGE_HANDOVER'): DayPhaseState {
   return {
     subPhase,
     dayNumber: 2,
@@ -200,5 +200,97 @@ describe('DayPhase — below-arch layout (my-role-chip left, log-fab + ActionMen
     expect(wrapper.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
     // log-fab is hidden in RESULT_HIDDEN to prevent spoilers, ActionMenu is not
     expect(wrapper.find('.log-fab').exists()).toBe(false)
+  })
+})
+
+describe('DayPhase — sheriff night-death badge handover', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  // The dying sheriff is alive=false (kills applied in revealNightResult),
+  // but still owns the badge identity until they pass or destroy it.
+  const SHERIFF_PLAYERS: GamePlayer[] = [
+    { userId: 'sheriff', nickname: 'Sheriff', seatIndex: 1, isAlive: false, isSheriff: true },
+    { userId: 'alice', nickname: 'Alice', seatIndex: 2, isAlive: true, isSheriff: false },
+    { userId: 'bob', nickname: 'Bob', seatIndex: 3, isAlive: true, isSheriff: false },
+  ]
+
+  function mountAs(myUserId: string, sheriffUserId: string | null = 'sheriff') {
+    return mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        myUserId,
+        sheriffUserId,
+        players: SHERIFF_PLAYERS,
+        dayPhase: makeDay('BADGE_HANDOVER'),
+      },
+    })
+  }
+
+  it('dying sheriff sees the heir-prompt banner + pass/destroy buttons', () => {
+    const wrapper = mountAs('sheriff')
+    expect(wrapper.find('[data-testid="day-badge-eliminated-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-badge-wait-banner"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-badge-pass"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-badge-destroy"]').exists()).toBe(true)
+  })
+
+  it('non-sheriff players see only the waiting banner — no pass/destroy buttons', () => {
+    const wrapper = mountAs('alice')
+    expect(wrapper.find('[data-testid="day-badge-wait-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-badge-eliminated-banner"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-badge-pass"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-badge-destroy"]').exists()).toBe(false)
+  })
+
+  it('pass button is disabled until the sheriff taps a live heir', async () => {
+    const wrapper = mountAs('sheriff')
+    const passBtn = wrapper.get('[data-testid="day-badge-pass"]')
+    expect(passBtn.attributes('disabled')).toBeDefined()
+
+    // Tap an alive non-self player → button enables.
+    await wrapper.find('[data-seat="2"]').trigger('click')
+    expect(passBtn.attributes('disabled')).toBeUndefined()
+  })
+
+  it('passBadge emits with the selected heir userId', async () => {
+    const wrapper = mountAs('sheriff')
+    await wrapper.find('[data-seat="2"]').trigger('click')
+    await wrapper.get('[data-testid="day-badge-pass"]').trigger('click')
+    expect(wrapper.emitted('passBadge')).toEqual([['alice']])
+  })
+
+  it('destroyBadge emits without arguments and works without a selection', async () => {
+    const wrapper = mountAs('sheriff')
+    await wrapper.get('[data-testid="day-badge-destroy"]').trigger('click')
+    expect(wrapper.emitted('destroyBadge')).toHaveLength(1)
+  })
+
+  it('host who is NOT the sheriff sees the waiting hint, not the host start-vote footer', () => {
+    // Sheriff death takes precedence over the regular host footer template.
+    const wrapper = mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        myUserId: 'alice',
+        isHost: true,
+        sheriffUserId: 'sheriff',
+        players: SHERIFF_PLAYERS,
+        dayPhase: makeDay('BADGE_HANDOVER'),
+      },
+    })
+    expect(wrapper.find('[data-testid="day-start-vote"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-reveal-result"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-badge-wait-banner"]').exists()).toBe(true)
+  })
+
+  it('tapping a dead player or self does NOT select them as heir', async () => {
+    const wrapper = mountAs('sheriff')
+    // Tap self (dead sheriff) — should not become selected.
+    await wrapper.find('[data-seat="1"]').trigger('click')
+    expect(wrapper.get('[data-testid="day-badge-pass"]').attributes('disabled')).toBeDefined()
+    // Tap an alive player — that should work.
+    await wrapper.find('[data-seat="2"]').trigger('click')
+    expect(wrapper.get('[data-testid="day-badge-pass"]').attributes('disabled')).toBeUndefined()
   })
 })

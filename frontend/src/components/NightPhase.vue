@@ -194,8 +194,16 @@
           </span>
           被狼人袭击，是否使用解药？
         </p>
+        <p
+          v-if="witchSelfSaveBlocked"
+          class="ws-desc ws-blocked-note"
+          data-testid="witch-self-save-blocked"
+        >
+          本局禁止自救 / Self-save disabled this game
+        </p>
         <div class="ws-row">
           <button
+            v-if="!witchSelfSaveBlocked"
             class="btn btn-primary ws-btn"
             data-testid="witch-antidote"
             :class="{ 'is-loading': actionPending }"
@@ -401,13 +409,28 @@ import {
   wolfVariant,
 } from '@/utils/nightPhaseHelpers'
 
-const props = defineProps<{
-  nightPhase: NightPhaseState
-  players: GamePlayer[]
-  myUserId: string
-  myRole?: PlayerRole
-  actionPending?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    nightPhase: NightPhaseState
+    players: GamePlayer[]
+    myUserId: string
+    myRole?: PlayerRole
+    actionPending?: boolean
+    witchSelfSaveAllowed?: boolean
+  }>(),
+  {
+    // Vue 3 coerces a missing boolean prop to `false`, but the safe default
+    // here is `true` — self-save was the historical behavior; only the new
+    // room-config opt-in disables it. Pin the default so callers that omit
+    // the prop (older mocks, tests, demo data) don't accidentally block
+    // self-save for every witch.
+    witchSelfSaveAllowed: true,
+  },
+)
+
+const witchSelfSaveBlocked = computed(
+  () => !props.witchSelfSaveAllowed && props.nightPhase.attackedPlayerId === props.myUserId,
+)
 
 const emit = defineEmits<{
   selectPlayer: [userId: string]
