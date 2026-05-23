@@ -415,15 +415,6 @@ function signInWithWechat() {
   letter-spacing: 0.05em;
 }
 
-.identity-name {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 1rem;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .identity-name-input {
   font-family: 'Noto Serif SC', serif;
   font-size: 1rem;
