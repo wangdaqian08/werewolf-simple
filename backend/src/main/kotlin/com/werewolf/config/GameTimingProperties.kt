@@ -26,10 +26,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  *                               begins, so goes_dark + wolf_howl play fully.
  *   waitingDelayMs            — how long WAITING sub-phase idles for sheriff-
  *                               election games before the first real role.
- *   sheriffResultAutoAdvanceMs — Variant B: how long the sheriff RESULT screen
- *                               is shown before the game auto-advances back
- *                               to DAY_DISCUSSION/RESULT_REVEALED. Defaults to
- *                               60_000ms in production; tests/e2e shrink it.
  *   sheriffMorningCueDelayMs  — Variant B Day 1: silence pause after
  *                               guard_close_eyes (night ended) before
  *                               rooster_crowing + day_time (campaign begins)
@@ -45,7 +41,6 @@ data class GameTimingProperties(
     val interRoleGapMs: Long? = null,
     val nightInitAudioDelayMs: Long? = null,
     val waitingDelayMs: Long? = null,
-    val sheriffResultAutoAdvanceMs: Long? = null,
     val sheriffMorningCueDelayMs: Long? = null,
 ) {
     /**
