@@ -234,7 +234,7 @@ import { roomService } from '@/services/roomService'
 import { audioTracksService, type AudioTrack } from '@/services/audioTracksService'
 import type { WinConditionMode } from '@/types'
 import { ROLE_DEFINITIONS, type RoleDefinition } from '@/utils/roleDefinitions'
-import { wolfBounds, clampWolfCount } from '@/utils/wolfBounds'
+import { wolfBounds } from '@/utils/wolfBounds'
 import RoleComposition from '@/components/RoleComposition.vue'
 
 const router = useRouter()
@@ -248,8 +248,11 @@ const totalPlayers = ref(9)
 const wolfCount = ref(wolfBounds(totalPlayers.value).default)
 const currentBounds = computed(() => wolfBounds(totalPlayers.value))
 
+// Whenever the host changes total players, snap wolf count to the canonical
+// default for that count (matches real-world 狼人杀 板子: 6p→2W, 9p→3W, 12p→4W).
+// The host can still adjust wolves up/down within the new bounds afterward.
 watch(totalPlayers, (n) => {
-  wolfCount.value = clampWolfCount(n, wolfCount.value)
+  wolfCount.value = wolfBounds(n).default
 })
 
 // Optional roles enabled by default
