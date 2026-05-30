@@ -15,6 +15,7 @@ object TestConstants {
     // Room fields
     const val FIELD_CONFIG = "config"
     const val FIELD_TOTAL_PLAYERS = "totalPlayers"
+    const val FIELD_WOLF_COUNT = "wolfCount"
     const val FIELD_ROLES = "roles"
     const val FIELD_ROOM_ID = "roomId"
     const val FIELD_ROOM_CODE = "roomCode"

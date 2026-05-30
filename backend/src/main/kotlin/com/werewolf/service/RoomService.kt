@@ -40,7 +40,7 @@ class RoomService(
             throw InvalidBgmTrackException("Unknown BGM track: ${cfg.bgmTrack}")
         }
 
-        validateRoleComposition(cfg)
+        validateRoleComposition(cfg.totalPlayers, cfg.wolfCount, cfg.roles)
 
         val room = roomRepository.save(
             Room(
@@ -244,20 +244,24 @@ class RoomService(
         return (1..4).map { chars.random() }.joinToString("")
     }
 
-    private fun validateRoleComposition(cfg: RoomConfigRequest) {
-        if (!WolfCountBounds.isValid(cfg.totalPlayers, cfg.wolfCount)) {
-            val min = WolfCountBounds.min(cfg.totalPlayers)
-            val max = WolfCountBounds.max(cfg.totalPlayers)
+    private fun validateRoleComposition(
+        totalPlayers: Int,
+        wolfCount: Int,
+        roles: List<PlayerRole>,
+    ) {
+        if (!WolfCountBounds.isValid(totalPlayers, wolfCount)) {
+            val min = WolfCountBounds.min(totalPlayers)
+            val max = WolfCountBounds.max(totalPlayers)
             throw InvalidRoleCompositionException(
-                "wolfCount ${cfg.wolfCount} out of bounds [$min, $max] for ${cfg.totalPlayers} players",
+                "wolfCount $wolfCount out of bounds [$min, $max] for $totalPlayers players",
             )
         }
-        val godCount = cfg.roles.count {
+        val godCount = roles.count {
             it != PlayerRole.WEREWOLF && it != PlayerRole.VILLAGER
         }
-        if (cfg.wolfCount + godCount > cfg.totalPlayers) {
+        if (wolfCount + godCount > totalPlayers) {
             throw InvalidRoleCompositionException(
-                "Composition overflow: ${cfg.wolfCount} wolves + $godCount gods > ${cfg.totalPlayers} seats",
+                "Composition overflow: $wolfCount wolves + $godCount gods > $totalPlayers seats",
             )
         }
     }

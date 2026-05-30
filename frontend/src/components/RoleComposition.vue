@@ -14,9 +14,7 @@
         <span class="chip-count">×{{ chip.count }}</span>
       </div>
     </div>
-    <div class="composition-total">
-      共 {{ totalRoles }} / {{ totalPlayers }} 座位
-    </div>
+    <div class="composition-total">共 {{ totalRoles }} / {{ totalPlayers }} 座位</div>
   </div>
 </template>
 
@@ -39,7 +37,8 @@ const chips = computed(() => {
   const out: Array<{ id: string; nameZh: string; emoji: string; count: number }> = []
 
   const wolf = roleDefinition('WEREWOLF')
-  if (wolf) out.push({ id: wolf.id, nameZh: wolf.nameZh, emoji: wolf.emoji, count: props.wolfCount })
+  if (wolf)
+    out.push({ id: wolf.id, nameZh: wolf.nameZh, emoji: wolf.emoji, count: props.wolfCount })
 
   for (const def of ROLE_DEFINITIONS) {
     if (GOD_IDS.has(def.id) && enabledGods.includes(def.id)) {
@@ -49,7 +48,12 @@ const chips = computed(() => {
 
   const villager = roleDefinition('VILLAGER')
   if (villager && villagerCount > 0) {
-    out.push({ id: villager.id, nameZh: villager.nameZh, emoji: villager.emoji, count: villagerCount })
+    out.push({
+      id: villager.id,
+      nameZh: villager.nameZh,
+      emoji: villager.emoji,
+      count: villagerCount,
+    })
   }
 
   return out

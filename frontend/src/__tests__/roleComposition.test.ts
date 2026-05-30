@@ -4,10 +4,9 @@ import RoleComposition from '@/components/RoleComposition.vue'
 
 function chipMap(wrapper: ReturnType<typeof mount>) {
   return Object.fromEntries(
-    wrapper.findAll('[data-role]').map((el) => [
-      el.attributes('data-role'),
-      Number(el.attributes('data-count')),
-    ]),
+    wrapper
+      .findAll('[data-role]')
+      .map((el) => [el.attributes('data-role'), Number(el.attributes('data-count'))]),
   )
 }
 

@@ -16,17 +16,19 @@
           <button
             :disabled="totalPlayers <= MIN_PLAYERS"
             class="stepper-btn stepper-minus"
+            data-testid="player-count-decrement"
             @click="decrement"
           >
             −
           </button>
           <div class="stepper-value">
-            <span class="stepper-num">{{ totalPlayers }}</span>
+            <span class="stepper-num" data-testid="player-count-value">{{ totalPlayers }}</span>
             <span class="stepper-range">{{ MIN_PLAYERS }} – {{ MAX_PLAYERS }}</span>
           </div>
           <button
             :disabled="totalPlayers >= MAX_PLAYERS"
             class="stepper-btn stepper-plus"
+            data-testid="player-count-increment"
             @click="increment"
           >
             +
@@ -63,7 +65,9 @@
 
       <!-- Role configuration -->
       <div class="field-lbl">角色配置 / Role Configuration</div>
-      <div class="balance-note">剩余席位自动分配为村民 · Remaining seats filled with villagers.</div>
+      <div class="balance-note">
+        剩余席位自动分配为村民 · Remaining seats filled with villagers.
+      </div>
 
       <div class="role-list">
         <div
@@ -95,7 +99,9 @@
             :class="isEnabled(role.id) ? 'toggle-on' : 'toggle-off'"
             class="toggle"
             :disabled="!canEnable(role.id)"
-            :title="!canEnable(role.id) ? '增加玩家或移除其他神职 / Increase players or remove a god' : ''"
+            :title="
+              !canEnable(role.id) ? '增加玩家或移除其他神职 / Increase players or remove a god' : ''
+            "
             @click="toggleRole(role.id)"
           >
             <span class="toggle-thumb" />
@@ -311,9 +317,7 @@ function wolfDecrement() {
 }
 
 const enabledGodCount = computed(() => enabledOptional.value.size)
-const villagerCount = computed(
-  () => totalPlayers.value - wolfCount.value - enabledGodCount.value,
-)
+const villagerCount = computed(() => totalPlayers.value - wolfCount.value - enabledGodCount.value)
 
 function isEnabled(roleId: string): boolean {
   const role = ROLE_DEFINITIONS.find((r) => r.id === roleId)
