@@ -293,4 +293,114 @@ describe('DayPhase — sheriff night-death badge handover', () => {
     await wrapper.find('[data-seat="2"]').trigger('click')
     expect(wrapper.get('[data-testid="day-badge-pass"]').attributes('disabled')).toBeUndefined()
   })
+
+  it('shows the night-death kill banner during badge handover (deaths stay visible)', () => {
+    const day: DayPhaseState = {
+      ...makeDay('BADGE_HANDOVER'),
+      nightResult: {
+        killedPlayers: [
+          { killedPlayerId: 'sheriff', killedSeatIndex: 1, killedNickname: 'Sheriff' },
+        ],
+      },
+    }
+    const wrapper = mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        myUserId: 'alice',
+        sheriffUserId: 'sheriff',
+        players: SHERIFF_PLAYERS,
+        dayPhase: day,
+      },
+    })
+    expect(wrapper.find('[data-testid="day-banner-kill"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-killed-seat-1"]').exists()).toBe(true)
+  })
+})
+
+describe('DayPhase — hunter night-death shoot', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  // The wolf-killed hunter is alive=false (kills applied at reveal) but is still
+  // the eligible shooter, identified by dayPhase.hunterUserId.
+  const HUNTER_PLAYERS: GamePlayer[] = [
+    { userId: 'hunter', nickname: 'Hunter', seatIndex: 1, isAlive: false, isSheriff: false },
+    { userId: 'alice', nickname: 'Alice', seatIndex: 2, isAlive: true, isSheriff: false },
+    { userId: 'bob', nickname: 'Bob', seatIndex: 3, isAlive: false, isSheriff: false },
+  ]
+
+  function hunterDay(): DayPhaseState {
+    return {
+      subPhase: 'HUNTER_SHOOT_NIGHT_DEATH',
+      dayNumber: 2,
+      phaseDeadline: Date.now() + 60000,
+      phaseStarted: Date.now() - 5000,
+      canVote: false,
+      hunterUserId: 'hunter',
+      nightResult: {
+        killedPlayers: [{ killedPlayerId: 'hunter', killedSeatIndex: 1, killedNickname: 'Hunter' }],
+      },
+    }
+  }
+
+  function mountAs(myUserId: string) {
+    return mount(DayPhase, {
+      props: { ...BASE_PROPS, myUserId, players: HUNTER_PLAYERS, dayPhase: hunterDay() },
+    })
+  }
+
+  it('acting hunter sees the shoot prompt + shoot/pass buttons + kill banner', () => {
+    const wrapper = mountAs('hunter')
+    expect(wrapper.find('[data-testid="day-hunter-night-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-hunter-night-wait-banner"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-hunter-night-pass"]').exists()).toBe(true)
+    // Deaths stay visible while the hunter acts.
+    expect(wrapper.find('[data-testid="day-banner-kill"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-killed-seat-1"]').exists()).toBe(true)
+  })
+
+  it('non-hunter players see the waiting hint — no shoot/pass buttons', () => {
+    const wrapper = mountAs('alice')
+    expect(wrapper.find('[data-testid="day-hunter-night-wait-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-hunter-night-banner"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-hunter-night-pass"]').exists()).toBe(false)
+  })
+
+  it('shoot button is disabled until the hunter taps a live target', async () => {
+    const wrapper = mountAs('hunter')
+    const shootBtn = wrapper.get('[data-testid="day-hunter-night-shoot"]')
+    expect(shootBtn.attributes('disabled')).toBeDefined()
+    await wrapper.find('[data-seat="2"]').trigger('click')
+    expect(shootBtn.attributes('disabled')).toBeUndefined()
+  })
+
+  it('hunterShoot emits with the selected target userId', async () => {
+    const wrapper = mountAs('hunter')
+    await wrapper.find('[data-seat="2"]').trigger('click')
+    await wrapper.get('[data-testid="day-hunter-night-shoot"]').trigger('click')
+    expect(wrapper.emitted('hunterShoot')).toEqual([['alice']])
+  })
+
+  it('hunterPass emits without arguments', async () => {
+    const wrapper = mountAs('hunter')
+    await wrapper.get('[data-testid="day-hunter-night-pass"]').trigger('click')
+    expect(wrapper.emitted('hunterPass')).toHaveLength(1)
+  })
+
+  it('tapping a dead player or self does NOT select them as a target', async () => {
+    const wrapper = mountAs('hunter')
+    const shootBtn = () => wrapper.get('[data-testid="day-hunter-night-shoot"]')
+    // self (dead hunter, seat 1)
+    await wrapper.find('[data-seat="1"]').trigger('click')
+    expect(shootBtn().attributes('disabled')).toBeDefined()
+    // another dead player (seat 3, Bob)
+    await wrapper.find('[data-seat="3"]').trigger('click')
+    expect(shootBtn().attributes('disabled')).toBeDefined()
+    // a live player enables it
+    await wrapper.find('[data-seat="2"]').trigger('click')
+    expect(shootBtn().attributes('disabled')).toBeUndefined()
+  })
 })

@@ -183,6 +183,29 @@ class GameServiceDayPhaseTest {
     }
 
     @Test
+    fun `getGameState DAY - hunterUserId is the eligible shooter during HUNTER_SHOOT_NIGHT_DEATH`() {
+        val players = listOf(player(hostId, 0), player("u2", 1))
+        val users = listOf(user(hostId, "Host"), user("u2", "Hunter"))
+        setupGameAndPlayers(game(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name), players, users)
+        whenever(dayRevealAdvancer.pendingHunterUserId(gameId)).thenReturn("u2")
+
+        val dayPhase = dayResult(gameService.getGameState(gameId, hostId))
+
+        assertThat(dayPhase["hunterUserId"]).isEqualTo("u2")
+    }
+
+    @Test
+    fun `getGameState DAY - hunterUserId is null outside HUNTER_SHOOT_NIGHT_DEATH`() {
+        val players = listOf(player(hostId, 0), player("u2", 1))
+        val users = listOf(user(hostId, "Host"), user("u2", "Bob"))
+        setupGameAndPlayers(game(DaySubPhase.RESULT_REVEALED.name), players, users)
+
+        val dayPhase = dayResult(gameService.getGameState(gameId, hostId))
+
+        assertThat(dayPhase["hunterUserId"]).isNull()
+    }
+
+    @Test
     fun `getGameState DAY - wolf kill negated by guard protection, nightResult is null`() {
         val players = listOf(player(hostId, 0), player("u2", 1))
         val users = listOf(user(hostId, "Host"), user("u2", "Protected"))

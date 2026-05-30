@@ -145,6 +145,20 @@ class DayRevealAdvancerTest {
     }
 
     @Test
+    fun `RESULT_REVEALED when there is no night phase row`() {
+        whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(game()))
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(player("a")))
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.empty())
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED)
+    }
+
+    @Test
+    fun `RESULT_REVEALED (safe default) when the game cannot be loaded`() {
+        whenever(gameRepository.findById(gameId)).thenReturn(Optional.empty())
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED)
+    }
+
+    @Test
     fun `markHunterShootResolved flips the flag and saves the night phase`() {
         val n = night(wolf = "h")
         whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(game()))

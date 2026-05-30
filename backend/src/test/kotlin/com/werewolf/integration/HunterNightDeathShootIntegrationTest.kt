@@ -412,4 +412,52 @@ class HunterNightDeathShootIntegrationTest {
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId).statusCode)
             .isEqualTo(HttpStatus.OK)
     }
+
+    @Test
+    fun `night-death hunter cannot shoot an already-dead target`() {
+        val room = setupRoom("HNS12")
+        val gameId = openDay2(room)
+        // Wolves kill the hunter (g1); witch poisons g4 — both are dead at reveal.
+        saveNight(gameId, wolfTarget = room.g1.userId, poisonTarget = room.g4.userId)
+        reveal(room, gameId)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+
+        // g4 is already dead (poison) → the shot is rejected; sub-phase unchanged.
+        assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId).statusCode)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+    }
+
+    @Test
+    fun `night-death hunter shoot requires a target`() {
+        val room = setupRoom("HNS13")
+        val gameId = openDay2(room)
+        saveNight(gameId, wolfTarget = room.g1.userId)
+        reveal(room, gameId)
+
+        assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", null).statusCode)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+    }
+
+    @Test
+    fun `sheriff BADGE_DESTROY at reveal still chains into the hunter shoot`() {
+        val room = setupRoom("HNS14")
+        val gameId = openDay2(room)
+        setSheriff(gameId, room.g3.userId)
+        // Wolves kill the hunter (g1); witch poisons the sheriff (g3).
+        saveNight(gameId, wolfTarget = room.g1.userId, poisonTarget = room.g3.userId)
+
+        reveal(room, gameId)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+
+        // Sheriff destroys the badge → chains into the hunter shoot (badge-first).
+        assertThat(action(room.g3.token, gameId, "BADGE_DESTROY").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+
+        // Hunter fires → RESULT_REVEALED.
+        assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+    }
 }
