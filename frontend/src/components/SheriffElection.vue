@@ -809,11 +809,6 @@ function speakerLabel(uid: string, idx: number) {
   color: var(--gold);
 }
 
-.timer-result {
-  font-size: 0.6875rem;
-  color: var(--muted);
-}
-
 /* Info banner */
 .info-banner {
   background: rgba(160, 120, 48, 0.08);
@@ -873,12 +868,6 @@ function speakerLabel(uid: string, idx: number) {
   color: var(--text);
 }
 
-.running-badge {
-  font-size: 0.625rem;
-  letter-spacing: 0.1em;
-  color: var(--gold);
-}
-
 /* SIGNUP stats — count + decision progress, no per-candidate rows */
 .signup-stats {
   background: var(--paper);
@@ -907,15 +896,6 @@ function speakerLabel(uid: string, idx: number) {
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text);
-}
-
-.stat-hint {
-  margin-top: 0.25rem;
-  font-size: 0.6875rem;
-  line-height: 1.5;
-  text-align: center;
-  border-top: 1px dashed var(--border-l);
-  padding-top: 0.5rem;
 }
 
 /* Action footer */

@@ -1041,16 +1041,6 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   margin-top: 0.375rem;
 }
 
-.ss-countdown {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 3.5rem;
-  font-weight: 700;
-  color: var(--paper);
-  line-height: 1;
-  margin: 0.25rem 0;
-  opacity: 0.9;
-}
-
 /* ── Button overrides for night mode ─────────────────────────────────────── */
 /* Size/shape use global .btn; only color overrides needed here */
 .btn:disabled {
@@ -1060,11 +1050,6 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 
 .btn-danger {
   background: var(--red);
-  color: #fff;
-}
-
-.btn-success {
-  background: var(--green);
   color: #fff;
 }
 

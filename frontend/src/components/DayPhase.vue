@@ -487,13 +487,6 @@ function onTap(player: GamePlayer) {
   font-weight: 600;
 }
 
-.footer-hint-sm {
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.6875rem;
-  margin: 0;
-}
-
 .player-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));

@@ -772,8 +772,7 @@ const endPlayers = computed<GamePlayer[]>(() =>
 .demo-phone :deep(.day-wrap),
 .demo-phone :deep(.voting-wrap),
 .demo-phone :deep(.sheriff-wrap),
-.demo-phone :deep(.reveal-wrap),
-.demo-phone :deep(.hunter-wrap) {
+.demo-phone :deep(.reveal-wrap) {
   min-height: auto;
 }
 /* Reveal-wrap has 5.5rem top padding for status-bar room — trim in demo */

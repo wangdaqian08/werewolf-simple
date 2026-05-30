@@ -1072,32 +1072,6 @@ function onBadgeTap(player: GamePlayer) {
   border: 1px solid currentColor;
 }
 
-.my-role-wolf {
-  color: var(--red);
-  background: rgba(181, 37, 26, 0.08);
-}
-
-.my-role-special {
-  color: var(--gold);
-  background: rgba(160, 120, 48, 0.08);
-}
-
-.my-role-guard {
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.my-role-hunter {
-  color: #7c5c3a;
-  background: rgba(124, 92, 58, 0.08);
-}
-
-.my-role-default {
-  color: var(--muted);
-  background: var(--paper);
-  border-color: var(--border-l);
-}
-
 .my-role-locked {
   color: var(--muted);
   background: var(--paper);
@@ -1195,12 +1169,6 @@ function onBadgeTap(player: GamePlayer) {
   font-size: 0.875rem;
   font-weight: 700;
   color: var(--text);
-}
-
-.history-elim {
-  font-size: 0.75rem;
-  color: var(--red);
-  padding: 0.25rem 0;
 }
 
 .history-columns {
