@@ -111,11 +111,7 @@
             <span class="banner-kill-muted">出局了</span>
           </div>
         </div>
-        <div
-          v-if="isActingHunter"
-          class="banner banner-gold"
-          data-testid="day-hunter-night-banner"
-        >
+        <div v-if="isActingHunter" class="banner banner-gold" data-testid="day-hunter-night-banner">
           <span class="banner-avatar">🏹</span>
           <div>
             <div class="banner-title">猎人开枪 · Hunter</div>
