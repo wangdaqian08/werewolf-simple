@@ -371,12 +371,7 @@ class GameService(
 
     private fun buildRoleList(room: Room, playerCount: Int): MutableList<PlayerRole> {
         val roles = mutableListOf<PlayerRole>()
-        val wolfCount = when {
-            playerCount <= 6 -> 2
-            playerCount <= 9 -> 3
-            else -> playerCount / 3
-        }
-        repeat(wolfCount) { roles.add(PlayerRole.WEREWOLF) }
+        repeat(room.wolfCount) { roles.add(PlayerRole.WEREWOLF) }
         if (room.hasSeer) roles.add(PlayerRole.SEER)
         if (room.hasWitch) roles.add(PlayerRole.WITCH)
         if (room.hasHunter) roles.add(PlayerRole.HUNTER)

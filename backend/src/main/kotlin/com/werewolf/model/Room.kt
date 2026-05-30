@@ -29,6 +29,9 @@ class Room(
     @Column(name = "total_players", nullable = false)
     val totalPlayers: Int,
 
+    @Column(name = "wolf_count", nullable = false)
+    val wolfCount: Int = 2,
+
     @Column(name = "has_seer", nullable = false)
     val hasSeer: Boolean = false,
 
@@ -66,5 +69,6 @@ class Room(
         require(roomCode.isNotBlank()) { "roomCode must not be blank" }
         require(hostUserId.isNotBlank()) { "hostUserId must not be blank" }
         require(totalPlayers > 0) { "totalPlayers must be > 0, got $totalPlayers" }
+        require(wolfCount > 0) { "wolfCount must be > 0, got $wolfCount" }
     }
 }

@@ -40,11 +40,14 @@ class RoomService(
             throw InvalidBgmTrackException("Unknown BGM track: ${cfg.bgmTrack}")
         }
 
+        validateRoleComposition(cfg)
+
         val room = roomRepository.save(
             Room(
                 roomCode = generateCode(),
                 hostUserId = userId,
                 totalPlayers = cfg.totalPlayers,
+                wolfCount = cfg.wolfCount,
                 hasSeer = PlayerRole.SEER in cfg.roles,
                 hasWitch = PlayerRole.WITCH in cfg.roles,
                 hasHunter = PlayerRole.HUNTER in cfg.roles,
@@ -231,7 +234,7 @@ class RoomService(
             hostId = room.hostUserId,
             status = room.status.name,
             players = playerDtos,
-            config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack, witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true),
+            config = RoomConfigDto(totalPlayers = room.totalPlayers, wolfCount = room.wolfCount, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack, witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true),
             activeGameId = activeGameId,
         )
     }
@@ -239,6 +242,24 @@ class RoomService(
     private fun generateCode(): String {
         val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         return (1..4).map { chars.random() }.joinToString("")
+    }
+
+    private fun validateRoleComposition(cfg: RoomConfigRequest) {
+        if (!WolfCountBounds.isValid(cfg.totalPlayers, cfg.wolfCount)) {
+            val min = WolfCountBounds.min(cfg.totalPlayers)
+            val max = WolfCountBounds.max(cfg.totalPlayers)
+            throw InvalidRoleCompositionException(
+                "wolfCount ${cfg.wolfCount} out of bounds [$min, $max] for ${cfg.totalPlayers} players",
+            )
+        }
+        val godCount = cfg.roles.count {
+            it != PlayerRole.WEREWOLF && it != PlayerRole.VILLAGER
+        }
+        if (cfg.wolfCount + godCount > cfg.totalPlayers) {
+            throw InvalidRoleCompositionException(
+                "Composition overflow: ${cfg.wolfCount} wolves + $godCount gods > ${cfg.totalPlayers} seats",
+            )
+        }
     }
 
     /**
@@ -266,3 +287,4 @@ class SeatTakenException(message: String) : RuntimeException(message)
 class NotHostException(message: String) : RuntimeException(message)
 class CannotKickHostException(message: String) : RuntimeException(message)
 class InvalidBgmTrackException(message: String) : RuntimeException(message)
+class InvalidRoleCompositionException(message: String) : RuntimeException(message)
