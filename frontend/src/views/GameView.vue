@@ -167,6 +167,8 @@
         @continue-to-night="handleVotingContinue"
         @pass-badge="handlePassBadge"
         @destroy-badge="handleDestroyBadge"
+        @hunter-shoot="handleHunterShoot"
+        @hunter-pass="handleHunterPass"
         @start-timer="(s) => handleTimerStart(Number(route.params.gameId), s)"
         @stop-timer="() => handleTimerStop(Number(route.params.gameId))"
       />
@@ -1040,8 +1042,20 @@ onMounted(async () => {
           // Small delay to ensure backend transaction has committed before we read state
           await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
-          // If fetched state doesn't match the event (transaction not committed yet), retry once
-          if (normalizedPhase && state.phase !== normalizedPhase) {
+          // Retry once if the fetched state doesn't match the event yet (slow-runner
+          // commit race). Compare BOTH the phase AND the effective sub-phase, so a
+          // sub-phase change *within* a phase (e.g. DAY_DISCUSSION RESULT_HIDDEN →
+          // HUNTER_SHOOT_NIGHT_DEATH / BADGE_HANDOVER) also re-fetches.
+          const fetchedSub =
+            state.nightPhase?.subPhase ??
+            state.votingPhase?.subPhase ??
+            state.dayPhase?.subPhase ??
+            state.sheriffElection?.subPhase ??
+            null
+          if (
+            (normalizedPhase && state.phase !== normalizedPhase) ||
+            (data.subPhase && fetchedSub !== data.subPhase)
+          ) {
             await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
           }

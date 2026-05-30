@@ -2,6 +2,7 @@ package com.werewolf.unit.service
 
 import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.timer.TimerSnapshot
 import com.werewolf.model.*
@@ -39,6 +40,7 @@ class GameServiceDayPhaseTest {
     @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
     @Mock lateinit var audioReplayCache: AudioReplayCache
     @Mock lateinit var hostTimerService: HostTimerService
+    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
     @InjectMocks lateinit var gameService: GameService
 
     private val gameId = 1
@@ -146,6 +148,38 @@ class GameServiceDayPhaseTest {
         assertThat(killedPlayers[0]["killedPlayerId"]).isEqualTo("u2")
         assertThat(killedPlayers[0]["killedNickname"]).isEqualTo("Victim")
         assertThat(killedPlayers[0]["killedSeatIndex"]).isEqualTo(1)
+    }
+
+    @Test
+    fun `getGameState DAY - nightResult stays visible during BADGE_HANDOVER`() {
+        val players = listOf(player(hostId, 0), player("u2", 1))
+        val users = listOf(user(hostId, "Host"), user("u2", "Sheriff"))
+        setupGameAndPlayers(game(DaySubPhase.BADGE_HANDOVER.name), players, users)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.of(nightPhase(wolfTarget = "u2")))
+
+        val dayPhase = dayResult(gameService.getGameState(gameId, hostId))
+        val nightResult = dayPhase["nightResult"] as Map<String, Any?>
+        val killedPlayers = nightResult["killedPlayers"] as List<Map<String, Any?>>
+
+        assertThat(killedPlayers).hasSize(1)
+        assertThat(killedPlayers[0]["killedPlayerId"]).isEqualTo("u2")
+    }
+
+    @Test
+    fun `getGameState DAY - nightResult stays visible during HUNTER_SHOOT_NIGHT_DEATH`() {
+        val players = listOf(player(hostId, 0), player("u2", 1))
+        val users = listOf(user(hostId, "Host"), user("u2", "Hunter"))
+        setupGameAndPlayers(game(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name), players, users)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.of(nightPhase(wolfTarget = "u2")))
+
+        val dayPhase = dayResult(gameService.getGameState(gameId, hostId))
+        val nightResult = dayPhase["nightResult"] as Map<String, Any?>
+        val killedPlayers = nightResult["killedPlayers"] as List<Map<String, Any?>>
+
+        assertThat(killedPlayers).hasSize(1)
+        assertThat(killedPlayers[0]["killedPlayerId"]).isEqualTo("u2")
     }
 
     @Test

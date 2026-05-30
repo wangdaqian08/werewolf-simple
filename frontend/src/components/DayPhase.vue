@@ -51,6 +51,25 @@
            other viewers see a "waiting for sheriff" hint. -->
       <template v-if="isBadgeHandover">
         <div
+          v-if="killedPlayers.length > 0"
+          class="banner banner-kill"
+          data-testid="day-banner-kill"
+        >
+          <span class="banner-avatar">💀</span>
+          <div class="banner-kill-text">
+            <span class="banner-kill-muted">昨晚</span>
+            <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
+              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span
+                class="banner-kill-red"
+                :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
+                >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
+              >
+            </template>
+            <span class="banner-kill-muted">出局了</span>
+          </div>
+        </div>
+        <div
           v-if="isDyingSheriff"
           class="banner banner-gold"
           data-testid="day-badge-eliminated-banner"
@@ -66,6 +85,48 @@
           <div>
             <div class="banner-title">警长正在移交警徽</div>
             <div class="banner-sub">Sheriff is choosing an heir…</div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Hunter killed by wolves at night: report the death(s), then let the
+           hunter take one shot before discussion. -->
+      <template v-else-if="isHunterNightShoot">
+        <div
+          v-if="killedPlayers.length > 0"
+          class="banner banner-kill"
+          data-testid="day-banner-kill"
+        >
+          <span class="banner-avatar">💀</span>
+          <div class="banner-kill-text">
+            <span class="banner-kill-muted">昨晚</span>
+            <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
+              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span
+                class="banner-kill-red"
+                :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
+                >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
+              >
+            </template>
+            <span class="banner-kill-muted">出局了</span>
+          </div>
+        </div>
+        <div
+          v-if="isActingHunter"
+          class="banner banner-gold"
+          data-testid="day-hunter-night-banner"
+        >
+          <span class="banner-avatar">🏹</span>
+          <div>
+            <div class="banner-title">猎人开枪 · Hunter</div>
+            <div class="banner-sub">你被狼人杀害，可开枪带走一人 / fire one shot</div>
+          </div>
+        </div>
+        <div v-else class="banner banner-info" data-testid="day-hunter-night-wait-banner">
+          <span class="banner-avatar">🏹</span>
+          <div>
+            <div class="banner-title">猎人正在开枪</div>
+            <div class="banner-sub">Hunter is choosing a target…</div>
           </div>
         </div>
       </template>
@@ -149,7 +210,10 @@
           <div class="sheriff-badge">⭐</div>
         </template>
         <template
-          v-if="!player.isAlive && (dayPhase.subPhase === 'RESULT_REVEALED' || isBadgeHandover)"
+          v-if="
+            !player.isAlive &&
+            (dayPhase.subPhase === 'RESULT_REVEALED' || isBadgeHandover || isHunterNightShoot)
+          "
           #overlay
         >
           <div class="slot-overlay dead-overlay">✕</div>
@@ -191,6 +255,36 @@
         </template>
         <template v-else>
           <p class="footer-hint">等待警长移交警徽 · Waiting for sheriff to pass badge…</p>
+        </template>
+      </template>
+
+      <!-- Hunter night-death shoot: only the wolf-killed hunter sees the
+           shoot/pass buttons; everyone else (including host) waits. -->
+      <template v-else-if="isHunterNightShoot">
+        <template v-if="isActingHunter">
+          <div class="vote-actions">
+            <button
+              class="btn btn-danger vote-btn"
+              data-testid="day-hunter-night-shoot"
+              :class="{ 'is-loading': actionPending }"
+              :disabled="!hunterSelectedId || actionPending"
+              @click="hunterSelectedId && emit('hunterShoot', hunterSelectedId)"
+            >
+              开枪 · Shoot
+            </button>
+            <button
+              class="btn btn-secondary skip-btn"
+              data-testid="day-hunter-night-pass"
+              :class="{ 'is-loading': actionPending }"
+              :disabled="actionPending"
+              @click="emit('hunterPass')"
+            >
+              放弃 · Pass
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <p class="footer-hint">等待猎人开枪 · Waiting for hunter…</p>
         </template>
       </template>
 
@@ -306,6 +400,22 @@ function onBadgeTap(player: GamePlayer) {
   badgeSelectedId.value = player.userId
 }
 
+// Hunter killed by wolves at night may fire one shot during the day reveal.
+const isHunterNightShoot = computed(() => props.dayPhase.subPhase === 'HUNTER_SHOOT_NIGHT_DEATH')
+const isActingHunter = computed(
+  () =>
+    isHunterNightShoot.value &&
+    !!props.dayPhase.hunterUserId &&
+    props.dayPhase.hunterUserId === props.myUserId,
+)
+const hunterSelectedId = ref<string | null>(null)
+function onHunterTap(player: GamePlayer) {
+  if (!isActingHunter.value) return
+  if (!player.isAlive) return
+  if (player.userId === props.myUserId) return
+  hunterSelectedId.value = player.userId
+}
+
 const showLog = ref(false)
 const showRoleCard = ref(false)
 
@@ -378,6 +488,8 @@ const emit = defineEmits<{
   continueToNight: []
   passBadge: [userId: string]
   destroyBadge: []
+  hunterShoot: [targetId: string]
+  hunterPass: []
   'start-timer': [seconds: number]
   'stop-timer': []
 }>()
@@ -400,6 +512,7 @@ watch(
   () => props.dayPhase.subPhase,
   () => {
     localSelected.value = undefined
+    hunterSelectedId.value = null
   },
 )
 
@@ -419,6 +532,11 @@ function slotVariant(player: GamePlayer) {
     if (player.userId === badgeSelectedId.value) return 'selected' as const
     return 'alive' as const
   }
+  if (isHunterNightShoot.value) {
+    if (!player.isAlive) return 'dead' as const
+    if (player.userId === hunterSelectedId.value) return 'selected' as const
+    return 'alive' as const
+  }
   if (props.dayPhase.subPhase === 'RESULT_REVEALED') {
     if (isKilledAndVisible(player)) return 'killed' as const
     if (!player.isAlive) return 'dead' as const
@@ -436,6 +554,10 @@ function slotVariant(player: GamePlayer) {
 function onTap(player: GamePlayer) {
   if (isBadgeHandover.value) {
     onBadgeTap(player)
+    return
+  }
+  if (isHunterNightShoot.value) {
+    onHunterTap(player)
     return
   }
   if (viewRole.value !== 'ALIVE') return

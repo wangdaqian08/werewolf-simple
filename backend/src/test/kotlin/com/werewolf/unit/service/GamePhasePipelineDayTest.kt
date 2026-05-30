@@ -4,6 +4,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.phase.GamePhasePipeline
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
@@ -39,6 +40,7 @@ class GamePhasePipelineDayTest {
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var actionLogService: ActionLogService
     @Mock lateinit var hostTimerService: HostTimerService
+    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
     @InjectMocks lateinit var pipeline: GamePhasePipeline
 
     private val gameId = 10
@@ -94,6 +96,7 @@ class GamePhasePipelineDayTest {
     fun `revealNightResult - success, subPhase changes to RESULT_REVEALED and broadcast sent`() {
         val game = game()
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
 
         val result = pipeline.revealNightResult(req(hostId, ActionType.REVEAL_NIGHT_RESULT), ctx(game))
 

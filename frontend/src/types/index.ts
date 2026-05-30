@@ -289,7 +289,11 @@ export interface SheriffElectionState {
 
 // ── Day Phase ─────────────────────────────────────────────────────────────────
 
-export type DaySubPhase = 'RESULT_HIDDEN' | 'RESULT_REVEALED' | 'BADGE_HANDOVER'
+export type DaySubPhase =
+  | 'RESULT_HIDDEN'
+  | 'RESULT_REVEALED'
+  | 'HUNTER_SHOOT_NIGHT_DEATH'
+  | 'BADGE_HANDOVER'
 
 export interface KilledPlayer {
   killedPlayerId: string
@@ -311,6 +315,7 @@ export interface DayPhaseState {
   canVote: boolean
   myVote?: string
   selectedPlayerId?: string
+  hunterUserId?: string // the wolf-killed hunter eligible to fire during HUNTER_SHOOT_NIGHT_DEATH
 }
 
 // ── Voting Phase ──────────────────────────────────────────────────────────────
