@@ -9,7 +9,6 @@ import com.werewolf.integration.TestConstants.FIELD_ROOM_CODE
 import com.werewolf.integration.TestConstants.FIELD_ROOM_ID
 import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
-import com.werewolf.integration.TestConstants.FIELD_WOLF_COUNT
 import com.werewolf.integration.TestConstants.FIELD_USER
 import com.werewolf.integration.TestConstants.FIELD_USER_ID
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
@@ -66,7 +65,6 @@ class GameStartAfterCommitIntegrationTest {
         private const val SEAT_URL = "/api/room/seat"
         private const val READY_URL = "/api/room/ready"
         private const val TOTAL_PLAYERS = 4
-        private const val WOLF_COUNT = 1 // canonical default for 4-player rooms
         private val DEFAULT_ROLES = listOf(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER)
     }
 
@@ -89,7 +87,7 @@ class GameStartAfterCommitIntegrationTest {
     @Suppress("UNCHECKED_CAST")
     private fun setupReadyRoom(prefix: String): Pair<Login, Int> {
         val host = login("${prefix}Host")
-        val createBody = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to TOTAL_PLAYERS, FIELD_WOLF_COUNT to WOLF_COUNT, FIELD_ROLES to DEFAULT_ROLES))
+        val createBody = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES))
         val room = restTemplate.postForEntity(
             CREATE_ROOM_URL, HttpEntity(createBody, authHeaders(host.token)), Map::class.java
         ).body!! as Map<String, Any?>

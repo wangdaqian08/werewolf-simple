@@ -121,19 +121,19 @@ class RoomServiceTest {
     }
 
     @Test
-    fun `createRoom - rejects wolfCount above the max for total players`() {
-        val cfg = RoomConfigRequest(totalPlayers = 6, wolfCount = 3, roles = listOf(PlayerRole.SEER))
+    fun `createRoom - rejects wolfCount of 0`() {
+        val cfg = RoomConfigRequest(totalPlayers = 6, wolfCount = 0, roles = listOf(PlayerRole.SEER))
         assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
             .isInstanceOf(InvalidRoleCompositionException::class.java)
-            .hasMessageContaining("out of bounds")
+            .hasMessageContaining("must be > 0")
     }
 
     @Test
-    fun `createRoom - rejects wolfCount below the min for total players`() {
-        val cfg = RoomConfigRequest(totalPlayers = 9, wolfCount = 1, roles = listOf(PlayerRole.SEER))
+    fun `createRoom - rejects negative wolfCount`() {
+        val cfg = RoomConfigRequest(totalPlayers = 6, wolfCount = -1, roles = listOf(PlayerRole.SEER))
         assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
             .isInstanceOf(InvalidRoleCompositionException::class.java)
-            .hasMessageContaining("out of bounds")
+            .hasMessageContaining("must be > 0")
     }
 
     @Test

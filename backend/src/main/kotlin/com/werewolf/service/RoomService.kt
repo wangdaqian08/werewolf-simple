@@ -244,16 +244,24 @@ class RoomService(
         return (1..4).map { chars.random() }.joinToString("")
     }
 
+    /**
+     * Backend enforces game-correctness invariants only:
+     *   1. wolfCount must be > 0 (a wolfless game is not werewolf)
+     *   2. wolves + gods ≤ totalPlayers (no seat overflow)
+     *
+     * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
+     * for the host-facing stepper — they intentionally do NOT gate the API,
+     * so headless tests and future tooling can construct edge configurations
+     * (e.g. small 4-player rooms with 2 wolves) without bypassing security.
+     */
     private fun validateRoleComposition(
         totalPlayers: Int,
         wolfCount: Int,
         roles: List<PlayerRole>,
     ) {
-        if (!WolfCountBounds.isValid(totalPlayers, wolfCount)) {
-            val min = WolfCountBounds.min(totalPlayers)
-            val max = WolfCountBounds.max(totalPlayers)
+        if (wolfCount <= 0) {
             throw InvalidRoleCompositionException(
-                "wolfCount $wolfCount out of bounds [$min, $max] for $totalPlayers players",
+                "wolfCount must be > 0, got $wolfCount",
             )
         }
         val godCount = roles.count {

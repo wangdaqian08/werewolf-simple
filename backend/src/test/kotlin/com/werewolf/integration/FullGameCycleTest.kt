@@ -7,7 +7,6 @@ import com.werewolf.integration.TestConstants.FIELD_ROOM_CODE
 import com.werewolf.integration.TestConstants.FIELD_ROOM_ID
 import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
-import com.werewolf.integration.TestConstants.FIELD_WOLF_COUNT
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.GamePhase
@@ -90,7 +89,6 @@ class FullGameCycleTest {
                 mapOf(
                     FIELD_CONFIG to (mapOf(
                         FIELD_TOTAL_PLAYERS to 4,
-                        FIELD_WOLF_COUNT to 1,
                         "roles" to emptyList<String>(),
                         "hasSheriff" to false,
                     ) + extraConfig)
