@@ -42,6 +42,14 @@ class NightPhase(
 
     @Column(name = "prev_guard_target_user_id", length = 128)
     var prevGuardTargetUserId: String? = null,
+
+    /**
+     * Set true once a wolf-killed hunter has shot OR passed during the
+     * day-reveal flow. Keeps [com.werewolf.game.phase.DayRevealAdvancer] from
+     * re-entering HUNTER_SHOOT_NIGHT_DEATH in the hunter-is-sheriff cascade.
+     */
+    @Column(name = "hunter_night_shoot_resolved", nullable = false)
+    var hunterNightShootResolved: Boolean = false,
 ) {
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }

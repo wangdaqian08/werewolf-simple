@@ -4,6 +4,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.phase.HardModeCounterplay
 import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
@@ -36,6 +37,7 @@ class VotingPipelineTest {
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var nightOrchestrator: NightOrchestrator
+    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
 
     private lateinit var votingPipeline: VotingPipeline
 
@@ -56,6 +58,7 @@ class VotingPipelineTest {
         nightOrchestrator = nightOrchestrator,
         actionLogService = mock(),
         hostTimerService = mock(),
+        dayRevealAdvancer = dayRevealAdvancer,
     )
 
     private val gameId = 1
@@ -397,6 +400,8 @@ class VotingPipelineTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u3")).thenReturn(Optional.of(heir))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        // Night-reveal handover now defers the next sub-phase to the advancer.
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
 
         val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
 
@@ -417,6 +422,7 @@ class VotingPipelineTest {
 
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
 
         val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_DESTROY), context)
 
@@ -1016,6 +1022,7 @@ class VotingPipelineTest {
         nightOrchestrator = nightOrchestrator,
         actionLogService = actionLogService,
         hostTimerService = mock(),
+        dayRevealAdvancer = dayRevealAdvancer,
     )
 
     @Test

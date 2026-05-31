@@ -2,6 +2,7 @@ package com.werewolf.integration
 
 import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.timer.TimerSnapshot
 import com.werewolf.model.*
@@ -40,6 +41,7 @@ class DayPhaseResultRevealTest {
     @Mock lateinit var sheriffService: SheriffService
     @Mock lateinit var audioReplayCache: AudioReplayCache
     @Mock lateinit var hostTimerService: HostTimerService
+    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
 
     private lateinit var gameService: GameService
 
@@ -65,6 +67,7 @@ class DayPhaseResultRevealTest {
             eliminationHistoryRepository = eliminationHistoryRepository,
             audioReplayCache = audioReplayCache,
             hostTimerService = hostTimerService,
+            dayRevealAdvancer = dayRevealAdvancer,
         )
         whenever(hostTimerService.snapshot(any())).thenReturn(TimerSnapshot(0L, 0L, false))
         whenever(roomPlayerRepository.findByRoomId(any())).thenReturn(emptyList())

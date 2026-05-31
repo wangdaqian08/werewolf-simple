@@ -4,6 +4,7 @@ import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.voting.TallyCalculator
 import com.werewolf.model.*
@@ -28,6 +29,7 @@ class GameService(
     private val eliminationHistoryRepository: EliminationHistoryRepository,
     private val audioReplayCache: AudioReplayCache,
     private val hostTimerService: HostTimerService,
+    private val dayRevealAdvancer: DayRevealAdvancer,
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
@@ -191,9 +193,17 @@ class GameService(
 
         val dayPhase = if (game.phase == GamePhase.DAY_DISCUSSION) {
             val playerMap = players.associateBy { it.userId }
-            val isResultRevealed = game.subPhase == DaySubPhase.RESULT_REVEALED.name
+            // Show the night deaths once the host reveals them and through every
+            // post-reveal sub-phase — the badge handover and the wolf-killed
+            // hunter's shot — so the death announcement stays visible until the
+            // vote begins.
+            val showNightResult = game.subPhase in setOf(
+                DaySubPhase.RESULT_REVEALED.name,
+                DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name,
+                DaySubPhase.BADGE_HANDOVER.name,
+            )
             // Night kills come from NightPhase (EliminationHistory only tracks voting eliminations)
-            val nightResult = if (isResultRevealed) {
+            val nightResult = if (showNightResult) {
                 val np = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
                 if (np != null) {
                     val wolfTarget = np.wolfTargetUserId
@@ -231,6 +241,9 @@ class GameService(
                 "phaseStarted"  to 0L,
                 "nightResult"   to nightResult,
                 "canVote"       to (myPlayer != null && myPlayer.alive && myPlayer.canVote),
+                // The wolf-killed hunter eligible to fire during the day-reveal shot.
+                "hunterUserId"  to (if (game.subPhase == DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+                    dayRevealAdvancer.pendingHunterUserId(gameId) else null),
             )
         } else null
 

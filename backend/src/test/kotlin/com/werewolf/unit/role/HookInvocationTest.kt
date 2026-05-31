@@ -118,6 +118,7 @@ class HookInvocationTest {
         nightOrchestrator = nightOrchestrator,
         actionLogService = mock(),
         hostTimerService = hostTimerService,
+        dayRevealAdvancer = mock(),
     )
 
     // ── onDayEnter ───────────────────────────────────────────────────────────

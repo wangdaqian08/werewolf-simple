@@ -32,6 +32,7 @@ class GamePhasePipeline(
     private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: com.werewolf.service.ActionLogService,
     private val hostTimerService: HostTimerService,
+    private val dayRevealAdvancer: DayRevealAdvancer,
 ) {
     val log: Logger = LoggerFactory.getLogger(GamePhasePipeline::class.java)
     // ── Phase transition actions ───────────────────────────────────────────────
@@ -68,14 +69,12 @@ class GamePhasePipeline(
             actionLogService.recordNightDeaths(context.gameId, context.game.dayNumber, pendingKills)
         }
 
-        // If the sheriff is among the night kills, transition into the new
-        // BADGE_HANDOVER sub-phase so the dying sheriff can pass on or destroy
-        // the badge before discussion begins. Otherwise land on RESULT_REVEALED
-        // and let the host advance to voting as usual.
-        val sheriffKilledAtNight =
-            context.game.sheriffUserId != null && context.game.sheriffUserId in pendingKills
-        val nextSubPhase =
-            if (sheriffKilledAtNight) DaySubPhase.BADGE_HANDOVER else DaySubPhase.RESULT_REVEALED
+        // Decide the next sub-phase now that the night deaths are applied: a
+        // dead sheriff hands over the badge first, then a wolf-killed hunter
+        // gets to shoot, otherwise the result is simply revealed. The advancer
+        // reads fresh state from the DB (applyNightKills already flushed the
+        // alive flags). See DayRevealAdvancer.
+        val nextSubPhase = dayRevealAdvancer.nextSubPhase(context.gameId)
         context.game.subPhase = nextSubPhase.name
         gameRepository.save(context.game)
 
