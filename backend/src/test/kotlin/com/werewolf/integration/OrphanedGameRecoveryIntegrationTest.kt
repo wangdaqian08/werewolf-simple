@@ -64,7 +64,10 @@ class OrphanedGameRecoveryIntegrationTest {
         private const val READY_URL = "/api/room/ready"
         private const val START_URL = "/api/game/start"
         private const val TOTAL_PLAYERS = 4
-        private val DEFAULT_ROLES = listOf(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER)
+        // 2 wolves (RoomConfigRequest default) + 1 god + 1 villager = 4 seats.
+        // Backend now rejects role lists that overflow the seat budget; the
+        // historical SEER+WITCH+HUNTER set silently over-filled 4-player rooms.
+        private val DEFAULT_ROLES = listOf(PlayerRole.SEER)
     }
 
     private fun login(nickname: String): String {

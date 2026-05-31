@@ -6,6 +6,12 @@ import jakarta.validation.constraints.Size
 
 data class RoomConfigRequest(
     val totalPlayers: Int = 6,
+    /**
+     * Required and must be > 0. The host explicitly sets this in the UI; there
+     * is no server-side fallback — every caller of /api/room/create owns the
+     * choice.
+     */
+    val wolfCount: Int = 2,
     val roles: List<PlayerRole> = listOf(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER),
     val hasSheriff: Boolean = true,
     val winCondition: WinConditionMode = WinConditionMode.CLASSIC,
@@ -45,7 +51,7 @@ data class RoomPlayerDto(
     val isHost: Boolean,
 )
 
-data class RoomConfigDto(val totalPlayers: Int, val roles: List<PlayerRole>, val hasSheriff: Boolean = true, val winCondition: WinConditionMode = WinConditionMode.CLASSIC, val bgmTrack: String? = null, val witchSelfSaveAllowed: Boolean = true)
+data class RoomConfigDto(val totalPlayers: Int, val wolfCount: Int, val roles: List<PlayerRole>, val hasSheriff: Boolean = true, val winCondition: WinConditionMode = WinConditionMode.CLASSIC, val bgmTrack: String? = null, val witchSelfSaveAllowed: Boolean = true)
 
 data class RoomDto(
     val roomId: String,

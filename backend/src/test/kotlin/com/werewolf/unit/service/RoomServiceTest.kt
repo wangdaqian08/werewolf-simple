@@ -101,6 +101,60 @@ class RoomServiceTest {
     }
 
     @Test
+    fun `createRoom - persists wolfCount and rejects out-of-bounds value`() {
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        // Happy: 9 players + wolfCount=2 is at the lower bound.
+        val cfg = RoomConfigRequest(totalPlayers = 9, wolfCount = 2, roles = listOf(PlayerRole.SEER))
+        roomService.createRoom(hostId, "Host", null, cfg)
+
+        val captor = argumentCaptor<Room>()
+        verify(roomRepository).save(captor.capture())
+        assertThat(captor.firstValue.wolfCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `createRoom - rejects wolfCount of 0`() {
+        val cfg = RoomConfigRequest(totalPlayers = 6, wolfCount = 0, roles = listOf(PlayerRole.SEER))
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("must be > 0")
+    }
+
+    @Test
+    fun `createRoom - rejects negative wolfCount`() {
+        val cfg = RoomConfigRequest(totalPlayers = 6, wolfCount = -1, roles = listOf(PlayerRole.SEER))
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("must be > 0")
+    }
+
+    @Test
+    fun `createRoom - rejects composition overflow (wolves + gods exceed seats)`() {
+        val cfg = RoomConfigRequest(
+            totalPlayers = 6,
+            wolfCount = 2,
+            roles = listOf(
+                PlayerRole.SEER,
+                PlayerRole.WITCH,
+                PlayerRole.HUNTER,
+                PlayerRole.GUARD,
+                PlayerRole.IDIOT,
+            ),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("overflow")
+    }
+
+    @Test
     fun `createRoom - does not broadcast STOMP on create`() {
         whenever(roomRepository.save(any<Room>())).thenAnswer {
             val r = it.arguments[0] as Room

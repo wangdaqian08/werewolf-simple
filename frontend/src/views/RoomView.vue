@@ -31,6 +31,13 @@
         </template>
       </div>
 
+      <!-- Role composition (visible to all players) -->
+      <RoleComposition
+        :total-players="roomStore.room.config.totalPlayers"
+        :wolf-count="resolvedWolfCount"
+        :roles="roomStore.room.config.roles"
+      />
+
       <!-- Player grid (4/3/2 columns based on nickname length) -->
       <section :class="gridClass">
         <PlayerSlot
@@ -153,6 +160,8 @@ import {
   subscribeToTopic,
 } from '@/services/stompClient'
 import PlayerSlot from '@/components/PlayerSlot.vue'
+import RoleComposition from '@/components/RoleComposition.vue'
+import { wolfBounds } from '@/utils/wolfBounds'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import { useRoomStatus } from '@/composables/useRoomStatus'
 import { useConnectionLifecycle } from '@/composables/useConnectionLifecycle'
@@ -169,6 +178,14 @@ useNavigationGuard()
 const loading = ref(true)
 
 const { room } = storeToRefs(roomStore)
+
+// Backend always sends wolfCount on freshly-created rooms; fall back to the
+// canonical default for legacy snapshots and mock-mode fixtures that omit it.
+const resolvedWolfCount = computed(() => {
+  const cfg = roomStore.room?.config
+  if (!cfg) return 0
+  return cfg.wolfCount ?? wolfBounds(cfg.totalPlayers).default
+})
 
 // Adapt grid columns to the longest nickname present
 const gridClass = computed(() => {

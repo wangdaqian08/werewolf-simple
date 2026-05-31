@@ -28,6 +28,8 @@ class RoomController(private val roomService: RoomService) {
             )
         } catch (e: InvalidBgmTrackException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: InvalidRoleCompositionException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
         }
     }
 

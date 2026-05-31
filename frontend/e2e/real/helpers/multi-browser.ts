@@ -145,17 +145,18 @@ export async function setupGame(
   await hostPage.waitForURL(/\/create-room/, { timeout: 30_000 })
 
   // Configure room: set player count
-  // The stepper shows the current total. Default is 9.
-  // Adjust if needed by clicking +/- buttons.
-  const currentCount = await hostPage.locator('.stepper-num').textContent()
+  // The stepper shows the current total. Default is 9. Use the player-count
+  // testids — there is now a second stepper for wolf count, so raw
+  // .stepper-num / .stepper-btn would match both.
+  const currentCount = await hostPage.getByTestId('player-count-value').textContent()
   const current = parseInt(currentCount ?? '9', 10)
   if (totalPlayers > current) {
     for (let i = 0; i < totalPlayers - current; i++) {
-      await hostPage.locator('.stepper-btn').last().click()
+      await hostPage.getByTestId('player-count-increment').click()
     }
   } else if (totalPlayers < current) {
     for (let i = 0; i < current - totalPlayers; i++) {
-      await hostPage.locator('.stepper-btn').first().click()
+      await hostPage.getByTestId('player-count-decrement').click()
     }
   }
 
