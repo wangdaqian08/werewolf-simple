@@ -40,11 +40,14 @@ class RoomService(
             throw InvalidBgmTrackException("Unknown BGM track: ${cfg.bgmTrack}")
         }
 
+        validateRoleComposition(cfg.totalPlayers, cfg.wolfCount, cfg.roles)
+
         val room = roomRepository.save(
             Room(
                 roomCode = generateCode(),
                 hostUserId = userId,
                 totalPlayers = cfg.totalPlayers,
+                wolfCount = cfg.wolfCount,
                 hasSeer = PlayerRole.SEER in cfg.roles,
                 hasWitch = PlayerRole.WITCH in cfg.roles,
                 hasHunter = PlayerRole.HUNTER in cfg.roles,
@@ -231,7 +234,7 @@ class RoomService(
             hostId = room.hostUserId,
             status = room.status.name,
             players = playerDtos,
-            config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack, witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true),
+            config = RoomConfigDto(totalPlayers = room.totalPlayers, wolfCount = room.wolfCount, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack, witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true),
             activeGameId = activeGameId,
         )
     }
@@ -239,6 +242,36 @@ class RoomService(
     private fun generateCode(): String {
         val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         return (1..4).map { chars.random() }.joinToString("")
+    }
+
+    /**
+     * Backend enforces game-correctness invariants only:
+     *   1. wolfCount must be > 0 (a wolfless game is not werewolf)
+     *   2. wolves + gods ≤ totalPlayers (no seat overflow)
+     *
+     * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
+     * for the host-facing stepper — they intentionally do NOT gate the API,
+     * so headless tests and future tooling can construct edge configurations
+     * (e.g. small 4-player rooms with 2 wolves) without bypassing security.
+     */
+    private fun validateRoleComposition(
+        totalPlayers: Int,
+        wolfCount: Int,
+        roles: List<PlayerRole>,
+    ) {
+        if (wolfCount <= 0) {
+            throw InvalidRoleCompositionException(
+                "wolfCount must be > 0, got $wolfCount",
+            )
+        }
+        val godCount = roles.count {
+            it != PlayerRole.WEREWOLF && it != PlayerRole.VILLAGER
+        }
+        if (wolfCount + godCount > totalPlayers) {
+            throw InvalidRoleCompositionException(
+                "Composition overflow: $wolfCount wolves + $godCount gods > $totalPlayers seats",
+            )
+        }
     }
 
     /**
@@ -266,3 +299,4 @@ class SeatTakenException(message: String) : RuntimeException(message)
 class NotHostException(message: String) : RuntimeException(message)
 class CannotKickHostException(message: String) : RuntimeException(message)
 class InvalidBgmTrackException(message: String) : RuntimeException(message)
+class InvalidRoleCompositionException(message: String) : RuntimeException(message)

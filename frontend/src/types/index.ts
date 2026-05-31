@@ -45,7 +45,8 @@ export type WinConditionMode = 'CLASSIC' | 'HARD_MODE'
 
 export interface RoomConfig {
   totalPlayers: number
-  roles: string[] // backend decides counts based on totalPlayers
+  wolfCount?: number
+  roles: string[]
   hasSheriff?: boolean
   winCondition?: WinConditionMode
   bgmTrack?: string | null
