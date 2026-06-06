@@ -302,7 +302,7 @@ class AudioSequenceIntegrationTest {
         hasGuard: Boolean = false,
     ): Room {
         val room = Room(
-            roomCode = "AB${System.currentTimeMillis().toString().takeLast(2)}",
+            roomCode = System.currentTimeMillis().toString().takeLast(3),
             hostUserId = hostId,
             totalPlayers = 6,
             hasSeer = hasSeer,

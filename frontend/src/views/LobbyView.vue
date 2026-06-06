@@ -6,6 +6,17 @@
       <h1 class="title">狼人杀</h1>
       <p class="subtitle">Werewolf</p>
 
+      <!-- Quick rejoin: shown when the player has an active room (e.g. they
+           closed or backgrounded the app mid-game). #7 -->
+      <button
+        v-if="activeRoom"
+        class="btn btn-gold rejoin-btn"
+        data-testid="rejoin-room-btn"
+        @click="handleRejoin"
+      >
+        继续游戏 · {{ activeRoom.roomCode }} / Rejoin
+      </button>
+
       <!-- Logged-in identity card ─────────────────────────────────────── -->
       <div v-if="userStore.isLoggedIn" class="identity" data-testid="signed-in-as">
         <div class="identity-avatar" :class="{ 'has-image': !!safeAvatarUrl }">
@@ -108,7 +119,8 @@
             v-model="roomCode"
             class="input input-code"
             data-testid="room-code-input"
-            maxlength="6"
+            maxlength="3"
+            inputmode="numeric"
             placeholder="Room code"
             type="text"
           />
@@ -168,7 +180,8 @@
                 v-model="roomCode"
                 class="input input-code"
                 data-testid="room-code-input"
-                maxlength="6"
+                maxlength="3"
+                inputmode="numeric"
                 placeholder="Room code"
                 type="text"
               />
@@ -200,7 +213,7 @@ import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import { userService } from '@/services/userService'
 import { buildGoogleAuthUrl, generateOAuthState } from '@/utils/oauth'
-import type { JoinRoomRequest, ProvidersResponse } from '@/types'
+import type { JoinRoomRequest, ProvidersResponse, Room } from '@/types'
 import InstallToHomeScreenPrompt from '@/components/InstallToHomeScreenPrompt.vue'
 
 const router = useRouter()
@@ -214,6 +227,10 @@ const error = ref('')
 const showGuest = ref(false)
 const providers = ref<ProvidersResponse>({ google: null, wechat: null, guest: true })
 const avatarFailed = ref(false)
+
+// #7: the active room this player can jump back into (set on mount via the
+// backend lookup) so closing/backgrounding the app isn't a dead end.
+const activeRoom = ref<Room | null>(null)
 
 // Per-room nickname override input. Pre-filled with the OAuth-provided
 // nickname so it looks normal; only treated as an override when the user
@@ -250,7 +267,25 @@ onMounted(async () => {
     // Backend down / 404 — keep guest-only fallback. Don't surface this to
     // the user; the guest flow still works.
   }
+  await refreshActiveRoom()
 })
+
+// Look up the player's active room so the lobby can offer a one-tap rejoin.
+// Only meaningful when a session already exists (logged-in or returning guest).
+async function refreshActiveRoom() {
+  if (!userStore.isLoggedIn) return
+  try {
+    activeRoom.value = await roomService.getActiveRoom()
+  } catch {
+    // Best-effort — absence of the rejoin button is a safe fallback.
+  }
+}
+
+function handleRejoin() {
+  if (activeRoom.value) {
+    router.push({ name: 'room', params: { roomId: activeRoom.value.roomId } })
+  }
+}
 
 async function ensureGuestSession() {
   if (userStore.isLoggedIn) return

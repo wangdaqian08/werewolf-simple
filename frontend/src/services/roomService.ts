@@ -21,6 +21,18 @@ export const roomService = {
     return data
   },
 
+  /**
+   * The active room the current user belongs to (for quick rejoin after closing
+   * the app), or null if none. Backend returns 204 No Content when there is no
+   * active room.
+   */
+  async getActiveRoom(): Promise<Room | null> {
+    const { data, status } = await http.get<Room>('/room/active', {
+      validateStatus: (s) => s === 200 || s === 204,
+    })
+    return status === 204 ? null : data
+  },
+
   async getRoomList(): Promise<Room[]> {
     const { data } = await http.get<Room[]>('/room/list')
     return data

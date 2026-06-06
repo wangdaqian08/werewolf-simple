@@ -82,6 +82,46 @@ class RoomServiceTest {
     }
 
     @Test
+    fun `createRoom - generates a 3-digit numeric room code`() {
+        whenever(roomRepository.findActiveByRoomCode(any())).thenReturn(Optional.empty())
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest())
+
+        val captor = argumentCaptor<Room>()
+        verify(roomRepository).save(captor.capture())
+        assertThat(captor.firstValue.roomCode).matches("\\d{3}")
+    }
+
+    @Test
+    fun `createRoom - retries code generation when the code is taken by an active room`() {
+        // First random code collides with an active room, second is free → reuse
+        // works without a globally-unique constraint.
+        whenever(roomRepository.findActiveByRoomCode(any()))
+            .thenReturn(Optional.of(room()), Optional.empty())
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest())
+
+        verify(roomRepository, atLeast(2)).findActiveByRoomCode(any())
+        verify(roomRepository).save(any<Room>())
+    }
+
+    @Test
     fun `createRoom - host is added as room player with host=true`() {
         whenever(roomRepository.save(any<Room>())).thenAnswer {
             val r = it.arguments[0] as Room
@@ -174,7 +214,7 @@ class RoomServiceTest {
 
     @Test
     fun `joinRoom - throws RoomNotFoundException when room code not found`() {
-        whenever(roomRepository.findByRoomCode("XXXX")).thenReturn(Optional.empty())
+        whenever(roomRepository.findActiveByRoomCode("XXXX")).thenReturn(Optional.empty())
 
         assertThatThrownBy { roomService.joinRoom(userId, "Nick", null, "XXXX") }
             .isInstanceOf(RoomNotFoundException::class.java)
@@ -186,7 +226,7 @@ class RoomServiceTest {
         // members (already in room_players) bypass it — see the rejoin
         // tests below.
         val room = room(status = RoomStatus.IN_GAME)
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.empty())
 
         assertThatThrownBy { roomService.joinRoom(userId, "Nick", null, "ABCD") }
@@ -200,7 +240,7 @@ class RoomServiceTest {
         // gets back the current room snapshot — even after the host has
         // started the game.
         val room = room(status = RoomStatus.IN_GAME)
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId))
             .thenReturn(Optional.of(RoomPlayer(roomId = 1, userId = userId)))
         whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(
@@ -218,7 +258,7 @@ class RoomServiceTest {
     @Test
     fun `joinRoom - throws RoomFullException when room is full`() {
         val room = room(totalPlayers = 2)
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.empty())
         whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(
             listOf(RoomPlayer(roomId = 1, userId = hostId), RoomPlayer(roomId = 1, userId = "u2"))
@@ -231,7 +271,7 @@ class RoomServiceTest {
     @Test
     fun `joinRoom - idempotent when player already in room`() {
         val room = room()
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         // Player already exists
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId))
             .thenReturn(Optional.of(RoomPlayer(roomId = 1, userId = userId)))
@@ -250,7 +290,7 @@ class RoomServiceTest {
     @Test
     fun `joinRoom - new player saved when not already in room`() {
         val room = room()
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.empty())
         whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(
             listOf(RoomPlayer(roomId = 1, userId = hostId)) // 1 player, room not full
@@ -287,6 +327,27 @@ class RoomServiceTest {
 
         assertThat(result.roomCode).isEqualTo("ABCD")
         assertThat(result.hostId).isEqualTo(hostId)
+    }
+
+    // ── findActiveRoomForUser (reconnect / quick-rejoin) ───────────────────────
+
+    @Test
+    fun `findActiveRoomForUser returns the user's active room`() {
+        whenever(roomRepository.findActiveRoomsForUser(userId)).thenReturn(listOf(room()))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        val result = roomService.findActiveRoomForUser(userId)
+
+        assertThat(result).isNotNull
+        assertThat(result!!.roomCode).isEqualTo("ABCD")
+    }
+
+    @Test
+    fun `findActiveRoomForUser returns null when the user has no active room`() {
+        whenever(roomRepository.findActiveRoomsForUser(userId)).thenReturn(emptyList())
+
+        assertThat(roomService.findActiveRoomForUser(userId)).isNull()
     }
 
     // ── kickPlayer ───────────────────────────────────────────────────────────

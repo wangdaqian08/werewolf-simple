@@ -75,4 +75,16 @@ describe('RoleComposition', () => {
     const ordered = wrapper.findAll('[data-role]').map((el) => el.attributes('data-role'))
     expect(ordered).toEqual(['WEREWOLF', 'SEER', 'WITCH', 'VILLAGER'])
   })
+
+  // #1: the configured player count INCLUDES the host (the host plays + takes a
+  // seat). Make that explicit on the shared composition card so players aren't
+  // confused that "set to 8" means 8 total incl. host (not 8 guests + host).
+  it('clarifies the seat total includes the host', () => {
+    const wrapper = mount(RoleComposition, {
+      props: { totalPlayers: 8, wolfCount: 2, roles: ['WEREWOLF', 'VILLAGER', 'SEER'] },
+    })
+    const total = wrapper.get('[data-testid="composition-total"]').text()
+    expect(total).toContain('8')
+    expect(total).toMatch(/含房主|incl\.?\s*host/i)
+  })
 })

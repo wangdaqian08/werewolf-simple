@@ -10,6 +10,39 @@ interface UserRepository : JpaRepository<User, String>
 
 interface RoomRepository : JpaRepository<Room, Int> {
     fun findByRoomCode(roomCode: String): Optional<Room>
+
+    /**
+     * Resolve the room currently "using" [code]. Room codes are reusable: once a
+     * room's game has ended, its code is free to recycle (see [findActiveByRoomCode]
+     * usage in RoomService.generateCode). A code is considered in use only while a
+     * room is still WAITING or has a game that has not ended — finished/closed rooms
+     * holding a recycled code are ignored. At most one such room exists per code.
+     */
+    @Query(
+        """
+        SELECT r FROM Room r
+        WHERE r.roomCode = :code
+          AND (r.status = com.werewolf.model.RoomStatus.WAITING
+               OR EXISTS (SELECT g FROM Game g WHERE g.roomId = r.roomId AND g.endedAt IS NULL))
+        """,
+    )
+    fun findActiveByRoomCode(code: String): Optional<Room>
+
+    /**
+     * Rooms the user belongs to that are still active (WAITING or with a live
+     * game) — used by the lobby's quick-rejoin lookup so a player who closed the
+     * app can jump straight back in. Most-recent room first.
+     */
+    @Query(
+        """
+        SELECT r FROM Room r
+        WHERE EXISTS (SELECT rp FROM RoomPlayer rp WHERE rp.roomId = r.roomId AND rp.userId = :userId)
+          AND (r.status = com.werewolf.model.RoomStatus.WAITING
+               OR EXISTS (SELECT g FROM Game g WHERE g.roomId = r.roomId AND g.endedAt IS NULL))
+        ORDER BY r.roomId DESC
+        """,
+    )
+    fun findActiveRoomsForUser(userId: String): List<Room>
 }
 
 interface RoomPlayerRepository : JpaRepository<RoomPlayer, Int> {

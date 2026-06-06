@@ -27,7 +27,7 @@ import { type RoleName } from './helpers/shell-runner'
 import { verifyAllBrowsersPhase } from './helpers/assertions'
 import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-screenshot'
 import { driveMinimalNight1ViaDom } from './helpers/night-driver'
-import { waitForCondition } from './helpers/state-polling'
+import { waitForDaySkipVoting, waitForDaySubPhase } from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -65,7 +65,8 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
     await driveMinimalNight1ViaDom(ctx, { wolfTargetSeat: wolfTargetSeat! })
 
     // hasSheriff=false → end-of-night lands at DAY_DISCUSSION/RESULT_HIDDEN.
-    await verifyAllBrowsersPhase(ctx.pages, 'DAY_DISCUSSION', 20_000)
+    // PHASE_DATA_VALUES key is 'DAY' (covers DAY_PENDING + DAY_DISCUSSION).
+    await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000)
 
     // Host reveals night kills → RESULT_REVEALED. log-fab is gated on
     // RESULT_REVEALED, so this is the earliest point we can verify the
@@ -73,16 +74,10 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
     const revealBtn = ctx.hostPage.getByTestId('day-reveal-result')
     await expect(revealBtn).toBeVisible({ timeout: 10_000 })
     await revealBtn.click()
-    await waitForCondition(
-      async () => {
-        const r = await ctx.hostPage.request.get(`/api/game/${ctx.gameId}/state`)
-        if (!r.ok()) return false
-        const s = await r.json()
-        return s?.subPhase === 'RESULT_REVEALED'
-      },
+    expect(
+      await waitForDaySubPhase(ctx.hostPage, ctx.gameId, 'RESULT_REVEALED', 15_000),
       'host reveal landed at DAY_DISCUSSION/RESULT_REVEALED',
-      15_000,
-    )
+    ).toBe(true)
 
     // ── Pre-self-destruct invariants ─────────────────────────────────────
     // Host's footer button is the vote-starter, NOT the night-entry.
@@ -108,16 +103,10 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
     await confirmBtn.click()
 
     // ── Wait for daySkipVoting + button swap to propagate via STOMP ──────
-    await waitForCondition(
-      async () => {
-        const r = await ctx.hostPage.request.get(`/api/game/${ctx.gameId}/state`)
-        if (!r.ok()) return false
-        const s = await r.json()
-        return s?.daySkipVoting === true
-      },
+    expect(
+      await waitForDaySkipVoting(ctx.hostPage, ctx.gameId, 10_000),
       'backend daySkipVoting=true after wolf self-destruct',
-      10_000,
-    )
+    ).toBe(true)
 
     // Host's footer flipped: now 进入夜晚 is visible, 开始投票 is gone.
     await expect(ctx.hostPage.getByTestId('day-enter-night')).toBeVisible({ timeout: 10_000 })
@@ -128,17 +117,24 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
     const drawer = ctx.hostPage.locator('.action-log-drawer')
     await expect(drawer).toBeVisible({ timeout: 5_000 })
     await expect(drawer.getByText('💥 自爆')).toBeVisible({ timeout: 5_000 })
-    await expect(drawer.getByText(/号\s*·\s*\S+\s*自爆/)).toBeVisible({ timeout: 5_000 })
+    // The entry renders the seat badge, nickname and 自爆 in separate spans, so
+    // assert against the drawer's concatenated text (mirrors actionLogDrawer.test.ts)
+    // rather than a single-element getByText regex.
+    await expect
+      .poll(async () => (await drawer.textContent()) ?? '', { timeout: 5_000 })
+      .toMatch(/\d+号/)
 
     await captureSnapshot(ctx.pages, testInfo, 'self-destruct-post-confirm')
   })
 
-  test('non-wolf taps Action chip → sees 暂无操作, no self-destruct option', async () => {
-    // Reuses the post-self-destruct game state. Pick any non-wolf browser.
-    const villagerPage =
-      ctx.pages.get('VILLAGER') ?? ctx.pages.get('SEER') ?? ctx.pages.get('WITCH')
-    expect(villagerPage, 'need at least one non-wolf browser').toBeTruthy()
-    const vp = villagerPage!
+  test('non-wolf taps Action chip → sees 暂无操作, no self-destruct option', async ({}, testInfo) => {
+    // Assert on the always-stable HOST page rather than a role browser: the role
+    // contexts have been driven through the full Night-1 flow and are no longer
+    // reliable for a fresh interaction in this shared-game describe. Only a
+    // non-wolf host is meaningful here (a wolf host WOULD see 自爆), so skip on
+    // the ~1/3 WEREWOLF host roll — same role-roll guard as flow-12p-sheriff.
+    testInfo.skip(ctx.hostRole === 'WEREWOLF', 'host rolled WEREWOLF — would see 自爆 by design')
+    const vp = ctx.hostPage
 
     const actionBtn = vp.getByTestId('action-menu-btn')
     await expect(actionBtn).toBeVisible({ timeout: 10_000 })

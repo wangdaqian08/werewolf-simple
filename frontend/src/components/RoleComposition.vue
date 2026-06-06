@@ -14,7 +14,9 @@
         <span class="chip-count">×{{ chip.count }}</span>
       </div>
     </div>
-    <div class="composition-total">共 {{ totalRoles }} / {{ totalPlayers }} 座位</div>
+    <div class="composition-total" data-testid="composition-total">
+      共 {{ totalRoles }} / {{ totalPlayers }} 座位（含房主 · incl. host）
+    </div>
   </div>
 </template>
 

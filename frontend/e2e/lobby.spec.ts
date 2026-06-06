@@ -30,14 +30,14 @@ test('Join button is disabled with nickname but no room code', async ({page}) =>
 })
 
 test('Join button is disabled with room code but no nickname', async ({page}) => {
-    await page.getByPlaceholder('Room code').fill('ABC123')
+    await page.getByPlaceholder('Room code').fill('123')
     const btn = page.getByRole('button', {name: /Join/i})
     await expect(btn).toBeDisabled()
 })
 
 test('Join button enables when both nickname and room code are entered', async ({page}) => {
     await page.getByPlaceholder('Enter your nickname').fill('Alice')
-    await page.getByPlaceholder('Room code').fill('ABC123')
+    await page.getByPlaceholder('Room code').fill('123')
     const btn = page.getByRole('button', {name: /Join/i})
     await expect(btn).toBeEnabled()
 })
@@ -50,14 +50,14 @@ test('Create Room navigates to config screen', async ({page}) => {
 
 test('Join Room navigates to room view', async ({page}) => {
     await page.getByPlaceholder('Enter your nickname').fill('TestGuest')
-    await page.getByPlaceholder('Room code').fill('XYZ789')
+    await page.getByPlaceholder('Room code').fill('789')
     await page.getByRole('button', {name: /Join/i}).click()
     await expect(page).toHaveURL(/\/room\//)
 })
 
 test('successful join stores JWT in localStorage', async ({page}) => {
     await page.getByPlaceholder('Enter your nickname').fill('Alice')
-    await page.getByPlaceholder('Room code').fill('XYZ789')
+    await page.getByPlaceholder('Room code').fill('789')
     await page.getByRole('button', {name: /Join/i}).click()
     await expect(page).toHaveURL(/\/room\//)
     const jwt = await page.evaluate(() => localStorage.getItem('jwt'))
@@ -70,7 +70,7 @@ test('successful join stores JWT in localStorage', async ({page}) => {
 
 test('invalid room code shows error message', async ({page}) => {
     await page.getByPlaceholder('Enter your nickname').fill('Alice')
-    await page.getByPlaceholder('Room code').fill('BADCD')
+    await page.getByPlaceholder('Room code').fill('000')
     await page.getByRole('button', {name: /Join/i}).click()
     await expect(page.getByText('Room not found. Check the code.')).toBeVisible()
     await expect(page).toHaveURL('/')
@@ -78,7 +78,7 @@ test('invalid room code shows error message', async ({page}) => {
 
 test('invalid room code does not navigate away', async ({page}) => {
     await page.getByPlaceholder('Enter your nickname').fill('Bob')
-    await page.getByPlaceholder('Room code').fill('WRONG')
+    await page.getByPlaceholder('Room code').fill('000')
     await page.getByRole('button', {name: /Join/i}).click()
     await expect(page).not.toHaveURL(/\/room\//)
 })

@@ -42,7 +42,7 @@ export const MOCK_LOGIN: LoginResponse = {
 
 export const MOCK_ROOM_AS_HOST: Room = {
   roomId: 'room-001',
-  roomCode: 'ABC123',
+  roomCode: '123',
   hostId: 'u1',
   status: 'WAITING',
   config: {
@@ -81,7 +81,7 @@ export const MOCK_ROOM_AS_HOST: Room = {
 
 export const MOCK_ROOM_AS_GUEST: Room = {
   roomId: 'room-002',
-  roomCode: 'XYZ789',
+  roomCode: '789',
   hostId: 'u2',
   status: 'WAITING',
   config: {

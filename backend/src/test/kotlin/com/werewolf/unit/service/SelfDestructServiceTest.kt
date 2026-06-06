@@ -182,10 +182,14 @@ class SelfDestructServiceTest {
         assertThat(handover.first().toUserId).isNull()
     }
 
-    // ── Case 4: Wolf during DAY_VOTING/VOTING → transitions to VOTE_RESULT ─────
+    // ── Case 4: Wolf during DAY_VOTING → day ends to the "enter night" path ─────
+    // Standard rule: 自爆 ends the day with NO vote. We must NOT leave the game on
+    // a DAY_VOTING vote-result screen (reported as "still goes to voting"); instead
+    // route to DAY_DISCUSSION/RESULT_REVEALED so the host's single 进入夜晚 button
+    // advances straight to night, identical to a self-destruct during discussion.
 
     @Test
-    fun `wolf during DAY_VOTING transitions to DAY_VOTING VOTE_RESULT`() {
+    fun `wolf during DAY_VOTING ends the day to DAY_DISCUSSION RESULT_REVEALED (no vote screen)`() {
         val ctx = context(
             game = game(phase = GamePhase.DAY_VOTING, subPhase = VotingSubPhase.VOTING.name),
             players = listOf(wolfPlayer(), villagePlayer()),
@@ -201,8 +205,8 @@ class SelfDestructServiceTest {
         val result = selfDestructService.selfDestruct(req(), ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_VOTING)
-        assertThat(ctx.game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
         assertThat(ctx.game.daySkipVoting).isTrue()
     }
 

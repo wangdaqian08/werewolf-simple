@@ -82,8 +82,14 @@ class SelfDestructService(
                 // Stay in current sub-phase — flag change enables host's "进入夜晚" button
             }
             GamePhase.DAY_VOTING -> {
-                // Discard tallies → VOTE_RESULT
-                context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
+                // Standard 自爆 rule: the day ends with NO vote. Don't leave the
+                // game on a DAY_VOTING vote-result screen (reported as "still goes
+                // to voting"); the night deaths were already revealed before voting
+                // began, so route to DAY_DISCUSSION/RESULT_REVEALED. The host's
+                // single 进入夜晚 button (daySkipVoting=true) then advances straight
+                // to night — identical to a self-destruct during discussion.
+                context.game.phase = GamePhase.DAY_DISCUSSION
+                context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
             }
             else -> {
                 // allowedPhases guard above prevents other phases reaching here

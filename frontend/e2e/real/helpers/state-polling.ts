@@ -18,8 +18,11 @@ import type { Page } from '@playwright/test'
 
 type GameStateMinimal = {
   phase?: string
+  subPhase?: string
+  daySkipVoting?: boolean
   nightPhase?: { subPhase?: string } | null
   votingPhase?: { subPhase?: string } | null
+  dayPhase?: { subPhase?: string } | null
   sheriffElection?: { subPhase?: string } | null
 }
 
@@ -80,6 +83,40 @@ export async function waitForPhase(
   while (Date.now() < deadline) {
     const state = await fetchGameState(hostPage, gameId)
     if (state?.phase === target) return true
+    await hostPage.waitForTimeout(300)
+  }
+  return false
+}
+
+/**
+ * Poll `state.dayPhase.subPhase` until it matches `target` (e.g. RESULT_HIDDEN,
+ * RESULT_REVEALED). The DAY sub-phase lives under `dayPhase`, not top-level.
+ */
+export async function waitForDaySubPhase(
+  hostPage: Page,
+  gameId: string,
+  target: string,
+  timeoutMs = 15_000,
+): Promise<boolean> {
+  const deadline = Date.now() + scale(timeoutMs)
+  while (Date.now() < deadline) {
+    const state = await fetchGameState(hostPage, gameId)
+    if (state?.dayPhase?.subPhase === target) return true
+    await hostPage.waitForTimeout(300)
+  }
+  return false
+}
+
+/** Poll the top-level `state.daySkipVoting` flag until it becomes true. */
+export async function waitForDaySkipVoting(
+  hostPage: Page,
+  gameId: string,
+  timeoutMs = 10_000,
+): Promise<boolean> {
+  const deadline = Date.now() + scale(timeoutMs)
+  while (Date.now() < deadline) {
+    const state = await fetchGameState(hostPage, gameId)
+    if (state?.daySkipVoting === true) return true
     await hostPage.waitForTimeout(300)
   }
   return false

@@ -250,7 +250,7 @@ export async function setupGame(
 
   // Get room code
   const roomCode = (await hostPage.locator('[data-testid="room-code"]').textContent()) ?? ''
-  if (!roomCode.match(/^[A-Z0-9]{4,6}$/)) {
+  if (!roomCode.match(/^[0-9]{3}$/)) {
     throw new Error(`Invalid room code: ${roomCode}`)
   }
 
