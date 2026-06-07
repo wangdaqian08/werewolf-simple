@@ -13,13 +13,14 @@ data class DevLoginRequest(
 )
 
 /**
- * Dev-only auth bypass — not compiled into production builds.
- * Active only when spring.profiles.active=dev.
+ * Dev-only auth bypass — an unauthenticated JWT mint for local/bot testing.
+ * Active only when the `dev` profile is on AND `prod` is NOT — so a stray
+ * `SPRING_PROFILES_ACTIVE=dev,prod` on a production box can never expose it.
  *
  * POST /api/auth/dev  { "nickname": "Alice" }
  *                     { "nickname": "Bob", "userId": "dev:bob-fixed-id" }
  */
-@Profile("dev")
+@Profile("dev & !prod")
 @RestController
 @RequestMapping("/api/auth")
 class DevAuthController(private val authService: AuthService) {
