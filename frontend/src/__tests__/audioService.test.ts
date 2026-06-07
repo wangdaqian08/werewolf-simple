@@ -244,4 +244,48 @@ describe('audioService', () => {
       expect.any(Object),
     )
   })
+
+  // ── Tab-resume drain must not discard a HEALTHY queue ────────────────────
+  //
+  // Reported: game 80, day 2 — rooster_crowing.mp3 / day_time.mp3 never played.
+  // The day audio was queued behind a still-playing seer_close_eyes.mp3 when the
+  // backgrounded tab resumed; the resume handler drained the queue "without
+  // replay", discarding the FRESH day audio. The drain must only fire for a
+  // genuinely STUCK queue (no playback progress for a while), not whenever a cue
+  // happens to be actively playing on resume.
+
+  function visibilityHandler(): () => void {
+    const calls = (document.addEventListener as unknown as ReturnType<typeof vi.fn>).mock.calls
+    const vis = calls.filter((c) => c[0] === 'visibilitychange')
+    return vis[vis.length - 1]![1] as () => void
+  }
+
+  it('tab resume does NOT drain the pending queue while a cue is actively playing', () => {
+    // seer_close_eyes playing, rooster_crowing queued behind it; cue just started.
+    audioService.playSequential(['seer_close_eyes.mp3', 'rooster_crowing.mp3'])
+    expect(audioService.isQueueActive()).toBe(true)
+    ;(document as unknown as { visibilityState: string }).visibilityState = 'visible'
+
+    visibilityHandler()()
+
+    // The fresh day cue must survive the resume: when seer_close_eyes ends,
+    // rooster_crowing plays.
+    mockAudioInstances[0]?.onended?.()
+    expect(mockAudioInstances).toHaveLength(2)
+    expect(mockAudioInstances[1]?.play).toHaveBeenCalled()
+  })
+
+  it('tab resume DOES drain a genuinely stuck queue (no playback progress >15s)', () => {
+    audioService.playSequential(['stale_a.mp3', 'stale_b.mp3'])
+    // Simulate a long suspension: no playback has progressed for 16s.
+    ;(audioService as unknown as { lastPlaybackStartTime: number }).lastPlaybackStartTime =
+      performance.now() - 16000
+    ;(document as unknown as { visibilityState: string }).visibilityState = 'visible'
+
+    visibilityHandler()()
+
+    // Stale queue drained: nothing else plays when the (suspended) cue ends.
+    mockAudioInstances[0]?.onended?.()
+    expect(mockAudioInstances).toHaveLength(1)
+  })
 })
