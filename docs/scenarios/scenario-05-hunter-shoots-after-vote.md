@@ -61,7 +61,7 @@ shoot one player before game continues.
 | 6      | DAY 1 / RESULT_REVEALED     | Alice(host): DAY_ADVANCE                           | `PhaseChanged(VOTING, VOTING)`                                                                                              | All: Frank dead                            |
 | **7**  | **VOTING 1 / VOTING**       | **All 5 vote; Eve gets majority**                  | `VoteSubmitted` × 5; `PhaseChanged(VOTING, VOTE_RESULT)`                                                                    | **Vote split shown**                       |
 | **8**  | **VOTING 1 / VOTE_RESULT**  | Alice(host): VOTING_REVEAL_TALLY                   | `VoteTally(eliminatedUserId: eve)`; `PlayerEliminated(eve, HUNTER)`; `PhaseChanged(VOTING, HUNTER_SHOOT)`                   | **Eve's HUNTER role triggers shoot phase** |
-| **9**  | **VOTING 1 / HUNTER_SHOOT** | **Eve: HUNTER_SHOOT(Bob)**                         | `HunterShot(hunterUserId: eve, targetUserId: bob)`; `PlayerEliminated(bob, WEREWOLF)`; `PhaseChanged(NIGHT, WEREWOLF_PICK)` | **Eve: shoot UI; all others: waiting**     |
+| **9**  | **VOTING 1 / HUNTER_SHOOT** | **Eve: HUNTER_SHOOT(Bob)**                         | `HunterShot(hunterUserId: eve, targetUserId: bob)`; `PlayerEliminated(bob, WEREWOLF)`; `PhaseChanged(DAY_VOTING, VOTE_RESULT)` (host then VOTING_CONTINUE → NIGHT) | **Eve: shoot UI → VOTE_RESULT; Bob's last words**     |
 | 10     | NIGHT 2 / WEREWOLF_PICK     | Alice (only wolf): WOLF_KILL(Carol)                | `NightSubPhaseChanged(SEER_PICK)`                                                                                           | Alice: solo wolf                           |
 | 11     | NIGHT 2 / SEER_PICK         | Carol: SEER_CHECK(Alice)                           | `NightSubPhaseChanged(SEER_RESULT)`                                                                                         | Carol: active                              |
 | 12     | NIGHT 2 / SEER_RESULT       | Carol: SEER_CONFIRM                                | `SeerResult(alice, true)` private; `NightSubPhaseChanged(WITCH_ACT)`                                                        | Carol: "Alice — 是狼人！"                      |
@@ -175,8 +175,14 @@ This is the core mechanic for this scenario. Eve's hunter skill fires because sh
 ```
 HunterShot(hunterUserId: eve, targetUserId: bob)
 PlayerEliminated(userId: bob, role: WEREWOLF)
+PhaseChanged(DAY_VOTING, VOTE_RESULT)   // host pause — Bob's last words
+// Alice(host): VOTING_CONTINUE →
 PhaseChanged(NIGHT, WEREWOLF_PICK)
 ```
+
+> The shot lands the day on `VOTE_RESULT` (not straight to night) so the host
+> controls the transition and Bob gets a last-words window — the same pause
+> every other voting-elimination day-death gets.
 
 **Win check after both eliminations (Eve + Bob):**
 

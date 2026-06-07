@@ -209,7 +209,7 @@ class VotingPipelineTest {
     // ── handleHunterShoot ─────────────────────────────────────────────────────
 
     @Test
-    fun `handleHunterShoot - hunter shoots non-sheriff target, win checked, goes to night`() {
+    fun `handleHunterShoot - hunter shoots non-sheriff, pauses on VOTE_RESULT for the victim's last words (no auto-night)`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER)
         val target = player("u2", 2)
         val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter, target)
@@ -223,7 +223,13 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(target.alive).isFalse()
-        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
+        // The shot victim needs a last-words window: the day must NOT auto-jump
+        // to night. It pauses on VOTE_RESULT (like every other day-death); the
+        // host then advances via VOTING_CONTINUE / continueToNight.
+        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.allValues).anyMatch { it.subPhase == VotingSubPhase.VOTE_RESULT.name }
     }
 
     @Test
@@ -499,7 +505,7 @@ class VotingPipelineTest {
     }
 
     @Test
-    fun `handleHunterShoot - hunter skips, not sheriff, goes to night`() {
+    fun `handleHunterShoot - hunter skips (not sheriff), pauses on VOTE_RESULT for host to advance (no auto-night)`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER)
         val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter)
 
@@ -509,7 +515,12 @@ class VotingPipelineTest {
         val result = votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
+        // A voted-out hunter who passes is still a day-death: pause on VOTE_RESULT
+        // so the host controls the night transition (no silent auto-night).
+        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.allValues).anyMatch { it.subPhase == VotingSubPhase.VOTE_RESULT.name }
     }
 
     @Test

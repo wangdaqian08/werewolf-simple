@@ -341,7 +341,8 @@ curl -s -X POST http://localhost:8080/api/game/action \
 # OR hunter passes:
 ./scripts/act.sh HUNTER_PASS $HUNTER_NICK
 
-# If hunter's target was NOT the sheriff → goes to night
+# If hunter's target was NOT the sheriff → subPhase = VOTE_RESULT (host pause
+#   for the victim's last words); host then VOTING_CONTINUE → night
 # If hunter's target WAS the sheriff → subPhase = BADGE_HANDOVER (see Case C)
 
 # ────────────────────────────────────────────────────────────────────

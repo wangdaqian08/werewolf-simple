@@ -41,7 +41,7 @@ flowchart TB
     DV1 -->|"voted-out HUNTER"| HS1["DAY_VOTING / HUNTER_SHOOT<br/>vote-out path only"]
     DV1 -->|"voted-out sheriff"| BH1["DAY_VOTING / BADGE_HANDOVER<br/>vote-out path only"]
     HS1 -->|"hunter shot sheriff"| BH1
-    HS1 --> N2["NIGHT D2+"]
+    HS1 -->|"shot/pass → VOTE_RESULT → host 进入夜晚"| N2["NIGHT D2+"]
     BH1 --> N2
     DV1 -->|"normal vote-out"| N2
     DV1 -->|"post-vote win"| GO
@@ -53,7 +53,7 @@ flowchart TB
     DV2 -->|"voted-out HUNTER"| HS2["DAY_VOTING / HUNTER_SHOOT"]
     DV2 -->|"voted-out sheriff"| BH2["DAY_VOTING / BADGE_HANDOVER"]
     HS2 -->|"hunter shot sheriff"| BH2
-    HS2 --> N2
+    HS2 -->|"shot/pass → VOTE_RESULT → host 进入夜晚"| N2
     BH2 --> N2
     DV2 --> N2
     DV2 -->|"post-vote win"| GO
@@ -80,6 +80,7 @@ flowchart TB
 | **`NIGHT-kill hunter` does NOT go through HUNTER_SHOOT** | `GamePhasePipeline.kt:69` | Same |
 | `Vote-out sheriff` → `DAY_VOTING/BADGE_HANDOVER` | `VotingPipeline.kt:handleBadge` | Vote-out path only |
 | `Vote-out hunter` → `DAY_VOTING/HUNTER_SHOOT` | `VotingPipeline.kt:handleHunterShoot` | Vote-out path only |
+| `HUNTER_SHOOT` (non-sheriff shot/pass) → `DAY_VOTING/VOTE_RESULT` | `VotingPipeline.kt:afterHunterAct` | Pause for the victim's last words; host `VOTING_CONTINUE` → night (never auto-night) |
 
 ---
 
