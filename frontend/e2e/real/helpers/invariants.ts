@@ -63,7 +63,15 @@ const NIGHT_SUBS = new Set([
   'COMPLETE',
 ])
 
-const DAY_SUBS = new Set(['RESULT_HIDDEN', 'RESULT_REVEALED'])
+// All DaySubPhase values (Enums.kt). HUNTER_SHOOT_NIGHT_DEATH and BADGE_HANDOVER
+// are reached during DAY_DISCUSSION when a wolf-killed hunter/sheriff resolves at
+// reveal (#133 / sheriff night-death handover) — the invariant must recognize them.
+const DAY_SUBS = new Set([
+  'RESULT_HIDDEN',
+  'RESULT_REVEALED',
+  'HUNTER_SHOOT_NIGHT_DEATH',
+  'BADGE_HANDOVER',
+])
 
 const VOTING_SUBS = new Set([
   'VOTING',

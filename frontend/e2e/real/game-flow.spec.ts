@@ -588,7 +588,17 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     const wolfPage = ctx.pages.get('WEREWOLF')
     let wolfDone = false
     if (wolfPage && (await isVisibleSoon(wolfPage, 'wolf-confirm-kill'))) {
-      const targetSlot = wolfPage.locator('.player-grid .slot-alive').first()
+      // Target a known-safe seat, NOT just the first alive slot. `allTargets`
+      // already excludes wolves and the host, and the HUNTER is its own role so
+      // it is never in that list — killing the hunter at night would trip #133's
+      // HUNTER_SHOOT_NIGHT_DEATH at reveal and stall this sequential flow-test
+      // (the night-death hunter path has its own spec). Fall back to first-alive
+      // only if every safe target is already dead.
+      const safeSeat = allTargets[0]?.seat
+      const targetSlot =
+        safeSeat != null
+          ? wolfPage.locator(`.player-grid .slot-alive[data-seat="${safeSeat}"]`)
+          : wolfPage.locator('.player-grid .slot-alive').first()
       const slotReady = await targetSlot
         .waitFor({ state: 'visible', timeout: 2_000 })
         .then(() => true)
@@ -994,8 +1004,22 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // where the wolf page's bot is dead but another wolf bot is alive.
     const wolfPage = ctx.pages.get('WEREWOLF')
     let wolfDone = false
+    // Never target the hunter at night (would trip #133's HUNTER_SHOOT_NIGHT_DEATH
+    // at reveal and stall this flow-test). Pick an alive non-wolf, non-host,
+    // non-hunter victim for both the DOM click and the API fallback below.
+    const wolfIds = new Set((ctx.roleMap.WEREWOLF ?? []).map((w) => w.userId))
+    const hunterIds = new Set((ctx.roleMap.HUNTER ?? []).map((h) => h.userId))
+    const safeVictim = ctx.allBots.find(
+      (b) =>
+        b.nick !== 'Host' &&
+        aliveSet.has(b.userId) &&
+        !wolfIds.has(b.userId) &&
+        !hunterIds.has(b.userId),
+    )
     if (wolfPage && (await isVisibleSoon(wolfPage, 'wolf-confirm-kill'))) {
-      const targetSlot = wolfPage.locator('.player-grid .slot-alive').first()
+      const targetSlot = safeVictim
+        ? wolfPage.locator(`.player-grid .slot-alive[data-seat="${safeVictim.seat}"]`)
+        : wolfPage.locator('.player-grid .slot-alive').first()
       const slotReady = await targetSlot
         .waitFor({ state: 'visible', timeout: 2_000 })
         .then(() => true)
@@ -1008,17 +1032,11 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
       }
     }
     if (!wolfDone) {
-      // wolfPage's bot is dead OR UI didn't render. Try API on remaining
-      // alive non-host wolf bots.
-      const wolfTargetCandidate = ctx.allBots.find(
-        (b) =>
-          b.nick !== 'Host' &&
-          aliveSet.has(b.userId) &&
-          !(ctx.roleMap.WEREWOLF ?? []).some((w) => w.userId === b.userId),
-      )
-      if (wolfBot && wolfTargetCandidate) {
+      // wolfPage's bot is dead OR UI didn't render. Try API on remaining alive
+      // non-host wolf bots, targeting the same safe (non-hunter) victim.
+      if (wolfBot && safeVictim) {
         tryAct('WOLF_KILL', actName(wolfBot), {
-          target: String(wolfTargetCandidate.seat),
+          target: String(safeVictim.seat),
           room: ctx.roomCode,
         })
         await waitForNightSubPhaseChange(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 8_000)
