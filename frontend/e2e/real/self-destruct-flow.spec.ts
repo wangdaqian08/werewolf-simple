@@ -112,6 +112,12 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
     await expect(ctx.hostPage.getByTestId('day-enter-night')).toBeVisible({ timeout: 10_000 })
     await expect(ctx.hostPage.getByTestId('day-start-vote')).toHaveCount(0)
 
+    // ── Self-destruct result shows in the day death banner ──────────────
+    const sdBanner = ctx.hostPage.getByTestId('day-banner-self-destruct')
+    await expect(sdBanner).toBeVisible({ timeout: 10_000 })
+    await expect(sdBanner).toContainText('自爆')
+    await expect(sdBanner).toContainText('号')
+
     // ── 游戏记录 drawer shows 💥 自爆 entry on the host's view ───────────
     await ctx.hostPage.getByTestId('log-fab').click()
     const drawer = ctx.hostPage.locator('.action-log-drawer')

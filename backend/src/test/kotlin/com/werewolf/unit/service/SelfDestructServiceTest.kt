@@ -306,4 +306,25 @@ class SelfDestructServiceTest {
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(ctx.game.daySkipVoting).isTrue()
     }
+
+    // ── Case 10: records the self-destructed player on the game (for the banner) ─
+
+    @Test
+    fun `self-destruct records the self-destructed userId on the game`() {
+        val ctx = context(
+            game = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name),
+            players = listOf(wolfPlayer(), villagePlayer()),
+        )
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId))
+            .thenReturn(Optional.of(wolfPlayer()))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+
+        selfDestructService.selfDestruct(req(), ctx)
+
+        assertThat(ctx.game.selfDestructUserId).isEqualTo(wolfId)
+    }
 }

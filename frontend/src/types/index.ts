@@ -307,12 +307,20 @@ export interface NightResult {
   killedPlayers: KilledPlayer[]
 }
 
+// The wolf who self-destructed (自爆) this day, shown in the day death banner.
+// Cleared at night-init, so it is only present for the day it happened.
+export interface SelfDestructResult {
+  seatIndex: number
+  nickname: string
+}
+
 export interface DayPhaseState {
   subPhase: DaySubPhase
   dayNumber: number
   phaseDeadline: number // epoch ms when phase ends
   phaseStarted: number // epoch ms when phase started
   nightResult?: NightResult // always present for host; present for others only after RESULT_REVEALED
+  selfDestruct?: SelfDestructResult | null // the wolf who self-destructed this day, if any
   canVote: boolean
   myVote?: string
   selectedPlayerId?: string

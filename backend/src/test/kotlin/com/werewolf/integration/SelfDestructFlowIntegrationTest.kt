@@ -169,6 +169,9 @@ class SelfDestructFlowIntegrationTest {
         val afterContinue = gameRepository.findById(gameId).orElseThrow()
         assertThat(afterContinue.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(afterContinue.dayNumber).isEqualTo(2)
+        // The self-destruct record is cleared at night-init so the banner does
+        // not bleed into the next day.
+        assertThat(afterContinue.selfDestructUserId).isNull()
     }
 
     @Test

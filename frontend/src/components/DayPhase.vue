@@ -46,6 +46,21 @@
 
     <!-- Fixed-height banner area — always rendered so grid position stays consistent -->
     <div class="banner-area">
+      <!-- Self-destruct (自爆): a wolf blew themselves up this day. Shown in the
+           death-banner area for every viewer, independent of the reveal sub-phase
+           below, so the 自爆 result is always visible until the next night. -->
+      <div v-if="selfDestruct" class="banner banner-kill" data-testid="day-banner-self-destruct">
+        <span class="banner-avatar">💥</span>
+        <div class="banner-kill-text">
+          <span
+            class="banner-kill-red"
+            :data-testid="`day-self-destruct-seat-${selfDestruct.seatIndex}`"
+            >{{ selfDestruct.seatIndex }}号 · {{ selfDestruct.nickname }}</span
+          >
+          <span class="banner-kill-muted">自爆了</span>
+        </div>
+      </div>
+
       <!-- Badge handover (sheriff killed at night): show this on top of the
            normal reveal banners. The dying sheriff sees the heir prompt; all
            other viewers see a "waiting for sheriff" hint. -->
@@ -517,6 +532,10 @@ const killedIds = computed(
 )
 
 const killedPlayers = computed(() => props.dayPhase.nightResult?.killedPlayers ?? [])
+
+// The wolf who self-destructed (自爆) this day — surfaced in the death-banner
+// area alongside any night kills. Cleared server-side at night-init.
+const selfDestruct = computed(() => props.dayPhase.selfDestruct ?? null)
 
 function isKilledAndVisible(player: GamePlayer) {
   return killedIds.value.includes(player.userId) && props.dayPhase.subPhase === 'RESULT_REVEALED'

@@ -234,12 +234,21 @@ class GameService(
                     } else null
                 } else null
             } else null
+            // The wolf who self-destructed (自爆) this day, if any — surfaced in the
+            // day death banner. Cleared at night-init so it only shows for its day.
+            val selfDestruct = game.selfDestructUserId?.let { sdId ->
+                mapOf(
+                    "seatIndex" to (playerMap[sdId]?.seatIndex ?: 0),
+                    "nickname"  to displayNameFor(sdId),
+                )
+            }
             mapOf(
                 "subPhase"      to (game.subPhase ?: DaySubPhase.RESULT_HIDDEN.name),
                 "dayNumber"     to game.dayNumber,
                 "phaseDeadline" to 0L,
                 "phaseStarted"  to 0L,
                 "nightResult"   to nightResult,
+                "selfDestruct"  to selfDestruct,
                 "canVote"       to (myPlayer != null && myPlayer.alive && myPlayer.canVote),
                 // The wolf-killed hunter eligible to fire during the day-reveal shot.
                 "hunterUserId"  to (if (game.subPhase == DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)

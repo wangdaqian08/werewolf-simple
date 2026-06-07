@@ -131,6 +131,13 @@ export async function setupGame(
   await hostPage.evaluate(() => localStorage.clear())
   await hostPage.goto(`${BASE_URL}/`)
 
+  // Depending on the backend's configured OAuth providers, the lobby may show
+  // the guest nickname directly OR collapse it behind a "Continue as guest"
+  // toggle. Reveal it if present (no-op when already shown) so the fill below
+  // doesn't hang.
+  const guestToggle = hostPage.getByRole('button', { name: /Continue as guest|继续以访客/i })
+  if (await guestToggle.count()) await guestToggle.first().click().catch(() => {})
+
   // Login
   await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
   await hostPage

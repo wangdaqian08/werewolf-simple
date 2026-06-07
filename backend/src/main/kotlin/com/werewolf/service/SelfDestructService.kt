@@ -68,8 +68,10 @@ class SelfDestructService(
         }
         gamePlayerRepository.save(wolfPlayer)
 
-        // Set daySkipVoting flag
+        // Set daySkipVoting flag + record who self-destructed (for the day death
+        // banner). Both are cleared at night-init.
         context.game.daySkipVoting = true
+        context.game.selfDestructUserId = request.actorUserId
 
         // Phase transition
         when (context.game.phase) {
