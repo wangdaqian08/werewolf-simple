@@ -81,7 +81,7 @@ class RoomService(
     ): RoomDto {
         authService.loginOrRegister(userId, nickname, avatarUrl)
 
-        val room = roomRepository.findByRoomCode(roomCode).orElse(null)
+        val room = roomRepository.findActiveByRoomCode(roomCode).orElse(null)
             ?: throw RoomNotFoundException("Room not found")
         val roomId = room.roomId ?: error("Room has no ID")
 
@@ -194,6 +194,18 @@ class RoomService(
         return buildRoomDto(room)
     }
 
+    /**
+     * The active room the caller currently belongs to (for the lobby's quick
+     * rejoin), or null if none. "Active" = WAITING or with a live game; finished
+     * rooms are ignored. The returned DTO carries `activeGameId` so the client
+     * can jump straight into an in-progress game.
+     */
+    @Transactional(readOnly = true)
+    fun findActiveRoomForUser(userId: String): RoomDto? {
+        val room = roomRepository.findActiveRoomsForUser(userId).firstOrNull() ?: return null
+        return buildRoomDto(room)
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildRoomDto(room: Room): RoomDto {
@@ -239,9 +251,18 @@ class RoomService(
         )
     }
 
+    /**
+     * Generate a 3-digit numeric room code (000–999). The space is small (1000),
+     * so codes are *reusable*: only rooms that are still active (WAITING or with a
+     * non-ended game) reserve a code — see [RoomRepository.findActiveByRoomCode].
+     * Retry until a code free among active rooms is found.
+     */
     private fun generateCode(): String {
-        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        return (1..4).map { chars.random() }.joinToString("")
+        repeat(ROOM_CODE_MAX_ATTEMPTS) {
+            val code = (1..3).map { ('0'..'9').random() }.joinToString("")
+            if (roomRepository.findActiveByRoomCode(code).isEmpty) return code
+        }
+        throw RoomCodeUnavailableException("No free room code available — too many active rooms")
     }
 
     /**
@@ -291,9 +312,12 @@ class RoomService(
     )
 }
 
+private const val ROOM_CODE_MAX_ATTEMPTS = 200
+
 class RoomNotFoundException(message: String) : RuntimeException(message)
 class RoomNotOpenException(message: String) : RuntimeException(message)
 class RoomFullException(message: String) : RuntimeException(message)
+class RoomCodeUnavailableException(message: String) : RuntimeException(message)
 class PlayerNotInRoomException(message: String) : RuntimeException(message)
 class SeatTakenException(message: String) : RuntimeException(message)
 class NotHostException(message: String) : RuntimeException(message)

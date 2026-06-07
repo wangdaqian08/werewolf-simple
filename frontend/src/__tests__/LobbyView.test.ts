@@ -18,6 +18,7 @@ const EXPIRED_JWT = () => makeJwt(-60 * 60)
 const getProvidersMock = vi.fn()
 const loginMock = vi.fn()
 const joinRoomMock = vi.fn()
+const getActiveRoomMock = vi.fn()
 
 vi.mock('@/services/userService', () => ({
   userService: {
@@ -39,6 +40,7 @@ vi.mock('@/services/roomService', () => ({
     setReady: vi.fn(),
     claimSeat: vi.fn(),
     kickPlayer: vi.fn(),
+    getActiveRoom: (...args: unknown[]) => getActiveRoomMock(...args),
   },
 }))
 
@@ -297,5 +299,64 @@ describe('LobbyView OAuth UI', () => {
     await flushPromises()
 
     expect(store.displayName).toBe('DW')
+  })
+})
+
+describe('LobbyView quick rejoin (#7)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    getProvidersMock.mockReset()
+    getProvidersMock.mockResolvedValue({ google: null, wechat: null, guest: true })
+    getActiveRoomMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function loginLocally() {
+    localStorage.setItem('jwt', VALID_JWT())
+    localStorage.setItem('userId', 'u1')
+    localStorage.setItem('nickname', 'Alice')
+  }
+
+  it('shows a Rejoin button when the player has an active room and navigates to it', async () => {
+    loginLocally()
+    getActiveRoomMock.mockResolvedValue({
+      roomId: '7',
+      roomCode: '123',
+      status: 'IN_GAME',
+      config: { totalPlayers: 9, roles: [] },
+      players: [],
+    })
+
+    const { wrapper, router } = await mountLobby()
+
+    const btn = wrapper.find('[data-testid="rejoin-room-btn"]')
+    expect(btn.exists()).toBe(true)
+    expect(btn.text()).toContain('123')
+
+    const pushSpy = vi.spyOn(router, 'push')
+    await btn.trigger('click')
+    expect(pushSpy).toHaveBeenCalledWith({ name: 'room', params: { roomId: '7' } })
+  })
+
+  it('shows no Rejoin button when there is no active room', async () => {
+    loginLocally()
+    getActiveRoomMock.mockResolvedValue(null)
+
+    const { wrapper } = await mountLobby()
+
+    expect(wrapper.find('[data-testid="rejoin-room-btn"]').exists()).toBe(false)
+  })
+
+  it('shows no Rejoin button when the user is not logged in', async () => {
+    getActiveRoomMock.mockResolvedValue({ roomId: '7', roomCode: '123', players: [] })
+
+    const { wrapper } = await mountLobby()
+
+    expect(wrapper.find('[data-testid="rejoin-room-btn"]').exists()).toBe(false)
+    expect(getActiveRoomMock).not.toHaveBeenCalled()
   })
 })

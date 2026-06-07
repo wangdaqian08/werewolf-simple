@@ -423,7 +423,7 @@ describe('audioService BGM defensive recovery (mobile Chrome)', () => {
     expect(bgm.play, 'visibility-resume must re-issue play() on the BGM element').toHaveBeenCalled()
   })
 
-  it('fix #3: visibility-resume drain unducks BGM when narration was mid-stream', () => {
+  it('fix #3: visibility-resume drain of a STUCK queue unducks BGM', () => {
     unlockUserGesture()
     audioService.startBgm('suspicion.mp3')
     audioService.setBgmLevel('HIGH')
@@ -434,13 +434,36 @@ describe('audioService BGM defensive recovery (mobile Chrome)', () => {
     audioService.playSequential(['wolf_open_eyes.mp3'])
     expect(bgm.volume).toBeLessThan(highVol)
 
-    // Tab goes hidden then comes back visible while narration was still in-flight.
+    // The resume-drain only fires for a GENUINELY STUCK queue (no playback
+    // progress for >15s) — a healthy queue is left to finish + unduck itself.
+    // Simulate the stuck state, then resume the tab.
+    ;(audioService as unknown as { lastPlaybackStartTime: number }).lastPlaybackStartTime =
+      performance.now() - 16000
     ;(document as unknown as { visibilityState: string }).visibilityState = 'visible'
     documentListeners[documentListeners.length - 1]!()
 
     expect(
       bgm.volume,
-      'visibility drain must unduck BGM, restoring it to the HIGH target',
+      'visibility drain of a stuck queue must unduck BGM, restoring it to the HIGH target',
     ).toBeCloseTo(highVol, 5)
+  })
+
+  it('fix #3b: visibility-resume of a HEALTHY queue keeps BGM ducked (narration continues)', () => {
+    unlockUserGesture()
+    audioService.startBgm('suspicion.mp3')
+    audioService.setBgmLevel('HIGH')
+    const bgm = getBgmInstance()!
+    const highVol = bgm.volume
+
+    // Narration just started → BGM ducked, queue healthy (recent start).
+    audioService.playSequential(['day_time.mp3'])
+    const duckedVol = bgm.volume
+    expect(duckedVol).toBeLessThan(highVol)
+
+    // Resume the tab — the queue is progressing, so it must NOT drain/unduck.
+    ;(document as unknown as { visibilityState: string }).visibilityState = 'visible'
+    documentListeners[documentListeners.length - 1]!()
+
+    expect(bgm.volume, 'healthy narration must stay ducked on resume').toBeCloseTo(duckedVol, 5)
   })
 })

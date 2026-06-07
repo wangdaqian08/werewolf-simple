@@ -91,6 +91,28 @@ describe('DayPhase — observability testids (action-observability sentinel)', (
     expect(wrapper.find('[data-testid="day-killed-seat-5"]').exists()).toBe(true)
   })
 
+  it('self-destruct surfaces day-banner-self-destruct testid with seat + nickname + 自爆', () => {
+    const dayWithSelfDestruct: DayPhaseState = {
+      ...peacefulDay,
+      selfDestruct: { seatIndex: 3, nickname: 'WolfBob' },
+    }
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: dayWithSelfDestruct },
+    })
+    const banner = wrapper.find('[data-testid="day-banner-self-destruct"]')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('3号')
+    expect(banner.text()).toContain('WolfBob')
+    expect(banner.text()).toContain('自爆')
+  })
+
+  it('no self-destruct → day-banner-self-destruct is absent', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: peacefulDay },
+    })
+    expect(wrapper.find('[data-testid="day-banner-self-destruct"]').exists()).toBe(false)
+  })
+
   it('multiple kills each get their own per-seat testid', () => {
     const dayWithKills: DayPhaseState = {
       ...peacefulDay,

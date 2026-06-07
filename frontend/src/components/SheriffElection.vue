@@ -247,7 +247,11 @@
             size="sm"
           />
           <div class="cand-info-col">
-            <span class="cand-name">{{ c.nickname }}</span>
+            <span class="cand-name">
+              <span v-if="seatByUserId.get(c.userId) != null" class="cand-seat"
+                >{{ seatByUserId.get(c.userId) }}号 · </span
+              >{{ c.nickname }}
+            </span>
             <span class="cand-sub-status">{{
               election.myVote === c.userId
                 ? 'VOTED ✓'

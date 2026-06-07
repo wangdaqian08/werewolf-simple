@@ -413,7 +413,17 @@ class VotingPipeline(
         // else: sub-phase stays at VOTE_RESULT — host calls VOTING_CONTINUE to proceed to night
     }
 
-    /** After hunter acts (no badge needed): check win, then go directly to night. */
+    /**
+     * After the hunter acts (no badge needed): check win, otherwise PAUSE on
+     * VOTE_RESULT for the host to advance — never auto-jump to night.
+     *
+     * The hunter's victim (and the dying hunter) need a last-words window, just
+     * like every other voting-elimination day-death: normal exile and the
+     * sheriff badge-handover both land on VOTE_RESULT, where the host clicks
+     * 进入夜晚 (VOTING_CONTINUE → continueToNight). Going straight to night here
+     * was the one inconsistent path, silently denying the killed player a chance
+     * to speak.
+     */
     private fun afterHunterAct(context: GameContext) {
         val updatedContext = contextLoader.load(context.gameId)
         val winner = winConditionChecker.check(
@@ -424,9 +434,14 @@ class VotingPipeline(
         )
         if (winner != null) {
             endGame(updatedContext, winner)
-        } else {
-            goToNight(updatedContext)
+            return
         }
+        context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
+        gameRepository.save(context.game)
+        stompPublisher.broadcastGameAfterCommit(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name),
+        )
     }
 
     /**

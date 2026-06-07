@@ -11,17 +11,20 @@ export type NightSlotVariant = 'alive' | 'dead' | 'selected' | 'teammate' | 'wai
 export function wolfVariant(
   p: GamePlayer,
   state: Pick<NightPhaseState, 'selectedTargetId' | 'teammates'>,
-  myUserId: string,
+  // Wolves may self-knife (自刀), so `self` is no longer a special non-target
+  // cell — it falls through to a normal selectable 'alive' slot. Kept in the
+  // signature for parity with the seer/witch variants (which still exclude self).
+  _myUserId: string,
 ): NightSlotVariant {
   if (!p.isAlive) return 'dead'
   if (p.userId === state.selectedTargetId) return 'selected'
   if ((state.teammates ?? []).includes(p.nickname)) return 'teammate'
-  if (p.userId === myUserId) return 'waiting'
   return 'alive'
 }
 
-export function isWolfTarget(p: GamePlayer, myUserId: string): boolean {
-  return p.isAlive && p.userId !== myUserId
+// Wolves may target anyone alive — including a teammate or themselves (自刀).
+export function isWolfTarget(p: GamePlayer, _myUserId: string): boolean {
+  return p.isAlive
 }
 
 // ── Seer ──────────────────────────────────────────────────────────────────────

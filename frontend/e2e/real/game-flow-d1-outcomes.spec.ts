@@ -15,7 +15,6 @@ import { act, actName, type RoleName } from './helpers/shell-runner'
 import { captureSnapshot } from './helpers/composite-screenshot'
 import {
   readUnvotedAlivePlayerIds,
-  waitForCondition,
   waitForNightSubPhase,
   waitForPhase,
   waitForVotingSubPhase,
@@ -346,29 +345,36 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       )
       await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-entered')
 
-      // Drive the hunter's pass (no shoot) so the game can advance — the
-      // important contract here is the SUB-PHASE TRANSITION, not which seat
-      // hunter targets.
-      act('HUNTER_PASS', actName(hunter), { room: localCtx.roomCode })
+      // The user-reported flow: the hunter SHOOTS a villager. The killed player
+      // must get a last-words window — the day pauses on VOTE_RESULT and the
+      // HOST advances to night, instead of the game silently auto-jumping.
+      // Target a living villager bot (never the host) so the shot can't end the
+      // game.
+      const shootTarget = villagers.find((v) => v.nick !== 'Host')
+      expect(shootTarget, 'need a villager bot for the hunter to shoot').toBeDefined()
+      act('HUNTER_SHOOT', actName(hunter), {
+        target: String(shootTarget!.seat),
+        room: localCtx.roomCode,
+      })
 
-      // Sub-phase advances out of HUNTER_SHOOT (to VOTE_RESULT, NIGHT, or
-      // GAME_OVER depending on remaining state). Either is acceptable —
-      // we're not asserting a specific downstream state, only that the
-      // transition out of HUNTER_SHOOT happened.
-      await waitForCondition(
-        async () => {
-          const state = await hostPage.evaluate(async (id: string) => {
-            const token = localStorage.getItem('jwt')
-            const res = await fetch(`/api/game/${id}/state`, {
-              headers: { Authorization: `Bearer ${token}` },
-            })
-            return res.ok ? res.json() : null
-          }, localCtx.gameId)
-          return state?.votingPhase?.subPhase !== 'HUNTER_SHOOT'
-        },
-        'sub-phase to leave HUNTER_SHOOT after HUNTER_PASS',
-        10_000,
+      // Fix: the day pauses on DAY_VOTING/VOTE_RESULT (NOT night) so the victim
+      // can speak. Before the fix this auto-jumped straight to NIGHT, which is
+      // why the loose "left HUNTER_SHOOT" assertion here never caught the gap.
+      const reachedVoteResult = await waitForVotingSubPhase(
+        hostPage,
+        localCtx.gameId,
+        'VOTE_RESULT',
+        15_000,
       )
+      expect(reachedVoteResult, 'expected DAY_VOTING/VOTE_RESULT after the hunter shot').toBe(true)
+      await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-vote-result')
+
+      // The host sees the continue control and drives the night transition —
+      // the "host clicks the button to go to the night phase" the report describes.
+      const continueBtn = hostPage.getByTestId('voting-continue')
+      await expect(continueBtn).toBeVisible({ timeout: 10_000 })
+      await continueBtn.click()
+      await waitForPhase(hostPage, localCtx.gameId, 'NIGHT', 15_000)
       await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-resolved')
     } finally {
       await localCtx.cleanup()

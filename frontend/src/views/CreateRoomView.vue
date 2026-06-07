@@ -11,7 +11,7 @@
 
       <!-- Player count stepper -->
       <div class="stepper-card">
-        <div class="field-lbl">玩家人数 / Number of Players</div>
+        <div class="field-lbl">玩家人数（含房主）/ Players (incl. host)</div>
         <div class="stepper-row">
           <button
             :disabled="totalPlayers <= MIN_PLAYERS"

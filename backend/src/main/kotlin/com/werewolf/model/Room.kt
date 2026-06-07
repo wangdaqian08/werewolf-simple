@@ -16,7 +16,10 @@ class Room(
     @Column(name = "room_id")
     val roomId: Int? = null,
 
-    @Column(name = "room_code", nullable = false, length = 4, unique = true)
+    // Not globally unique: 3-digit codes are recycled once a room's game ends,
+    // so finished rooms may share a code with a newer active room. Uniqueness is
+    // enforced among *active* rooms in RoomService.generateCode.
+    @Column(name = "room_code", nullable = false, length = 3)
     val roomCode: String,
 
     @Column(name = "host_user_id", nullable = false, length = 128)

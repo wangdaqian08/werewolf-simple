@@ -261,4 +261,46 @@ class DayPhaseResultRevealTest {
         assertThat(killedPlayer?.get("killedNickname")).isEqualTo("Victim")
         assertThat(killedPlayer?.get("killedSeatIndex")).isEqualTo(2)
     }
+
+    @Test
+    fun `Day reveal - self-destruct surfaces dayPhase selfDestruct seat + nickname`() {
+        val wolf = player(wolfId, 1, PlayerRole.WEREWOLF, alive = false) // self-destructed → dead
+        val villager = player(victimId, 2, PlayerRole.VILLAGER)
+        val g = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
+        g.selfDestructUserId = wolfId
+        val r = room()
+
+        whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(g))
+        whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(wolf, villager))
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.empty())
+        whenever(userRepository.findAllById(any()))
+            .thenReturn(listOf(user(wolfId, "WolfBob"), user(victimId, "Victim")))
+
+        val result = gameService.getGameState(gameId, hostId)
+
+        val dayPhase = result["dayPhase"] as? Map<*, *>
+        assertThat(dayPhase).isNotNull()
+        val selfDestruct = dayPhase?.get("selfDestruct") as? Map<*, *>
+        assertThat(selfDestruct).isNotNull()
+        assertThat(selfDestruct?.get("seatIndex")).isEqualTo(1)
+        assertThat(selfDestruct?.get("nickname")).isEqualTo("WolfBob")
+    }
+
+    @Test
+    fun `Day reveal - no self-destruct → dayPhase selfDestruct is null`() {
+        val villager = player(victimId, 2, PlayerRole.VILLAGER)
+        val g = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
+        val r = room()
+
+        whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(g))
+        whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(villager))
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.empty())
+        whenever(userRepository.findAllById(any())).thenReturn(listOf(user(victimId, "Victim")))
+
+        val result = gameService.getGameState(gameId, hostId)
+        val dayPhase = result["dayPhase"] as? Map<*, *>
+        assertThat(dayPhase?.get("selfDestruct")).isNull()
+    }
 }

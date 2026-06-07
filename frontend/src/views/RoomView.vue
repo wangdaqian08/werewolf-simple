@@ -275,15 +275,21 @@ async function handleStartGame() {
   await gameService.startGame(Number(roomStore.room.roomId))
 }
 
-// Re-fetch room status and redirect if a game is already in progress.
-// Does NOT update the room store — avoids resetting local UI state
-// (selected seat, pending ready toggle, etc.).
+// Re-fetch room status on resume/reconnect. Redirect if a game has started,
+// otherwise re-sync the WAITING-room player list: the STOMP SimpleBroker does
+// NOT replay events sent while our socket was down, so a ready/seat ROOM_UPDATE
+// that landed during a disconnect window would otherwise be lost forever and the
+// host's ready count / Start button would go stale. Only called from the
+// reconnect (onConnect) and resume (useConnectionLifecycle) paths — never on a
+// fresh mount — so adopting the server-authoritative player list here is safe.
 async function checkActiveGame() {
   if (!roomStore.room) return
   try {
     const room = await roomService.getRoom(roomStore.room.roomId)
     if (room.status === 'IN_GAME' && room.activeGameId) {
       router.push({ name: 'game', params: { gameId: room.activeGameId } })
+    } else if (room.status === 'WAITING') {
+      roomStore.updatePlayers(room.players)
     }
   } catch {
     /* room may have been deleted — ignore, user can still leave manually */

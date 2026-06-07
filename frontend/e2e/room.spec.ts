@@ -30,7 +30,7 @@ async function createRoomWith12Players(page: import('@playwright/test').Page) {
 async function joinRoom(page: import('@playwright/test').Page) {
     await goToLobby(page)
     await page.getByPlaceholder('Enter your nickname').fill('TestGuest')
-    await page.getByPlaceholder('Room code').fill('XYZ789')
+    await page.getByPlaceholder('Room code').fill('789')
     await page.getByRole('button', {name: /Join/i}).click()
     await expect(page).toHaveURL(/\/room\//)
 }
@@ -99,7 +99,7 @@ test('config screen shows Werewolf and Villager as REQUIRED', async ({page}) => 
 
 test('waiting room shows room code', async ({page}) => {
     await createRoom(page)
-    await expect(page.getByText('ABC123')).toBeVisible()
+    await expect(page.getByText('123')).toBeVisible()
 })
 
 test('waiting room shows player count', async ({page}) => {
@@ -138,7 +138,7 @@ test('join room does NOT show Start Game button', async ({page}) => {
 
 test('join room shows room code', async ({page}) => {
     await joinRoom(page)
-    await expect(page.getByText('XYZ789')).toBeVisible()
+    await expect(page.getByText('789')).toBeVisible()
 })
 
 test('join room shows Ready button', async ({page}) => {

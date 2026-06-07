@@ -15,9 +15,9 @@ Standard 狼人杀 move: a werewolf publicly kills themselves during the day to 
 | `SHERIFF_ELECTION` | `TIED` | visible | ✅ | `DAY_DISCUSSION / RESULT_HIDDEN`; `daySkipVoting=true` | Same as above |
 | `DAY_DISCUSSION` | `RESULT_HIDDEN` | visible | ✅ | stays at `RESULT_HIDDEN`; `daySkipVoting=true`; pending night kills applied | Host clicks **显示结果** → `RESULT_REVEALED` → host sees **进入夜晚** |
 | `DAY_DISCUSSION` | `RESULT_REVEALED` | visible | ✅ | stays at `RESULT_REVEALED`; `daySkipVoting=true` | **进入夜晚** swaps in for **开始投票** |
-| `DAY_VOTING` | `VOTING` | visible | ✅ | `DAY_VOTING / VOTE_RESULT`; tallies discarded; `daySkipVoting=true` | Host's existing **继续 / Continue** advances to night |
-| `DAY_VOTING` | `RE_VOTING` | visible | ✅ | `DAY_VOTING / VOTE_RESULT`; tallies discarded | Same as above |
-| `DAY_VOTING` | `VOTE_RESULT` | visible | ✅ | stays at `VOTE_RESULT` | Same as above |
+| `DAY_VOTING` | `VOTING` | visible | ✅ | `DAY_DISCUSSION / RESULT_REVEALED`; `daySkipVoting=true`; votes discarded | Host sees **进入夜晚** (no vote-result screen) |
+| `DAY_VOTING` | `RE_VOTING` | visible | ✅ | `DAY_DISCUSSION / RESULT_REVEALED`; `daySkipVoting=true`; votes discarded | Same as above |
+| `DAY_VOTING` | `VOTE_RESULT` | visible | ✅ | `DAY_DISCUSSION / RESULT_REVEALED`; `daySkipVoting=true` | Same as above |
 | `GAME_OVER` | — | hidden | ❌ | — | — |
 
 ## Special cases

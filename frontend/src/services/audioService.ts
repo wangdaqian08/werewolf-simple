@@ -26,6 +26,12 @@ const BGM_GAIN_LOW = 0.45
 const BGM_DUCK_ABSOLUTE = 0.1
 const BGM_RAMP_SEC = 0.15
 
+// A queue is "stuck" only if no cue has STARTED for this long — a hung play()
+// promise or AudioContext suspended in a background tab. Used by both the
+// playSequential watchdog and the tab-resume drain so a healthy, progressing
+// queue is never discarded.
+const STUCK_QUEUE_MS = 15_000
+
 class AudioService {
   private audioCache = new Map<string, HTMLAudioElement>()
   private globalVolume = 1.0
@@ -118,7 +124,13 @@ class AudioService {
       // Drain queue stuck from suspension. Do NOT replay — playing stale narration
       // on a freshly-woken device duplicates what other players already heard
       // (the action is over). Just reset state so subsequent live STOMP cues play.
-      if (this.isPlayingQueue) {
+      //
+      // Only drain a GENUINELY STUCK queue (no cue has started for >STUCK_QUEUE_MS).
+      // A queue that is merely actively playing must NOT be discarded: a resume
+      // that coincides with a fresh phase cue queued behind the still-playing one
+      // (game 80 day-2: day_time/rooster_crowing queued behind seer_close_eyes)
+      // would otherwise be wrongly dropped, leaving the day silent.
+      if (this.isPlayingQueue && performance.now() - this.lastPlaybackStartTime > STUCK_QUEUE_MS) {
         console.warn('[AudioService] Tab resumed with stuck queue — draining without replay')
         this.audioQueue = []
         this.isPlayingQueue = false
@@ -171,7 +183,7 @@ class AudioService {
     // because of the !isPlayingQueue gate. Detect via wall-clock: if we are
     // "playing" but no item has started for >15s, the queue is stuck — drain
     // and reset so this call gets to play.
-    if (this.isPlayingQueue && performance.now() - this.lastPlaybackStartTime > 15000) {
+    if (this.isPlayingQueue && performance.now() - this.lastPlaybackStartTime > STUCK_QUEUE_MS) {
       console.warn(
         '[AudioService] Stuck queue detected (no playback start in >15s) — force-recovering',
         { queueLen: this.audioQueue.length, lastStart: this.lastPlaybackStartTime },

@@ -47,6 +47,11 @@ class Game(
     @Column(name = "day_skip_voting", nullable = false)
     var daySkipVoting: Boolean = false,
 
+    // The wolf who self-destructed (自爆) this day; surfaced in the day death
+    // banner. Reset to null at night-init (parallel to daySkipVoting).
+    @Column(name = "self_destruct_user_id", length = 128)
+    var selfDestructUserId: String? = null,
+
     @Column(name = "timer_started_at")
     var timerStartedAt: Long? = null,
 

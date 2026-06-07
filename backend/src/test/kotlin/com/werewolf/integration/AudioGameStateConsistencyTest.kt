@@ -320,7 +320,7 @@ class AudioGameStateConsistencyTest {
         hasGuard: Boolean = false,
         roomId: Int? = null
     ): Room {
-        val roomCode = roomId?.toString() ?: "TE${System.currentTimeMillis().toString().takeLast(2)}"
+        val roomCode = (roomId?.toString() ?: System.currentTimeMillis().toString()).takeLast(3)
         
         val room = Room(
             roomCode = roomCode,

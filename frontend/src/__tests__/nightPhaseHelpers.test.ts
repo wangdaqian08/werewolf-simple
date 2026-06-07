@@ -49,8 +49,14 @@ describe('wolfVariant', () => {
     expect(wolfVariant(player({ userId: OTHER, nickname: 'Bob' }), state, ME)).toBe('teammate')
   })
 
-  it('self → waiting (wolves cannot target themselves)', () => {
-    expect(wolfVariant(player({ userId: ME }), state, ME)).toBe('waiting')
+  it('self → alive (wolves CAN self-knife / 自刀)', () => {
+    expect(wolfVariant(player({ userId: ME }), state, ME)).toBe('alive')
+  })
+
+  it('selected self → selected (self-knife confirmed)', () => {
+    expect(wolfVariant(player({ userId: ME }), { ...state, selectedTargetId: ME }, ME)).toBe(
+      'selected',
+    )
   })
 
   it('normal alive other player → alive', () => {
@@ -71,12 +77,16 @@ describe('isWolfTarget', () => {
     expect(isWolfTarget(player({ userId: OTHER }), ME)).toBe(true)
   })
 
-  it('self → false', () => {
-    expect(isWolfTarget(player({ userId: ME }), ME)).toBe(false)
+  it('self → true (wolves CAN self-knife / 自刀)', () => {
+    expect(isWolfTarget(player({ userId: ME }), ME)).toBe(true)
   })
 
   it('dead player → false', () => {
     expect(isWolfTarget(player({ userId: OTHER, isAlive: false }), ME)).toBe(false)
+  })
+
+  it('dead self → false (cannot self-knife when already dead)', () => {
+    expect(isWolfTarget(player({ userId: ME, isAlive: false }), ME)).toBe(false)
   })
 
   it('teammate is a valid wolf target', () => {

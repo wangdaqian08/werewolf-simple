@@ -23,7 +23,7 @@ object TestConstants {
     const val FIELD_ERROR = "error"
 
     // Room values
-    const val ROOM_CODE_LENGTH = 4
+    const val ROOM_CODE_LENGTH = 3
     const val DEFAULT_TOTAL_PLAYERS = 6
-    const val INVALID_ROOM_CODE = "ZZZZ"
+    const val INVALID_ROOM_CODE = "ZZZ"
 }

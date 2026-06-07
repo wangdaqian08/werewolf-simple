@@ -230,6 +230,25 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
     expect(wrapper.find('.vote-row-selected').exists()).toBe(true)
   })
 
+  it('VOTING: each candidate row shows the player seat number', () => {
+    // #3: during the sheriff campaign vote, voters must be able to identify
+    // candidates by seat (the table announces by seat, not nickname).
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({ subPhase: 'VOTING', canVote: true }),
+        ...DEFAULT_PROPS,
+        myUserId: 'u1',
+        players: [
+          { userId: 'u2', nickname: 'Alice', seatIndex: 4, isAlive: true, isSheriff: false },
+          { userId: 'u3', nickname: 'Bob', seatIndex: 7, isAlive: true, isSheriff: false },
+        ],
+      },
+    })
+    const rows = wrapper.findAll('.vote-row')
+    expect(rows[0]!.text()).toContain('4号')
+    expect(rows[1]!.text()).toContain('7号')
+  })
+
   it('host sees Confirm Vote button when a candidate is selected', async () => {
     const wrapper = mount(SheriffElection, {
       props: {
