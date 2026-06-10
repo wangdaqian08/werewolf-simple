@@ -30,6 +30,8 @@ class GameService(
     private val audioReplayCache: AudioReplayCache,
     private val hostTimerService: HostTimerService,
     private val dayRevealAdvancer: DayRevealAdvancer,
+    private val creditTransactionRepository: CreditTransactionRepository,
+    private val walletService: WalletService,
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
@@ -332,6 +334,25 @@ class GameService(
             )
         } else null
 
+        // Game-end credit rewards, rebuilt from the ledger (the durable record)
+        // so a page refresh on the Result screen still shows earnings.
+        val settlement = if (game.phase == GamePhase.GAME_OVER) {
+            val playerMap = players.associateBy { it.userId }
+            val rewardRows = creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD)
+            if (rewardRows.isEmpty()) null else mapOf(
+                "rewards" to rewardRows.map { tx ->
+                    mapOf(
+                        "userId" to tx.userId,
+                        "nickname" to displayNameFor(tx.userId),
+                        "seatIndex" to (playerMap[tx.userId]?.seatIndex ?: 0),
+                        "amount" to tx.amount,
+                    )
+                },
+                "myEarned" to rewardRows.firstOrNull { it.userId == requestingUserId }?.amount,
+                "myBalance" to walletService.balance(requestingUserId),
+            )
+        } else null
+
         val timerSnapshot = hostTimerService.snapshot(gameId)
         return mapOf(
             "gameId" to gameId,
@@ -354,6 +375,7 @@ class GameService(
             "bgmTrack" to room?.config?.bgmTrack,
             "witchSelfSaveAllowed" to (room?.config?.witchSelfSaveAllowed ?: true),
             "winner" to game.winner?.name,
+            "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,
             "sheriffElection" to sheriffElection,

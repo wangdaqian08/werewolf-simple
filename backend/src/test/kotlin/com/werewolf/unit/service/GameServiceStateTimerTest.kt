@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.util.*
 
@@ -51,6 +52,7 @@ class GameServiceStateTimerTest {
             stompPublisher, nightOrchestrator, userRepository, sheriffService,
             nightPhaseRepository, voteRepository, eliminationHistoryRepository,
             audioReplayCache, hostTimerService, dayRevealAdvancer,
+            mock(), mock(),
         )
     }
 

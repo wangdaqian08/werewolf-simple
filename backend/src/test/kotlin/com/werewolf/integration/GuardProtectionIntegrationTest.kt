@@ -66,6 +66,7 @@ class GuardProtectionIntegrationTest {
             coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
             actionLogService = mock(),
             timing = com.werewolf.config.GameTimingProperties(),
+            rewardSettlementService = mock(),
         )
     }
 

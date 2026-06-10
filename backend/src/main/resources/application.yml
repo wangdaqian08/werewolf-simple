@@ -48,3 +48,10 @@ server:
 # WebSocket configuration
 websocket:
   allowed-origins: "*"
+
+# Game-end credit rewards (see RewardSettlementService)
+werewolf:
+  rewards:
+    win-bonus: 20
+    participation: 5
+    wolf-per-day-survived: 4

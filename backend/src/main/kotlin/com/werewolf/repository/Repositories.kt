@@ -1,7 +1,9 @@
 package com.werewolf.repository
 
 import com.werewolf.model.*
+import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import java.util.*
@@ -43,6 +45,15 @@ interface RoomRepository : JpaRepository<Room, Int> {
         """,
     )
     fun findActiveRoomsForUser(userId: String): List<Room>
+
+    /**
+     * Pessimistic lock on the room row — serializes perk activations per room
+     * so the FCFS "one activation per perk per room" rule holds under
+     * concurrency on both Postgres and H2 (tests have no partial unique index).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM Room r WHERE r.roomId = :roomId")
+    fun findByIdForUpdate(roomId: Int): Optional<Room>
 }
 
 interface RoomPlayerRepository : JpaRepository<RoomPlayer, Int> {
@@ -108,4 +119,83 @@ interface EliminationHistoryRepository : JpaRepository<EliminationHistory, Int> 
 
 interface GameEventRepository : JpaRepository<GameEvent, Int> {
     fun findByGameIdOrderByCreatedAtAsc(gameId: Int): List<GameEvent>
+}
+
+interface WalletRepository : JpaRepository<Wallet, String> {
+    /**
+     * Atomic conditional debit — 0 rows updated means insufficient funds.
+     * Doing the balance check inside the UPDATE makes concurrent spends safe
+     * without row locks (double-spend protection).
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Wallet w SET w.balance = w.balance - :amount WHERE w.userId = :userId AND w.balance >= :amount")
+    fun tryDebit(userId: String, amount: Int): Int
+
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Wallet w SET w.balance = w.balance + :amount WHERE w.userId = :userId")
+    fun credit(userId: String, amount: Int): Int
+
+    /**
+     * Scalar read straight from the DB — bypasses any stale Wallet instance in
+     * the persistence context, so it sees the result of tryDebit/credit above.
+     */
+    @Query("SELECT w.balance FROM Wallet w WHERE w.userId = :userId")
+    fun getBalance(userId: String): Int?
+}
+
+interface CreditTransactionRepository : JpaRepository<CreditTransaction, Int> {
+    fun findTop20ByUserIdOrderByCreatedAtDesc(userId: String): List<CreditTransaction>
+    fun findByGameIdAndType(gameId: Int, type: CreditTxType): List<CreditTransaction>
+}
+
+interface PerkRepository : JpaRepository<Perk, String> {
+    fun findByActiveTrue(): List<Perk>
+}
+
+interface PerkActivationRepository : JpaRepository<PerkActivation, Int> {
+    fun findByRoomIdAndStatus(roomId: Int, status: PerkActivationStatus): List<PerkActivation>
+    fun findByGameId(gameId: Int): List<PerkActivation>
+    fun findByStatusAndGameIdIsNullAndCreatedAtBefore(
+        status: PerkActivationStatus,
+        createdAtBefore: java.time.LocalDateTime,
+    ): List<PerkActivation>
+}
+
+interface ProductRepository : JpaRepository<Product, Int> {
+    fun findByActiveTrueOrderBySortOrderAsc(): List<Product>
+    fun findByProductKeyAndActiveTrue(productKey: String): Optional<Product>
+}
+
+interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
+    fun findByStripeSessionId(stripeSessionId: String): Optional<PaymentOrder>
+    fun findByOrderNo(orderNo: String): Optional<PaymentOrder>
+
+    /**
+     * Conditional CREATED → COMPLETED transition; 0 rows updated means the
+     * order was already fulfilled (or expired) — webhook fulfillment idempotency.
+     */
+    @Modifying
+    @Query(
+        "UPDATE PaymentOrder o SET o.status = com.werewolf.model.PaymentOrderStatus.COMPLETED " +
+            "WHERE o.id = :orderId AND o.status = com.werewolf.model.PaymentOrderStatus.CREATED",
+    )
+    fun markCompletedIfCreated(orderId: Int): Int
+}
+
+interface PaymentEventRepository : JpaRepository<PaymentEvent, String>
+
+interface GameSettlementRepository : JpaRepository<GameSettlement, Int> {
+    /**
+     * Insert-first idempotency guard: 1 = this caller owns the settlement,
+     * 0 = already settled. ON CONFLICT DO NOTHING instead of catching a
+     * duplicate-key exception because a failed INSERT poisons the surrounding
+     * Postgres transaction — and settle() runs inside the game-over tx.
+     * Works on H2 too (tests run MODE=PostgreSQL).
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(
+        value = "INSERT INTO game_settlements (game_id, settled_at) VALUES (:gameId, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING",
+        nativeQuery = true,
+    )
+    fun tryInsert(gameId: Int): Int
 }

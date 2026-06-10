@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.util.*
 
@@ -68,6 +69,8 @@ class DayPhaseResultRevealTest {
             audioReplayCache = audioReplayCache,
             hostTimerService = hostTimerService,
             dayRevealAdvancer = dayRevealAdvancer,
+            creditTransactionRepository = mock(),
+            walletService = mock(),
         )
         whenever(hostTimerService.snapshot(any())).thenReturn(TimerSnapshot(0L, 0L, false))
         whenever(roomPlayerRepository.findByRoomId(any())).thenReturn(emptyList())

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { userService } from '@/services/userService'
+import { walletService } from '@/services/walletService'
 import type { OAuthProvider } from '@/types'
 
 function isTokenExpired(token: string): boolean {
@@ -49,6 +50,26 @@ export const useUserStore = defineStore('user', () => {
   const displayName = ref<string | null>(sessionStorage.getItem('displayName'))
 
   const isLoggedIn = computed(() => !!token.value && !!userId.value && !isTokenExpired(token.value))
+
+  // Guest accounts (nickname login) get a forgeable "guest:" userId — they can
+  // play and earn credits but cannot make real-money purchases.
+  const isGuest = computed(() => !!userId.value?.startsWith('guest:'))
+
+  // Credit balance; null until the first refreshWallet() resolves.
+  const credits = ref<number | null>(null)
+
+  async function refreshWallet() {
+    if (!isLoggedIn.value) {
+      credits.value = null
+      return
+    }
+    try {
+      const wallet = await walletService.getWallet()
+      credits.value = wallet.balance
+    } catch {
+      // non-fatal — balance chip just stays hidden
+    }
+  }
 
   function hasValidSession(nick: string): boolean {
     return !!token.value && nickname.value === nick && !isTokenExpired(token.value)
@@ -103,6 +124,7 @@ export const useUserStore = defineStore('user', () => {
   // Wipe both in-memory refs and persisted storage. Called from logout() and
   // from the 401 interceptor when the backend rejects an expired token.
   function clearSession() {
+    credits.value = null
     token.value = null
     userId.value = null
     nickname.value = null
@@ -129,6 +151,9 @@ export const useUserStore = defineStore('user', () => {
     avatarUrl,
     displayName,
     isLoggedIn,
+    isGuest,
+    credits,
+    refreshWallet,
     login,
     loginWithCode,
     logout,

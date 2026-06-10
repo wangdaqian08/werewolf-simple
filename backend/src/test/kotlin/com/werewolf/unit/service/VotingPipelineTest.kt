@@ -59,6 +59,7 @@ class VotingPipelineTest {
         actionLogService = mock(),
         hostTimerService = mock(),
         dayRevealAdvancer = dayRevealAdvancer,
+        rewardSettlementService = mock(),
     )
 
     private val gameId = 1
@@ -1034,6 +1035,7 @@ class VotingPipelineTest {
         actionLogService = actionLogService,
         hostTimerService = mock(),
         dayRevealAdvancer = dayRevealAdvancer,
+        rewardSettlementService = mock(),
     )
 
     @Test

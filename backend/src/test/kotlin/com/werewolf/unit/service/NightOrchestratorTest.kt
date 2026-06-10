@@ -79,6 +79,7 @@ class NightOrchestratorTest {
         coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
         actionLogService = actionLogService,
         timing = com.werewolf.config.GameTimingProperties(),
+        rewardSettlementService = mock(),
     )
 
     private fun mockAudioServiceForDayTransition(r: Room) {

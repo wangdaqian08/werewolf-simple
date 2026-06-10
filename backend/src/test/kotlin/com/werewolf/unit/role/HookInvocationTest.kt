@@ -104,6 +104,7 @@ class HookInvocationTest {
         coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
         actionLogService = mock(),
         timing = com.werewolf.config.GameTimingProperties(),
+        rewardSettlementService = mock(),
     )
 
     private fun makeVotingPipeline(handlers: List<RoleHandler>) = VotingPipeline(
@@ -119,6 +120,7 @@ class HookInvocationTest {
         actionLogService = mock(),
         hostTimerService = hostTimerService,
         dayRevealAdvancer = mock(),
+        rewardSettlementService = mock(),
     )
 
     // ── onDayEnter ───────────────────────────────────────────────────────────

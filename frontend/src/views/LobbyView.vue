@@ -33,6 +33,9 @@
             type="text"
             :placeholder="userStore.nickname ?? ''"
           />
+          <div v-if="userStore.credits !== null" class="credits-chip" data-testid="credits-chip">
+            ◈ {{ userStore.credits }} 积分 / Credits
+          </div>
         </div>
         <button class="logout-link" data-testid="logout-link" @click="handleLogout">
           登出 / Logout
@@ -268,6 +271,7 @@ onMounted(async () => {
     // the user; the guest flow still works.
   }
   await refreshActiveRoom()
+  await userStore.refreshWallet()
 })
 
 // Look up the player's active room so the lobby can offer a one-tap rejoin.
@@ -471,6 +475,13 @@ function signInWithWechat() {
 .identity-name-input::placeholder {
   color: var(--muted);
   opacity: 0.6;
+}
+
+.credits-chip {
+  font-size: 0.75rem;
+  color: var(--gold);
+  margin-top: 0.125rem;
+  letter-spacing: 0.05em;
 }
 
 .logout-link {

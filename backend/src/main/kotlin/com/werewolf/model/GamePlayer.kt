@@ -42,6 +42,10 @@ class GamePlayer(
 
     @Column(name = "idiot_revealed", nullable = false)
     var idiotRevealed: Boolean = false,
+
+    // Day the player died (NULL = survived to the end); drives wolf survival-scaled rewards
+    @Column(name = "died_day")
+    var diedDay: Int? = null,
 ) {
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }

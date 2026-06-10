@@ -27,6 +27,28 @@
         </div>
       </section>
 
+      <template v-if="settlement">
+        <div class="divider-label">
+          <span>积分结算 / REWARDS</span>
+        </div>
+        <section class="settlement" data-testid="settlement">
+          <div v-if="settlement.myEarned != null" class="my-earned">
+            +{{ settlement.myEarned }} <span class="earned-label">积分 / Credits earned</span>
+          </div>
+          <div v-if="settlement.myBalance != null" class="my-balance">
+            余额 / Balance: ◈ {{ settlement.myBalance }}
+          </div>
+          <div class="reward-list">
+            <div v-for="r in sortedRewards" :key="r.userId" class="reward-row">
+              <span class="reward-name">
+                {{ String(r.seatIndex).padStart(2, '0') }} · {{ displayName(r) }}
+              </span>
+              <span class="reward-amount">+{{ r.amount }}</span>
+            </div>
+          </div>
+        </section>
+      </template>
+
       <button class="btn btn-danger play-again-btn" data-testid="play-again" @click="goLobby">
         Play Again
       </button>
@@ -53,9 +75,15 @@ onMounted(async () => {
     const state = await gameService.getState(gameId.toString())
     gameStore.setState(state)
   }
+  // Game rewards were credited at game end — refresh the lobby balance chip.
+  await userStore.refreshWallet()
 })
 
 const winner = computed(() => gameStore.state?.winner)
+const settlement = computed(() => gameStore.state?.settlement ?? null)
+const sortedRewards = computed(() =>
+  [...(settlement.value?.rewards ?? [])].sort((a, b) => a.seatIndex - b.seatIndex),
+)
 
 const ROLE_ZH: Record<string, string> = {
   WEREWOLF: '狼人',
@@ -262,6 +290,59 @@ function goLobby() {
 
 .result-wolves .reveal-wolf .reveal-role {
   color: #ff8a80;
+}
+
+/* ── Settlement ─────────────────────────────────────────────────────── */
+.settlement {
+  margin-bottom: 1.5rem;
+}
+
+.my-earned {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.5rem;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.earned-label {
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.my-balance {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0.25rem 0 0.75rem;
+}
+
+.result-wolves .my-balance,
+.result-wolves .earned-label {
+  color: rgba(245, 240, 232, 0.55);
+}
+
+.reward-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.reward-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 0.125rem 0.5rem;
+}
+
+.result-wolves .reward-row {
+  color: rgba(245, 240, 232, 0.65);
+}
+
+.reward-amount {
+  color: var(--gold);
+  font-weight: 600;
 }
 
 .play-again-btn {

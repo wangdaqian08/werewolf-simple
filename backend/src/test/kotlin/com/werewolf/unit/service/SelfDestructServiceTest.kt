@@ -48,6 +48,7 @@ class SelfDestructServiceTest {
             actionLogService,
             nightOrchestrator,
             winConditionChecker,
+            mock(),
         )
     }
 

@@ -43,6 +43,7 @@ class NightOrchestrator(
     private val coroutineScope: CoroutineScope,
     private val actionLogService: com.werewolf.service.ActionLogService,
     private val timing: GameTimingProperties,
+    private val rewardSettlementService: com.werewolf.service.RewardSettlementService,
 ) {
     private val log = LoggerFactory.getLogger(NightOrchestrator::class.java)
 
@@ -300,6 +301,7 @@ class NightOrchestrator(
                 endedAt = LocalDateTime.now()
             }
             gameRepository.save(context.game)
+            rewardSettlementService.settle(gameId, winner)
 
             if (TransactionSynchronizationManager.isActualTransactionActive()) {
                 TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
@@ -502,10 +504,14 @@ class NightOrchestrator(
      */
     @Transactional
     fun applyNightKills(gameId: Int, killIds: List<String>) {
+        // Night-of-day-N kills are applied while game.dayNumber is still N
+        // (dayNumber only advances at the next night init).
+        val diedDay = gameRepository.findById(gameId).map { it.dayNumber }.orElse(null)
         for (killId in killIds.distinct()) {
             gamePlayerRepository.findByGameIdAndUserId(gameId, killId).ifPresent { player ->
                 if (player.alive) {
                     player.alive = false
+                    player.diedDay = diedDay
                     gamePlayerRepository.save(player)
                 }
             }

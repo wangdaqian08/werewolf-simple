@@ -33,6 +33,7 @@ class SelfDestructService(
     private val actionLogService: ActionLogService,
     private val nightOrchestrator: NightOrchestrator,
     private val winConditionChecker: WinConditionChecker,
+    private val rewardSettlementService: RewardSettlementService,
 ) {
     private val log = LoggerFactory.getLogger(SelfDestructService::class.java)
 
@@ -61,6 +62,7 @@ class SelfDestructService(
         val wolfPlayer = gamePlayerRepository.findByGameIdAndUserId(context.gameId, request.actorUserId)
             .orElse(null) ?: return GameActionResult.Rejected("Player not found in DB")
         wolfPlayer.alive = false
+        wolfPlayer.diedDay = context.game.dayNumber
         val wasSheriff = context.game.sheriffUserId == request.actorUserId
         if (wasSheriff) {
             wolfPlayer.sheriff = false
@@ -130,6 +132,7 @@ class SelfDestructService(
             context.game.phase = GamePhase.GAME_OVER
             context.game.endedAt = LocalDateTime.now()
             gameRepository.save(context.game)
+            rewardSettlementService.settle(context.gameId, winner)
             eventsToSend.add(DomainEvent.GameOver(context.gameId, winner))
         }
 
