@@ -62,7 +62,7 @@ class GamePhasePipeline(
             .findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
             .orElse(null)
         val pendingKills = if (nightPhase != null) {
-            nightOrchestrator.computePendingKills(nightPhase)
+            nightOrchestrator.computePendingKills(context.gameId, nightPhase)
         } else emptyList()
         if (pendingKills.isNotEmpty()) {
             nightOrchestrator.applyNightKills(context.gameId, pendingKills)

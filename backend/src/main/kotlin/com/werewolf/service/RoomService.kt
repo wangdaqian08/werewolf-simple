@@ -3,12 +3,15 @@ package com.werewolf.service
 import com.werewolf.auth.AuthService
 import com.werewolf.config.GameTimingProperties
 import com.werewolf.controller.BgmTrackRegistry
+import com.werewolf.dto.PerkActivationDto
 import com.werewolf.dto.RoomConfigDto
 import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.dto.RoomDto
 import com.werewolf.dto.RoomPlayerDto
 import com.werewolf.model.*
 import com.werewolf.repository.GameRepository
+import com.werewolf.repository.PerkActivationRepository
+import com.werewolf.repository.PerkRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
@@ -25,6 +28,9 @@ class RoomService(
     private val stompPublisher: StompPublisher,
     private val timing: GameTimingProperties,
     private val bgmRegistry: BgmTrackRegistry,
+    private val perkActivationRepository: PerkActivationRepository,
+    private val perkRepository: PerkRepository,
+    private val perkService: PerkService,
 ) {
     @Transactional
     fun createRoom(
@@ -55,7 +61,7 @@ class RoomService(
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
-                config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed),
+                config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed),
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")
@@ -150,6 +156,10 @@ class RoomService(
 
         roomPlayerRepository.delete(target)
 
+        // Refund any perk the kicked player had activated — they paid for a
+        // game they can no longer play in.
+        perkService.refundActiveForUser(roomId, targetUserId)
+
         stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "PLAYER_KICKED",
             "payload" to mapOf("userId" to targetUserId)))
         stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "ROOM_UPDATE",
@@ -240,14 +250,21 @@ class RoomService(
             gameRepository.findByRoomIdAndEndedAtIsNull(room.roomId!!).map { it.gameId }.orElse(null)
         } else null
 
+        // Live perk activations are public to the whole room (fairness rule).
+        val perkNames = perkRepository.findAll().associate { it.perkCode to it.name }
+        val perkActivations = perkActivationRepository
+            .findByRoomIdAndStatus(room.roomId!!, PerkActivationStatus.ACTIVE)
+            .map { PerkActivationDto(it.userId, it.perkCode, perkNames[it.perkCode] ?: it.perkCode) }
+
         return RoomDto(
             roomId = room.roomId.toString(),
             roomCode = room.roomCode,
             hostId = room.hostUserId,
             status = room.status.name,
             players = playerDtos,
-            config = RoomConfigDto(totalPlayers = room.totalPlayers, wolfCount = room.wolfCount, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack, witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true),
+            config = RoomConfigDto(totalPlayers = room.totalPlayers, wolfCount = room.wolfCount, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack, witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true, perksAllowed = room.config?.perksAllowed ?: true),
             activeGameId = activeGameId,
+            perkActivations = perkActivations,
         )
     }
 
@@ -300,7 +317,7 @@ class RoomService(
      * overrides. Production leaves the properties unset and gets the compile-time
      * role defaults; the test profile sets small values so CI completes quickly.
      */
-    private fun buildGameConfig(bgmTrack: String?, witchSelfSaveAllowed: Boolean): GameConfig = GameConfig(
+    private fun buildGameConfig(bgmTrack: String?, witchSelfSaveAllowed: Boolean, perksAllowed: Boolean): GameConfig = GameConfig(
         roleDelays = mapOf(
             PlayerRole.WEREWOLF to timing.applyTo(PlayerRole.WEREWOLF),
             PlayerRole.SEER to timing.applyTo(PlayerRole.SEER),
@@ -309,6 +326,7 @@ class RoomService(
         ),
         bgmTrack = bgmTrack,
         witchSelfSaveAllowed = witchSelfSaveAllowed,
+        perksAllowed = perksAllowed,
     )
 }
 

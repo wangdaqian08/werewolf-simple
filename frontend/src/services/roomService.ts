@@ -1,5 +1,5 @@
 import http from './http'
-import type { CreateRoomRequest, JoinRoomRequest, Room } from '@/types'
+import type { CreateRoomRequest, JoinRoomRequest, Perk, Room } from '@/types'
 
 export const roomService = {
   async createRoom(req: CreateRoomRequest): Promise<Room> {
@@ -48,5 +48,19 @@ export const roomService = {
 
   async kickPlayer(roomId: string, targetUserId: string): Promise<void> {
     await http.post('/room/kick', { roomId: Number(roomId), targetUserId })
+  },
+
+  async getPerks(): Promise<Perk[]> {
+    const { data } = await http.get<Perk[]>('/perks')
+    return data
+  },
+
+  /** Charge-at-click; backend rejects with 400 + error (FCFS taken / insufficient credits). */
+  async activatePerk(roomId: string, perkCode: string): Promise<void> {
+    await http.post('/room/perk/activate', { roomId: Number(roomId), perkCode })
+  },
+
+  async withdrawPerk(roomId: string, perkCode: string): Promise<void> {
+    await http.post('/room/perk/withdraw', { roomId: Number(roomId), perkCode })
   },
 }

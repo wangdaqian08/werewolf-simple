@@ -29,6 +29,9 @@ class RoomServiceTest {
     @Mock lateinit var stompPublisher: StompPublisher
     @org.mockito.Spy val timing: com.werewolf.config.GameTimingProperties = com.werewolf.config.GameTimingProperties()
     @Mock(strictness = org.mockito.Mock.Strictness.LENIENT) lateinit var bgmRegistry: com.werewolf.controller.BgmTrackRegistry
+    @Mock lateinit var perkActivationRepository: com.werewolf.repository.PerkActivationRepository
+    @Mock lateinit var perkRepository: com.werewolf.repository.PerkRepository
+    @Mock lateinit var perkService: com.werewolf.service.PerkService
     @InjectMocks lateinit var roomService: RoomService
 
     @org.junit.jupiter.api.BeforeEach

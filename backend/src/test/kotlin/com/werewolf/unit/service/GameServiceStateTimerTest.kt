@@ -52,7 +52,7 @@ class GameServiceStateTimerTest {
             stompPublisher, nightOrchestrator, userRepository, sheriffService,
             nightPhaseRepository, voteRepository, eliminationHistoryRepository,
             audioReplayCache, hostTimerService, dayRevealAdvancer,
-            mock(), mock(),
+            mock(), mock(), mock(),
         )
     }
 

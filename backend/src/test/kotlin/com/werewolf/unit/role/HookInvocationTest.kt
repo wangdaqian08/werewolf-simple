@@ -105,6 +105,7 @@ class HookInvocationTest {
         actionLogService = mock(),
         timing = com.werewolf.config.GameTimingProperties(),
         rewardSettlementService = mock(),
+        perkService = mock(lenient = true) { on { night1ImmuneUserIds(any()) } doReturn emptySet() },
     )
 
     private fun makeVotingPipeline(handlers: List<RoleHandler>) = VotingPipeline(

@@ -44,6 +44,7 @@ class NightOrchestrator(
     private val actionLogService: com.werewolf.service.ActionLogService,
     private val timing: GameTimingProperties,
     private val rewardSettlementService: com.werewolf.service.RewardSettlementService,
+    private val perkService: com.werewolf.service.PerkService,
 ) {
     private val log = LoggerFactory.getLogger(NightOrchestrator::class.java)
 
@@ -59,6 +60,29 @@ class NightOrchestrator(
          *  queue drain so players hear: guard_close_eyes → brief silence → rooster.
          *  Overridable via `werewolf.timing.sheriff-morning-cue-delay-ms`. */
         private const val DEFAULT_SHERIFF_MORNING_CUE_DELAY_MS = 2_500L
+
+        /**
+         * The single source of truth for night-kill resolution. Static so
+         * unit tests with a mocked orchestrator can delegate stubs here
+         * instead of re-deriving the rules.
+         */
+        fun computeKills(nightPhase: NightPhase, immuneUserIds: Set<String> = emptySet()): List<String> {
+            val kills = mutableListOf<String>()
+            val wolfTarget = nightPhase.wolfTargetUserId
+            if (wolfTarget != null) {
+                val antidoteSaved = nightPhase.witchAntidoteUsed
+                val guardSaved = nightPhase.guardTargetUserId == wolfTarget
+                val perkSaved = nightPhase.dayNumber == 1 && wolfTarget in immuneUserIds
+                if (!antidoteSaved && !guardSaved && !perkSaved) {
+                    kills.add(wolfTarget)
+                }
+            }
+            val poisonTarget = nightPhase.witchPoisonTargetUserId
+            if (poisonTarget != null) {
+                kills.add(poisonTarget)
+            }
+            return kills.distinct()
+        }
     }
 
     private val waitingDelayMs: Long get() = timing.waitingDelayMs ?: DEFAULT_WAITING_DELAY_MS
@@ -275,7 +299,14 @@ class NightOrchestrator(
             return
         }
 
-        val pendingKills = computePendingKills(nightPhase)
+        val pendingKills = computePendingKills(gameId, nightPhase)
+
+        // Night-1 immunity perks are spent once night 1 resolves, triggered or
+        // not — they only ever cover the first night. (computePendingKills
+        // includes CONSUMED holders, so later re-computations stay consistent.)
+        if (nightPhase.dayNumber == 1) {
+            perkService.consumeNight1Perks(gameId)
+        }
 
         nightPhase.subPhase = NightSubPhase.COMPLETE
         nightPhaseRepository.save(nightPhase)
@@ -471,30 +502,29 @@ class NightOrchestrator(
     }
 
     /**
+     * Compute pending kills for [nightPhase], folding in any first-night
+     * immunity perk holders for the game. Every production caller MUST use
+     * this overload (not the pure one below) or the kill list will disagree
+     * across call sites and leak the immune player's "death" in the UI.
+     */
+    fun computePendingKills(gameId: Int, nightPhase: NightPhase): List<String> =
+        computePendingKills(nightPhase, perkService.night1ImmuneUserIds(gameId))
+
+    /**
      * Compute the set of pending kills from a NightPhase row. Pure function —
      * does not touch DB. Public so [GamePhasePipeline.revealNightResult] can
      * call it to figure out which players to flip alive=false on the reveal
      * click.
      *
-     * Wolf target dies unless witch antidote was used or guard protected the
-     * same target. Witch poison target dies unconditionally.
+     * Wolf target dies unless witch antidote was used, guard protected the
+     * same target, or (night 1 only) the target holds the first-night
+     * immunity perk — indistinguishable from a save: only the final kill
+     * list is filtered, the witch still saw the attack. Witch poison target
+     * dies unconditionally (poison is not a wolf kill, immunity does not
+     * cover it).
      */
-    fun computePendingKills(nightPhase: NightPhase): List<String> {
-        val kills = mutableListOf<String>()
-        val wolfTarget = nightPhase.wolfTargetUserId
-        if (wolfTarget != null) {
-            val antidoteSaved = nightPhase.witchAntidoteUsed
-            val guardSaved = nightPhase.guardTargetUserId == wolfTarget
-            if (!antidoteSaved && !guardSaved) {
-                kills.add(wolfTarget)
-            }
-        }
-        val poisonTarget = nightPhase.witchPoisonTargetUserId
-        if (poisonTarget != null) {
-            kills.add(poisonTarget)
-        }
-        return kills.distinct()
-    }
+    fun computePendingKills(nightPhase: NightPhase, immuneUserIds: Set<String> = emptySet()): List<String> =
+        computeKills(nightPhase, immuneUserIds)
 
     /**
      * Apply pending night kills to game_players (flip alive=false). Idempotent

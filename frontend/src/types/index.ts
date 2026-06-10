@@ -58,6 +58,22 @@ export interface GameSettlement {
   myBalance?: number | null
 }
 
+// ── Perks ─────────────────────────────────────────────────────────────────────
+
+export interface Perk {
+  perkCode: string
+  name: string
+  description: string
+  priceCredits: number
+}
+
+/** A live perk activation in the room — visible to every room member. */
+export interface PerkActivation {
+  userId: string
+  perkCode: string
+  perkName: string
+}
+
 // ── Room ──────────────────────────────────────────────────────────────────────
 
 export type PlayerStatus = 'NOT_READY' | 'READY'
@@ -82,6 +98,8 @@ export interface RoomConfig {
   winCondition?: WinConditionMode
   bgmTrack?: string | null
   witchSelfSaveAllowed?: boolean
+  /** Whether players may activate paid perks in this room (host fairness toggle). */
+  perksAllowed?: boolean
 }
 
 export interface Room {
@@ -92,6 +110,7 @@ export interface Room {
   players: RoomPlayer[]
   config: RoomConfig
   activeGameId?: number
+  perkActivations?: PerkActivation[]
 }
 
 export interface CreateRoomRequest {

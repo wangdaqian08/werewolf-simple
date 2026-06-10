@@ -147,6 +147,28 @@
             <span class="toggle-thumb" />
           </button>
         </div>
+        <div class="role-row" :class="perksAllowed ? 'row-on' : 'row-off'">
+          <span class="role-emoji">🛡</span>
+          <div class="role-names">
+            <span class="role-name">道具 Perks</span>
+            <span class="win-cond-desc">
+              {{
+                perksAllowed
+                  ? '允许玩家使用积分道具 (Allowed)'
+                  : '禁止玩家使用积分道具 (Disallowed)'
+              }}
+            </span>
+          </div>
+          <button
+            :class="perksAllowed ? 'toggle-on' : 'toggle-off'"
+            class="toggle"
+            data-testid="perksAllowed-toggle"
+            :data-perks-allowed="perksAllowed"
+            @click="perksAllowed = !perksAllowed"
+          >
+            <span class="toggle-thumb" />
+          </button>
+        </div>
         <div class="role-row" :class="winCondition === 'HARD_MODE' ? 'row-wolf' : 'row-on'">
           <span class="role-emoji">⚔️</span>
           <div class="role-names">
@@ -259,6 +281,7 @@ watch(totalPlayers, (n) => {
 const enabledOptional = ref(new Set(['SEER', 'WITCH', 'HUNTER']))
 const hasSheriff = ref(true)
 const witchSelfSaveAllowed = ref(true)
+const perksAllowed = ref(true)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
 const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: '无 (None)' }])
@@ -368,6 +391,7 @@ async function handleCreate() {
         winCondition: winCondition.value,
         bgmTrack: bgmTrack.value,
         witchSelfSaveAllowed: witchSelfSaveAllowed.value,
+        perksAllowed: perksAllowed.value,
       },
     }
     // Carry the per-room display-name override that the lobby may have set.

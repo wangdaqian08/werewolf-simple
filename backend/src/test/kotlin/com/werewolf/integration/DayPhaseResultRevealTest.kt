@@ -71,6 +71,7 @@ class DayPhaseResultRevealTest {
             dayRevealAdvancer = dayRevealAdvancer,
             creditTransactionRepository = mock(),
             walletService = mock(),
+            perkService = mock(),
         )
         whenever(hostTimerService.snapshot(any())).thenReturn(TimerSnapshot(0L, 0L, false))
         whenever(roomPlayerRepository.findByRoomId(any())).thenReturn(emptyList())
@@ -135,6 +136,7 @@ class DayPhaseResultRevealTest {
         whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(playerList)
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf(victimId))
 
         val users = listOf(
             user(wolfId, "Wolf"),
@@ -189,6 +191,7 @@ class DayPhaseResultRevealTest {
         whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(playerList)
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(emptyList())
 
         val users = listOf(
             user(wolfId, "Wolf"),
@@ -234,6 +237,7 @@ class DayPhaseResultRevealTest {
         whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(playerList)
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf(victimId))
 
         val users = listOf(
             user(wolfId, "Wolf"),

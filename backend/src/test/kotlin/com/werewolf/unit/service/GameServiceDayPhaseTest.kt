@@ -41,6 +41,9 @@ class GameServiceDayPhaseTest {
     @Mock lateinit var audioReplayCache: AudioReplayCache
     @Mock lateinit var hostTimerService: HostTimerService
     @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
+    @Mock lateinit var creditTransactionRepository: CreditTransactionRepository
+    @Mock lateinit var walletService: com.werewolf.service.WalletService
+    @Mock lateinit var perkService: com.werewolf.service.PerkService
     @InjectMocks lateinit var gameService: GameService
 
     private val gameId = 1
@@ -77,6 +80,11 @@ class GameServiceDayPhaseTest {
     fun setupCommon() {
         whenever(roomRepository.findById(1)).thenReturn(Optional.of(room()))
         whenever(hostTimerService.snapshot(any())).thenReturn(TimerSnapshot(0L, 0L, false))
+        // The mocked orchestrator delegates to the real (static) kill rules so
+        // every nightResult scenario below still exercises the actual logic.
+        org.mockito.Mockito.lenient()
+            .`when`(nightOrchestrator.computePendingKills(eq(gameId), any()))
+            .thenAnswer { NightOrchestrator.computeKills(it.getArgument(1)) }
     }
 
     private fun setupGameAndPlayers(game: Game, players: List<GamePlayer>, users: List<User>) {
