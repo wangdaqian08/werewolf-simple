@@ -49,6 +49,13 @@ const router = createRouter({
       component: () => import('@/views/ResultView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      // Stripe Checkout success/cancel redirect target
+      path: '/pay/result',
+      name: 'pay-result',
+      component: () => import('@/views/PayResultView.vue'),
+      meta: { requiresAuth: true },
+    },
     // ── Dev-only routes (tree-shaken out of production builds) ────────────────
     ...(import.meta.env.DEV
       ? [

@@ -182,7 +182,20 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
     fun markCompletedIfCreated(orderId: Int): Int
 }
 
-interface PaymentEventRepository : JpaRepository<PaymentEvent, String>
+interface PaymentEventRepository : JpaRepository<PaymentEvent, String> {
+    /**
+     * Webhook event dedup, insert-first: 1 = first delivery, 0 = duplicate
+     * (Stripe retries). ON CONFLICT DO NOTHING for the same reason as
+     * GameSettlementRepository.tryInsert — no exception, no poisoned tx.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(
+        value = "INSERT INTO payment_events (stripe_event_id, event_type, received_at) " +
+            "VALUES (:eventId, :eventType, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING",
+        nativeQuery = true,
+    )
+    fun tryInsert(eventId: String, eventType: String): Int
+}
 
 interface GameSettlementRepository : JpaRepository<GameSettlement, Int> {
     /**

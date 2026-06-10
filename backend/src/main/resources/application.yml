@@ -41,6 +41,11 @@ app:
       app-secret: ${WECHAT_APP_SECRET:}
   cors:
     allowed-origins: "*"
+  payment:
+    frontend-base-url: ${FRONTEND_BASE_URL:https://www.youplay123.online}
+    # Test-mode keys; empty default disables checkout (503) rather than failing boot
+    stripe-secret-key: ${STRIPE_SECRET_KEY:}
+    stripe-webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
 
 server:
   port: 8080

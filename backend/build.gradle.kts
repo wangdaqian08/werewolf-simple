@@ -46,6 +46,9 @@ dependencies {
     // Flyway (PostgreSQL support is built into flyway-core for Flyway 9.x / Spring Boot 3.2.x)
     implementation("org.flywaydb:flyway-core")
 
+    // Stripe (credit purchases — Checkout sessions + webhook fulfillment)
+    implementation("com.stripe:stripe-java:25.13.0")
+
     // JWT
     implementation("io.jsonwebtoken:jjwt-api:$jjwtVersion")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:$jjwtVersion")
