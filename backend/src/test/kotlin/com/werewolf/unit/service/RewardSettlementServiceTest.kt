@@ -104,6 +104,14 @@ class RewardSettlementServiceTest {
     }
 
     @Test
+    fun `losing wolf on a day-1 finish still earns one day's worth (coerceAtLeast 1)`() {
+        // diedDay null + finalDay 1 → 4 × 1 = 4, never 0.
+        stub(listOf(player("w1", PlayerRole.WEREWOLF)), finalDay = 1)
+        service.settle(gameId, WinnerSide.VILLAGER)
+        verify(walletService).credit(eq("w1"), eq(4), eq(CreditTxType.GAME_REWARD), eq(gameId), anyOrNull(), anyOrNull(), anyOrNull())
+    }
+
+    @Test
     fun `second settle is a no-op (insert-first guard)`() {
         whenever(gameSettlementRepository.tryInsert(gameId)).thenReturn(0)
         service.settle(gameId, WinnerSide.VILLAGER)

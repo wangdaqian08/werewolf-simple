@@ -245,6 +245,12 @@ class FullGameCycleTest {
         rewardSettlementService.settle(gameId, WinnerSide.WEREWOLF)
         assertThat(creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD))
             .hasSize(rewardRows.size)
+
+        // diedDay is stamped on the night-killed villager (drives wolf reward
+        // scaling on the losing side) and left null for survivors.
+        val killed = players.first { it.userId == villagerTarget.userId }
+        assertThat(killed.diedDay).isEqualTo(1)
+        assertThat(players.first { it.role == PlayerRole.WEREWOLF }.diedDay).isNull()
     }
 
     /**

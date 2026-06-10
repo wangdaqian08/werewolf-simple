@@ -85,4 +85,34 @@ describe('roomStore', () => {
     expect(store.room?.players[1]?.status).toBe('NOT_READY') // alice
     expect(store.room?.players[2]?.status).toBe('READY') // bob (was already READY)
   })
+
+  it('updatePerkActivations() replaces the activation list (PERK_UPDATE broadcast)', () => {
+    const store = useRoomStore()
+    store.setRoom(freshRoom())
+    store.updatePerkActivations([
+      { userId: 'u2', perkCode: 'NIGHT1_IMMUNITY', perkName: 'First Night Immunity' },
+    ])
+    expect(store.room?.perkActivations).toHaveLength(1)
+    expect(store.room?.perkActivations?.[0]?.userId).toBe('u2')
+    // Player list is untouched by a perk update.
+    expect(store.room?.players).toHaveLength(3)
+  })
+
+  it('updatePerkActivations([]) clears activations (e.g. after a withdraw)', () => {
+    const store = useRoomStore()
+    store.setRoom(freshRoom())
+    store.updatePerkActivations([
+      { userId: 'u2', perkCode: 'NIGHT1_IMMUNITY', perkName: 'First Night Immunity' },
+    ])
+    store.updatePerkActivations([])
+    expect(store.room?.perkActivations).toEqual([])
+  })
+
+  it('updatePerkActivations() is a no-op when there is no room', () => {
+    const store = useRoomStore()
+    store.updatePerkActivations([
+      { userId: 'u2', perkCode: 'NIGHT1_IMMUNITY', perkName: 'First Night Immunity' },
+    ])
+    expect(store.room).toBeNull()
+  })
 })

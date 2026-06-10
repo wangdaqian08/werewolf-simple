@@ -23,9 +23,17 @@ vi.mock('@/services/userService', () => ({
   },
 }))
 
+// userStore.refreshWallet() calls walletService — mock it so no real HTTP.
+vi.mock('@/services/walletService', () => ({
+  walletService: {
+    getWallet: vi.fn(),
+  },
+}))
+
 // Re-seed userService mocks each test so JWT `exp` is computed at test time
 // (avoids fixtures that "expire" if the suite is slow).
 import { userService } from '@/services/userService'
+import { walletService } from '@/services/walletService'
 
 describe('userStore', () => {
   beforeEach(() => {
@@ -52,6 +60,8 @@ describe('userStore', () => {
         avatarUrl: 'https://thirdwx.qlogo.cn/x.jpg',
       },
     })
+    vi.mocked(walletService.getWallet).mockReset()
+    vi.mocked(walletService.getWallet).mockResolvedValue({ balance: 0, recent: [] })
   })
 
   it('starts logged out when localStorage is empty', () => {
@@ -259,5 +269,62 @@ describe('userStore', () => {
     expect(store.isLoggedIn).toBe(false)
     expect(localStorage.getItem('jwt')).toBeNull()
     expect(vi.mocked(userService.logout)).not.toHaveBeenCalled()
+  })
+
+  // ── Credits / wallet ─────────────────────────────────────────────────────
+
+  it('isGuest is true for a guest-prefixed userId', async () => {
+    vi.mocked(userService.login).mockResolvedValue({
+      token: makeJwt(FUTURE),
+      user: { userId: 'guest:bob', nickname: 'Bob' },
+    })
+    const store = useUserStore()
+    await store.login('Bob')
+    expect(store.isGuest).toBe(true)
+  })
+
+  it('isGuest is false for an OAuth userId', async () => {
+    const store = useUserStore()
+    await store.loginWithCode('google', 'code')
+    expect(store.userId).toBe('google:abc')
+    expect(store.isGuest).toBe(false)
+  })
+
+  it('credits is null until refreshWallet resolves, then holds the balance', async () => {
+    const store = useUserStore()
+    expect(store.credits).toBeNull()
+    await store.login('TestUser')
+    vi.mocked(walletService.getWallet).mockResolvedValue({ balance: 500, recent: [] })
+    await store.refreshWallet()
+    expect(store.credits).toBe(500)
+  })
+
+  it('refreshWallet does nothing (and clears credits) when not logged in', async () => {
+    const store = useUserStore()
+    await store.refreshWallet()
+    expect(store.credits).toBeNull()
+    expect(vi.mocked(walletService.getWallet)).not.toHaveBeenCalled()
+  })
+
+  it('refreshWallet swallows errors and leaves the last known balance', async () => {
+    const store = useUserStore()
+    await store.login('TestUser')
+    vi.mocked(walletService.getWallet).mockResolvedValue({ balance: 100, recent: [] })
+    await store.refreshWallet()
+    expect(store.credits).toBe(100)
+    // Backend hiccups on the next refresh — chip keeps the old value, no throw.
+    vi.mocked(walletService.getWallet).mockRejectedValue(new Error('network'))
+    await store.refreshWallet()
+    expect(store.credits).toBe(100)
+  })
+
+  it('clearSession resets credits to null', async () => {
+    const store = useUserStore()
+    await store.loginWithCode('google', 'code')
+    vi.mocked(walletService.getWallet).mockResolvedValue({ balance: 500, recent: [] })
+    await store.refreshWallet()
+    expect(store.credits).toBe(500)
+    store.clearSession()
+    expect(store.credits).toBeNull()
   })
 })
