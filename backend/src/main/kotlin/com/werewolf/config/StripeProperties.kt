@@ -15,6 +15,10 @@ data class PaymentProperties(
     /**
      * Feature flag for the Stripe sandbox integration tests
      * (StripeSandboxIntegrationTest). Never true in prod.
+     *
+     * The JUnit gate reads the STRIPE_SANDBOX_TESTS_ENABLED env var
+     * directly (@EnabledIfEnvironmentVariable); this property mirrors it
+     * so the switch is visible in config, not buried in a test annotation.
      */
     val sandboxTestsEnabled: Boolean = false,
 )
