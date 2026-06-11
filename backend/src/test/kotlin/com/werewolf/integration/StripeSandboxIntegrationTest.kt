@@ -1,9 +1,11 @@
 package com.werewolf.integration
 
+import com.stripe.exception.StripeException
 import com.stripe.model.Event
 import com.stripe.model.checkout.Session
 import com.stripe.param.EventListParams
 import com.werewolf.config.PaymentProperties
+import com.werewolf.model.PaymentOrder
 import com.werewolf.model.PaymentOrderStatus
 import com.werewolf.model.Product
 import com.werewolf.model.User
@@ -49,6 +51,12 @@ class StripeSandboxIntegrationTest {
         ) { "STRIPE_SANDBOX_SECRET must be a Stripe TEST-mode key (sk_test_/rk_test_)" }
     }
 
+    private fun orderFor(userId: String): PaymentOrder {
+        val orders = paymentOrderRepository.findAll().filter { it.userId == userId }
+        check(orders.size == 1) { "expected exactly 1 order for $userId, found ${orders.size}" }
+        return orders.first()
+    }
+
     private fun seedUserAndProduct(): Pair<String, Product> {
         val userId = "google:sandbox-${UUID.randomUUID()}"
         userRepository.save(User(userId = userId, nickname = "SandboxBuyer"))
@@ -67,7 +75,7 @@ class StripeSandboxIntegrationTest {
         val url = paymentService.createCheckout(userId, product.productKey)
 
         assertThat(url).contains("checkout.stripe.com")
-        val order = paymentOrderRepository.findAll().single { it.userId == userId }
+        val order = orderFor(userId)
         val sessionId = order.stripeSessionId ?: error("order has no session id")
 
         val session = Session.retrieve(sessionId)
@@ -79,14 +87,18 @@ class StripeSandboxIntegrationTest {
         assertThat(session.metadata["userId"]).isEqualTo(userId)
         assertThat(session.successUrl).startsWith(props.frontendBaseUrl)
 
-        session.expire() // tidy up the sandbox
+        // Tidy up the sandbox — cleanup only, must never fail the test.
+        try {
+            session.expire()
+        } catch (_: StripeException) {
+        }
     }
 
     @Test
     fun `a real checkout_session_expired event round-trips through handleEvent`() {
         val (userId, product) = seedUserAndProduct()
         paymentService.createCheckout(userId, product.productKey)
-        val order = paymentOrderRepository.findAll().single { it.userId == userId }
+        val order = orderFor(userId)
         val sessionId = order.stripeSessionId ?: error("order has no session id")
 
         Session.retrieve(sessionId).expire()
