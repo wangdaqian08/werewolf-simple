@@ -47,7 +47,19 @@ test('buy the starter pack with the 4242 test card → wallet credited via real 
   // 4. Real Stripe hosted checkout. Fresh email each run so Stripe never
   //    routes us into a returning-Link-user OTP screen.
   await page.waitForURL(/checkout\.stripe\.com/, { timeout: 45_000 })
+  // Fail fast with a clear message if Stripe's form DOM drifts.
+  await page.waitForSelector('input[name="cardNumber"]', { state: 'visible', timeout: 20_000 })
   await page.fill('input[name="email"]', `payment-e2e-${Date.now()}@example.com`)
+  // ADAPTATION (seen on the real page 2026-06-11): Stripe pre-CHECKS the
+  // "Save my information for faster checkout" Link opt-in immediately after
+  // the email field, which reveals a REQUIRED phone-number field — submitting
+  // with it empty fails client-side validation and never navigates. Uncheck
+  // early (before card fields) so the phone field disappears before we type
+  // card details and we never enroll the throwaway email in Link.
+  const linkOptIn = page.locator('input[name="enableStripePass"]')
+  if ((await linkOptIn.count()) > 0 && (await linkOptIn.isChecked())) {
+    await linkOptIn.uncheck()
+  }
   await page.fill('input[name="cardNumber"]', '4242 4242 4242 4242')
   await page.fill('input[name="cardExpiry"]', '12 / 34')
   await page.fill('input[name="cardCvc"]', '123')
@@ -56,20 +68,11 @@ test('buy the starter pack with the 4242 test card → wallet credited via real 
   // deterministic on both local (AU) and CI (US) machines.
   await page.selectOption('select[name="billingCountry"]', 'US')
   await page.fill('input[name="billingPostalCode"]', '12345')
-  // ADAPTATION (seen on the real page 2026-06-11): Stripe pre-CHECKS the
-  // "Save my information for faster checkout" Link opt-in, which reveals a
-  // REQUIRED phone-number field — submitting with it empty fails client-side
-  // validation and never navigates. Uncheck the opt-in so the phone field
-  // disappears and we never enroll the throwaway email in Link.
-  const linkOptIn = page.locator('input[name="enableStripePass"]')
-  if ((await linkOptIn.count()) > 0 && (await linkOptIn.isChecked())) {
-    await linkOptIn.uncheck()
-  }
   await page.click('button[type="submit"]')
 
   // 5. Stripe redirects back; PayResultView polls the order until the
   //    webhook fulfills it server-side (success page is never trusted).
-  await page.waitForURL(/\/pay\/result\?status=success/, { timeout: 90_000 })
+  await page.waitForURL(/\/pay\/result\?.*status=success.*orderNo=/, { timeout: 90_000 })
   await expect(page.getByTestId('pay-credits')).toHaveText(/\+100/, { timeout: 45_000 })
 
   // 6. Authoritative check: balance from the backend wallet API.
@@ -82,5 +85,6 @@ test('buy the starter pack with the 4242 test card → wallet credited via real 
 
   // 7. Backend log error scan (six-design-principles).
   const log = fs.readFileSync('/tmp/werewolf-payment-backend.log', 'utf-8')
-  expect(log).not.toMatch(/ERROR.*\[payment\]|\[payment\].*(error|cannot deserialize)/i)
+  // Any ERROR-level [payment] line fails the run (cannot-deserialize etc. all log at ERROR).
+  expect(log).not.toMatch(/^.*\bERROR\b.*\[payment\]/im)
 })
