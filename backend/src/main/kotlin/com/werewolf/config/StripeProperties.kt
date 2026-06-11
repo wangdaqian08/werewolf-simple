@@ -12,4 +12,9 @@ data class PaymentProperties(
     val frontendBaseUrl: String = "https://www.youplay123.online",
     val stripeSecretKey: String = "",
     val stripeWebhookSecret: String = "",
+    /**
+     * Feature flag for the Stripe sandbox integration tests
+     * (StripeSandboxIntegrationTest). Never true in prod.
+     */
+    val sandboxTestsEnabled: Boolean = false,
 )

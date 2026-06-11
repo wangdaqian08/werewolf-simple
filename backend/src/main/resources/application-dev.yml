@@ -32,6 +32,8 @@ app:
     # Safe here because SecurityConfig sets allowCredentials=false; no cookies/session
     # cross the boundary, only Authorization-header JWT. Prod uses ${FRONTEND_ORIGIN}.
     allowed-origins: "*"
+  payment:
+    sandbox-tests-enabled: ${STRIPE_SANDBOX_TESTS_ENABLED:false}
 
 logging:
   level:

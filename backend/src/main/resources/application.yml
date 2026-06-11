@@ -46,6 +46,8 @@ app:
     # Test-mode keys; empty default disables checkout (503) rather than failing boot
     stripe-secret-key: ${STRIPE_SECRET_KEY:}
     stripe-webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    # Feature flag: lets the Stripe sandbox integration tests run (CI/local only)
+    sandbox-tests-enabled: ${STRIPE_SANDBOX_TESTS_ENABLED:false}
 
 server:
   port: 8080
