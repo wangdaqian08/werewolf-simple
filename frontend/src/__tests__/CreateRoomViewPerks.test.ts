@@ -37,8 +37,12 @@ async function mountCreateRoom() {
 describe('CreateRoomView perks toggle', () => {
   beforeEach(() => {
     h.createRoomMock.mockReset().mockResolvedValue({
-      roomId: '1', roomCode: '123', hostId: 'u1', status: 'WAITING',
-      config: { totalPlayers: 9, roles: [] }, players: [],
+      roomId: '1',
+      roomCode: '123',
+      hostId: 'u1',
+      status: 'WAITING',
+      config: { totalPlayers: 9, roles: [] },
+      players: [],
     })
   })
   afterEach(() => vi.clearAllMocks())
@@ -60,7 +64,9 @@ describe('CreateRoomView perks toggle', () => {
   it('flips off on click and sends perksAllowed:false', async () => {
     const wrapper = await mountCreateRoom()
     await wrapper.find('[data-testid="perksAllowed-toggle"]').trigger('click')
-    expect(wrapper.find('[data-testid="perksAllowed-toggle"]').attributes('data-perks-allowed')).toBe('false')
+    expect(
+      wrapper.find('[data-testid="perksAllowed-toggle"]').attributes('data-perks-allowed'),
+    ).toBe('false')
 
     await wrapper.find('button.btn-primary').trigger('click')
     await flushPromises()

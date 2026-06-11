@@ -270,7 +270,10 @@ describe('ResultView - new dashboard-style gameover screen', () => {
       phase: 'GAME_OVER',
       dayNumber: 3,
       winner: 'VILLAGER',
-      players: [makePlayer(1, 'user-1', 'Alice', 'VILLAGER'), makePlayer(3, 'user-3', 'Bob', 'WEREWOLF')],
+      players: [
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER'),
+        makePlayer(3, 'user-3', 'Bob', 'WEREWOLF'),
+      ],
       events: [],
       settlement: {
         myEarned: 50,

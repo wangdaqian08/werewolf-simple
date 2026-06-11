@@ -80,11 +80,7 @@
       </section>
 
       <!-- Perk panel: catalog + activation (visible pre-game when host allows perks) -->
-      <section
-        v-if="perksEnabled && perks.length"
-        class="perk-panel"
-        data-testid="perk-panel"
-      >
+      <section v-if="perksEnabled && perks.length" class="perk-panel" data-testid="perk-panel">
         <div class="perk-panel-title">
           道具 / Perks
           <span v-if="userStore.credits !== null" class="perk-balance"

@@ -13,7 +13,12 @@ import { useRoomStore } from '@/stores/roomStore'
 import type { Perk, PerkActivation, Room, RoomPlayer } from '@/types'
 
 const h = vi.hoisted(() => {
-  const fakeClient = { onConnect: null as null | (() => void), active: true, activate: vi.fn(), forceDisconnect: vi.fn() }
+  const fakeClient = {
+    onConnect: null as null | (() => void),
+    active: true,
+    activate: vi.fn(),
+    forceDisconnect: vi.fn(),
+  }
   return {
     fakeClient,
     getPerksMock: vi.fn(),
@@ -54,20 +59,32 @@ function makeJwt(expSecondsFromNow: number): string {
 }
 
 const CATALOG: Perk[] = [
-  { perkCode: 'NIGHT1_IMMUNITY', name: 'First Night Immunity', description: 'Safe night 1', priceCredits: 30 },
+  {
+    perkCode: 'NIGHT1_IMMUNITY',
+    name: 'First Night Immunity',
+    description: 'Safe night 1',
+    priceCredits: 30,
+  },
 ]
 
 function rp(userId: string, seatIndex: number, opts: Partial<RoomPlayer> = {}): RoomPlayer {
   return { userId, nickname: userId, seatIndex, status: 'READY', isHost: false, ...opts }
 }
 
-function room(opts: { perksAllowed?: boolean; activations?: PerkActivation[]; u2Ready?: boolean } = {}): Room {
+function room(
+  opts: { perksAllowed?: boolean; activations?: PerkActivation[]; u2Ready?: boolean } = {},
+): Room {
   return {
     roomId: '1',
     roomCode: '123',
     hostId: 'u-host',
     status: 'WAITING',
-    config: { totalPlayers: 4, wolfCount: 2, roles: ['WEREWOLF', 'VILLAGER'], perksAllowed: opts.perksAllowed },
+    config: {
+      totalPlayers: 4,
+      wolfCount: 2,
+      roles: ['WEREWOLF', 'VILLAGER'],
+      perksAllowed: opts.perksAllowed,
+    },
     players: [
       rp('u-host', 1, { nickname: 'Host', isHost: true }),
       rp('u2', 2, { nickname: 'Alice', status: opts.u2Ready === false ? 'NOT_READY' : 'READY' }),
@@ -160,7 +177,9 @@ describe('RoomView perk panel', () => {
   })
 
   it('a held perk shows Withdraw for the holder and calls withdrawPerk', async () => {
-    const activations = [{ userId: 'u2', perkCode: 'NIGHT1_IMMUNITY', perkName: 'First Night Immunity' }]
+    const activations = [
+      { userId: 'u2', perkCode: 'NIGHT1_IMMUNITY', perkName: 'First Night Immunity' },
+    ]
     const wrapper = await mountRoom('u2', room({ activations }))
     const withdrawBtn = wrapper.find('[data-testid="perk-withdraw-btn"]')
     expect(withdrawBtn.exists()).toBe(true)
@@ -171,7 +190,9 @@ describe('RoomView perk panel', () => {
   })
 
   it('shows a Taken indicator and disables Activate for non-holders, and badges the holder seat', async () => {
-    const activations = [{ userId: 'u2', perkCode: 'NIGHT1_IMMUNITY', perkName: 'First Night Immunity' }]
+    const activations = [
+      { userId: 'u2', perkCode: 'NIGHT1_IMMUNITY', perkName: 'First Night Immunity' },
+    ]
     const wrapper = await mountRoom('u-host', room({ activations }))
     // Non-holder host sees the perk as taken by Alice and cannot activate.
     expect(wrapper.find('[data-testid="perk-panel"]').text()).toContain('Alice')

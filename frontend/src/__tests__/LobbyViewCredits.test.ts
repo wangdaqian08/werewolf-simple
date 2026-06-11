@@ -22,7 +22,11 @@ vi.mock('@/services/userService', () => ({
   },
 }))
 vi.mock('@/services/roomService', () => ({
-  roomService: { getActiveRoom: vi.fn().mockResolvedValue(null), joinRoom: vi.fn(), createRoom: vi.fn() },
+  roomService: {
+    getActiveRoom: vi.fn().mockResolvedValue(null),
+    joinRoom: vi.fn(),
+    createRoom: vi.fn(),
+  },
 }))
 vi.mock('@/services/walletService', () => ({ walletService: { getWallet: h.getWalletMock } }))
 

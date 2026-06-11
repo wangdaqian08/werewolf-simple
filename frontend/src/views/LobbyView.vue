@@ -63,7 +63,8 @@
           >
             <span class="buy-name">{{ p.name }}</span>
             <span class="buy-credits"
-              >◈ {{ p.credits }}<template v-if="p.bonusCredits"> +{{ p.bonusCredits }}</template></span
+              >◈ {{ p.credits
+              }}<template v-if="p.bonusCredits"> +{{ p.bonusCredits }}</template></span
             >
             <span class="buy-price">${{ (p.priceCents / 100).toFixed(2) }}</span>
           </button>

@@ -10,7 +10,10 @@ vi.mock('@/services/http', () => ({
 
 import http from '@/services/http'
 
-const mockedHttp = http as unknown as { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn> }
+const mockedHttp = http as unknown as {
+  get: ReturnType<typeof vi.fn>
+  post: ReturnType<typeof vi.fn>
+}
 
 /**
  * Wire-format contracts for the perk endpoints. roomId is coerced to Number
@@ -26,7 +29,12 @@ describe('roomService perk endpoints', () => {
 
   it('getPerks GETs /perks and returns the catalog', async () => {
     const catalog = [
-      { perkCode: 'NIGHT1_IMMUNITY', name: 'First Night Immunity', description: 'Safe night 1', priceCredits: 30 },
+      {
+        perkCode: 'NIGHT1_IMMUNITY',
+        name: 'First Night Immunity',
+        description: 'Safe night 1',
+        priceCredits: 30,
+      },
     ]
     mockedHttp.get.mockResolvedValueOnce({ data: catalog })
 
