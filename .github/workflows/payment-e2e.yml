@@ -1,0 +1,87 @@
+name: Payment E2E (Stripe sandbox)
+
+on:
+  schedule:
+    - cron: '17 16 * * *' # daily, ~02:17 AEST
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/payment-e2e.yml'
+      - 'frontend/e2e/payment/**'
+      - 'frontend/playwright.payment.config.ts'
+      - 'frontend/scripts/run-payment-e2e.sh'
+
+jobs:
+  payment-e2e:
+    name: Stripe sandbox payment flow
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('backend/**/*.gradle.kts', 'backend/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Install Playwright OS dependencies (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+        working-directory: frontend
+
+      - name: Install stripe-cli
+        run: |
+          curl -fsSL https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" | sudo tee /etc/apt/sources.list.d/stripe.list
+          sudo apt-get update -qq && sudo apt-get install -y stripe
+          stripe --version
+
+      - name: Payment E2E
+        env:
+          STRIPE_SANDBOX_SECRET: ${{ secrets.STRIPE_SANDBOX_SECRET }}
+        run: npm run test:e2e:payment
+        working-directory: frontend
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payment-e2e-artifacts
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            /tmp/werewolf-payment-backend.log
+            /tmp/stripe-listen.log
+          retention-days: 7
