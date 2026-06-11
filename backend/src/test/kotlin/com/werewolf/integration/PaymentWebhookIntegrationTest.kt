@@ -26,6 +26,8 @@ import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import java.util.UUID
 
+private const val TEST_WEBHOOK_SECRET = "whsec_test_secret"
+
 /**
  * Webhook fulfillment idempotency on the real H2 schema: duplicate event ids
  * are dropped, duplicate fulfillment of the same order is a no-op, and the
@@ -34,7 +36,7 @@ import java.util.UUID
  */
 @SpringBootTest(
     webEnvironment = WebEnvironment.RANDOM_PORT,
-    properties = ["app.payment.stripe-webhook-secret=whsec_test_secret"],
+    properties = ["app.payment.stripe-webhook-secret=" + TEST_WEBHOOK_SECRET],
 )
 @ActiveProfiles("test")
 class PaymentWebhookIntegrationTest {
@@ -164,7 +166,7 @@ class PaymentWebhookIntegrationTest {
 
         // Same HMAC scheme Stripe uses: v1 = HMAC-SHA256(secret, "<ts>.<payload>")
         val ts = System.currentTimeMillis() / 1000
-        val signature = Webhook.Util.computeHmacSha256("whsec_test_secret", "$ts.$payload")
+        val signature = Webhook.Util.computeHmacSha256(TEST_WEBHOOK_SECRET, "$ts.$payload")
         val headers = HttpHeaders().also {
             it.contentType = MediaType.APPLICATION_JSON
             it.set("Stripe-Signature", "t=$ts,v1=$signature")
@@ -176,8 +178,9 @@ class PaymentWebhookIntegrationTest {
 
         assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(walletService.balance(userId)).isEqualTo(100)
-        assertThat(paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow().status)
-            .isEqualTo(PaymentOrderStatus.COMPLETED)
+        val fulfilled = paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow()
+        assertThat(fulfilled.status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(fulfilled.stripePaymentIntentId).isEqualTo("pi_signed_123")
     }
 
     @Test
@@ -200,4 +203,5 @@ class PaymentWebhookIntegrationTest {
         )
         assertThat(resp.statusCode).isEqualTo(HttpStatus.FORBIDDEN)
     }
+
 }
