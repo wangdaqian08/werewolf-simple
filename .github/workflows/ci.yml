@@ -58,6 +58,10 @@ jobs:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/werewolf_test
           SPRING_DATASOURCE_USERNAME: werewolf
           SPRING_DATASOURCE_PASSWORD: werewolf
+          # Sandbox tests run only when the secret exists (fork PRs get no
+          # secrets → flag stays false → StripeSandboxIntegrationTest skips cleanly).
+          STRIPE_SANDBOX_TESTS_ENABLED: ${{ secrets.STRIPE_SANDBOX_SECRET != '' && 'true' || 'false' }}
+          STRIPE_SANDBOX_SECRET: ${{ secrets.STRIPE_SANDBOX_SECRET }}
 
   # ── Frontend ──────────────────────────────────────────────────────────────────
   checks:
