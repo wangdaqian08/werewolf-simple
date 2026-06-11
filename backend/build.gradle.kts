@@ -47,7 +47,7 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
 
     // Stripe (credit purchases — Checkout sessions + webhook fulfillment)
-    implementation("com.stripe:stripe-java:25.13.0")
+    implementation("com.stripe:stripe-java:33.0.0")
 
     // JWT
     implementation("io.jsonwebtoken:jjwt-api:$jjwtVersion")
