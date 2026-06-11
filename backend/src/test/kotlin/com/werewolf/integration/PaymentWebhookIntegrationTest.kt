@@ -3,6 +3,7 @@ package com.werewolf.integration
 import com.stripe.Stripe
 import com.stripe.model.Event
 import com.stripe.net.ApiResource
+import com.stripe.net.Webhook
 import com.werewolf.model.PaymentOrder
 import com.werewolf.model.PaymentOrderStatus
 import com.werewolf.model.Product
@@ -31,7 +32,10 @@ import java.util.UUID
  * wallet is credited exactly once. Events are built from raw Stripe JSON
  * (same shape `stripe trigger checkout.session.completed` delivers).
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = WebEnvironment.RANDOM_PORT,
+    properties = ["app.payment.stripe-webhook-secret=whsec_test_secret"],
+)
 @ActiveProfiles("test")
 class PaymentWebhookIntegrationTest {
 
@@ -136,6 +140,44 @@ class PaymentWebhookIntegrationTest {
             Map::class.java,
         )
         assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+    }
+
+    @Test
+    fun `correctly signed webhook is accepted and fulfills the order`() {
+        val (userId, order) = seedOrder()
+        val sessionId = order.stripeSessionId ?: error("no session id")
+        val payload = """
+            {
+              "id": "evt_signed_$sessionId",
+              "object": "event",
+              "api_version": "${Stripe.API_VERSION}",
+              "type": "checkout.session.completed",
+              "data": {
+                "object": {
+                  "id": "$sessionId",
+                  "object": "checkout.session",
+                  "payment_intent": "pi_signed_123"
+                }
+              }
+            }
+        """.trimIndent()
+
+        // Same HMAC scheme Stripe uses: v1 = HMAC-SHA256(secret, "<ts>.<payload>")
+        val ts = System.currentTimeMillis() / 1000
+        val signature = Webhook.Util.computeHmacSha256("whsec_test_secret", "$ts.$payload")
+        val headers = HttpHeaders().also {
+            it.contentType = MediaType.APPLICATION_JSON
+            it.set("Stripe-Signature", "t=$ts,v1=$signature")
+        }
+
+        val resp = restTemplate.postForEntity(
+            "/api/payment/webhook", HttpEntity(payload, headers), Map::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(walletService.balance(userId)).isEqualTo(100)
+        assertThat(paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow().status)
+            .isEqualTo(PaymentOrderStatus.COMPLETED)
     }
 
     @Test
