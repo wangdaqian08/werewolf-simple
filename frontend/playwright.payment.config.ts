@@ -36,7 +36,7 @@ export default defineConfig({
       // Dummy GOOGLE_* values keep dev's oauth2 placeholders resolvable
       // (the e2e profile excludes the OAuth2 client auto-config anyway).
       command:
-        "bash -c 'cd ../backend && SPRING_PROFILES_ACTIVE=dev,e2e GOOGLE_CLIENT_ID=dummy GOOGLE_CLIENT_SECRET=dummy STRIPE_SECRET_KEY=$STRIPE_SANDBOX_SECRET STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET FRONTEND_BASE_URL=http://localhost:5174 ./gradlew bootRun -q --console=plain 2>&1 | tee /tmp/werewolf-payment-backend.log'",
+        'bash -c \': "${STRIPE_SANDBOX_SECRET:?not set — run via npm run test:e2e:payment}" "${STRIPE_WEBHOOK_SECRET:?not set — run via npm run test:e2e:payment}" && cd ../backend && SPRING_PROFILES_ACTIVE=dev,e2e GOOGLE_CLIENT_ID=dummy GOOGLE_CLIENT_SECRET=dummy STRIPE_SECRET_KEY=$STRIPE_SANDBOX_SECRET STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET FRONTEND_BASE_URL=http://localhost:5174 ./gradlew bootRun -q --console=plain 2>&1 | tee /tmp/werewolf-payment-backend.log\'',
       url: 'http://localhost:8080/api/health',
       timeout: 120_000,
       // Never reuse: a backend booted by the regular real config lacks the
