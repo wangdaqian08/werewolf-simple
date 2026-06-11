@@ -15,6 +15,9 @@ jobs:
   payment-e2e:
     name: Stripe sandbox payment flow
     runs-on: ubuntu-latest
+    # Fork PRs receive no secrets — skip instead of failing red on the
+    # launcher's STRIPE_SANDBOX_SECRET guard.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
 
