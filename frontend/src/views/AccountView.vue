@@ -67,7 +67,12 @@
               </div>
               <div class="row-sub">
                 <span>◈{{ perk.pricePaid }}</span>
-                <span>{{ fmtDate(perk.createdAt) }}</span>
+                <span
+                  >{{ fmtDate(perk.createdAt)
+                  }}<template v-if="perk.settledAt">
+                    · 结算 {{ fmtDate(perk.settledAt) }}</template
+                  ></span
+                >
               </div>
             </li>
           </ul>
@@ -91,7 +96,7 @@
                 </div>
                 <div class="row-sub">
                   <span>
-                    ${{ (order.amountCents / 100).toFixed(2) }} {{ order.currency.toUpperCase() }} ·
+                    {{ fmtMoney(order) }} ·
                     {{ ORDER_STATUS_LABELS[order.status] }}
                   </span>
                   <span>{{ fmtDate(order.createdAt) }}</span>
@@ -157,6 +162,13 @@ const balanceText = computed(() => wallet.value?.balance ?? userStore.credits ??
 
 function signed(amount: number): string {
   return amount >= 0 ? `+${amount}` : `−${Math.abs(amount)}`
+}
+
+function fmtMoney(order: { amountCents: number; currency: string }): string {
+  const amount = (order.amountCents / 100).toFixed(2)
+  return order.currency.toLowerCase() === 'usd'
+    ? `$${amount}`
+    : `${amount} ${order.currency.toUpperCase()}`
 }
 
 function fmtDate(iso: string): string {

@@ -50,7 +50,10 @@ const WALLET: Wallet = {
   ],
 }
 
-function perk(status: MyPerkActivation['status']): MyPerkActivation {
+function perk(
+  status: MyPerkActivation['status'],
+  settledAt: string | null = null,
+): MyPerkActivation {
   return {
     perkCode: 'NIGHT1_IMMUNITY',
     perkName: '首夜免死',
@@ -59,7 +62,7 @@ function perk(status: MyPerkActivation['status']): MyPerkActivation {
     roomId: 1,
     gameId: 101,
     createdAt: '2026-06-10T20:00:00',
-    settledAt: null,
+    settledAt,
   }
 }
 
@@ -72,6 +75,42 @@ const ORDERS: PaymentOrderSummary[] = [
     currency: 'usd',
     status: 'COMPLETED',
     createdAt: '2026-06-10T19:55:00',
+  },
+  {
+    orderNo: 'WW2',
+    productName: 'Value Pack',
+    credits: 300,
+    amountCents: 999,
+    currency: 'usd',
+    status: 'CREATED',
+    createdAt: '2026-06-09T10:00:00',
+  },
+  {
+    orderNo: 'WW3',
+    productName: 'Big Pack',
+    credits: 700,
+    amountCents: 1999,
+    currency: 'usd',
+    status: 'EXPIRED',
+    createdAt: '2026-06-08T10:00:00',
+  },
+  {
+    orderNo: 'WW4',
+    productName: 'Fail Pack',
+    credits: 100,
+    amountCents: 499,
+    currency: 'usd',
+    status: 'FAILED',
+    createdAt: '2026-06-07T10:00:00',
+  },
+  {
+    orderNo: 'WW5',
+    productName: 'Euro Pack',
+    credits: 100,
+    amountCents: 999,
+    currency: 'eur',
+    status: 'COMPLETED',
+    createdAt: '2026-06-06T10:00:00',
   },
 ]
 
@@ -165,6 +204,50 @@ describe('AccountView', () => {
     // Other sections are unaffected.
     expect(wrapper.find('[data-testid="perk-row"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="order-row"]').exists()).toBe(true)
+  })
+
+  it('renders all four order status labels', async () => {
+    const { wrapper } = await mountAccount()
+    const rows = wrapper.findAll('[data-testid="order-row"]')
+    expect(rows).toHaveLength(5)
+    const texts = rows.map((r) => r.text())
+    expect(texts.some((t) => t.includes('已完成'))).toBe(true)
+    expect(texts.some((t) => t.includes('处理中'))).toBe(true)
+    expect(texts.some((t) => t.includes('已过期'))).toBe(true)
+    expect(texts.some((t) => t.includes('失败'))).toBe(true)
+  })
+
+  it('formats USD orders with $ prefix and non-USD orders with amount + code', async () => {
+    const { wrapper } = await mountAccount()
+    const rows = wrapper.findAll('[data-testid="order-row"]')
+    // First row: USD $4.99
+    expect(rows[0]!.text()).toContain('$4.99')
+    expect(rows[0]!.text()).not.toMatch(/USD/i)
+    // Last row: EUR — no $ prefix, shows code
+    expect(rows[4]!.text()).toContain('9.99 EUR')
+    expect(rows[4]!.text()).not.toMatch(/^\$/)
+  })
+
+  it('ledger rows use amount-neg for debits and amount-pos for credits', async () => {
+    const { wrapper } = await mountAccount()
+    const ledger = wrapper.findAll('[data-testid="ledger-row"]')
+    // First row: PERK_SPEND, amount -30 → amount-neg
+    const debitSpan = ledger[0]!.find('.row-amount')
+    expect(debitSpan.classes()).toContain('amount-neg')
+    // Second row: GAME_REWARD, amount +20 → amount-pos
+    const creditSpan = ledger[1]!.find('.row-amount')
+    expect(creditSpan.classes()).toContain('amount-pos')
+  })
+
+  it('settled perk row shows settledAt date; ACTIVE row does not', async () => {
+    h.getMyPerksMock.mockResolvedValue([
+      perk('CONSUMED', '2026-06-09T22:00:00'),
+      perk('ACTIVE', null),
+    ])
+    const { wrapper } = await mountAccount()
+    const rows = wrapper.findAll('[data-testid="perk-row"]')
+    expect(rows[0]!.text()).toContain('结算')
+    expect(rows[1]!.text()).not.toContain('结算')
   })
 
   it('not logged in: shows the sign-in prompt and fetches nothing', async () => {

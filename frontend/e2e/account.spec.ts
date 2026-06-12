@@ -32,7 +32,25 @@ test('account page renders wallet, perk history and payment history', async ({ p
   await expect(page.getByTestId('perk-row')).toHaveCount(4)
   await expect(page.getByTestId('order-row')).toHaveCount(2)
 
+  // Row content assertions (testid-only, no text selectors).
+  // MOCK_MY_PERKS[2] is VOID, MOCK_MY_PERKS[0] is ACTIVE.
+  await expect(page.getByTestId('perk-row').nth(0)).toContainText('启用中')
+  await expect(page.getByTestId('perk-row').nth(2)).toContainText('未生效')
+  // First order row has its fixture amount and 已完成 status.
+  await expect(page.getByTestId('order-row').first()).toContainText('$9.99')
+  await expect(page.getByTestId('order-row').first()).toContainText('已完成')
+
   // Back returns to the lobby.
   await page.getByTestId('account-back-btn').click()
   await expect(page.getByTestId('account-menu-btn')).toBeVisible()
+})
+
+test('account page shows login prompt when not logged in', async ({ page }) => {
+  // Navigate directly to /account without logging in.
+  await page.goto('/')
+  await page.evaluate(() => localStorage.clear())
+  await page.goto('/account')
+
+  await expect(page.getByTestId('account-login-prompt')).toBeVisible()
+  await expect(page.getByTestId('account-wallet')).not.toBeVisible()
 })
