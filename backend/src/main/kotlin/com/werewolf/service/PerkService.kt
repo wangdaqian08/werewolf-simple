@@ -51,6 +51,24 @@ class PerkService(
         )
     }
 
+    /** Caller's own activation history (most recent 50) for the account page. */
+    @Transactional(readOnly = true)
+    fun myActivations(userId: String): List<Map<String, Any?>> {
+        val names = perkRepository.findAll().associate { it.perkCode to it.name }
+        return perkActivationRepository.findTop50ByUserIdOrderByCreatedAtDesc(userId).map {
+            mapOf(
+                "perkCode" to it.perkCode,
+                "perkName" to (names[it.perkCode] ?: it.perkCode),
+                "status" to it.status.name,
+                "pricePaid" to it.pricePaid,
+                "roomId" to it.roomId,
+                "gameId" to it.gameId,
+                "createdAt" to it.createdAt.toString(),
+                "settledAt" to it.settledAt?.toString(),
+            )
+        }
+    }
+
     @Transactional
     fun activate(userId: String, roomId: Int, perkCode: String) {
         // Pessimistic lock serializes all perk activations for this room —

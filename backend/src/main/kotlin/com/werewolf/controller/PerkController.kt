@@ -20,6 +20,12 @@ class PerkController(private val perkService: PerkService) {
     @GetMapping("/api/perks")
     fun catalog(): ResponseEntity<Any> = ResponseEntity.ok(perkService.catalog())
 
+    @GetMapping("/api/perks/my")
+    fun myActivations(authentication: Authentication): ResponseEntity<Any> {
+        val userId = authentication.principal as String
+        return ResponseEntity.ok(perkService.myActivations(userId))
+    }
+
     @PostMapping("/api/room/perk/activate")
     fun activate(
         @RequestBody body: PerkActionRequest,
