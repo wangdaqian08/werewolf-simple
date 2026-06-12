@@ -33,6 +33,8 @@ import java.time.LocalDateTime
  *     to recreate the room.
  *   - Broadcast DomainEvent.GameOver so any client still on the GameView
  *     auto-routes to the Result screen instead of staring at a frozen UI.
+ *   - RewardSettlementService.settle(gameId, null) runs so perk activations
+ *     bound to the forfeited game are refunded (no rewards — winner is null).
  *
  * Operationally: server restart = forfeit the in-flight round. The lobby
  * survives. This is the documented, conservative recovery — it does not
@@ -45,6 +47,7 @@ class OrphanedGameRecovery(
     private val roomRepository: RoomRepository,
     private val roomPlayerRepository: RoomPlayerRepository,
     private val stompPublisher: StompPublisher,
+    private val rewardSettlementService: RewardSettlementService,
     txManager: PlatformTransactionManager,
 ) {
     private val log = LoggerFactory.getLogger(OrphanedGameRecovery::class.java)
@@ -88,6 +91,10 @@ class OrphanedGameRecovery(
         // case (outcomeTitle "比赛取消 / Game Cancelled") so players don't think
         // someone won.
         gameRepository.save(game)
+
+        // winner == null → no rewards, but perk activations bound to this game
+        // are refunded (per-activation idempotent, same txTemplate transaction).
+        rewardSettlementService.settle(gameId, null)
 
         roomRepository.findById(game.roomId).ifPresent { room ->
             room.status = RoomStatus.WAITING

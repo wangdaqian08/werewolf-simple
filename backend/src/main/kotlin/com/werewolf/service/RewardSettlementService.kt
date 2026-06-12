@@ -20,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional
  * NightOrchestrator.resolveNightKills, SelfDestructService.selfDestruct)
  * inside the game-over transaction; the game_settlements insert-first guard
  * makes duplicate calls a no-op. Cancelled games (winner == null, e.g.
- * OrphanedGameRecovery) are never settled.
+ * OrphanedGameRecovery) never get REWARDS — but perk settlement (refund of
+ * activations that did not take effect) runs on EVERY call, including
+ * cancellations, gated per-activation by PerkSettlementService.
  *
  * Reward formula (amounts from werewolf.rewards config):
  *   winning side          → winBonus
@@ -35,11 +37,16 @@ class RewardSettlementService(
     private val walletService: WalletService,
     private val stompPublisher: StompPublisher,
     private val rewards: RewardProperties,
+    private val perkSettlementService: PerkSettlementService,
 ) {
     private val log = LoggerFactory.getLogger(RewardSettlementService::class.java)
 
     @Transactional(propagation = Propagation.REQUIRED)
     fun settle(gameId: Int, winner: WinnerSide?) {
+        // Perk settlement runs on EVERY call (including winner == null cancellations)
+        // and is per-activation idempotent — independent of the game_settlements guard.
+        perkSettlementService.settleForGame(gameId, cancelled = winner == null)
+
         if (winner == null) return
         if (gameSettlementRepository.tryInsert(gameId) == 0) {
             log.info("[settle] game={} already settled, skipping", gameId)

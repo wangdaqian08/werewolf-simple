@@ -24,9 +24,11 @@ const val PERK_NIGHT1_IMMUNITY = "NIGHT1_IMMUNITY"
  * Postgres partial unique index ux_one_active_perk_per_room is the prod
  * backstop). Rejection is synchronous — there is no pending state.
  *
- * Lifecycle: ACTIVE → CONSUMED (night 1 resolved) | VOID (holder dealt a wolf
- * role — no refund, the gamble is stated in the perk description; to change
- * that policy, refund in [onGameStart]) | REFUNDED (withdraw / kick / sweep).
+ * Lifecycle: ACTIVE for the whole game (with [markNight1Triggered] recording
+ * whether the perk actually took effect) | VOID = bound but inapplicable
+ * (holder dealt a wolf role) — refunded by settlement at game end | terminal
+ * CONSUMED/REFUNDED set only by PerkSettlementService at game end, except the
+ * pre-game REFUNDED paths (withdraw / kick / sweep of never-started rooms).
  */
 @Service
 class PerkService(
@@ -99,8 +101,10 @@ class PerkService(
 
     /**
      * Bind every live activation in [roomId] to the started game; activations
-     * held by a player dealt a wolf role are VOIDED with no refund (a refund
-     * would also leak the wolf identity via the balance change).
+     * held by a player dealt a wolf role are VOIDED — bound but inapplicable.
+     * The refund happens at game end via PerkSettlementService (refunding now
+     * would leak the wolf identity via the balance change; at game end roles
+     * are public).
      */
     @Transactional
     fun onGameStart(roomId: Int, gameId: Int, players: List<GamePlayer>) {
@@ -118,7 +122,7 @@ class PerkService(
     /**
      * Users holding live first-night immunity for [gameId]. Includes CONSUMED
      * so re-computations of the night-1 kill list (host reveal, state polls)
-     * stay consistent after the activation is marked consumed.
+     * stay consistent after settlement marks the activation CONSUMED at game end.
      */
     @Transactional(readOnly = true)
     fun night1ImmuneUserIds(gameId: Int): Set<String> =
@@ -128,15 +132,11 @@ class PerkService(
             .map { it.userId }
             .toSet()
 
-    /** Mark night-1 perks consumed once night 1 resolves (triggered or not — they only cover night 1). */
+    /** Idempotent: only flips triggered_at from NULL, only for ACTIVE holders. */
     @Transactional
-    fun consumeNight1Perks(gameId: Int) {
-        perkActivationRepository.findByGameId(gameId)
-            .filter { it.perkCode == PERK_NIGHT1_IMMUNITY && it.status == PerkActivationStatus.ACTIVE }
-            .forEach {
-                it.status = PerkActivationStatus.CONSUMED
-                perkActivationRepository.save(it)
-            }
+    fun markNight1Triggered(gameId: Int, userIds: Set<String>) {
+        if (userIds.isEmpty()) return
+        perkActivationRepository.markTriggered(gameId, PERK_NIGHT1_IMMUNITY, userIds)
     }
 
     /** Refund all of [userId]'s live activations in [roomId] (kick / leave). */

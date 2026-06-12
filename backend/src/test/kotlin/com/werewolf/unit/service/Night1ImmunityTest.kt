@@ -108,4 +108,45 @@ class Night1ImmunityTest {
         val np = night(dayNumber = 1, wolfTarget = "victim")
         assertThat(orchestrator.computePendingKills(np)).containsExactly("victim")
     }
+
+    // ── night1PerkDecisiveSaves — the settlement trigger predicate ──────────
+    // Must be the precise complement of computeKills' other saves for the same
+    // target: the perk "took effect" only when it alone blocked the wolf kill.
+
+    @Test
+    fun `decisive save - attacked immune target with no other save`() {
+        val np = night(dayNumber = 1, wolfTarget = "victim")
+        assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim")))
+            .containsExactly("victim")
+    }
+
+    @Test
+    fun `no decisive save - holder was not attacked`() {
+        val np = night(dayNumber = 1, wolfTarget = "other")
+        assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).isEmpty()
+    }
+
+    @Test
+    fun `no decisive save - night 2`() {
+        val np = night(dayNumber = 2, wolfTarget = "victim")
+        assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).isEmpty()
+    }
+
+    @Test
+    fun `no decisive save - witch antidote also saved the target`() {
+        val np = night(dayNumber = 1, wolfTarget = "victim", antidoteUsed = true)
+        assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).isEmpty()
+    }
+
+    @Test
+    fun `no decisive save - guard also protected the target`() {
+        val np = night(dayNumber = 1, wolfTarget = "victim", guardTarget = "victim")
+        assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).isEmpty()
+    }
+
+    @Test
+    fun `no decisive save - no wolf target at all`() {
+        val np = night(dayNumber = 1, wolfTarget = null)
+        assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).isEmpty()
+    }
 }
