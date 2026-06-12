@@ -159,6 +159,36 @@ interface PerkActivationRepository : JpaRepository<PerkActivation, Int> {
         status: PerkActivationStatus,
         createdAtBefore: java.time.LocalDateTime,
     ): List<PerkActivation>
+
+    /** Idempotent trigger mark: only flips NULL → now, only for live holders. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+        "UPDATE PerkActivation a SET a.triggeredAt = CURRENT_TIMESTAMP " +
+            "WHERE a.gameId = :gameId AND a.perkCode = :perkCode AND a.userId IN :userIds " +
+            "AND a.status = com.werewolf.model.PerkActivationStatus.ACTIVE AND a.triggeredAt IS NULL",
+    )
+    fun markTriggered(gameId: Int, perkCode: String, userIds: Collection<String>): Int
+
+    /**
+     * Exactly-once settlement transition (same spirit as
+     * PaymentOrderRepository.markCompletedIfCreated): 0 rows = already
+     * settled — callers must gate any wallet credit on the return value.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+        "UPDATE PerkActivation a SET a.status = :newStatus, a.settledAt = CURRENT_TIMESTAMP " +
+            "WHERE a.id = :id AND a.status IN (com.werewolf.model.PerkActivationStatus.ACTIVE, com.werewolf.model.PerkActivationStatus.VOID)",
+    )
+    fun settleIfLive(id: Int, newStatus: PerkActivationStatus): Int
+
+    /** Self-heal: live activations bound to already-ended games. */
+    @Query(
+        "SELECT a FROM PerkActivation a, Game g WHERE a.gameId = g.gameId AND g.endedAt IS NOT NULL " +
+            "AND a.status IN (com.werewolf.model.PerkActivationStatus.ACTIVE, com.werewolf.model.PerkActivationStatus.VOID)",
+    )
+    fun findUnsettledForEndedGames(): List<PerkActivation>
+
+    fun findTop50ByUserIdOrderByCreatedAtDesc(userId: String): List<PerkActivation>
 }
 
 interface ProductRepository : JpaRepository<Product, Int> {
@@ -180,6 +210,8 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
             "WHERE o.id = :orderId AND o.status = com.werewolf.model.PaymentOrderStatus.CREATED",
     )
     fun markCompletedIfCreated(orderId: Int): Int
+
+    fun findTop50ByUserIdOrderByCreatedAtDesc(userId: String): List<PaymentOrder>
 }
 
 interface PaymentEventRepository : JpaRepository<PaymentEvent, String> {
