@@ -5,6 +5,7 @@ import com.werewolf.repository.*
 import com.werewolf.service.PERK_NIGHT1_IMMUNITY
 import com.werewolf.service.PerkService
 import com.werewolf.service.PerkSettlementService
+import com.werewolf.service.RewardSettlementService
 import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -29,7 +30,10 @@ class PerkSettlementServiceIntegrationTest {
 
     @Autowired lateinit var perkService: PerkService
     @Autowired lateinit var perkSettlementService: PerkSettlementService
+    @Autowired lateinit var rewardSettlementService: RewardSettlementService
     @Autowired lateinit var walletService: WalletService
+    @Autowired lateinit var gameRepository: GameRepository
+    @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var perkRepository: PerkRepository
     @Autowired lateinit var perkActivationRepository: PerkActivationRepository
     @Autowired lateinit var userRepository: UserRepository
@@ -61,7 +65,8 @@ class PerkSettlementServiceIntegrationTest {
     private fun newRoom(hostId: String): Int {
         val room = roomRepository.save(
             Room(
-                roomCode = (100..999).random().toString(),
+                // avoid RoomControllerTest's fixed codes 111/222/333 (shared H2 schema)
+                roomCode = (400 + ROOM_CODE_SEQ.getAndIncrement() % 600).toString(),
                 hostUserId = hostId,
                 totalPlayers = 6,
                 config = GameConfig(perksAllowed = true),
@@ -83,6 +88,7 @@ class PerkSettlementServiceIntegrationTest {
 
     companion object {
         private val GAME_ID_SEQ = AtomicInteger(900_000)
+        private val ROOM_CODE_SEQ = AtomicInteger(0)
     }
 
     /** Full purchase path: fund 100, activate (-30), bind to [gameId] with [role]. */
@@ -288,5 +294,122 @@ class PerkSettlementServiceIntegrationTest {
         assertThat(walletService.balance(triggered)).isEqualTo(0)
         assertThat(walletService.balance(untriggered)).isEqualTo(30)
         assertThat(walletService.balance(wolf)).isEqualTo(30)
+    }
+
+    // ------------------------------------------------------------------
+    // Full lifecycle through the REAL settle path:
+    // RewardSettlementService.settle(gameId, winner) drives BOTH perk
+    // settlement and game-reward credits on the same wallet. Expected
+    // reward amounts come from werewolf.rewards (application.yml /
+    // RewardProperties defaults): winBonus=20, participation=5,
+    // wolfPerDaySurvived=4. All holders below are villager-side winners,
+    // so the reward is winBonus = 20.
+    // ------------------------------------------------------------------
+
+    /** Persist a real Game row + a seated GamePlayer so settle() finds both. */
+    private fun newGameWithPlayer(roomId: Int, userId: String, role: PlayerRole): Int {
+        val game = gameRepository.save(Game(roomId = roomId, hostUserId = userId))
+        val gameId = game.gameId ?: error("game not persisted")
+        gamePlayerRepository.save(GamePlayer(gameId = gameId, userId = userId, seatIndex = 0, role = role))
+        return gameId
+    }
+
+    /** Full ledger in insertion order (IDENTITY id is monotonic). */
+    private fun ledgerInOrder(userId: String): List<CreditTransaction> =
+        creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId)
+            .sortedBy { it.id ?: error("tx not persisted") }
+
+    /** Every row's balanceAfter must equal the running sum of amounts so far. */
+    private fun assertBalanceChain(ledger: List<CreditTransaction>) {
+        var running = 0
+        ledger.forEach { tx ->
+            running += tx.amount
+            assertThat(tx.balanceAfter)
+                .describedAs("balanceAfter of %s tx id=%s", tx.type, tx.id)
+                .isEqualTo(running)
+        }
+    }
+
+    @Test
+    fun `full lifecycle - attacked holder - settle(winner) consumes perk and pays reward`() {
+        ensurePerk()
+        val user = newUser("flc")
+        val roomId = newRoom(user)
+        val gameId = newGameWithPlayer(roomId, user, PlayerRole.SEER)
+        activateAndBind(user, roomId, gameId, PlayerRole.SEER) // fund +100, PERK_SPEND -30, bind
+        perkService.markNight1Triggered(gameId, setOf(user))
+
+        rewardSettlementService.settle(gameId, WinnerSide.VILLAGER)
+
+        val settled = perkActivationRepository.findByGameId(gameId).single()
+        assertThat(settled.status).isEqualTo(PerkActivationStatus.CONSUMED)
+        assertThat(settled.settledAt).isNotNull()
+        // 100 seed − 30 perk + 20 winBonus (holder on the winning villager side)
+        assertThat(walletService.balance(user)).isEqualTo(90)
+
+        val ledger = ledgerInOrder(user)
+        assertThat(ledger).hasSize(3)
+        assertThat(ledger.map { it.type })
+            .containsExactly(CreditTxType.GAME_REWARD, CreditTxType.PERK_SPEND, CreditTxType.GAME_REWARD)
+        assertThat(ledger.map { it.amount }).containsExactly(100, -30, 20)
+        assertThat(ledger[2].gameId).isEqualTo(gameId)
+        assertBalanceChain(ledger)
+        assertThat(refundRows(user)).isEmpty()
+    }
+
+    @Test
+    fun `full lifecycle - never-attacked holder - settle(winner) refunds perk and pays reward`() {
+        ensurePerk()
+        val user = newUser("flr")
+        val roomId = newRoom(user)
+        val gameId = newGameWithPlayer(roomId, user, PlayerRole.VILLAGER)
+        val activation = activateAndBind(user, roomId, gameId, PlayerRole.VILLAGER)
+        // markNight1Triggered never called — same observable contract when the
+        // holder WAS attacked but a guard save covered it (orchestrator skips
+        // the mark): settle must refund.
+
+        rewardSettlementService.settle(gameId, WinnerSide.VILLAGER)
+
+        val settled = perkActivationRepository.findByGameId(gameId).single()
+        assertThat(settled.status).isEqualTo(PerkActivationStatus.REFUNDED)
+        assertThat(settled.settledAt).isNotNull()
+        // 100 seed − 30 perk + 30 refund + 20 winBonus
+        assertThat(walletService.balance(user)).isEqualTo(120)
+
+        val ledger = ledgerInOrder(user)
+        assertThat(ledger).hasSize(4)
+        assertThat(ledger.map { it.type }).containsExactly(
+            CreditTxType.GAME_REWARD, CreditTxType.PERK_SPEND, CreditTxType.REFUND, CreditTxType.GAME_REWARD,
+        )
+        assertThat(ledger.map { it.amount }).containsExactly(100, -30, 30, 20)
+        assertThat(ledger[2].perkActivationId).isEqualTo(activation.id)
+        assertThat(ledger[3].gameId).isEqualTo(gameId)
+        assertBalanceChain(ledger)
+    }
+
+    @Test
+    fun `full lifecycle - cancelled game refunds perk and pays no reward`() {
+        ensurePerk()
+        val user = newUser("flx")
+        val roomId = newRoom(user)
+        val gameId = newGameWithPlayer(roomId, user, PlayerRole.SEER)
+        val activation = activateAndBind(user, roomId, gameId, PlayerRole.SEER)
+
+        rewardSettlementService.settle(gameId, null) // cancelled — no winner
+
+        val settled = perkActivationRepository.findByGameId(gameId).single()
+        assertThat(settled.status).isEqualTo(PerkActivationStatus.REFUNDED)
+        assertThat(settled.settledAt).isNotNull()
+        assertThat(walletService.balance(user)).isEqualTo(100)
+
+        val ledger = ledgerInOrder(user)
+        assertThat(ledger).hasSize(3)
+        assertThat(ledger.map { it.type })
+            .containsExactly(CreditTxType.GAME_REWARD, CreditTxType.PERK_SPEND, CreditTxType.REFUND)
+        assertThat(ledger.map { it.amount }).containsExactly(100, -30, 30)
+        assertThat(ledger[2].perkActivationId).isEqualTo(activation.id)
+        // no game reward was paid: the only GAME_REWARD row is the test seed (gameId == null)
+        assertThat(ledger.filter { it.type == CreditTxType.GAME_REWARD && it.gameId != null }).isEmpty()
+        assertBalanceChain(ledger)
     }
 }

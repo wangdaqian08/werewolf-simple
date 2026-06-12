@@ -72,6 +72,7 @@ class OrphanedGameRecoveryIntegrationTest {
     @SpyBean lateinit var stompPublisher: StompPublisher
 
     companion object {
+        private val ROOM_CODE_SEQ = java.util.concurrent.atomic.AtomicInteger(0)
         private const val SEAT_URL = "/api/room/seat"
         private const val READY_URL = "/api/room/ready"
         private const val START_URL = "/api/game/start"
@@ -181,7 +182,8 @@ class OrphanedGameRecoveryIntegrationTest {
         // needed for the refund path).
         val user = "guest:orphan-perk-${System.nanoTime()}"
         // room_code is VARCHAR(3) — use a 3-digit code like the join-flow does.
-        val room = roomRepository.save(Room(roomCode = (100..999).random().toString(), hostUserId = user, totalPlayers = 6))
+        // avoid RoomControllerTest's fixed codes 111/222/333 (shared H2 schema)
+        val room = roomRepository.save(Room(roomCode = (400 + ROOM_CODE_SEQ.getAndIncrement() % 600).toString(), hostUserId = user, totalPlayers = 6))
         val roomId = room.roomId ?: error("room not persisted")
         val game = gameRepository.save(Game(roomId = roomId, hostUserId = user))
         val gameId = game.gameId ?: error("game not persisted")
