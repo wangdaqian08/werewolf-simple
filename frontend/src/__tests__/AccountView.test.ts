@@ -160,6 +160,8 @@ describe('AccountView', () => {
     const { wrapper } = await mountAccount()
     expect(wrapper.find('[data-testid="account-wallet"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="account-wallet"]').text()).toContain('无法加载积分记录')
+    // Balance line is hidden on error so stale credits from userStore are not shown.
+    expect(wrapper.find('[data-testid="account-balance"]').exists()).toBe(false)
     // Other sections are unaffected.
     expect(wrapper.find('[data-testid="perk-row"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="order-row"]').exists()).toBe(true)

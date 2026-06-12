@@ -18,10 +18,17 @@
         <!-- ── Section 1: credits + ledger ─────────────────────────────── -->
         <section class="section" data-testid="account-wallet">
           <h2 class="section-title">积分 / Credits</h2>
-          <p class="balance" data-testid="account-balance">◈ {{ balanceText }}</p>
+          <p v-if="!walletError" class="balance" data-testid="account-balance">
+            ◈ {{ balanceText }}
+          </p>
           <p v-if="walletError" class="error-msg">无法加载积分记录 / Failed to load credits</p>
           <ul v-else-if="wallet && wallet.recent.length > 0" class="rows">
-            <li v-for="(tx, i) in wallet.recent" :key="i" class="row" data-testid="ledger-row">
+            <li
+              v-for="tx in wallet.recent"
+              :key="`${tx.type}-${tx.createdAt}-${tx.balanceAfter}`"
+              class="row"
+              data-testid="ledger-row"
+            >
               <div class="row-main">
                 <span class="row-name">{{ TX_LABELS[tx.type] ?? tx.type }}</span>
                 <span class="row-amount" :class="tx.amount >= 0 ? 'amount-pos' : 'amount-neg'">
@@ -42,7 +49,12 @@
           <h2 class="section-title">道具 / Perks</h2>
           <p v-if="perksError" class="error-msg">无法加载道具记录 / Failed to load perks</p>
           <ul v-else-if="perks.length > 0" class="rows">
-            <li v-for="(perk, i) in perks" :key="i" class="row" data-testid="perk-row">
+            <li
+              v-for="perk in perks"
+              :key="`${perk.roomId}-${perk.perkCode}-${perk.createdAt}`"
+              class="row"
+              data-testid="perk-row"
+            >
               <div class="row-main">
                 <span class="row-name">{{ perk.perkName }}</span>
                 <span
@@ -151,6 +163,7 @@ function fmtDate(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleString('zh-CN', {
+    year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
