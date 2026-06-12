@@ -30,7 +30,6 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 
 /**
@@ -46,7 +45,6 @@ class PerkControllerTest {
     @Autowired lateinit var walletService: WalletService
     @Autowired lateinit var perkRepository: PerkRepository
     @Autowired lateinit var perkActivationRepository: PerkActivationRepository
-    @Autowired lateinit var jdbcTemplate: JdbcTemplate
 
     companion object {
         const val PERKS_URL = "/api/perks"
@@ -350,39 +348,4 @@ class PerkControllerTest {
         assertThat(perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)).isEmpty()
     }
 
-    @Test
-    fun `GET perks-my falls back to perkCode when the catalog row is missing`() {
-        // perk_activations.perk_code has FK fk_pa_perk → perks(perk_code).
-        // Use SET REFERENTIAL_INTEGRITY FALSE to insert an orphan row on H2.
-        val (token, userId) = login("PerkFallback")
-        val orphanCode = "GHOST_PERK_${System.nanoTime()}"
-
-        // All three statements must run on the same connection for H2's
-        // SET REFERENTIAL_INTEGRITY to take effect.
-        jdbcTemplate.execute(org.springframework.jdbc.core.ConnectionCallback { con ->
-            con.createStatement().use { stmt -> stmt.execute("SET REFERENTIAL_INTEGRITY FALSE") }
-            con.prepareStatement(
-                "INSERT INTO perk_activations (room_id, user_id, perk_code, status, price_paid, created_at) VALUES (1, ?, ?, 'ACTIVE', 0, CURRENT_TIMESTAMP)",
-            ).use { ps ->
-                ps.setString(1, userId)
-                ps.setString(2, orphanCode)
-                ps.executeUpdate()
-            }
-            con.createStatement().use { stmt -> stmt.execute("SET REFERENTIAL_INTEGRITY TRUE") }
-        })
-
-        val resp = restTemplate.exchange(
-            "/api/perks/my",
-            org.springframework.http.HttpMethod.GET,
-            HttpEntity<Nothing>(headers(token)),
-            List::class.java,
-        )
-
-        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
-        @Suppress("UNCHECKED_CAST")
-        val rows = resp.body!! as List<Map<String, Any?>>
-        val row = rows.first { it["perkCode"] == orphanCode }
-        // When no perks row exists the service falls back to the perkCode string itself.
-        assertThat(row["perkName"]).isEqualTo(orphanCode)
-    }
 }

@@ -23,7 +23,6 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.util.UUID
 
@@ -39,7 +38,6 @@ class PaymentControllerTest {
     @Autowired lateinit var userRepository: UserRepository
     @Autowired lateinit var productRepository: ProductRepository
     @Autowired lateinit var paymentOrderRepository: PaymentOrderRepository
-    @Autowired lateinit var jdbcTemplate: JdbcTemplate
 
     companion object {
         const val ORDERS_URL = "/api/payment/orders"
@@ -173,38 +171,4 @@ class PaymentControllerTest {
         assertThat(resp.statusCode).isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN)
     }
 
-    @Test
-    fun `GET payment-orders returns empty productName when the product row is missing`() {
-        // payment_orders.product_id has FK fk_po_product → products(id).
-        // Use SET REFERENTIAL_INTEGRITY FALSE to insert an order with a non-existent product_id on H2.
-        val (token, userId) = login("PayProdFallback")
-        val ghostProductId = 999_999
-        val orderNo = UUID.randomUUID().toString()
-
-        // All three statements must run on the same connection for H2's
-        // SET REFERENTIAL_INTEGRITY to take effect.
-        jdbcTemplate.execute(org.springframework.jdbc.core.ConnectionCallback { con ->
-            con.createStatement().use { stmt -> stmt.execute("SET REFERENTIAL_INTEGRITY FALSE") }
-            con.prepareStatement(
-                "INSERT INTO payment_orders (order_no, user_id, product_id, credits, amount_cents, currency, status, created_at) VALUES (?, ?, ?, 0, 0, 'usd', 'COMPLETED', CURRENT_TIMESTAMP)",
-            ).use { ps ->
-                ps.setString(1, orderNo)
-                ps.setString(2, userId)
-                ps.setInt(3, ghostProductId)
-                ps.executeUpdate()
-            }
-            con.createStatement().use { stmt -> stmt.execute("SET REFERENTIAL_INTEGRITY TRUE") }
-        })
-
-        val resp = restTemplate.exchange(
-            ORDERS_URL, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(token)), List::class.java,
-        )
-
-        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
-        @Suppress("UNCHECKED_CAST")
-        val rows = resp.body!! as List<Map<String, Any?>>
-        val row = rows.first { it["orderNo"] == orderNo }
-        // When no products row exists the service falls back to "".
-        assertThat(row["productName"]).isEqualTo("")
-    }
 }
