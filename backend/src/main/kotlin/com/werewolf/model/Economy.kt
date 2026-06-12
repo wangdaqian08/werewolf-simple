@@ -128,7 +128,7 @@ class PerkActivation(
     @Column(name = "triggered_at")
     var triggeredAt: LocalDateTime? = null,
 
-    /** Set when settlement decided the terminal status (CONSUMED/REFUNDED). */
+    /** Set when the terminal status (CONSUMED/REFUNDED) was decided — by game-end settlement or a pre-game refund. */
     @Column(name = "settled_at")
     var settledAt: LocalDateTime? = null,
 )

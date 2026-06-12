@@ -24,6 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.sql.Timestamp
 import java.time.LocalDateTime
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The scheduled safety nets: (1) activations still ACTIVE with no bound game
@@ -55,9 +56,19 @@ class PerkRefundSweepTest {
 
     private fun newRoom(host: String): Int {
         val room = roomRepository.save(
-            Room(roomCode = (100..999).random().toString(), hostUserId = host, totalPlayers = 6, config = GameConfig()),
+            Room(
+                // avoid RoomControllerTest's fixed codes 111/222/333 (shared H2 schema)
+                roomCode = (400 + ROOM_CODE_SEQ.getAndIncrement() % 600).toString(),
+                hostUserId = host,
+                totalPlayers = 6,
+                config = GameConfig(),
+            ),
         )
         return room.roomId ?: error("room not persisted")
+    }
+
+    companion object {
+        private val ROOM_CODE_SEQ = AtomicInteger(0)
     }
 
     private fun saveActivation(roomId: Int, userId: String, gameId: Int?, price: Int = 30): Int {

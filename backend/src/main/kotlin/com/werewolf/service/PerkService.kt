@@ -147,12 +147,19 @@ class PerkService(
             .forEach { refund(it) }
     }
 
+    /**
+     * Exactly-once: the wallet credit is gated on settleIfLive's conditional
+     * UPDATE (same pattern as PerkSettlementService) — 0 rows = the activation
+     * is already terminal (a concurrent refund/settle won), so no credit.
+     * NOTE: settleIfLive clears the persistence context — [activation] is
+     * detached after the gate; only plain fields may be read from it.
+     */
     private fun refund(activation: PerkActivation) {
-        activation.status = PerkActivationStatus.REFUNDED
-        perkActivationRepository.save(activation)
+        val id = activation.id ?: error("activation has no id")
+        if (perkActivationRepository.settleIfLive(id, PerkActivationStatus.REFUNDED) == 0) return
         walletService.credit(
             activation.userId, activation.pricePaid, CreditTxType.REFUND,
-            perkActivationId = activation.id, note = activation.perkCode,
+            perkActivationId = id, note = activation.perkCode,
         )
         log.info("[perk] refund room={} user={} perk={} amount={}",
             activation.roomId, activation.userId, activation.perkCode, activation.pricePaid)
