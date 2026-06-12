@@ -33,6 +33,7 @@ class SelfDestructServiceTest {
     @Mock lateinit var actionLogService: ActionLogService
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var winConditionChecker: WinConditionChecker
+    @Mock lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
 
     private lateinit var selfDestructService: SelfDestructService
 
@@ -48,6 +49,7 @@ class SelfDestructServiceTest {
             actionLogService,
             nightOrchestrator,
             winConditionChecker,
+            rewardSettlementService,
         )
     }
 
@@ -283,6 +285,33 @@ class SelfDestructServiceTest {
         val gameOver = captor.allValues.filterIsInstance<DomainEvent.GameOver>()
         assertThat(gameOver).isNotEmpty()
         assertThat(gameOver.first().winner).isEqualTo(WinnerSide.VILLAGER)
+    }
+
+    // ── Case 8b: last wolf self-destruct settles rewards and records diedDay ────
+
+    @Test
+    fun `last wolf self-destruct settles the game and stamps diedDay on the wolf`() {
+        val ctx = context(
+            game = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name),
+            players = listOf(wolfPlayer(), villagePlayer()),
+        )
+        // game.dayNumber defaults to 1.
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId))
+            .thenReturn(Optional.of(wolfPlayer()))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
+
+        selfDestructService.selfDestruct(req(), ctx)
+
+        // Settlement fires on the self-destruct game-over path.
+        verify(rewardSettlementService).settle(gameId, WinnerSide.VILLAGER)
+        // The self-destructing wolf is stamped with the day it died (drives reward scaling).
+        val captor = argumentCaptor<GamePlayer>()
+        verify(gamePlayerRepository).save(captor.capture())
+        assertThat(captor.firstValue.diedDay).isEqualTo(1)
     }
 
     // ── Case 9: Wolf during DAY_DISCUSSION RESULT_HIDDEN → pending kills applied ─

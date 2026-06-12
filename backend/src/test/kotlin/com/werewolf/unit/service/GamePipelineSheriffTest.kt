@@ -196,7 +196,7 @@ class GamePipelineSheriffTest {
             it.wolfTargetUserId = "victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("victim"))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("victim"))
 
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
@@ -219,7 +219,7 @@ class GamePipelineSheriffTest {
     fun `revealNightResult with no pending kills does NOT call applyNightKills`() {
         val np = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.COMPLETE }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(emptyList())
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(emptyList())
 
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
@@ -245,7 +245,7 @@ class GamePipelineSheriffTest {
         // already over.
         val np = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.COMPLETE }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(emptyList())
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(emptyList())
 
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
@@ -278,7 +278,7 @@ class GamePipelineSheriffTest {
             it.wolfTargetUserId = "sheriff_victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("sheriff_victim"))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("sheriff_victim"))
         whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.BADGE_HANDOVER)
 
         val game = game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 2, subPhase = DaySubPhase.RESULT_HIDDEN.name)
@@ -303,7 +303,7 @@ class GamePipelineSheriffTest {
             it.wolfTargetUserId = "non_sheriff_victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("non_sheriff_victim"))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("non_sheriff_victim"))
 
         val game = game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 2, subPhase = DaySubPhase.RESULT_HIDDEN.name)
         game.sheriffUserId = "different_sheriff"
@@ -327,7 +327,7 @@ class GamePipelineSheriffTest {
             it.wolfTargetUserId = "hunter_victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("hunter_victim"))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("hunter_victim"))
         whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
 
         val ctx = GameContext(
@@ -355,7 +355,7 @@ class GamePipelineSheriffTest {
             it.witchPoisonTargetUserId = "hunter_victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np))
             .thenReturn(listOf("sheriff_victim", "hunter_victim"))
         whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.BADGE_HANDOVER)
 

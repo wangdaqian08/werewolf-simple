@@ -9,6 +9,7 @@ import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
+import com.werewolf.model.CreditTxType
 import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
@@ -37,6 +38,9 @@ class FullGameCycleTest {
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
     @Autowired lateinit var nightOrchestrator: NightOrchestrator
+    @Autowired lateinit var walletRepository: com.werewolf.repository.WalletRepository
+    @Autowired lateinit var creditTransactionRepository: com.werewolf.repository.CreditTransactionRepository
+    @Autowired lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -225,6 +229,28 @@ class FullGameCycleTest {
         val finalGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(finalGame.phase).isEqualTo(GamePhase.GAME_OVER)
         assertThat(finalGame.winner).isEqualTo(WinnerSide.WEREWOLF)
+
+        // ── Reward settlement: every player got exactly one GAME_REWARD ledger
+        // row and a matching wallet balance; re-settling is a no-op.
+        val players = gamePlayerRepository.findByGameId(gameId)
+        val rewardRows = creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD)
+        assertThat(rewardRows.map { it.userId }).containsExactlyInAnyOrderElementsOf(players.map { it.userId })
+        players.forEach { p ->
+            val row = rewardRows.first { it.userId == p.userId }
+            // wolves won (winBonus=20); the killed villager + survivor lost (participation=5)
+            val expected = if (p.role == PlayerRole.WEREWOLF) 20 else 5
+            assertThat(row.amount).`as`("reward for ${p.userId} (${p.role})").isEqualTo(expected)
+            assertThat(walletRepository.findById(p.userId).orElseThrow().balance).isEqualTo(expected)
+        }
+        rewardSettlementService.settle(gameId, WinnerSide.WEREWOLF)
+        assertThat(creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD))
+            .hasSize(rewardRows.size)
+
+        // diedDay is stamped on the night-killed villager (drives wolf reward
+        // scaling on the losing side) and left null for survivors.
+        val killed = players.first { it.userId == villagerTarget.userId }
+        assertThat(killed.diedDay).isEqualTo(1)
+        assertThat(players.first { it.role == PlayerRole.WEREWOLF }.diedDay).isNull()
     }
 
     /**

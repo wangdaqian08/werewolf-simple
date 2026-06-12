@@ -27,6 +27,53 @@ export interface WeChatProvider {
 
 export type OAuthProvider = 'google' | 'wechat'
 
+// ── Wallet / Credits ──────────────────────────────────────────────────────────
+
+export type CreditTxType = 'PURCHASE' | 'GAME_REWARD' | 'PERK_SPEND' | 'REFUND'
+
+export interface CreditTransaction {
+  type: CreditTxType
+  amount: number // signed: positive = credit, negative = debit
+  balanceAfter: number
+  note?: string | null
+  createdAt: string
+}
+
+export interface Wallet {
+  balance: number
+  recent: CreditTransaction[]
+}
+
+/** Per-player credit reward granted at game end (GameState.settlement). */
+export interface SettlementReward {
+  userId: string
+  nickname: string
+  seatIndex: number
+  amount: number
+}
+
+export interface GameSettlement {
+  rewards: SettlementReward[]
+  myEarned?: number | null
+  myBalance?: number | null
+}
+
+// ── Perks ─────────────────────────────────────────────────────────────────────
+
+export interface Perk {
+  perkCode: string
+  name: string
+  description: string
+  priceCredits: number
+}
+
+/** A live perk activation in the room — visible to every room member. */
+export interface PerkActivation {
+  userId: string
+  perkCode: string
+  perkName: string
+}
+
 // ── Room ──────────────────────────────────────────────────────────────────────
 
 export type PlayerStatus = 'NOT_READY' | 'READY'
@@ -51,6 +98,8 @@ export interface RoomConfig {
   winCondition?: WinConditionMode
   bgmTrack?: string | null
   witchSelfSaveAllowed?: boolean
+  /** Whether players may activate paid perks in this room (host fairness toggle). */
+  perksAllowed?: boolean
 }
 
 export interface Room {
@@ -61,6 +110,7 @@ export interface Room {
   players: RoomPlayer[]
   config: RoomConfig
   activeGameId?: number
+  perkActivations?: PerkActivation[]
 }
 
 export interface CreateRoomRequest {
@@ -166,6 +216,8 @@ export interface GameState {
   /** Whether the witch may use her antidote to save herself (room config). */
   witchSelfSaveAllowed?: boolean
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
+  /** Game-end credit rewards (present once settled when phase is GAME_OVER). */
+  settlement?: GameSettlement | null
   /** True when a wolf self-destructed this day — host sees "进入夜晚" instead of voting. */
   daySkipVoting?: boolean
   events: GameEvent[]

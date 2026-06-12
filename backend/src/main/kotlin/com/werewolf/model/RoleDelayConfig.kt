@@ -98,6 +98,12 @@ data class GameConfig(
      * target is the witch. Default true preserves the historical behavior.
      */
     val witchSelfSaveAllowed: Boolean = true,
+
+    /**
+     * Whether players may activate paid perks (e.g. first-night immunity) in
+     * this room. Host-controlled fairness toggle; default on.
+     */
+    val perksAllowed: Boolean = true,
 ) {
     /**
      * 获取指定角色的延迟配置

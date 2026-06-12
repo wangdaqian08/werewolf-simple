@@ -58,6 +58,7 @@ class VotingPipelineSheriffWeightTest {
         actionLogService = mock(),
         hostTimerService = hostTimerService,
         dayRevealAdvancer = mock(),
+        rewardSettlementService = mock(),
     )
 
     private val gameId = 1

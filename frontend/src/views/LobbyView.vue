@@ -33,10 +33,43 @@
             type="text"
             :placeholder="userStore.nickname ?? ''"
           />
+          <div v-if="userStore.credits !== null" class="credits-chip" data-testid="credits-chip">
+            ◈ {{ userStore.credits }} 积分 / Credits
+            <button class="buy-link" data-testid="buy-credits-toggle" @click="showBuy = !showBuy">
+              充值 / Buy
+            </button>
+          </div>
         </div>
         <button class="logout-link" data-testid="logout-link" @click="handleLogout">
           登出 / Logout
         </button>
+      </div>
+
+      <!-- Buy credits sheet (Stripe Checkout). Guests can't buy — their
+           identity is forgeable; earned credits only. -->
+      <div v-if="userStore.isLoggedIn && showBuy" class="buy-sheet" data-testid="buy-sheet">
+        <p v-if="userStore.isGuest" class="buy-guest-note">
+          访客账号无法充值，请使用 Google 登录。 / Purchases require a signed-in account — sign in
+          with Google to buy credits.
+        </p>
+        <template v-else>
+          <button
+            v-for="p in products"
+            :key="p.productKey"
+            class="buy-row"
+            :data-testid="`buy-${p.productKey}`"
+            :disabled="buying"
+            @click="handleBuy(p.productKey)"
+          >
+            <span class="buy-name">{{ p.name }}</span>
+            <span class="buy-credits"
+              >◈ {{ p.credits
+              }}<template v-if="p.bonusCredits"> +{{ p.bonusCredits }}</template></span
+            >
+            <span class="buy-price">${{ (p.priceCents / 100).toFixed(2) }}</span>
+          </button>
+          <p v-if="buyError" class="error-msg">{{ buyError }}</p>
+        </template>
       </div>
 
       <!-- OAuth buttons (only when not logged in) ───────────────────────── -->
@@ -212,6 +245,7 @@ import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import { userService } from '@/services/userService'
+import { paymentService, type CreditProduct } from '@/services/paymentService'
 import { buildGoogleAuthUrl, generateOAuthState } from '@/utils/oauth'
 import type { JoinRoomRequest, ProvidersResponse, Room } from '@/types'
 import InstallToHomeScreenPrompt from '@/components/InstallToHomeScreenPrompt.vue'
@@ -231,6 +265,40 @@ const avatarFailed = ref(false)
 // #7: the active room this player can jump back into (set on mount via the
 // backend lookup) so closing/backgrounding the app isn't a dead end.
 const activeRoom = ref<Room | null>(null)
+
+// Buy-credits sheet
+const showBuy = ref(false)
+const products = ref<CreditProduct[]>([])
+const buying = ref(false)
+const buyError = ref('')
+
+watch(showBuy, async (open) => {
+  if (open && products.value.length === 0 && !userStore.isGuest) {
+    try {
+      products.value = await paymentService.getProducts()
+    } catch {
+      buyError.value = '无法加载商品 / Failed to load products'
+    }
+  }
+})
+
+async function handleBuy(productKey: string) {
+  buyError.value = ''
+  buying.value = true
+  try {
+    // Redirect to Stripe Checkout (hosted page); we return to /pay/result.
+    window.location.href = await paymentService.createCheckout(productKey)
+  } catch (e: unknown) {
+    if (axios.isAxiosError(e)) {
+      buyError.value =
+        (e.response?.data as { error?: string } | undefined)?.error ??
+        '支付暂不可用 / Payments unavailable'
+    } else {
+      buyError.value = '支付暂不可用 / Payments unavailable'
+    }
+    buying.value = false
+  }
+}
 
 // Per-room nickname override input. Pre-filled with the OAuth-provided
 // nickname so it looks normal; only treated as an override when the user
@@ -268,6 +336,7 @@ onMounted(async () => {
     // the user; the guest flow still works.
   }
   await refreshActiveRoom()
+  await userStore.refreshWallet()
 })
 
 // Look up the player's active room so the lobby can offer a one-tap rejoin.
@@ -471,6 +540,83 @@ function signInWithWechat() {
 .identity-name-input::placeholder {
   color: var(--muted);
   opacity: 0.6;
+}
+
+.credits-chip {
+  font-size: 0.75rem;
+  color: var(--gold);
+  margin-top: 0.125rem;
+  letter-spacing: 0.05em;
+}
+
+.buy-link {
+  background: transparent;
+  border: none;
+  color: var(--gold);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0 0 0 0.375rem;
+  text-decoration: underline;
+  font-family: inherit;
+}
+
+/* ── Buy credits sheet ──────────────────────────────────────────────── */
+.buy-sheet {
+  background: var(--card);
+  border: 1px solid var(--border-l);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.buy-guest-note {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin: 0;
+  text-align: center;
+}
+
+.buy-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--text);
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.buy-row:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.buy-row:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.buy-name {
+  flex: 1;
+  text-align: left;
+}
+
+.buy-credits {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.buy-price {
+  color: var(--muted);
+  min-width: 3.5rem;
+  text-align: right;
 }
 
 .logout-link {

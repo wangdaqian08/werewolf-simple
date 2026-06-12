@@ -38,6 +38,7 @@ class VotingPipelineTest {
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
+    @Mock lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
 
     private lateinit var votingPipeline: VotingPipeline
 
@@ -59,6 +60,7 @@ class VotingPipelineTest {
         actionLogService = mock(),
         hostTimerService = mock(),
         dayRevealAdvancer = dayRevealAdvancer,
+        rewardSettlementService = rewardSettlementService,
     )
 
     private val gameId = 1
@@ -477,6 +479,8 @@ class VotingPipelineTest {
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.phase).isEqualTo(GamePhase.GAME_OVER)
         assertThat(captor.firstValue.winner).isEqualTo(WinnerSide.VILLAGER)
+        // The hunter-shoot game-over path must also settle rewards.
+        verify(rewardSettlementService).settle(gameId, WinnerSide.VILLAGER)
     }
 
     @Test
@@ -502,6 +506,32 @@ class VotingPipelineTest {
         verify(gameRepository, atLeastOnce()).save(captor.capture())
         assertThat(captor.allValues).anyMatch { it.phase == GamePhase.GAME_OVER }
         assertThat(captor.allValues).anyMatch { it.winner == WinnerSide.VILLAGER }
+    }
+
+    @Test
+    fun `revealTally - day-vote win settles rewards and stamps diedDay on the eliminated wolf`() {
+        val host = player(hostId, 0)
+        val lastWolf = player("wolf", 1, PlayerRole.WEREWOLF)
+        val villager = player("v1", 2)
+        val context = ctx(game(), host, lastWolf, villager) // game().dayNumber == 1
+
+        val votes = listOf(vote(hostId, "wolf"), vote("v1", "wolf"))
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(votes)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wolf")).thenReturn(Optional.of(lastWolf))
+        stubLoader(host, villager)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        // endGame on the day-vote path invokes settlement exactly once...
+        verify(rewardSettlementService).settle(gameId, WinnerSide.VILLAGER)
+        // ...and the voted-out wolf is persisted, stamped with the day it died
+        // (reward scaling input).
+        verify(gamePlayerRepository).save(lastWolf)
+        assertThat(lastWolf.alive).isFalse()
+        assertThat(lastWolf.diedDay).isEqualTo(1)
     }
 
     @Test
@@ -1034,6 +1064,7 @@ class VotingPipelineTest {
         actionLogService = actionLogService,
         hostTimerService = mock(),
         dayRevealAdvancer = dayRevealAdvancer,
+        rewardSettlementService = mock(),
     )
 
     @Test

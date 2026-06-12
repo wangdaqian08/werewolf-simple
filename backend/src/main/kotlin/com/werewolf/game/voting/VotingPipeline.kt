@@ -18,6 +18,7 @@ import com.werewolf.repository.GameRepository
 import com.werewolf.repository.VoteRepository
 import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameContextLoader
+import com.werewolf.service.RewardSettlementService
 import com.werewolf.service.StompPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -39,6 +40,7 @@ class VotingPipeline(
     private val actionLogService: ActionLogService,
     private val hostTimerService: HostTimerService,
     private val dayRevealAdvancer: DayRevealAdvancer,
+    private val rewardSettlementService: RewardSettlementService,
 ) {
     private val log = LoggerFactory.getLogger(VotingPipeline::class.java)
 
@@ -254,6 +256,7 @@ class VotingPipeline(
 
                 // Non-sheriff target: kill immediately and proceed to night.
                 targetPlayer.alive = false
+                targetPlayer.diedDay = context.game.dayNumber
                 gamePlayerRepository.save(targetPlayer)
                 stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
@@ -390,6 +393,7 @@ class VotingPipeline(
         gamePlayerRepository.findByGameIdAndUserId(context.gameId, actorUserId).ifPresent { p ->
             if (!p.alive) return@ifPresent // already dead — nothing to commit
             p.alive = false
+            p.diedDay = context.game.dayNumber
             gamePlayerRepository.save(p)
             stompPublisher.broadcastGameAfterCommit(
                 context.gameId,
@@ -478,6 +482,7 @@ class VotingPipeline(
                 // picks up BADGE_HANDOVER from the now-dead sheriff (exactly how
                 // the existing night-death sheriff handover runs).
                 targetPlayer.alive = false
+                targetPlayer.diedDay = context.game.dayNumber
                 gamePlayerRepository.save(targetPlayer)
                 dayRevealAdvancer.markHunterShootResolved(context.gameId)
                 stompPublisher.broadcastGameAfterCommit(
@@ -542,6 +547,7 @@ class VotingPipeline(
         game.phase = GamePhase.GAME_OVER
         game.endedAt = LocalDateTime.now()
         gameRepository.save(game)
+        rewardSettlementService.settle(context.gameId, winner)
 
         // Broadcast GameOver after transaction commit if in transaction context
         val gameOverEvent = DomainEvent.GameOver(context.gameId, winner)
@@ -605,6 +611,7 @@ class VotingPipeline(
         }
 
         player.alive = false
+        player.diedDay = context.game.dayNumber
         gamePlayerRepository.save(player)
 
         // Record elimination

@@ -30,6 +30,9 @@ class GameService(
     private val audioReplayCache: AudioReplayCache,
     private val hostTimerService: HostTimerService,
     private val dayRevealAdvancer: DayRevealAdvancer,
+    private val creditTransactionRepository: CreditTransactionRepository,
+    private val walletService: WalletService,
+    private val perkService: PerkService,
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
@@ -64,6 +67,10 @@ class GameService(
             )
         }
         gamePlayerRepository.saveAll(gamePlayers)
+
+        // Bind room perk activations to this game; activations held by a
+        // player dealt a wolf role become VOID (no refund — stated gamble).
+        perkService.onGameStart(roomId, gameId, gamePlayers)
 
         room.status = RoomStatus.IN_GAME
         roomRepository.save(room)
@@ -202,22 +209,15 @@ class GameService(
                 DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name,
                 DaySubPhase.BADGE_HANDOVER.name,
             )
-            // Night kills come from NightPhase (EliminationHistory only tracks voting eliminations)
+            // Night kills come from NightPhase (EliminationHistory only tracks voting eliminations).
+            // Shared computePendingKills keeps this consistent with the actual
+            // applied kills (witch/guard saves AND the night-1 immunity perk) —
+            // an inline re-derivation here previously risked diverging.
             val nightResult = if (showNightResult) {
                 val np = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
                 if (np != null) {
-                    val wolfTarget = np.wolfTargetUserId
-                    val wolfKilled = wolfTarget != null && !np.witchAntidoteUsed && np.guardTargetUserId != wolfTarget
-                    val poisonTarget = np.witchPoisonTargetUserId
-                    
-                    // Collect all killed players (wolf kill + witch poison)
-                    val killedIds = mutableListOf<String>()
-                    if (wolfKilled) wolfTarget?.let { killedIds.add(it) }
-                    if (poisonTarget != null) killedIds.add(poisonTarget)
-                    
-                    // Deduplicate killed players (wolf and witch may target the same player)
-                    val uniqueKilledIds = killedIds.toSet()
-                    
+                    val uniqueKilledIds = nightOrchestrator.computePendingKills(gameId, np).toSet()
+
                     if (uniqueKilledIds.isNotEmpty()) {
                         mapOf(
                             "killedPlayers" to uniqueKilledIds.map { killedId ->
@@ -332,6 +332,25 @@ class GameService(
             )
         } else null
 
+        // Game-end credit rewards, rebuilt from the ledger (the durable record)
+        // so a page refresh on the Result screen still shows earnings.
+        val settlement = if (game.phase == GamePhase.GAME_OVER) {
+            val playerMap = players.associateBy { it.userId }
+            val rewardRows = creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD)
+            if (rewardRows.isEmpty()) null else mapOf(
+                "rewards" to rewardRows.map { tx ->
+                    mapOf(
+                        "userId" to tx.userId,
+                        "nickname" to displayNameFor(tx.userId),
+                        "seatIndex" to (playerMap[tx.userId]?.seatIndex ?: 0),
+                        "amount" to tx.amount,
+                    )
+                },
+                "myEarned" to rewardRows.firstOrNull { it.userId == requestingUserId }?.amount,
+                "myBalance" to walletService.balance(requestingUserId),
+            )
+        } else null
+
         val timerSnapshot = hostTimerService.snapshot(gameId)
         return mapOf(
             "gameId" to gameId,
@@ -354,6 +373,7 @@ class GameService(
             "bgmTrack" to room?.config?.bgmTrack,
             "witchSelfSaveAllowed" to (room?.config?.witchSelfSaveAllowed ?: true),
             "winner" to game.winner?.name,
+            "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,
             "sheriffElection" to sheriffElection,

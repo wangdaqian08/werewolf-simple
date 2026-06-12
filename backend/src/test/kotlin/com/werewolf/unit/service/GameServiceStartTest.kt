@@ -36,6 +36,9 @@ class GameServiceStartTest {
     @Mock lateinit var audioReplayCache: AudioReplayCache
     @Mock lateinit var hostTimerService: HostTimerService
     @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
+    @Mock lateinit var creditTransactionRepository: CreditTransactionRepository
+    @Mock lateinit var walletService: com.werewolf.service.WalletService
+    @Mock lateinit var perkService: com.werewolf.service.PerkService
     @InjectMocks lateinit var gameService: GameService
 
     private val hostId = "host:001"

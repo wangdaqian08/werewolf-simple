@@ -57,8 +57,9 @@
             WAITING stage; the button isn't rendered after Start Game
             because the room view isn't shown then.
           -->
-          <template v-if="canKick(seat)" #overlay>
+          <template v-if="canKick(seat) || hasPerkAtSeat(seat)" #overlay>
             <button
+              v-if="canKick(seat)"
               class="kick-btn"
               :data-testid="`kick-player-${seat}`"
               :aria-label="`Kick ${playerAtSeat(seat)?.nickname}`"
@@ -66,8 +67,54 @@
             >
               ×
             </button>
+            <!-- Perk activations are public to the whole room (fairness rule) -->
+            <span
+              v-if="hasPerkAtSeat(seat)"
+              class="perk-badge"
+              :data-testid="`perk-badge-${seat}`"
+              :title="perkAtSeat(seat)?.perkName"
+              >🛡</span
+            >
           </template>
         </PlayerSlot>
+      </section>
+
+      <!-- Perk panel: catalog + activation (visible pre-game when host allows perks) -->
+      <section v-if="perksEnabled && perks.length" class="perk-panel" data-testid="perk-panel">
+        <div class="perk-panel-title">
+          道具 / Perks
+          <span v-if="userStore.credits !== null" class="perk-balance"
+            >◈ {{ userStore.credits }}</span
+          >
+        </div>
+        <div v-for="perk in perks" :key="perk.perkCode" class="perk-row">
+          <div class="perk-info">
+            <div class="perk-name">{{ perk.name }} · ◈{{ perk.priceCredits }}</div>
+            <div class="perk-desc">{{ perk.description }}</div>
+            <div v-if="holderOf(perk.perkCode)" class="perk-holder">
+              已被 {{ holderNickname(perk.perkCode) }} 启用 / Taken
+            </div>
+          </div>
+          <button
+            v-if="iHold(perk.perkCode)"
+            class="btn btn-outline perk-btn"
+            data-testid="perk-withdraw-btn"
+            :disabled="perkBusy"
+            @click="handleWithdrawPerk(perk.perkCode)"
+          >
+            退还 / Withdraw
+          </button>
+          <button
+            v-else
+            class="btn btn-gold perk-btn"
+            data-testid="perk-activate-btn"
+            :disabled="perkBusy || !!holderOf(perk.perkCode)"
+            @click="handleActivatePerk(perk.perkCode)"
+          >
+            启用 / Activate
+          </button>
+        </div>
+        <p v-if="perkError" class="perk-error" data-testid="perk-error">{{ perkError }}</p>
       </section>
 
       <!-- Debug panel (mock mode only) -->
@@ -125,12 +172,14 @@
         >
           开始游戏 / Start Game
         </button>
-        <!-- Guest: ready toggle (disabled until a seat number is picked) -->
+        <!-- Guest: ready toggle (disabled until a seat number is picked;
+             also while a perk request is unresolved — decision 5: you can't
+             ready up mid-activation, resolve or withdraw the choice first) -->
         <template v-else>
           <button
             v-if="!iAmReady"
             class="btn btn-gold"
-            :disabled="!hasPickedSeat"
+            :disabled="!hasPickedSeat || perkBusy"
             @click="handleReady(true)"
           >
             准备 / Ready
@@ -145,8 +194,10 @@
 </template>
 
 <script lang="ts" setup>
+import axios from 'axios'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import http from '@/services/http'
+import type { Perk, PerkActivation } from '@/types'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/userStore'
@@ -210,6 +261,78 @@ const {
   playerAtSeat,
   slotVariant,
 } = useRoomStatus(room, userId)
+
+// ── Perks ───────────────────────────────────────────────────────────────────
+const perks = ref<Perk[]>([])
+const perkBusy = ref(false)
+const perkError = ref('')
+
+const perksEnabled = computed(
+  () => roomStore.room?.status === 'WAITING' && roomStore.room?.config.perksAllowed !== false,
+)
+const perkActivations = computed<PerkActivation[]>(() => roomStore.room?.perkActivations ?? [])
+
+function holderOf(perkCode: string): PerkActivation | undefined {
+  return perkActivations.value.find((a) => a.perkCode === perkCode)
+}
+
+function iHold(perkCode: string): boolean {
+  return holderOf(perkCode)?.userId === userStore.userId
+}
+
+function holderNickname(perkCode: string): string {
+  const holder = holderOf(perkCode)
+  if (!holder) return ''
+  if (holder.userId === userStore.userId) return '我'
+  return roomStore.room?.players.find((p) => p.userId === holder.userId)?.nickname ?? holder.userId
+}
+
+function perkAtSeat(seat: number): PerkActivation | undefined {
+  const player = playerAtSeat(seat)
+  if (!player) return undefined
+  return perkActivations.value.find((a) => a.userId === player.userId)
+}
+
+function hasPerkAtSeat(seat: number): boolean {
+  return !!perkAtSeat(seat)
+}
+
+function perkErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const msg = (err.response?.data as { error?: string } | undefined)?.error
+    if (msg) return msg
+  }
+  return '操作失败 / Action failed'
+}
+
+async function handleActivatePerk(perkCode: string) {
+  if (!roomStore.room) return
+  perkError.value = ''
+  perkBusy.value = true
+  try {
+    await roomService.activatePerk(roomStore.room.roomId, perkCode)
+    // PERK_UPDATE lands via STOMP; refresh balance for the panel chip.
+    await userStore.refreshWallet()
+  } catch (err) {
+    perkError.value = perkErrorMessage(err)
+  } finally {
+    perkBusy.value = false
+  }
+}
+
+async function handleWithdrawPerk(perkCode: string) {
+  if (!roomStore.room) return
+  perkError.value = ''
+  perkBusy.value = true
+  try {
+    await roomService.withdrawPerk(roomStore.room.roomId, perkCode)
+    await userStore.refreshWallet()
+  } catch (err) {
+    perkError.value = perkErrorMessage(err)
+  } finally {
+    perkBusy.value = false
+  }
+}
 
 async function handleSeatClick(seat: number) {
   if (!canSelectSeat(seat)) return
@@ -290,6 +413,7 @@ async function checkActiveGame() {
       router.push({ name: 'game', params: { gameId: room.activeGameId } })
     } else if (room.status === 'WAITING') {
       roomStore.updatePlayers(room.players)
+      roomStore.updatePerkActivations(room.perkActivations ?? [])
     }
   } catch {
     /* room may have been deleted — ignore, user can still leave manually */
@@ -324,6 +448,16 @@ onMounted(async () => {
   }
   loading.value = false
 
+  // Perk catalog + balance for the perk panel; non-fatal if either fails.
+  if (perksEnabled.value) {
+    try {
+      perks.value = await roomService.getPerks()
+    } catch {
+      /* panel simply stays hidden */
+    }
+    void userStore.refreshWallet()
+  }
+
   // Trigger 1 — on mount: if the room already has an active game (page refresh
   // after missing the GAME_STARTED event), redirect immediately.
   if (roomStore.room?.status === 'IN_GAME' && roomStore.room.activeGameId) {
@@ -346,6 +480,9 @@ onMounted(async () => {
         const data = JSON.parse(msg.body)
         if (data.type === 'ROOM_UPDATE') {
           roomStore.updatePlayers(data.payload.players)
+        }
+        if (data.type === 'PERK_UPDATE') {
+          roomStore.updatePerkActivations(data.payload.perkActivations)
         }
         if (data.type === 'GAME_STARTED') {
           router.push({ name: 'game', params: { gameId: data.payload.gameId } })
@@ -603,6 +740,83 @@ onUnmounted(() => {
 .debug-start-btn:hover {
   border-color: var(--red);
   color: var(--red);
+}
+
+/* ── Perk panel ──────────────────────────────────────────────────────── */
+.perk-panel {
+  border: 1px solid var(--border-l);
+  border-radius: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  background: rgba(160, 120, 48, 0.04);
+  margin-bottom: 0.75rem;
+}
+
+.perk-panel-title {
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.perk-balance {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.perk-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.perk-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.perk-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.perk-desc {
+  font-size: 0.625rem;
+  color: var(--muted);
+  margin-top: 0.125rem;
+}
+
+.perk-holder {
+  font-size: 0.625rem;
+  color: var(--green);
+  margin-top: 0.125rem;
+}
+
+.perk-btn {
+  width: auto;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.perk-error {
+  color: var(--red);
+  font-size: 0.6875rem;
+  margin: 0.375rem 0 0;
+}
+
+/* Shield badge on a seat tile for players holding an active perk. */
+.perk-badge {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  z-index: 1;
 }
 
 /* Host-only kick button overlaid on a player's seat card. */

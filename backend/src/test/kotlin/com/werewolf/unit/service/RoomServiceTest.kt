@@ -29,6 +29,9 @@ class RoomServiceTest {
     @Mock lateinit var stompPublisher: StompPublisher
     @org.mockito.Spy val timing: com.werewolf.config.GameTimingProperties = com.werewolf.config.GameTimingProperties()
     @Mock(strictness = org.mockito.Mock.Strictness.LENIENT) lateinit var bgmRegistry: com.werewolf.controller.BgmTrackRegistry
+    @Mock lateinit var perkActivationRepository: com.werewolf.repository.PerkActivationRepository
+    @Mock lateinit var perkRepository: com.werewolf.repository.PerkRepository
+    @Mock lateinit var perkService: com.werewolf.service.PerkService
     @InjectMocks lateinit var roomService: RoomService
 
     @org.junit.jupiter.api.BeforeEach
@@ -418,5 +421,81 @@ class RoomServiceTest {
         verify(stompPublisher).broadcastRoomAfterCommit(eq(1), argThat<Map<String, Any>> {
             this["type"] == "ROOM_UPDATE"
         })
+    }
+
+    @Test
+    fun `kickPlayer - refunds the kicked player's active perks`() {
+        val room = room()
+        val targetRow = RoomPlayer(roomId = 1, userId = userId)
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.of(targetRow))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(listOf(RoomPlayer(roomId = 1, userId = hostId)))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.kickPlayer(hostId, 1, userId)
+
+        verify(perkService).refundActiveForUser(1, userId)
+    }
+
+    // ── perks: room config + DTO exposure ──────────────────────────────────────
+
+    @Test
+    fun `createRoom - persists perksAllowed flag in GameConfig`() {
+        val captor = argumentCaptor<Room>()
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest(perksAllowed = false))
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest(perksAllowed = true))
+
+        verify(roomRepository, org.mockito.kotlin.times(2)).save(captor.capture())
+        assertThat(captor.firstValue.config?.perksAllowed).isFalse()
+        assertThat(captor.secondValue.config?.perksAllowed).isTrue()
+    }
+
+    @Test
+    fun `buildRoomDto - surfaces ACTIVE perk activations to all room members`() {
+        val room = room()
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+        whenever(perkRepository.findAll()).thenReturn(
+            listOf(Perk(perkCode = "NIGHT1_IMMUNITY", name = "First Night Immunity", description = "d", priceCredits = 30)),
+        )
+        whenever(perkActivationRepository.findByRoomIdAndStatus(1, PerkActivationStatus.ACTIVE)).thenReturn(
+            listOf(PerkActivation(roomId = 1, userId = "u2", perkCode = "NIGHT1_IMMUNITY", pricePaid = 30)),
+        )
+
+        val dto = roomService.getRoom(1)
+
+        // Pins that buildRoomDto queries specifically the ACTIVE status (not
+        // CONSUMED/VOID/REFUNDED) — the status filter is the fairness contract.
+        verify(perkActivationRepository).findByRoomIdAndStatus(1, PerkActivationStatus.ACTIVE)
+        assertThat(dto.perkActivations).hasSize(1)
+        val pa = dto.perkActivations.single()
+        assertThat(pa.userId).isEqualTo("u2")
+        assertThat(pa.perkCode).isEqualTo("NIGHT1_IMMUNITY")
+        // perkName is resolved by mapping the code through perkRepository.findAll().
+        assertThat(pa.perkName).isEqualTo("First Night Immunity")
+    }
+
+    @Test
+    fun `buildRoomDto - perkActivations is empty when none are active`() {
+        val room = room()
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+        whenever(perkActivationRepository.findByRoomIdAndStatus(1, PerkActivationStatus.ACTIVE)).thenReturn(emptyList())
+
+        val dto = roomService.getRoom(1)
+
+        verify(perkActivationRepository).findByRoomIdAndStatus(1, PerkActivationStatus.ACTIVE)
+        assertThat(dto.perkActivations).isEmpty()
     }
 }

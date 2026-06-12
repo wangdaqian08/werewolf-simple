@@ -79,6 +79,8 @@ class NightOrchestratorTest {
         coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
         actionLogService = actionLogService,
         timing = com.werewolf.config.GameTimingProperties(),
+        rewardSettlementService = mock(),
+        perkService = mock(lenient = true) { on { night1ImmuneUserIds(any()) } doReturn emptySet() },
     )
 
     private fun mockAudioServiceForDayTransition(r: Room) {

@@ -33,6 +33,12 @@ enum class VotingSubPhase { VOTING, RE_VOTING, VOTE_RESULT, HUNTER_SHOOT, BADGE_
 
 enum class WinConditionMode { CLASSIC, HARD_MODE }
 
+enum class CreditTxType { PURCHASE, GAME_REWARD, PERK_SPEND, REFUND }
+
+enum class PerkActivationStatus { ACTIVE, CONSUMED, VOID, REFUNDED }
+
+enum class PaymentOrderStatus { CREATED, COMPLETED, EXPIRED, FAILED }
+
 enum class ActionType {
     // Role reveal
     CONFIRM_ROLE, START_NIGHT,
