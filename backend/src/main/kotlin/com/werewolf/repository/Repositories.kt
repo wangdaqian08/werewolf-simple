@@ -181,6 +181,25 @@ interface PerkActivationRepository : JpaRepository<PerkActivation, Int> {
     )
     fun settleIfLive(id: Int, newStatus: PerkActivationStatus): Int
 
+    /** Race-proof game binding: only never-bound, still-ACTIVE rows. A row
+     *  refunded by a concurrent withdraw stays REFUNDED (no resurrection). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+        "UPDATE PerkActivation a SET a.gameId = :gameId " +
+            "WHERE a.roomId = :roomId AND a.status = com.werewolf.model.PerkActivationStatus.ACTIVE " +
+            "AND a.gameId IS NULL",
+    )
+    fun bindToGame(roomId: Int, gameId: Int): Int
+
+    /** Race-proof VOID for wolf-dealt holders: only flips bound ACTIVE rows. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+        "UPDATE PerkActivation a SET a.status = com.werewolf.model.PerkActivationStatus.VOID " +
+            "WHERE a.gameId = :gameId AND a.userId IN :wolfUserIds " +
+            "AND a.status = com.werewolf.model.PerkActivationStatus.ACTIVE",
+    )
+    fun voidWolfHolders(gameId: Int, wolfUserIds: Collection<String>): Int
+
     /** Self-heal: live activations bound to already-ended games. */
     @Query(
         "SELECT a FROM PerkActivation a, Game g WHERE a.gameId = g.gameId AND g.endedAt IS NOT NULL " +

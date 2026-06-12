@@ -8,6 +8,7 @@ import com.werewolf.service.PerkService
 import com.werewolf.service.PerkSettlementService
 import com.werewolf.service.PerkTakenException
 import com.werewolf.service.PerksDisabledException
+import com.werewolf.service.RoomNotOpenException
 import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -229,6 +230,109 @@ class PerkServiceIntegrationTest {
         ).isEmpty()
         // Still reported immune after settlement (CONSUMED stays in the set).
         assertThat(perkService.night1ImmuneUserIds(gameId)).containsExactly(host)
+    }
+
+    @Test
+    fun `onGameStart never resurrects a withdrawn activation`() {
+        ensurePerk()
+        val host = newUser("h")
+        val roomId = newRoom(host)
+        fund(host, 100)
+        perkService.activate(host, roomId, PERK_NIGHT1_IMMUNITY)
+        val activationId = perkActivationRepository
+            .findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)
+            .single().id ?: error("activation not persisted")
+
+        // Withdraw refunds and terminates the row (models the audit race:
+        // a withdraw committing between onGameStart's read and its commit).
+        perkService.withdraw(host, roomId, PERK_NIGHT1_IMMUNITY)
+        assertThat(walletService.balance(host)).isEqualTo(100)
+
+        val gameId = 997_000 + seq
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
+        )
+
+        // The conditional bind must not touch the REFUNDED row.
+        val row = perkActivationRepository.findById(activationId).orElseThrow()
+        assertThat(row.status).isEqualTo(PerkActivationStatus.REFUNDED)
+        assertThat(row.gameId).isNull()
+        assertThat(walletService.balance(host)).isEqualTo(100)
+
+        // Nothing got bound, so game-end settlement finds nothing to refund.
+        perkSettlementService.settleForGame(gameId, cancelled = false)
+        assertThat(walletService.balance(host)).isEqualTo(100)
+        assertThat(
+            creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(host)
+                .filter { it.type == CreditTxType.REFUND },
+        ).hasSize(1) // only the withdraw refund — never a second one
+    }
+
+    @Test
+    fun `withdraw after game start is rejected - stays ACTIVE and bound, no refund`() {
+        ensurePerk()
+        val host = newUser("h")
+        val roomId = newRoom(host)
+        fund(host, 100)
+        perkService.activate(host, roomId, PERK_NIGHT1_IMMUNITY)
+
+        val gameId = 996_000 + seq
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
+        )
+        // GameService.startGame flips the room out of WAITING in the same tx.
+        val room = roomRepository.findById(roomId).orElseThrow()
+        room.status = RoomStatus.IN_GAME
+        roomRepository.save(room)
+
+        assertThatThrownBy { perkService.withdraw(host, roomId, PERK_NIGHT1_IMMUNITY) }
+            .isInstanceOf(RoomNotOpenException::class.java)
+
+        val row = perkActivationRepository.findByGameId(gameId).single()
+        assertThat(row.status).isEqualTo(PerkActivationStatus.ACTIVE)
+        assertThat(row.gameId).isEqualTo(gameId)
+        assertThat(walletService.balance(host)).isEqualTo(70) // still charged
+        assertThat(
+            creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(host)
+                .filter { it.type == CreditTxType.REFUND },
+        ).isEmpty()
+    }
+
+    @Test
+    fun `markNight1Triggered is idempotent - second call keeps the first timestamp, one CONSUME, no refund`() {
+        ensurePerk()
+        val host = newUser("h")
+        val roomId = newRoom(host)
+        fund(host, 100)
+        perkService.activate(host, roomId, PERK_NIGHT1_IMMUNITY)
+
+        val gameId = 995_000 + seq
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
+        )
+
+        perkService.markNight1Triggered(gameId, setOf(host))
+        val first = perkActivationRepository.findByGameId(gameId).single().triggeredAt
+        assertThat(first).isNotNull()
+
+        // Let CURRENT_TIMESTAMP move on so a buggy re-mark would be visible.
+        Thread.sleep(50)
+        perkService.markNight1Triggered(gameId, setOf(host))
+        val second = perkActivationRepository.findByGameId(gameId).single().triggeredAt
+        assertThat(second).isEqualTo(first)
+
+        // Settlement still consumes exactly once with no refund row.
+        perkSettlementService.settleForGame(gameId, cancelled = false)
+        assertThat(perkActivationRepository.findByGameId(gameId).single().status)
+            .isEqualTo(PerkActivationStatus.CONSUMED)
+        assertThat(walletService.balance(host)).isEqualTo(70)
+        assertThat(
+            creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(host)
+                .filter { it.type == CreditTxType.REFUND },
+        ).isEmpty()
     }
 
     @Test

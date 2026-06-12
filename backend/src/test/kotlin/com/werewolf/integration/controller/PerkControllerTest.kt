@@ -256,6 +256,79 @@ class PerkControllerTest {
     }
 
     @Test
+    fun `GET perks-my caps the response at 50 rows`() {
+        val (token, userId) = login("PerkMyCap")
+        // Seed straight through the repository — the cap is a read-side contract,
+        // independent of how the rows were created (FCFS would block 51 buys).
+        repeat(51) {
+            perkActivationRepository.save(
+                com.werewolf.model.PerkActivation(
+                    roomId = 1, userId = userId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+                ),
+            )
+        }
+
+        val resp = restTemplate.exchange(
+            "/api/perks/my",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Nothing>(headers(token)),
+            List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(resp.body!!).hasSize(50)
+    }
+
+    @Test
+    fun `GET perks-my returns 200 and an empty list when the caller has no activations`() {
+        val (token, _) = login("PerkMyEmpty")
+
+        val resp = restTemplate.exchange(
+            "/api/perks/my",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Nothing>(headers(token)),
+            List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(resp.body!!).isEmpty()
+    }
+
+    @Test
+    fun `GET perks-my for a guest-prefixed userId returns only that guest's activations`() {
+        // /api/user/login mints guest JWTs ("guest:<nickname>") — the same way
+        // every other test in this file authenticates.
+        val (token, userId) = login("PerkMyGuest")
+        val (_, otherId) = login("PerkMyGuestOther")
+        assertThat(userId).startsWith("guest:")
+
+        perkActivationRepository.save(
+            com.werewolf.model.PerkActivation(
+                roomId = 1, userId = userId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+            ),
+        )
+        perkActivationRepository.save(
+            com.werewolf.model.PerkActivation(
+                roomId = 1, userId = otherId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+            ),
+        )
+
+        val resp = restTemplate.exchange(
+            "/api/perks/my",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Nothing>(headers(token)),
+            List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        @Suppress("UNCHECKED_CAST")
+        val rows = resp.body!! as List<Map<String, Any?>>
+        // Scoped to the caller: only the one row seeded for this guest.
+        assertThat(rows).hasSize(1)
+        assertThat(rows.single()["perkCode"]).isEqualTo(PERK_NIGHT1_IMMUNITY)
+    }
+
+    @Test
     fun `GET perks-my without token is rejected with 401 or 403`() {
         val resp = restTemplate.getForEntity("/api/perks/my", Map::class.java)
         assertThat(resp.statusCode).isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN)

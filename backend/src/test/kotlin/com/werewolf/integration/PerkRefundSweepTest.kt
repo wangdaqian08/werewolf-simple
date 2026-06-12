@@ -156,6 +156,39 @@ class PerkRefundSweepTest {
     }
 
     @Test
+    fun `settles a triggered leftover bound to an ended winnerless game (cancellation precedence, refund)`() {
+        val user = newUser()
+        val roomId = newRoom(user)
+        // Ended but winner == null → the sweep's own `cancelled = game.winner == null`
+        // mapping must treat it as cancelled and refund EVEN THOUGH triggeredAt is set.
+        val game = gameRepository.save(
+            Game(roomId = roomId, hostUserId = user).also {
+                it.phase = GamePhase.GAME_OVER
+                it.endedAt = LocalDateTime.now()
+            },
+        )
+        val gameId = game.gameId ?: error("game not persisted")
+        val activation = perkActivationRepository.save(
+            PerkActivation(
+                roomId = roomId, gameId = gameId, userId = user,
+                perkCode = PERK_NIGHT1_IMMUNITY, status = PerkActivationStatus.ACTIVE, pricePaid = 30,
+            ).also { it.triggeredAt = LocalDateTime.now() },
+        )
+        val id = activation.id ?: error("activation not persisted")
+
+        sweep.settleLeftoversForEndedGames()
+
+        val settled = perkActivationRepository.findById(id).orElseThrow()
+        assertThat(settled.status).isEqualTo(PerkActivationStatus.REFUNDED)
+        assertThat(settled.settledAt).isNotNull()
+        assertThat(walletService.balance(user)).isEqualTo(30)
+        val refunds = creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(user)
+            .filter { it.type == CreditTxType.REFUND }
+        assertThat(refunds).hasSize(1)
+        assertThat(refunds.single().perkActivationId).isEqualTo(id)
+    }
+
+    @Test
     fun `settles a leftover ACTIVE activation bound to an ended game (refund, untriggered)`() {
         val user = newUser()
         val roomId = newRoom(user)

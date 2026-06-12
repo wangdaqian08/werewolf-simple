@@ -126,6 +126,46 @@ class PaymentControllerTest {
     }
 
     @Test
+    fun `GET payment-orders caps the response at 50 rows`() {
+        val (token, userId) = login("PayOrdCap")
+        repeat(51) { saveOrder(userId, PaymentOrderStatus.COMPLETED) }
+
+        val resp = restTemplate.exchange(
+            ORDERS_URL, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(token)), List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(resp.body!!).hasSize(50)
+    }
+
+    @Test
+    fun `GET payment-orders returns 200 and an empty list when the caller has no orders`() {
+        val (token, _) = login("PayOrdEmpty")
+
+        val resp = restTemplate.exchange(
+            ORDERS_URL, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(token)), List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(resp.body!!).isEmpty()
+    }
+
+    @Test
+    fun `GET payment-orders with a guest token returns 200 and an empty list, not 403`() {
+        // Checkout blocks "guest:" identities with 403 (GuestPurchaseException);
+        // the read-only order history must NOT inherit that block.
+        val (token, userId) = login("PayOrdGuest")
+        assertThat(userId).startsWith("guest:")
+
+        val resp = restTemplate.exchange(
+            ORDERS_URL, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(token)), List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(resp.body!!).isEmpty()
+    }
+
+    @Test
     fun `GET payment-orders without token is rejected with 401 or 403`() {
         val resp = restTemplate.getForEntity(ORDERS_URL, Map::class.java)
         assertThat(resp.statusCode).isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN)

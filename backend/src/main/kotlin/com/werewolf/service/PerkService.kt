@@ -123,17 +123,24 @@ class PerkService(
      * The refund happens at game end via PerkSettlementService (refunding now
      * would leak the wolf identity via the balance change; at game end roles
      * are public).
+     *
+     * Race-proof: both steps are conditional bulk UPDATEs (no entity
+     * mutation + save). A row refunded by a concurrent withdraw between a
+     * read here and this transaction's commit stays REFUNDED — a stale
+     * full-row UPDATE would resurrect it to ACTIVE/bound and game-end
+     * settlement would refund it a second time (double credit).
      */
     @Transactional
     fun onGameStart(roomId: Int, gameId: Int, players: List<GamePlayer>) {
-        val roleByUser = players.associate { it.userId to it.role }
-        perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE).forEach { activation ->
-            activation.gameId = gameId
-            if (roleByUser[activation.userId] == PlayerRole.WEREWOLF) {
-                activation.status = PerkActivationStatus.VOID
-                log.info("[perk] void (wolf role) game={} user={} perk={}", gameId, activation.userId, activation.perkCode)
-            }
-            perkActivationRepository.save(activation)
+        if (perkActivationRepository.bindToGame(roomId, gameId) == 0) return
+        val wolfUserIds = players.filter { it.role == PlayerRole.WEREWOLF }.map { it.userId }
+        if (wolfUserIds.isEmpty()) return
+        if (perkActivationRepository.voidWolfHolders(gameId, wolfUserIds) > 0) {
+            perkActivationRepository.findByGameId(gameId)
+                .filter { it.status == PerkActivationStatus.VOID }
+                .forEach {
+                    log.info("[perk] void (wolf role) game={} user={} perk={}", gameId, it.userId, it.perkCode)
+                }
         }
     }
 

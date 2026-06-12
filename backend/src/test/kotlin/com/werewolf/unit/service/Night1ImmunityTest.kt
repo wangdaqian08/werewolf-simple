@@ -145,6 +145,16 @@ class Night1ImmunityTest {
     }
 
     @Test
+    fun `holder both wolf-targeted and poisoned - dies by poison yet the wolf-kill save stays decisive`() {
+        val np = night(dayNumber = 1, wolfTarget = "victim", poisonTarget = "victim")
+        // Poison lands regardless of immunity (not a wolf kill) — the holder dies...
+        assertThat(orchestrator.computePendingKills(np, setOf("victim"))).containsExactly("victim")
+        // ...but the perk still decisively blocked the WOLF kill, so settlement
+        // must CONSUME it even though the holder died to poison the same night.
+        assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).containsExactly("victim")
+    }
+
+    @Test
     fun `no decisive save - no wolf target at all`() {
         val np = night(dayNumber = 1, wolfTarget = null)
         assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).isEmpty()
