@@ -74,6 +74,31 @@ export interface PerkActivation {
   perkName: string
 }
 
+export type PerkActivationStatus = 'ACTIVE' | 'CONSUMED' | 'VOID' | 'REFUNDED'
+
+/** One of the caller's own perk activations (GET /api/perks/my). */
+export interface MyPerkActivation {
+  perkCode: string
+  perkName: string
+  status: PerkActivationStatus
+  pricePaid: number
+  roomId: number
+  gameId?: number | null
+  createdAt: string
+  settledAt?: string | null
+}
+
+/** One of the caller's own payment orders (GET /api/payment/orders). */
+export interface PaymentOrderSummary {
+  orderNo: string
+  productName: string
+  credits: number
+  amountCents: number
+  currency: string
+  status: 'CREATED' | 'COMPLETED' | 'EXPIRED' | 'FAILED'
+  createdAt: string
+}
+
 // ── Room ──────────────────────────────────────────────────────────────────────
 
 export type PlayerStatus = 'NOT_READY' | 'READY'

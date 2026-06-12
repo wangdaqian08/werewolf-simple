@@ -1,4 +1,5 @@
 import http from './http'
+import type { PaymentOrderSummary } from '@/types'
 
 export interface CreditProduct {
   productKey: string
@@ -30,6 +31,12 @@ export const paymentService = {
   /** Owner-only fulfillment poll — the redirect back from Stripe is not trusted. */
   async getOrder(orderNo: string): Promise<PaymentOrderStatus> {
     const { data } = await http.get<PaymentOrderStatus>(`/payment/order/${orderNo}`)
+    return data
+  },
+
+  /** The caller's own payment order history (most recent first). */
+  async listOrders(): Promise<PaymentOrderSummary[]> {
+    const { data } = await http.get<PaymentOrderSummary[]>('/payment/orders')
     return data
   },
 }

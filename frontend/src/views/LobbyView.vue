@@ -1,5 +1,14 @@
 <template>
   <div class="lobby-wrap">
+    <button
+      v-if="userStore.isLoggedIn"
+      class="account-menu-btn"
+      data-testid="account-menu-btn"
+      aria-label="我的账户 / Account"
+      @click="router.push('/account')"
+    >
+      ☰
+    </button>
     <div class="lobby-card">
       <InstallToHomeScreenPrompt />
 
@@ -437,12 +446,38 @@ function signInWithWechat() {
 
 <style scoped>
 .lobby-wrap {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100dvh;
   padding: 1.5rem;
   background: var(--bg);
+}
+
+/* ☰ entry to the /account page — icon button sized like other secondary
+   controls (44px touch target; 88px applies to primary actions only). */
+.account-menu-btn {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--muted);
+  font-size: 1.125rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.account-menu-btn:hover {
+  color: var(--text);
 }
 
 .lobby-card {

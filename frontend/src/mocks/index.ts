@@ -18,6 +18,8 @@ import {
   MOCK_GAME_RESULT_WOLVES,
   MOCK_GAME_STATE,
   MOCK_LOGIN,
+  MOCK_MY_PERKS,
+  MOCK_PAYMENT_ORDERS,
   MOCK_ROLE_ASSIGNMENTS,
   MOCK_ROOM_AS_GUEST,
   MOCK_ROOM_AS_HOST,
@@ -29,6 +31,7 @@ import {
   MOCK_SHERIFF_VOTING_HOST_QUIT,
   MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
   MOCK_STOMP_EVENTS,
+  MOCK_WALLET,
 } from './data'
 import { mockStompClient } from './mockStompClient'
 import type {
@@ -154,6 +157,11 @@ export function setupMocks() {
   mock.onPost('/user/login').reply(200, MOCK_LOGIN)
   mock.onGet('/user/profile').reply(200, MOCK_LOGIN.user)
   mock.onPost('/user/logout').reply(200)
+
+  // ── Wallet / Perks / Payments (account page) ──────────────────────────────────
+  mock.onGet('/wallet').reply(200, MOCK_WALLET)
+  mock.onGet('/perks/my').reply(200, MOCK_MY_PERKS)
+  mock.onGet('/payment/orders').reply(200, MOCK_PAYMENT_ORDERS)
 
   // ── Room ──────────────────────────────────────────────────────────────────────
   mock.onPost('/room/create').reply((config) => {
