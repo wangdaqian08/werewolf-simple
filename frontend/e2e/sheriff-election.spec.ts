@@ -22,35 +22,28 @@ async function goToSheriffSignup(page: import('@playwright/test').Page) {
   await page.waitForTimeout(100)
 }
 
-// ── Test 1: withdraw removes player from candidate list ───────────────────────
+// ── Test 1: run → withdraw toggles between Run/Pass and Withdraw buttons ─────
+//
+// 2026-05-11 behaviour change: SIGNUP no longer renders per-candidate rows.
+// The visible state we can assert is the action button affordance.
 
-test('withdraw removes player from candidate list', async ({ page }) => {
+test('run then withdraw toggles the action buttons', async ({ page }) => {
   await goToSheriffSignup(page)
 
-  // Verify we're in SIGNUP phase
-  await expect(page.getByText(/参选 \/ Run for Sheriff/i)).toBeVisible()
-
-  // Run for sheriff to become a candidate
-  await page.getByRole('button', { name: /参选 \/ Run for Sheriff/i }).click()
-  await page.waitForTimeout(100)
-
-  // Player is now a candidate — the "Withdraw" button should be visible
-  await expect(page.getByRole('button', { name: /撤回 \/ Withdraw/i })).toBeVisible()
-
-  // Note the candidate count before withdrawal (initial SIGNUP mock has Alice + Tom + now You)
-  const candidatesBeforeCount = await page.locator('.cand-row-running').count()
-
-  // Click Withdraw
-  await page.getByRole('button', { name: /撤回 \/ Withdraw/i }).click()
-  await page.waitForTimeout(100)
-
-  // After withdrawal, the Withdraw button should disappear and Run for Sheriff should return
+  // Initial state: Run + Pass visible, Withdraw hidden
   await expect(page.getByRole('button', { name: /参选 \/ Run for Sheriff/i })).toBeVisible()
   await expect(page.getByRole('button', { name: /撤回 \/ Withdraw/i })).not.toBeVisible()
 
-  // The candidate count should have decreased (u1 removed)
-  const candidatesAfterCount = await page.locator('.cand-row-running').count()
-  expect(candidatesAfterCount).toBeLessThan(candidatesBeforeCount)
+  // Run for sheriff → Withdraw appears, Run hides
+  await page.getByRole('button', { name: /参选 \/ Run for Sheriff/i }).click()
+  await expect(page.getByRole('button', { name: /撤回 \/ Withdraw/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /参选 \/ Run for Sheriff/i })).not.toBeVisible()
+
+  // Click Withdraw → Run reappears (treated as pass — Pass button stays hidden
+  // since hasPassed=true).
+  await page.getByRole('button', { name: /撤回 \/ Withdraw/i }).click()
+  await expect(page.getByRole('button', { name: /参选 \/ Run for Sheriff/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /撤回 \/ Withdraw/i })).not.toBeVisible()
 })
 
 // ── Test 2: pass button changes to Passed state ───────────────────────────────

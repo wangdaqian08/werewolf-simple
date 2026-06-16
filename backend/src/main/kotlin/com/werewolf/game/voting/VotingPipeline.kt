@@ -5,10 +5,12 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.phase.HardModeCounterplay
 import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
@@ -16,6 +18,7 @@ import com.werewolf.repository.GameRepository
 import com.werewolf.repository.VoteRepository
 import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameContextLoader
+import com.werewolf.service.RewardSettlementService
 import com.werewolf.service.StompPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -35,6 +38,9 @@ class VotingPipeline(
     private val contextLoader: GameContextLoader,
     private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: ActionLogService,
+    private val hostTimerService: HostTimerService,
+    private val dayRevealAdvancer: DayRevealAdvancer,
+    private val rewardSettlementService: RewardSettlementService,
 ) {
     private val log = LoggerFactory.getLogger(VotingPipeline::class.java)
 
@@ -166,25 +172,48 @@ class VotingPipeline(
     fun continueToNight(request: GameActionRequest, context: GameContext): GameActionResult {
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can advance")
-        if (context.game.phase != GamePhase.DAY_VOTING)
-            return GameActionResult.Rejected("Not in voting phase")
-        if (context.game.subPhase != VotingSubPhase.VOTE_RESULT.name)
-            return GameActionResult.Rejected("Not in VOTE_RESULT sub-phase")
-        goToNight(context)
-        return GameActionResult.Success()
+
+        // Normal path: DAY_VOTING/VOTE_RESULT
+        if (context.game.phase == GamePhase.DAY_VOTING) {
+            if (context.game.subPhase != VotingSubPhase.VOTE_RESULT.name)
+                return GameActionResult.Rejected("Not in VOTE_RESULT sub-phase")
+            goToNight(context)
+            return GameActionResult.Success()
+        }
+
+        // Skip-voting path: DAY_DISCUSSION when daySkipVoting=true (wolf self-destructed)
+        if (context.game.phase == GamePhase.DAY_DISCUSSION) {
+            if (!context.game.daySkipVoting)
+                return GameActionResult.Rejected("Voting was not skipped — cannot advance to night from DAY_DISCUSSION")
+            if (context.game.subPhase !in setOf(DaySubPhase.RESULT_HIDDEN.name, DaySubPhase.RESULT_REVEALED.name))
+                return GameActionResult.Rejected("Not in a day discussion sub-phase")
+            hostTimerService.cancel(context.gameId)
+            goToNight(context)
+            return GameActionResult.Success()
+        }
+
+        return GameActionResult.Rejected("Not in voting phase")
     }
 
     @Transactional
     fun handleHunterShoot(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.DAY_VOTING)
-            return GameActionResult.Rejected("Not in voting phase")
-        if (context.game.subPhase != VotingSubPhase.HUNTER_SHOOT.name)
-            return GameActionResult.Rejected("Not in HUNTER_SHOOT sub-phase")
+        // Two entry points share this handler (mirrors handleBadge):
+        //   (A) Voting elimination: DAY_VOTING + VotingSubPhase.HUNTER_SHOOT.
+        //   (B) Night-death reveal:  DAY_DISCUSSION + DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH
+        //       — a hunter killed by wolves (not poisoned) fires during the day.
+        val fromVoting = context.game.phase == GamePhase.DAY_VOTING &&
+            context.game.subPhase == VotingSubPhase.HUNTER_SHOOT.name
+        val fromNightReveal = context.game.phase == GamePhase.DAY_DISCUSSION &&
+            context.game.subPhase == DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name
+        if (!fromVoting && !fromNightReveal)
+            return GameActionResult.Rejected("Not in a HUNTER_SHOOT sub-phase")
 
         val actor = context.playerById(request.actorUserId)
             ?: return GameActionResult.Rejected("Actor not found")
         if (actor.role != PlayerRole.HUNTER)
             return GameActionResult.Rejected("Only the hunter can act here")
+
+        if (fromNightReveal) return handleNightDeathHunterShoot(request, context, actor)
 
         when (request.actionType) {
             ActionType.HUNTER_SHOOT -> {
@@ -194,11 +223,11 @@ class VotingPipeline(
                     .orElse(null) ?: return GameActionResult.Rejected("Target not found")
                 if (!targetPlayer.alive) return GameActionResult.Rejected("Target is already dead")
 
-                targetPlayer.alive = false
-                gamePlayerRepository.save(targetPlayer)
                 actionLogService.recordHunterShot(context.gameId, context.game.dayNumber, actor.userId, target)
 
-                // Record in elimination history
+                // Record in elimination history. `hunterShotUserId` doubles as
+                // the deferred-kill signal for BADGE_PASS / BADGE_DESTROY when
+                // the target is the sheriff (see below).
                 eliminationHistoryRepository.findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
                     .ifPresent { history ->
                         history.hunterShotUserId = target
@@ -210,12 +239,11 @@ class VotingPipeline(
                     context.gameId,
                     DomainEvent.HunterShot(context.gameId, actor.userId, target)
                 )
-                stompPublisher.broadcastGameAfterCommit(
-                    context.gameId,
-                    DomainEvent.PlayerEliminated(context.gameId, target, targetPlayer.role)
-                )
 
-                // If hunted player was the sheriff, need badge handover
+                // Sheriff target: defer the kill (国标 rule — the dying sheriff
+                // performs the badge handover BEFORE being marked dead).
+                // handleBadge.BADGE_PASS / BADGE_DESTROY commits the kill once
+                // the heir is chosen.
                 if (target == context.game.sheriffUserId) {
                     context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
                     gameRepository.save(context.game)
@@ -226,7 +254,14 @@ class VotingPipeline(
                     return GameActionResult.Success()
                 }
 
-                // No badge handover needed — check win then go to night
+                // Non-sheriff target: kill immediately and proceed to night.
+                targetPlayer.alive = false
+                targetPlayer.diedDay = context.game.dayNumber
+                gamePlayerRepository.save(targetPlayer)
+                stompPublisher.broadcastGameAfterCommit(
+                    context.gameId,
+                    DomainEvent.PlayerEliminated(context.gameId, target, targetPlayer.role)
+                )
                 afterHunterAct(context)
             }
 
@@ -251,10 +286,29 @@ class VotingPipeline(
 
     @Transactional
     fun handleBadge(request: GameActionRequest, context: GameContext): GameActionResult {
-        if (context.game.phase != GamePhase.DAY_VOTING)
-            return GameActionResult.Rejected("Not in voting phase")
-        if (context.game.subPhase != VotingSubPhase.BADGE_HANDOVER.name)
+        // Two entry points share this handler:
+        //   (A) Voting elimination: DAY_VOTING + VotingSubPhase.BADGE_HANDOVER
+        //       — sheriff voted out → after handover, continue elimination via
+        //         afterElimination() and land on VotingSubPhase.VOTE_RESULT.
+        //   (B) Night kill reveal:  DAY_DISCUSSION + DaySubPhase.BADGE_HANDOVER
+        //       — sheriff killed at night → after handover, land back on
+        //         DaySubPhase.RESULT_REVEALED so host can advance to voting.
+        val fromVoting = context.game.phase == GamePhase.DAY_VOTING &&
+            context.game.subPhase == VotingSubPhase.BADGE_HANDOVER.name
+        val fromNightReveal = context.game.phase == GamePhase.DAY_DISCUSSION &&
+            context.game.subPhase == DaySubPhase.BADGE_HANDOVER.name
+        if (!fromVoting && !fromNightReveal)
             return GameActionResult.Rejected("Not in BADGE_HANDOVER sub-phase")
+
+        val postPhase = if (fromVoting) GamePhase.DAY_VOTING else GamePhase.DAY_DISCUSSION
+        // Where the day lands after this handover. Voting elimination always
+        // returns to VOTE_RESULT; the night-reveal path defers to the advancer,
+        // which may chain into HUNTER_SHOOT_NIGHT_DEATH (badge first, then the
+        // wolf-killed hunter shoots) before finally reaching RESULT_REVEALED.
+        // Resolved only after the sheriff reassign/destroy is persisted.
+        fun resolvePostSubPhase(): String =
+            if (fromVoting) VotingSubPhase.VOTE_RESULT.name
+            else dayRevealAdvancer.nextSubPhase(context.gameId).name
 
         val actor = context.playerById(request.actorUserId)
             ?: return GameActionResult.Rejected("Actor not found")
@@ -268,10 +322,15 @@ class VotingPipeline(
                 val targetPlayer = context.alivePlayerById(target)
                     ?: return GameActionResult.Rejected("Target not found or dead")
 
-                // Update sheriff
+                // Reassign the badge, then resolve where the day goes next. The
+                // advancer reads the same managed Game instance, so it sees the
+                // new sheriffUserId without an intermediate save.
                 context.game.sheriffUserId = targetPlayer.userId
-                context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
+                val postSubPhase = resolvePostSubPhase()
+                context.game.subPhase = postSubPhase
                 gameRepository.save(context.game)
+
+                if (fromVoting) commitDeferredHunterShotIfAny(context, actor.userId)
 
                 // Update sheriff flags
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
@@ -286,15 +345,17 @@ class VotingPipeline(
                 )
                 stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
+                    DomainEvent.PhaseChanged(context.gameId, postPhase, postSubPhase)
                 )
             }
 
             ActionType.BADGE_DESTROY -> {
-                // Update sheriff
+                // Destroy the badge, then resolve where the day goes next.
                 context.game.sheriffUserId = null
-                context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
+                val postSubPhase = resolvePostSubPhase()
+                context.game.subPhase = postSubPhase
                 gameRepository.save(context.game)
+                if (fromVoting) commitDeferredHunterShotIfAny(context, actor.userId)
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
                     it.sheriff = false; gamePlayerRepository.save(it)
                 }
@@ -304,23 +365,42 @@ class VotingPipeline(
                 )
                 stompPublisher.broadcastGameAfterCommit(
                     context.gameId,
-                    DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
+                    DomainEvent.PhaseChanged(context.gameId, postPhase, postSubPhase)
                 )
             }
 
             else -> return GameActionResult.Rejected("Unknown action: ${request.actionType}")
+        }
 
-            
+        if (fromVoting) afterElimination(context)
+        return GameActionResult.Success()
+    }
 
-                    }
-
-            
-
-                    afterElimination(context)
-
-                    return GameActionResult.Success()
-
-                }
+    /**
+     * Commit the deferred hunter-shot kill on the dying sheriff, if there is
+     * one. We discriminate by elimHistory.hunterShotUserId == actor — that's
+     * the signal HUNTER_SHOOT left behind when it deferred the kill. Other
+     * paths into BADGE_HANDOVER (revealed-idiot sheriff, voted-out sheriff)
+     * either have the actor already dead (vote-out) or must stay alive
+     * (revealed idiot), and this guard leaves them untouched.
+     */
+    private fun commitDeferredHunterShotIfAny(context: GameContext, actorUserId: String) {
+        val hunterShotUserId = eliminationHistoryRepository
+            .findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
+            .orElse(null)
+            ?.hunterShotUserId
+        if (hunterShotUserId != actorUserId) return
+        gamePlayerRepository.findByGameIdAndUserId(context.gameId, actorUserId).ifPresent { p ->
+            if (!p.alive) return@ifPresent // already dead — nothing to commit
+            p.alive = false
+            p.diedDay = context.game.dayNumber
+            gamePlayerRepository.save(p)
+            stompPublisher.broadcastGameAfterCommit(
+                context.gameId,
+                DomainEvent.PlayerEliminated(context.gameId, actorUserId, p.role),
+            )
+        }
+    }
 
     /** Check win condition; if no winner, stay in VOTE_RESULT for host to proceed to night. */
     private fun afterElimination(context: GameContext) {
@@ -337,7 +417,17 @@ class VotingPipeline(
         // else: sub-phase stays at VOTE_RESULT — host calls VOTING_CONTINUE to proceed to night
     }
 
-    /** After hunter acts (no badge needed): check win, then go directly to night. */
+    /**
+     * After the hunter acts (no badge needed): check win, otherwise PAUSE on
+     * VOTE_RESULT for the host to advance — never auto-jump to night.
+     *
+     * The hunter's victim (and the dying hunter) need a last-words window, just
+     * like every other voting-elimination day-death: normal exile and the
+     * sheriff badge-handover both land on VOTE_RESULT, where the host clicks
+     * 进入夜晚 (VOTING_CONTINUE → continueToNight). Going straight to night here
+     * was the one inconsistent path, silently denying the killed player a chance
+     * to speak.
+     */
     private fun afterHunterAct(context: GameContext) {
         val updatedContext = contextLoader.load(context.gameId)
         val winner = winConditionChecker.check(
@@ -348,9 +438,98 @@ class VotingPipeline(
         )
         if (winner != null) {
             endGame(updatedContext, winner)
-        } else {
-            goToNight(updatedContext)
+            return
         }
+        context.game.subPhase = VotingSubPhase.VOTE_RESULT.name
+        gameRepository.save(context.game)
+        stompPublisher.broadcastGameAfterCommit(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name),
+        )
+    }
+
+    /**
+     * A hunter killed by wolves at night fires (or passes) during the day-reveal
+     * flow (DAY_DISCUSSION + HUNTER_SHOOT_NIGHT_DEATH). The shooter is already
+     * dead (applyNightKills flipped them at reveal), so — unlike the voting path
+     * — there is no 国标 ordering to preserve: the shot kills the target
+     * immediately, then the advancer routes to BADGE_HANDOVER (when the target
+     * was the sheriff) or RESULT_REVEALED.
+     */
+    private fun handleNightDeathHunterShoot(
+        request: GameActionRequest,
+        context: GameContext,
+        actor: GamePlayer,
+    ): GameActionResult {
+        // Only the specific wolf-killed hunter may act, and only once: once they
+        // have shot/passed the resolved flag is set and pendingHunterUserId
+        // returns null, so a double-fire is rejected here.
+        if (actor.userId != dayRevealAdvancer.pendingHunterUserId(context.gameId))
+            return GameActionResult.Rejected("You are not the hunter who may shoot")
+
+        when (request.actionType) {
+            ActionType.HUNTER_SHOOT -> {
+                val target = request.targetUserId
+                    ?: return GameActionResult.Rejected("Target required")
+                val targetPlayer = gamePlayerRepository.findByGameIdAndUserId(context.gameId, target)
+                    .orElse(null) ?: return GameActionResult.Rejected("Target not found")
+                if (!targetPlayer.alive) return GameActionResult.Rejected("Target is already dead")
+
+                actionLogService.recordHunterShot(context.gameId, context.game.dayNumber, actor.userId, target)
+
+                // Kill immediately — no deferred-kill machinery: the shooter is
+                // already dead, and if the target is the sheriff the advancer
+                // picks up BADGE_HANDOVER from the now-dead sheriff (exactly how
+                // the existing night-death sheriff handover runs).
+                targetPlayer.alive = false
+                targetPlayer.diedDay = context.game.dayNumber
+                gamePlayerRepository.save(targetPlayer)
+                dayRevealAdvancer.markHunterShootResolved(context.gameId)
+                stompPublisher.broadcastGameAfterCommit(
+                    context.gameId,
+                    DomainEvent.HunterShot(context.gameId, actor.userId, target)
+                )
+                stompPublisher.broadcastGameAfterCommit(
+                    context.gameId,
+                    DomainEvent.PlayerEliminated(context.gameId, target, targetPlayer.role)
+                )
+                afterNightDeathHunterAct(context)
+            }
+
+            ActionType.HUNTER_PASS -> {
+                dayRevealAdvancer.markHunterShootResolved(context.gameId)
+                afterNightDeathHunterAct(context)
+            }
+
+            else -> return GameActionResult.Rejected("Unknown action: ${request.actionType}")
+        }
+        return GameActionResult.Success()
+    }
+
+    /**
+     * After the night-death hunter acts: check win (the shot may end the game),
+     * otherwise let the advancer continue the day — BADGE_HANDOVER if the shot
+     * killed the sheriff, else RESULT_REVEALED so the host can start the vote.
+     */
+    private fun afterNightDeathHunterAct(context: GameContext) {
+        val updatedContext = contextLoader.load(context.gameId)
+        val winner = winConditionChecker.check(
+            alivePlayers = updatedContext.alivePlayers,
+            mode = updatedContext.room.winCondition,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = buildCounterplay(updatedContext),
+        )
+        if (winner != null) {
+            endGame(updatedContext, winner)
+            return
+        }
+        val nextSubPhase = dayRevealAdvancer.nextSubPhase(context.gameId)
+        context.game.subPhase = nextSubPhase.name
+        gameRepository.save(context.game)
+        stompPublisher.broadcastGameAfterCommit(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, nextSubPhase.name)
+        )
     }
 
     private fun goToNight(context: GameContext) {
@@ -368,6 +547,7 @@ class VotingPipeline(
         game.phase = GamePhase.GAME_OVER
         game.endedAt = LocalDateTime.now()
         gameRepository.save(game)
+        rewardSettlementService.settle(context.gameId, winner)
 
         // Broadcast GameOver after transaction commit if in transaction context
         val gameOverEvent = DomainEvent.GameOver(context.gameId, winner)
@@ -431,6 +611,7 @@ class VotingPipeline(
         }
 
         player.alive = false
+        player.diedDay = context.game.dayNumber
         gamePlayerRepository.save(player)
 
         // Record elimination

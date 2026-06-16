@@ -137,6 +137,16 @@
                   <span class="log-name">{{ round.hunterShot.targetNickname }}</span>
                 </div>
               </div>
+
+              <!-- Self-destruct -->
+              <div v-if="round.selfDestructs.length > 0" class="log-section">
+                <div class="section-title">💥 自爆</div>
+                <div v-for="s in round.selfDestructs" :key="s.userId" class="log-row">
+                  <span class="seat-badge">{{ s.seatIndex }}号</span>
+                  <span class="log-name">{{ s.nickname }}</span>
+                  <span class="log-tag tag-red">自爆</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -153,6 +163,7 @@ import type {
   HunterShotPayload,
   IdiotRevealPayload,
   NightDeathPayload,
+  SelfDestructPayload,
   SheriffResultPayload,
   VoteResultPayload,
 } from '@/types'
@@ -167,6 +178,7 @@ interface Round {
   voteResult: VoteResultPayload | null
   hunterShot: HunterShotPayload | null
   idiotReveals: IdiotRevealPayload[]
+  selfDestructs: SelfDestructPayload[]
 }
 
 const loading = ref(false)
@@ -184,6 +196,7 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         voteResult: null,
         hunterShot: null,
         idiotReveals: [],
+        selfDestructs: [],
       })
     }
     return map.get(day)!
@@ -208,6 +221,9 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         break
       case 'SHERIFF_RESULT':
         getOrCreate(day).sheriffResult = payload as SheriffResultPayload
+        break
+      case 'SELF_DESTRUCT':
+        getOrCreate(day).selfDestructs.push(payload as SelfDestructPayload)
         break
     }
   }

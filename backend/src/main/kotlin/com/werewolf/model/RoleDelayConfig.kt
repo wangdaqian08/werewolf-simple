@@ -92,6 +92,18 @@ data class GameConfig(
      * 选定的夜晚背景音乐文件名（在 /audio/bgm/ 下），未选则为 null。
      */
     val bgmTrack: String? = null,
+
+    /**
+     * Whether the witch may use her antidote to save herself when the wolves'
+     * target is the witch. Default true preserves the historical behavior.
+     */
+    val witchSelfSaveAllowed: Boolean = true,
+
+    /**
+     * Whether players may activate paid perks (e.g. first-night immunity) in
+     * this room. Host-controlled fairness toggle; default on.
+     */
+    val perksAllowed: Boolean = true,
 ) {
     /**
      * 获取指定角色的延迟配置

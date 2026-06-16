@@ -8,7 +8,7 @@
     <template v-if="mode === 'room'">
       <template v-if="nickname">
         <!-- Seat number always visible so players can identify themselves -->
-        <span class="slot-index">{{ seat }}</span>
+        <span class="slot-index">{{ seat }}号</span>
         <Avatar
           :nickname="nickname ?? ''"
           :avatar-url="avatarAsUrl"
@@ -20,7 +20,7 @@
       </template>
       <template v-else>
         <!-- Show the seat number so players can identify which slot to pick -->
-        <span class="empty-num">{{ seat }}</span>
+        <span class="empty-num">{{ seat }}号</span>
       </template>
       <slot name="overlay" />
     </template>
@@ -207,10 +207,10 @@ const variantClass = computed(() => {
 
 /* ── Room mode text ── */
 .slot-index {
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: inherit;
-  opacity: 0.6;
+  opacity: 0.85;
   line-height: 1;
 }
 

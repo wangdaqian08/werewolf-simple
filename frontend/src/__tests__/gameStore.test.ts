@@ -150,4 +150,34 @@ describe('gameStore', () => {
     store.setState({ ...freshState(), audioSequence: next })
     expect(store.state?.audioSequence).toEqual(next)
   })
+
+  // ── setTimer ──────────────────────────────────────────────────────────────
+
+  it('setTimer() produces a new object reference (Vue reactivity requirement)', () => {
+    const store = useGameStore()
+    store.setState(freshState())
+    const prev = store.state
+
+    store.setTimer({ remainingMs: 45_000, durationMs: 60_000, running: true })
+
+    expect(store.state).not.toBe(prev)
+    expect(store.state?.timer).toEqual({ remainingMs: 45_000, durationMs: 60_000, running: true })
+  })
+
+  it('setTimer() updates timer without changing other state fields', () => {
+    const store = useGameStore()
+    store.setState(freshState())
+    store.setTimer({ remainingMs: 0, durationMs: 0, running: false })
+
+    expect(store.state?.phase).toBe('DAY_DISCUSSION')
+    expect(store.state?.dayNumber).toBe(1)
+    expect(store.state?.timer?.running).toBe(false)
+  })
+
+  it('setTimer() is a no-op when state is null', () => {
+    const store = useGameStore()
+    // Should not throw
+    store.setTimer({ remainingMs: 0, durationMs: 0, running: false })
+    expect(store.state).toBeNull()
+  })
 })

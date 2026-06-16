@@ -3,12 +3,15 @@ package com.werewolf.service
 import com.werewolf.auth.AuthService
 import com.werewolf.config.GameTimingProperties
 import com.werewolf.controller.BgmTrackRegistry
+import com.werewolf.dto.PerkActivationDto
 import com.werewolf.dto.RoomConfigDto
 import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.dto.RoomDto
 import com.werewolf.dto.RoomPlayerDto
 import com.werewolf.model.*
 import com.werewolf.repository.GameRepository
+import com.werewolf.repository.PerkActivationRepository
+import com.werewolf.repository.PerkRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
@@ -25,6 +28,9 @@ class RoomService(
     private val stompPublisher: StompPublisher,
     private val timing: GameTimingProperties,
     private val bgmRegistry: BgmTrackRegistry,
+    private val perkActivationRepository: PerkActivationRepository,
+    private val perkRepository: PerkRepository,
+    private val perkService: PerkService,
 ) {
     @Transactional
     fun createRoom(
@@ -40,11 +46,14 @@ class RoomService(
             throw InvalidBgmTrackException("Unknown BGM track: ${cfg.bgmTrack}")
         }
 
+        validateRoleComposition(cfg.totalPlayers, cfg.wolfCount, cfg.roles)
+
         val room = roomRepository.save(
             Room(
                 roomCode = generateCode(),
                 hostUserId = userId,
                 totalPlayers = cfg.totalPlayers,
+                wolfCount = cfg.wolfCount,
                 hasSeer = PlayerRole.SEER in cfg.roles,
                 hasWitch = PlayerRole.WITCH in cfg.roles,
                 hasHunter = PlayerRole.HUNTER in cfg.roles,
@@ -52,7 +61,7 @@ class RoomService(
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
-                config = buildGameConfig(cfg.bgmTrack),
+                config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed),
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")
@@ -78,7 +87,7 @@ class RoomService(
     ): RoomDto {
         authService.loginOrRegister(userId, nickname, avatarUrl)
 
-        val room = roomRepository.findByRoomCode(roomCode).orElse(null)
+        val room = roomRepository.findActiveByRoomCode(roomCode).orElse(null)
             ?: throw RoomNotFoundException("Room not found")
         val roomId = room.roomId ?: error("Room has no ID")
 
@@ -147,6 +156,10 @@ class RoomService(
 
         roomPlayerRepository.delete(target)
 
+        // Refund any perk the kicked player had activated — they paid for a
+        // game they can no longer play in.
+        perkService.refundActiveForUser(roomId, targetUserId)
+
         stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "PLAYER_KICKED",
             "payload" to mapOf("userId" to targetUserId)))
         stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "ROOM_UPDATE",
@@ -191,6 +204,18 @@ class RoomService(
         return buildRoomDto(room)
     }
 
+    /**
+     * The active room the caller currently belongs to (for the lobby's quick
+     * rejoin), or null if none. "Active" = WAITING or with a live game; finished
+     * rooms are ignored. The returned DTO carries `activeGameId` so the client
+     * can jump straight into an in-progress game.
+     */
+    @Transactional(readOnly = true)
+    fun findActiveRoomForUser(userId: String): RoomDto? {
+        val room = roomRepository.findActiveRoomsForUser(userId).firstOrNull() ?: return null
+        return buildRoomDto(room)
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildRoomDto(room: Room): RoomDto {
@@ -225,20 +250,66 @@ class RoomService(
             gameRepository.findByRoomIdAndEndedAtIsNull(room.roomId!!).map { it.gameId }.orElse(null)
         } else null
 
+        // Live perk activations are public to the whole room (fairness rule).
+        val perkNames = perkRepository.findAll().associate { it.perkCode to it.name }
+        val perkActivations = perkActivationRepository
+            .findByRoomIdAndStatus(room.roomId!!, PerkActivationStatus.ACTIVE)
+            .map { PerkActivationDto(it.userId, it.perkCode, perkNames[it.perkCode] ?: it.perkCode) }
+
         return RoomDto(
             roomId = room.roomId.toString(),
             roomCode = room.roomCode,
             hostId = room.hostUserId,
             status = room.status.name,
             players = playerDtos,
-            config = RoomConfigDto(totalPlayers = room.totalPlayers, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack),
+            config = RoomConfigDto(totalPlayers = room.totalPlayers, wolfCount = room.wolfCount, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack, witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true, perksAllowed = room.config?.perksAllowed ?: true),
             activeGameId = activeGameId,
+            perkActivations = perkActivations,
         )
     }
 
+    /**
+     * Generate a 3-digit numeric room code (000–999). The space is small (1000),
+     * so codes are *reusable*: only rooms that are still active (WAITING or with a
+     * non-ended game) reserve a code — see [RoomRepository.findActiveByRoomCode].
+     * Retry until a code free among active rooms is found.
+     */
     private fun generateCode(): String {
-        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        return (1..4).map { chars.random() }.joinToString("")
+        repeat(ROOM_CODE_MAX_ATTEMPTS) {
+            val code = (1..3).map { ('0'..'9').random() }.joinToString("")
+            if (roomRepository.findActiveByRoomCode(code).isEmpty) return code
+        }
+        throw RoomCodeUnavailableException("No free room code available — too many active rooms")
+    }
+
+    /**
+     * Backend enforces game-correctness invariants only:
+     *   1. wolfCount must be > 0 (a wolfless game is not werewolf)
+     *   2. wolves + gods ≤ totalPlayers (no seat overflow)
+     *
+     * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
+     * for the host-facing stepper — they intentionally do NOT gate the API,
+     * so headless tests and future tooling can construct edge configurations
+     * (e.g. small 4-player rooms with 2 wolves) without bypassing security.
+     */
+    private fun validateRoleComposition(
+        totalPlayers: Int,
+        wolfCount: Int,
+        roles: List<PlayerRole>,
+    ) {
+        if (wolfCount <= 0) {
+            throw InvalidRoleCompositionException(
+                "wolfCount must be > 0, got $wolfCount",
+            )
+        }
+        val godCount = roles.count {
+            it != PlayerRole.WEREWOLF && it != PlayerRole.VILLAGER
+        }
+        if (wolfCount + godCount > totalPlayers) {
+            throw InvalidRoleCompositionException(
+                "Composition overflow: $wolfCount wolves + $godCount gods > $totalPlayers seats",
+            )
+        }
     }
 
     /**
@@ -246,7 +317,7 @@ class RoomService(
      * overrides. Production leaves the properties unset and gets the compile-time
      * role defaults; the test profile sets small values so CI completes quickly.
      */
-    private fun buildGameConfig(bgmTrack: String?): GameConfig = GameConfig(
+    private fun buildGameConfig(bgmTrack: String?, witchSelfSaveAllowed: Boolean, perksAllowed: Boolean): GameConfig = GameConfig(
         roleDelays = mapOf(
             PlayerRole.WEREWOLF to timing.applyTo(PlayerRole.WEREWOLF),
             PlayerRole.SEER to timing.applyTo(PlayerRole.SEER),
@@ -254,14 +325,20 @@ class RoomService(
             PlayerRole.GUARD to timing.applyTo(PlayerRole.GUARD),
         ),
         bgmTrack = bgmTrack,
+        witchSelfSaveAllowed = witchSelfSaveAllowed,
+        perksAllowed = perksAllowed,
     )
 }
+
+private const val ROOM_CODE_MAX_ATTEMPTS = 200
 
 class RoomNotFoundException(message: String) : RuntimeException(message)
 class RoomNotOpenException(message: String) : RuntimeException(message)
 class RoomFullException(message: String) : RuntimeException(message)
+class RoomCodeUnavailableException(message: String) : RuntimeException(message)
 class PlayerNotInRoomException(message: String) : RuntimeException(message)
 class SeatTakenException(message: String) : RuntimeException(message)
 class NotHostException(message: String) : RuntimeException(message)
 class CannotKickHostException(message: String) : RuntimeException(message)
 class InvalidBgmTrackException(message: String) : RuntimeException(message)
+class InvalidRoleCompositionException(message: String) : RuntimeException(message)

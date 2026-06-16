@@ -28,6 +28,8 @@ class RoomController(private val roomService: RoomService) {
             )
         } catch (e: InvalidBgmTrackException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: InvalidRoleCompositionException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
         }
     }
 
@@ -88,6 +90,18 @@ class RoomController(private val roomService: RoomService) {
         } catch (e: SeatTakenException) {
             ResponseEntity.badRequest().body(mapOf("success" to false, "error" to e.message))
         }
+    }
+
+    /**
+     * Quick-rejoin lookup: the active room the caller currently belongs to, or
+     * 204 No Content if none. Lets the lobby surface a "继续游戏 / Rejoin" button
+     * after the player closed or backgrounded the app.
+     */
+    @GetMapping("/active")
+    fun activeRoom(authentication: Authentication): ResponseEntity<Any> {
+        val (userId, _, _) = authentication.userClaims()
+        val room = roomService.findActiveRoomForUser(userId)
+        return if (room != null) ResponseEntity.ok(room) else ResponseEntity.noContent().build()
     }
 
     @GetMapping("/{roomId}")

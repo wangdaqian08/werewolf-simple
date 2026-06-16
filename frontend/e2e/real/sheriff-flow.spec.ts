@@ -14,6 +14,17 @@ import {driveMinimalNight1ViaDom} from './helpers/night-driver'
 
 let ctx: GameContext
 
+// Tests within this describe run serially (Playwright config workers:1) and
+// share game state. Test 2 records which userIds entered the campaign so
+// test 3 can drive every other alive player to pass. The SIGNUP state
+// response deliberately hides other candidates' identities (2026-05-11),
+// so we can't recover this from the state itself.
+let test2CampaignerUserIds = new Set<string>()
+// Nickname of the bot that signed up via DOM in test 2 — test 4 votes for
+// this exact bot. Chosen at runtime as the first non-host browser-page
+// role, so the host is structurally guaranteed not to become a candidate.
+let test2BrowserCandidateNick: string | null = null
+
 test.describe('Sheriff election — multi-browser STOMP verification', () => {
   test.setTimeout(180_000)
 
@@ -24,7 +35,7 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       hasSheriff: true,
       // Variant B: each role's Night 1 action is DOM-driven from its own
       // browser context. driveMinimalNight1ViaDom drives WEREWOLF_PICK →
-      // SEER_PICK → SEER_RESULT → WITCH_ACT → GUARD_PICK in order, so the
+      // WITCH_ACT → SEER_PICK → SEER_RESULT → GUARD_PICK in order, so the
       // kit MUST include all four special roles; otherwise the missing
       // role's sub-phase never fires and the wait times out. Explicit
       // roles also bypass the default 9p kit which doesn't guarantee
@@ -87,32 +98,51 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
   test('2. Sheriff signup — browser player signs up, button changes', async ({}, testInfo) => {
     // Strong contract — three things this test exercises that no other
     // sheriff-flow test does:
-    //   (a) The seer's browser shows `sheriff-run` while in SIGNUP.
+    //   (a) A non-host player's browser shows `sheriff-run` while in SIGNUP.
     //   (b) Clicking it round-trips through STOMP and the same browser
     //       sees `sheriff-withdraw` (proves signup registered + state
     //       broadcast back to the originating browser).
     //   (c) Bot campaigns submitted via the REST script appear in the
-    //       seer's candidate list (cross-browser STOMP fan-out).
+    //       decision counter (cross-browser STOMP fan-out).
     //
     // Earlier versions wrapped (b) in `if (await runBtn.isVisible())` and
     // (c) in `try { ... } catch {}`, so the test passed silently even when
     // the signup feature was completely broken. Same anti-pattern as
     // `test.skip()` — replaced with positive assertions.
-
-    const seerPage = ctx.pages.get('SEER')
-    if (!seerPage) {
+    //
+    // The browser used for DOM signup MUST be non-host. Earlier this test
+    // hardcoded `ctx.pages.get('SEER')`, but setupGame maps host's role to
+    // hostPage (multi-browser.ts:469-470) — so when the random role
+    // assignment puts the host into SEER, the seer-browser click became a
+    // host signup, leaving the host in the candidate list. Tests 4-5 then
+    // failed because `sheriff-abstain` is replaced by a disabled
+    // "Candidates can't vote" button for candidates (SheriffElection.vue
+    // :286-305). Picking the first browser-page role that is not the
+    // host's role guarantees a bot's browser and removes that edge case
+    // entirely.
+    const candidateRole = (['SEER', 'WITCH', 'GUARD', 'WEREWOLF', 'VILLAGER'] as const).find(
+      (r) => r !== ctx.hostRole && ctx.pages.has(r),
+    )
+    if (!candidateRole) {
       throw new Error(
-        `ctx.pages.get('SEER') is undefined — setupGame did not assign a SEER page. ` +
-          `Check beforeAll's browserRoles (must include 'SEER') and the role kit ` +
-          `(room.hasSeer must be true). hostRole=${ctx.hostRole}.`,
+        `No non-host browser available for DOM signup. ` +
+          `hostRole=${ctx.hostRole}, pages=${Array.from(ctx.pages.keys()).join(',')}`,
       )
     }
+    const candidatePage = ctx.pages.get(candidateRole)!
+    const candidateBot = (ctx.roleMap[candidateRole] ?? []).find((b) => b.nick !== 'Host')
+    if (!candidateBot) {
+      throw new Error(
+        `roleMap[${candidateRole}] has no non-host bot — host pinning is wrong`,
+      )
+    }
+    test2BrowserCandidateNick = candidateBot.nick
 
     // Wait for SHERIFF_ELECTION/SIGNUP — only sub-phase where `sheriff-run`
     // renders. Backend may take a moment after role-reveal-end to enter it.
     await waitForCondition(
       async () => {
-        const state = await seerPage.evaluate(async (id: string) => {
+        const state = await candidatePage.evaluate(async (id: string) => {
           const token = localStorage.getItem('jwt')
           const res = await fetch(`/api/game/${id}/state`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -127,38 +157,46 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
 
     // (a) sheriff-run must render. If it doesn't, that's a regression in
     //     SheriffElection.vue's signup template (or an aliveness bug).
-    const runBtn = seerPage.getByTestId('sheriff-run')
+    const runBtn = candidatePage.getByTestId('sheriff-run')
     await expect(runBtn).toBeVisible({ timeout: 10_000 })
 
     // (b) Click → button toggles to "Withdraw" (signup confirmed).
     await runBtn.click()
-    await expect(seerPage.getByTestId('sheriff-withdraw')).toBeVisible({
+    await expect(candidatePage.getByTestId('sheriff-withdraw')).toBeVisible({
       timeout: 10_000,
     })
 
-    // (c) Drive 3 bot campaigns via script and assert all 3 appear in the
-    //     seer's candidate list (1 self-signup + 3 bots = 4 candidates).
-    //     Filter Host out: the seer just signed up via the seerPage click;
-    //     if host rolled SEER, seerPage IS hostPage and the host is already
-    //     in the list — feeding host into `sheriff campaign` here would be
-    //     a duplicate signup that the backend rejects.
+    // (c) Drive 3 bot campaigns via script and assert the decision counter
+    //     reflects them. 1 self-signup + 3 bots = 4 decisions. Filter Host
+    //     out of the bot list (we never want host in the candidate set —
+    //     see test 4's host-abstain step). Also filter the bot we just
+    //     signed up via DOM (no duplicate signup).
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
     const villagerBots = ctx.roleMap.VILLAGER ?? []
     const campaigners = [...wolfBots.slice(0, 1), ...villagerBots.slice(0, 2)].filter(
-      (b) => b.nick !== 'Host',
+      (b) => b.nick !== 'Host' && b.userId !== candidateBot.userId,
     )
     expect(campaigners.length, 'need at least one non-host bot to campaign').toBeGreaterThan(0)
     for (const bot of campaigners) {
       sheriff('campaign', { player: actName(bot), room: ctx.roomCode })
     }
 
-    // Candidate count on the seer's UI = 1 (self) + campaigners.length,
-    // propagated via STOMP. toHaveCount retries until the count matches
-    // or the timeout expires, so this naturally waits for STOMP delivery.
-    await expect(seerPage.locator('.cand-row-running')).toHaveCount(
-      1 + campaigners.length,
+    // 2026-05-11 behaviour: SIGNUP no longer renders per-candidate rows
+    // (identities are hidden). The observable signal that the bot fan-out
+    // landed is the decision-progress counter on the candidate's UI: it must
+    // reflect the count of decided alive players. The candidate signed up
+    // via (b) above, so the expected `decided` is 1 + campaigners.length.
+    await expect(candidatePage.getByTestId('sheriff-decision-progress')).toContainText(
+      new RegExp(`${1 + campaigners.length}\\s*/`),
       { timeout: 10_000 },
     )
+
+    // Record campaigner userIds so test 3 can leave them alone when driving
+    // remaining alive players to pass.
+    test2CampaignerUserIds = new Set<string>([
+      candidateBot.userId,
+      ...campaigners.map((b) => b.userId),
+    ])
 
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-02-signup-done')
   })
@@ -179,23 +217,53 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
   // ── Test 3: Speeches — host advances, speaker shown ────────────────────
 
   test('3. Sheriff speeches — host advances, current speaker updates', async ({}, testInfo) => {
-    // Host starts speeches via the dedicated UI button (DOM-driven, no act.sh
-    // fan-out). The button is visible only in SIGNUP — wait for that
-    // sub-phase before clicking so the action lands cleanly.
+    // 2026-05-11: SIGNUP→SPEECH is now backend-auto-triggered when every
+    // alive player has decided (signed up or passed). The host's manual
+    // `sheriff-start-campaign` button is gone. Drive every remaining
+    // undecided alive player to pass via sheriff.sh, using test 2's
+    // recorded campaigner list as ground truth (the SIGNUP state response
+    // hides other candidates' identities, so we can't recover the set from
+    // a state poll).
     await waitForCondition(
       async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'SIGNUP',
-      'sheriff election to reach SIGNUP before starting speeches',
+      'sheriff election to reach SIGNUP before driving remaining passes',
       15_000,
     )
-    const startBtn = ctx.hostPage.getByTestId('sheriff-start-campaign')
-    await expect(startBtn).toBeVisible({ timeout: 10_000 })
-    await expect(startBtn).toBeEnabled({ timeout: 10_000 })
-    await startBtn.click()
+    expect(
+      test2CampaignerUserIds.size,
+      'test 2 must have populated test2CampaignerUserIds before test 3 runs',
+    ).toBeGreaterThan(0)
 
-    // Backend transitions SIGNUP → SPEECH. Assert it.
+    const hostUserId = await ctx.hostPage.evaluate(() => localStorage.getItem('userId'))
+    const aliveIds = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return [] as string[]
+      const state = await res.json()
+      return ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
+        .filter((p) => p.isAlive)
+        .map((p) => p.userId)
+    }, ctx.gameId)
+    const allBots = Object.values(ctx.roleMap).flatMap((b) => b ?? [])
+    for (const userId of aliveIds) {
+      if (test2CampaignerUserIds.has(userId)) continue // campaigner — leave RUNNING
+      const selector =
+        userId === hostUserId ? 'HOST' : allBots.find((b) => b.userId === userId)?.nick
+      if (!selector) continue
+      try {
+        sheriff('pass', { player: selector, room: ctx.roomCode })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn(`[sheriff] pass ${selector} threw: ${(e as Error).message}`)
+      }
+    }
+
+    // Backend auto-transitions SIGNUP → SPEECH once all alive players have decided.
     await waitForCondition(
       async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'SPEECH',
-      'sheriff election to reach SPEECH after sheriff-start-campaign click',
+      'sheriff election to auto-transition to SPEECH after every alive player decides',
       15_000,
     )
 
@@ -243,12 +311,15 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       15_000,
     )
 
-    // All non-host non-candidate bots vote for the seer (the candidate
-    // signed up in test 2). Candidates can't vote for themselves
-    // (SheriffService.kt:385), so they abstain instead.
-    const seerBots = ctx.roleMap.SEER ?? []
-    const targetNick = seerBots[0]?.nick
-    expect(targetNick, 'kit must include a SEER candidate to vote for').toBeDefined()
+    // All non-host non-candidate bots vote for the bot that signed up via
+    // DOM in test 2 (recorded in test2BrowserCandidateNick). Candidates
+    // can't vote for themselves (SheriffService.kt:385), so they abstain
+    // instead.
+    const targetNick = test2BrowserCandidateNick
+    expect(
+      targetNick,
+      'test 2 must have recorded the DOM-signup candidate nick before test 4',
+    ).toBeTruthy()
     sheriff('vote', { target: targetNick!, room: ctx.roomCode })
     sheriff('abstain', { player: targetNick!, room: ctx.roomCode })
 

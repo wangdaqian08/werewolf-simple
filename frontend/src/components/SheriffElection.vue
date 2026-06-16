@@ -1,13 +1,39 @@
 <template>
   <div class="sheriff-wrap">
-    <!-- Header: phase chip + timer -->
+    <!-- Header: phase chip + countdown arc (SPEECH only) -->
     <div class="sheriff-header">
       <div class="phase-chip">{{ phaseChipLabel }}</div>
-      <div class="timer">{{ election.subPhase !== 'RESULT' ? election.timeRemaining : '' }}</div>
-      <div v-if="election.subPhase === 'RESULT'" class="timer-result">Result</div>
+      <CountdownArc
+        v-if="election.subPhase === 'SPEECH'"
+        :remaining-ms="timer?.remainingMs ?? 0"
+        :duration-ms="timer?.durationMs ?? 0"
+        :running="timer?.running ?? false"
+        :is-host="isHost"
+        @start-timer="(s) => emit('start-timer', s)"
+        @stop-timer="emit('stop-timer')"
+      />
+    </div>
+
+    <!-- Below-header row: Action chip on the right (wolf self-destruct) -->
+    <div class="below-header-row">
+      <div />
+      <ActionMenu
+        phase="SHERIFF_ELECTION"
+        :sub-phase="election.subPhase"
+        :my-role="myRole"
+        :is-alive="isAlive ?? false"
+        @self-destruct="emit('self-destruct')"
+      />
     </div>
 
     <!-- ── SIGNUP ── -->
+    <!--
+      Identities are deliberately hidden during SIGNUP: who joined the campaign
+      affects everyone's decision (especially werewolves piling on a known
+      strong claim). Players see only the aggregate count + decision progress.
+      The campaign auto-advances to SPEECH once every alive player has decided —
+      there is no host "Start Campaign" button anymore.
+    -->
     <template v-if="election.subPhase === 'SIGNUP'">
       <div class="info-banner">
         <div class="info-title">警长竞选开始 · Sheriff Election</div>
@@ -16,18 +42,13 @@
         </p>
       </div>
 
-      <div class="section-label">Candidates so far ({{ runningCandidates.length }})</div>
-      <div class="candidate-list">
-        <div v-for="c in runningCandidates" :key="c.userId" class="cand-row-running">
-          <Avatar
-            class="cand-avatar"
-            :avatar="c.avatar"
-            :nickname="c.nickname"
-            emoji="😊"
-            size="sm"
-          />
-          <span class="cand-name">{{ c.nickname }}</span>
-          <span class="running-badge">RUNNING</span>
+      <div class="signup-stats">
+        <div class="stat-row">
+          <span class="stat-label">已选择 / Decided</span>
+          <span class="stat-value gold" data-testid="sheriff-decision-progress"
+            >{{ election.decisionProgress?.decided ?? 0 }} /
+            {{ election.decisionProgress?.total ?? 0 }}</span
+          >
         </div>
       </div>
 
@@ -63,18 +84,6 @@
             @click="emit('pass')"
           >
             放弃 / Pass
-          </button>
-        </template>
-        <template v-if="isHost">
-          <div class="host-divider" />
-          <button
-            class="btn btn-primary"
-            data-testid="sheriff-start-campaign"
-            :class="{ 'is-loading': actionPending }"
-            :disabled="runningCandidates.length === 0 || actionPending"
-            @click="emit('startCampaign')"
-          >
-            开始演讲 / Start Campaign
           </button>
         </template>
       </div>
@@ -238,7 +247,11 @@
             size="sm"
           />
           <div class="cand-info-col">
-            <span class="cand-name">{{ c.nickname }}</span>
+            <span class="cand-name">
+              <span v-if="seatByUserId.get(c.userId) != null" class="cand-seat"
+                >{{ seatByUserId.get(c.userId) }}号 · </span
+              >{{ c.nickname }}
+            </span>
             <span class="cand-sub-status">{{
               election.myVote === c.userId
                 ? 'VOTED ✓'
@@ -294,8 +307,18 @@
             放弃投票 / Give Up Vote
           </button>
         </template>
-        <!-- Forfeited (quit during speech) -->
-        <button v-else class="btn btn-secondary" disabled>已放弃投票 / Vote forfeited</button>
+        <!-- Cannot vote: RUNNING candidate or speech-quitter -->
+        <button
+          v-else-if="cannotVoteReason === 'CANDIDATE'"
+          class="btn btn-secondary"
+          data-testid="sheriff-candidate-no-vote"
+          disabled
+        >
+          候选人不参与投票 / Candidates can't vote
+        </button>
+        <button v-else class="btn btn-secondary" data-testid="sheriff-vote-forfeited" disabled>
+          已放弃投票 / Vote forfeited
+        </button>
 
         <template v-if="isHost">
           <div class="host-divider" />
@@ -573,12 +596,24 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import Avatar from '@/components/Avatar.vue'
-import type { SheriffCandidate, SheriffElectionState } from '@/types'
+import ActionMenu from '@/components/ActionMenu.vue'
+import CountdownArc from '@/components/CountdownArc.vue'
+import type {
+  GamePlayer,
+  PlayerRole,
+  SheriffCandidate,
+  SheriffElectionState,
+  TimerState,
+} from '@/types'
 
 const props = defineProps<{
   election: SheriffElectionState
   myUserId: string
   isHost: boolean
+  players?: GamePlayer[]
+  timer?: TimerState | null
+  myRole?: PlayerRole
+  isAlive?: boolean
   actionPending?: boolean
 }>()
 
@@ -586,7 +621,6 @@ const emit = defineEmits<{
   run: []
   pass: []
   withdraw: []
-  startCampaign: []
   quit: []
   vote: [userId: string]
   abstain: []
@@ -594,11 +628,23 @@ const emit = defineEmits<{
   revealResult: []
   endResult: []
   appoint: [userId: string]
+  'self-destruct': []
+  'start-timer': [seconds: number]
+  'stop-timer': []
 }>()
 
 const iAmCandidate = computed(() =>
   props.election.candidates.some((c) => c.userId === props.myUserId && c.status === 'RUNNING'),
 )
+
+const myCandidateStatus = computed(
+  () => props.election.candidates.find((c) => c.userId === props.myUserId)?.status ?? null,
+)
+
+const cannotVoteReason = computed<'CANDIDATE' | 'QUIT_SPEECH' | null>(() => {
+  if (props.election.canVote !== false) return null
+  return myCandidateStatus.value === 'RUNNING' ? 'CANDIDATE' : 'QUIT_SPEECH'
+})
 
 const runningCandidates = computed(() =>
   props.election.candidates.filter((c) => c.status === 'RUNNING'),
@@ -613,6 +659,12 @@ const quitCandidates = computed(() =>
 const candidateMap = computed(() => {
   const m = new Map<string, SheriffCandidate>()
   props.election.candidates.forEach((c) => m.set(c.userId, c))
+  return m
+})
+
+const seatByUserId = computed(() => {
+  const m = new Map<string, number>()
+  props.players?.forEach((p) => m.set(p.userId, p.seatIndex))
   return m
 })
 
@@ -700,14 +752,19 @@ function speakingIcon(uid: string) {
 function speakerLabel(uid: string, idx: number) {
   const c = candidateMap.value.get(uid)
   const name = uid === props.myUserId ? '我' : (c?.nickname ?? uid)
+  const seat = seatByUserId.value.get(uid)
+  const seatPrefix = seat != null ? `${seat}号 ` : ''
   const isCurrent = uid === props.election.currentSpeakerId
   const isQuit = candidateStatus(uid) === 'QUIT'
   const currentIdx = props.election.speakingOrder.indexOf(props.election.currentSpeakerId ?? '')
 
-  if (isCurrent) return uid === props.myUserId ? '我 · speaking now' : `${name} · speaking`
-  if (isQuit) return `${name} · Quit`
-  if (idx === currentIdx + 1) return `${name} · next`
-  return name
+  if (isCurrent)
+    return uid === props.myUserId
+      ? `${seatPrefix}我 · speaking now`
+      : `${seatPrefix}${name} · speaking`
+  if (isQuit) return `${seatPrefix}${name} · Quit`
+  if (idx === currentIdx + 1) return `${seatPrefix}${name} · next`
+  return `${seatPrefix}${name}`
 }
 </script>
 
@@ -726,6 +783,12 @@ function speakerLabel(uid: string, idx: number) {
 }
 
 /* Header */
+.below-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0 1rem 0.5rem;
+}
 .sheriff-header {
   display: flex;
   align-items: center;
@@ -748,11 +811,6 @@ function speakerLabel(uid: string, idx: number) {
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--gold);
-}
-
-.timer-result {
-  font-size: 0.6875rem;
-  color: var(--muted);
 }
 
 /* Info banner */
@@ -814,10 +872,34 @@ function speakerLabel(uid: string, idx: number) {
   color: var(--text);
 }
 
-.running-badge {
-  font-size: 0.625rem;
-  letter-spacing: 0.1em;
-  color: var(--gold);
+/* SIGNUP stats — count + decision progress, no per-candidate rows */
+.signup-stats {
+  background: var(--paper);
+  border: 1px solid var(--border-l);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
 }
 
 /* Action footer */

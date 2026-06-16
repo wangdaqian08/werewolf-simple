@@ -1,5 +1,5 @@
 import http from './http'
-import type { CreateRoomRequest, JoinRoomRequest, Room } from '@/types'
+import type { CreateRoomRequest, JoinRoomRequest, Perk, Room } from '@/types'
 
 export const roomService = {
   async createRoom(req: CreateRoomRequest): Promise<Room> {
@@ -21,6 +21,18 @@ export const roomService = {
     return data
   },
 
+  /**
+   * The active room the current user belongs to (for quick rejoin after closing
+   * the app), or null if none. Backend returns 204 No Content when there is no
+   * active room.
+   */
+  async getActiveRoom(): Promise<Room | null> {
+    const { data, status } = await http.get<Room>('/room/active', {
+      validateStatus: (s) => s === 200 || s === 204,
+    })
+    return status === 204 ? null : data
+  },
+
   async getRoomList(): Promise<Room[]> {
     const { data } = await http.get<Room[]>('/room/list')
     return data
@@ -36,5 +48,19 @@ export const roomService = {
 
   async kickPlayer(roomId: string, targetUserId: string): Promise<void> {
     await http.post('/room/kick', { roomId: Number(roomId), targetUserId })
+  },
+
+  async getPerks(): Promise<Perk[]> {
+    const { data } = await http.get<Perk[]>('/perks')
+    return data
+  },
+
+  /** Charge-at-click; backend rejects with 400 + error (FCFS taken / insufficient credits). */
+  async activatePerk(roomId: string, perkCode: string): Promise<void> {
+    await http.post('/room/perk/activate', { roomId: Number(roomId), perkCode })
+  },
+
+  async withdrawPerk(roomId: string, perkCode: string): Promise<void> {
+    await http.post('/room/perk/withdraw', { roomId: Number(roomId), perkCode })
   },
 }

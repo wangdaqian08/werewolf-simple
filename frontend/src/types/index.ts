@@ -27,6 +27,53 @@ export interface WeChatProvider {
 
 export type OAuthProvider = 'google' | 'wechat'
 
+// ── Wallet / Credits ──────────────────────────────────────────────────────────
+
+export type CreditTxType = 'PURCHASE' | 'GAME_REWARD' | 'PERK_SPEND' | 'REFUND'
+
+export interface CreditTransaction {
+  type: CreditTxType
+  amount: number // signed: positive = credit, negative = debit
+  balanceAfter: number
+  note?: string | null
+  createdAt: string
+}
+
+export interface Wallet {
+  balance: number
+  recent: CreditTransaction[]
+}
+
+/** Per-player credit reward granted at game end (GameState.settlement). */
+export interface SettlementReward {
+  userId: string
+  nickname: string
+  seatIndex: number
+  amount: number
+}
+
+export interface GameSettlement {
+  rewards: SettlementReward[]
+  myEarned?: number | null
+  myBalance?: number | null
+}
+
+// ── Perks ─────────────────────────────────────────────────────────────────────
+
+export interface Perk {
+  perkCode: string
+  name: string
+  description: string
+  priceCredits: number
+}
+
+/** A live perk activation in the room — visible to every room member. */
+export interface PerkActivation {
+  userId: string
+  perkCode: string
+  perkName: string
+}
+
 // ── Room ──────────────────────────────────────────────────────────────────────
 
 export type PlayerStatus = 'NOT_READY' | 'READY'
@@ -45,10 +92,14 @@ export type WinConditionMode = 'CLASSIC' | 'HARD_MODE'
 
 export interface RoomConfig {
   totalPlayers: number
-  roles: string[] // backend decides counts based on totalPlayers
+  wolfCount?: number
+  roles: string[]
   hasSheriff?: boolean
   winCondition?: WinConditionMode
   bgmTrack?: string | null
+  witchSelfSaveAllowed?: boolean
+  /** Whether players may activate paid perks in this room (host fairness toggle). */
+  perksAllowed?: boolean
 }
 
 export interface Room {
@@ -59,6 +110,7 @@ export interface Room {
   players: RoomPlayer[]
   config: RoomConfig
   activeGameId?: number
+  perkActivations?: PerkActivation[]
 }
 
 export interface CreateRoomRequest {
@@ -86,6 +138,14 @@ export interface AudioSequence {
   audioFiles: string[]
   priority: number
   timestamp: number
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+
+export interface TimerState {
+  remainingMs: number
+  durationMs: number
+  running: boolean
 }
 
 // ── Game ──────────────────────────────────────────────────────────────────────
@@ -141,11 +201,27 @@ export interface GameState {
   dayNumber: number
   players: GamePlayer[]
   myRole?: PlayerRole
-  sheriff?: string // userId of current sheriff
+  // The backend response key is `sheriffUserId` (see GameService.getGameState).
+  // The legacy `sheriff` field below was declared but never populated by the
+  // wire — keep both in sync; `sheriffUserId` is the source of truth.
+  sheriffUserId?: string | null
+  sheriff?: string // legacy alias — DO NOT use; will be removed
   hostId?: string // userId of the room host
   hasSheriff?: boolean // whether sheriff election is enabled for this game
+  // Track filename from Room.config.bgmTrack, surfaced on the game state so
+  // useAudioService can start BGM after a mid-game page reload (when
+  // roomStore is empty). Source of truth lives in roomStore for the lobby
+  // flow; mirror here for the game flow.
+  bgmTrack?: string | null
+  /** Whether the witch may use her antidote to save herself (room config). */
+  witchSelfSaveAllowed?: boolean
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
+  /** Game-end credit rewards (present once settled when phase is GAME_OVER). */
+  settlement?: GameSettlement | null
+  /** True when a wolf self-destructed this day — host sees "进入夜晚" instead of voting. */
+  daySkipVoting?: boolean
   events: GameEvent[]
+  timer?: TimerState
   roleReveal?: RoleRevealState
   sheriffElection?: SheriffElectionState
   dayPhase?: DayPhaseState
@@ -239,7 +315,13 @@ export interface SheriffVoteTally {
 export interface SheriffElectionState {
   subPhase: SheriffSubPhase
   timeRemaining: number
+  // During SIGNUP, identities are hidden from everyone except the requesting
+  // player — `candidates` contains only the viewer's own row (if they decided)
+  // so `iAmCandidate` / `hasPassed` keep working. Outside SIGNUP, the full
+  // candidate list is exposed.
   candidates: SheriffCandidate[]
+  /** Decision progress during SIGNUP — backs the "X / Y 已选择" indicator. */
+  decisionProgress?: { decided: number; total: number }
   speakingOrder: string[] // userIds in order
   currentSpeakerId?: string
   hasPassed?: boolean // true if I chose to pass on signup
@@ -260,7 +342,11 @@ export interface SheriffElectionState {
 
 // ── Day Phase ─────────────────────────────────────────────────────────────────
 
-export type DaySubPhase = 'RESULT_HIDDEN' | 'RESULT_REVEALED'
+export type DaySubPhase =
+  | 'RESULT_HIDDEN'
+  | 'RESULT_REVEALED'
+  | 'HUNTER_SHOOT_NIGHT_DEATH'
+  | 'BADGE_HANDOVER'
 
 export interface KilledPlayer {
   killedPlayerId: string
@@ -273,15 +359,24 @@ export interface NightResult {
   killedPlayers: KilledPlayer[]
 }
 
+// The wolf who self-destructed (自爆) this day, shown in the day death banner.
+// Cleared at night-init, so it is only present for the day it happened.
+export interface SelfDestructResult {
+  seatIndex: number
+  nickname: string
+}
+
 export interface DayPhaseState {
   subPhase: DaySubPhase
   dayNumber: number
   phaseDeadline: number // epoch ms when phase ends
   phaseStarted: number // epoch ms when phase started
   nightResult?: NightResult // always present for host; present for others only after RESULT_REVEALED
+  selfDestruct?: SelfDestructResult | null // the wolf who self-destructed this day, if any
   canVote: boolean
   myVote?: string
   selectedPlayerId?: string
+  hunterUserId?: string // the wolf-killed hunter eligible to fire during HUNTER_SHOOT_NIGHT_DEATH
 }
 
 // ── Voting Phase ──────────────────────────────────────────────────────────────
@@ -390,7 +485,13 @@ export interface NightPhaseState {
 
 export interface ActionLogEntry {
   id: number
-  eventType: 'NIGHT_DEATH' | 'VOTE_RESULT' | 'HUNTER_SHOT' | 'IDIOT_REVEAL' | 'SHERIFF_RESULT'
+  eventType:
+    | 'NIGHT_DEATH'
+    | 'VOTE_RESULT'
+    | 'HUNTER_SHOT'
+    | 'IDIOT_REVEAL'
+    | 'SHERIFF_RESULT'
+    | 'SELF_DESTRUCT'
   message: string // raw JSON — parse per eventType
   targetUserId: string | null
   createdAt: string | null
@@ -459,6 +560,13 @@ export interface SheriffResultPayload {
   winnerSeatIndex: number | null
   abstainCount?: number
   abstainVoters?: AbstainVoter[]
+}
+
+export interface SelfDestructPayload {
+  dayNumber: number
+  userId: string
+  nickname: string
+  seatIndex: number
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

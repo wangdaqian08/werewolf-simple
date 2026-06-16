@@ -25,8 +25,14 @@ import type {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
+// JWT-shaped fixture so userStore.isTokenExpired() can decode the payload.
+// The store treats undecodable tokens as expired and purges them on init,
+// which would log mock-mode E2E specs out and trip the router auth guard.
+// Payload: { "exp": 4070908800 } → 2099-01-01.
+export const MOCK_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjQwNzA5MDg4MDB9.mock-sig'
+
 export const MOCK_LOGIN: LoginResponse = {
-  token: 'mock-jwt-token-abc123',
+  token: MOCK_JWT,
   user: { userId: 'u1', nickname: 'You' },
 }
 
@@ -36,7 +42,7 @@ export const MOCK_LOGIN: LoginResponse = {
 
 export const MOCK_ROOM_AS_HOST: Room = {
   roomId: 'room-001',
-  roomCode: 'ABC123',
+  roomCode: '123',
   hostId: 'u1',
   status: 'WAITING',
   config: {
@@ -75,7 +81,7 @@ export const MOCK_ROOM_AS_HOST: Room = {
 
 export const MOCK_ROOM_AS_GUEST: Room = {
   roomId: 'room-002',
-  roomCode: 'XYZ789',
+  roomCode: '789',
   hostId: 'u2',
   status: 'WAITING',
   config: {
@@ -182,12 +188,18 @@ export const MOCK_ROLE_ASSIGNMENTS: Record<string, PlayerRole> = {
 
 // ── Result (game over) ────────────────────────────────────────────────────────
 
+// Casualties for the demo result screen. u4 (Carol) was killed N1 (matches
+// MOCK_GAME_STATE); we add a couple more so the GAME_OVER grey-out is visible:
+// u2 (Alice, wolf) and u7 (Frank, hunter) died during day votes/shots.
+const RESULT_DEAD_IDS = new Set(['u4', 'u2', 'u7'])
+
 export const MOCK_GAME_RESULT = {
   ...MOCK_GAME_STATE,
   phase: 'GAME_OVER' as const,
   winner: 'VILLAGER' as const,
   players: MOCK_GAME_STATE.players.map((p) => ({
     ...p,
+    isAlive: !RESULT_DEAD_IDS.has(p.userId),
     role: MOCK_ROLE_ASSIGNMENTS[p.userId] ?? 'VILLAGER',
   })),
 }
@@ -198,6 +210,7 @@ export const MOCK_GAME_RESULT_WOLVES = {
   winner: 'WEREWOLF' as const,
   players: MOCK_GAME_STATE.players.map((p) => ({
     ...p,
+    isAlive: !RESULT_DEAD_IDS.has(p.userId),
     role: MOCK_ROLE_ASSIGNMENTS[p.userId] ?? 'VILLAGER',
   })),
 }
@@ -312,14 +325,16 @@ export const MOCK_DAY_SCENARIO_GUEST: GameState = makeDayScenario('GUEST')
 // ── Sheriff Election mock states ──────────────────────────────────────────────
 // u1 = You (logged-in user), u2 = Alice, u6 = Tom
 
+// During SIGNUP, the backend hides other candidates' identities — the state
+// only includes the viewer's own row (if they decided) plus decision progress.
+// Mirroring that contract here keeps the dev UI honest. u1 (You) has not yet
+// decided, so the candidates list is empty.
 export const MOCK_SHERIFF_SIGNUP: SheriffElectionState = {
   subPhase: 'SIGNUP',
   timeRemaining: 48,
-  candidates: [
-    { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' },
-    { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
-  ],
-  speakingOrder: ['u2', 'u6'],
+  candidates: [],
+  decisionProgress: { decided: 5, total: 8 },
+  speakingOrder: [],
   canVote: true,
 }
 

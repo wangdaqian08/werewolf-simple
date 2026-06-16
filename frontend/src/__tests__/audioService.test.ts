@@ -155,6 +155,31 @@ describe('audioService', () => {
     expect(mod.audioService.isMuted()).toBe(true)
   })
 
+  // Regression: VolumeControl mounts BEFORE the GameView watcher fires
+  // setMuted (gameStore.hostId arrives via HTTP after the component tree is
+  // mounted). Without an observer, the icon stayed stuck at the initial
+  // value while audioService.muted flipped under it. PR #122 surfaced this.
+  it('onMuteChange fires when setMuted changes the value', () => {
+    const seen: boolean[] = []
+    const unsub = audioService.onMuteChange((m) => seen.push(m))
+    audioService.setMuted(true)
+    audioService.setMuted(false)
+    audioService.setMuted(false) // no-op, no event
+    expect(seen).toEqual([true, false])
+    unsub()
+    audioService.setMuted(true)
+    expect(seen).toEqual([true, false]) // unsubscribed → no further events
+  })
+
+  it('onMuteChange also fires on toggleMute', () => {
+    const seen: boolean[] = []
+    const unsub = audioService.onMuteChange((m) => seen.push(m))
+    audioService.toggleMute() // false → true
+    audioService.toggleMute() // true → false
+    expect(seen).toEqual([true, false])
+    unsub()
+  })
+
   // ── Volume ──────────────────────────────────────────────────────────────
 
   it('setGlobalVolume clamps to 0-1', () => {
@@ -187,5 +212,80 @@ describe('audioService', () => {
       expect(mockAudioInstances).toHaveLength(2)
     })
     expect(mockAudioInstances[1]?.play).toHaveBeenCalled()
+  })
+
+  // ── Stuck-queue watchdog ─────────────────────────────────────────────────
+  //
+  // Documented failure mode (audioService.ts:246–259): if a prior playback's
+  // onended never fires (paused mid-stream, AudioContext suspended in a
+  // background tab, play() promise hung), isPlayingQueue stays true forever.
+  // The next playSequential queues files but skips processing because of the
+  // !isPlayingQueue gate, leaving the host's phone silent for the rest of the
+  // game. Reproduced indirectly: game 17, room 21, 2026-05-09 — seer/witch
+  // audio played on their phones but the host heard nothing.
+
+  it('playSequential recovers from a stuck queue when no playback has started in >15s', () => {
+    // Simulate a stuck state: isPlayingQueue = true but lastPlaybackStartTime
+    // is 16 seconds in the past (as if play() hung and onended never fired).
+    ;(audioService as any).isPlayingQueue = true
+    ;(audioService as any).lastPlaybackStartTime = performance.now() - 16000
+
+    const warnSpy = vi.spyOn(console, 'warn')
+
+    audioService.playSequential(['seer_open_eyes.mp3'])
+
+    // The watchdog should have reset the stuck state so play() is called.
+    expect(mockAudioInstances).toHaveLength(1)
+    expect(mockAudioInstances[0]?.play).toHaveBeenCalledTimes(1)
+
+    // The watchdog warn must fire to help with future debugging.
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[AudioService] Stuck queue detected'),
+      expect.any(Object),
+    )
+  })
+
+  // ── Tab-resume drain must not discard a HEALTHY queue ────────────────────
+  //
+  // Reported: game 80, day 2 — rooster_crowing.mp3 / day_time.mp3 never played.
+  // The day audio was queued behind a still-playing seer_close_eyes.mp3 when the
+  // backgrounded tab resumed; the resume handler drained the queue "without
+  // replay", discarding the FRESH day audio. The drain must only fire for a
+  // genuinely STUCK queue (no playback progress for a while), not whenever a cue
+  // happens to be actively playing on resume.
+
+  function visibilityHandler(): () => void {
+    const calls = (document.addEventListener as unknown as ReturnType<typeof vi.fn>).mock.calls
+    const vis = calls.filter((c) => c[0] === 'visibilitychange')
+    return vis[vis.length - 1]![1] as () => void
+  }
+
+  it('tab resume does NOT drain the pending queue while a cue is actively playing', () => {
+    // seer_close_eyes playing, rooster_crowing queued behind it; cue just started.
+    audioService.playSequential(['seer_close_eyes.mp3', 'rooster_crowing.mp3'])
+    expect(audioService.isQueueActive()).toBe(true)
+    ;(document as unknown as { visibilityState: string }).visibilityState = 'visible'
+
+    visibilityHandler()()
+
+    // The fresh day cue must survive the resume: when seer_close_eyes ends,
+    // rooster_crowing plays.
+    mockAudioInstances[0]?.onended?.()
+    expect(mockAudioInstances).toHaveLength(2)
+    expect(mockAudioInstances[1]?.play).toHaveBeenCalled()
+  })
+
+  it('tab resume DOES drain a genuinely stuck queue (no playback progress >15s)', () => {
+    audioService.playSequential(['stale_a.mp3', 'stale_b.mp3'])
+    // Simulate a long suspension: no playback has progressed for 16s.
+    ;(audioService as unknown as { lastPlaybackStartTime: number }).lastPlaybackStartTime =
+      performance.now() - 16000
+    ;(document as unknown as { visibilityState: string }).visibilityState = 'visible'
+
+    visibilityHandler()()
+
+    // Stale queue drained: nothing else plays when the (suspended) cue ends.
+    mockAudioInstances[0]?.onended?.()
+    expect(mockAudioInstances).toHaveLength(1)
   })
 })

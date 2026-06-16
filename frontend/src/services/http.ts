@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { useUserStore } from '@/stores/userStore'
 
 const http = axios.create({
   baseURL: '/api',
@@ -15,15 +16,13 @@ http.interceptors.request.use((config) => {
   return config
 })
 
-// Handle 401 globally — clear session and redirect to lobby
+// Handle 401 globally — clear session so the UI drops back to the OAuth/guest
+// view instead of staying stuck on a stale identity card.
 http.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('jwt')
-      localStorage.removeItem('userId')
-      localStorage.removeItem('nickname')
-      localStorage.removeItem('avatarUrl')
+      useUserStore().clearSession()
     }
     return Promise.reject(err)
   },

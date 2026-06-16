@@ -21,8 +21,16 @@ const BGM_VOLUME_STORAGE_KEY = 'bgm-volume'
 
 const BGM_GAIN_HIGH = 1.0
 const BGM_GAIN_LOW = 0.45
-const BGM_GAIN_DUCKED = 0.15
+// Absolute BGM volume during narration cues. Capped at the unducked target so
+// users listening at < 10% never get loudened mid-cue.
+const BGM_DUCK_ABSOLUTE = 0.1
 const BGM_RAMP_SEC = 0.15
+
+// A queue is "stuck" only if no cue has STARTED for this long — a hung play()
+// promise or AudioContext suspended in a background tab. Used by both the
+// playSequential watchdog and the tab-resume drain so a healthy, progressing
+// queue is never discarded.
+const STUCK_QUEUE_MS = 15_000
 
 class AudioService {
   private audioCache = new Map<string, HTMLAudioElement>()
@@ -63,6 +71,7 @@ class AudioService {
 
   private audioQueue: Array<{ filename: string; options: AudioOptions }> = []
   private isPlayingQueue = false
+  private lastPlaybackStartTime = 0
 
   /**
    * Setup tracking for user interaction to enable audio playback
@@ -101,11 +110,47 @@ class AudioService {
       document.addEventListener(eventName, enableAudio, { capture: true })
     })
 
-    // On returning to foreground, defensively resume the audio context.
+    // On returning to foreground: resume the audio context, then drain any queue
+    // that got stuck during suspension. Do NOT replay stale narration — playing
+    // audio that other players already heard would confuse the resumed player.
+    // PR #113's stuck-queue watchdog (in playSequential) remains as the backstop.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && this.audioContext?.state === 'suspended') {
+      if (document.visibilityState !== 'visible') return
+      if (this.audioContext?.state === 'suspended') {
         this.audioContext.resume().catch(() => {
           /* swallow */
+        })
+      }
+      // Drain queue stuck from suspension. Do NOT replay — playing stale narration
+      // on a freshly-woken device duplicates what other players already heard
+      // (the action is over). Just reset state so subsequent live STOMP cues play.
+      //
+      // Only drain a GENUINELY STUCK queue (no cue has started for >STUCK_QUEUE_MS).
+      // A queue that is merely actively playing must NOT be discarded: a resume
+      // that coincides with a fresh phase cue queued behind the still-playing one
+      // (game 80 day-2: day_time/rooster_crowing queued behind seer_close_eyes)
+      // would otherwise be wrongly dropped, leaving the day silent.
+      if (this.isPlayingQueue && performance.now() - this.lastPlaybackStartTime > STUCK_QUEUE_MS) {
+        console.warn('[AudioService] Tab resumed with stuck queue — draining without replay')
+        this.audioQueue = []
+        this.isPlayingQueue = false
+        // The queue drained mid-narration without firing the unduck path in
+        // playNextInQueue's "queue empty" branch. Restore BGM gain so the
+        // music isn't left clamped at the duck level forever.
+        this.unduckBgm()
+      }
+      // Mobile Chrome / iOS pause the BGM <audio> element implicitly when the
+      // screen locks or the tab backgrounds. Narration recovers because each
+      // cue calls play() fresh on a new (or cached + user-unlocked) element;
+      // BGM does not, since it's a single long-lived element. Re-issue play()
+      // here so the music resumes on unlock without waiting for a manual tap.
+      if (this.bgmAudioEl && this.bgmFilename && this.bgmAudioEl.paused && !this.muted) {
+        const bgmFilename = this.bgmFilename
+        this.bgmAudioEl.play().catch(() => {
+          // If the resume itself needs user-activation (no recent gesture),
+          // re-arm pendingStart so the next click retries — same recovery
+          // path as the startBgm rejection branch above.
+          this.bgmPendingStart = () => this.startBgm(bgmFilename)
         })
       }
     })
@@ -130,6 +175,26 @@ class AudioService {
    */
   playSequential(filenames: string[], options: AudioOptions = {}): void {
     if (this.muted || filenames.length === 0) return
+
+    // Stuck-queue self-heal. Documented failure (see stopAll() comment): if
+    // a prior playback's onended never fires (paused mid-stream, AudioContext
+    // suspended in background tab, play() promise hung), isPlayingQueue stays
+    // true forever and every subsequent playSequential is silently dropped
+    // because of the !isPlayingQueue gate. Detect via wall-clock: if we are
+    // "playing" but no item has started for >15s, the queue is stuck — drain
+    // and reset so this call gets to play.
+    if (this.isPlayingQueue && performance.now() - this.lastPlaybackStartTime > STUCK_QUEUE_MS) {
+      console.warn(
+        '[AudioService] Stuck queue detected (no playback start in >15s) — force-recovering',
+        { queueLen: this.audioQueue.length, lastStart: this.lastPlaybackStartTime },
+      )
+      this.audioQueue = []
+      this.isPlayingQueue = false
+      // Note: we deliberately do NOT call unduckBgm() here. The watchdog only
+      // fires from playSequential, which immediately re-enqueues narration
+      // and re-ducks. The visibility-resume drain (in setupUserInteractionTracking)
+      // does call unduckBgm because no new narration is guaranteed to follow.
+    }
 
     // Add to queue with options
     filenames.forEach((filename) => {
@@ -192,6 +257,9 @@ class AudioService {
         this.playNextInQueue() // Continue to next audio
         return
       }
+
+      // Record start time for stuck-queue watchdog in playSequential.
+      this.lastPlaybackStartTime = performance.now()
 
       // Handle play errors and continue to next
       audio.play().catch((error) => {
@@ -346,7 +414,23 @@ class AudioService {
     // Recompute BGM target — applyBgmGain reads `this.muted` and ramps the
     // element's volume to 0 (mute) or to the level-aware target (unmute).
     this.applyBgmGain()
+    this.notifyMuteListeners()
     return this.muted
+  }
+
+  /**
+   * Set mute state to a specific value.
+   * No-op if the value is already set.
+   */
+  setMuted(value: boolean): void {
+    if (this.muted === value) return
+    this.muted = value
+    this.persistMute()
+    if (this.muted) {
+      this.stopAll()
+    }
+    this.applyBgmGain()
+    this.notifyMuteListeners()
   }
 
   /**
@@ -354,6 +438,24 @@ class AudioService {
    */
   isMuted(): boolean {
     return this.muted
+  }
+
+  // Mute-change subscription. VolumeControl and similar UI read `muted` once
+  // at mount; without this, a later setMuted call (e.g. the host-aware default
+  // in GameView, which fires only after gameStore.hostId arrives via HTTP)
+  // would update audioService state but leave the icon stuck on the initial
+  // value. Subscribe in setup, unsubscribe on unmount.
+  private muteListeners = new Set<(muted: boolean) => void>()
+
+  onMuteChange(listener: (muted: boolean) => void): () => void {
+    this.muteListeners.add(listener)
+    return () => {
+      this.muteListeners.delete(listener)
+    }
+  }
+
+  private notifyMuteListeners(): void {
+    for (const fn of this.muteListeners) fn(this.muted)
   }
 
   /**
@@ -457,7 +559,14 @@ class AudioService {
       this.bgmFilename = filename
 
       el.play().catch((err) => {
-        console.warn('[AudioService] BGM play() rejected:', err)
+        // Mobile Chrome rejects autoplay if no user-activation is on the
+        // document at the moment play() is called — which is exactly the
+        // case for BGM, since startBgm fires from a STOMP phase change, not
+        // a user click. Re-arm bgmPendingStart so the very next gesture
+        // (any click / touch / keydown via setupUserInteractionTracking)
+        // retries the start. Keeps retrying until one sticks.
+        console.warn('[AudioService] BGM play() rejected — will retry on next user gesture', err)
+        this.bgmPendingStart = () => this.startBgm(filename, displayName)
       })
 
       this.applyMediaSession(displayName ?? filename)
@@ -579,14 +688,16 @@ class AudioService {
 
   /** Compute the target HTMLAudioElement.volume from current state. */
   private computeBgmTargetVolume(): number {
-    const multiplier = this.muted
-      ? 0
-      : this.bgmNarrationActive
-        ? BGM_GAIN_DUCKED
-        : this.bgmLevel === 'HIGH'
-          ? BGM_GAIN_HIGH
-          : BGM_GAIN_LOW
-    return Math.max(0, Math.min(1, this.bgmBaseVolume * multiplier))
+    if (this.muted) return 0
+    const levelMult = this.bgmLevel === 'HIGH' ? BGM_GAIN_HIGH : BGM_GAIN_LOW
+    const unducked = this.bgmBaseVolume * levelMult
+    if (this.bgmNarrationActive) {
+      // Absolute target during cue narration; never louder than what the
+      // user picked unducked (otherwise a 5%-listener would hear the BGM
+      // jump UP to 10% during cues).
+      return Math.max(0, Math.min(unducked, BGM_DUCK_ABSOLUTE))
+    }
+    return Math.max(0, Math.min(1, unducked))
   }
 
   /**

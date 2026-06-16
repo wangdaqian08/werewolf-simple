@@ -207,6 +207,46 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(texts[4]).toContain('猎人')
   })
 
+  it('greys out reveal-cards for players who died during the game', async () => {
+    // 2026-05-11 behaviour change: the GAME_OVER reveal grid must indicate
+    // which players were killed during the game. Dead players' cards get a
+    // `reveal-dead` class so they render desaturated/grey.
+    const state: GameState = {
+      gameId: 'g-dead',
+      phase: 'GAME_OVER',
+      dayNumber: 3,
+      winner: 'VILLAGER',
+      players: [
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER', true),
+        makePlayer(2, 'user-2', 'Bob', 'WEREWOLF', false), // killed
+        makePlayer(3, 'user-3', 'Charlie', 'SEER', false), // killed
+        makePlayer(4, 'user-4', 'Dan', 'WEREWOLF', true),
+      ],
+      events: [],
+    }
+    const { wrapper } = await mountResultView(state)
+    const cards = wrapper.findAll('.reveal-card')
+    const deadStates = cards.map((c) => c.classes().includes('reveal-dead'))
+    expect(deadStates).toEqual([false, true, true, false])
+  })
+
+  it('dead WEREWOLF keeps reveal-wolf class so wolf identity stays readable beneath the grey', async () => {
+    // Death is rendered as a grey overlay/desaturation; the role-team colour
+    // underneath is still meaningful (e.g. for "who was on which team").
+    const state: GameState = {
+      gameId: 'g-dead-wolf',
+      phase: 'GAME_OVER',
+      dayNumber: 3,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Wolfie', 'WEREWOLF', false)],
+      events: [],
+    }
+    const { wrapper } = await mountResultView(state)
+    const card = wrapper.find('.reveal-card')
+    expect(card.classes()).toContain('reveal-wolf')
+    expect(card.classes()).toContain('reveal-dead')
+  })
+
   it('Play Again button triggers router push to lobby', async () => {
     const state: GameState = {
       gameId: 'g-7',
@@ -220,5 +260,76 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     const pushSpy = vi.spyOn(router, 'push')
     await wrapper.find('[data-testid="play-again"]').trigger('click')
     expect(pushSpy).toHaveBeenCalledWith({ name: 'lobby' })
+  })
+
+  // ── Credit settlement (game-end rewards) ─────────────────────────────────
+
+  it('renders the settlement block with my earnings, balance and per-player rewards', async () => {
+    const state: GameState = {
+      gameId: 'g-settle',
+      phase: 'GAME_OVER',
+      dayNumber: 3,
+      winner: 'VILLAGER',
+      players: [
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER'),
+        makePlayer(3, 'user-3', 'Bob', 'WEREWOLF'),
+      ],
+      events: [],
+      settlement: {
+        myEarned: 50,
+        myBalance: 500,
+        rewards: [
+          { userId: 'user-3', nickname: 'Bob', seatIndex: 3, amount: 12 },
+          { userId: 'user-1', nickname: 'Alice', seatIndex: 1, amount: 50 },
+        ],
+      },
+    }
+    // authed as a spectator so reward names render as nicknames, not "我".
+    const { wrapper } = await mountResultView(state, { authedUserId: 'spectator' })
+    const settlement = wrapper.find('[data-testid="settlement"]')
+    expect(settlement.exists()).toBe(true)
+    expect(settlement.text()).toContain('+50')
+    expect(settlement.text()).toContain('积分 / Credits earned')
+    expect(settlement.text()).toContain('500')
+    // rewards sorted by seatIndex ascending regardless of input order
+    const rows = wrapper.findAll('.reward-row').map((r) => r.text())
+    expect(rows[0]).toContain('01 · Alice')
+    expect(rows[0]).toContain('+50')
+    expect(rows[1]).toContain('03 · Bob')
+    expect(rows[1]).toContain('+12')
+  })
+
+  it('omits the settlement block entirely when there is no settlement', async () => {
+    const state: GameState = {
+      gameId: 'g-nosettle',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Alice', 'VILLAGER')],
+      events: [],
+      settlement: null,
+    }
+    const { wrapper } = await mountResultView(state)
+    expect(wrapper.find('[data-testid="settlement"]').exists()).toBe(false)
+  })
+
+  it('hides the my-earned line when myEarned is null but still lists rewards', async () => {
+    const state: GameState = {
+      gameId: 'g-noearn',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Alice', 'VILLAGER')],
+      events: [],
+      settlement: {
+        myEarned: null,
+        myBalance: 200,
+        rewards: [{ userId: 'user-1', nickname: 'Alice', seatIndex: 1, amount: 5 }],
+      },
+    }
+    const { wrapper } = await mountResultView(state, { authedUserId: 'spectator' })
+    expect(wrapper.find('[data-testid="settlement"]').exists()).toBe(true)
+    expect(wrapper.find('.my-earned').exists()).toBe(false)
+    expect(wrapper.findAll('.reward-row')).toHaveLength(1)
   })
 })

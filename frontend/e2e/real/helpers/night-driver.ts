@@ -56,31 +56,6 @@ export async function driveMinimalNight1ViaDom(
   await wolfSlot.click()
   await wolfPage.getByTestId('wolf-confirm-kill').click()
 
-  // ── Seer check + acknowledge result ──────────────────────────────────
-  const reachedSeerPick = await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
-  if (!reachedSeerPick) {
-    throw new Error('driveMinimalNight1ViaDom: SEER_PICK sub-phase not reached')
-  }
-  const seerPage = pageOrThrow(ctx, 'SEER')
-  // Default seerCheckSeat must NOT be the seer's own seat — seer-self-check
-  // is disallowed (per project_game_rules_clarifications memory), so the
-  // slot renders with aria-disabled="true" and .player-grid intercepts the
-  // click. Without this guard the test hangs on retry-click for 180s and
-  // fails with the misleading "Target page, context or browser has been
-  // closed" error (the page is fine; Playwright tears it down at timeout).
-  // Bot1 always lands at seat 1, and the SEER role rolls onto bot1 ~1/N
-  // of the time → without this guard the test is randomly flaky.
-  const seerSeat = ctx.roleMap.SEER?.[0]?.seat
-  const checkSeat = opts.seerCheckSeat ?? (seerSeat !== 1 ? 1 : 2)
-  const seerSlot = seerPage.locator(`.player-grid [data-seat="${checkSeat}"]`)
-  await expect(seerSlot, `seer check seat ${checkSeat} must render`).toBeVisible({ timeout: 10_000 })
-  await seerSlot.click()
-  await seerPage.getByTestId('seer-check').click()
-
-  await waitForNightSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
-  await expect(seerPage.getByTestId('seer-result-card')).toBeVisible({ timeout: 10_000 })
-  await seerPage.getByTestId('seer-done').click()
-
   // ── Witch passes on antidote + poison ────────────────────────────────
   const reachedWitchAct = await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
   if (!reachedWitchAct) {
@@ -107,6 +82,31 @@ export async function driveMinimalNight1ViaDom(
   if (await witchSkip.isVisible({ timeout: 2_000 }).catch(() => false)) {
     await witchSkip.click()
   }
+
+  // ── Seer check + acknowledge result ──────────────────────────────────
+  const reachedSeerPick = await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
+  if (!reachedSeerPick) {
+    throw new Error('driveMinimalNight1ViaDom: SEER_PICK sub-phase not reached')
+  }
+  const seerPage = pageOrThrow(ctx, 'SEER')
+  // Default seerCheckSeat must NOT be the seer's own seat — seer-self-check
+  // is disallowed (per project_game_rules_clarifications memory), so the
+  // slot renders with aria-disabled="true" and .player-grid intercepts the
+  // click. Without this guard the test hangs on retry-click for 180s and
+  // fails with the misleading "Target page, context or browser has been
+  // closed" error (the page is fine; Playwright tears it down at timeout).
+  // Bot1 always lands at seat 1, and the SEER role rolls onto bot1 ~1/N
+  // of the time → without this guard the test is randomly flaky.
+  const seerSeat = ctx.roleMap.SEER?.[0]?.seat
+  const checkSeat = opts.seerCheckSeat ?? (seerSeat !== 1 ? 1 : 2)
+  const seerSlot = seerPage.locator(`.player-grid [data-seat="${checkSeat}"]`)
+  await expect(seerSlot, `seer check seat ${checkSeat} must render`).toBeVisible({ timeout: 10_000 })
+  await seerSlot.click()
+  await seerPage.getByTestId('seer-check').click()
+
+  await waitForNightSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
+  await expect(seerPage.getByTestId('seer-result-card')).toBeVisible({ timeout: 10_000 })
+  await seerPage.getByTestId('seer-done').click()
 
   // ── Guard protects (UI has no skip — must pick a target) ─────────────
   const reachedGuardPick = await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)

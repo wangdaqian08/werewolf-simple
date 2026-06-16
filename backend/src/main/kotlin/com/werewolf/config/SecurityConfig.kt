@@ -51,6 +51,9 @@ class SecurityConfig(
                     .requestMatchers("/api/auth/**").permitAll()
                     .requestMatchers("/api/user/login").permitAll()
                     .requestMatchers("/api/health").permitAll()
+                    // Stripe calls this with its own signature header, no JWT;
+                    // authenticity is verified via Webhook.constructEvent.
+                    .requestMatchers("/api/payment/webhook").permitAll()
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/ws/**").permitAll()
                     .requestMatchers("/api/**").authenticated()

@@ -138,7 +138,7 @@
           </div>
           <div class="sr-verdict">
             {{
-              nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 平民阵营 · Good Camp'
+              nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 好人阵营 · Good Camp'
             }}
           </div>
         </div>
@@ -155,7 +155,7 @@
               <span class="srh-name">{{ h.nickname }}</span>
               <span class="srh-arrow">→</span>
               <span :class="h.isWerewolf ? 'srh-wolf' : 'srh-ok'">
-                {{ h.isWerewolf ? '狼人 ✗' : '平民 ✓' }}
+                {{ h.isWerewolf ? '狼人 ✗' : '好人 ✓' }}
               </span>
             </div>
           </template>
@@ -194,8 +194,16 @@
           </span>
           被狼人袭击，是否使用解药？
         </p>
+        <p
+          v-if="witchSelfSaveBlocked"
+          class="ws-desc ws-blocked-note"
+          data-testid="witch-self-save-blocked"
+        >
+          本局禁止自救 / Self-save disabled this game
+        </p>
         <div class="ws-row">
           <button
+            v-if="!witchSelfSaveBlocked"
             class="btn btn-primary ws-btn"
             data-testid="witch-antidote"
             :class="{ 'is-loading': actionPending }"
@@ -401,13 +409,28 @@ import {
   wolfVariant,
 } from '@/utils/nightPhaseHelpers'
 
-const props = defineProps<{
-  nightPhase: NightPhaseState
-  players: GamePlayer[]
-  myUserId: string
-  myRole?: PlayerRole
-  actionPending?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    nightPhase: NightPhaseState
+    players: GamePlayer[]
+    myUserId: string
+    myRole?: PlayerRole
+    actionPending?: boolean
+    witchSelfSaveAllowed?: boolean
+  }>(),
+  {
+    // Vue 3 coerces a missing boolean prop to `false`, but the safe default
+    // here is `true` — self-save was the historical behavior; only the new
+    // room-config opt-in disables it. Pin the default so callers that omit
+    // the prop (older mocks, tests, demo data) don't accidentally block
+    // self-save for every witch.
+    witchSelfSaveAllowed: true,
+  },
+)
+
+const witchSelfSaveBlocked = computed(
+  () => !props.witchSelfSaveAllowed && props.nightPhase.attackedPlayerId === props.myUserId,
+)
 
 const emit = defineEmits<{
   selectPlayer: [userId: string]
@@ -1018,16 +1041,6 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   margin-top: 0.375rem;
 }
 
-.ss-countdown {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 3.5rem;
-  font-weight: 700;
-  color: var(--paper);
-  line-height: 1;
-  margin: 0.25rem 0;
-  opacity: 0.9;
-}
-
 /* ── Button overrides for night mode ─────────────────────────────────────── */
 /* Size/shape use global .btn; only color overrides needed here */
 .btn:disabled {
@@ -1037,11 +1050,6 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 
 .btn-danger {
   background: var(--red);
-  color: #fff;
-}
-
-.btn-success {
-  background: var(--green);
   color: #fff;
 }
 

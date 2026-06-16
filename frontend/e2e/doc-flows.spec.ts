@@ -66,9 +66,10 @@ test('flow: gameStart → roleSkip → sheriffExit → dayScenario HOST_REVEALED
 
 // ── Flow 3: Test candidate controls ──────────────────────────────────────────
 
-test('flow: roleSkip already seeds Alice+Tom as candidates', async ({ page }) => {
-  // Verify that MOCK_SHERIFF_SIGNUP (used by roleSkip) already contains Alice and Tom.
-  // This means the doc's sheriffCandidate calls in "Test candidate controls" are no-ops.
+test('flow: roleSkip lands on SIGNUP showing decision progress', async ({ page }) => {
+  // 2026-05-11: SIGNUP no longer exposes candidate identities, so the
+  // previous "Alice+Tom seeded as visible candidates" claim no longer
+  // applies. The observable signal is the decision-progress counter.
   await setup(page)
 
   await page.evaluate(() => (window as any).__debug.gameStart())
@@ -78,11 +79,9 @@ test('flow: roleSkip already seeds Alice+Tom as candidates', async ({ page }) =>
   await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
-  await page.waitForTimeout(70)
 
-  // Alice and Tom should already be candidates without any sheriffCandidate() call
-  await expect(page.getByText('Alice', { exact: true }).first()).toBeVisible()
-  await expect(page.getByText('Tom', { exact: true }).first()).toBeVisible()
+  // Mock SIGNUP fixture lands at 5 of 8 alive players decided
+  await expect(page.getByTestId('sheriff-decision-progress')).toContainText(/5\s*\/\s*8/)
 })
 
 test('flow: sheriffCandidate is a no-op when candidate already exists', async ({ page }) => {
@@ -95,20 +94,15 @@ test('flow: sheriffCandidate is a no-op when candidate already exists', async ({
   await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
-  await page.waitForTimeout(70)
 
-  // Count candidates before
-  const before = await page.evaluate(() => {
-    // The mock exposes mockGameState indirectly; read from DOM
-    return document.querySelectorAll('.cand-name').length
-  })
-
-  // Adding Alice again should be a no-op
+  const progress = page.getByTestId('sheriff-decision-progress')
+  // First sheriffCandidate(u2) is a real add: counter advances 5/8 → 6/8.
+  await page.evaluate(() => (window as any).__debug.sheriffCandidate('u2', 'Alice', '😊'))
+  await expect(progress).toContainText(/6\s*\/\s*8/)
+  // Adding Alice again should be a no-op: counter stays at 6/8.
   await page.evaluate(() => (window as any).__debug.sheriffCandidate('u2', 'Alice', '😊'))
   await page.waitForTimeout(70)
-
-  const after = await page.evaluate(() => document.querySelectorAll('.cand-name').length)
-  expect(after).toBe(before) // count unchanged — no-op confirmed
+  await expect(progress).toContainText(/6\s*\/\s*8/)
 })
 
 test('flow: correct candidate controls sequence — remove then re-add', async ({ page }) => {
@@ -121,16 +115,17 @@ test('flow: correct candidate controls sequence — remove then re-add', async (
   await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
-  await page.waitForTimeout(70)
 
-  // Remove Alice first, then re-add to actually see the add take effect
-  await page.evaluate(() => (window as any).__debug.sheriffRemove('u2'))
-  await page.waitForTimeout(70)
-
+  const progress = page.getByTestId('sheriff-decision-progress')
+  // Add Alice: 5/8 → 6/8
   await page.evaluate(() => (window as any).__debug.sheriffCandidate('u2', 'Alice', '😊'))
-  await page.waitForTimeout(70)
-
-  await expect(page.getByText('Alice', { exact: true }).first()).toBeVisible()
+  await expect(progress).toContainText(/6\s*\/\s*8/)
+  // Remove Alice: 6/8 → 5/8
+  await page.evaluate(() => (window as any).__debug.sheriffRemove('u2'))
+  await expect(progress).toContainText(/5\s*\/\s*8/)
+  // Re-add Alice: 5/8 → 6/8
+  await page.evaluate(() => (window as any).__debug.sheriffCandidate('u2', 'Alice', '😊'))
+  await expect(progress).toContainText(/6\s*\/\s*8/)
 })
 
 test('flow: sheriffPhase SPEECH_CANDIDATE after roleSkip works', async ({ page }) => {

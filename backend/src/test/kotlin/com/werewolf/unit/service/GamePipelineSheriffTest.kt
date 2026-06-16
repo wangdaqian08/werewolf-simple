@@ -4,7 +4,9 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.phase.GamePhasePipeline
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.ActionLogService
@@ -12,12 +14,15 @@ import com.werewolf.service.GameContextLoader
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
+import org.mockito.junit.jupiter.MockitoSettings
 import org.mockito.kotlin.*
+import org.mockito.quality.Strictness
 import java.util.*
 
 /**
@@ -33,6 +38,7 @@ import java.util.*
  *    gameplay ago).
  */
 @ExtendWith(MockitoExtension::class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class GamePipelineSheriffTest {
 
     @Mock lateinit var gameRepository: GameRepository
@@ -44,11 +50,21 @@ class GamePipelineSheriffTest {
     @Mock lateinit var sheriffService: SheriffService
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var actionLogService: ActionLogService
+    @Mock lateinit var hostTimerService: HostTimerService
+    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
     @InjectMocks lateinit var pipeline: GamePhasePipeline
 
     private val gameId = 10
     private val hostId = "host:001"
     private val guestId = "guest:001"
+
+    @BeforeEach
+    fun stubAdvancerDefault() {
+        // revealNightResult delegates the next sub-phase to DayRevealAdvancer.
+        // Default it to RESULT_REVEALED; scenarios that need a different decision
+        // override this stub. The decision matrix lives in DayRevealAdvancerTest.
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
+    }
 
     private fun game(phase: GamePhase = GamePhase.ROLE_REVEAL, dayNumber: Int = 1, subPhase: String? = null) =
         Game(roomId = 1, hostUserId = hostId).also {
@@ -180,7 +196,7 @@ class GamePipelineSheriffTest {
             it.wolfTargetUserId = "victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("victim"))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("victim"))
 
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
@@ -203,7 +219,7 @@ class GamePipelineSheriffTest {
     fun `revealNightResult with no pending kills does NOT call applyNightKills`() {
         val np = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.COMPLETE }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(emptyList())
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(emptyList())
 
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
@@ -229,7 +245,7 @@ class GamePipelineSheriffTest {
         // already over.
         val np = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.COMPLETE }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(emptyList())
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(emptyList())
 
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
@@ -247,19 +263,23 @@ class GamePipelineSheriffTest {
     // ── Night-kill = no last action contract (regression guard for Phase B) ──
 
     @Test
-    fun `revealNightResult with sheriff among the killed lands on RESULT_REVEALED, NOT BADGE_HANDOVER`() {
-        // Contract: a sheriff killed at night silently loses the badge — no
-        // BADGE_HANDOVER sub-phase fires. Last actions only happen on vote-out
-        // (国标 rule: only voted-out players retain agency at the moment of
-        // elimination). An earlier Phase B prototype routed night-killed
-        // sheriffs to DAY_DISCUSSION/BADGE_HANDOVER; that was reverted because
-        // it ships the wrong rule. This test guards against re-introducing it.
+    fun `revealNightResult with sheriff among the killed lands on BADGE_HANDOVER`() {
+        // Contract (updated): a sheriff killed at night gets one last action —
+        // pass the badge to an heir or destroy it. revealNightResult lands the
+        // game on DAY_DISCUSSION/BADGE_HANDOVER (new DaySubPhase value); the
+        // dying sheriff then dispatches BADGE_PASS / BADGE_DESTROY through
+        // VotingPipeline.handleBadge, which transitions back to RESULT_REVEALED
+        // so the host can advance to voting. Earlier prototype: night-killed
+        // sheriffs silently lost the badge — that contract was reversed at the
+        // product owner's request because losing the badge with no farewell
+        // was unsatisfying gameplay.
         val np = NightPhase(gameId = gameId, dayNumber = 2).also {
             it.subPhase = NightSubPhase.COMPLETE
             it.wolfTargetUserId = "sheriff_victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("sheriff_victim"))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("sheriff_victim"))
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.BADGE_HANDOVER)
 
         val game = game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 2, subPhase = DaySubPhase.RESULT_HIDDEN.name)
         game.sheriffUserId = "sheriff_victim"
@@ -269,25 +289,46 @@ class GamePipelineSheriffTest {
         val result = pipeline.revealNightResult(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
-        // Crucially: NOT BADGE_HANDOVER — the contract says the badge
-        // silently disappears when the sheriff dies at night.
-        assertThat(ctx.game.subPhase).isNotEqualTo("BADGE_HANDOVER")
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
     }
 
     @Test
-    fun `revealNightResult with hunter among the killed lands on RESULT_REVEALED, NOT HUNTER_SHOOT`() {
-        // Contract: a hunter killed at night just dies — no HUNTER_SHOOT
-        // sub-phase fires. The hunter's "last shot" privilege only applies
-        // to vote-out (DAY_VOTING/HUNTER_SHOOT in VotingPipeline). This test
-        // guards against any future re-introduction of night-route hunter
-        // shooting, which the reverted Phase B prototype attempted.
+    fun `revealNightResult with non-sheriff among the killed lands on RESULT_REVEALED`() {
+        // Counterpart to the above: the BADGE_HANDOVER branch must trigger only
+        // when the dying player IS the sheriff. A non-sheriff night death lands
+        // on RESULT_REVEALED as before.
+        val np = NightPhase(gameId = gameId, dayNumber = 2).also {
+            it.subPhase = NightSubPhase.COMPLETE
+            it.wolfTargetUserId = "non_sheriff_victim"
+        }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("non_sheriff_victim"))
+
+        val game = game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 2, subPhase = DaySubPhase.RESULT_HIDDEN.name)
+        game.sheriffUserId = "different_sheriff"
+        val ctx = GameContext(game, room(hasSheriff = true), emptyList())
+
+        val req = GameActionRequest(gameId, hostId, ActionType.REVEAL_NIGHT_RESULT)
+        val result = pipeline.revealNightResult(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+    }
+
+    @Test
+    fun `revealNightResult with a wolf-killed hunter lands on HUNTER_SHOOT_NIGHT_DEATH`() {
+        // A hunter killed by the wolves (not poisoned) now gets a day-reveal
+        // shot. revealNightResult delegates the decision to DayRevealAdvancer,
+        // which returns HUNTER_SHOOT_NIGHT_DEATH. The decision matrix itself
+        // (wolf vs poison vs sheriff priority) is covered by DayRevealAdvancerTest.
         val np = NightPhase(gameId = gameId, dayNumber = 1).also {
             it.subPhase = NightSubPhase.COMPLETE
             it.wolfTargetUserId = "hunter_victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np)).thenReturn(listOf("hunter_victim"))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("hunter_victim"))
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
 
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
@@ -299,26 +340,24 @@ class GamePipelineSheriffTest {
         val result = pipeline.revealNightResult(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
-        // Crucially: NOT HUNTER_SHOOT.
-        assertThat(ctx.game.subPhase).isNotEqualTo("HUNTER_SHOOT")
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
     }
 
     @Test
-    fun `revealNightResult with sheriff AND hunter killed lands on RESULT_REVEALED, NOT BADGE_HANDOVER nor HUNTER_SHOOT`() {
-        // The doubly-special-role night-kill: both sheriff and hunter are
-        // among the killed (e.g. wolves' WOLF_KILL targets the sheriff; witch
-        // poisons the hunter). Neither last-action sub-phase fires — both
-        // players just die. The contract's symmetry: "killed at night = no
-        // last action" applies regardless of which / how many specials died.
+    fun `revealNightResult with sheriff AND hunter killed lands on BADGE_HANDOVER but skips HUNTER_SHOOT`() {
+        // Asymmetric mixed case: sheriff gets a last action (badge handover);
+        // hunter night-death still does NOT trigger HUNTER_SHOOT — that
+        // privilege remains a day-voting exclusive. Sheriff-handover takes
+        // precedence and is the only last-action that fires at reveal.
         val np = NightPhase(gameId = gameId, dayNumber = 2).also {
             it.subPhase = NightSubPhase.COMPLETE
             it.wolfTargetUserId = "sheriff_victim"
             it.witchPoisonTargetUserId = "hunter_victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
-        whenever(nightOrchestrator.computePendingKills(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np))
             .thenReturn(listOf("sheriff_victim", "hunter_victim"))
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.BADGE_HANDOVER)
 
         val game = game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 2, subPhase = DaySubPhase.RESULT_HIDDEN.name)
         game.sheriffUserId = "sheriff_victim"
@@ -328,6 +367,7 @@ class GamePipelineSheriffTest {
         val result = pipeline.revealNightResult(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(ctx.game.subPhase).isNotEqualTo("HUNTER_SHOOT")
     }
 }

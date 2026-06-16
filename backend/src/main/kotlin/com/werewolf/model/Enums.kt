@@ -27,11 +27,17 @@ enum class VoteContext { SHERIFF_ELECTION, ELIMINATION }
 
 enum class WinnerSide { WEREWOLF, VILLAGER }
 
-enum class DaySubPhase { RESULT_HIDDEN, RESULT_REVEALED }
+enum class DaySubPhase { RESULT_HIDDEN, RESULT_REVEALED, HUNTER_SHOOT_NIGHT_DEATH, BADGE_HANDOVER }
 
 enum class VotingSubPhase { VOTING, RE_VOTING, VOTE_RESULT, HUNTER_SHOOT, BADGE_HANDOVER }
 
 enum class WinConditionMode { CLASSIC, HARD_MODE }
+
+enum class CreditTxType { PURCHASE, GAME_REWARD, PERK_SPEND, REFUND }
+
+enum class PerkActivationStatus { ACTIVE, CONSUMED, VOID, REFUNDED }
+
+enum class PaymentOrderStatus { CREATED, COMPLETED, EXPIRED, FAILED }
 
 enum class ActionType {
     // Role reveal
@@ -70,4 +76,7 @@ enum class ActionType {
     // host controls when the camera shifts off the elected sheriff back to
     // the day cadence.
     SHERIFF_END_RESULT,
+
+    // Wolf self-destruction (day action)
+    WOLF_SELF_DESTRUCT,
 }

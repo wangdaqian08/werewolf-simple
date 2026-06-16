@@ -13,6 +13,11 @@ RUN --mount=type=cache,target=/root/.npm \
 
 # Copy sources and build. `npm run build` = vue-tsc -b && vite build → dist/.
 COPY . .
+# Version for the corner badge. `git describe` can't run in this stage (no `.git`
+# in the ./frontend build context, no git binary in alpine), so the build pipeline
+# injects it and vite reads APP_VERSION. Empty default → vite falls back to 'dev'.
+ARG APP_VERSION=
+ENV APP_VERSION=$APP_VERSION
 RUN npm run build
 
 # ---- Stage 2: serve static assets via Nginx ------------------------------

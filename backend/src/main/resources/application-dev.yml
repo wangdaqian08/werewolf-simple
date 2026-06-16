@@ -13,8 +13,8 @@ spring:
       client:
         registration:
           google:
-            client-id: dev-placeholder
-            client-secret: dev-placeholder
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
 
 websocket:
   allowed-origins: "*"
@@ -32,6 +32,8 @@ app:
     # Safe here because SecurityConfig sets allowCredentials=false; no cookies/session
     # cross the boundary, only Authorization-header JWT. Prod uses ${FRONTEND_ORIGIN}.
     allowed-origins: "*"
+  payment:
+    sandbox-tests-enabled: ${STRIPE_SANDBOX_TESTS_ENABLED:false}
 
 logging:
   level:

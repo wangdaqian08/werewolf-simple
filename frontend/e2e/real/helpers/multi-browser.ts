@@ -131,6 +131,13 @@ export async function setupGame(
   await hostPage.evaluate(() => localStorage.clear())
   await hostPage.goto(`${BASE_URL}/`)
 
+  // Depending on the backend's configured OAuth providers, the lobby may show
+  // the guest nickname directly OR collapse it behind a "Continue as guest"
+  // toggle. Reveal it if present (no-op when already shown) so the fill below
+  // doesn't hang.
+  const guestToggle = hostPage.getByRole('button', { name: /Continue as guest|继续以访客/i })
+  if (await guestToggle.count()) await guestToggle.first().click().catch(() => {})
+
   // Login
   await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
   await hostPage
@@ -145,17 +152,18 @@ export async function setupGame(
   await hostPage.waitForURL(/\/create-room/, { timeout: 30_000 })
 
   // Configure room: set player count
-  // The stepper shows the current total. Default is 9.
-  // Adjust if needed by clicking +/- buttons.
-  const currentCount = await hostPage.locator('.stepper-num').textContent()
+  // The stepper shows the current total. Default is 9. Use the player-count
+  // testids — there is now a second stepper for wolf count, so raw
+  // .stepper-num / .stepper-btn would match both.
+  const currentCount = await hostPage.getByTestId('player-count-value').textContent()
   const current = parseInt(currentCount ?? '9', 10)
   if (totalPlayers > current) {
     for (let i = 0; i < totalPlayers - current; i++) {
-      await hostPage.locator('.stepper-btn').last().click()
+      await hostPage.getByTestId('player-count-increment').click()
     }
   } else if (totalPlayers < current) {
     for (let i = 0; i < current - totalPlayers; i++) {
-      await hostPage.locator('.stepper-btn').first().click()
+      await hostPage.getByTestId('player-count-decrement').click()
     }
   }
 
@@ -249,7 +257,7 @@ export async function setupGame(
 
   // Get room code
   const roomCode = (await hostPage.locator('[data-testid="room-code"]').textContent()) ?? ''
-  if (!roomCode.match(/^[A-Z0-9]{4,6}$/)) {
+  if (!roomCode.match(/^[0-9]{3}$/)) {
     throw new Error(`Invalid room code: ${roomCode}`)
   }
 

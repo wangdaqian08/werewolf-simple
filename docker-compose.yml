@@ -65,6 +65,9 @@ services:
     image: ghcr.io/wangdaqian08/werewolf-simple-frontend:${WEREWOLF_VERSION:-latest}
     build:
       context: ./frontend
+      # Badge version for a local `--build`; CI passes the git tag instead.
+      args:
+        APP_VERSION: ${WEREWOLF_VERSION:-}
     restart: unless-stopped
     # Host Nginx proxies to this port; /api and /ws are handled by the host,
     # so the frontend container only needs to serve static assets.

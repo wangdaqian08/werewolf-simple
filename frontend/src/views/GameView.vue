@@ -68,11 +68,16 @@
         :election="gameStore.state.sheriffElection"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :players="gameStore.state.players"
+        :timer="gameStore.state?.timer ?? null"
+        :my-role="gameStore.state?.myRole"
+        :is-alive="
+          gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
+        "
         :action-pending="actionPending"
         @run="handleSheriffRun"
         @pass="handleSheriffPass"
         @withdraw="handleSheriffWithdraw"
-        @start-campaign="handleSheriffStartCampaign"
         @quit="handleSheriffQuit"
         @vote="handleSheriffVote"
         @abstain="handleSheriffAbstain"
@@ -80,6 +85,9 @@
         @reveal-result="handleSheriffRevealResult"
         @end-result="handleSheriffEndResult"
         @appoint="handleSheriffAppoint"
+        @self-destruct="handleSelfDestruct"
+        @start-timer="(s) => handleTimerStart(Number(route.params.gameId), s)"
+        @stop-timer="() => handleTimerStop(Number(route.params.gameId))"
       />
     </template>
 
@@ -92,6 +100,7 @@
         :my-user-id="userStore.userId ?? ''"
         :my-role="gameStore.state.myRole"
         :action-pending="actionPending"
+        :witch-self-save-allowed="gameStore.state.witchSelfSaveAllowed"
         @select-player="handleNightSelect"
         @confirm="handleNightConfirm"
         @witch-antidote="handleWitchAntidote"
@@ -112,6 +121,10 @@
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
         :my-role="gameStore.state?.myRole"
+        :is-alive="
+          gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
+        "
+        :current-sheriff-user-id="gameStore.state?.sheriffUserId ?? null"
         :vote-history="gameStore.state?.voteHistory"
         :action-pending="actionPending"
         @select-player="handleVotingSelect"
@@ -124,6 +137,7 @@
         @hunter-pass="handleHunterPass"
         @pass-badge="handlePassBadge"
         @destroy-badge="handleDestroyBadge"
+        @self-destruct="handleSelfDestruct"
       />
     </template>
 
@@ -136,12 +150,27 @@
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
+        :timer="gameStore.state?.timer ?? null"
+        :my-role="gameStore.state?.myRole"
+        :is-alive="
+          gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
+        "
+        :day-skip-voting="gameStore.state?.daySkipVoting ?? false"
+        :sheriff-user-id="gameStore.state?.sheriffUserId ?? null"
         :action-pending="actionPending"
         @reveal-result="handleRevealResult"
         @start-vote="handleStartVote"
         @vote="handleDayVote"
         @skip="handleDaySkip"
         @select-player="handleDaySelectPlayer"
+        @self-destruct="handleSelfDestruct"
+        @continue-to-night="handleVotingContinue"
+        @pass-badge="handlePassBadge"
+        @destroy-badge="handleDestroyBadge"
+        @hunter-shoot="handleHunterShoot"
+        @hunter-pass="handleHunterPass"
+        @start-timer="(s) => handleTimerStart(Number(route.params.gameId), s)"
+        @stop-timer="() => handleTimerStop(Number(route.params.gameId))"
       />
     </template>
 
@@ -487,6 +516,7 @@ import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import { useAudioService } from '@/composables/useAudioService'
 import { useConnectionLifecycle } from '@/composables/useConnectionLifecycle'
 import { useWakeLock } from '@/composables/useWakeLock'
+import { audioService } from '@/services/audioService'
 import type { GamePlayer } from '@/types'
 
 const route = useRoute()
@@ -543,6 +573,30 @@ const isHost = computed(() => {
   const hostId = gameStore.state?.hostId ?? roomStore.room?.hostId
   return hostId === userStore.userId
 })
+
+// Default mute for non-host players on every page load.
+//
+// Apply once when the game phase has loaded — gating on `phase` (not just
+// `hostId`) means the trigger only fires after the full game payload from
+// /api/game/{id}/state has populated the store, not on intermediate STOMP
+// frames or partial room data. hostId and phase land together in that
+// response, so the check is redundant on the happy path but documents the
+// "wait for game state to be detected" intent and is robust to any future
+// path that sets hostId without phase.
+//
+// VolumeControl subscribes to audioService.onMuteChange (see VolumeControl.vue)
+// so its icon reflects this setMuted call regardless of mount order.
+let appliedDefaultMute = false
+watch(
+  () => [userStore.userId, gameStore.state?.hostId, gameStore.state?.phase] as const,
+  ([uid, hostId, phase]) => {
+    if (appliedDefaultMute) return
+    if (!uid || !hostId || !phase) return
+    appliedDefaultMute = true
+    audioService.setMuted(uid !== hostId)
+  },
+  { immediate: true },
+)
 
 useNavigationGuard()
 
@@ -657,9 +711,6 @@ async function handleSheriffPass() {
 async function handleSheriffWithdraw() {
   await action({ actionType: 'SHERIFF_QUIT' })
 }
-async function handleSheriffStartCampaign() {
-  await action({ actionType: 'SHERIFF_START_SPEECH' })
-}
 async function handleSheriffQuit() {
   await action({ actionType: 'SHERIFF_QUIT_CAMPAIGN' })
 }
@@ -720,6 +771,22 @@ async function handleDaySkip() {
 }
 async function handleDaySelectPlayer(userId: string) {
   await action({ actionType: 'SELECT_PLAYER', targetId: userId })
+}
+
+async function handleTimerStart(gameId: number, durationSeconds: number) {
+  try {
+    await gameService.startTimer(gameId, durationSeconds)
+  } catch {
+    /* host sees no feedback — timer state arrives via STOMP TimerUpdated */
+  }
+}
+
+async function handleTimerStop(gameId: number) {
+  try {
+    await gameService.stopTimer(gameId)
+  } catch {
+    /* same as above */
+  }
 }
 
 async function handleNightSelect(userId: string) {
@@ -842,6 +909,9 @@ async function handlePassBadge(userId: string) {
 }
 async function handleDestroyBadge() {
   await action({ actionType: 'BADGE_DESTROY' })
+}
+async function handleSelfDestruct() {
+  await action({ actionType: 'WOLF_SELF_DESTRUCT' })
 }
 
 async function debugVoting(scenario: string) {
@@ -972,8 +1042,20 @@ onMounted(async () => {
           // Small delay to ensure backend transaction has committed before we read state
           await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
-          // If fetched state doesn't match the event (transaction not committed yet), retry once
-          if (normalizedPhase && state.phase !== normalizedPhase) {
+          // Retry once if the fetched state doesn't match the event yet (slow-runner
+          // commit race). Compare BOTH the phase AND the effective sub-phase, so a
+          // sub-phase change *within* a phase (e.g. DAY_DISCUSSION RESULT_HIDDEN →
+          // HUNTER_SHOOT_NIGHT_DEATH / BADGE_HANDOVER) also re-fetches.
+          const fetchedSub =
+            state.nightPhase?.subPhase ??
+            state.votingPhase?.subPhase ??
+            state.dayPhase?.subPhase ??
+            state.sheriffElection?.subPhase ??
+            null
+          if (
+            (normalizedPhase && state.phase !== normalizedPhase) ||
+            (data.subPhase && fetchedSub !== data.subPhase)
+          ) {
             await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
           }
@@ -1051,6 +1133,14 @@ onMounted(async () => {
         // This is the main event that should trigger UI update; PhaseChanged is also sent but VoteTally is more complete
         if (data.type === 'VoteTally') {
           await refreshState()
+        }
+        // Timer update from host: update timer state in store directly (no state refetch needed)
+        if (data.type === 'TimerUpdated') {
+          gameStore.setTimer({
+            remainingMs: data.remainingMs,
+            durationMs: data.durationMs,
+            running: data.running,
+          })
         }
         // Both mock (GAME_OVER) and real backend (GameOver) navigate to result
         if (data.type === 'GAME_OVER' || data.type === 'GameOver') {

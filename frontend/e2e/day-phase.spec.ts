@@ -125,7 +125,7 @@ async function joinAsGuestAndStartGame(page: import('@playwright/test').Page) {
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
   await page.getByPlaceholder('Enter your nickname').fill('GuestUser')
-  await page.getByRole('textbox', { name: 'Room code' }).fill('XYZ789')
+  await page.getByRole('textbox', { name: 'Room code' }).fill('789')
   await page.getByRole('button', { name: /Join/i }).click()
 
   await page.waitForURL(/\/room\//, { timeout: 5000 })

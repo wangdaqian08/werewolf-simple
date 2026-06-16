@@ -171,7 +171,7 @@ In each human browser: click **Reveal Role** → **Got it**.
 
 ## Complete NIGHT phase walkthrough
 
-Night sub-phases run in strict order: **WEREWOLF_PICK → SEER_PICK → SEER_RESULT → WITCH_ACT → GUARD_PICK**
+Night sub-phases run in strict order: **WEREWOLF_PICK → WITCH_ACT → SEER_PICK → SEER_RESULT → GUARD_PICK**
 
 ```bash
 # Verify phase before starting
@@ -341,7 +341,8 @@ curl -s -X POST http://localhost:8080/api/game/action \
 # OR hunter passes:
 ./scripts/act.sh HUNTER_PASS $HUNTER_NICK
 
-# If hunter's target was NOT the sheriff → goes to night
+# If hunter's target was NOT the sheriff → subPhase = VOTE_RESULT (host pause
+#   for the victim's last words); host then VOTING_CONTINUE → night
 # If hunter's target WAS the sheriff → subPhase = BADGE_HANDOVER (see Case C)
 
 # ────────────────────────────────────────────────────────────────────

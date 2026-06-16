@@ -4,6 +4,8 @@ import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.voting.TallyCalculator
 import com.werewolf.model.*
 import com.werewolf.repository.*
@@ -26,6 +28,11 @@ class GameService(
     private val voteRepository: VoteRepository,
     private val eliminationHistoryRepository: EliminationHistoryRepository,
     private val audioReplayCache: AudioReplayCache,
+    private val hostTimerService: HostTimerService,
+    private val dayRevealAdvancer: DayRevealAdvancer,
+    private val creditTransactionRepository: CreditTransactionRepository,
+    private val walletService: WalletService,
+    private val perkService: PerkService,
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
@@ -60,6 +67,10 @@ class GameService(
             )
         }
         gamePlayerRepository.saveAll(gamePlayers)
+
+        // Bind room perk activations to this game; activations held by a
+        // player dealt a wolf role become VOID (no refund — stated gamble).
+        perkService.onGameStart(roomId, gameId, gamePlayers)
 
         room.status = RoomStatus.IN_GAME
         roomRepository.save(room)
@@ -189,23 +200,24 @@ class GameService(
 
         val dayPhase = if (game.phase == GamePhase.DAY_DISCUSSION) {
             val playerMap = players.associateBy { it.userId }
-            val isResultRevealed = game.subPhase == DaySubPhase.RESULT_REVEALED.name
-            // Night kills come from NightPhase (EliminationHistory only tracks voting eliminations)
-            val nightResult = if (isResultRevealed) {
+            // Show the night deaths once the host reveals them and through every
+            // post-reveal sub-phase — the badge handover and the wolf-killed
+            // hunter's shot — so the death announcement stays visible until the
+            // vote begins.
+            val showNightResult = game.subPhase in setOf(
+                DaySubPhase.RESULT_REVEALED.name,
+                DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name,
+                DaySubPhase.BADGE_HANDOVER.name,
+            )
+            // Night kills come from NightPhase (EliminationHistory only tracks voting eliminations).
+            // Shared computePendingKills keeps this consistent with the actual
+            // applied kills (witch/guard saves AND the night-1 immunity perk) —
+            // an inline re-derivation here previously risked diverging.
+            val nightResult = if (showNightResult) {
                 val np = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
                 if (np != null) {
-                    val wolfTarget = np.wolfTargetUserId
-                    val wolfKilled = wolfTarget != null && !np.witchAntidoteUsed && np.guardTargetUserId != wolfTarget
-                    val poisonTarget = np.witchPoisonTargetUserId
-                    
-                    // Collect all killed players (wolf kill + witch poison)
-                    val killedIds = mutableListOf<String>()
-                    if (wolfKilled) wolfTarget?.let { killedIds.add(it) }
-                    if (poisonTarget != null) killedIds.add(poisonTarget)
-                    
-                    // Deduplicate killed players (wolf and witch may target the same player)
-                    val uniqueKilledIds = killedIds.toSet()
-                    
+                    val uniqueKilledIds = nightOrchestrator.computePendingKills(gameId, np).toSet()
+
                     if (uniqueKilledIds.isNotEmpty()) {
                         mapOf(
                             "killedPlayers" to uniqueKilledIds.map { killedId ->
@@ -222,13 +234,25 @@ class GameService(
                     } else null
                 } else null
             } else null
+            // The wolf who self-destructed (自爆) this day, if any — surfaced in the
+            // day death banner. Cleared at night-init so it only shows for its day.
+            val selfDestruct = game.selfDestructUserId?.let { sdId ->
+                mapOf(
+                    "seatIndex" to (playerMap[sdId]?.seatIndex ?: 0),
+                    "nickname"  to displayNameFor(sdId),
+                )
+            }
             mapOf(
                 "subPhase"      to (game.subPhase ?: DaySubPhase.RESULT_HIDDEN.name),
                 "dayNumber"     to game.dayNumber,
                 "phaseDeadline" to 0L,
                 "phaseStarted"  to 0L,
                 "nightResult"   to nightResult,
+                "selfDestruct"  to selfDestruct,
                 "canVote"       to (myPlayer != null && myPlayer.alive && myPlayer.canVote),
+                // The wolf-killed hunter eligible to fire during the day-reveal shot.
+                "hunterUserId"  to (if (game.subPhase == DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+                    dayRevealAdvancer.pendingHunterUserId(gameId) else null),
             )
         } else null
 
@@ -308,19 +332,53 @@ class GameService(
             )
         } else null
 
+        // Game-end credit rewards, rebuilt from the ledger (the durable record)
+        // so a page refresh on the Result screen still shows earnings.
+        val settlement = if (game.phase == GamePhase.GAME_OVER) {
+            val playerMap = players.associateBy { it.userId }
+            val rewardRows = creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD)
+            if (rewardRows.isEmpty()) null else mapOf(
+                "rewards" to rewardRows.map { tx ->
+                    mapOf(
+                        "userId" to tx.userId,
+                        "nickname" to displayNameFor(tx.userId),
+                        "seatIndex" to (playerMap[tx.userId]?.seatIndex ?: 0),
+                        "amount" to tx.amount,
+                    )
+                },
+                "myEarned" to rewardRows.firstOrNull { it.userId == requestingUserId }?.amount,
+                "myBalance" to walletService.balance(requestingUserId),
+            )
+        } else null
+
+        val timerSnapshot = hostTimerService.snapshot(gameId)
         return mapOf(
             "gameId" to gameId,
             "hostId" to game.hostUserId,
+            "timer" to mapOf(
+                "remainingMs" to timerSnapshot.remainingMs,
+                "durationMs"  to timerSnapshot.durationMs,
+                "running"     to timerSnapshot.running,
+            ),
             "phase" to game.phase.name,
             "subPhase" to game.subPhase,
             "dayNumber" to game.dayNumber,
             "sheriffUserId" to game.sheriffUserId,
             "hasSheriff" to room?.hasSheriff,
+            // bgmTrack lives in Room.config (JSONB GameConfig). roomStore on
+            // the frontend is in-memory only, so a mid-game page reload loses
+            // it. Surfacing the track here lets useAudioService recover BGM
+            // after a refresh — the existing per-phase startBgm watcher reads
+            // it from gameStore as a fallback when roomStore is empty.
+            "bgmTrack" to room?.config?.bgmTrack,
+            "witchSelfSaveAllowed" to (room?.config?.witchSelfSaveAllowed ?: true),
             "winner" to game.winner?.name,
+            "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
             "roleReveal" to roleReveal,
             "sheriffElection" to sheriffElection,
             "dayPhase" to dayPhase,
+            "daySkipVoting" to game.daySkipVoting,
             "votingPhase" to votingPhase,
             "nightPhase" to nightPhase,
             // Audio recovery for STOMP-reconnect.
@@ -355,12 +413,7 @@ class GameService(
 
     private fun buildRoleList(room: Room, playerCount: Int): MutableList<PlayerRole> {
         val roles = mutableListOf<PlayerRole>()
-        val wolfCount = when {
-            playerCount <= 6 -> 2
-            playerCount <= 9 -> 3
-            else -> playerCount / 3
-        }
-        repeat(wolfCount) { roles.add(PlayerRole.WEREWOLF) }
+        repeat(room.wolfCount) { roles.add(PlayerRole.WEREWOLF) }
         if (room.hasSeer) roles.add(PlayerRole.SEER)
         if (room.hasWitch) roles.add(PlayerRole.WITCH)
         if (room.hasHunter) roles.add(PlayerRole.HUNTER)

@@ -94,3 +94,32 @@ test('result: Play Again — navigates to lobby', async ({ page }) => {
   await page.locator('[data-testid="play-again"]').click()
   await page.waitForURL(/\/$/, { timeout: 5000 })
 })
+
+// ── Dead players are greyed out (2026-05-11) ─────────────────────────────────
+//
+// Killed players' role cards must render with `.reveal-dead` (desaturated /
+// strikethrough role text) so survivors are visually distinct from casualties.
+
+test('result: dead players role cards carry .reveal-dead', async ({ page }) => {
+  await setup(page)
+  await goToResult(page, 'VILLAGER')
+
+  // MOCK_GAME_RESULT marks seats 2, 4, 7 as dead.
+  const deadSeats = [2, 4, 7]
+  for (const seat of deadSeats) {
+    const card = page.locator(`[data-testid="role-reveal-${seat}"]`)
+    await expect(card).toHaveClass(/reveal-dead/)
+  }
+  // Alive players must NOT carry the class.
+  const aliveSeats = [1, 3, 5, 6, 8, 9]
+  for (const seat of aliveSeats) {
+    const card = page.locator(`[data-testid="role-reveal-${seat}"]`)
+    await expect(card).not.toHaveClass(/reveal-dead/)
+  }
+
+  // Visual evidence: capture the result screen so reviewers can see the
+  // grey-out + strikethrough effect on the dead players' cards.
+  await page
+    .locator('.result-card')
+    .screenshot({ path: 'e2e/screenshots/result-dead-greyed.png' })
+})

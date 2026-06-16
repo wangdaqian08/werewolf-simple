@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { userService } from '@/services/userService'
+import { walletService } from '@/services/walletService'
 import type { OAuthProvider } from '@/types'
 
 function isTokenExpired(token: string): boolean {
@@ -14,12 +15,32 @@ function isTokenExpired(token: string): boolean {
   }
 }
 
+// Drop persisted session if the stored JWT is already expired, so the store
+// never boots into a half-valid "looks logged in but every request 401s" state.
+function loadPersistedSession() {
+  const token = localStorage.getItem('jwt')
+  if (token && isTokenExpired(token)) {
+    localStorage.removeItem('jwt')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('nickname')
+    localStorage.removeItem('avatarUrl')
+    return { token: null, userId: null, nickname: null, avatarUrl: null }
+  }
+  return {
+    token,
+    userId: localStorage.getItem('userId'),
+    nickname: localStorage.getItem('nickname'),
+    avatarUrl: localStorage.getItem('avatarUrl'),
+  }
+}
+
 export const useUserStore = defineStore('user', () => {
   // All four values are persisted so they survive page refresh
-  const token = ref<string | null>(localStorage.getItem('jwt'))
-  const userId = ref<string | null>(localStorage.getItem('userId'))
-  const nickname = ref<string | null>(localStorage.getItem('nickname'))
-  const avatarUrl = ref<string | null>(localStorage.getItem('avatarUrl'))
+  const persisted = loadPersistedSession()
+  const token = ref<string | null>(persisted.token)
+  const userId = ref<string | null>(persisted.userId)
+  const nickname = ref<string | null>(persisted.nickname)
+  const avatarUrl = ref<string | null>(persisted.avatarUrl)
 
   // Per-room nickname override (Option A from the OAuth follow-up). Lives in
   // sessionStorage — survives a Lobby → CreateRoom navigation refresh, but
@@ -28,7 +49,27 @@ export const useUserStore = defineStore('user', () => {
   // nickname is left intact so the next OAuth login re-syncs from provider.
   const displayName = ref<string | null>(sessionStorage.getItem('displayName'))
 
-  const isLoggedIn = computed(() => !!token.value && !!userId.value)
+  const isLoggedIn = computed(() => !!token.value && !!userId.value && !isTokenExpired(token.value))
+
+  // Guest accounts (nickname login) get a forgeable "guest:" userId — they can
+  // play and earn credits but cannot make real-money purchases.
+  const isGuest = computed(() => !!userId.value?.startsWith('guest:'))
+
+  // Credit balance; null until the first refreshWallet() resolves.
+  const credits = ref<number | null>(null)
+
+  async function refreshWallet() {
+    if (!isLoggedIn.value) {
+      credits.value = null
+      return
+    }
+    try {
+      const wallet = await walletService.getWallet()
+      credits.value = wallet.balance
+    } catch {
+      // non-fatal — balance chip just stays hidden
+    }
+  }
 
   function hasValidSession(nick: string): boolean {
     return !!token.value && nickname.value === nick && !isTokenExpired(token.value)
@@ -80,19 +121,26 @@ export const useUserStore = defineStore('user', () => {
     applySession(res.token, res.user.userId, res.user.nickname, res.user.avatarUrl)
   }
 
+  // Wipe both in-memory refs and persisted storage. Called from logout() and
+  // from the 401 interceptor when the backend rejects an expired token.
+  function clearSession() {
+    credits.value = null
+    token.value = null
+    userId.value = null
+    nickname.value = null
+    avatarUrl.value = null
+    localStorage.removeItem('jwt')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('nickname')
+    localStorage.removeItem('avatarUrl')
+    clearDisplayName()
+  }
+
   async function logout() {
     try {
       await userService.logout()
     } finally {
-      token.value = null
-      userId.value = null
-      nickname.value = null
-      avatarUrl.value = null
-      localStorage.removeItem('jwt')
-      localStorage.removeItem('userId')
-      localStorage.removeItem('nickname')
-      localStorage.removeItem('avatarUrl')
-      clearDisplayName()
+      clearSession()
     }
   }
 
@@ -103,9 +151,13 @@ export const useUserStore = defineStore('user', () => {
     avatarUrl,
     displayName,
     isLoggedIn,
+    isGuest,
+    credits,
+    refreshWallet,
     login,
     loginWithCode,
     logout,
+    clearSession,
     setDisplayName,
   }
 })

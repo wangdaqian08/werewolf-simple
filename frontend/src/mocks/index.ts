@@ -294,19 +294,33 @@ export function setupMocks() {
           sheriffElection: {
             ...e,
             candidates: [...e.candidates, { userId, nickname, avatar, status: 'RUNNING' as const }],
+            // Treat the added player as a fresh decision so the SIGNUP
+            // progress indicator advances visibly in dev tools.
+            decisionProgress: e.decisionProgress
+              ? { ...e.decisionProgress, decided: e.decisionProgress.decided + 1 }
+              : undefined,
           },
         }
         pushGameStateUpdate()
       }
     } else if (action === 'REMOVE') {
-      mockGameState = {
-        ...mockGameState,
-        sheriffElection: {
-          ...e,
-          candidates: e.candidates.filter((c) => c.userId !== userId),
-        },
+      const exists = e.candidates.some((c) => c.userId === userId)
+      if (exists) {
+        mockGameState = {
+          ...mockGameState,
+          sheriffElection: {
+            ...e,
+            candidates: e.candidates.filter((c) => c.userId !== userId),
+            decisionProgress: e.decisionProgress
+              ? {
+                  ...e.decisionProgress,
+                  decided: Math.max(0, e.decisionProgress.decided - 1),
+                }
+              : undefined,
+          },
+        }
+        pushGameStateUpdate()
       }
-      pushGameStateUpdate()
     }
     return [200]
   })
@@ -534,45 +548,69 @@ export function setupMocks() {
       const e = mockGameState.sheriffElection
       if (actionType === 'SHERIFF_CAMPAIGN') {
         const existing = e.candidates.find((c) => c.userId === MOCK_LOGIN.user.userId)
-        if (!existing) {
-          mockGameState = {
-            ...mockGameState,
-            sheriffElection: {
-              ...e,
-              candidates: [
-                ...e.candidates,
-                { userId: 'u1', nickname: '我', avatar: '⭐', status: 'RUNNING' as const },
-              ],
-              hasPassed: false,
-            },
-          }
-          pushGameStateUpdate()
-        } else if (existing.status === 'QUIT') {
-          // Player passed earlier but changed their mind — allow re-running
-          mockGameState = {
-            ...mockGameState,
-            sheriffElection: {
-              ...e,
-              candidates: e.candidates.map((c) =>
-                c.userId === 'u1' ? { ...c, status: 'RUNNING' as const } : c,
-              ),
-              hasPassed: false,
-            },
-          }
-          pushGameStateUpdate()
+        const newDecided = existing
+          ? (e.decisionProgress?.decided ?? 0)
+          : (e.decisionProgress?.decided ?? 0) + 1
+        const u1Row = {
+          userId: 'u1',
+          nickname: '我',
+          avatar: '⭐',
+          status: 'RUNNING' as const,
         }
-      } else if (actionType === 'SHERIFF_PASS') {
-        mockGameState = {
-          ...mockGameState,
-          sheriffElection: { ...e, hasPassed: true },
-        }
-        pushGameStateUpdate()
-      } else if (actionType === 'SHERIFF_QUIT') {
+        const newCandidates = existing
+          ? e.candidates.map((c) => (c.userId === 'u1' ? u1Row : c))
+          : [...e.candidates, u1Row]
         mockGameState = {
           ...mockGameState,
           sheriffElection: {
             ...e,
-            candidates: e.candidates.filter((c) => c.userId !== MOCK_LOGIN.user.userId),
+            candidates: newCandidates,
+            decisionProgress: e.decisionProgress
+              ? { ...e.decisionProgress, decided: newDecided }
+              : undefined,
+            hasPassed: false,
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'SHERIFF_PASS') {
+        const existing = e.candidates.find((c) => c.userId === MOCK_LOGIN.user.userId)
+        const newDecided = existing
+          ? (e.decisionProgress?.decided ?? 0)
+          : (e.decisionProgress?.decided ?? 0) + 1
+        // Backend records the pass on a QUIT row so hasPassed can be derived;
+        // mirror that here so the UI flips the Pass button off.
+        const u1QuitRow = {
+          userId: 'u1',
+          nickname: '我',
+          avatar: '⭐',
+          status: 'QUIT' as const,
+        }
+        const newCandidates = existing
+          ? e.candidates.map((c) => (c.userId === 'u1' ? u1QuitRow : c))
+          : [...e.candidates, u1QuitRow]
+        mockGameState = {
+          ...mockGameState,
+          sheriffElection: {
+            ...e,
+            candidates: newCandidates,
+            decisionProgress: e.decisionProgress
+              ? { ...e.decisionProgress, decided: newDecided }
+              : undefined,
+            hasPassed: true,
+          },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'SHERIFF_QUIT') {
+        // Withdraw flips RUNNING → QUIT in place; decision count is unchanged
+        // since the player already had a row.
+        mockGameState = {
+          ...mockGameState,
+          sheriffElection: {
+            ...e,
+            candidates: e.candidates.map((c) =>
+              c.userId === 'u1' ? { ...c, status: 'QUIT' as const } : c,
+            ),
+            hasPassed: true,
           },
         }
         pushGameStateUpdate()

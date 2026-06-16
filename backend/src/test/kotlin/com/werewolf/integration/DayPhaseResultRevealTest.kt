@@ -2,6 +2,9 @@ package com.werewolf.integration
 
 import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
+import com.werewolf.game.timer.HostTimerService
+import com.werewolf.game.timer.TimerSnapshot
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.GameService
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.util.*
 
@@ -22,6 +26,7 @@ import java.util.*
  * Verifies that when the host reveals night results, the correct death information is displayed.
  */
 @ExtendWith(MockitoExtension::class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class DayPhaseResultRevealTest {
 
     @Mock lateinit var gameRepository: GameRepository
@@ -36,6 +41,8 @@ class DayPhaseResultRevealTest {
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var sheriffService: SheriffService
     @Mock lateinit var audioReplayCache: AudioReplayCache
+    @Mock lateinit var hostTimerService: HostTimerService
+    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
 
     private lateinit var gameService: GameService
 
@@ -60,7 +67,14 @@ class DayPhaseResultRevealTest {
             voteRepository = voteRepository,
             eliminationHistoryRepository = eliminationHistoryRepository,
             audioReplayCache = audioReplayCache,
+            hostTimerService = hostTimerService,
+            dayRevealAdvancer = dayRevealAdvancer,
+            creditTransactionRepository = mock(),
+            walletService = mock(),
+            perkService = mock(),
         )
+        whenever(hostTimerService.snapshot(any())).thenReturn(TimerSnapshot(0L, 0L, false))
+        whenever(roomPlayerRepository.findByRoomId(any())).thenReturn(emptyList())
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -122,6 +136,7 @@ class DayPhaseResultRevealTest {
         whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(playerList)
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf(victimId))
 
         val users = listOf(
             user(wolfId, "Wolf"),
@@ -176,6 +191,7 @@ class DayPhaseResultRevealTest {
         whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(playerList)
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(emptyList())
 
         val users = listOf(
             user(wolfId, "Wolf"),
@@ -221,6 +237,7 @@ class DayPhaseResultRevealTest {
         whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(playerList)
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf(victimId))
 
         val users = listOf(
             user(wolfId, "Wolf"),
@@ -250,5 +267,47 @@ class DayPhaseResultRevealTest {
         assertThat(killedPlayer?.get("killedPlayerId")).isEqualTo(victimId)
         assertThat(killedPlayer?.get("killedNickname")).isEqualTo("Victim")
         assertThat(killedPlayer?.get("killedSeatIndex")).isEqualTo(2)
+    }
+
+    @Test
+    fun `Day reveal - self-destruct surfaces dayPhase selfDestruct seat + nickname`() {
+        val wolf = player(wolfId, 1, PlayerRole.WEREWOLF, alive = false) // self-destructed → dead
+        val villager = player(victimId, 2, PlayerRole.VILLAGER)
+        val g = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
+        g.selfDestructUserId = wolfId
+        val r = room()
+
+        whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(g))
+        whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(wolf, villager))
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.empty())
+        whenever(userRepository.findAllById(any()))
+            .thenReturn(listOf(user(wolfId, "WolfBob"), user(victimId, "Victim")))
+
+        val result = gameService.getGameState(gameId, hostId)
+
+        val dayPhase = result["dayPhase"] as? Map<*, *>
+        assertThat(dayPhase).isNotNull()
+        val selfDestruct = dayPhase?.get("selfDestruct") as? Map<*, *>
+        assertThat(selfDestruct).isNotNull()
+        assertThat(selfDestruct?.get("seatIndex")).isEqualTo(1)
+        assertThat(selfDestruct?.get("nickname")).isEqualTo("WolfBob")
+    }
+
+    @Test
+    fun `Day reveal - no self-destruct → dayPhase selfDestruct is null`() {
+        val villager = player(victimId, 2, PlayerRole.VILLAGER)
+        val g = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
+        val r = room()
+
+        whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(g))
+        whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(r))
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(villager))
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.empty())
+        whenever(userRepository.findAllById(any())).thenReturn(listOf(user(victimId, "Victim")))
+
+        val result = gameService.getGameState(gameId, hostId)
+        val dayPhase = result["dayPhase"] as? Map<*, *>
+        assertThat(dayPhase?.get("selfDestruct")).isNull()
     }
 }

@@ -4,6 +4,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.phase.HardModeCounterplay
 import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
@@ -36,6 +37,8 @@ class VotingPipelineTest {
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var nightOrchestrator: NightOrchestrator
+    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
+    @Mock lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
 
     private lateinit var votingPipeline: VotingPipeline
 
@@ -55,6 +58,9 @@ class VotingPipelineTest {
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
         actionLogService = mock(),
+        hostTimerService = mock(),
+        dayRevealAdvancer = dayRevealAdvancer,
+        rewardSettlementService = rewardSettlementService,
     )
 
     private val gameId = 1
@@ -205,7 +211,7 @@ class VotingPipelineTest {
     // ── handleHunterShoot ─────────────────────────────────────────────────────
 
     @Test
-    fun `handleHunterShoot - hunter shoots non-sheriff target, win checked, goes to night`() {
+    fun `handleHunterShoot - hunter shoots non-sheriff, pauses on VOTE_RESULT for the victim's last words (no auto-night)`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER)
         val target = player("u2", 2)
         val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter, target)
@@ -219,11 +225,20 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(target.alive).isFalse()
-        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
+        // The shot victim needs a last-words window: the day must NOT auto-jump
+        // to night. It pauses on VOTE_RESULT (like every other day-death); the
+        // host then advances via VOTING_CONTINUE / continueToNight.
+        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.allValues).anyMatch { it.subPhase == VotingSubPhase.VOTE_RESULT.name }
     }
 
     @Test
-    fun `handleHunterShoot - hunter shoots sheriff, transitions to BADGE_HANDOVER`() {
+    fun `handleHunterShoot - hunter shoots sheriff, transitions to BADGE_HANDOVER and defers the kill`() {
+        // 国标 rule: the dying sheriff performs the badge handover BEFORE
+        // being marked dead. handleBadge commits the deferred kill once the
+        // heir is chosen (see BADGE_PASS / BADGE_DESTROY tests below).
         val hunter = player(hostId, 0, PlayerRole.HUNTER)
         val sheriff = player("u2", 2).also { it.sheriff = true }
         val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = "u2"), hunter, sheriff)
@@ -237,7 +252,209 @@ class VotingPipelineTest {
         val captor = argumentCaptor<Game>()
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+        // Deferred kill: sheriff must still be alive at the end of HUNTER_SHOOT.
+        assertThat(sheriff.alive)
+            .withFailMessage("sheriff must stay alive during BADGE_HANDOVER; kill is deferred to BADGE_PASS/DESTROY")
+            .isTrue()
+        verify(gamePlayerRepository, never()).save(sheriff)
+        // PlayerEliminated must NOT be broadcast yet — only HunterShot + PhaseChanged.
+        val eventCaptor = argumentCaptor<com.werewolf.game.DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), eventCaptor.capture())
+        assertThat(eventCaptor.allValues).noneMatch {
+            it is com.werewolf.game.DomainEvent.PlayerEliminated && it.userId == "u2"
+        }
         verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+    }
+
+    @Test
+    fun `handleBadge BADGE_PASS - commits deferred hunter-shot kill on the dying sheriff`() {
+        val dyingSheriff = player("u2", 2).also { it.sheriff = true; it.alive = true } // deferred from HUNTER_SHOOT
+        val heir = player("u3", 3)
+        val context = ctx(
+            game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = "u2"),
+            dyingSheriff, heir,
+        )
+
+        // The discriminator for "commit deferred kill" is the elimination
+        // history's hunterShotUserId, which HUNTER_SHOOT wrote before
+        // transitioning to BADGE_HANDOVER.
+        val history = EliminationHistory(gameId = gameId, dayNumber = 1).also {
+            it.hunterShotUserId = "u2"
+            it.hunterShotRole = PlayerRole.VILLAGER
+        }
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1))
+            .thenReturn(Optional.of(history))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u3")).thenReturn(Optional.of(heir))
+        stubLoader(heir) // post-elimination roster (sheriff dead, heir alive)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        // Kill committed AFTER the heir is chosen.
+        assertThat(dyingSheriff.alive)
+            .withFailMessage("BADGE_PASS must commit the deferred kill on the dying sheriff")
+            .isFalse()
+        assertThat(dyingSheriff.sheriff).isFalse()
+        assertThat(heir.sheriff).isTrue()
+
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.allValues).anyMatch {
+            it.sheriffUserId == "u3" && it.subPhase == VotingSubPhase.VOTE_RESULT.name
+        }
+        // PlayerEliminated must now be broadcast for the sheriff.
+        val eventCaptor = argumentCaptor<com.werewolf.game.DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), eventCaptor.capture())
+        assertThat(eventCaptor.allValues).anyMatch {
+            it is com.werewolf.game.DomainEvent.PlayerEliminated && it.userId == "u2"
+        }
+    }
+
+    @Test
+    fun `handleBadge BADGE_DESTROY - commits deferred hunter-shot kill on the dying sheriff`() {
+        val dyingSheriff = player("u2", 2).also { it.sheriff = true; it.alive = true }
+        val context = ctx(
+            game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = "u2"),
+            dyingSheriff,
+        )
+
+        val history = EliminationHistory(gameId = gameId, dayNumber = 1).also {
+            it.hunterShotUserId = "u2"
+            it.hunterShotRole = PlayerRole.VILLAGER
+        }
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1))
+            .thenReturn(Optional.of(history))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
+        stubLoader()
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_DESTROY), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(dyingSheriff.alive)
+            .withFailMessage("BADGE_DESTROY must also commit the deferred kill")
+            .isFalse()
+        assertThat(dyingSheriff.sheriff).isFalse()
+
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.allValues).anyMatch {
+            it.sheriffUserId == null && it.subPhase == VotingSubPhase.VOTE_RESULT.name
+        }
+        val eventCaptor = argumentCaptor<com.werewolf.game.DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), eventCaptor.capture())
+        assertThat(eventCaptor.allValues).anyMatch {
+            it is com.werewolf.game.DomainEvent.PlayerEliminated && it.userId == "u2"
+        }
+    }
+
+    @Test
+    fun `handleBadge BADGE_PASS - vote-out path (actor already dead) does NOT re-broadcast PlayerEliminated`() {
+        // Voted-out sheriff path: the sheriff was killed during revealTally's
+        // applyElimination, so alive=false BEFORE BADGE_HANDOVER. handleBadge
+        // must not fire a second PlayerEliminated event for them.
+        val deadSheriff = player("u2", 2, alive = false).also { it.sheriff = true }
+        val heir = player("u3", 3)
+        val context = ctx(
+            game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = "u2"),
+            deadSheriff, heir,
+        )
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(deadSheriff))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u3")).thenReturn(Optional.of(heir))
+        stubLoader(heir)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
+
+        val eventCaptor = argumentCaptor<com.werewolf.game.DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), eventCaptor.capture())
+        assertThat(eventCaptor.allValues).noneMatch {
+            it is com.werewolf.game.DomainEvent.PlayerEliminated && it.userId == "u2"
+        }
+    }
+
+    // ── Night-reveal badge handover path ──────────────────────────────────────
+
+    /**
+     * Game state for the night-reveal handover branch: phase=DAY_DISCUSSION,
+     * subPhase=DaySubPhase.BADGE_HANDOVER (set by GamePhasePipeline.revealNightResult
+     * when sheriff is among pending kills).
+     */
+    private fun nightRevealGame(sheriff: String) = Game(roomId = 1, hostUserId = hostId).also {
+        val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+        it.phase = GamePhase.DAY_DISCUSSION
+        it.subPhase = DaySubPhase.BADGE_HANDOVER.name
+        it.dayNumber = 2
+        it.sheriffUserId = sheriff
+    }
+
+    @Test
+    fun `handleBadge BADGE_PASS from night-reveal transitions to RESULT_REVEALED and does NOT run afterElimination`() {
+        // Night-killed sheriff hands the badge to an heir. Post-handover the
+        // game must land on DAY_DISCUSSION/RESULT_REVEALED so the host can run
+        // dayAdvance into voting. No elimination happened, so afterElimination
+        // (and its win-condition check via contextLoader) must NOT fire.
+        val dyingSheriff = player("u2", 2, alive = false).also { it.sheriff = true }
+        val heir = player("u3", 3)
+        val game = nightRevealGame(sheriff = "u2")
+        val context = GameContext(game, room(), listOf(dyingSheriff, heir))
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u3")).thenReturn(Optional.of(heir))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        // Night-reveal handover now defers the next sub-phase to the advancer.
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(game.sheriffUserId).isEqualTo("u3")
+        assertThat(game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        // No afterElimination — contextLoader.load must NOT be called.
+        verify(contextLoader, never()).load(any())
+        verify(winConditionChecker, never()).check(any(), any(), any(), any())
+    }
+
+    @Test
+    fun `handleBadge BADGE_DESTROY from night-reveal transitions to RESULT_REVEALED with sheriff cleared`() {
+        val dyingSheriff = player("u2", 2, alive = false).also { it.sheriff = true }
+        val game = nightRevealGame(sheriff = "u2")
+        val context = GameContext(game, room(), listOf(dyingSheriff))
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(dyingSheriff))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_DESTROY), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(game.sheriffUserId).isNull()
+        assertThat(game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        verify(contextLoader, never()).load(any())
+    }
+
+    @Test
+    fun `handleBadge rejected when not in any BADGE_HANDOVER sub-phase`() {
+        val sheriff = player("u2", 2)
+        val game = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.DAY_DISCUSSION
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
+            it.sheriffUserId = "u2"
+        }
+        val context = GameContext(game, room(), listOf(sheriff))
+
+        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("BADGE_HANDOVER")
     }
 
     @Test
@@ -262,6 +479,8 @@ class VotingPipelineTest {
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.phase).isEqualTo(GamePhase.GAME_OVER)
         assertThat(captor.firstValue.winner).isEqualTo(WinnerSide.VILLAGER)
+        // The hunter-shoot game-over path must also settle rewards.
+        verify(rewardSettlementService).settle(gameId, WinnerSide.VILLAGER)
     }
 
     @Test
@@ -290,7 +509,33 @@ class VotingPipelineTest {
     }
 
     @Test
-    fun `handleHunterShoot - hunter skips, not sheriff, goes to night`() {
+    fun `revealTally - day-vote win settles rewards and stamps diedDay on the eliminated wolf`() {
+        val host = player(hostId, 0)
+        val lastWolf = player("wolf", 1, PlayerRole.WEREWOLF)
+        val villager = player("v1", 2)
+        val context = ctx(game(), host, lastWolf, villager) // game().dayNumber == 1
+
+        val votes = listOf(vote(hostId, "wolf"), vote("v1", "wolf"))
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(votes)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wolf")).thenReturn(Optional.of(lastWolf))
+        stubLoader(host, villager)
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        // endGame on the day-vote path invokes settlement exactly once...
+        verify(rewardSettlementService).settle(gameId, WinnerSide.VILLAGER)
+        // ...and the voted-out wolf is persisted, stamped with the day it died
+        // (reward scaling input).
+        verify(gamePlayerRepository).save(lastWolf)
+        assertThat(lastWolf.alive).isFalse()
+        assertThat(lastWolf.diedDay).isEqualTo(1)
+    }
+
+    @Test
+    fun `handleHunterShoot - hunter skips (not sheriff), pauses on VOTE_RESULT for host to advance (no auto-night)`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER)
         val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter)
 
@@ -300,7 +545,12 @@ class VotingPipelineTest {
         val result = votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        verify(nightOrchestrator).initNight(any(), any(), anyOrNull(), any())
+        // A voted-out hunter who passes is still a day-death: pause on VOTE_RESULT
+        // so the host controls the night transition (no silent auto-night).
+        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.allValues).anyMatch { it.subPhase == VotingSubPhase.VOTE_RESULT.name }
     }
 
     @Test
@@ -631,9 +881,24 @@ class VotingPipelineTest {
     }
 
     @Test
-    fun `continueToNight - rejected when not in VOTING phase`() {
-        val game = game().also { it.phase = GamePhase.DAY_DISCUSSION }
+    fun `continueToNight - rejected when in DAY_DISCUSSION without daySkipVoting`() {
+        val game = game().also { it.phase = GamePhase.DAY_DISCUSSION; it.daySkipVoting = false }
         val context = ctx(game)
+
+        val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        // daySkipVoting is false so voting was not skipped — cannot advance to night
+        assertThat((result as GameActionResult.Rejected).reason).contains("skipped")
+    }
+
+    @Test
+    fun `continueToNight - rejected when in an unrelated phase (NIGHT)`() {
+        val g = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.NIGHT
+        }
+        val context = ctx(g)
 
         val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
 
@@ -660,6 +925,42 @@ class VotingPipelineTest {
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         // dayNumber is 1, so next night should be day 2
         verify(nightOrchestrator).initNight(eq(gameId), eq(2), anyOrNull(), any())
+    }
+
+    // ── continueToNight skip-voting path (wolf self-destruct) ──────────────────
+
+    @Test
+    fun `continueToNight - DAY_DISCUSSION with daySkipVoting true succeeds and calls goToNight`() {
+        val g = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.DAY_DISCUSSION
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
+            it.dayNumber = 1
+            it.daySkipVoting = true
+        }
+        val context = ctx(g)
+
+        val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        verify(nightOrchestrator).initNight(eq(gameId), eq(2), anyOrNull(), any())
+    }
+
+    @Test
+    fun `continueToNight - DAY_DISCUSSION with daySkipVoting false is rejected`() {
+        val g = Game(roomId = 1, hostUserId = hostId).also {
+            val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
+            it.phase = GamePhase.DAY_DISCUSSION
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
+            it.dayNumber = 1
+            it.daySkipVoting = false
+        }
+        val context = ctx(g)
+
+        val result = votingPipeline.continueToNight(req(hostId, ActionType.VOTING_CONTINUE), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("skipped")
     }
 
     // ── WinConditionMode ──────────────────────────────────────────────────────
@@ -761,6 +1062,9 @@ class VotingPipelineTest {
         contextLoader = contextLoader,
         nightOrchestrator = nightOrchestrator,
         actionLogService = actionLogService,
+        hostTimerService = mock(),
+        dayRevealAdvancer = dayRevealAdvancer,
+        rewardSettlementService = mock(),
     )
 
     @Test

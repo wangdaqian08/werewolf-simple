@@ -119,6 +119,20 @@ async function runNight1ToDay(localCtx: GameContext): Promise<void> {
     room: localCtx.roomCode,
   })
 
+  // Witch declines both potions so the wolf-killed villager actually dies and
+  // the day count is right. Always present, including host-as-WITCH (uses
+  // host token via actName).
+  expect(witchBots.length, 'kit must have a WITCH').toBeGreaterThan(0)
+  const witchBot = witchBots[0]
+  expect(
+    await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
+    'expected NIGHT/WITCH_ACT',
+  ).toBe(true)
+  act('WITCH_ACT', actName(witchBot), {
+    room: localCtx.roomCode,
+    payload: '{"useAntidote":false}',
+  })
+
   // Seer checks the wolf (non-functional for the IDIOT-reveal contract — just
   // advances the phase deterministically). Always present in the kit, including
   // when host rolled SEER (uses host token via actName).
@@ -137,20 +151,6 @@ async function runNight1ToDay(localCtx: GameContext): Promise<void> {
     'expected NIGHT/SEER_RESULT after SEER_CHECK',
   ).toBe(true)
   act('SEER_CONFIRM', actName(seerBot), { room: localCtx.roomCode })
-
-  // Witch declines both potions so the wolf-killed villager actually dies and
-  // the day count is right. Always present, including host-as-WITCH (uses
-  // host token via actName).
-  expect(witchBots.length, 'kit must have a WITCH').toBeGreaterThan(0)
-  const witchBot = witchBots[0]
-  expect(
-    await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
-    'expected NIGHT/WITCH_ACT',
-  ).toBe(true)
-  act('WITCH_ACT', actName(witchBot), {
-    room: localCtx.roomCode,
-    payload: '{"useAntidote":false}',
-  })
 
   expect(
     await waitForPhase(hostPage, localCtx.gameId, 'DAY_DISCUSSION', 30_000),

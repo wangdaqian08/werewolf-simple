@@ -16,11 +16,15 @@ import com.werewolf.integration.TestConstants.INVALID_ROOM_CODE
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.integration.TestConstants.ROOM_CODE_LENGTH
+import com.werewolf.model.Game
 import com.werewolf.model.PlayerRole
+import com.werewolf.model.Room
 import com.werewolf.model.RoomStatus
+import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
+import java.time.LocalDateTime
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -42,6 +46,7 @@ class RoomControllerTest {
     @Autowired lateinit var roomRepository: RoomRepository
     @Autowired lateinit var roomPlayerRepository: RoomPlayerRepository
     @Autowired lateinit var userRepository: UserRepository
+    @Autowired lateinit var gameRepository: GameRepository
 
     companion object {
         val DEFAULT_ROLES = listOf(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER)
@@ -105,7 +110,62 @@ class RoomControllerTest {
         val body = response.body!!
         assertThat(body[FIELD_ROOM_ID]).isNotNull()
         assertThat(body[FIELD_ROOM_CODE] as String).hasSize(ROOM_CODE_LENGTH)
+        assertThat(body[FIELD_ROOM_CODE] as String).matches("\\d{3}")
         assertThat(body[FIELD_STATUS]).isEqualTo(RoomStatus.WAITING.name)
+    }
+
+    @Test
+    fun `GET active returns the caller's room and 204 when none`() {
+        // #7: quick-rejoin lookup. Host who created a room sees it; a stranger gets 204.
+        val hostToken = login("ActiveHost")
+        val created = createRoom(hostToken)
+
+        val mine = restTemplate.exchange(
+            "/api/room/active",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Void>(authHeaders(hostToken)),
+            Map::class.java,
+        )
+        assertThat(mine.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(mine.body!![FIELD_ROOM_ID]).isEqualTo(created[FIELD_ROOM_ID])
+
+        val strangerToken = login("Stranger")
+        val none = restTemplate.exchange(
+            "/api/room/active",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Void>(authHeaders(strangerToken)),
+            Map::class.java,
+        )
+        assertThat(none.statusCode).isEqualTo(HttpStatus.NO_CONTENT)
+    }
+
+    @Test
+    fun `findActiveByRoomCode reuses a code once the room's game has ended`() {
+        // #8: 3-digit codes are reusable. A room reserves its code only while it is
+        // WAITING or has a live game; once the game ends the code is free again.
+        val hostId = extractUserId(login("ReuseHost"))
+
+        // WAITING room → code reserved
+        roomRepository.save(
+            Room(roomCode = "111", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.WAITING),
+        )
+        assertThat(roomRepository.findActiveByRoomCode("111")).isPresent
+
+        // IN_GAME room whose game ENDED → code reusable
+        val finished = roomRepository.save(
+            Room(roomCode = "222", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
+        )
+        gameRepository.save(
+            Game(roomId = finished.roomId!!, hostUserId = hostId, endedAt = LocalDateTime.now()),
+        )
+        assertThat(roomRepository.findActiveByRoomCode("222")).isEmpty
+
+        // IN_GAME room with a LIVE game → code reserved
+        val live = roomRepository.save(
+            Room(roomCode = "333", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
+        )
+        gameRepository.save(Game(roomId = live.roomId!!, hostUserId = hostId, endedAt = null))
+        assertThat(roomRepository.findActiveByRoomCode("333")).isPresent
     }
 
     @Test

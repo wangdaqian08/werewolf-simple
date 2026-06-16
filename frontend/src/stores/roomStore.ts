@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, toRaw } from 'vue'
-import type { Room, RoomPlayer } from '@/types'
+import type { PerkActivation, Room, RoomPlayer } from '@/types'
 
 export const useRoomStore = defineStore('room', () => {
   const room = ref<Room | null>(null)
@@ -32,9 +32,23 @@ export const useRoomStore = defineStore('room', () => {
     })
   }
 
+  function updatePerkActivations(perkActivations: PerkActivation[]) {
+    if (room.value) {
+      room.value = { ...toRaw(room.value), perkActivations }
+    }
+  }
+
   function clearRoom() {
     room.value = null
   }
 
-  return { room, setRoom, updatePlayers, updateMyStatus, updateSeatIndex, clearRoom }
+  return {
+    room,
+    setRoom,
+    updatePlayers,
+    updateMyStatus,
+    updateSeatIndex,
+    updatePerkActivations,
+    clearRoom,
+  }
 })

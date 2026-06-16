@@ -106,6 +106,16 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
         room: ctx.roomCode,
       })
 
+      // Witch declines save (otherwise seer doesn't actually die at night
+      // resolve and the dead-seer audio at N2 won't fire).
+      expect(
+        await waitForNightSubPhase(hostPage, ctx.gameId, 'WITCH_ACT', 15_000),
+      ).toBe(true)
+      act('WITCH_ACT', actName(witch), {
+        room: ctx.roomCode,
+        payload: '{"useAntidote":false}',
+      })
+
       // Seer's own check fires before the kill resolves — the seer is still
       // technically alive during their pick sub-phase. Drive their action so
       // the night progresses.
@@ -121,16 +131,6 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
         await waitForNightSubPhase(hostPage, ctx.gameId, 'SEER_RESULT', 10_000),
       ).toBe(true)
       act('SEER_CONFIRM', actName(seer), { room: ctx.roomCode })
-
-      // Witch declines save (otherwise seer doesn't actually die at night
-      // resolve and the dead-seer audio at N2 won't fire).
-      expect(
-        await waitForNightSubPhase(hostPage, ctx.gameId, 'WITCH_ACT', 15_000),
-      ).toBe(true)
-      act('WITCH_ACT', actName(witch), {
-        room: ctx.roomCode,
-        payload: '{"useAntidote":false}',
-      })
 
       expect(
         await waitForNightSubPhase(hostPage, ctx.gameId, 'GUARD_PICK', 15_000),
@@ -306,18 +306,6 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
         room: ctx.roomCode,
       })
 
-      expect(
-        await waitForNightSubPhase(hostPage, ctx.gameId, 'SEER_PICK', 15_000),
-      ).toBe(true)
-      act('SEER_CHECK', actName(seer), {
-        target: String(wolves[0].seat),
-        room: ctx.roomCode,
-      })
-      expect(
-        await waitForNightSubPhase(hostPage, ctx.gameId, 'SEER_RESULT', 10_000),
-      ).toBe(true)
-      act('SEER_CONFIRM', actName(seer), { room: ctx.roomCode })
-
       // Witch poisons guard (no antidote — backend forbids combined potions).
       expect(
         await waitForNightSubPhase(hostPage, ctx.gameId, 'WITCH_ACT', 15_000),
@@ -329,6 +317,18 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
           poisonTargetUserId: guard.userId,
         }),
       })
+
+      expect(
+        await waitForNightSubPhase(hostPage, ctx.gameId, 'SEER_PICK', 15_000),
+      ).toBe(true)
+      act('SEER_CHECK', actName(seer), {
+        target: String(wolves[0].seat),
+        room: ctx.roomCode,
+      })
+      expect(
+        await waitForNightSubPhase(hostPage, ctx.gameId, 'SEER_RESULT', 10_000),
+      ).toBe(true)
+      act('SEER_CONFIRM', actName(seer), { room: ctx.roomCode })
 
       expect(
         await waitForNightSubPhase(hostPage, ctx.gameId, 'GUARD_PICK', 15_000),
@@ -395,11 +395,11 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
       // ── N2: wolf kills, then role-loop walks past dead seer + guard ─────
       // With the witch in the middle, the audio sequence at N2 is:
       //   wolf_open + wolf_close          (alive wolf actor)
-      //   seer_open + seer_close (dead)   (dead-role audio for seer)
       //   witch_open + witch_close        (alive witch actor)
+      //   seer_open + seer_close (dead)   (dead-role audio for seer)
       //   guard_open + guard_close (dead) (dead-role audio for guard)
-      // The seer's dead-role audio fires when the role-loop transitions
-      // past SEER_PICK; the guard's fires after WITCH_ACT.
+      // The seer's dead-role audio fires after WITCH_ACT; the guard's
+      // fires after SEER_RESULT (or the seer skip).
       expect(
         await waitForPhase(hostPage, ctx.gameId, 'NIGHT', 30_000),
         'expected N2 to start; if game ended at D1 the host-role roll left ' +

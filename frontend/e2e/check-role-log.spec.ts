@@ -12,7 +12,7 @@ async function goToVotingScenario(page: Page, scenario: string) {
   // Set a mock token so the auth guard doesn't redirect
   await page.goto('/')
   await page.evaluate(() => {
-    localStorage.setItem('jwt', 'mock-jwt-token-abc123')
+    localStorage.setItem('jwt', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjQwNzA5MDg4MDB9.mock-sig')
     localStorage.setItem('userId', 'u1')
     localStorage.setItem('nickname', 'You')
   })

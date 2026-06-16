@@ -5,6 +5,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
@@ -30,6 +31,8 @@ class GamePhasePipeline(
     private val sheriffService: SheriffService,
     private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: com.werewolf.service.ActionLogService,
+    private val hostTimerService: HostTimerService,
+    private val dayRevealAdvancer: DayRevealAdvancer,
 ) {
     val log: Logger = LoggerFactory.getLogger(GamePhasePipeline::class.java)
     // ── Phase transition actions ───────────────────────────────────────────────
@@ -59,17 +62,23 @@ class GamePhasePipeline(
             .findByGameIdAndDayNumber(context.gameId, context.game.dayNumber)
             .orElse(null)
         val pendingKills = if (nightPhase != null) {
-            nightOrchestrator.computePendingKills(nightPhase)
+            nightOrchestrator.computePendingKills(context.gameId, nightPhase)
         } else emptyList()
         if (pendingKills.isNotEmpty()) {
             nightOrchestrator.applyNightKills(context.gameId, pendingKills)
             actionLogService.recordNightDeaths(context.gameId, context.game.dayNumber, pendingKills)
         }
 
-        context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
+        // Decide the next sub-phase now that the night deaths are applied: a
+        // dead sheriff hands over the badge first, then a wolf-killed hunter
+        // gets to shoot, otherwise the result is simply revealed. The advancer
+        // reads fresh state from the DB (applyNightKills already flushed the
+        // alive flags). See DayRevealAdvancer.
+        val nextSubPhase = dayRevealAdvancer.nextSubPhase(context.gameId)
+        context.game.subPhase = nextSubPhase.name
         gameRepository.save(context.game)
 
-        log.info("[revealNightResult] Successfully revealed night result; applied kills=$pendingKills")
+        log.info("[revealNightResult] Successfully revealed night result; applied kills=$pendingKills nextSubPhase=$nextSubPhase")
         if (pendingKills.isNotEmpty()) {
             stompPublisher.broadcastGameAfterCommit(
                 context.gameId,
@@ -78,7 +87,7 @@ class GamePhasePipeline(
         }
         stompPublisher.broadcastGameAfterCommit(
             context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, nextSubPhase.name)
         )
 
         return GameActionResult.Success()
@@ -101,6 +110,7 @@ class GamePhasePipeline(
             return GameActionResult.Rejected("Reveal the night result before starting the vote")
         }
 
+        hostTimerService.cancel(context.gameId)
         context.game.phase = GamePhase.DAY_VOTING
         context.game.subPhase = VotingSubPhase.VOTING.name
         gameRepository.save(context.game)

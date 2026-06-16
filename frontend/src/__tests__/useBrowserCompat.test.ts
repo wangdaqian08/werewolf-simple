@@ -6,7 +6,7 @@
  * captured 2026-04-26.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { isSupportedBrowser } from '@/composables/useBrowserCompat'
+import { isSupportedBrowser, isIosSafari, isStandalonePwa } from '@/composables/useBrowserCompat'
 
 interface Stub {
   ua: string
@@ -187,5 +187,123 @@ describe('isSupportedBrowser', () => {
     // delete `navigator` in jsdom, so just sanity-check the function doesn't
     // throw — the SSR branch is exercised via direct logic review.
     expect(() => isSupportedBrowser()).not.toThrow()
+  })
+})
+
+// ── isIosSafari ───────────────────────────────────────────────────────────────
+
+const ORIGINAL_MATCH_MEDIA = window.matchMedia
+
+afterEach(() => {
+  Object.defineProperty(navigator, 'userAgent', {
+    value: ORIGINAL.ua,
+    configurable: true,
+  })
+  Object.defineProperty(navigator, 'userAgentData', {
+    value: ORIGINAL.data,
+    configurable: true,
+    writable: true,
+  })
+  Object.defineProperty(navigator, 'standalone', {
+    value: undefined,
+    configurable: true,
+    writable: true,
+  })
+  window.matchMedia = ORIGINAL_MATCH_MEDIA
+})
+
+describe('isIosSafari', () => {
+  it('returns true for iOS Safari iPhone', () => {
+    stubNavigator({
+      ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+    })
+    expect(isIosSafari()).toBe(true)
+  })
+
+  it('returns true for iOS Safari iPad', () => {
+    stubNavigator({
+      ua: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    })
+    expect(isIosSafari()).toBe(true)
+  })
+
+  it('returns false for Chrome iOS (CriOS)', () => {
+    stubNavigator({
+      ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.0.0 Mobile/15E148 Safari/604.1',
+    })
+    expect(isIosSafari()).toBe(false)
+  })
+
+  it('returns false for Firefox iOS (FxiOS)', () => {
+    stubNavigator({
+      ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/119.0 Mobile/15E148 Safari/604.1',
+    })
+    expect(isIosSafari()).toBe(false)
+  })
+
+  it('returns false for Edge iOS (EdgiOS)', () => {
+    stubNavigator({
+      ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/119.0.0.0 Mobile/15E148 Safari/604.1',
+    })
+    expect(isIosSafari()).toBe(false)
+  })
+
+  it('returns false for Android Chrome', () => {
+    stubNavigator({
+      ua: 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
+    })
+    expect(isIosSafari()).toBe(false)
+  })
+
+  it('returns false for desktop Safari', () => {
+    stubNavigator({
+      ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+    })
+    expect(isIosSafari()).toBe(false)
+  })
+})
+
+// ── isStandalonePwa ───────────────────────────────────────────────────────────
+
+describe('isStandalonePwa', () => {
+  it('returns true when navigator.standalone is true', () => {
+    Object.defineProperty(navigator, 'standalone', {
+      value: true,
+      configurable: true,
+      writable: true,
+    })
+    expect(isStandalonePwa()).toBe(true)
+  })
+
+  it('returns true when matchMedia display-mode standalone matches', () => {
+    Object.defineProperty(navigator, 'standalone', {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    })
+    window.matchMedia = (query: string) =>
+      ({
+        matches: query === '(display-mode: standalone)',
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList
+    expect(isStandalonePwa()).toBe(true)
+  })
+
+  it('returns false when neither standalone flag is set', () => {
+    Object.defineProperty(navigator, 'standalone', {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    })
+    window.matchMedia = (query: string) =>
+      ({
+        matches: false,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList
+    expect(isStandalonePwa()).toBe(false)
   })
 })

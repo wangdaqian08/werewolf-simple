@@ -11,23 +11,52 @@
 
       <!-- Player count stepper -->
       <div class="stepper-card">
-        <div class="field-lbl">玩家人数 / Number of Players</div>
+        <div class="field-lbl">玩家人数（含房主）/ Players (incl. host)</div>
         <div class="stepper-row">
           <button
             :disabled="totalPlayers <= MIN_PLAYERS"
             class="stepper-btn stepper-minus"
+            data-testid="player-count-decrement"
             @click="decrement"
           >
             −
           </button>
           <div class="stepper-value">
-            <span class="stepper-num">{{ totalPlayers }}</span>
+            <span class="stepper-num" data-testid="player-count-value">{{ totalPlayers }}</span>
             <span class="stepper-range">{{ MIN_PLAYERS }} – {{ MAX_PLAYERS }}</span>
           </div>
           <button
             :disabled="totalPlayers >= MAX_PLAYERS"
             class="stepper-btn stepper-plus"
+            data-testid="player-count-increment"
             @click="increment"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      <!-- Wolf-count stepper -->
+      <div class="stepper-card">
+        <div class="field-lbl">狼人数量 / Number of Werewolves</div>
+        <div class="stepper-row">
+          <button
+            :disabled="wolfCount <= currentBounds.min"
+            class="stepper-btn stepper-minus"
+            data-testid="wolf-count-decrement"
+            @click="wolfDecrement"
+          >
+            −
+          </button>
+          <div class="stepper-value">
+            <span class="stepper-num" data-testid="wolf-count-value">{{ wolfCount }}</span>
+            <span class="stepper-range">{{ currentBounds.min }} – {{ currentBounds.max }}</span>
+          </div>
+          <button
+            :disabled="wolfCount >= currentBounds.max"
+            class="stepper-btn stepper-plus"
+            data-testid="wolf-count-increment"
+            @click="wolfIncrement"
           >
             +
           </button>
@@ -36,7 +65,9 @@
 
       <!-- Role configuration -->
       <div class="field-lbl">角色配置 / Role Configuration</div>
-      <div class="balance-note">Backend auto-balances role counts based on total players.</div>
+      <div class="balance-note">
+        剩余席位自动分配为村民 · Remaining seats filled with villagers.
+      </div>
 
       <div class="role-list">
         <div
@@ -67,6 +98,10 @@
             v-else
             :class="isEnabled(role.id) ? 'toggle-on' : 'toggle-off'"
             class="toggle"
+            :disabled="!canEnable(role.id)"
+            :title="
+              !canEnable(role.id) ? '增加玩家或移除其他神职 / Increase players or remove a god' : ''
+            "
             @click="toggleRole(role.id)"
           >
             <span class="toggle-thumb" />
@@ -86,6 +121,50 @@
             :class="hasSheriff ? 'toggle-on' : 'toggle-off'"
             class="toggle"
             @click="hasSheriff = !hasSheriff"
+          >
+            <span class="toggle-thumb" />
+          </button>
+        </div>
+        <div class="role-row" :class="witchSelfSaveAllowed ? 'row-on' : 'row-off'">
+          <span class="role-emoji">🧙‍♀️</span>
+          <div class="role-names">
+            <span class="role-name">女巫自救 Witch Self-Save</span>
+            <span class="win-cond-desc">
+              {{
+                witchSelfSaveAllowed
+                  ? '允许女巫使用解药救自己 (Allowed)'
+                  : '禁止女巫使用解药救自己 (Disallowed)'
+              }}
+            </span>
+          </div>
+          <button
+            :class="witchSelfSaveAllowed ? 'toggle-on' : 'toggle-off'"
+            class="toggle"
+            data-testid="witchSelfSave-toggle"
+            :data-witch-self-save="witchSelfSaveAllowed"
+            @click="witchSelfSaveAllowed = !witchSelfSaveAllowed"
+          >
+            <span class="toggle-thumb" />
+          </button>
+        </div>
+        <div class="role-row" :class="perksAllowed ? 'row-on' : 'row-off'">
+          <span class="role-emoji">🛡</span>
+          <div class="role-names">
+            <span class="role-name">道具 Perks</span>
+            <span class="win-cond-desc">
+              {{
+                perksAllowed
+                  ? '允许玩家使用积分道具 (Allowed)'
+                  : '禁止玩家使用积分道具 (Disallowed)'
+              }}
+            </span>
+          </div>
+          <button
+            :class="perksAllowed ? 'toggle-on' : 'toggle-off'"
+            class="toggle"
+            data-testid="perksAllowed-toggle"
+            :data-perks-allowed="perksAllowed"
+            @click="perksAllowed = !perksAllowed"
           >
             <span class="toggle-thumb" />
           </button>
@@ -153,6 +232,12 @@
         </div>
       </div>
 
+      <RoleComposition
+        :total-players="totalPlayers"
+        :wolf-count="wolfCount"
+        :roles="compositionRoles"
+      />
+
       <button :disabled="loading" class="btn btn-primary" @click="handleCreate">
         {{ loading ? '创建中…' : '创建房间 / Create Room' }}
       </button>
@@ -163,13 +248,16 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'
 import { useUserStore } from '@/stores/userStore'
 import { roomService } from '@/services/roomService'
 import { audioTracksService, type AudioTrack } from '@/services/audioTracksService'
 import type { WinConditionMode } from '@/types'
+import { ROLE_DEFINITIONS, type RoleDefinition } from '@/utils/roleDefinitions'
+import { wolfBounds } from '@/utils/wolfBounds'
+import RoleComposition from '@/components/RoleComposition.vue'
 
 const router = useRouter()
 const roomStore = useRoomStore()
@@ -178,20 +266,22 @@ const userStore = useUserStore()
 const MIN_PLAYERS = 6
 const MAX_PLAYERS = 12
 
-const ROLE_DEFINITIONS = [
-  { id: 'WEREWOLF', nameZh: '狼人', nameEn: 'Werewolf', emoji: '🐺', required: true },
-  { id: 'VILLAGER', nameZh: '村民', nameEn: 'Villager', emoji: '🧑‍🌾', required: true },
-  { id: 'SEER', nameZh: '预言家', nameEn: 'Seer', emoji: '🔮', required: false },
-  { id: 'WITCH', nameZh: '女巫', nameEn: 'Witch', emoji: '🧙‍♀️', required: false },
-  { id: 'HUNTER', nameZh: '猎人', nameEn: 'Hunter', emoji: '🏹', required: false },
-  { id: 'GUARD', nameZh: '守卫', nameEn: 'Guard', emoji: '🛡️', required: false },
-  { id: 'IDIOT', nameZh: '白痴', nameEn: 'Idiot', emoji: '🃏', required: false },
-]
-
 const totalPlayers = ref(9)
+const wolfCount = ref(wolfBounds(totalPlayers.value).default)
+const currentBounds = computed(() => wolfBounds(totalPlayers.value))
+
+// Whenever the host changes total players, snap wolf count to the canonical
+// default for that count (matches real-world 狼人杀 板子: 6p→2W, 9p→3W, 12p→4W).
+// The host can still adjust wolves up/down within the new bounds afterward.
+watch(totalPlayers, (n) => {
+  wolfCount.value = wolfBounds(n).default
+})
+
 // Optional roles enabled by default
 const enabledOptional = ref(new Set(['SEER', 'WITCH', 'HUNTER']))
 const hasSheriff = ref(true)
+const witchSelfSaveAllowed = ref(true)
+const perksAllowed = ref(true)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
 const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: '无 (None)' }])
@@ -245,24 +335,47 @@ function decrement() {
   if (totalPlayers.value > MIN_PLAYERS) totalPlayers.value--
 }
 
+function wolfIncrement() {
+  if (wolfCount.value < currentBounds.value.max) wolfCount.value++
+}
+function wolfDecrement() {
+  if (wolfCount.value > currentBounds.value.min) wolfCount.value--
+}
+
+const enabledGodCount = computed(() => enabledOptional.value.size)
+const villagerCount = computed(() => totalPlayers.value - wolfCount.value - enabledGodCount.value)
+
 function isEnabled(roleId: string): boolean {
   const role = ROLE_DEFINITIONS.find((r) => r.id === roleId)
   if (role?.required) return true
   return enabledOptional.value.has(roleId)
 }
 
+// A god toggle can be enabled iff it is already on (lets the host disable it
+// again) or there is at least one villager seat to give up to it.
+function canEnable(roleId: string): boolean {
+  if (enabledOptional.value.has(roleId)) return true
+  return villagerCount.value > 0
+}
+
 function toggleRole(roleId: string) {
   if (enabledOptional.value.has(roleId)) {
     enabledOptional.value.delete(roleId)
-  } else {
+  } else if (canEnable(roleId)) {
     enabledOptional.value.add(roleId)
   }
 }
 
-function roleRowClass(role: (typeof ROLE_DEFINITIONS)[0]) {
+function roleRowClass(role: RoleDefinition) {
   if (role.required) return role.id === 'WEREWOLF' ? 'row-wolf' : 'row-village'
   return isEnabled(role.id) ? 'row-on' : 'row-off'
 }
+
+const compositionRoles = computed(() => [
+  'WEREWOLF',
+  'VILLAGER',
+  ...Array.from(enabledOptional.value),
+])
 
 async function handleCreate() {
   loading.value = true
@@ -272,10 +385,13 @@ async function handleCreate() {
     const req: import('@/types').CreateRoomRequest = {
       config: {
         totalPlayers: totalPlayers.value,
+        wolfCount: wolfCount.value,
         roles,
         hasSheriff: hasSheriff.value,
         winCondition: winCondition.value,
         bgmTrack: bgmTrack.value,
+        witchSelfSaveAllowed: witchSelfSaveAllowed.value,
+        perksAllowed: perksAllowed.value,
       },
     }
     // Carry the per-room display-name override that the lobby may have set.

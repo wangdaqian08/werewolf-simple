@@ -16,7 +16,10 @@ class Room(
     @Column(name = "room_id")
     val roomId: Int? = null,
 
-    @Column(name = "room_code", nullable = false, length = 4, unique = true)
+    // Not globally unique: 3-digit codes are recycled once a room's game ends,
+    // so finished rooms may share a code with a newer active room. Uniqueness is
+    // enforced among *active* rooms in RoomService.generateCode.
+    @Column(name = "room_code", nullable = false, length = 3)
     val roomCode: String,
 
     @Column(name = "host_user_id", nullable = false, length = 128)
@@ -28,6 +31,9 @@ class Room(
 
     @Column(name = "total_players", nullable = false)
     val totalPlayers: Int,
+
+    @Column(name = "wolf_count", nullable = false)
+    val wolfCount: Int = 2,
 
     @Column(name = "has_seer", nullable = false)
     val hasSeer: Boolean = false,
@@ -66,5 +72,6 @@ class Room(
         require(roomCode.isNotBlank()) { "roomCode must not be blank" }
         require(hostUserId.isNotBlank()) { "hostUserId must not be blank" }
         require(totalPlayers > 0) { "totalPlayers must be > 0, got $totalPlayers" }
+        require(wolfCount > 0) { "wolfCount must be > 0, got $wolfCount" }
     }
 }

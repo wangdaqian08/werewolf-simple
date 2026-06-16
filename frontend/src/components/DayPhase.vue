@@ -1,17 +1,148 @@
 <template>
   <div class="day-wrap">
-    <!-- Header: pill badge left | large timer right -->
+    <!-- Header: pill badge left | countdown arc right -->
     <header class="day-header">
       <div class="day-pill">第 {{ dayPhase.dayNumber }} 天 · Day {{ dayPhase.dayNumber }}</div>
-      <div class="day-timer">{{ formattedTime }}</div>
+      <CountdownArc
+        :remaining-ms="timer?.remainingMs ?? 0"
+        :duration-ms="timer?.durationMs ?? 0"
+        :running="timer?.running ?? false"
+        :is-host="isHost"
+        @start-timer="(s) => emit('start-timer', s)"
+        @stop-timer="emit('stop-timer')"
+      />
     </header>
 
     <!-- Sun arc -->
     <SunArc :phase-deadline="dayPhase.phaseDeadline" :phase-started="dayPhase.phaseStarted" />
 
+    <!-- Below-arch row: my-role-chip on left, log-fab + Action stacked on right -->
+    <div class="below-arch-row">
+      <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
+        🔒 身份 · Tap to reveal
+      </button>
+      <div v-else />
+      <div class="right-stack">
+        <button
+          v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
+          class="log-fab"
+          aria-label="游戏记录"
+          data-testid="log-fab"
+          @click="showLog = true"
+        >
+          <span class="log-fab-icon" aria-hidden="true">📋</span>
+          <span class="log-fab-label">游戏记录</span>
+        </button>
+        <ActionMenu
+          v-if="myRole"
+          phase="DAY_DISCUSSION"
+          :sub-phase="dayPhase.subPhase"
+          :my-role="myRole"
+          :is-alive="isAlive"
+          @self-destruct="emit('self-destruct')"
+        />
+      </div>
+    </div>
+
     <!-- Fixed-height banner area — always rendered so grid position stays consistent -->
     <div class="banner-area">
-      <template v-if="viewRole === 'DEAD'">
+      <!-- Self-destruct (自爆): a wolf blew themselves up this day. Shown in the
+           death-banner area for every viewer, independent of the reveal sub-phase
+           below, so the 自爆 result is always visible until the next night. -->
+      <div v-if="selfDestruct" class="banner banner-kill" data-testid="day-banner-self-destruct">
+        <span class="banner-avatar">💥</span>
+        <div class="banner-kill-text">
+          <span
+            class="banner-kill-red"
+            :data-testid="`day-self-destruct-seat-${selfDestruct.seatIndex}`"
+            >{{ selfDestruct.seatIndex }}号 · {{ selfDestruct.nickname }}</span
+          >
+          <span class="banner-kill-muted">自爆了</span>
+        </div>
+      </div>
+
+      <!-- Badge handover (sheriff killed at night): show this on top of the
+           normal reveal banners. The dying sheriff sees the heir prompt; all
+           other viewers see a "waiting for sheriff" hint. -->
+      <template v-if="isBadgeHandover">
+        <div
+          v-if="killedPlayers.length > 0"
+          class="banner banner-kill"
+          data-testid="day-banner-kill"
+        >
+          <span class="banner-avatar">💀</span>
+          <div class="banner-kill-text">
+            <span class="banner-kill-muted">昨晚</span>
+            <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
+              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span
+                class="banner-kill-red"
+                :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
+                >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
+              >
+            </template>
+            <span class="banner-kill-muted">出局了</span>
+          </div>
+        </div>
+        <div
+          v-if="isDyingSheriff"
+          class="banner banner-gold"
+          data-testid="day-badge-eliminated-banner"
+        >
+          <span class="banner-avatar">⭐</span>
+          <div>
+            <div class="banner-title">你已出局 · Eliminated</div>
+            <div class="banner-sub">选择警徽继承人 / Choose badge heir</div>
+          </div>
+        </div>
+        <div v-else class="banner banner-info" data-testid="day-badge-wait-banner">
+          <span class="banner-avatar">⭐</span>
+          <div>
+            <div class="banner-title">警长正在移交警徽</div>
+            <div class="banner-sub">Sheriff is choosing an heir…</div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Hunter killed by wolves at night: report the death(s), then let the
+           hunter take one shot before discussion. -->
+      <template v-else-if="isHunterNightShoot">
+        <div
+          v-if="killedPlayers.length > 0"
+          class="banner banner-kill"
+          data-testid="day-banner-kill"
+        >
+          <span class="banner-avatar">💀</span>
+          <div class="banner-kill-text">
+            <span class="banner-kill-muted">昨晚</span>
+            <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
+              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span
+                class="banner-kill-red"
+                :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
+                >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
+              >
+            </template>
+            <span class="banner-kill-muted">出局了</span>
+          </div>
+        </div>
+        <div v-if="isActingHunter" class="banner banner-gold" data-testid="day-hunter-night-banner">
+          <span class="banner-avatar">🏹</span>
+          <div>
+            <div class="banner-title">猎人开枪 · Hunter</div>
+            <div class="banner-sub">你被狼人杀害，可开枪带走一人 / fire one shot</div>
+          </div>
+        </div>
+        <div v-else class="banner banner-info" data-testid="day-hunter-night-wait-banner">
+          <span class="banner-avatar">🏹</span>
+          <div>
+            <div class="banner-title">猎人正在开枪</div>
+            <div class="banner-sub">Hunter is choosing a target…</div>
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="viewRole === 'DEAD'">
         <div class="banner banner-info" data-testid="day-banner-self-eliminated">
           <span class="banner-icon">☑</span>
           <div>
@@ -89,28 +220,86 @@
         <template v-if="player.isSheriff" #badge>
           <div class="sheriff-badge">⭐</div>
         </template>
-        <template v-if="!player.isAlive && dayPhase.subPhase === 'RESULT_REVEALED'" #overlay>
+        <template
+          v-if="
+            !player.isAlive &&
+            (dayPhase.subPhase === 'RESULT_REVEALED' || isBadgeHandover || isHunterNightShoot)
+          "
+          #overlay
+        >
           <div class="slot-overlay dead-overlay">✕</div>
         </template>
       </PlayerSlot>
     </section>
-
-    <!-- Floating action log button: hidden until host reveals result to prevent spoilers -->
-    <button
-      v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
-      class="log-fab"
-      aria-label="游戏记录"
-      @click="showLog = true"
-    >
-      📋
-    </button>
 
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
 
     <!-- Footer -->
     <footer class="day-footer">
-      <template v-if="viewRole === 'HOST'">
+      <!-- BADGE_HANDOVER (sheriff killed at night): dying sheriff sees
+           pass/destroy; everyone else (including host) waits. Takes precedence
+           over the regular host/dead/alive footer templates because the dying
+           sheriff may also be the host. -->
+      <template v-if="isBadgeHandover">
+        <template v-if="isDyingSheriff">
+          <div class="vote-actions">
+            <button
+              class="btn btn-gold vote-btn"
+              data-testid="day-badge-pass"
+              :class="{ 'is-loading': actionPending }"
+              :disabled="!badgeSelectedId || actionPending"
+              @click="badgeSelectedId && emit('passBadge', badgeSelectedId)"
+            >
+              移交警徽 · Pass Badge
+            </button>
+            <button
+              class="btn btn-secondary skip-btn"
+              data-testid="day-badge-destroy"
+              :class="{ 'is-loading': actionPending }"
+              :disabled="actionPending"
+              @click="emit('destroyBadge')"
+            >
+              销毁
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <p class="footer-hint">等待警长移交警徽 · Waiting for sheriff to pass badge…</p>
+        </template>
+      </template>
+
+      <!-- Hunter night-death shoot: only the wolf-killed hunter sees the
+           shoot/pass buttons; everyone else (including host) waits. -->
+      <template v-else-if="isHunterNightShoot">
+        <template v-if="isActingHunter">
+          <div class="vote-actions">
+            <button
+              class="btn btn-danger vote-btn"
+              data-testid="day-hunter-night-shoot"
+              :class="{ 'is-loading': actionPending }"
+              :disabled="!hunterSelectedId || actionPending"
+              @click="hunterSelectedId && emit('hunterShoot', hunterSelectedId)"
+            >
+              开枪 · Shoot
+            </button>
+            <button
+              class="btn btn-secondary skip-btn"
+              data-testid="day-hunter-night-pass"
+              :class="{ 'is-loading': actionPending }"
+              :disabled="actionPending"
+              @click="emit('hunterPass')"
+            >
+              放弃 · Pass
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <p class="footer-hint">等待猎人开枪 · Waiting for hunter…</p>
+        </template>
+      </template>
+
+      <template v-else-if="viewRole === 'HOST'">
         <div v-if="dayPhase.subPhase === 'RESULT_HIDDEN'" class="vote-actions">
           <button
             class="btn btn-primary vote-btn"
@@ -123,7 +312,19 @@
           </button>
         </div>
         <div v-else-if="dayPhase.subPhase === 'RESULT_REVEALED'" class="vote-actions">
+          <!-- When a wolf self-destructed, skip voting and go to night -->
           <button
+            v-if="daySkipVoting"
+            class="btn btn-primary vote-btn"
+            data-testid="day-enter-night"
+            :class="{ 'is-loading': actionPending }"
+            :disabled="actionPending"
+            @click="emit('continueToNight')"
+          >
+            进入夜晚 · Night
+          </button>
+          <button
+            v-else
             class="btn btn-gold vote-btn"
             data-testid="day-start-vote"
             :class="{ 'is-loading': actionPending }"
@@ -152,15 +353,37 @@
         <p class="footer-hint">等待房主公布结果 · Waiting for host to reveal the result</p>
       </template>
     </footer>
+
+    <!-- Role card bottom sheet — same as VotingPhase so the my-role-chip works during DAY_DISCUSSION -->
+    <Teleport to="body">
+      <div v-if="showRoleCard" class="role-card-overlay" @click.self="showRoleCard = false">
+        <div class="role-card-sheet">
+          <div class="role-card-header">
+            <span>你的身份 · My Role</span>
+            <button class="history-close" @click="showRoleCard = false">✕</button>
+          </div>
+          <div v-if="myRole && ROLE_META[myRole]" class="role-card-body">
+            <div class="rc-emoji">{{ ROLE_META[myRole]?.emoji }}</div>
+            <div class="rc-name-zh">{{ ROLE_META[myRole]?.nameZh }}</div>
+            <div class="rc-label" :class="`rc-label-${ROLE_META[myRole]?.team}`">
+              {{ ROLE_META[myRole]?.nameEn }}
+            </div>
+            <p class="rc-desc">{{ ROLE_META[myRole]?.description }}</p>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { DayPhaseState, GamePlayer } from '@/types'
+import { computed, ref, watch } from 'vue'
+import type { DayPhaseState, GamePlayer, PlayerRole, TimerState } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
+import ActionMenu from '@/components/ActionMenu.vue'
+import CountdownArc from '@/components/CountdownArc.vue'
 
 const props = defineProps<{
   gameId: number
@@ -168,10 +391,103 @@ const props = defineProps<{
   players: GamePlayer[]
   myUserId: string
   isHost: boolean
+  timer?: TimerState | null
+  myRole?: PlayerRole
+  isAlive?: boolean
+  daySkipVoting?: boolean
+  sheriffUserId?: string | null
   actionPending?: boolean
 }>()
 
+const isBadgeHandover = computed(() => props.dayPhase.subPhase === 'BADGE_HANDOVER')
+const isDyingSheriff = computed(
+  () => isBadgeHandover.value && !!props.sheriffUserId && props.sheriffUserId === props.myUserId,
+)
+const badgeSelectedId = ref<string | null>(null)
+function onBadgeTap(player: GamePlayer) {
+  if (!isDyingSheriff.value) return
+  if (!player.isAlive) return
+  if (player.userId === props.myUserId) return
+  badgeSelectedId.value = player.userId
+}
+
+// Hunter killed by wolves at night may fire one shot during the day reveal.
+const isHunterNightShoot = computed(() => props.dayPhase.subPhase === 'HUNTER_SHOOT_NIGHT_DEATH')
+const isActingHunter = computed(
+  () =>
+    isHunterNightShoot.value &&
+    !!props.dayPhase.hunterUserId &&
+    props.dayPhase.hunterUserId === props.myUserId,
+)
+const hunterSelectedId = ref<string | null>(null)
+function onHunterTap(player: GamePlayer) {
+  if (!isActingHunter.value) return
+  if (!player.isAlive) return
+  if (player.userId === props.myUserId) return
+  hunterSelectedId.value = player.userId
+}
+
 const showLog = ref(false)
+const showRoleCard = ref(false)
+
+interface RoleMeta {
+  nameZh: string
+  nameEn: string
+  emoji: string
+  team: string
+  description: string
+}
+const ROLE_META: Record<string, RoleMeta> = {
+  WEREWOLF: {
+    nameZh: '狼人',
+    nameEn: 'WEREWOLF',
+    emoji: '🐺',
+    team: 'wolf',
+    description: '每晚与狼队商议，袭击一名村民。',
+  },
+  VILLAGER: {
+    nameZh: '村民',
+    nameEn: 'VILLAGER',
+    emoji: '🌾',
+    team: 'village',
+    description: '通过讨论和投票找出狼人，保护村庄。',
+  },
+  SEER: {
+    nameZh: '预言家',
+    nameEn: 'SEER',
+    emoji: '🔭',
+    team: 'special',
+    description: '每晚可查验一名玩家，得知其是否为狼人。',
+  },
+  WITCH: {
+    nameZh: '女巫',
+    nameEn: 'WITCH',
+    emoji: '🔮',
+    team: 'special',
+    description: '拥有一瓶解药和一瓶毒药，各可使用一次。',
+  },
+  HUNTER: {
+    nameZh: '猎人',
+    nameEn: 'HUNTER',
+    emoji: '🏹',
+    team: 'special',
+    description: '死亡时可开枪带走一名玩家。',
+  },
+  GUARD: {
+    nameZh: '守卫',
+    nameEn: 'GUARD',
+    emoji: '🛡️',
+    team: 'special',
+    description: '每晚保护一名玩家免受狼人袭击。',
+  },
+  IDIOT: {
+    nameZh: '白痴',
+    nameEn: 'IDIOT',
+    emoji: '🃏',
+    team: 'special',
+    description: '被投票驱逐时揭示身份，免于出局但失去投票权。',
+  },
+}
 
 const emit = defineEmits<{
   revealResult: []
@@ -179,6 +495,14 @@ const emit = defineEmits<{
   vote: [targetId: string]
   skip: []
   selectPlayer: [userId: string]
+  'self-destruct': []
+  continueToNight: []
+  passBadge: [userId: string]
+  destroyBadge: []
+  hunterShoot: [targetId: string]
+  hunterPass: []
+  'start-timer': [seconds: number]
+  'stop-timer': []
 }>()
 
 type ViewRole = 'HOST' | 'DEAD' | 'ALIVE' | 'GUEST'
@@ -191,26 +515,6 @@ const viewRole = computed<ViewRole>(() => {
   return 'ALIVE'
 })
 
-const now = ref(Date.now())
-let intervalId = 0
-
-onMounted(() => {
-  intervalId = window.setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
-})
-
-onUnmounted(() => {
-  clearInterval(intervalId)
-})
-
-const formattedTime = computed(() => {
-  const remaining = Math.max(0, props.dayPhase.phaseDeadline - now.value) / 1000
-  const m = Math.floor(remaining / 60)
-  const s = Math.floor(remaining % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
-})
-
 // Selection is local UI state — server is notified but not authoritative for display
 const localSelected = ref<string | undefined>(props.dayPhase.selectedPlayerId)
 
@@ -219,6 +523,7 @@ watch(
   () => props.dayPhase.subPhase,
   () => {
     localSelected.value = undefined
+    hunterSelectedId.value = null
   },
 )
 
@@ -228,11 +533,25 @@ const killedIds = computed(
 
 const killedPlayers = computed(() => props.dayPhase.nightResult?.killedPlayers ?? [])
 
+// The wolf who self-destructed (自爆) this day — surfaced in the death-banner
+// area alongside any night kills. Cleared server-side at night-init.
+const selfDestruct = computed(() => props.dayPhase.selfDestruct ?? null)
+
 function isKilledAndVisible(player: GamePlayer) {
   return killedIds.value.includes(player.userId) && props.dayPhase.subPhase === 'RESULT_REVEALED'
 }
 
 function slotVariant(player: GamePlayer) {
+  if (isBadgeHandover.value) {
+    if (!player.isAlive) return 'dead' as const
+    if (player.userId === badgeSelectedId.value) return 'selected' as const
+    return 'alive' as const
+  }
+  if (isHunterNightShoot.value) {
+    if (!player.isAlive) return 'dead' as const
+    if (player.userId === hunterSelectedId.value) return 'selected' as const
+    return 'alive' as const
+  }
   if (props.dayPhase.subPhase === 'RESULT_REVEALED') {
     if (isKilledAndVisible(player)) return 'killed' as const
     if (!player.isAlive) return 'dead' as const
@@ -248,6 +567,14 @@ function slotVariant(player: GamePlayer) {
 }
 
 function onTap(player: GamePlayer) {
+  if (isBadgeHandover.value) {
+    onBadgeTap(player)
+    return
+  }
+  if (isHunterNightShoot.value) {
+    onHunterTap(player)
+    return
+  }
   if (viewRole.value !== 'ALIVE') return
   if (!props.dayPhase.canVote) return
   if (!player.isAlive) return
@@ -297,13 +624,6 @@ function onTap(player: GamePlayer) {
   font-weight: 600;
 }
 
-.footer-hint-sm {
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.6875rem;
-  margin: 0;
-}
-
 .player-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
@@ -311,21 +631,136 @@ function onTap(player: GamePlayer) {
   padding: 0 1rem 1rem;
 }
 
+.below-arch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0 1rem 0.5rem;
+}
+
+.right-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 .log-fab {
-  position: fixed;
-  bottom: 88px;
-  right: 16px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  width: auto;
+  padding: 6px 12px;
+  gap: 6px;
+  border-radius: 999px;
   background: var(--paper, #f5f0e8);
   border: 1px solid var(--border, #ccc2b0);
-  font-size: 20px;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.log-fab-icon {
+  font-size: 16px;
+}
+.log-fab-label {
+  font-size: 13px;
+  color: var(--text, #1a140c);
+  font-weight: 500;
+}
+
+.my-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: var(--paper, #f5f0e8);
+  border: 1px solid var(--border, #ccc2b0);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted, #8a7a65);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.my-role-locked {
+  font-style: italic;
+}
+
+/* Role card bottom sheet — mirrors VotingPhase.vue so the my-role-chip works during DAY_DISCUSSION */
+.role-card-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 20, 12, 0.55);
+  z-index: 201;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  touch-action: none;
+}
+.role-card-sheet {
+  width: 100%;
+  max-width: 320px;
+  background: var(--paper);
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(26, 20, 12, 0.3);
+}
+.role-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--border-l);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.history-close {
+  background: transparent;
+  border: none;
+  font-size: 1.125rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+.role-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.75rem 1.5rem 2rem;
+}
+.rc-emoji {
+  font-size: 3.5rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.rc-name-zh {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.rc-label {
+  font-size: 0.625rem;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.rc-label-wolf {
+  color: var(--red);
+}
+.rc-label-village {
+  color: var(--green);
+}
+.rc-label-special {
+  color: var(--gold);
+}
+.rc-desc {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.6;
+  text-align: center;
+  margin: 0;
 }
 </style>

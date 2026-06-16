@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
-@Order(3)
+@Order(2)
 @Component
 class WitchHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
 
@@ -65,6 +65,13 @@ class WitchHandler(private val nightPhaseRepository: NightPhaseRepository) : Rol
 
         if (poisonTarget != null && context.alivePlayerById(poisonTarget) == null)
             return GameActionResult.Rejected("Poison target not found or dead")
+
+        // Self-save gate: when the room has disabled self-save and the wolves'
+        // victim tonight is the witch herself, reject the antidote.
+        val selfSaveAllowed = context.room.config?.witchSelfSaveAllowed ?: true
+        if (useAntidote && !selfSaveAllowed && nightPhase.wolfTargetUserId == actor.userId) {
+            return GameActionResult.Rejected("Witch cannot self-save in this game")
+        }
 
         if (useAntidote) {
             nightPhase.witchAntidoteUsed = true

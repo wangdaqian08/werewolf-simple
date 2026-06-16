@@ -21,14 +21,34 @@
         🔁 第二轮投票 · Round 2
       </div>
 
-      <!-- Role + history row -->
+      <!-- Below-arch row: my-role-chip on left, right-stack (history / log-fab / Action) on right -->
       <div v-if="myRole || voteHistory?.length" class="role-history-row">
         <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
           🔒 身份 · Tap to reveal
         </button>
-        <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
-          📋 历史
-        </button>
+        <div v-else />
+        <div class="right-stack">
+          <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
+            📋 历史
+          </button>
+          <button
+            class="log-fab"
+            aria-label="游戏记录"
+            data-testid="log-fab"
+            @click="showLog = true"
+          >
+            <span class="log-fab-icon" aria-hidden="true">📋</span>
+            <span class="log-fab-label">游戏记录</span>
+          </button>
+          <ActionMenu
+            v-if="myRole"
+            phase="DAY_VOTING"
+            :sub-phase="votingPhase.subPhase"
+            :my-role="myRole"
+            :is-alive="isAlive ?? false"
+            @self-destruct="emit('self-destruct')"
+          />
+        </div>
       </div>
 
       <!-- Before reveal: simple vote count -->
@@ -561,9 +581,6 @@
       </footer>
     </template>
 
-    <!-- Floating action log button: full game record across all days -->
-    <button class="log-fab" aria-label="游戏记录" @click="showLog = true">📋</button>
-
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
   </div>
@@ -576,6 +593,7 @@ import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 import Avatar from '@/components/Avatar.vue'
+import ActionMenu from '@/components/ActionMenu.vue'
 
 const props = defineProps<{
   gameId: number
@@ -584,6 +602,13 @@ const props = defineProps<{
   myUserId: string
   isHost: boolean
   myRole?: PlayerRole
+  isAlive?: boolean
+  // userId of the game's current sheriff (null after BADGE_DESTROY).
+  // Drives badge-handover UI: the dying sheriff to pass is whoever holds
+  // the badge right now — could be the voted-out player, the hunter-shot
+  // sheriff, or a revealed-idiot sheriff. `eliminatedPlayerId` only
+  // identifies the voted-out player and gets the hunter-shot case wrong.
+  currentSheriffUserId?: string | null
   voteHistory?: VoteRoundHistory[]
   actionPending?: boolean
 }>()
@@ -599,6 +624,7 @@ const emit = defineEmits<{
   hunterPass: []
   passBadge: [userId: string]
   destroyBadge: []
+  'self-destruct': []
 }>()
 
 // ── Screen grouping ───────────────────────────────────────────────────────────
@@ -633,21 +659,26 @@ const isRevealed = computed(
 // )
 
 // Badge screen: post-action states
+//
+// We tie this to the backend's authoritative `subPhase`, NOT to player flag
+// inspection (the previous approach guessed by looking at who's still flagged
+// `isSheriff`, which got the hunter-shot-sheriff case wrong — the eliminated
+// player there is the hunter, not the sheriff). The backend transitions
+// BADGE_HANDOVER → VOTE_RESULT atomically with the player-flag updates and
+// then `isBadgeScreen` flips false, so any UI inside the badge screen runs
+// only while we're genuinely waiting for the dying sheriff to act.
 const badgeDone = computed(() => {
   if (props.votingPhase.badgeDestroyed) return true
-  // Check if eliminated player is a sheriff
-  const eliminatedSheriff = props.players.find(
-    (p) => p.userId === props.votingPhase.eliminatedPlayerId && p.isSheriff,
-  )
-  // If eliminated player is not a sheriff, no badge handover is needed
-  if (!eliminatedSheriff) return true
-  // Sheriff has handed over the badge (isSheriff is now false)
-  return !eliminatedSheriff.isSheriff
+  return props.votingPhase.subPhase !== 'BADGE_HANDOVER'
 })
 
-// Check if current player is the eliminated sheriff (only they can pass the badge)
+// Check if current player is the dying sheriff (only they can pass the badge).
+// Previously this was `votingPhase.eliminatedPlayerId === myUserId` — wrong
+// when the hunter is voted out and shoots a different player who happens to be
+// the sheriff: the eliminated player is the hunter, but the sheriff (the
+// shot victim) is the one who must hand over the badge.
 const isEliminatedSheriff = computed(() => {
-  return props.votingPhase.eliminatedPlayerId === props.myUserId
+  return props.currentSheriffUserId === props.myUserId
 })
 
 // Get new sheriff info (alive player with isSheriff=true in BADGE_HANDOVER)
@@ -1041,32 +1072,6 @@ function onBadgeTap(player: GamePlayer) {
   border: 1px solid currentColor;
 }
 
-.my-role-wolf {
-  color: var(--red);
-  background: rgba(181, 37, 26, 0.08);
-}
-
-.my-role-special {
-  color: var(--gold);
-  background: rgba(160, 120, 48, 0.08);
-}
-
-.my-role-guard {
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.my-role-hunter {
-  color: #7c5c3a;
-  background: rgba(124, 92, 58, 0.08);
-}
-
-.my-role-default {
-  color: var(--muted);
-  background: var(--paper);
-  border-color: var(--border-l);
-}
-
 .my-role-locked {
   color: var(--muted);
   background: var(--paper);
@@ -1164,12 +1169,6 @@ function onBadgeTap(player: GamePlayer) {
   font-size: 0.875rem;
   font-weight: 700;
   color: var(--text);
-}
-
-.history-elim {
-  font-size: 0.75rem;
-  color: var(--red);
-  padding: 0.25rem 0;
 }
 
 .history-columns {
@@ -1288,23 +1287,33 @@ function onBadgeTap(player: GamePlayer) {
   font-weight: 600;
 }
 
-/* Floating action log FAB — mirrors DayPhase.log-fab so the game record stays
-   reachable across the entire daytime, not just DAY_DISCUSSION. */
+/* Right-side stack inside role-history-row: history-btn, log-fab, ActionMenu */
+.right-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 .log-fab {
-  position: fixed;
-  bottom: 88px;
-  right: 16px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  width: auto;
+  border-radius: 999px;
   background: var(--paper, #f5f0e8);
   border: 1px solid var(--border, #ccc2b0);
-  font-size: 20px;
+  font-size: 14px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.log-fab-icon {
+  font-size: 16px;
+}
+.log-fab-label {
+  font-size: 13px;
+  color: var(--text, #1a140c);
+  font-weight: 500;
 }
 </style>

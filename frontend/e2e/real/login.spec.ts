@@ -47,7 +47,7 @@ test('repeat login with same nickname returns the same userId (idempotent rejoin
 
 test('joining a non-existent room shows error and stays on lobby', async ({ page }) => {
   await page.getByPlaceholder('Enter your nickname').fill('Alice')
-  await page.getByPlaceholder('Room code').fill('BADCD')
+  await page.getByPlaceholder('Room code').fill('000')
   await page.getByRole('button', { name: /Join/i }).click()
 
   await expect(page.getByText('Room not found. Check the code.')).toBeVisible()
@@ -72,7 +72,7 @@ test('host creates room, guest joins with the room code', async ({ browser }) =>
   await expect(hostPage).toHaveURL(/\/room\//)
 
   const roomCode = await hostPage.locator('[data-testid="room-code"]').textContent()
-  expect(roomCode).toMatch(/^[A-Z0-9]{4,6}$/)
+  expect(roomCode).toMatch(/^[0-9]{3}$/)
 
   // Guest: login → join with the room code → lands in room
   const guestPage = await guestCtx.newPage()

@@ -5,9 +5,20 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import LobbyView from '@/views/LobbyView.vue'
 import { useUserStore } from '@/stores/userStore'
 
+// JWT-shaped fixture: the store decodes the payload to gate `isLoggedIn`, so
+// opaque strings would be treated as expired and purged on init.
+function makeJwt(expSecondsFromNow: number): string {
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expSecondsFromNow }))
+  return `${header}.${payload}.sig`
+}
+const VALID_JWT = () => makeJwt(60 * 60)
+const EXPIRED_JWT = () => makeJwt(-60 * 60)
+
 const getProvidersMock = vi.fn()
 const loginMock = vi.fn()
 const joinRoomMock = vi.fn()
+const getActiveRoomMock = vi.fn()
 
 vi.mock('@/services/userService', () => ({
   userService: {
@@ -29,6 +40,7 @@ vi.mock('@/services/roomService', () => ({
     setReady: vi.fn(),
     claimSeat: vi.fn(),
     kickPlayer: vi.fn(),
+    getActiveRoom: (...args: unknown[]) => getActiveRoomMock(...args),
   },
 }))
 
@@ -157,7 +169,7 @@ describe('LobbyView OAuth UI', () => {
   })
 
   it('shows logged-in identity card when userStore is OAuth-authenticated', async () => {
-    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('jwt', VALID_JWT())
     localStorage.setItem('userId', 'google:abc')
     localStorage.setItem('nickname', 'Daniel Wang')
     localStorage.setItem('avatarUrl', 'https://example.com/a.png')
@@ -178,7 +190,7 @@ describe('LobbyView OAuth UI', () => {
   })
 
   it('logged-in user can click Create Room without re-login', async () => {
-    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('jwt', VALID_JWT())
     localStorage.setItem('userId', 'google:abc')
     localStorage.setItem('nickname', 'Daniel Wang')
     getProvidersMock.mockResolvedValue({
@@ -202,7 +214,7 @@ describe('LobbyView OAuth UI', () => {
   // ── Per-room nickname override (Option A) ─────────────────────────────────
 
   it('logged-in identity card has an editable nickname input pre-filled with OAuth nickname', async () => {
-    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('jwt', VALID_JWT())
     localStorage.setItem('userId', 'google:abc')
     localStorage.setItem('nickname', 'Daniel Wang')
     getProvidersMock.mockResolvedValue({
@@ -218,7 +230,7 @@ describe('LobbyView OAuth UI', () => {
   })
 
   it('typing in the display-name input writes to userStore.displayName', async () => {
-    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('jwt', VALID_JWT())
     localStorage.setItem('userId', 'google:abc')
     localStorage.setItem('nickname', 'Daniel Wang')
     getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
@@ -231,7 +243,7 @@ describe('LobbyView OAuth UI', () => {
   })
 
   it('Join Room sends displayName as nickname to roomService.joinRoom when overridden', async () => {
-    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('jwt', VALID_JWT())
     localStorage.setItem('userId', 'google:abc')
     localStorage.setItem('nickname', 'Daniel Wang')
     getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
@@ -246,7 +258,7 @@ describe('LobbyView OAuth UI', () => {
   })
 
   it('Join Room omits nickname when display-name was not changed (sends just roomCode)', async () => {
-    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('jwt', VALID_JWT())
     localStorage.setItem('userId', 'google:abc')
     localStorage.setItem('nickname', 'Daniel Wang')
     getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
@@ -261,8 +273,22 @@ describe('LobbyView OAuth UI', () => {
     expect(joinRoomMock).toHaveBeenCalledWith({ roomCode: 'ABCD' })
   })
 
+  // Regression: an expired JWT in localStorage used to keep `isLoggedIn` true,
+  // hiding the Google login button so the user couldn't re-authenticate.
+  it('shows the Google login button when the persisted JWT is expired', async () => {
+    localStorage.setItem('jwt', EXPIRED_JWT())
+    localStorage.setItem('userId', 'google:abc')
+    localStorage.setItem('nickname', 'Daniel Wang')
+    getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
+
+    const { wrapper } = await mountLobby()
+
+    expect(wrapper.find('[data-testid="signed-in-as"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="oauth-google"]').exists()).toBe(true)
+  })
+
   it('Create Room saves displayName to userStore for CreateRoomView to pick up', async () => {
-    localStorage.setItem('jwt', 'jwt')
+    localStorage.setItem('jwt', VALID_JWT())
     localStorage.setItem('userId', 'google:abc')
     localStorage.setItem('nickname', 'Daniel Wang')
     getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
@@ -273,5 +299,64 @@ describe('LobbyView OAuth UI', () => {
     await flushPromises()
 
     expect(store.displayName).toBe('DW')
+  })
+})
+
+describe('LobbyView quick rejoin (#7)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    getProvidersMock.mockReset()
+    getProvidersMock.mockResolvedValue({ google: null, wechat: null, guest: true })
+    getActiveRoomMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function loginLocally() {
+    localStorage.setItem('jwt', VALID_JWT())
+    localStorage.setItem('userId', 'u1')
+    localStorage.setItem('nickname', 'Alice')
+  }
+
+  it('shows a Rejoin button when the player has an active room and navigates to it', async () => {
+    loginLocally()
+    getActiveRoomMock.mockResolvedValue({
+      roomId: '7',
+      roomCode: '123',
+      status: 'IN_GAME',
+      config: { totalPlayers: 9, roles: [] },
+      players: [],
+    })
+
+    const { wrapper, router } = await mountLobby()
+
+    const btn = wrapper.find('[data-testid="rejoin-room-btn"]')
+    expect(btn.exists()).toBe(true)
+    expect(btn.text()).toContain('123')
+
+    const pushSpy = vi.spyOn(router, 'push')
+    await btn.trigger('click')
+    expect(pushSpy).toHaveBeenCalledWith({ name: 'room', params: { roomId: '7' } })
+  })
+
+  it('shows no Rejoin button when there is no active room', async () => {
+    loginLocally()
+    getActiveRoomMock.mockResolvedValue(null)
+
+    const { wrapper } = await mountLobby()
+
+    expect(wrapper.find('[data-testid="rejoin-room-btn"]').exists()).toBe(false)
+  })
+
+  it('shows no Rejoin button when the user is not logged in', async () => {
+    getActiveRoomMock.mockResolvedValue({ roomId: '7', roomCode: '123', players: [] })
+
+    const { wrapper } = await mountLobby()
+
+    expect(wrapper.find('[data-testid="rejoin-room-btn"]').exists()).toBe(false)
+    expect(getActiveRoomMock).not.toHaveBeenCalled()
   })
 })

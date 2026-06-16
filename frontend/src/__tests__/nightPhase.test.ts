@@ -78,6 +78,84 @@ describe('NightPhase - eliminated banner gating', () => {
     expect(wrapper.find('[data-testid="guard-confirm-protect"]').exists()).toBe(false)
   })
 
+  it('witch sees the self-save-blocked note + the antidote button is HIDDEN when self-save is off and she is the wolves victim', () => {
+    const witch = mkPlayer({ userId: 'witch1', nickname: 'Witch', seatIndex: 1, isAlive: true })
+    const wolf = mkPlayer({ userId: 'w1', nickname: 'Wolf', seatIndex: 2 })
+
+    const wrapper = mountNight({
+      // hasAntidote=true so the antidote section actually renders. The
+      // wolves' target is the witch herself.
+      nightPhase: mkNight({
+        subPhase: 'WITCH_ACT',
+        dayNumber: 1,
+        hasAntidote: true,
+        attackedPlayerId: 'witch1',
+        attackedNickname: 'Witch',
+        attackedSeatIndex: 1,
+      }),
+      players: [witch, wolf],
+      myUserId: 'witch1',
+      myRole: 'WITCH',
+      // @ts-expect-error — extra prop accepted by the component
+      witchSelfSaveAllowed: false,
+    })
+
+    // "使用解药" button must NOT render.
+    expect(wrapper.find('[data-testid="witch-antidote"]').exists()).toBe(false)
+    // Explanatory note shown in its place.
+    expect(wrapper.find('[data-testid="witch-self-save-blocked"]').exists()).toBe(true)
+    // "放弃" button still available so the witch can advance.
+    expect(wrapper.find('[data-testid="switch-pass-antidote"]').exists()).toBe(true)
+  })
+
+  it('witch sees the antidote button when self-save is off but wolves attacked someone else', () => {
+    const witch = mkPlayer({ userId: 'witch1', nickname: 'Witch', seatIndex: 1, isAlive: true })
+    const other = mkPlayer({ userId: 'other1', nickname: 'Other', seatIndex: 2, isAlive: true })
+
+    const wrapper = mountNight({
+      nightPhase: mkNight({
+        subPhase: 'WITCH_ACT',
+        dayNumber: 1,
+        hasAntidote: true,
+        attackedPlayerId: 'other1',
+        attackedNickname: 'Other',
+        attackedSeatIndex: 2,
+      }),
+      players: [witch, other],
+      myUserId: 'witch1',
+      myRole: 'WITCH',
+      // @ts-expect-error — extra prop accepted by the component
+      witchSelfSaveAllowed: false,
+    })
+
+    expect(wrapper.find('[data-testid="witch-antidote"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="witch-self-save-blocked"]').exists()).toBe(false)
+  })
+
+  it('witch sees the antidote button when self-save is allowed (default), even when wolves attacked her', () => {
+    const witch = mkPlayer({ userId: 'witch1', nickname: 'Witch', seatIndex: 1, isAlive: true })
+    const filler = mkPlayer({ userId: 'v1', nickname: 'V1', seatIndex: 2, isAlive: true })
+
+    const wrapper = mountNight({
+      nightPhase: mkNight({
+        subPhase: 'WITCH_ACT',
+        dayNumber: 1,
+        hasAntidote: true,
+        attackedPlayerId: 'witch1',
+        attackedNickname: 'Witch',
+        attackedSeatIndex: 1,
+      }),
+      players: [witch, filler],
+      myUserId: 'witch1',
+      myRole: 'WITCH',
+      // No witchSelfSaveAllowed prop → undefined → defaults to allow (existing
+      // behavior preserved).
+    })
+
+    expect(wrapper.find('[data-testid="witch-antidote"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="witch-self-save-blocked"]').exists()).toBe(false)
+  })
+
   it('alive non-actor (villager during WEREWOLF_PICK) does NOT see the eliminated banner', () => {
     const villager = mkPlayer({ userId: 'v1', isAlive: true })
     const wolf = mkPlayer({ userId: 'w1', seatIndex: 2 })

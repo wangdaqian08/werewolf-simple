@@ -29,6 +29,9 @@ class RoomServiceTest {
     @Mock lateinit var stompPublisher: StompPublisher
     @org.mockito.Spy val timing: com.werewolf.config.GameTimingProperties = com.werewolf.config.GameTimingProperties()
     @Mock(strictness = org.mockito.Mock.Strictness.LENIENT) lateinit var bgmRegistry: com.werewolf.controller.BgmTrackRegistry
+    @Mock lateinit var perkActivationRepository: com.werewolf.repository.PerkActivationRepository
+    @Mock lateinit var perkRepository: com.werewolf.repository.PerkRepository
+    @Mock lateinit var perkService: com.werewolf.service.PerkService
     @InjectMocks lateinit var roomService: RoomService
 
     @org.junit.jupiter.api.BeforeEach
@@ -82,6 +85,46 @@ class RoomServiceTest {
     }
 
     @Test
+    fun `createRoom - generates a 3-digit numeric room code`() {
+        whenever(roomRepository.findActiveByRoomCode(any())).thenReturn(Optional.empty())
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest())
+
+        val captor = argumentCaptor<Room>()
+        verify(roomRepository).save(captor.capture())
+        assertThat(captor.firstValue.roomCode).matches("\\d{3}")
+    }
+
+    @Test
+    fun `createRoom - retries code generation when the code is taken by an active room`() {
+        // First random code collides with an active room, second is free → reuse
+        // works without a globally-unique constraint.
+        whenever(roomRepository.findActiveByRoomCode(any()))
+            .thenReturn(Optional.of(room()), Optional.empty())
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest())
+
+        verify(roomRepository, atLeast(2)).findActiveByRoomCode(any())
+        verify(roomRepository).save(any<Room>())
+    }
+
+    @Test
     fun `createRoom - host is added as room player with host=true`() {
         whenever(roomRepository.save(any<Room>())).thenAnswer {
             val r = it.arguments[0] as Room
@@ -98,6 +141,60 @@ class RoomServiceTest {
         verify(roomPlayerRepository).save(captor.capture())
         assertThat(captor.firstValue.userId).isEqualTo(hostId)
         assertThat(captor.firstValue.host).isTrue()
+    }
+
+    @Test
+    fun `createRoom - persists wolfCount and rejects out-of-bounds value`() {
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        // Happy: 9 players + wolfCount=2 is at the lower bound.
+        val cfg = RoomConfigRequest(totalPlayers = 9, wolfCount = 2, roles = listOf(PlayerRole.SEER))
+        roomService.createRoom(hostId, "Host", null, cfg)
+
+        val captor = argumentCaptor<Room>()
+        verify(roomRepository).save(captor.capture())
+        assertThat(captor.firstValue.wolfCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `createRoom - rejects wolfCount of 0`() {
+        val cfg = RoomConfigRequest(totalPlayers = 6, wolfCount = 0, roles = listOf(PlayerRole.SEER))
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("must be > 0")
+    }
+
+    @Test
+    fun `createRoom - rejects negative wolfCount`() {
+        val cfg = RoomConfigRequest(totalPlayers = 6, wolfCount = -1, roles = listOf(PlayerRole.SEER))
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("must be > 0")
+    }
+
+    @Test
+    fun `createRoom - rejects composition overflow (wolves + gods exceed seats)`() {
+        val cfg = RoomConfigRequest(
+            totalPlayers = 6,
+            wolfCount = 2,
+            roles = listOf(
+                PlayerRole.SEER,
+                PlayerRole.WITCH,
+                PlayerRole.HUNTER,
+                PlayerRole.GUARD,
+                PlayerRole.IDIOT,
+            ),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("overflow")
     }
 
     @Test
@@ -120,7 +217,7 @@ class RoomServiceTest {
 
     @Test
     fun `joinRoom - throws RoomNotFoundException when room code not found`() {
-        whenever(roomRepository.findByRoomCode("XXXX")).thenReturn(Optional.empty())
+        whenever(roomRepository.findActiveByRoomCode("XXXX")).thenReturn(Optional.empty())
 
         assertThatThrownBy { roomService.joinRoom(userId, "Nick", null, "XXXX") }
             .isInstanceOf(RoomNotFoundException::class.java)
@@ -132,7 +229,7 @@ class RoomServiceTest {
         // members (already in room_players) bypass it — see the rejoin
         // tests below.
         val room = room(status = RoomStatus.IN_GAME)
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.empty())
 
         assertThatThrownBy { roomService.joinRoom(userId, "Nick", null, "ABCD") }
@@ -146,7 +243,7 @@ class RoomServiceTest {
         // gets back the current room snapshot — even after the host has
         // started the game.
         val room = room(status = RoomStatus.IN_GAME)
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId))
             .thenReturn(Optional.of(RoomPlayer(roomId = 1, userId = userId)))
         whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(
@@ -164,7 +261,7 @@ class RoomServiceTest {
     @Test
     fun `joinRoom - throws RoomFullException when room is full`() {
         val room = room(totalPlayers = 2)
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.empty())
         whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(
             listOf(RoomPlayer(roomId = 1, userId = hostId), RoomPlayer(roomId = 1, userId = "u2"))
@@ -177,7 +274,7 @@ class RoomServiceTest {
     @Test
     fun `joinRoom - idempotent when player already in room`() {
         val room = room()
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         // Player already exists
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId))
             .thenReturn(Optional.of(RoomPlayer(roomId = 1, userId = userId)))
@@ -196,7 +293,7 @@ class RoomServiceTest {
     @Test
     fun `joinRoom - new player saved when not already in room`() {
         val room = room()
-        whenever(roomRepository.findByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.empty())
         whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(
             listOf(RoomPlayer(roomId = 1, userId = hostId)) // 1 player, room not full
@@ -233,6 +330,27 @@ class RoomServiceTest {
 
         assertThat(result.roomCode).isEqualTo("ABCD")
         assertThat(result.hostId).isEqualTo(hostId)
+    }
+
+    // ── findActiveRoomForUser (reconnect / quick-rejoin) ───────────────────────
+
+    @Test
+    fun `findActiveRoomForUser returns the user's active room`() {
+        whenever(roomRepository.findActiveRoomsForUser(userId)).thenReturn(listOf(room()))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        val result = roomService.findActiveRoomForUser(userId)
+
+        assertThat(result).isNotNull
+        assertThat(result!!.roomCode).isEqualTo("ABCD")
+    }
+
+    @Test
+    fun `findActiveRoomForUser returns null when the user has no active room`() {
+        whenever(roomRepository.findActiveRoomsForUser(userId)).thenReturn(emptyList())
+
+        assertThat(roomService.findActiveRoomForUser(userId)).isNull()
     }
 
     // ── kickPlayer ───────────────────────────────────────────────────────────
@@ -303,5 +421,81 @@ class RoomServiceTest {
         verify(stompPublisher).broadcastRoomAfterCommit(eq(1), argThat<Map<String, Any>> {
             this["type"] == "ROOM_UPDATE"
         })
+    }
+
+    @Test
+    fun `kickPlayer - refunds the kicked player's active perks`() {
+        val room = room()
+        val targetRow = RoomPlayer(roomId = 1, userId = userId)
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.of(targetRow))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(listOf(RoomPlayer(roomId = 1, userId = hostId)))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.kickPlayer(hostId, 1, userId)
+
+        verify(perkService).refundActiveForUser(1, userId)
+    }
+
+    // ── perks: room config + DTO exposure ──────────────────────────────────────
+
+    @Test
+    fun `createRoom - persists perksAllowed flag in GameConfig`() {
+        val captor = argumentCaptor<Room>()
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest(perksAllowed = false))
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest(perksAllowed = true))
+
+        verify(roomRepository, org.mockito.kotlin.times(2)).save(captor.capture())
+        assertThat(captor.firstValue.config?.perksAllowed).isFalse()
+        assertThat(captor.secondValue.config?.perksAllowed).isTrue()
+    }
+
+    @Test
+    fun `buildRoomDto - surfaces ACTIVE perk activations to all room members`() {
+        val room = room()
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+        whenever(perkRepository.findAll()).thenReturn(
+            listOf(Perk(perkCode = "NIGHT1_IMMUNITY", name = "First Night Immunity", description = "d", priceCredits = 30)),
+        )
+        whenever(perkActivationRepository.findByRoomIdAndStatus(1, PerkActivationStatus.ACTIVE)).thenReturn(
+            listOf(PerkActivation(roomId = 1, userId = "u2", perkCode = "NIGHT1_IMMUNITY", pricePaid = 30)),
+        )
+
+        val dto = roomService.getRoom(1)
+
+        // Pins that buildRoomDto queries specifically the ACTIVE status (not
+        // CONSUMED/VOID/REFUNDED) — the status filter is the fairness contract.
+        verify(perkActivationRepository).findByRoomIdAndStatus(1, PerkActivationStatus.ACTIVE)
+        assertThat(dto.perkActivations).hasSize(1)
+        val pa = dto.perkActivations.single()
+        assertThat(pa.userId).isEqualTo("u2")
+        assertThat(pa.perkCode).isEqualTo("NIGHT1_IMMUNITY")
+        // perkName is resolved by mapping the code through perkRepository.findAll().
+        assertThat(pa.perkName).isEqualTo("First Night Immunity")
+    }
+
+    @Test
+    fun `buildRoomDto - perkActivations is empty when none are active`() {
+        val room = room()
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+        whenever(perkActivationRepository.findByRoomIdAndStatus(1, PerkActivationStatus.ACTIVE)).thenReturn(emptyList())
+
+        val dto = roomService.getRoom(1)
+
+        verify(perkActivationRepository).findByRoomIdAndStatus(1, PerkActivationStatus.ACTIVE)
+        assertThat(dto.perkActivations).isEmpty()
     }
 }

@@ -34,6 +34,9 @@ sealed class DomainEvent {
     data class SheriffElected(val gameId: Int, val sheriffUserId: String?) : DomainEvent()
     @JsonTypeName("GameOver")
     data class GameOver(val gameId: Int, val winner: WinnerSide?) : DomainEvent()
+    // Per-user credit rewards granted at game end (userId → amount)
+    @JsonTypeName("GameSettled")
+    data class GameSettled(val gameId: Int, val rewards: Map<String, Int>) : DomainEvent()
     @JsonTypeName("RoleConfirmed")
     data class RoleConfirmed(val gameId: Int, val userId: String) : DomainEvent()
     @JsonTypeName("IdiotRevealed")
@@ -63,6 +66,14 @@ sealed class DomainEvent {
         val nightNumber: Int
     ) : DomainEvent()
 
+    @JsonTypeName("WolfSelfDestructed")
+    data class WolfSelfDestructed(
+        val gameId: Int,
+        val userId: String,
+        val seatIndex: Int,
+        val nickname: String,
+    ) : DomainEvent()
+
     @JsonTypeName("RoleAction")
     data class RoleAction(
         val gameId: Int,
@@ -73,5 +84,13 @@ sealed class DomainEvent {
         val canHeal: Boolean? = null,
         val canPoison: Boolean? = null,
         val timeoutMs: Long
+    ) : DomainEvent()
+
+    @JsonTypeName("TimerUpdated")
+    data class TimerUpdated(
+        val gameId: Int,
+        val remainingMs: Long,
+        val durationMs: Long,
+        val running: Boolean,
     ) : DomainEvent()
 }

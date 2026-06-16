@@ -4,7 +4,8 @@ import { createPinia, setActivePinia } from 'pinia'
 // Vue watchers need an active effect scope
 import { effectScope, nextTick } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
-import type { AudioSequence, GameState } from '@/types'
+import { useRoomStore } from '@/stores/roomStore'
+import type { AudioSequence, GameState, Room } from '@/types'
 // Must import after mock
 import { useAudioService } from '@/composables/useAudioService'
 
@@ -15,6 +16,7 @@ const mockClearQueue = vi.fn()
 const mockStopAll = vi.fn()
 const mockIsMuted = vi.fn().mockReturnValue(false)
 const mockToggleMute = vi.fn()
+const mockSetMuted = vi.fn()
 const mockIsQueueActive = vi.fn().mockReturnValue(false)
 const mockStartBgm = vi.fn()
 const mockStopBgm = vi.fn()
@@ -29,6 +31,7 @@ vi.mock('@/services/audioService', () => ({
     stopAll: () => mockStopAll(),
     isMuted: () => mockIsMuted(),
     toggleMute: () => mockToggleMute(),
+    setMuted: (...args: unknown[]) => mockSetMuted(...args),
     isQueueActive: () => mockIsQueueActive(),
     setGlobalVolume: vi.fn(),
     getGlobalVolume: vi.fn().mockReturnValue(1),
@@ -37,6 +40,7 @@ vi.mock('@/services/audioService', () => ({
     setBgmLevel: (...args: unknown[]) => mockSetBgmLevel(...args),
     setBgmVolume: (...args: unknown[]) => mockSetBgmVolume(...args),
     getBgmVolume: () => mockGetBgmVolume(),
+    onMuteChange: () => () => {},
   },
 }))
 
@@ -306,43 +310,43 @@ describe('useAudioService', () => {
     ])
   })
 
-  it('WEREWOLF_PICK → SEER_PICK: backend sends close + open eyes', async () => {
+  it('WEREWOLF_PICK → WITCH_ACT: backend sends close + open eyes', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['wolf_close_eyes.mp3', 'seer_open_eyes.mp3'], 'wolf-to-seer')
-    seq.phase = 'NIGHT'
-    seq.subPhase = 'SEER_PICK'
-    gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
-    await nextTick()
-
-    expect(mockPlaySequential).toHaveBeenCalledWith(['wolf_close_eyes.mp3', 'seer_open_eyes.mp3'])
-  })
-
-  it('SEER_RESULT → WITCH_ACT: backend sends close + open eyes', async () => {
-    const gameStore = useGameStore()
-    setupComposable()
-
-    const seq = makeSequence(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'], 'seer-to-witch')
+    const seq = makeSequence(['wolf_close_eyes.mp3', 'witch_open_eyes.mp3'], 'wolf-to-witch')
     seq.phase = 'NIGHT'
     seq.subPhase = 'WITCH_ACT'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['wolf_close_eyes.mp3', 'witch_open_eyes.mp3'])
   })
 
-  it('WITCH_ACT → GUARD_PICK: backend sends close + open eyes', async () => {
+  it('WITCH_ACT → SEER_PICK: backend sends close + open eyes', async () => {
     const gameStore = useGameStore()
     setupComposable()
 
-    const seq = makeSequence(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'], 'witch-to-guard')
+    const seq = makeSequence(['witch_close_eyes.mp3', 'seer_open_eyes.mp3'], 'witch-to-seer')
+    seq.phase = 'NIGHT'
+    seq.subPhase = 'SEER_PICK'
+    gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
+    await nextTick()
+
+    expect(mockPlaySequential).toHaveBeenCalledWith(['witch_close_eyes.mp3', 'seer_open_eyes.mp3'])
+  })
+
+  it('SEER_RESULT → GUARD_PICK: backend sends close + open eyes', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    const seq = makeSequence(['seer_close_eyes.mp3', 'guard_open_eyes.mp3'], 'seer-to-guard')
     seq.phase = 'NIGHT'
     seq.subPhase = 'GUARD_PICK'
     gameStore.setState(makeState({ phase: 'NIGHT', audioSequence: seq }))
     await nextTick()
 
-    expect(mockPlaySequential).toHaveBeenCalledWith(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'])
+    expect(mockPlaySequential).toHaveBeenCalledWith(['seer_close_eyes.mp3', 'guard_open_eyes.mp3'])
   })
 
   it('SEER_PICK → SEER_RESULT: close eyes only (no open-eyes for SEER_RESULT)', async () => {
@@ -422,39 +426,39 @@ describe('useAudioService', () => {
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['wolf_open_eyes.mp3'])
 
-    // 3. WEREWOLF_PICK → SEER_PICK (close wolf + open seer)
+    // 3. WEREWOLF_PICK → WITCH_ACT (close wolf + open witch)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['wolf_close_eyes.mp3', 'seer_open_eyes.mp3'], 'wolf-seer'),
+        audioSequence: makeSequence(['wolf_close_eyes.mp3', 'witch_open_eyes.mp3'], 'wolf-witch'),
       }),
     )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith([
       'wolf_close_eyes.mp3',
-      'seer_open_eyes.mp3',
-    ])
-
-    // 4. SEER → WITCH (close seer + open witch)
-    gameStore.setState(
-      makeState({
-        audioSequence: makeSequence(['seer_close_eyes.mp3', 'witch_open_eyes.mp3'], 'seer-witch'),
-      }),
-    )
-    await nextTick()
-    expect(mockPlaySequential).toHaveBeenLastCalledWith([
-      'seer_close_eyes.mp3',
       'witch_open_eyes.mp3',
     ])
 
-    // 5. WITCH → GUARD (close witch + open guard)
+    // 4. WITCH → SEER (close witch + open seer)
     gameStore.setState(
       makeState({
-        audioSequence: makeSequence(['witch_close_eyes.mp3', 'guard_open_eyes.mp3'], 'witch-guard'),
+        audioSequence: makeSequence(['witch_close_eyes.mp3', 'seer_open_eyes.mp3'], 'witch-seer'),
       }),
     )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenLastCalledWith([
       'witch_close_eyes.mp3',
+      'seer_open_eyes.mp3',
+    ])
+
+    // 5. SEER → GUARD (close seer + open guard)
+    gameStore.setState(
+      makeState({
+        audioSequence: makeSequence(['seer_close_eyes.mp3', 'guard_open_eyes.mp3'], 'seer-guard'),
+      }),
+    )
+    await nextTick()
+    expect(mockPlaySequential).toHaveBeenLastCalledWith([
+      'seer_close_eyes.mp3',
       'guard_open_eyes.mp3',
     ])
 
@@ -575,26 +579,26 @@ describe('useAudioService', () => {
     setupComposable()
 
     // Full sequence when guard is last role:
-    // 1. WITCH_ACT → GUARD_PICK: witch_close_eyes.mp3 + guard_open_eyes.mp3
+    // 1. SEER_RESULT → GUARD_PICK: seer_close_eyes.mp3 + guard_open_eyes.mp3
     // 2. GUARD_PICK completion: guard_close_eyes.mp3 (ONCE)
     // 3. DAY transition: rooster_crowing.mp3 + day_time.mp3
 
-    // Step 1: Witch to Guard transition
-    const witchToGuardSeq = makeSequence(
-      ['witch_close_eyes.mp3', 'guard_open_eyes.mp3'],
-      'seq-witch-to-guard-001',
+    // Step 1: Seer to Guard transition
+    const seerToGuardSeq = makeSequence(
+      ['seer_close_eyes.mp3', 'guard_open_eyes.mp3'],
+      'seq-seer-to-guard-001',
     )
     gameStore.setState(
       makeState({
         phase: 'NIGHT',
         nightPhase: { subPhase: 'GUARD_PICK', dayNumber: 1 },
-        audioSequence: witchToGuardSeq,
+        audioSequence: seerToGuardSeq,
       }),
     )
     await nextTick()
     expect(mockPlaySequential).toHaveBeenCalledTimes(1)
     expect(mockPlaySequential).toHaveBeenLastCalledWith([
-      'witch_close_eyes.mp3',
+      'seer_close_eyes.mp3',
       'guard_open_eyes.mp3',
     ])
 
@@ -689,5 +693,186 @@ describe('useAudioService', () => {
     // New audio should play
     expect(mockPlaySequential).toHaveBeenCalledTimes(1)
     expect(mockPlaySequential).toHaveBeenLastCalledWith(['new_audio.mp3'])
+  })
+
+  // ── Tab-wake no-side-effect recovery (PR C) ──────────────────────────────
+
+  /**
+   * Test A — "no stale replay after tab wake"
+   *
+   * Constraint (from plan): If a player resumes their phone during the game,
+   * audio cues that already played on other players' phones must NOT replay
+   * on the resumed phone.
+   *
+   * Mechanism: on visibilitychange→hidden the composable pre-dedupes every id
+   * in the current audioReplayBuffer into playedIds. When refreshState() lands
+   * the same buffer after reconnect, the audioReplayBuffer watcher's tryPlay
+   * calls are all dedup-skipped. Only ids that arrive AFTER the wake (new ids)
+   * are absent from playedIds and will play normally.
+   */
+  it('does not replay stale buffer cues after tab wake (pre-dedup on hidden)', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    // 1. Populate the replay buffer with 3 cues before the composable mounts.
+    const buf = [
+      makeSequence(['seer_open_eyes.mp3'], 'seq-1'),
+      makeSequence(['witch_open_eyes.mp3'], 'seq-2'),
+      makeSequence(['guard_open_eyes.mp3'], 'seq-3'),
+    ]
+    gameStore.setState(makeState({ audioReplayBuffer: buf }))
+    await nextTick()
+
+    // 2. Trigger one live audioSequence so the composable has at least one
+    //    played id (proves the composable is active / watchers are running).
+    const liveSeq = makeSequence(['goes_dark_close_eyes.mp3'], 'seq-live-pre')
+    gameStore.setState(makeState({ audioSequence: liveSeq, audioReplayBuffer: buf }))
+    await nextTick()
+    expect(mockPlaySequential).toHaveBeenCalledWith(['goes_dark_close_eyes.mp3'])
+
+    // 3. Tab goes to background — composable should pre-dedup buffer ids.
+    mockPlaySequential.mockClear()
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true,
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    // 4. Simulate refreshState() landing after STOMP reconnect on resume.
+    //    Same 3 cues + 1 new one (seq-4). The 3 stale cues must NOT play.
+    const bufAfterResume = [...buf, makeSequence(['wolf_open_eyes.mp3'], 'seq-4')]
+    gameStore.setState(makeState({ audioReplayBuffer: bufAfterResume }))
+    await nextTick()
+
+    // 5. Tab becomes visible.
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'visible',
+      configurable: true,
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await nextTick()
+
+    // Assert: zero new play() calls — all 3 stale cues were pre-deduped.
+    // (seq-4 is in the buffer but not in a separate audioSequence broadcast,
+    // so it also won't play here — it would only play if a live audioSequence
+    // or a new-tail-id replay watcher triggers tryPlay with seq-4.)
+    expect(mockPlaySequential).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Test B — "live cue after tab wake plays"
+   *
+   * After the tab wakes and the stale buffer is pre-deduped, a brand-new
+   * audioSequence broadcast (new id, never seen by this device) must still
+   * play normally. This proves the fix doesn't over-suppress future audio.
+   */
+  it('plays a live cue that arrives after tab wake (new id not in playedIds)', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    // 1. Set up buffer with 3 stale cues.
+    const buf = [
+      makeSequence(['seer_open_eyes.mp3'], 'seq-1'),
+      makeSequence(['witch_open_eyes.mp3'], 'seq-2'),
+      makeSequence(['guard_open_eyes.mp3'], 'seq-3'),
+    ]
+    gameStore.setState(makeState({ audioReplayBuffer: buf }))
+    await nextTick()
+
+    // 2. Tab goes hidden → pre-dedup triggered.
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true,
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    // 3. Tab becomes visible again.
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'visible',
+      configurable: true,
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await nextTick()
+    mockPlaySequential.mockClear()
+
+    // 4. A fresh live audioSequence arrives after wake (new id — not in playedIds).
+    const liveAfterWake = makeSequence(['wolf_howl.mp3'], 'seq-live-after-wake')
+    gameStore.setState(makeState({ audioSequence: liveAfterWake, audioReplayBuffer: buf }))
+    await nextTick()
+
+    // Assert: exactly this one cue plays — the live post-wake cue.
+    expect(mockPlaySequential).toHaveBeenCalledTimes(1)
+    expect(mockPlaySequential).toHaveBeenCalledWith(['wolf_howl.mp3'])
+  })
+
+  // ── BGM track source (gameStore primary, roomStore fallback) ────────────
+  //
+  // roomStore is in-memory only and is wiped by a page reload. Without the
+  // gameStore fallback below, a mid-game refresh entering NIGHT would never
+  // call startBgm because roomStore.room is null. The backend now mirrors
+  // Room.config.bgmTrack onto the /api/game/{id}/state response so
+  // gameStore.state.bgmTrack survives the reload.
+  //
+  // Helper: build a minimal Room with a bgmTrack on config.
+  function makeRoom(track: string | null): Room {
+    return {
+      roomId: 'r1',
+      roomCode: 'ABCD',
+      hostId: 'host',
+      status: 'IN_GAME',
+      players: [],
+      config: {
+        totalPlayers: 9,
+        roles: [],
+        bgmTrack: track,
+      },
+    }
+  }
+
+  it('NIGHT phase starts BGM from gameStore.state.bgmTrack (post-reload path)', async () => {
+    const gameStore = useGameStore()
+    // roomStore is empty — simulates a mid-game page reload where the lobby
+    // state never re-hydrated.
+    setupComposable()
+
+    gameStore.setState(makeState({ phase: 'NIGHT', bgmTrack: 'suspicion.mp3' }))
+    await nextTick()
+
+    expect(mockStartBgm).toHaveBeenCalledWith('suspicion.mp3')
+  })
+
+  it('NIGHT phase falls back to roomStore.room.config.bgmTrack when gameStore has no track', async () => {
+    const gameStore = useGameStore()
+    const roomStore = useRoomStore()
+    roomStore.setRoom(makeRoom('心愿便利贴.mp3'))
+    setupComposable()
+
+    gameStore.setState(makeState({ phase: 'NIGHT' })) // no bgmTrack
+    await nextTick()
+
+    expect(mockStartBgm).toHaveBeenCalledWith('心愿便利贴.mp3')
+  })
+
+  it('NIGHT phase with no track in either store does not start BGM', async () => {
+    const gameStore = useGameStore()
+    setupComposable()
+
+    gameStore.setState(makeState({ phase: 'NIGHT' })) // no bgmTrack anywhere
+    await nextTick()
+
+    expect(mockStartBgm).not.toHaveBeenCalled()
+  })
+
+  it('gameStore.state.bgmTrack takes precedence over roomStore (the wire is authoritative)', async () => {
+    const gameStore = useGameStore()
+    const roomStore = useRoomStore()
+    roomStore.setRoom(makeRoom('心愿便利贴.mp3'))
+    setupComposable()
+
+    gameStore.setState(makeState({ phase: 'NIGHT', bgmTrack: 'suspicion.mp3' }))
+    await nextTick()
+
+    expect(mockStartBgm).toHaveBeenCalledWith('suspicion.mp3')
+    expect(mockStartBgm).not.toHaveBeenCalledWith('心愿便利贴.mp3')
   })
 })
