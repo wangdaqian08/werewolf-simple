@@ -87,6 +87,9 @@ export interface GameSetupOptions {
   /** Win condition mode. Defaults to 'CLASSIC'; pass 'HARD_MODE' to flip the
    *  CreateRoom DOM toggle before submission. */
   winCondition?: 'CLASSIC' | 'HARD_MODE'
+  /** 女巫自救 toggle. Defaults to true (room default); pass false to flip the
+   *  CreateRoom DOM toggle so the witch cannot self-save. */
+  witchSelfSaveAllowed?: boolean
   /**
    * Optional BGM track filename (e.g. 'suspicion.mp3'). When set, the host
    * picks the matching option from the BGM dropdown on the CreateRoom page
@@ -136,7 +139,11 @@ export async function setupGame(
   // toggle. Reveal it if present (no-op when already shown) so the fill below
   // doesn't hang.
   const guestToggle = hostPage.getByRole('button', { name: /Continue as guest|继续以访客/i })
-  if (await guestToggle.count()) await guestToggle.first().click().catch(() => {})
+  if (await guestToggle.count())
+    await guestToggle
+      .first()
+      .click()
+      .catch(() => {})
 
   // Login
   await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
@@ -208,6 +215,22 @@ export async function setupGame(
     if ((await toggle.count()) > 0) {
       await toggle.click()
       await hostPage.waitForTimeout(300)
+    }
+  }
+
+  // Flip the 女巫自救 toggle when self-save is explicitly disabled. Default is
+  // allowed (true), so only `false` needs a click. Assert via the dedicated
+  // data attribute — the row shares .role-row markup with the WITCH role row,
+  // so testid targeting avoids the text-filter ambiguity.
+  if (opts.witchSelfSaveAllowed === false) {
+    const selfSaveToggle = hostPage.getByTestId('witchSelfSave-toggle')
+    await selfSaveToggle.waitFor({ state: 'visible', timeout: 5_000 })
+    const current = await selfSaveToggle.getAttribute('data-witch-self-save')
+    if (current !== 'false') {
+      await selfSaveToggle.click()
+      await expect(selfSaveToggle).toHaveAttribute('data-witch-self-save', 'false', {
+        timeout: 5_000,
+      })
     }
   }
 

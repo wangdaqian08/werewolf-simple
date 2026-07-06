@@ -212,6 +212,40 @@ describe('assertGameInvariantsOnState — violations', () => {
     ).not.toThrow()
   })
 
+  it('dead sheriff during DAY_DISCUSSION/BADGE_HANDOVER does NOT throw (night-death handover)', () => {
+    expect(() =>
+      assertGameInvariantsOnState(
+        baseState({
+          phase: 'DAY_DISCUSSION',
+          nightPhase: null,
+          dayPhase: { subPhase: 'BADGE_HANDOVER', dayNumber: 2 },
+          players: [
+            { userId: 'u1', isAlive: false, isSheriff: true, seatIndex: 1, nickname: 'Sheriff' },
+            { userId: 'u2', isAlive: true, seatIndex: 2 },
+          ],
+        }),
+        newInvariantState(),
+        'night-death-badge-handover',
+      ),
+    ).not.toThrow()
+  })
+
+  it('day-1 NIGHT → SHERIFF_ELECTION is forward (election opens at end of night 1)', () => {
+    let s = newInvariantState()
+    s = assertGameInvariantsOnState(baseState(), s, 'night-1')
+    expect(() =>
+      assertGameInvariantsOnState(
+        baseState({
+          phase: 'SHERIFF_ELECTION',
+          nightPhase: { subPhase: 'COMPLETE', dayNumber: 1 },
+          sheriffElection: { subPhase: 'SIGNUP' },
+        }),
+        s,
+        'sheriff-after-night-1',
+      ),
+    ).not.toThrow()
+  })
+
   it('dead sheriff during GAME_OVER does NOT throw', () => {
     expect(() =>
       assertGameInvariantsOnState(
