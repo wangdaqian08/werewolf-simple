@@ -52,12 +52,13 @@ import org.springframework.test.context.ActiveProfiles
  * and their game-scoped credit transactions — while deliberately KEEPING
  * users and wallets (guest identities are shared across rooms in a session).
  *
- * The `e2e` profile is activated alongside `test` because the TestSupport
- * beans are @Profile("e2e")-gated (see TestSupportControllerProfileTest for
- * the gating pins).
+ * Runs in the ordinary "test" context: the beans are gated
+ * @Profile("(e2e | test) & !prod"), so no extra profile (and no extra Spring
+ * context) is needed — activating "e2e" here would mix application-e2e.yml's
+ * H2 driver settings with CI's Postgres datasource override.
  */
 @SpringBootTest
-@ActiveProfiles("test", "e2e")
+@ActiveProfiles("test")
 class TestSupportCleanupIntegrationTest {
 
     @Autowired lateinit var service: TestSupportService

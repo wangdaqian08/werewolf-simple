@@ -26,11 +26,16 @@ import org.springframework.transaction.annotation.Transactional
  * are shared across rooms within a session, and purchase transactions with
  * no game/activation linkage are wallet history, not game state.
  *
- * Gated to the e2e profile (and never alongside prod) exactly like the
- * DevAuthController hardening — see TestSupportControllerProfileTest.
+ * Gated to the e2e/test profiles (never alongside prod, and no deployment
+ * runs either) in the spirit of the DevAuthController hardening — see
+ * TestSupportControllerProfileTest. The `test` leg lets the backend
+ * integration suite exercise the cascade inside its ordinary cached "test"
+ * context: activating the e2e profile there would mix application-e2e.yml's
+ * H2 driver settings with CI's Postgres SPRING_DATASOURCE_URL override and
+ * the context fails at dialect resolution.
  */
 @Service
-@Profile("e2e & !prod")
+@Profile("(e2e | test) & !prod")
 class TestSupportService(
     private val roomRepository: RoomRepository,
     private val roomPlayerRepository: RoomPlayerRepository,

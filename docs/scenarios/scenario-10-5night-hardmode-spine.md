@@ -116,7 +116,7 @@ case goes to the backend matrix instead.
 
 Both new specs call `DELETE /api/test-support/rooms/{roomCode}` in `afterAll`
 (`helpers/test-support.ts`, warn-never-throw). The endpoint —
-`TestSupportController`, gated `@Profile("e2e & !prod")` — cascades the room's
+`TestSupportController`, gated `@Profile("(e2e | test) & !prod")` (no deployment runs either profile) — cascades the room's
 full game graph (votes, events, eliminations, sheriff rows, night phases,
 game players, games, room players, perk activations and their game-scoped
 credit transactions, the room itself) while **keeping users and wallets**

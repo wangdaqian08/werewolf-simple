@@ -14,12 +14,12 @@ import org.springframework.web.bind.annotation.RestController
  * locally-reused backend doesn't accumulate rows between runs (CI backends
  * are per-shard H2 create-drop and die with the process anyway).
  *
- * Registered ONLY under the e2e profile and never alongside prod — pinned by
- * TestSupportControllerProfileTest.
+ * Registered only under the e2e/test profiles and never alongside prod —
+ * pinned by TestSupportControllerProfileTest.
  */
 @RestController
 @RequestMapping("/api/test-support")
-@Profile("e2e & !prod")
+@Profile("(e2e | test) & !prod")
 class TestSupportController(private val testSupportService: TestSupportService) {
 
     @DeleteMapping("/rooms/{roomCode}")

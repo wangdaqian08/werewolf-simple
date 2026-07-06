@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test'
 /**
  * Ask the e2e backend to purge every row the test room left behind —
  * DELETE /api/test-support/rooms/{roomCode}, served by the
- * @Profile("e2e & !prod") TestSupportController. Users and wallets survive
+ * @Profile("(e2e | test) & !prod") TestSupportController. Users and wallets survive
  * by design (guest identities are shared across rooms in a session).
  *
  * Warn-never-throw: cleanup must not fail a suite. CI backends are

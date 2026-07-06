@@ -10,10 +10,10 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 
 /**
  * Guards the deployment invariant: the destructive test-support cleanup
- * endpoint (DELETE /api/test-support/rooms/{code}) is registered ONLY under
- * the `e2e` profile — never in dev or prod, and not even when e2e is listed
- * alongside prod. Same bean-registration technique as
- * DevAuthControllerProfileTest.
+ * endpoint (DELETE /api/test-support/rooms/{code}) is registered only under
+ * the `e2e` or `test` profiles (neither is ever a deployment) — never in dev
+ * or prod, and not even when e2e is listed alongside prod. Same
+ * bean-registration technique as DevAuthControllerProfileTest.
  */
 class TestSupportControllerProfileTest {
 
@@ -29,6 +29,13 @@ class TestSupportControllerProfileTest {
     @Test
     fun `registered under the e2e profile`() {
         contextWith("e2e").use { ctx ->
+            assertThat(ctx.getBeanNamesForType(TestSupportController::class.java)).isNotEmpty()
+        }
+    }
+
+    @Test
+    fun `registered under the test profile (backend integration suite)`() {
+        contextWith("test").use { ctx ->
             assertThat(ctx.getBeanNamesForType(TestSupportController::class.java)).isNotEmpty()
         }
     }
