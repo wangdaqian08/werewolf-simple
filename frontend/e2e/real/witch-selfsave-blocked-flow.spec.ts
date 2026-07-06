@@ -170,7 +170,7 @@ test.describe('Witch self-save blocked — victim witch poisons the guard', () =
     ).toBeVisible({ timeout: 5_000 })
     await captureSnapshot(ctx.pages, testInfo, 'wssb-02-two-dead-revealed')
 
-    invariants = await assertGameInvariants(hostPage, gameId, invariants, 'revealed')
+    await assertGameInvariants(hostPage, gameId, invariants, 'revealed')
     await ctx.assertNoBackendErrors(testInfo)
   })
 })
