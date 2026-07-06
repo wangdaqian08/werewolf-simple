@@ -26,4 +26,13 @@ object TestConstants {
     const val ROOM_CODE_LENGTH = 3
     const val DEFAULT_TOTAL_PLAYERS = 6
     const val INVALID_ROOM_CODE = "ZZZ"
+
+    // Room-code sequence for tests that seed Room rows directly (bypassing the
+    // API's generateCode). JVM-global so every class sharing the schema draws
+    // from ONE sequence — per-class copies emit identical codes, and duplicate
+    // codes break findActiveByRoomCode's at-most-one invariant, 500-ing
+    // unrelated createRoom calls. 400-999 avoids RoomControllerTest's fixed
+    // 111/222/333.
+    private val SEEDED_ROOM_CODE_SEQ = java.util.concurrent.atomic.AtomicInteger(0)
+    fun nextSeededRoomCode(): String = (400 + SEEDED_ROOM_CODE_SEQ.getAndIncrement() % 600).toString()
 }

@@ -24,7 +24,6 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.sql.Timestamp
 import java.time.LocalDateTime
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The scheduled safety nets: (1) activations still ACTIVE with no bound game
@@ -57,18 +56,13 @@ class PerkRefundSweepTest {
     private fun newRoom(host: String): Int {
         val room = roomRepository.save(
             Room(
-                // avoid RoomControllerTest's fixed codes 111/222/333 (shared H2 schema)
-                roomCode = (400 + ROOM_CODE_SEQ.getAndIncrement() % 600).toString(),
+                roomCode = TestConstants.nextSeededRoomCode(),
                 hostUserId = host,
                 totalPlayers = 6,
                 config = GameConfig(),
             ),
         )
         return room.roomId ?: error("room not persisted")
-    }
-
-    companion object {
-        private val ROOM_CODE_SEQ = AtomicInteger(0)
     }
 
     private fun saveActivation(roomId: Int, userId: String, gameId: Int?, price: Int = 30): Int {
@@ -220,5 +214,39 @@ class PerkRefundSweepTest {
             creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(user)
                 .filter { it.type == CreditTxType.REFUND },
         ).hasSize(1)
+    }
+
+    @Test
+    fun `settles a triggered leftover bound to an ended winner game as CONSUMED - no refund`() {
+        val user = newUser()
+        val roomId = newRoom(user)
+        val game = gameRepository.save(
+            Game(roomId = roomId, hostUserId = user).also {
+                it.phase = GamePhase.GAME_OVER
+                it.winner = WinnerSide.VILLAGER
+                it.endedAt = LocalDateTime.now()
+            },
+        )
+        val gameId = game.gameId ?: error("game not persisted")
+        val activation = perkActivationRepository.save(
+            PerkActivation(
+                roomId = roomId, gameId = gameId, userId = user,
+                perkCode = PERK_NIGHT1_IMMUNITY, status = PerkActivationStatus.ACTIVE, pricePaid = 30,
+            ).also { it.triggeredAt = LocalDateTime.now() },
+        )
+        val id = activation.id ?: error("activation not persisted")
+
+        sweep.settleLeftoversForEndedGames()
+
+        // Winner set + triggered → the sweep's `cancelled = game.winner == null`
+        // mapping must land on CONSUMED: credits stay spent, no REFUND row.
+        val settled = perkActivationRepository.findById(id).orElseThrow()
+        assertThat(settled.status).isEqualTo(PerkActivationStatus.CONSUMED)
+        assertThat(settled.settledAt).isNotNull()
+        assertThat(walletService.balance(user)).isEqualTo(0)
+        assertThat(
+            creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(user)
+                .filter { it.type == CreditTxType.REFUND },
+        ).isEmpty()
     }
 }

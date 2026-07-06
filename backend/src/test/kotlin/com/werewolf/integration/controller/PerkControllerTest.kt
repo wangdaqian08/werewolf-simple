@@ -260,10 +260,13 @@ class PerkControllerTest {
         val (token, userId) = login("PerkMyCap")
         // Seed straight through the repository — the cap is a read-side contract,
         // independent of how the rows were created (FCFS would block 51 buys).
+        // Sentinel roomIds (roomId has no FK): real ids start at 1 in the shared
+        // schema, and squatting an ACTIVE perk on a real room would poison that
+        // room's FCFS exclusivity check for whichever test legitimately owns it.
         repeat(51) {
             perkActivationRepository.save(
                 com.werewolf.model.PerkActivation(
-                    roomId = 1, userId = userId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+                    roomId = 910_000 + it, userId = userId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
                 ),
             )
         }
@@ -302,14 +305,15 @@ class PerkControllerTest {
         val (_, otherId) = login("PerkMyGuestOther")
         assertThat(userId).startsWith("guest:")
 
+        // Sentinel roomIds (no FK) — never squat an ACTIVE perk on a real room.
         perkActivationRepository.save(
             com.werewolf.model.PerkActivation(
-                roomId = 1, userId = userId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+                roomId = 920_000, userId = userId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
             ),
         )
         perkActivationRepository.save(
             com.werewolf.model.PerkActivation(
-                roomId = 1, userId = otherId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+                roomId = 920_001, userId = otherId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
             ),
         )
 

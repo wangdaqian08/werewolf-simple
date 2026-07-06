@@ -62,7 +62,7 @@
                   :class="`status-${perk.status.toLowerCase()}`"
                   data-testid="perk-status"
                 >
-                  {{ PERK_STATUS_LABELS[perk.status] }}
+                  {{ PERK_STATUS_LABELS[perk.status] ?? perk.status }}
                 </span>
               </div>
               <div class="row-sub">
@@ -97,7 +97,7 @@
                 <div class="row-sub">
                   <span>
                     {{ fmtMoney(order) }} ·
-                    {{ ORDER_STATUS_LABELS[order.status] }}
+                    {{ ORDER_STATUS_LABELS[order.status] ?? order.status }}
                   </span>
                   <span>{{ fmtDate(order.createdAt) }}</span>
                 </div>
@@ -164,15 +164,44 @@ function signed(amount: number): string {
   return amount >= 0 ? `+${amount}` : `−${Math.abs(amount)}`
 }
 
+// Stripe minor units are not always hundredths: zero-decimal currencies store
+// whole units, three-decimal currencies store thousandths (per Stripe docs).
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  'bif',
+  'clp',
+  'djf',
+  'gnf',
+  'jpy',
+  'kmf',
+  'krw',
+  'mga',
+  'pyg',
+  'rwf',
+  'ugx',
+  'vnd',
+  'vuv',
+  'xaf',
+  'xof',
+  'xpf',
+])
+const THREE_DECIMAL_CURRENCIES = new Set(['bhd', 'jod', 'kwd', 'omr', 'tnd'])
+
 function fmtMoney(order: { amountCents: number; currency: string }): string {
-  const amount = (order.amountCents / 100).toFixed(2)
-  return order.currency.toLowerCase() === 'usd'
-    ? `$${amount}`
-    : `${amount} ${order.currency.toUpperCase()}`
+  const cur = order.currency.toLowerCase()
+  const amount = ZERO_DECIMAL_CURRENCIES.has(cur)
+    ? String(order.amountCents)
+    : THREE_DECIMAL_CURRENCIES.has(cur)
+      ? (order.amountCents / 1000).toFixed(3)
+      : (order.amountCents / 100).toFixed(2)
+  return cur === 'usd' ? `$${amount}` : `${amount} ${order.currency.toUpperCase()}`
 }
 
 function fmtDate(iso: string): string {
-  const d = new Date(iso)
+  // Backend serializes zone-less LocalDateTime (UTC wall-clock in the prod
+  // containers) — treat a missing zone designator as UTC so the browser
+  // renders the viewer's local time instead of the server's wall-clock.
+  const hasZone = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(iso)
+  const d = new Date(hasZone ? iso : `${iso}Z`)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleString('zh-CN', {
     year: 'numeric',
@@ -242,6 +271,8 @@ onMounted(async () => {
   max-width: 360px;
 }
 
+/* 44px min tap target (codebase floor for secondary controls) — the visual
+   stays a compact text link, the extra height is transparent hit area. */
 .back-btn {
   background: none;
   border: none;
@@ -250,7 +281,11 @@ onMounted(async () => {
   cursor: pointer;
   font-family: inherit;
   padding: 0;
-  margin-bottom: 0.75rem;
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 0.25rem;
   white-space: nowrap;
 }
 

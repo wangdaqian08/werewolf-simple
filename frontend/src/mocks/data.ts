@@ -1245,16 +1245,9 @@ export const MOCK_MY_PERKS: MyPerkActivation[] = [
   },
 ]
 
+// Newest-first, mirroring the real endpoint's contract
+// (PaymentService.listOrders / findTop50ByUserIdOrderByCreatedAtDesc).
 export const MOCK_PAYMENT_ORDERS: PaymentOrderSummary[] = [
-  {
-    orderNo: 'WW20260610001',
-    productName: '畅玩包 / Plus Pack',
-    credits: 300,
-    amountCents: 999,
-    currency: 'usd',
-    status: 'COMPLETED',
-    createdAt: '2026-06-10T19:55:00',
-  },
   {
     orderNo: 'WW20260611002',
     productName: '入门包 / Starter Pack',
@@ -1263,5 +1256,14 @@ export const MOCK_PAYMENT_ORDERS: PaymentOrderSummary[] = [
     currency: 'usd',
     status: 'CREATED',
     createdAt: '2026-06-11T10:00:00',
+  },
+  {
+    orderNo: 'WW20260610001',
+    productName: '畅玩包 / Plus Pack',
+    credits: 300,
+    amountCents: 999,
+    currency: 'usd',
+    status: 'COMPLETED',
+    createdAt: '2026-06-10T19:55:00',
   },
 ]

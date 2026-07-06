@@ -65,8 +65,7 @@ class PerkSettlementServiceIntegrationTest {
     private fun newRoom(hostId: String): Int {
         val room = roomRepository.save(
             Room(
-                // avoid RoomControllerTest's fixed codes 111/222/333 (shared H2 schema)
-                roomCode = (400 + ROOM_CODE_SEQ.getAndIncrement() % 600).toString(),
+                roomCode = TestConstants.nextSeededRoomCode(),
                 hostUserId = hostId,
                 totalPlayers = 6,
                 config = GameConfig(perksAllowed = true),
@@ -88,7 +87,6 @@ class PerkSettlementServiceIntegrationTest {
 
     companion object {
         private val GAME_ID_SEQ = AtomicInteger(900_000)
-        private val ROOM_CODE_SEQ = AtomicInteger(0)
     }
 
     /** Full purchase path: fund 100, activate (-30), bind to [gameId] with [role]. */

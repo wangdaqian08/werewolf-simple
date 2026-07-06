@@ -272,3 +272,83 @@ describe('AccountView', () => {
     expect(h.listOrdersMock).not.toHaveBeenCalled()
   })
 })
+
+describe('AccountView money formatting and status fallbacks', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    h.getWalletMock.mockReset().mockResolvedValue(WALLET)
+    h.getMyPerksMock.mockReset().mockResolvedValue([perk('ACTIVE')])
+    h.listOrdersMock.mockReset().mockResolvedValue(ORDERS)
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('renders zero-decimal (JPY) and three-decimal (KWD) Stripe amounts in whole/thousandth units', async () => {
+    h.listOrdersMock.mockResolvedValue([
+      {
+        orderNo: 'J1',
+        productName: 'JP Pack',
+        credits: 100,
+        amountCents: 500, // Stripe zero-decimal: ¥500, NOT ¥5.00
+        currency: 'jpy',
+        status: 'COMPLETED',
+        createdAt: '2026-06-10T10:00:00',
+      },
+      {
+        orderNo: 'K1',
+        productName: 'KW Pack',
+        credits: 100,
+        amountCents: 12345, // Stripe three-decimal: 12.345 KWD
+        currency: 'kwd',
+        status: 'COMPLETED',
+        createdAt: '2026-06-09T10:00:00',
+      },
+    ])
+    const { wrapper } = await mountAccount()
+    const rows = wrapper.findAll('[data-testid="order-row"]')
+    expect(rows[0]!.text()).toContain('500 JPY')
+    expect(rows[0]!.text()).not.toContain('5.00')
+    expect(rows[1]!.text()).toContain('12.345 KWD')
+  })
+
+  it('falls back to the raw status code for unknown perk/order statuses (deploy skew)', async () => {
+    // Simulates a newer backend enum member reaching an older cached bundle.
+    h.getMyPerksMock.mockResolvedValue([{ ...perk('ACTIVE'), status: 'SUPERSEDED' }])
+    h.listOrdersMock.mockResolvedValue([
+      {
+        orderNo: 'X1',
+        productName: 'Pack',
+        credits: 100,
+        amountCents: 499,
+        currency: 'usd',
+        status: 'REFUNDED',
+        createdAt: '2026-06-10T10:00:00',
+      },
+    ])
+    const { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="perk-status"]').text()).toBe('SUPERSEDED')
+    expect(wrapper.find('[data-testid="order-row"]').text()).toContain('REFUNDED')
+  })
+
+  it('still renders the page when the perks fetch fails (per-section fallback)', async () => {
+    h.getMyPerksMock.mockRejectedValue(new Error('network'))
+    const { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="account-perks"]').text()).toContain('无法加载道具记录')
+    expect(wrapper.find('[data-testid="perk-row"]').exists()).toBe(false)
+    // Other sections are unaffected and loading cleared (no unhandled rejection).
+    expect(wrapper.find('[data-testid="account-balance"]').text()).toContain('250')
+    expect(wrapper.find('[data-testid="order-row"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('加载中')
+  })
+
+  it('still renders the page when the orders fetch fails (per-section fallback)', async () => {
+    h.listOrdersMock.mockRejectedValue(new Error('network'))
+    const { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="account-payments"]').text()).toContain('无法加载充值记录')
+    expect(wrapper.find('[data-testid="order-row"]').exists()).toBe(false)
+    // Other sections are unaffected and loading cleared (no unhandled rejection).
+    expect(wrapper.find('[data-testid="account-balance"]').text()).toContain('250')
+    expect(wrapper.find('[data-testid="perk-row"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('加载中')
+  })
+})

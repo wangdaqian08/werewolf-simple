@@ -301,6 +301,37 @@ class PerkServiceIntegrationTest {
     }
 
     @Test
+    fun `refundActiveForUser never touches a game-bound activation`() {
+        ensurePerk()
+        val host = newUser("h")
+        val roomId = newRoom(host)
+        fund(host, 100)
+        perkService.activate(host, roomId, PERK_NIGHT1_IMMUNITY)
+
+        val gameId = 994_000 + seq
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
+        )
+
+        // Models the kick/sweep refund path firing after a concurrent game
+        // start bound the row (both read the room as WAITING before the start
+        // committed): bound rows belong to game-end settlement — a mid-game
+        // refund here would both strip the paid immunity from the kill
+        // computation and race the settle paths.
+        perkService.refundActiveForUser(roomId, host)
+
+        val row = perkActivationRepository.findByGameId(gameId).single()
+        assertThat(row.status).isEqualTo(PerkActivationStatus.ACTIVE)
+        assertThat(row.gameId).isEqualTo(gameId)
+        assertThat(walletService.balance(host)).isEqualTo(70) // still charged
+        assertThat(
+            creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(host)
+                .filter { it.type == CreditTxType.REFUND },
+        ).isEmpty()
+    }
+
+    @Test
     fun `markNight1Triggered is idempotent - second call keeps the first timestamp, one CONSUME, no refund`() {
         ensurePerk()
         val host = newUser("h")

@@ -164,11 +164,17 @@ class PerkService(
         perkActivationRepository.markTriggered(gameId, PERK_NIGHT1_IMMUNITY, userIds)
     }
 
-    /** Refund all of [userId]'s live activations in [roomId] (kick / leave). */
+    /**
+     * Refund all of [userId]'s live UNBOUND activations in [roomId] (kick /
+     * sweep). Game-bound rows are excluded: they belong to game-end
+     * settlement, and refunding one here (kick or sweep racing a concurrent
+     * game start that just bound it) would strip the paid immunity from the
+     * kill computation mid-game.
+     */
     @Transactional
     fun refundActiveForUser(roomId: Int, userId: String) {
         perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)
-            .filter { it.userId == userId }
+            .filter { it.userId == userId && it.gameId == null }
             .forEach { refund(it) }
     }
 
