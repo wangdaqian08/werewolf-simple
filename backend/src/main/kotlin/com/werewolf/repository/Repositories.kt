@@ -13,6 +13,10 @@ interface UserRepository : JpaRepository<User, String>
 interface RoomRepository : JpaRepository<Room, Int> {
     fun findByRoomCode(roomCode: String): Optional<Room>
 
+    /** All rooms ever created under [roomCode] — codes recycle, so finished
+     *  rooms accumulate per code. Used by the e2e TestSupport cleanup. */
+    fun findAllByRoomCode(roomCode: String): List<Room>
+
     /**
      * Resolve the room currently "using" [code]. Room codes are reusable: once a
      * room's game has ended, its code is free to recycle (see [findActiveByRoomCode]
@@ -72,29 +76,37 @@ interface RoomPlayerRepository : JpaRepository<RoomPlayer, Int> {
     @Modifying
     @Query("UPDATE RoomPlayer rp SET rp.seatIndex = :seatIndex WHERE rp.roomId = :roomId AND rp.userId = :userId")
     fun updateSeatIndex(roomId: Int, userId: String, seatIndex: Int): Int
+
+    fun deleteByRoomId(roomId: Int): Long
 }
 
 interface GameRepository : JpaRepository<Game, Int> {
     fun findByRoomIdAndEndedAtIsNull(roomId: Int): Optional<Game>
     fun findByEndedAtIsNull(): List<Game>
+    fun findByRoomId(roomId: Int): List<Game>
 }
 
 interface GamePlayerRepository : JpaRepository<GamePlayer, Int> {
     fun findByGameId(gameId: Int): List<GamePlayer>
     fun findByGameIdAndUserId(gameId: Int, userId: String): Optional<GamePlayer>
+    fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }
 
 interface NightPhaseRepository : JpaRepository<NightPhase, Int> {
     fun findByGameIdAndDayNumber(gameId: Int, dayNumber: Int): Optional<NightPhase>
     fun findByGameId(gameId: Int): List<NightPhase>
+    fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }
 
 interface SheriffElectionRepository : JpaRepository<SheriffElection, Int> {
     fun findByGameId(gameId: Int): Optional<SheriffElection>
+    fun findByGameIdIn(gameIds: Collection<Int>): List<SheriffElection>
+    fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }
 
 interface SheriffCandidateRepository : JpaRepository<SheriffCandidate, Int> {
     fun findByElectionId(electionId: Int): List<SheriffCandidate>
+    fun deleteByElectionIdIn(electionIds: Collection<Int>): Long
 }
 
 interface VoteRepository : JpaRepository<Vote, Int> {
@@ -110,15 +122,19 @@ interface VoteRepository : JpaRepository<Vote, Int> {
         dayNumber: Int,
         voterUserId: String,
     ): Optional<Vote>
+
+    fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }
 
 interface EliminationHistoryRepository : JpaRepository<EliminationHistory, Int> {
     fun findByGameId(gameId: Int): List<EliminationHistory>
     fun findByGameIdAndDayNumber(gameId: Int, dayNumber: Int): Optional<EliminationHistory>
+    fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }
 
 interface GameEventRepository : JpaRepository<GameEvent, Int> {
     fun findByGameIdOrderByCreatedAtAsc(gameId: Int): List<GameEvent>
+    fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }
 
 interface WalletRepository : JpaRepository<Wallet, String> {
@@ -146,6 +162,9 @@ interface WalletRepository : JpaRepository<Wallet, String> {
 interface CreditTransactionRepository : JpaRepository<CreditTransaction, Int> {
     fun findTop20ByUserIdOrderByCreatedAtDesc(userId: String): List<CreditTransaction>
     fun findByGameIdAndType(gameId: Int, type: CreditTxType): List<CreditTransaction>
+
+    fun deleteByGameIdIn(gameIds: Collection<Int>): Long
+    fun deleteByPerkActivationIdIn(perkActivationIds: Collection<Int>): Long
 }
 
 interface PerkRepository : JpaRepository<Perk, String> {
@@ -208,6 +227,9 @@ interface PerkActivationRepository : JpaRepository<PerkActivation, Int> {
     fun findUnsettledForEndedGames(): List<PerkActivation>
 
     fun findTop50ByUserIdOrderByCreatedAtDesc(userId: String): List<PerkActivation>
+
+    fun findByRoomId(roomId: Int): List<PerkActivation>
+    fun deleteByRoomId(roomId: Int): Long
 }
 
 interface ProductRepository : JpaRepository<Product, Int> {
@@ -262,4 +284,6 @@ interface GameSettlementRepository : JpaRepository<GameSettlement, Int> {
         nativeQuery = true,
     )
     fun tryInsert(gameId: Int): Int
+
+    fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }

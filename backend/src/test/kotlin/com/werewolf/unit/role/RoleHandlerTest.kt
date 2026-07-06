@@ -115,6 +115,22 @@ class RoleHandlerTest {
         }
 
         @Test
+        fun `wolf kill - accepts a fellow WEREWOLF as target (内刀 - no role check on the victim)`() {
+            val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
+            val wolf1 = player("wolf1", 1, PlayerRole.WEREWOLF)
+            val wolf2 = player("wolf2", 2, PlayerRole.WEREWOLF)
+            val ctx = GameContext(game(), room(), listOf(wolf1, wolf2), nightPhase = np)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("wolf1", ActionType.WOLF_KILL, "wolf2"), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+            val captor = argumentCaptor<NightPhase>()
+            verify(nightPhaseRepository).save(captor.capture())
+            assertThat(captor.firstValue.wolfTargetUserId).isEqualTo("wolf2")
+        }
+
+        @Test
         fun `wolf kill - second wolf kill rejected after first confirmed`() {
             val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
             val wolf1 = player("wolf1", 1, PlayerRole.WEREWOLF)
