@@ -188,6 +188,157 @@ class PerkControllerTest {
     }
 
     @Test
+    fun `GET perks-my returns the caller's activations with all 8 fields`() {
+        val (tokenA, userIdA) = login("PerkMyA")
+        val (tokenB, userIdB) = login("PerkMyB")
+        val (roomIdA, _) = createRoom(tokenA)
+        val (roomIdB, codeB) = createRoom(tokenB)
+        join(tokenA, codeB)
+        walletService.credit(userIdA, 100, com.werewolf.model.CreditTxType.GAME_REWARD)
+        walletService.credit(userIdB, 100, com.werewolf.model.CreditTxType.GAME_REWARD)
+
+        // A activates in room A; B activates in room B
+        activate(tokenA, roomIdA)
+        activate(tokenB, roomIdB)
+
+        val resp = restTemplate.exchange(
+            "/api/perks/my",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Nothing>(headers(tokenA)),
+            List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        @Suppress("UNCHECKED_CAST")
+        val rows = resp.body!! as List<Map<String, Any?>>
+
+        // Only A's activation returned (not B's)
+        assertThat(rows).hasSize(1)
+        val row = rows.single()
+        assertThat(row["perkCode"]).isEqualTo(PERK_NIGHT1_IMMUNITY)
+        assertThat(row["perkName"]).isNotNull()
+        assertThat(row["status"]).isEqualTo("ACTIVE")
+        assertThat(row["pricePaid"]).isEqualTo(30)
+        assertThat(row["roomId"]).isNotNull()
+        // gameId is null pre-game — key must be present
+        assertThat(row.containsKey("gameId")).isTrue()
+        assertThat(row["createdAt"]).isNotNull()
+        // settledAt is null pre-game — key must be present
+        assertThat(row.containsKey("settledAt")).isTrue()
+    }
+
+    @Test
+    fun `GET perks-my returns activations in most-recent-first order`() {
+        val (token, userId) = login("PerkMyOrder")
+        walletService.credit(userId, 200, com.werewolf.model.CreditTxType.GAME_REWARD)
+
+        // Seed 3 activations across separate rooms (withdraw after each so we can activate again)
+        repeat(3) {
+            val (roomId, _) = createRoom(token)
+            activate(token, roomId)
+            // Each activation is in its own room; no need to withdraw — rooms are independent.
+        }
+
+        val resp = restTemplate.exchange(
+            "/api/perks/my",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Nothing>(headers(token)),
+            List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        @Suppress("UNCHECKED_CAST")
+        val rows = resp.body!! as List<Map<String, Any?>>
+        assertThat(rows).hasSize(3)
+        // Timestamps must be non-ascending (most-recent first)
+        val timestamps = rows.map { it["createdAt"] as String }
+        assertThat(timestamps).isSortedAccordingTo(Comparator.reverseOrder())
+    }
+
+    @Test
+    fun `GET perks-my caps the response at 50 rows`() {
+        val (token, userId) = login("PerkMyCap")
+        // Seed straight through the repository — the cap is a read-side contract,
+        // independent of how the rows were created (FCFS would block 51 buys).
+        // Sentinel roomIds (roomId has no FK): real ids start at 1 in the shared
+        // schema, and squatting an ACTIVE perk on a real room would poison that
+        // room's FCFS exclusivity check for whichever test legitimately owns it.
+        repeat(51) {
+            perkActivationRepository.save(
+                com.werewolf.model.PerkActivation(
+                    roomId = 910_000 + it, userId = userId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+                ),
+            )
+        }
+
+        val resp = restTemplate.exchange(
+            "/api/perks/my",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Nothing>(headers(token)),
+            List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(resp.body!!).hasSize(50)
+    }
+
+    @Test
+    fun `GET perks-my returns 200 and an empty list when the caller has no activations`() {
+        val (token, _) = login("PerkMyEmpty")
+
+        val resp = restTemplate.exchange(
+            "/api/perks/my",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Nothing>(headers(token)),
+            List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(resp.body!!).isEmpty()
+    }
+
+    @Test
+    fun `GET perks-my for a guest-prefixed userId returns only that guest's activations`() {
+        // /api/user/login mints guest JWTs ("guest:<nickname>") — the same way
+        // every other test in this file authenticates.
+        val (token, userId) = login("PerkMyGuest")
+        val (_, otherId) = login("PerkMyGuestOther")
+        assertThat(userId).startsWith("guest:")
+
+        // Sentinel roomIds (no FK) — never squat an ACTIVE perk on a real room.
+        perkActivationRepository.save(
+            com.werewolf.model.PerkActivation(
+                roomId = 920_000, userId = userId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+            ),
+        )
+        perkActivationRepository.save(
+            com.werewolf.model.PerkActivation(
+                roomId = 920_001, userId = otherId, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+            ),
+        )
+
+        val resp = restTemplate.exchange(
+            "/api/perks/my",
+            org.springframework.http.HttpMethod.GET,
+            HttpEntity<Nothing>(headers(token)),
+            List::class.java,
+        )
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        @Suppress("UNCHECKED_CAST")
+        val rows = resp.body!! as List<Map<String, Any?>>
+        // Scoped to the caller: only the one row seeded for this guest.
+        assertThat(rows).hasSize(1)
+        assertThat(rows.single()["perkCode"]).isEqualTo(PERK_NIGHT1_IMMUNITY)
+    }
+
+    @Test
+    fun `GET perks-my without token is rejected with 401 or 403`() {
+        val resp = restTemplate.getForEntity("/api/perks/my", Map::class.java)
+        assertThat(resp.statusCode).isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN)
+    }
+
+    @Test
     fun `POST withdraw returns 200 and refunds the activation`() {
         val (token, userId) = login("PerkWd")
         val (roomId, _) = createRoom(token)
@@ -200,4 +351,5 @@ class PerkControllerTest {
         assertThat(walletService.balance(userId)).isEqualTo(50) // fully refunded
         assertThat(perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)).isEmpty()
     }
+
 }

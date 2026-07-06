@@ -24,9 +24,11 @@ const val PERK_NIGHT1_IMMUNITY = "NIGHT1_IMMUNITY"
  * Postgres partial unique index ux_one_active_perk_per_room is the prod
  * backstop). Rejection is synchronous — there is no pending state.
  *
- * Lifecycle: ACTIVE → CONSUMED (night 1 resolved) | VOID (holder dealt a wolf
- * role — no refund, the gamble is stated in the perk description; to change
- * that policy, refund in [onGameStart]) | REFUNDED (withdraw / kick / sweep).
+ * Lifecycle: ACTIVE for the whole game (with [markNight1Triggered] recording
+ * whether the perk actually took effect) | VOID = bound but inapplicable
+ * (holder dealt a wolf role) — refunded by settlement at game end | terminal
+ * CONSUMED/REFUNDED set only by PerkSettlementService at game end, except the
+ * pre-game REFUNDED paths (withdraw / kick / sweep of never-started rooms).
  */
 @Service
 class PerkService(
@@ -47,6 +49,24 @@ class PerkService(
             "description" to it.description,
             "priceCredits" to it.priceCredits,
         )
+    }
+
+    /** Caller's own activation history (most recent 50) for the account page. */
+    @Transactional(readOnly = true)
+    fun myActivations(userId: String): List<Map<String, Any?>> {
+        val names = perkRepository.findAll().associate { it.perkCode to it.name }
+        return perkActivationRepository.findTop50ByUserIdOrderByCreatedAtDesc(userId).map {
+            mapOf(
+                "perkCode" to it.perkCode,
+                "perkName" to (names[it.perkCode] ?: it.perkCode),
+                "status" to it.status.name,
+                "pricePaid" to it.pricePaid,
+                "roomId" to it.roomId,
+                "gameId" to it.gameId,
+                "createdAt" to it.createdAt.toString(),
+                "settledAt" to it.settledAt?.toString(),
+            )
+        }
     }
 
     @Transactional
@@ -99,26 +119,35 @@ class PerkService(
 
     /**
      * Bind every live activation in [roomId] to the started game; activations
-     * held by a player dealt a wolf role are VOIDED with no refund (a refund
-     * would also leak the wolf identity via the balance change).
+     * held by a player dealt a wolf role are VOIDED — bound but inapplicable.
+     * The refund happens at game end via PerkSettlementService (refunding now
+     * would leak the wolf identity via the balance change; at game end roles
+     * are public).
+     *
+     * Race-proof: both steps are conditional bulk UPDATEs (no entity
+     * mutation + save). A row refunded by a concurrent withdraw between a
+     * read here and this transaction's commit stays REFUNDED — a stale
+     * full-row UPDATE would resurrect it to ACTIVE/bound and game-end
+     * settlement would refund it a second time (double credit).
      */
     @Transactional
     fun onGameStart(roomId: Int, gameId: Int, players: List<GamePlayer>) {
-        val roleByUser = players.associate { it.userId to it.role }
-        perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE).forEach { activation ->
-            activation.gameId = gameId
-            if (roleByUser[activation.userId] == PlayerRole.WEREWOLF) {
-                activation.status = PerkActivationStatus.VOID
-                log.info("[perk] void (wolf role) game={} user={} perk={}", gameId, activation.userId, activation.perkCode)
-            }
-            perkActivationRepository.save(activation)
+        if (perkActivationRepository.bindToGame(roomId, gameId) == 0) return
+        val wolfUserIds = players.filter { it.role == PlayerRole.WEREWOLF }.map { it.userId }
+        if (wolfUserIds.isEmpty()) return
+        if (perkActivationRepository.voidWolfHolders(gameId, wolfUserIds) > 0) {
+            perkActivationRepository.findByGameId(gameId)
+                .filter { it.status == PerkActivationStatus.VOID }
+                .forEach {
+                    log.info("[perk] void (wolf role) game={} user={} perk={}", gameId, it.userId, it.perkCode)
+                }
         }
     }
 
     /**
      * Users holding live first-night immunity for [gameId]. Includes CONSUMED
      * so re-computations of the night-1 kill list (host reveal, state polls)
-     * stay consistent after the activation is marked consumed.
+     * stay consistent after settlement marks the activation CONSUMED at game end.
      */
     @Transactional(readOnly = true)
     fun night1ImmuneUserIds(gameId: Int): Set<String> =
@@ -128,31 +157,40 @@ class PerkService(
             .map { it.userId }
             .toSet()
 
-    /** Mark night-1 perks consumed once night 1 resolves (triggered or not — they only cover night 1). */
+    /** Idempotent: only flips triggered_at from NULL, only for ACTIVE holders. */
     @Transactional
-    fun consumeNight1Perks(gameId: Int) {
-        perkActivationRepository.findByGameId(gameId)
-            .filter { it.perkCode == PERK_NIGHT1_IMMUNITY && it.status == PerkActivationStatus.ACTIVE }
-            .forEach {
-                it.status = PerkActivationStatus.CONSUMED
-                perkActivationRepository.save(it)
-            }
+    fun markNight1Triggered(gameId: Int, userIds: Set<String>) {
+        if (userIds.isEmpty()) return
+        perkActivationRepository.markTriggered(gameId, PERK_NIGHT1_IMMUNITY, userIds)
     }
 
-    /** Refund all of [userId]'s live activations in [roomId] (kick / leave). */
+    /**
+     * Refund all of [userId]'s live UNBOUND activations in [roomId] (kick /
+     * sweep). Game-bound rows are excluded: they belong to game-end
+     * settlement, and refunding one here (kick or sweep racing a concurrent
+     * game start that just bound it) would strip the paid immunity from the
+     * kill computation mid-game.
+     */
     @Transactional
     fun refundActiveForUser(roomId: Int, userId: String) {
         perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)
-            .filter { it.userId == userId }
+            .filter { it.userId == userId && it.gameId == null }
             .forEach { refund(it) }
     }
 
+    /**
+     * Exactly-once: the wallet credit is gated on settleIfLive's conditional
+     * UPDATE (same pattern as PerkSettlementService) — 0 rows = the activation
+     * is already terminal (a concurrent refund/settle won), so no credit.
+     * NOTE: settleIfLive clears the persistence context — [activation] is
+     * detached after the gate; only plain fields may be read from it.
+     */
     private fun refund(activation: PerkActivation) {
-        activation.status = PerkActivationStatus.REFUNDED
-        perkActivationRepository.save(activation)
+        val id = activation.id ?: error("activation has no id")
+        if (perkActivationRepository.settleIfLive(id, PerkActivationStatus.REFUNDED) == 0) return
         walletService.credit(
             activation.userId, activation.pricePaid, CreditTxType.REFUND,
-            perkActivationId = activation.id, note = activation.perkCode,
+            perkActivationId = id, note = activation.perkCode,
         )
         log.info("[perk] refund room={} user={} perk={} amount={}",
             activation.roomId, activation.userId, activation.perkCode, activation.pricePaid)

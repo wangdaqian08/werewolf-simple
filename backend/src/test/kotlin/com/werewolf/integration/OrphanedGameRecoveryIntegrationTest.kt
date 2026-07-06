@@ -11,15 +11,24 @@ import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
+import com.werewolf.model.CreditTxType
+import com.werewolf.model.Game
 import com.werewolf.model.GamePhase
+import com.werewolf.model.PerkActivation
+import com.werewolf.model.PerkActivationStatus
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.ReadyStatus
+import com.werewolf.model.Room
 import com.werewolf.model.RoomStatus
+import com.werewolf.repository.CreditTransactionRepository
 import com.werewolf.repository.GameRepository
+import com.werewolf.repository.PerkActivationRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.service.OrphanedGameRecovery
+import com.werewolf.service.PERK_NIGHT1_IMMUNITY
 import com.werewolf.service.StompPublisher
+import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.argumentCaptor
@@ -56,6 +65,9 @@ class OrphanedGameRecoveryIntegrationTest {
     @Autowired lateinit var roomRepository: RoomRepository
     @Autowired lateinit var roomPlayerRepository: RoomPlayerRepository
     @Autowired lateinit var orphanedGameRecovery: OrphanedGameRecovery
+    @Autowired lateinit var perkActivationRepository: PerkActivationRepository
+    @Autowired lateinit var walletService: WalletService
+    @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
 
     @SpyBean lateinit var stompPublisher: StompPublisher
 
@@ -160,5 +172,33 @@ class OrphanedGameRecoveryIntegrationTest {
         val secondEndedAt = gameRepository.findById(gameId).orElseThrow().endedAt
         assertThat(secondEndedAt).isEqualTo(firstEndedAt)
         verify(stompPublisher, org.mockito.kotlin.never()).broadcastGame(eq(gameId), org.mockito.kotlin.any())
+    }
+
+    @Test
+    fun `cancelling an in-flight game refunds its bound ACTIVE perk activation`() {
+        // Seed directly: an in-flight game with a bound, still-ACTIVE activation
+        // (the holder was charged at activation time; the credit row is not
+        // needed for the refund path).
+        val user = "guest:orphan-perk-${System.nanoTime()}"
+        // room_code is VARCHAR(3) — use a 3-digit code like the join-flow does.
+        val room = roomRepository.save(Room(roomCode = TestConstants.nextSeededRoomCode(), hostUserId = user, totalPlayers = 6))
+        val roomId = room.roomId ?: error("room not persisted")
+        val game = gameRepository.save(Game(roomId = roomId, hostUserId = user))
+        val gameId = game.gameId ?: error("game not persisted")
+        val activation = perkActivationRepository.save(
+            PerkActivation(roomId = roomId, gameId = gameId, userId = user, perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30),
+        )
+
+        orphanedGameRecovery.cancelInFlightGames()
+
+        assertThat(gameRepository.findById(gameId).orElseThrow().endedAt).isNotNull
+        val settled = perkActivationRepository.findById(activation.id ?: error("no id")).orElseThrow()
+        assertThat(settled.status).isEqualTo(PerkActivationStatus.REFUNDED)
+        assertThat(settled.settledAt).isNotNull()
+        assertThat(walletService.balance(user)).isEqualTo(30)
+        val refunds = creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(user)
+            .filter { it.type == CreditTxType.REFUND }
+        assertThat(refunds).hasSize(1)
+        assertThat(refunds.single().perkActivationId).isEqualTo(settled.id)
     }
 }

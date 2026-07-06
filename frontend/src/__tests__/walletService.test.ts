@@ -39,4 +39,25 @@ describe('walletService', () => {
     expect(mockedHttp.get).toHaveBeenCalledWith('/wallet')
     expect(result).toEqual(expected)
   })
+
+  it('getMyPerks GETs /perks/my and returns the activation list', async () => {
+    const expected = [
+      {
+        perkCode: 'NIGHT1_IMMUNITY',
+        perkName: '首夜免死',
+        status: 'REFUNDED',
+        pricePaid: 30,
+        roomId: 1,
+        gameId: 101,
+        createdAt: '2026-06-10T20:00:00',
+        settledAt: '2026-06-10T22:00:00',
+      },
+    ]
+    mockedHttp.get.mockResolvedValueOnce({ data: expected })
+
+    const result = await walletService.getMyPerks()
+
+    expect(mockedHttp.get).toHaveBeenCalledWith('/perks/my')
+    expect(result).toEqual(expected)
+  })
 })

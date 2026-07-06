@@ -83,6 +83,23 @@ class NightOrchestrator(
             }
             return kills.distinct()
         }
+
+        /**
+         * Users whose night-1 immunity perk was the DECISIVE save: attacked by wolves
+         * on night 1 and not otherwise saved (witch antidote / guard). Settlement
+         * marks these CONSUMED at game end; all other holders are refunded.
+         *
+         * Mirrors [computeKills] exactly: the perk is decisive iff `perkSaved` is
+         * the only one of the three save conditions that holds for the wolf target.
+         */
+        fun night1PerkDecisiveSaves(nightPhase: NightPhase, immuneUserIds: Set<String>): Set<String> {
+            if (nightPhase.dayNumber != 1) return emptySet()
+            val wolfTarget = nightPhase.wolfTargetUserId ?: return emptySet()
+            if (wolfTarget !in immuneUserIds) return emptySet()
+            if (nightPhase.witchAntidoteUsed) return emptySet()
+            if (nightPhase.guardTargetUserId == wolfTarget) return emptySet()
+            return setOf(wolfTarget)
+        }
     }
 
     private val waitingDelayMs: Long get() = timing.waitingDelayMs ?: DEFAULT_WAITING_DELAY_MS
@@ -299,13 +316,17 @@ class NightOrchestrator(
             return
         }
 
-        val pendingKills = computePendingKills(gameId, nightPhase)
+        val immuneUserIds = perkService.night1ImmuneUserIds(gameId)
+        val pendingKills = computePendingKills(nightPhase, immuneUserIds)
 
-        // Night-1 immunity perks are spent once night 1 resolves, triggered or
-        // not — they only ever cover the first night. (computePendingKills
-        // includes CONSUMED holders, so later re-computations stay consistent.)
+        // Record which night-1 immunity perks actually took effect. Status stays
+        // ACTIVE (still immune for re-computations); CONSUMED/REFUNDED is decided
+        // once at game end by PerkSettlementService.
         if (nightPhase.dayNumber == 1) {
-            perkService.consumeNight1Perks(gameId)
+            val saved = night1PerkDecisiveSaves(nightPhase, immuneUserIds)
+            if (saved.isNotEmpty()) {
+                perkService.markNight1Triggered(gameId, saved)
+            }
         }
 
         nightPhase.subPhase = NightSubPhase.COMPLETE

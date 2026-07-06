@@ -64,6 +64,13 @@ class PaymentController(
         return ResponseEntity.ok(mapOf("received" to true))
     }
 
+    /** Caller's own Stripe order history (most recent 50). */
+    @GetMapping("/orders")
+    fun orders(authentication: Authentication): ResponseEntity<Any> {
+        val userId = authentication.principal as String
+        return ResponseEntity.ok(paymentService.listOrders(userId))
+    }
+
     /** Owner-only fulfillment poll for the success page (redirects are not trusted). */
     @GetMapping("/order/{orderNo}")
     fun order(

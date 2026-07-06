@@ -50,6 +50,13 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      // No requiresAuth: the view itself renders a sign-in prompt when the
+      // visitor has no session (the lobby ☰ entry point is login-gated anyway).
+      path: '/account',
+      name: 'account',
+      component: () => import('@/views/AccountView.vue'),
+    },
+    {
       // Stripe Checkout success/cancel redirect target
       path: '/pay/result',
       name: 'pay-result',

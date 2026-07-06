@@ -181,6 +181,23 @@ class PaymentService(
             order.orderNo, order.credits, order.userId, balance)
     }
 
+    /** Caller's own Stripe order history (most recent 50) for the account page. */
+    @Transactional(readOnly = true)
+    fun listOrders(userId: String): List<Map<String, Any?>> {
+        val productNames = productRepository.findAll().associate { it.id to it.name }
+        return paymentOrderRepository.findTop50ByUserIdOrderByCreatedAtDesc(userId).map {
+            mapOf(
+                "orderNo" to it.orderNo,
+                "productName" to (productNames[it.productId] ?: ""),
+                "credits" to it.credits,
+                "amountCents" to it.amountCents,
+                "currency" to it.currency,
+                "status" to it.status.name,
+                "createdAt" to it.createdAt.toString(),
+            )
+        }
+    }
+
     @Transactional(readOnly = true)
     fun orderStatus(userId: String, orderNo: String): Map<String, Any?> {
         val order = paymentOrderRepository.findByOrderNo(orderNo).orElse(null)

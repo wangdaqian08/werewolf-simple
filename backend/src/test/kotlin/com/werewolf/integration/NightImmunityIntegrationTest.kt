@@ -21,7 +21,9 @@ import org.mockito.quality.Strictness
 /**
  * Verifies the night-1 immunity WIRING inside NightOrchestrator.resolveNightKills
  * (the pure kill maths is covered by Night1ImmunityTest): the resolver folds the
- * perk holders into the kill computation and spends the perks on night 1 only.
+ * perk holders into the kill computation and records the decisive-save trigger on
+ * night 1 only — status stays ACTIVE; CONSUMED/REFUNDED is decided at game end
+ * by PerkSettlementService.
  */
 @ExtendWith(MockitoExtension::class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -35,6 +37,7 @@ class NightImmunityIntegrationTest {
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var audioService: com.werewolf.service.AudioService
     @Mock lateinit var perkService: PerkService
+    @Mock lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
 
     private lateinit var nightOrchestrator: NightOrchestrator
 
@@ -59,7 +62,7 @@ class NightImmunityIntegrationTest {
             coroutineScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
             actionLogService = mock(),
             timing = com.werewolf.config.GameTimingProperties(),
-            rewardSettlementService = mock(),
+            rewardSettlementService = rewardSettlementService,
             perkService = perkService,
         )
         whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
@@ -94,7 +97,7 @@ class NightImmunityIntegrationTest {
         }
 
     @Test
-    fun `night 1 - wolf target holding immunity is excluded from kills and the perk is consumed`() {
+    fun `night 1 - wolf target holding immunity is excluded from kills and the trigger is recorded`() {
         whenever(perkService.night1ImmuneUserIds(gameId)).thenReturn(setOf(immuneId))
         val np = nightPhase(dayNumber = 1, wolfTarget = immuneId)
         val ctx = GameContext(
@@ -110,12 +113,87 @@ class NightImmunityIntegrationTest {
         // unit-tested in Night1ImmunityTest) — if resolveNightKills reverted to
         // the perk-blind overload, night1ImmuneUserIds would never be called.
         verify(perkService, atLeastOnce()).night1ImmuneUserIds(gameId)
-        // And night-1 perks are spent whether or not they triggered.
-        verify(perkService).consumeNight1Perks(gameId)
+        // The decisive save is recorded as triggered — status flips happen only
+        // at game-end settlement, never mid-game.
+        verify(perkService).markNight1Triggered(gameId, setOf(immuneId))
     }
 
     @Test
-    fun `night 2 - immunity no longer applies and the perk is not consumed again`() {
+    fun `night 1 - non-immune wolf target records no trigger`() {
+        whenever(perkService.night1ImmuneUserIds(gameId)).thenReturn(setOf(immuneId))
+        val np = nightPhase(dayNumber = 1, wolfTarget = "v2")
+        val ctx = GameContext(
+            game(1), room(),
+            listOf(player(wolfId, 1, PlayerRole.WEREWOLF), player(immuneId, 2), player("v2", 3)),
+            nightPhase = np,
+        )
+
+        nightOrchestrator.resolveNightKills(ctx, np)
+
+        // Holder was never attacked → no trigger; settlement will refund.
+        verify(perkService, never()).markNight1Triggered(any(), any())
+    }
+
+    @Test
+    fun `night 1 decisive save with immediate game over - trigger is recorded before settlement`() {
+        whenever(perkService.night1ImmuneUserIds(gameId)).thenReturn(setOf(immuneId))
+        // Immediate game over on night 1 (e.g. wolf parity short-circuit).
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
+        val np = nightPhase(dayNumber = 1, wolfTarget = immuneId)
+        val ctx = GameContext(
+            game(1), room(),
+            listOf(player(wolfId, 1, PlayerRole.WEREWOLF), player(immuneId, 2), player("v2", 3)),
+            nightPhase = np,
+        )
+
+        nightOrchestrator.resolveNightKills(ctx, np)
+
+        // Ordering invariant in resolveNightKills: the decisive-save trigger
+        // must be recorded BEFORE settle(), or settlement would read a
+        // null triggeredAt and refund a perk that actually took effect.
+        val order = inOrder(perkService, rewardSettlementService)
+        order.verify(perkService).markNight1Triggered(gameId, setOf(immuneId))
+        order.verify(rewardSettlementService).settle(gameId, WinnerSide.WEREWOLF)
+    }
+
+    @Test
+    fun `night 1 - guard also protected the immune wolf target - no trigger is recorded`() {
+        whenever(perkService.night1ImmuneUserIds(gameId)).thenReturn(setOf(immuneId))
+        val np = nightPhase(dayNumber = 1, wolfTarget = immuneId)
+        np.guardTargetUserId = immuneId
+        val ctx = GameContext(
+            game(1), room(),
+            listOf(player(wolfId, 1, PlayerRole.WEREWOLF), player(immuneId, 2), player("v2", 3)),
+            nightPhase = np,
+        )
+
+        nightOrchestrator.resolveNightKills(ctx, np)
+
+        // The guard save covered the attack — the perk was not decisive,
+        // so no trigger; settlement will refund.
+        verify(perkService, never()).markNight1Triggered(any(), any())
+    }
+
+    @Test
+    fun `night 1 - witch antidote also saved the immune wolf target - no trigger is recorded`() {
+        whenever(perkService.night1ImmuneUserIds(gameId)).thenReturn(setOf(immuneId))
+        val np = nightPhase(dayNumber = 1, wolfTarget = immuneId)
+        np.witchAntidoteUsed = true
+        val ctx = GameContext(
+            game(1), room(),
+            listOf(player(wolfId, 1, PlayerRole.WEREWOLF), player(immuneId, 2), player("v2", 3)),
+            nightPhase = np,
+        )
+
+        nightOrchestrator.resolveNightKills(ctx, np)
+
+        // The antidote covered the attack — the perk was not decisive,
+        // so no trigger; settlement will refund.
+        verify(perkService, never()).markNight1Triggered(any(), any())
+    }
+
+    @Test
+    fun `night 2 - immunity no longer applies and no trigger is recorded`() {
         // Even though the user is still reported immune, day 2 ignores it.
         whenever(perkService.night1ImmuneUserIds(gameId)).thenReturn(setOf(immuneId))
         val np = nightPhase(dayNumber = 2, wolfTarget = immuneId)
@@ -127,9 +205,9 @@ class NightImmunityIntegrationTest {
 
         nightOrchestrator.resolveNightKills(ctx, np)
 
-        // The night-1 consume guard (if dayNumber == 1) must not fire on a
-        // later night — otherwise an immunity bought for night 1 would also be
-        // spent (and mis-reported) on night 2+.
-        verify(perkService, never()).consumeNight1Perks(any())
+        // The night-1 trigger guard (if dayNumber == 1) must not fire on a
+        // later night — an immunity bought for night 1 never covers night 2+,
+        // and a spurious trigger would make settlement consume instead of refund.
+        verify(perkService, never()).markNight1Triggered(any(), any())
     }
 }

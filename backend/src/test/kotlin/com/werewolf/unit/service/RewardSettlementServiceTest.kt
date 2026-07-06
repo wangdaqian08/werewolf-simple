@@ -9,6 +9,7 @@ import com.werewolf.model.WinnerSide
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.GameSettlementRepository
+import com.werewolf.service.PerkSettlementService
 import com.werewolf.service.RewardSettlementService
 import com.werewolf.service.StompPublisher
 import com.werewolf.service.WalletService
@@ -31,6 +32,7 @@ class RewardSettlementServiceTest {
     @Mock lateinit var gameRepository: GameRepository
     @Mock lateinit var walletService: WalletService
     @Mock lateinit var stompPublisher: StompPublisher
+    @Mock lateinit var perkSettlementService: PerkSettlementService
 
     private lateinit var service: RewardSettlementService
 
@@ -41,7 +43,7 @@ class RewardSettlementServiceTest {
     fun setUp() {
         service = RewardSettlementService(
             gameSettlementRepository, gamePlayerRepository, gameRepository,
-            walletService, stompPublisher, rewards,
+            walletService, stompPublisher, rewards, perkSettlementService,
         )
         whenever(gameSettlementRepository.tryInsert(gameId)).thenReturn(1)
         whenever(walletService.credit(any(), any(), any(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull()))
@@ -119,9 +121,18 @@ class RewardSettlementServiceTest {
     }
 
     @Test
-    fun `cancelled game (winner null) is never settled`() {
+    fun `cancelled game (winner null) is never settled for rewards but perks are still settled`() {
         service.settle(gameId, null)
         verify(gameSettlementRepository, never()).tryInsert(any())
         verify(walletService, never()).credit(any(), any(), any(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())
+        // Perk settlement is the choke point — it runs even on cancellations.
+        verify(perkSettlementService).settleForGame(gameId, cancelled = true)
+    }
+
+    @Test
+    fun `normal settle also settles perks with cancelled = false`() {
+        stub(listOf(player("v1", PlayerRole.VILLAGER)))
+        service.settle(gameId, WinnerSide.VILLAGER)
+        verify(perkSettlementService).settleForGame(gameId, cancelled = false)
     }
 }

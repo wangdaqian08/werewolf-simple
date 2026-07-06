@@ -69,7 +69,9 @@ class GameService(
         gamePlayerRepository.saveAll(gamePlayers)
 
         // Bind room perk activations to this game; activations held by a
-        // player dealt a wolf role become VOID (no refund — stated gamble).
+        // player dealt a wolf role become VOID — bound but inapplicable. The
+        // refund happens at game end via PerkSettlementService (refunding now
+        // would leak the wolf identity through the balance change).
         perkService.onGameStart(roomId, gameId, gamePlayers)
 
         room.status = RoomStatus.IN_GAME

@@ -123,6 +123,14 @@ class PerkActivation(
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreationTimestamp
     val createdAt: LocalDateTime? = null,
+
+    /** Set once (idempotently) when the perk actually took effect in-game. */
+    @Column(name = "triggered_at")
+    var triggeredAt: LocalDateTime? = null,
+
+    /** Set when the terminal status (CONSUMED/REFUNDED) was decided — by game-end settlement or a pre-game refund. */
+    @Column(name = "settled_at")
+    var settledAt: LocalDateTime? = null,
 )
 
 @Entity

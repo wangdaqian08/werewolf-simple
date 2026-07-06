@@ -12,7 +12,9 @@ import type {
   DayPhaseState,
   GameState,
   LoginResponse,
+  MyPerkActivation,
   NightPhaseState,
+  PaymentOrderSummary,
   PlayerRole,
   RoleRevealState,
   Room,
@@ -21,6 +23,7 @@ import type {
   VoteTally,
   VoteVoter,
   VotingState,
+  Wallet,
 } from '@/types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1159,5 +1162,108 @@ export const MOCK_ACTION_LOG: ActionLogEntry[] = [
     }),
     targetUserId: 'u5',
     createdAt: '2024-01-01T12:00:00Z',
+  },
+]
+
+// ── Wallet / Perks / Payments (account page) ──────────────────────────────────
+
+export const MOCK_WALLET: Wallet = {
+  balance: 250,
+  recent: [
+    {
+      type: 'REFUND',
+      amount: 30,
+      balanceAfter: 250,
+      note: 'NIGHT1_IMMUNITY',
+      createdAt: '2026-06-10T21:30:00',
+    },
+    {
+      type: 'PERK_SPEND',
+      amount: -30,
+      balanceAfter: 220,
+      note: 'NIGHT1_IMMUNITY',
+      createdAt: '2026-06-10T20:00:00',
+    },
+    {
+      type: 'GAME_REWARD',
+      amount: 20,
+      balanceAfter: 250,
+      note: null,
+      createdAt: '2026-06-09T22:15:00',
+    },
+    {
+      type: 'PURCHASE',
+      amount: 100,
+      balanceAfter: 230,
+      note: 'starter',
+      createdAt: '2026-06-08T18:00:00',
+    },
+  ],
+}
+
+// Covers all four activation statuses so the account e2e spec can assert each badge.
+export const MOCK_MY_PERKS: MyPerkActivation[] = [
+  {
+    perkCode: 'NIGHT1_IMMUNITY',
+    perkName: '首夜免死',
+    status: 'ACTIVE',
+    pricePaid: 30,
+    roomId: 1,
+    gameId: 101,
+    createdAt: '2026-06-10T20:00:00',
+    settledAt: null,
+  },
+  {
+    perkCode: 'NIGHT1_IMMUNITY',
+    perkName: '首夜免死',
+    status: 'CONSUMED',
+    pricePaid: 30,
+    roomId: 2,
+    gameId: 99,
+    createdAt: '2026-06-09T20:00:00',
+    settledAt: '2026-06-09T22:00:00',
+  },
+  {
+    perkCode: 'NIGHT1_IMMUNITY',
+    perkName: '首夜免死',
+    status: 'VOID',
+    pricePaid: 30,
+    roomId: 3,
+    gameId: 98,
+    createdAt: '2026-06-08T20:00:00',
+    settledAt: null,
+  },
+  {
+    perkCode: 'NIGHT1_IMMUNITY',
+    perkName: '首夜免死',
+    status: 'REFUNDED',
+    pricePaid: 30,
+    roomId: 4,
+    gameId: 97,
+    createdAt: '2026-06-07T20:00:00',
+    settledAt: '2026-06-07T22:30:00',
+  },
+]
+
+// Newest-first, mirroring the real endpoint's contract
+// (PaymentService.listOrders / findTop50ByUserIdOrderByCreatedAtDesc).
+export const MOCK_PAYMENT_ORDERS: PaymentOrderSummary[] = [
+  {
+    orderNo: 'WW20260611002',
+    productName: '入门包 / Starter Pack',
+    credits: 100,
+    amountCents: 499,
+    currency: 'usd',
+    status: 'CREATED',
+    createdAt: '2026-06-11T10:00:00',
+  },
+  {
+    orderNo: 'WW20260610001',
+    productName: '畅玩包 / Plus Pack',
+    credits: 300,
+    amountCents: 999,
+    currency: 'usd',
+    status: 'COMPLETED',
+    createdAt: '2026-06-10T19:55:00',
   },
 ]
