@@ -96,7 +96,12 @@ jobs:
         run: npm run test:unit:coverage
 
   e2e-ui:
-    name: E2E · UI (${{ matrix.shard }}/3)
+    # No shard-count denominator in the name: branch protection matches
+    # required checks by EXACT name, so "(1/3)" style names break protection
+    # every time the shard count changes (bit us on the 6→8 integration
+    # rebalance). Update the required checks in Settings → Branches if these
+    # names ever change again.
+    name: E2E · UI (${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -237,7 +242,8 @@ jobs:
   #                                               CLASSIC/HARD_MODE)
   #     witch-selfsave-blocked-flow.spec.ts ~35s  (one night + one reveal)
   e2e-integration:
-    name: E2E · Integration (${{ matrix.shard.id }}/8)
+    # Denominator-free for the same reason as the UI shards (see above).
+    name: E2E · Integration (${{ matrix.shard.id }})
     runs-on: ubuntu-latest
     needs: backend
     strategy:
