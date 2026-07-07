@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import type { GameContext } from './multi-browser'
+import type { WitchPlan } from './flow-drivers'
 import { waitForCondition, waitForNightSubPhase, waitForPhase } from './state-polling'
 
 /**
@@ -22,12 +23,38 @@ import { waitForCondition, waitForNightSubPhase, waitForPhase } from './state-po
  */
 export async function driveMinimalNight1ViaDom(
   ctx: GameContext,
-  opts: { wolfTargetSeat: number; seerCheckSeat?: number; guardTargetSeat?: number },
+  opts: {
+    wolfTargetSeat: number
+    seerCheckSeat?: number
+    guardTargetSeat?: number
+    /**
+     * Witch decision for N1. Default keeps the historical behavior: pass on
+     * antidote and poison. A single click submits a COMPLETE WITCH_ACT
+     * (NightPhase.vue emits one terminal action per button), so 'save' and
+     * 'poison' are one-decision paths.
+     */
+    witch?: WitchPlan
+  },
 ): Promise<void> {
   const hostPage = ctx.hostPage
   const gameId = ctx.gameId
 
   // ── Host starts night ────────────────────────────────────────────────
+  // Self-heal a stale role card first. GameView's `hasConfirmedRole` is a
+  // LOCAL ref: any transient phase flicker (a STOMP reconnect momentarily
+  // clearing state) resets it, bringing the un-revealed card back even
+  // though the backend has all 12 confirms — and start-night renders only
+  // on the confirmed waiting-screen. Walking the real reveal → confirm path
+  // restores it: the backend accepts a duplicate CONFIRM_ROLE (SUCCESS) and
+  // handleRoleConfirm re-fetches state.
+  const staleCardReveal = hostPage.getByTestId('reveal-role-btn')
+  if (await staleCardReveal.isVisible({ timeout: 1_500 }).catch(() => false)) {
+    await staleCardReveal.click()
+    const staleCardConfirm = hostPage.getByTestId('confirm-role-btn')
+    if (await staleCardConfirm.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await staleCardConfirm.click()
+    }
+  }
   const startBtn = hostPage.getByTestId('start-night')
   await expect(startBtn).toBeVisible({ timeout: 15_000 })
   await expect(startBtn).toBeEnabled({ timeout: 10_000 })
@@ -56,71 +83,101 @@ export async function driveMinimalNight1ViaDom(
   await wolfSlot.click()
   await wolfPage.getByTestId('wolf-confirm-kill').click()
 
-  // ── Witch passes on antidote + poison ────────────────────────────────
-  const reachedWitchAct = await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
-  if (!reachedWitchAct) {
-    throw new Error('driveMinimalNight1ViaDom: WITCH_ACT sub-phase not reached')
-  }
-  const witchPage = pageOrThrow(ctx, 'WITCH')
-  // The witch UI shows: (a) antidote section if hasAntidote, (b) poison
-  // section if hasPoison, (c) skip button only when neither item is
-  // available. For a fresh Day 1 witch both items are available — pass on
-  // each in turn. Use isVisible-with-short-timeout rather than asserting
-  // visibility: a particular sub-section only renders if the condition is
-  // met (e.g. switch-pass-poison is gated on a wolf having killed someone).
-  const passAntidote = witchPage.getByTestId('switch-pass-antidote')
-  if (await passAntidote.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await passAntidote.click()
-  }
-  const passPoison = witchPage.getByTestId('switch-pass-poison')
-  if (await passPoison.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await passPoison.click()
-  }
-  // If the witch happens to have no items, the skip button replaces the
-  // sections above and is the only path forward.
-  const witchSkip = witchPage.getByTestId('witch-skip')
-  if (await witchSkip.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await witchSkip.click()
+  // ── Witch acts (default: pass on antidote + poison) ──────────────────
+  // Skipped entirely for casts without a WITCH — the backend role loop only
+  // includes handlers for roles present in the game.
+  if ((ctx.roleMap.WITCH ?? []).length > 0) {
+    const reachedWitchAct = await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
+    if (!reachedWitchAct) {
+      throw new Error('driveMinimalNight1ViaDom: WITCH_ACT sub-phase not reached')
+    }
+    const witchPage = pageOrThrow(ctx, 'WITCH')
+    const witchPlan: WitchPlan = opts.witch ?? { mode: 'pass' }
+    if (witchPlan.mode === 'save') {
+      // One click submits the complete WITCH_ACT with useAntidote=true.
+      await witchPage.getByTestId('witch-antidote').click()
+    } else if (witchPlan.mode === 'poison') {
+      // use-poison opens the target picker; the confirm click submits the
+      // complete WITCH_ACT with poisonTargetUserId.
+      await witchPage.getByTestId('use-poison').click()
+      const poisonSlot = witchPage.locator(`.player-grid [data-seat="${witchPlan.targetSeat}"]`)
+      await expect(
+        poisonSlot,
+        `poison target seat ${witchPlan.targetSeat} must render`,
+      ).toBeVisible({ timeout: 10_000 })
+      await poisonSlot.click()
+      await witchPage.getByTestId('witch-poison-confirm').click()
+    } else if (witchPlan.mode === 'confirmNoItems') {
+      // Potion-less witch: the skip button is the only rendered path.
+      await witchPage.getByTestId('witch-skip').click()
+    } else {
+      // The witch UI shows: (a) antidote section if hasAntidote, (b) poison
+      // section if hasPoison, (c) skip button only when neither item is
+      // available. For a fresh Day 1 witch both items are available — pass on
+      // each in turn. Use isVisible-with-short-timeout rather than asserting
+      // visibility: a particular sub-section only renders if the condition is
+      // met (e.g. switch-pass-poison is gated on a wolf having killed someone).
+      const passAntidote = witchPage.getByTestId('switch-pass-antidote')
+      if (await passAntidote.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await passAntidote.click()
+      }
+      const passPoison = witchPage.getByTestId('switch-pass-poison')
+      if (await passPoison.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await passPoison.click()
+      }
+      // If the witch happens to have no items, the skip button replaces the
+      // sections above and is the only path forward.
+      const witchSkip = witchPage.getByTestId('witch-skip')
+      if (await witchSkip.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await witchSkip.click()
+      }
+    }
   }
 
-  // ── Seer check + acknowledge result ──────────────────────────────────
-  const reachedSeerPick = await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
-  if (!reachedSeerPick) {
-    throw new Error('driveMinimalNight1ViaDom: SEER_PICK sub-phase not reached')
-  }
-  const seerPage = pageOrThrow(ctx, 'SEER')
-  // Default seerCheckSeat must NOT be the seer's own seat — seer-self-check
-  // is disallowed (per project_game_rules_clarifications memory), so the
-  // slot renders with aria-disabled="true" and .player-grid intercepts the
-  // click. Without this guard the test hangs on retry-click for 180s and
-  // fails with the misleading "Target page, context or browser has been
-  // closed" error (the page is fine; Playwright tears it down at timeout).
-  // Bot1 always lands at seat 1, and the SEER role rolls onto bot1 ~1/N
-  // of the time → without this guard the test is randomly flaky.
-  const seerSeat = ctx.roleMap.SEER?.[0]?.seat
-  const checkSeat = opts.seerCheckSeat ?? (seerSeat !== 1 ? 1 : 2)
-  const seerSlot = seerPage.locator(`.player-grid [data-seat="${checkSeat}"]`)
-  await expect(seerSlot, `seer check seat ${checkSeat} must render`).toBeVisible({ timeout: 10_000 })
-  await seerSlot.click()
-  await seerPage.getByTestId('seer-check').click()
+  // ── Seer check + acknowledge result (skipped for casts without SEER) ──
+  if ((ctx.roleMap.SEER ?? []).length > 0) {
+    const reachedSeerPick = await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
+    if (!reachedSeerPick) {
+      throw new Error('driveMinimalNight1ViaDom: SEER_PICK sub-phase not reached')
+    }
+    const seerPage = pageOrThrow(ctx, 'SEER')
+    // Default seerCheckSeat must NOT be the seer's own seat — seer-self-check
+    // is disallowed (per project_game_rules_clarifications memory), so the
+    // slot renders with aria-disabled="true" and .player-grid intercepts the
+    // click. Without this guard the test hangs on retry-click for 180s and
+    // fails with the misleading "Target page, context or browser has been
+    // closed" error (the page is fine; Playwright tears it down at timeout).
+    // Bot1 always lands at seat 1, and the SEER role rolls onto bot1 ~1/N
+    // of the time → without this guard the test is randomly flaky.
+    const seerSeat = ctx.roleMap.SEER?.[0]?.seat
+    const checkSeat = opts.seerCheckSeat ?? (seerSeat !== 1 ? 1 : 2)
+    const seerSlot = seerPage.locator(`.player-grid [data-seat="${checkSeat}"]`)
+    await expect(seerSlot, `seer check seat ${checkSeat} must render`).toBeVisible({
+      timeout: 10_000,
+    })
+    await seerSlot.click()
+    await seerPage.getByTestId('seer-check').click()
 
-  await waitForNightSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
-  await expect(seerPage.getByTestId('seer-result-card')).toBeVisible({ timeout: 10_000 })
-  await seerPage.getByTestId('seer-done').click()
-
-  // ── Guard protects (UI has no skip — must pick a target) ─────────────
-  const reachedGuardPick = await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
-  if (!reachedGuardPick) {
-    throw new Error('driveMinimalNight1ViaDom: GUARD_PICK sub-phase not reached')
+    await waitForNightSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
+    await expect(seerPage.getByTestId('seer-result-card')).toBeVisible({ timeout: 10_000 })
+    await seerPage.getByTestId('seer-done').click()
   }
-  const guardPage = pageOrThrow(ctx, 'GUARD')
-  const protectSeat = opts.guardTargetSeat ?? 1
-  const guardSlot = guardPage.locator(`.player-grid [data-seat="${protectSeat}"]`)
-  await expect(guardSlot, `guard protect seat ${protectSeat} must render`).toBeVisible({
-    timeout: 10_000,
-  })
-  await guardSlot.click()
-  await guardPage.getByTestId('guard-confirm-protect').click()
+
+  // ── Guard protects (skipped for casts without GUARD; UI has no skip) ──
+  if ((ctx.roleMap.GUARD ?? []).length > 0) {
+    const reachedGuardPick = await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
+    if (!reachedGuardPick) {
+      throw new Error('driveMinimalNight1ViaDom: GUARD_PICK sub-phase not reached')
+    }
+    const guardPage = pageOrThrow(ctx, 'GUARD')
+    const protectSeat = opts.guardTargetSeat ?? 1
+    const guardSlot = guardPage.locator(`.player-grid [data-seat="${protectSeat}"]`)
+    await expect(guardSlot, `guard protect seat ${protectSeat} must render`).toBeVisible({
+      timeout: 10_000,
+    })
+    await guardSlot.click()
+    await guardPage.getByTestId('guard-confirm-protect').click()
+  }
 
   // ── Wait for end-of-night transition ─────────────────────────────────
   // Variant B (correct ordering): the backend automatically opens

@@ -1,0 +1,992 @@
+/**
+ * Shared full-game flow drivers: resolve special roles to bot-or-host, run
+ * the day-1 sheriff election, and drive whole nights/days through the same
+ * hybrid path the flow specs use (host UI clicks + bot REST actions via
+ * scripts/act.sh), with every bot action gated on the backend sub-phase.
+ */
+import { expect, type Page } from '@playwright/test'
+import { type GameContext } from './multi-browser'
+import { act, actName, type RoleName, sheriff } from './shell-runner'
+import { verifyAllBrowsersPhase } from './assertions'
+import { captureSnapshot } from './composite-screenshot'
+import {
+  readAlivePlayerIds,
+  readHostSeat,
+  readHostUserId,
+  readUnvotedAlivePlayerIds,
+  waitForVotingSubPhase,
+} from './state-polling'
+
+// ── Action plans ─────────────────────────────────────────────────────────────
+
+/**
+ * Witch decision for one night. A WITCH_ACT is a single terminal submission
+ * (WitchHandler): save excludes poison on the same night; 'pass' declines
+ * both; 'confirmNoItems' is the potion-less acknowledgement (drives the
+ * witch-skip UI when a WITCH page is available, API pass otherwise).
+ */
+export type WitchPlan =
+  | { mode: 'pass' }
+  | { mode: 'save' }
+  | { mode: 'poison'; targetSeat: number }
+  | { mode: 'confirmNoItems' }
+
+/** Guard decision — protecting the guard's own seat is legal self-protect. */
+export type GuardPlan = { mode: 'skip' } | { mode: 'protect'; targetSeat: number }
+
+/** Per-night action table for the API-path night driver. */
+export interface NightActionPlan {
+  wolfKillSeat: number
+  witch?: WitchPlan
+  guard?: GuardPlan
+  seerCheckSeat?: number
+}
+
+/** Per-day action table for the day driver. */
+export interface DayPlan {
+  /** Seat everyone piles onto; null → every voter abstains. */
+  targetSeat: number | null
+  /** Evidence-screenshot label prefix. */
+  label: string
+  /** Page of the player wearing the badge (needed when the vote executes the sheriff). */
+  sheriffPage?: Page
+  badgeRecipientSeat?: number
+  /** Resolves a VOTING/HUNTER_SHOOT sub-phase (vote executed the hunter). */
+  hunterShootTargetSeat?: number
+  /**
+   * Engineered FIRST round: only these voters vote (their own targets; null =
+   * abstain); every other alive player abstains. Later rounds fall back to
+   * the targetSeat pile-on. Voter 'Host' selects the host token.
+   */
+  round1Votes?: Array<{ voterNick: string; targetSeat: number | null }>
+}
+
+/**
+ * Deterministic role→action binding: the actor about to fire `action` must
+ * hold `expectedRole` in the runtime role map (assignment is server-shuffled;
+ * specs resolve it via getRoles). Fails loudly test-side; the backend handler
+ * rejection remains the authoritative second layer.
+ */
+export function assertActorRole(
+  ctx: GameContext,
+  actor: { nick: string; userId: string },
+  expectedRole: RoleName,
+  action: string,
+): void {
+  const holders = ctx.roleMap[expectedRole] ?? []
+  if (!holders.some((b) => b.userId === actor.userId)) {
+    throw new Error(
+      `[role-guard] ${action} actor ${actor.nick} (${actor.userId}) does not hold ` +
+        `${expectedRole} — holders: ${holders.map((b) => b.nick).join(', ') || 'none'}`,
+    )
+  }
+}
+
+/** A special-role player resolved to either a bot OR the host. */
+export interface RolePlayer {
+  seat: number
+  nick: string
+  isHost: boolean
+  userId: string
+}
+
+/**
+ * `expect(value).not.toBeNull()` doesn't narrow via TypeScript flow analysis,
+ * so callers still see `T | null` after the assertion. This helper uses a TS
+ * assertion signature so subsequent reads of `value` are non-null without
+ * resorting to a non-null bang at every call site.
+ */
+export function assertNonNull<T>(value: T | null | undefined, msg: string): asserts value is T {
+  expect(value, msg).not.toBeNull()
+  expect(value, msg).not.toBeUndefined()
+}
+
+/**
+ * Resolve `role` to its bot OR to the host (whoever holds it). Returns null
+ * only if neither holds the role (impossible if the role is in the kit).
+ */
+export async function resolveRolePlayer(
+  ctx: GameContext,
+  role: RoleName,
+): Promise<RolePlayer | null> {
+  if (ctx.isHostRole(role)) {
+    const hostSeat = await readHostSeat(ctx.hostPage, ctx.gameId)
+    const hostUserId = await readHostUserId(ctx.hostPage)
+    if (hostSeat == null || hostUserId == null) return null
+    return { seat: hostSeat, nick: 'Host', isHost: true, userId: hostUserId }
+  }
+  const bot = (ctx.roleMap[role] ?? []).find((b) => b.nick !== 'Host')
+  if (!bot) return null
+  return { seat: bot.seat, nick: bot.nick, isHost: false, userId: bot.userId }
+}
+
+export function tryAct(...args: Parameters<typeof act>): boolean {
+  try {
+    const out = act(...args)
+    const rejected = out.includes('rejected') || out.includes('fail')
+    if (rejected) {
+      // Silent rejections are the #1 cause of coroutine stalls. Surface them
+      // in CI logs so the next failing run points straight at the culprit.
+      // eslint-disable-next-line no-console
+      console.warn(`[tryAct rejected] args=${JSON.stringify(args)} output=\n${out}`)
+    }
+    return !rejected
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn(`[tryAct threw] args=${JSON.stringify(args)} err=${(e as Error).message}`)
+    return false
+  }
+}
+
+/**
+ * Poll the backend via the host browser (it already has the JWT in
+ * localStorage) until the game's night sub-phase matches `target`, then
+ * return. Without this, bot actions fire faster than the role-loop coroutine
+ * advances, land in the wrong sub-phase, and are rejected — stalling the
+ * whole night.
+ */
+export async function waitForSubPhase(
+  hostPage: Page,
+  gameId: string,
+  target: string,
+  timeoutMs = 30_000,
+): Promise<boolean> {
+  // Same CI scaling rationale as assertions.ts: slow GH runners need more slack.
+  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
+  const deadline = Date.now() + effective
+  while (Date.now() < deadline) {
+    const state = await hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      if (!token) return null
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      return res.json()
+    }, gameId)
+    const sp = state?.nightPhase?.subPhase
+    const phase = state?.phase
+    if (sp === target) return true
+    // Short-circuit if game already moved past NIGHT (e.g., already in DAY)
+    if (phase && phase !== 'NIGHT' && target !== phase) return false
+    await hostPage.waitForTimeout(300)
+  }
+  return false
+}
+
+/**
+ * Push the sheriff election through on the host — candidates campaign, speeches,
+ * votes, reveal. Returns the role the bots voted for (so callers know who holds
+ * the badge once the badge-award sub-phase completes).
+ */
+/**
+ * Poll the backend for a sheriff sub-phase transition. Unlike waitForSubPhase,
+ * which reads `nightPhase.subPhase`, sheriff state lives at
+ * `state.sheriffElection.subPhase` (confirmed: scripts/act.sh:357,
+ * SheriffService.kt transitions SIGNUP→SPEECH→VOTING→RESULT/TIED).
+ */
+export async function waitForSheriffSubPhase(
+  hostPage: Page,
+  gameId: string,
+  target: string,
+  timeoutMs = 15_000,
+): Promise<boolean> {
+  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
+  const deadline = Date.now() + effective
+  while (Date.now() < deadline) {
+    const sub = await hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      if (!token) return null
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      const state = await res.json()
+      return state?.sheriffElection?.subPhase ?? null
+    }, gameId)
+    if (sub === target) return true
+    await hostPage.waitForTimeout(200)
+  }
+  return false
+}
+
+/**
+ * Host drives all sheriff speeches via a single UI button click per speaker.
+ * The `sheriff-advance-speech` button is rendered ONLY when
+ * `election.subPhase === 'SPEECH'` (SheriffElection.vue:115,128,182); it is
+ * not in the DOM once SheriffService.kt auto-transitions SPEECH→VOTING after
+ * the last speaker. Loop exit condition therefore reads both the backend
+ * sub-phase (/state) AND the button's DOM presence — either signals done.
+ *
+ * Replaces the prior `for (12) { act('SHERIFF_ADVANCE_SPEECH') }` loop, which
+ * (a) iterated more times than needed and (b) through `act.sh`'s default
+ * PLAYER_SEL="all" fanned each call out to 11 non-host bots, producing 1,500+
+ * "Only host can advance speeches" rejections per CI run (see
+ * docs/ci-tests-issues.md for the pre-fix rejection breakdown).
+ */
+export async function advanceAllSheriffSpeeches(hostPage: Page, gameId: string): Promise<void> {
+  // Safety cap — 12p games have at most 12 speakers. Real exit condition is
+  // the sub-phase leaving SPEECH (backend auto-advances after last speaker).
+  const maxIterations = 20
+  for (let i = 0; i < maxIterations; i++) {
+    const sub = await hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      if (!token) return null
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      const state = await res.json()
+      return state?.sheriffElection?.subPhase ?? null
+    }, gameId)
+    if (sub !== 'SPEECH') return
+
+    const advanceBtn = hostPage.getByTestId('sheriff-advance-speech')
+    // Wait (don't just probe) for the button to be visible. During speaker
+    // transitions Vue re-renders the SheriffElection component and the
+    // button is briefly detached; `isVisible()` returns false for that tick
+    // and would incorrectly bail. `waitFor({state: 'visible'})` waits up to
+    // the timeout for it to settle.
+    const appeared = await advanceBtn
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (!appeared) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[sheriff] advance button did not reappear after 5s (iter ${i}, subPhase=${sub}) — will re-poll`,
+      )
+      // Don't early-return; if sub is still SPEECH on the next iteration,
+      // try once more. Only exit the whole helper if iterations run out.
+      continue
+    }
+
+    await advanceBtn.click()
+    // Small settle so the next state poll observes the post-click state.
+    await hostPage.waitForTimeout(400)
+  }
+  // eslint-disable-next-line no-console
+  console.warn('[sheriff] advanceAllSpeeches hit maxIterations — check backend speaker count')
+}
+
+export async function readTopPhase(hostPage: Page, gameId: string): Promise<string | null> {
+  return hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return null
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    return (await res.json())?.phase ?? null
+  }, gameId)
+}
+
+export async function readSheriffSubPhase(hostPage: Page, gameId: string): Promise<string | null> {
+  return hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return null
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const state = await res.json()
+    return state?.sheriffElection?.subPhase ?? null
+  }, gameId)
+}
+
+export async function runSheriffElection(
+  ctx: GameContext,
+  pickNickCampaign: string[],
+): Promise<void> {
+  const hostPage = ctx.hostPage
+  const gameId = ctx.gameId
+  await verifyAllBrowsersPhase(ctx.pages, 'SHERIFF_ELECTION', 20_000)
+
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] entered runSheriffElection — candidates=${JSON.stringify(pickNickCampaign)} ` +
+      `initial subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
+
+  // Campaign: legitimate per-candidate fan-out; stays as script calls.
+  for (const nick of pickNickCampaign) {
+    try {
+      sheriff('campaign', { player: nick, room: ctx.roomCode })
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[sheriff] campaign ${nick} threw: ${(e as Error).message}`)
+    }
+  }
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] after campaign scripts — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
+
+  // 2026-05-11: SIGNUP→SPEECH is now backend-auto-triggered when every alive
+  // player has decided. The host's `sheriff-start-campaign` button is gone.
+  // Drive every alive player who didn't campaign to pass so the auto-trigger
+  // fires. We can't read the candidate list back from state to "find the
+  // undecided" — the SIGNUP state response deliberately hides other players'
+  // candidacies — so use the test's known campaigner list (pickNickCampaign)
+  // as the ground truth.
+  const campaignerNicks = new Set(pickNickCampaign)
+  const allBots = Object.values(ctx.roleMap).flatMap((b) => b ?? [])
+  const aliveIds = await readAlivePlayerIds(hostPage, gameId)
+  const hostUserId = await readHostUserId(hostPage)
+  let drivenCount = 0
+  for (const userId of aliveIds) {
+    const bot = allBots.find((b) => b.userId === userId)
+    const nick = bot?.nick
+    if (nick && campaignerNicks.has(nick)) continue // campaigner — leave RUNNING
+    const selector = userId === hostUserId ? 'HOST' : nick
+    if (!selector) continue
+    try {
+      sheriff('pass', { player: selector, room: ctx.roomCode })
+      drivenCount++
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[sheriff] pass ${selector} threw: ${(e as Error).message}`)
+    }
+  }
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] drove ${drivenCount} non-campaigners to pass — ` +
+      `subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
+
+  // Wait for backend to auto-transition SIGNUP → SPEECH.
+  const reachedSpeech = await waitForSheriffSubPhase(hostPage, gameId, 'SPEECH', 15_000)
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] reachedSpeech=${reachedSpeech} current=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
+  await advanceAllSheriffSpeeches(hostPage, gameId)
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] advanceAllSpeeches done — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
+
+  const reachedVoting = await waitForSheriffSubPhase(hostPage, gameId, 'VOTING', 15_000)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] reachedVoting=${reachedVoting}`)
+
+  // Voting: bots vote for the first campaigner via sheriff.sh (legitimate
+  // per-voter fan-out). Host doesn't vote through the script (the script
+  // iterates bots only, not the host's browser-owned session), so the
+  // frontend's `election.allVoted` stays false (SheriffElection.vue:279)
+  // and sheriff-reveal-result remains disabled. Host must also register
+  // a vote/abstain for allVoted to flip true.
+  //
+  // Note: the backend's revealResult() actually only requires subPhase=VOTING
+  // (SheriffService.kt:247-252). The old test bypassed this via act('SHERIFF_
+  // REVEAL_RESULT') hitting the REST API directly with the host token. The
+  // UI-click path respects the stricter frontend allVoted gate, which also
+  // more accurately models real-user behavior.
+  if (pickNickCampaign.length > 0) {
+    try {
+      sheriff('vote', { target: pickNickCampaign[0], room: ctx.roomCode })
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[sheriff] vote threw: ${(e as Error).message}`)
+    }
+    // Backend rejects self-votes (SheriffService.kt:385-386 "Cannot vote for
+    // yourself"). When a candidate is the target of the fan-out sheriff.sh
+    // vote, they can't vote for themselves — so they must abstain instead
+    // or `allVoted` never reaches true. Run abstain for every candidate in
+    // the election so the denominator is satisfied regardless of which bots
+    // campaigned.
+    for (const candidateNick of pickNickCampaign) {
+      try {
+        sheriff('abstain', { player: candidateNick, room: ctx.roomCode })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn(`[sheriff] candidate-abstain ${candidateNick} threw: ${(e as Error).message}`)
+      }
+    }
+  }
+
+  // Host abstains via UI so allVoted becomes true. (Host is never a
+  // candidate in this test — pickNickCampaign filters out the host.)
+  const abstainBtn = hostPage.getByTestId('sheriff-abstain')
+  const abstainAppeared = await abstainBtn
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] sheriff-abstain: visible=${abstainAppeared}`)
+  if (abstainAppeared) {
+    await abstainBtn.click()
+    // eslint-disable-next-line no-console
+    console.warn('[sheriff] clicked sheriff-abstain')
+  }
+
+  // Diagnostic: read voteProgress so we see the actual vote count vs the
+  // eligible-voter denominator. If submitted < total we know bots' script
+  // votes didn't all land (retry / candidate filtering bug), not a bug in
+  // the host-abstain click.
+  const progressAfter = await hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const state = await res.json()
+    return {
+      voteProgress: state?.sheriffElection?.voteProgress,
+      allVoted: state?.sheriffElection?.allVoted,
+      candidates: state?.sheriffElection?.candidates,
+    }
+  }, gameId)
+  // eslint-disable-next-line no-console
+  console.warn(`[sheriff] voteProgress=${JSON.stringify(progressAfter)}`)
+
+  // Host UI click: VOTING → RESULT/TIED via `sheriff-reveal-result`.
+  const revealBtn = hostPage.getByTestId('sheriff-reveal-result')
+  const revealVisible = await revealBtn
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  const revealEnabled = await expect(revealBtn)
+    .toBeEnabled({ timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false)
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] sheriff-reveal-result: visible=${revealVisible} enabled=${revealEnabled} ` +
+      `subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
+  if (revealVisible && revealEnabled) {
+    await revealBtn.click()
+    // eslint-disable-next-line no-console
+    console.warn('[sheriff] clicked sheriff-reveal-result')
+  }
+  await hostPage.waitForTimeout(1_500)
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[sheriff] leaving runSheriffElection — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
+  )
+}
+
+/**
+ * Drive one night through role actions (API path). Accepts either the legacy
+ * positional form — completeNight(ctx, wolfKillSeat, seerCheckSeat?) with
+ * witch passing and guard skipping — or a full NightActionPlan. Returns
+ * silently; rejected actions are ignored (roles may be dead / skipped).
+ */
+export async function completeNight(
+  ctx: GameContext,
+  planOrKillSeat: NightActionPlan | number,
+  legacySeerCheckSeat?: number,
+): Promise<void> {
+  const plan: NightActionPlan =
+    typeof planOrKillSeat === 'number'
+      ? { wolfKillSeat: planOrKillSeat, seerCheckSeat: legacySeerCheckSeat }
+      : planOrKillSeat
+  const targetSeat = plan.wolfKillSeat
+  const seerCheckSeat = plan.seerCheckSeat
+  const wolfBots = ctx.roleMap.WEREWOLF ?? []
+  const seerBots = ctx.roleMap.SEER ?? []
+  const witchBots = ctx.roleMap.WITCH ?? []
+  const guardBots = ctx.roleMap.GUARD ?? []
+  const hostPage = ctx.hostPage
+  const gameId = ctx.gameId
+
+  // Fetch live roster so role actors reflect prior-day eliminations. roleMap
+  // is populated once at game start and never updates when players die —
+  // without this filter, picking `wolfBots[0]` on night 2+ would hand us a
+  // dead wolf (e.g. the one the village voted out on D1), the action rejects
+  // silently, and the role-loop coroutine stalls forever waiting for an
+  // action that was never dispatched. Same risk for seer/witch/guard.
+  //
+  // readAlivePlayerIds also underpins the target-alive precondition: if the
+  // caller's `targetSeat` refers to a player already killed on a prior
+  // night, WOLF_KILL rejects with "Target not alive" — we fall back to any
+  // alive non-wolf seat to keep the night progressing.
+  const aliveIds = await readAlivePlayerIds(hostPage, gameId)
+  const isAlive = (uid: string): boolean => aliveIds.size === 0 || aliveIds.has(uid)
+
+  const wolfBot = wolfBots.find((b) => isAlive(b.userId))
+  const seerBot = seerBots.find((b) => isAlive(b.userId))
+  const witchBot = witchBots.find((b) => isAlive(b.userId))
+  const guardBot = guardBots.find((b) => isAlive(b.userId))
+
+  // Verify WOLF_KILL target is alive; if not, re-target any alive non-wolf
+  // seat. Avoids the "villagerSeats rotation hands wolves an already dead
+  // seat on a later round" stall documented in the 2026-04-24 walkthrough.
+  // Resolve via the live game state (not ctx.allBots) — the host is in
+  // state.players but not in ctx.allBots, so a host-seated kill target
+  // (e.g. host=GUARD on N1, host=WITCH on N2) would otherwise fall through
+  // to the first non-host alive bot.
+  const wolfSeats = new Set(wolfBots.map((b) => b.seat))
+  const seatToUserId = await hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return {} as Record<string, string>
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return {} as Record<string, string>
+    const state = await res.json()
+    return Object.fromEntries(
+      ((state?.players ?? []) as Array<{ seatIndex: number; userId: string; isAlive?: boolean }>)
+        .filter((p) => p.isAlive !== false)
+        .map((p) => [String(p.seatIndex), p.userId]),
+    )
+  }, gameId)
+  const targetUserId = seatToUserId[String(targetSeat)] ?? null
+  const targetIsAlive = targetUserId != null && isAlive(targetUserId)
+  const resolvedTargetSeat = targetIsAlive
+    ? targetSeat
+    : (Object.entries(seatToUserId).find(
+        ([s, uid]) => !wolfSeats.has(Number(s)) && isAlive(uid),
+      )?.[0] ?? targetSeat)
+  const resolvedTargetSeatNum =
+    typeof resolvedTargetSeat === 'string' ? Number(resolvedTargetSeat) : resolvedTargetSeat
+
+  // ── WEREWOLF_PICK ──
+  // Only fire the kill if the backend actually reached the WEREWOLF_PICK
+  // sub-phase. waitForSubPhase returns false when the game already left
+  // NIGHT (e.g. someone won at post-night-resolve before this call ran)
+  // or the gate timed out — in either case there's nothing for the role
+  // actor to do, and firing anyway produces a "Not in WEREWOLF_PICK
+  // sub-phase" rejection in the CI log.
+  const reachedWolfPick = await waitForSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 20_000)
+  if (!reachedWolfPick) return
+  if (wolfBot) {
+    assertActorRole(ctx, wolfBot, 'WEREWOLF', 'WOLF_KILL')
+    tryAct('WOLF_KILL', actName(wolfBot), {
+      target: String(resolvedTargetSeatNum),
+      room: ctx.roomCode,
+    })
+  } else {
+    // host is the sole alive wolf — drive via host UI
+    await hostPage
+      .locator('.player-grid .slot-alive')
+      .first()
+      .click()
+      .catch(() => {})
+    await hostPage
+      .getByTestId('wolf-confirm-kill')
+      .click()
+      .catch(() => {})
+  }
+
+  // ── WITCH_ACT ──
+  // Gate on a LIVING actor: a dead role's sub-phase is a fixed masking delay
+  // with no action to take — waiting for it would stall up to the timeout.
+  if (witchBots.length > 0 && witchBot) {
+    const reached = await waitForSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)
+    if (reached) {
+      assertActorRole(ctx, witchBot, 'WITCH', 'WITCH_ACT')
+      const witchPlan: WitchPlan = plan.witch ?? { mode: 'pass' }
+      if (witchPlan.mode === 'save') {
+        tryAct('WITCH_ACT', actName(witchBot), {
+          payload: '{"useAntidote":true}',
+          room: ctx.roomCode,
+        })
+      } else if (witchPlan.mode === 'poison') {
+        // WITCH_ACT's poison field is a userId (WitchHandler), not a seat —
+        // resolve via the live seat map read above.
+        const poisonUserId = seatToUserId[String(witchPlan.targetSeat)]
+        if (!poisonUserId) {
+          throw new Error(
+            `[completeNight] poison target seat ${witchPlan.targetSeat} has no alive player`,
+          )
+        }
+        tryAct('WITCH_ACT', actName(witchBot), {
+          payload: JSON.stringify({ useAntidote: false, poisonTargetUserId: poisonUserId }),
+          room: ctx.roomCode,
+        })
+      } else if (witchPlan.mode === 'confirmNoItems') {
+        // Prefer the DOM path when a WITCH page exists — it exercises the
+        // potion-less witch-skip UI branch. API pass is the fallback.
+        const witchPage = ctx.pages.get('WITCH')
+        const skipBtn = witchPage?.getByTestId('witch-skip')
+        if (
+          witchPage &&
+          skipBtn &&
+          (await skipBtn.isVisible({ timeout: 5_000 }).catch(() => false))
+        ) {
+          await skipBtn.click()
+        } else {
+          tryAct('WITCH_ACT', actName(witchBot), {
+            payload: '{"useAntidote":false}',
+            room: ctx.roomCode,
+          })
+        }
+      } else {
+        tryAct('WITCH_ACT', actName(witchBot), {
+          payload: '{"useAntidote":false}',
+          room: ctx.roomCode,
+        })
+      }
+    }
+  }
+
+  // ── SEER_PICK ──
+  if (seerBots.length > 0 && seerBot) {
+    const reached = await waitForSubPhase(hostPage, gameId, 'SEER_PICK', 15_000)
+    if (reached) {
+      assertActorRole(ctx, seerBot, 'SEER', 'SEER_CHECK')
+      // If the caller's seerCheckSeat is dead (or not provided), probe any
+      // alive non-seer seat. The seer's own identity is handled below via
+      // the self-check prohibition (game-rules memory).
+      const candidateSeat = seerCheckSeat ?? 1
+      const candidateBot = ctx.allBots.find((b) => b.seat === candidateSeat && isAlive(b.userId))
+      const checkSeat =
+        candidateBot && candidateBot.userId !== seerBot.userId
+          ? candidateSeat
+          : (ctx.allBots.find(
+              (b) => b.userId !== seerBot.userId && b.nick !== 'Host' && isAlive(b.userId),
+            )?.seat ?? candidateSeat)
+      tryAct('SEER_CHECK', actName(seerBot), { target: String(checkSeat), room: ctx.roomCode })
+      // SEER_RESULT next
+      await waitForSubPhase(hostPage, gameId, 'SEER_RESULT', 10_000)
+      tryAct('SEER_CONFIRM', actName(seerBot), { room: ctx.roomCode })
+    }
+  }
+
+  // ── GUARD_PICK ──
+  if (guardBots.length > 0 && guardBot) {
+    const reached = await waitForSubPhase(hostPage, gameId, 'GUARD_PICK', 15_000)
+    if (reached) {
+      assertActorRole(ctx, guardBot, 'GUARD', 'GUARD_PROTECT')
+      const guardPlan: GuardPlan = plan.guard ?? { mode: 'skip' }
+      if (guardPlan.mode === 'protect') {
+        tryAct('GUARD_PROTECT', actName(guardBot), {
+          target: String(guardPlan.targetSeat),
+          room: ctx.roomCode,
+        })
+      } else {
+        tryAct('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
+      }
+    }
+  }
+}
+
+/**
+ * Drive one day: host reveals the night result via UI, then opens voting.
+ * Every alive non-target voter votes for [targetNickOrSeat]. Host reveals tally;
+ * host clicks continue. Handles the optional BADGE_HANDOVER sub-phase when the
+ * sheriff is voted out: captures a dedicated screenshot and passes the badge.
+ *
+ * When the sheriff is expected to be voted out, pass `sheriffPage` — the
+ * browser page logged in as the player wearing the badge. Only that page sees
+ * the pass-badge / destroy-badge buttons (`isEliminatedSheriff` is true on
+ * that page only — VotingPhase.vue:601). Without the page, badge handover
+ * never resolves and the game stays parked at DAY_VOTING/BADGE_HANDOVER until
+ * the test times out (root cause of the pre-fix HARD_MODE 6-round timeout —
+ * verified locally 2026-04-27 in /tmp/werewolf-e2e-backend.log: every
+ * subsequent WOLF_KILL was REJECTED with "No active night phase").
+ */
+export async function completeDay(
+  ctx: GameContext,
+  testInfo: Parameters<typeof captureSnapshot>[1],
+  planOrTargetSeat: DayPlan | number,
+  legacyLabel?: string,
+  legacySheriffPage?: Page,
+  legacyBadgeRecipientSeat?: number,
+): Promise<string | null> {
+  const plan: DayPlan =
+    typeof planOrTargetSeat === 'number'
+      ? {
+          targetSeat: planOrTargetSeat,
+          label: legacyLabel ?? 'day',
+          sheriffPage: legacySheriffPage,
+          badgeRecipientSeat: legacyBadgeRecipientSeat,
+        }
+      : planOrTargetSeat
+  const targetSeat = plan.targetSeat ?? -1
+  const evidenceLabel = plan.label
+  const sheriffPage = plan.sheriffPage
+  const badgeRecipientSeat = plan.badgeRecipientSeat
+  const hostPage = ctx.hostPage
+  const gameId = ctx.gameId
+
+  // Wait for night to resolve → day-reveal-result becomes visible. Night role
+  // loop takes ~10-15s under test timings (wolf+seer+seer_result+witch+guard,
+  // each with open_eyes / await-action / close_eyes / cooldown / gap).
+  const revealBtn = hostPage.getByTestId('day-reveal-result')
+  await revealBtn.waitFor({ state: 'visible', timeout: 30_000 }).catch(() => {})
+  if (await revealBtn.isVisible().catch(() => false)) {
+    await revealBtn.click()
+    await hostPage.waitForTimeout(800)
+  }
+  await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-day-result-revealed`)
+
+  // Host starts vote
+  const startVoteBtn = hostPage.getByTestId('day-start-vote')
+  if (await startVoteBtn.isVisible({ timeout: 8_000 }).catch(() => false)) {
+    await startVoteBtn.click()
+  }
+  await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-day-voting-opened`)
+
+  // Resolve target (if any) from the current alive roster. Unresolved target
+  // → everyone abstains. Use the live game state's `players` list (not
+  // `ctx.allBots`) — the host is in `players` but not in `allBots`, so a
+  // host-seated target (e.g. the seer-as-sheriff when the host rolled SEER)
+  // would otherwise resolve to undefined and the fan-out would silently
+  // abstain instead of voting.
+  const aliveIds = await readAlivePlayerIds(hostPage, gameId)
+  const targetUserId =
+    targetSeat >= 0
+      ? await hostPage.evaluate(
+          async ({ id, seat }) => {
+            const token = localStorage.getItem('jwt')
+            if (!token) return null as string | null
+            const res = await fetch(`/api/game/${id}/state`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (!res.ok) return null as string | null
+            const state = await res.json()
+            const match = (
+              (state?.players ?? []) as Array<{ seatIndex: number; userId: string }>
+            ).find((p) => p.seatIndex === seat)
+            return match?.userId ?? null
+          },
+          { id: gameId, seat: targetSeat },
+        )
+      : null
+  const targetBot =
+    targetUserId && aliveIds.has(targetUserId)
+      ? { seat: targetSeat, userId: targetUserId }
+      : undefined
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[completeDay] targetSeat=${targetSeat} → targetUserId=${targetUserId ?? 'null'} alive=${targetUserId ? aliveIds.has(targetUserId) : false}`,
+  )
+
+  // Vote cycle — up to 3 rounds (initial + 2 revotes).
+  //
+  // For each round:
+  //   1. Gate on the backend sub-phase before firing any SUBMIT_VOTE. Previous
+  //      implementation fanned out to every alive voter with 3× retries per
+  //      call, which stalled the spec — a 12-player game revoting 3 times
+  //      could burn ~100s on rejected votes alone. The gate skips that.
+  //   2. Fan out only to non-host, alive, UNVOTED players via
+  //      readUnvotedAlivePlayerIds. The helper now returns empty outside
+  //      VOTING/RE_VOTING, so if the backend isn't in a voting sub-phase the
+  //      fan-out is skipped entirely.
+  //   3. Host votes via act('Host', ...) — setupGame saves a hostToken in the
+  //      shell state file, so act.sh can use it the same way it uses bot
+  //      tokens.
+  //   4. Reveal tally via the host browser button. Break out once the backend
+  //      leaves VOTING/RE_VOTING (i.e. landed on VOTE_RESULT / BADGE_HANDOVER
+  //      / HUNTER_SHOOT / post-elimination GAME_OVER).
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const expected = attempt === 0 ? 'VOTING' : 'RE_VOTING'
+    const reached = await waitForVotingSubPhase(hostPage, gameId, expected, 15_000)
+    if (!reached) break
+
+    const unvoted = await readUnvotedAlivePlayerIds(hostPage, gameId)
+    const hostId = await readHostUserId(hostPage)
+
+    if (attempt === 0 && plan.round1Votes) {
+      // Engineered first round: listed voters cast their own targets, every
+      // other alive player abstains (e.g. a two-voter 1:1 tie with the
+      // sheriff sitting out so the 1.5× weight can't break it).
+      const byNick = new Map(plan.round1Votes.map((v) => [v.voterNick, v.targetSeat]))
+      const optsFor = (nick: string): { target?: string; room: string } => {
+        const t = byNick.get(nick)
+        return t != null ? { target: String(t), room: ctx.roomCode } : { room: ctx.roomCode }
+      }
+      if (hostId && unvoted.has(hostId)) {
+        tryAct('SUBMIT_VOTE', 'Host', optsFor('Host'))
+      }
+      for (const bot of ctx.allBots) {
+        if (bot.nick === 'Host' || bot.userId === hostId) continue
+        if (!unvoted.has(bot.userId)) continue
+        tryAct('SUBMIT_VOTE', bot.nick, optsFor(bot.nick))
+      }
+    } else {
+      const voteOpts: { target?: string; room: string } = targetBot
+        ? { target: String(targetSeat), room: ctx.roomCode }
+        : { room: ctx.roomCode }
+
+      if (hostId && unvoted.has(hostId)) {
+        tryAct('SUBMIT_VOTE', 'Host', voteOpts)
+      }
+      for (const bot of ctx.allBots) {
+        if (bot.nick === 'Host' || bot.userId === hostId) continue
+        if (!unvoted.has(bot.userId)) continue
+        tryAct('SUBMIT_VOTE', bot.nick, voteOpts)
+      }
+    }
+    await hostPage.waitForTimeout(1_500)
+
+    const revealTallyBtn = hostPage.getByTestId('voting-reveal')
+    await revealTallyBtn.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {})
+    await expect(revealTallyBtn)
+      .toBeEnabled({ timeout: 15_000 })
+      .catch(() => {})
+    if (await revealTallyBtn.isVisible().catch(() => false)) {
+      await revealTallyBtn.click()
+      await hostPage.waitForTimeout(1_500)
+    } else {
+      tryAct('VOTING_REVEAL_TALLY', 'Host', { room: ctx.roomCode })
+      await hostPage.waitForTimeout(1_500)
+    }
+    await captureSnapshot(
+      ctx.pages,
+      testInfo,
+      `${evidenceLabel}-day-tally-revealed-r${attempt + 1}`,
+    )
+
+    // A second consecutive tie AUTO-advances to NIGHT (no host click:
+    // VotingPipeline.processGoToNightWithEventCollection), and a decisive
+    // vote can end the game right here — exit on any phase change.
+    const topPhase = await readTopPhase(hostPage, gameId)
+    if (topPhase && topPhase !== 'DAY_VOTING') {
+      return topPhase
+    }
+
+    // If the backend has left voting (VOTE_RESULT / BADGE_HANDOVER /
+    // HUNTER_SHOOT) or the top-level phase changed (e.g. GAME_OVER), stop.
+    const leftVoting = await waitForVotingSubPhase(hostPage, gameId, 'VOTE_RESULT', 5_000)
+    if (leftVoting) break
+  }
+
+  // Did BADGE_HANDOVER fire? Read the backend sub-phase directly — DOM-only
+  // detection misses fast transitions on slow runners.
+  const subPhaseAfterReveal = await hostPage.evaluate(async (id: string) => {
+    const token = localStorage.getItem('jwt')
+    if (!token) return null
+    const res = await fetch(`/api/game/${id}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    return (await res.json())?.votingPhase?.subPhase ?? null
+  }, gameId)
+
+  if (subPhaseAfterReveal === 'HUNTER_SHOOT') {
+    // The vote executed the HUNTER — the freshly eliminated hunter takes the
+    // revenge shot (alive-filter deliberately not applied: the actor is dead
+    // by definition of this sub-phase).
+    const hunterBot = (ctx.roleMap.HUNTER ?? [])[0]
+    if (!hunterBot) {
+      // eslint-disable-next-line no-console
+      console.warn('[completeDay] HUNTER_SHOOT fired but roleMap has no HUNTER — cannot resolve')
+    } else {
+      assertActorRole(ctx, hunterBot, 'HUNTER', 'HUNTER_SHOOT')
+      if (plan.hunterShootTargetSeat != null) {
+        tryAct('HUNTER_SHOOT', actName(hunterBot), {
+          target: String(plan.hunterShootTargetSeat),
+          room: ctx.roomCode,
+        })
+      } else {
+        tryAct('HUNTER_PASS', actName(hunterBot), { room: ctx.roomCode })
+      }
+      await waitForVotingSubPhase(hostPage, gameId, 'VOTE_RESULT', 10_000)
+      await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-hunter-shot-resolved`)
+    }
+  }
+
+  if (subPhaseAfterReveal === 'BADGE_HANDOVER') {
+    await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-badge-handover-triggered`)
+    // Resolve the eliminated sheriff's page. Caller may have supplied it
+    // explicitly (HARD_MODE knows the seer is sheriff up-front) but in
+    // CLASSIC the elected sheriff depends on who campaigns + who wins (e.g.
+    // when host=SEER, the wolf becomes sole candidate and wins; voting that
+    // wolf out then triggers BADGE_HANDOVER on the wolf bot's own page).
+    // Auto-resolve in priority order:
+    //   1. eliminated == host → use hostPage.
+    //   2. eliminated is the bot tracked in ctx.bots[role] → use that role's page.
+    //   3. eliminated is a different bot of a tracked role → match by userId
+    //      across roleMap, but only if we have a page logged in as THAT bot.
+    //   4. None match → log + skip (game stalls — caller must open a page).
+    const hostUserId = await readHostUserId(hostPage)
+    let resolvedSheriffPage = sheriffPage
+    if (!resolvedSheriffPage && targetUserId) {
+      if (targetUserId === hostUserId) {
+        resolvedSheriffPage = hostPage
+      } else {
+        for (const [role, bot] of ctx.bots) {
+          if (bot.userId === targetUserId) {
+            resolvedSheriffPage = ctx.pages.get(role)
+            break
+          }
+        }
+      }
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[completeDay] auto-resolved sheriffPage for eliminated userId=${targetUserId} → ` +
+          `${resolvedSheriffPage ? 'found' : 'NOT FOUND in ctx.pages or hostPage'}`,
+      )
+    }
+    // Default the badge recipient to host's seat if the caller didn't
+    // specify one. This avoids cascading BADGE_HANDOVERs in CLASSIC: when
+    // bot-A sheriff is voted out and we click "first alive slot" on bot-A's
+    // page, the badge can land on another wolf bot we don't have a page
+    // for; voting THAT bot out later then fires BADGE_HANDOVER and the
+    // auto-resolve has no page to drive. Parking the badge on the host
+    // (whose page we always have) makes the next handover — when host
+    // themselves gets voted out — driveable on hostPage. When host IS the
+    // eliminated sheriff, fall back to first-alive (host's seat is dead).
+    let resolvedRecipientSeat = badgeRecipientSeat
+    if (resolvedRecipientSeat === undefined && targetUserId !== hostUserId) {
+      const hostSeat = await readHostSeat(hostPage, gameId)
+      if (hostSeat != null) {
+        resolvedRecipientSeat = hostSeat
+        // eslint-disable-next-line no-console
+        console.warn(`[completeDay] defaulting badge recipient to host seat=${hostSeat}`)
+      }
+    }
+    if (!resolvedSheriffPage) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[completeDay] BADGE_HANDOVER fired for game=${gameId} but no sheriffPage available — ` +
+          `caller must pass the eliminated sheriff's browser page (or open one in browserRoles).`,
+      )
+    } else {
+      // Pick the badge recipient. If the caller supplied `badgeRecipientSeat`,
+      // click that exact seat — important when the same eliminated-sheriff
+      // flow can fire on a later day with a different person voted out
+      // (e.g. HARD_MODE D2 elimination), where parking the badge on a wolf
+      // keeps it sticky for the remainder of the test. Otherwise pick the
+      // first alive slot. Click is on the page where `isEliminatedSheriff`
+      // is true (resolvedSheriffPage) — only that page renders the buttons.
+      const slot =
+        resolvedRecipientSeat !== undefined
+          ? resolvedSheriffPage.locator(
+              `.player-grid [data-seat="${resolvedRecipientSeat}"].slot-alive`,
+            )
+          : resolvedSheriffPage.locator('.player-grid .slot-alive').first()
+      await slot.waitFor({ state: 'visible', timeout: 10_000 })
+      await slot.click()
+      await resolvedSheriffPage.waitForTimeout(300)
+
+      const passBtn = resolvedSheriffPage.getByTestId('badge-pass')
+      const passEnabled = await passBtn
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (passEnabled) {
+        await passBtn.click()
+      } else {
+        // Fall back to destroy if for some reason no slot was selectable.
+        const destroyBtn = resolvedSheriffPage.getByTestId('badge-destroy')
+        if (await destroyBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await destroyBtn.click()
+        }
+      }
+      // Wait for the sub-phase to leave BADGE_HANDOVER (backend transitions
+      // to VOTE_RESULT once the badge is passed/destroyed).
+      const leftBadge = await waitForVotingSubPhase(hostPage, gameId, 'VOTE_RESULT', 10_000)
+      // eslint-disable-next-line no-console
+      console.warn(`[completeDay] left BADGE_HANDOVER → VOTE_RESULT: ${leftBadge}`)
+    }
+    await hostPage.waitForTimeout(1_000)
+    await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-badge-handover-done`)
+  }
+
+  // Host clicks Continue to advance to night. After the badge handover
+  // resolves the host page sees `voting-continue`; if the elimination ended
+  // the game (HARD_MODE wolf-win at this very vote) the page redirected to
+  // /result and the button never renders — that's fine, just skip it.
+  if (hostPage.url().includes('/result/')) return 'GAME_OVER'
+  const continueBtn = hostPage.getByTestId('voting-continue')
+  if (await continueBtn.isVisible({ timeout: 6_000 }).catch(() => false)) {
+    await continueBtn.click()
+    await hostPage.waitForTimeout(1_200)
+  }
+  return readTopPhase(hostPage, gameId)
+}

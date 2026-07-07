@@ -19,6 +19,7 @@ makes should be derivable from these documents.
 | 07 | [scenario-07-with-guard.md](scenario-07-with-guard.md)                                 | 7 (W×2, S, Wi, H, G, V) | TBD (mid-game)        | Guard protect, same-player repeat rejection             |
 | 08 | [scenario-08-with-idiot.md](scenario-08-with-idiot.md)                                 | 6 (W×2, S, I, H, V)     | Mid-game (see doc)    | Idiot reveal on vote, loses vote right, stays alive     |
 | 09 | [scenario-09-e2e.md](scenario-09-e2e.md)                                               | 12 (hard mode)          | see doc               | HARD_MODE win condition, full 12-player regression      |
+| 10 | [scenario-10-5night-hardmode-spine.md](scenario-10-5night-hardmode-spine.md)           | 12 (hard, all roles)    | Wolves win Day 5      | 5-night master script: poison/antidote/guard saves, potion exhaustion, double tie, dual dead-role masking, 60-file audio manifest |
 
 > **Role abbreviations used throughout:** W = WEREWOLF, S = SEER, Wi = WITCH, H = HUNTER, G = GUARD, V = VILLAGER
 

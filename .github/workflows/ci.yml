@@ -96,7 +96,12 @@ jobs:
         run: npm run test:unit:coverage
 
   e2e-ui:
-    name: E2E · UI (${{ matrix.shard }}/3)
+    # No shard-count denominator in the name: branch protection matches
+    # required checks by EXACT name, so "(1/3)" style names break protection
+    # every time the shard count changes (bit us on the 6→8 integration
+    # rebalance). Update the required checks in Settings → Branches if these
+    # names ever change again.
+    name: E2E · UI (${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -227,9 +232,18 @@ jobs:
   #     full-game-audio.spec.ts            ~42s
   #     bgm-flow.spec.ts                   ~40s
   #     login.spec.ts                      ~10s
-  #     guard-audio-sequence.spec.ts        ~0s  (skipped)
+  #     guard-audio-sequence.spec.ts       ~85s  (runs on shard 6 — an older
+  #                                               note wrongly said "skipped")
+  #
+  #   2026-07-07 additions (local measurements, CI ≈ 2×):
+  #     flow-5night-hardmode.spec.ts      ~330s  ← new long pole, own shard 7
+  #     flow-12p-sheriff night-killed      ~150s  (was in NO shard before —
+  #                                               shards 1+2 grep only
+  #                                               CLASSIC/HARD_MODE)
+  #     witch-selfsave-blocked-flow.spec.ts ~35s  (one night + one reveal)
   e2e-integration:
-    name: E2E · Integration (${{ matrix.shard.id }}/6)
+    # Denominator-free for the same reason as the UI shards (see above).
+    name: E2E · Integration (${{ matrix.shard.id }})
     runs-on: ubuntu-latest
     needs: backend
     strategy:
@@ -256,6 +270,18 @@ jobs:
           - id: 6
             specs: e2e/real/witch-audio.spec.ts e2e/real/audio-reconnect-recovery.spec.ts e2e/real/login.spec.ts e2e/real/room-ready-sync.spec.ts e2e/real/guard-audio-sequence.spec.ts
             grep: ''
+          # Shard 7: the 5-night HARD_MODE spine — the longest single spec,
+          # runs alone. Pre-agreed fallback: demote to a nightly workflow
+          # (payment-e2e.yml pattern) if p95 exceeds 15m or it flakes >1/20.
+          - id: 7
+            specs: e2e/real/flow-5night-hardmode.spec.ts
+            grep: ''
+          # Shard 8: flow-12p scenario 3 (never sharded before — shards 1+2
+          # grep only its siblings) + the witch-selfsave variant. The grep is
+          # a regex alternation over both describe titles.
+          - id: 8
+            specs: e2e/real/flow-12p-sheriff.spec.ts e2e/real/witch-selfsave-blocked-flow.spec.ts
+            grep: 'night-killed sheriff|Witch self-save blocked'
 
     steps:
       - uses: actions/checkout@v4

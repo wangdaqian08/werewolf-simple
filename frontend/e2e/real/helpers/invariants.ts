@@ -42,8 +42,11 @@ import type { Page } from '@playwright/test'
 export const PHASE_RANK: Record<string, number> = Object.freeze({
   ROLE_REVEAL: 0,
   WAITING: 10,
-  SHERIFF_ELECTION: 20,
   NIGHT: 30,
+  // The day-1 election opens at END of night 1 (NIGHT → SHERIFF_ELECTION,
+  // before the death reveal — NightOrchestrator.resolveNightKills), so it
+  // ranks after NIGHT and before the day phases.
+  SHERIFF_ELECTION: 35,
   DAY_PENDING: 40,
   DAY_DISCUSSION: 50,
   DAY_VOTING: 60,
@@ -207,7 +210,11 @@ export function assertGameInvariantsOnState(
   //    GAME_OVER terminal state is exempt.
   const sheriff = (state.players ?? []).find((p) => p.isSheriff)
   if (sheriff && !sheriff.isAlive) {
-    const inHandover = phase === 'DAY_VOTING' && vSub === 'BADGE_HANDOVER'
+    // Two legitimate handover windows: vote-out (DAY_VOTING) and night-death
+    // (DAY_DISCUSSION at reveal — DaySubPhase.BADGE_HANDOVER).
+    const inHandover =
+      (phase === 'DAY_VOTING' && vSub === 'BADGE_HANDOVER') ||
+      (phase === 'DAY_DISCUSSION' && dSub === 'BADGE_HANDOVER')
     if (phase !== 'GAME_OVER' && !inHandover) {
       throw new Error(
         `[invariants/${contextLabel}] sheriff (seat ${sheriff.seatIndex} ${sheriff.nickname}) ` +
