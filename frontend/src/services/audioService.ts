@@ -32,6 +32,31 @@ const BGM_RAMP_SEC = 0.15
 // queue is never discarded.
 const STUCK_QUEUE_MS = 15_000
 
+/**
+ * Static narration pool, primed (muted play+pause) inside the first user
+ * gesture. iOS Safari removes its autoplay restriction PER ELEMENT on the
+ * element's first gestured play() — page-level interaction history is not
+ * enough — so cues pushed later over STOMP would otherwise be denied on
+ * every night. Mirrors backend/src/main/resources/static/audio/ minus the
+ * unreferenced crow_night.mp3; a cue missing from this list still works via
+ * the park-and-resume path, it just needs one extra tap on iOS.
+ */
+export const KNOWN_NARRATION_FILES: readonly string[] = [
+  'goes_dark_close_eyes.mp3',
+  'wolf_howl.mp3',
+  'wolf_open_eyes.mp3',
+  'wolf_close_eyes.mp3',
+  'witch_open_eyes.mp3',
+  'witch_close_eyes.mp3',
+  'seer_open_eyes.mp3',
+  'seer_close_eyes.mp3',
+  'guard_open_eyes.mp3',
+  'guard_close_eyes.mp3',
+  'rooster_crowing.mp3',
+  'day_time.mp3',
+  'countdown_warning.mp3',
+]
+
 class AudioService {
   private audioCache = new Map<string, HTMLAudioElement>()
   private globalVolume = 1.0
@@ -72,6 +97,11 @@ class AudioService {
   private audioQueue: Array<{ filename: string; options: AudioOptions }> = []
   private isPlayingQueue = false
   private lastPlaybackStartTime = 0
+  // Narration blocked by the autoplay policy waits here for a user gesture
+  // (the narration counterpart of bgmPendingStart, PR #119).
+  private pendingGestureResume = false
+  private primedFiles = new Set<string>()
+  private currentAudio: HTMLAudioElement | null = null
 
   /**
    * Setup tracking for user interaction to enable audio playback
@@ -89,6 +119,21 @@ class AudioService {
           } catch (error) {
             console.warn('[AudioService] Failed to initialize AudioContext:', error)
           }
+        }
+      }
+
+      // Bless the narration pool while we are inside a genuine input
+      // handler — the only context iOS accepts for a first play().
+      this.primeNarrationPool()
+
+      // Resume narration parked by the autoplay policy. playNextInQueue's
+      // play() runs synchronously inside this input handler, which is
+      // exactly the context iOS/Firefox require.
+      if (this.pendingGestureResume) {
+        this.pendingGestureResume = false
+        if (!this.muted && this.audioQueue.length > 0 && !this.isPlayingQueue) {
+          this.duckBgm()
+          this.playNextInQueue()
         }
       }
 
@@ -196,6 +241,16 @@ class AudioService {
       // does call unduckBgm because no new narration is guaranteed to follow.
     }
 
+    // A parked backlog is stale by definition (same philosophy as the
+    // tab-resume drain: never replay narration other players already
+    // heard). Keep only the newest sequence for the eventual gesture-resume.
+    if (this.pendingGestureResume && !this.isPlayingQueue && this.audioQueue.length > 0) {
+      console.warn('[AudioService] Replacing parked narration with a newer sequence', {
+        dropped: this.audioQueue.length,
+      })
+      this.audioQueue = []
+    }
+
     // Add to queue with options
     filenames.forEach((filename) => {
       this.audioQueue.push({ filename, options })
@@ -216,20 +271,22 @@ class AudioService {
   private playNextInQueue(): void {
     if (this.audioQueue.length === 0) {
       this.isPlayingQueue = false
+      this.currentAudio = null
       this.unduckBgm()
       console.log('[AudioService] Queue empty, playback complete')
       return
     }
 
     this.isPlayingQueue = true
-    const { filename, options } = this.audioQueue.shift()!
-    console.log(
-      `[AudioService] Starting playback: ${filename} (queue remaining: ${this.audioQueue.length})`,
-    )
+    const item = this.audioQueue.shift()!
+    const { filename, options } = item
 
     try {
       const audio = this.getAudio(filename)
       audio.currentTime = 0
+      // Pool priming leaves elements muted for a tick; real playback must
+      // always be audible.
+      audio.muted = false
 
       // Apply options
       if (options.loop !== undefined) {
@@ -250,32 +307,102 @@ class AudioService {
         this.playNextInQueue()
       }
 
-      // Check if user has interacted before playing
+      // No interaction yet: the browser would deny play() anyway. Park the
+      // sequence for the first gesture instead of consuming it.
       if (!this.userInteracted) {
         console.warn('[AudioService] Cannot play audio - user has not interacted with the page yet')
-        console.warn('[AudioService] Please click anywhere on the page to enable audio')
-        this.playNextInQueue() // Continue to next audio
+        this.parkQueue(item)
         return
       }
 
+      console.log(
+        `[AudioService] Starting playback: ${filename} (queue remaining: ${this.audioQueue.length})`,
+      )
+
       // Record start time for stuck-queue watchdog in playSequential.
       this.lastPlaybackStartTime = performance.now()
+      this.currentAudio = audio
 
-      // Handle play errors and continue to next
       audio.play().catch((error) => {
-        console.warn(`[AudioService] Failed to play ${filename} in queue:`, error)
-
-        // Check if it's an autoplay error
+        // Autoplay denial (iOS per-element gesture rule, Chrome/Firefox
+        // before first interaction): park and retry on the next gesture —
+        // dropping here is what made whole nights silently mute on phones.
         if (error instanceof Error && error.name === 'NotAllowedError') {
-          console.warn('[AudioService] Autoplay prevented by browser policy')
-          console.warn('[AudioService] Please click anywhere on the page to enable audio')
+          console.warn(
+            '[AudioService] Autoplay prevented by browser policy — parking narration for the next gesture',
+          )
+          this.parkQueue(item)
+          return
         }
 
+        // Anything else (decode error, missing file): skip this cue and
+        // keep the sequence moving.
+        console.warn(`[AudioService] Failed to play ${filename} in queue:`, error)
         this.playNextInQueue()
       })
     } catch (error) {
       console.warn(`[AudioService] Error playing ${filename} in queue:`, error)
       this.playNextInQueue()
+    }
+  }
+
+  /**
+   * Put a blocked item back at the queue head and wait for a user gesture
+   * (the interaction tracker resumes the queue inside its handler). The
+   * narration counterpart of bgmPendingStart: before this existed, blocked
+   * cues were consumed one by one — a whole night could drain silently, and
+   * the first cue to arrive after a stray tap played out of context (e.g.
+   * wolf_close_eyes blaring from the wolf's phone during 狼人闭眼).
+   */
+  private parkQueue(item: { filename: string; options: AudioOptions }): void {
+    this.audioQueue.unshift(item)
+    this.isPlayingQueue = false
+    this.currentAudio = null
+    this.pendingGestureResume = true
+    console.warn(
+      `[AudioService] Narration parked (autoplay blocked) — ${this.audioQueue.length} cue(s) awaiting a user gesture`,
+    )
+  }
+
+  /**
+   * Muted play()+pause() inside a user gesture removes the element-level
+   * autoplay restriction (iOS Safari blesses each HTMLAudioElement on its
+   * first gestured play; page-level interaction is not enough). Primes the
+   * static cue pool plus anything queued, except the queue head — the
+   * gesture-resume real-plays that one in the same handler. A rejected
+   * prime is retried on a later gesture.
+   */
+  private primeNarrationPool(): void {
+    const queued = this.audioQueue.map((q) => q.filename)
+    const head = queued[0]
+    let primed = 0
+    for (const filename of new Set([...KNOWN_NARRATION_FILES, ...queued])) {
+      if (this.primedFiles.has(filename) || filename === head) continue
+      try {
+        const el = this.getAudio(filename)
+        if (el === this.currentAudio) continue
+        el.muted = true
+        this.primedFiles.add(filename)
+        primed += 1
+        el.play()
+          .then(() => {
+            // Never yank an element that became the live cue meanwhile.
+            if (el !== this.currentAudio) {
+              el.pause()
+              el.currentTime = 0
+            }
+            el.muted = false
+          })
+          .catch(() => {
+            el.muted = false
+            this.primedFiles.delete(filename)
+          })
+      } catch {
+        /* priming is best-effort; the park-resume path still covers playback */
+      }
+    }
+    if (primed > 0) {
+      console.log(`[AudioService] Primed ${primed} narration file(s) during user gesture`)
     }
   }
 
@@ -333,6 +460,8 @@ class AudioService {
       }
       this.audioQueue = []
       this.isPlayingQueue = false
+      this.pendingGestureResume = false
+      this.currentAudio = null
     } catch (error) {
       console.warn('[AudioService] Error stopping all audio:', error)
     }
@@ -488,6 +617,8 @@ class AudioService {
     this.audioQueue = []
     this.stopAllNarration()
     this.isPlayingQueue = false
+    this.pendingGestureResume = false
+    this.currentAudio = null
     this.unduckBgm()
   }
 
