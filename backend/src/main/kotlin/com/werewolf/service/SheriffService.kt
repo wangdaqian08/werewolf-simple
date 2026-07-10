@@ -50,6 +50,7 @@ class SheriffService(
         ActionType.SHERIFF_VOTE -> vote(request, context)
         ActionType.SHERIFF_ABSTAIN -> abstain(request, context)
         ActionType.SHERIFF_END_RESULT -> endResult(request, context)
+        ActionType.SHERIFF_SET_SPEECH_ORDER -> setSpeechOrder(request, context)
         else -> GameActionResult.Rejected("Unknown sheriff action: ${request.actionType}")
     }
 
@@ -132,6 +133,7 @@ class SheriffService(
             "candidates" to candidatesOut,
             "decisionProgress" to decisionProgress,
             "speakingOrder" to speakingOrderIds,
+            "speechOrderDirection" to election.speechOrderDirection.name,
             "currentSpeakerId" to currentSpeakerId,
             // hasPassed: player explicitly chose not to run (QUIT but was never in the speaking order)
             "hasPassed" to (myCandidate?.status == CandidateStatus.QUIT && !speakingOrderIds.contains(myPlayer?.userId)),
@@ -244,7 +246,7 @@ class SheriffService(
         }
 
         election.subPhase = ElectionSubPhase.SPEECH
-        election.speakingOrder = running.map { it.userId }.shuffled().joinToString(",")
+        election.speakingOrder = buildSpeakingOrder(election, running, context)
         election.currentSpeakerIdx = 0
         sheriffElectionRepository.save(election)
         broadcastAfterCommit(
@@ -297,13 +299,32 @@ class SheriffService(
         }
 
         election.subPhase = ElectionSubPhase.SPEECH
-        election.speakingOrder = candidates.map { it.userId }.shuffled().joinToString(",")
+        election.speakingOrder = buildSpeakingOrder(election, candidates, context)
         election.currentSpeakerIdx = 0
         sheriffElectionRepository.save(election)
         broadcastAfterCommit(
             context.gameId,
             DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name)
         )
+        return GameActionResult.Success()
+    }
+
+    private fun setSpeechOrder(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (request.actorUserId != context.game.hostUserId)
+            return GameActionResult.Rejected("Only host can set the speech order")
+        if (context.game.phase != GamePhase.SHERIFF_ELECTION)
+            return GameActionResult.Rejected("Not in SHERIFF_ELECTION phase")
+        val election = context.election ?: return GameActionResult.Rejected("No election in progress")
+        if (election.subPhase != ElectionSubPhase.SIGNUP)
+            return GameActionResult.Rejected("Speech order can only be set during SIGNUP")
+
+        val direction = (request.payload["direction"] as? String)
+            ?.let { d -> SpeechOrderDirection.entries.firstOrNull { it.name == d } }
+            ?: return GameActionResult.Rejected("payload.direction must be ASC or DESC")
+
+        election.speechOrderDirection = direction
+        sheriffElectionRepository.save(election)
+        broadcastSignupUpdate(context.gameId)
         return GameActionResult.Success()
     }
 
@@ -454,6 +475,23 @@ class SheriffService(
         // Sheriff is shown on the RESULT screen until the host clicks 显示结果
         // (SHERIFF_END_RESULT) — no auto-timer.
         return GameActionResult.Success()
+    }
+
+    /**
+     * Speaking order = running candidates sorted by seat index, ascending or
+     * descending per the host's SIGNUP-time choice (default ASC). Replaces
+     * the historical shuffled() order.
+     */
+    private fun buildSpeakingOrder(
+        election: SheriffElection,
+        running: List<SheriffCandidate>,
+        context: GameContext,
+    ): String {
+        val seatByUserId = context.players.associate { it.userId to it.seatIndex }
+        val asc = running.sortedBy { seatByUserId[it.userId] ?: Int.MAX_VALUE }
+        val ordered =
+            if (election.speechOrderDirection == SpeechOrderDirection.DESC) asc.asReversed() else asc
+        return ordered.joinToString(",") { it.userId }
     }
 
     private fun electSheriff(winnerUserId: String, context: GameContext) {

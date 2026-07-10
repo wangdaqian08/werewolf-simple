@@ -85,6 +85,7 @@
         @reveal-result="handleSheriffRevealResult"
         @end-result="handleSheriffEndResult"
         @appoint="handleSheriffAppoint"
+        @set-speech-order="handleSheriffSetSpeechOrder"
         @self-destruct="handleSelfDestruct"
         @start-timer="(s) => handleTimerStart(Number(route.params.gameId), s)"
         @stop-timer="() => handleTimerStop(Number(route.params.gameId))"
@@ -731,6 +732,9 @@ async function handleSheriffEndResult() {
 }
 async function handleSheriffAppoint(userId: string) {
   await action({ actionType: 'SHERIFF_APPOINT', targetId: userId })
+}
+async function handleSheriffSetSpeechOrder(direction: 'ASC' | 'DESC') {
+  await action({ actionType: 'SHERIFF_SET_SPEECH_ORDER', payload: { direction } })
 }
 async function handleRevealResult() {
   await action({ actionType: 'REVEAL_NIGHT_RESULT' })

@@ -21,12 +21,18 @@ class SheriffElection(
     @Column(name = "sub_phase", nullable = false, length = 10)
     var subPhase: ElectionSubPhase = ElectionSubPhase.SIGNUP,
 
-    // Comma-separated userIds in randomized speaking order; set once at SPEECH start
+    // Comma-separated userIds in seat-index order (ASC/DESC per speechOrderDirection);
+    // set once at SPEECH start
     @Column(name = "speaking_order", columnDefinition = "TEXT")
     var speakingOrder: String? = null,
 
     @Column(name = "current_speaker_idx", nullable = false)
     var currentSpeakerIdx: Int = 0,
+
+    // Host-chosen speech order direction (set during SIGNUP, default ASC).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "speech_order_direction", nullable = false, length = 4)
+    var speechOrderDirection: SpeechOrderDirection = SpeechOrderDirection.ASC,
 
     @Column(name = "elected_sheriff_user_id", length = 128)
     var electedSheriffUserId: String? = null,
