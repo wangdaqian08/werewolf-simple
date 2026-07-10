@@ -312,6 +312,8 @@ class SheriffService(
     private fun setSpeechOrder(request: GameActionRequest, context: GameContext): GameActionResult {
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can set the speech order")
+        if (context.game.phase != GamePhase.SHERIFF_ELECTION)
+            return GameActionResult.Rejected("Not in SHERIFF_ELECTION phase")
         val election = context.election ?: return GameActionResult.Rejected("No election in progress")
         if (election.subPhase != ElectionSubPhase.SIGNUP)
             return GameActionResult.Rejected("Speech order can only be set during SIGNUP")

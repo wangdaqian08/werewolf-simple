@@ -21,7 +21,8 @@ class SheriffElection(
     @Column(name = "sub_phase", nullable = false, length = 10)
     var subPhase: ElectionSubPhase = ElectionSubPhase.SIGNUP,
 
-    // Comma-separated userIds in randomized speaking order; set once at SPEECH start
+    // Comma-separated userIds in seat-index order (ASC/DESC per speechOrderDirection);
+    // set once at SPEECH start
     @Column(name = "speaking_order", columnDefinition = "TEXT")
     var speakingOrder: String? = null,
 
