@@ -52,6 +52,33 @@
         </div>
       </div>
 
+      <!-- Host-only: candidate speaking order for the SPEECH sub-phase.
+           Server-authoritative — this only fires SHERIFF_SET_SPEECH_ORDER;
+           the backend stores it and builds the order at SIGNUP→SPEECH. -->
+      <div v-if="isHost" class="order-toggle">
+        <div class="order-label">发言顺序 / Speaking order</div>
+        <div class="order-btns">
+          <button
+            class="btn btn-outline order-btn"
+            :class="{ 'order-active': speechOrderDirection === 'ASC' }"
+            data-testid="speech-order-asc"
+            :disabled="actionPending"
+            @click="emit('set-speech-order', 'ASC')"
+          >
+            正序 / Seat ↑
+          </button>
+          <button
+            class="btn btn-outline order-btn"
+            :class="{ 'order-active': speechOrderDirection === 'DESC' }"
+            data-testid="speech-order-desc"
+            :disabled="actionPending"
+            @click="emit('set-speech-order', 'DESC')"
+          >
+            倒序 / Seat ↓
+          </button>
+        </div>
+      </div>
+
       <div class="spacer" />
       <div class="action-footer">
         <template v-if="iAmCandidate">
@@ -631,11 +658,14 @@ const emit = defineEmits<{
   'self-destruct': []
   'start-timer': [seconds: number]
   'stop-timer': []
+  'set-speech-order': [direction: 'ASC' | 'DESC']
 }>()
 
 const iAmCandidate = computed(() =>
   props.election.candidates.some((c) => c.userId === props.myUserId && c.status === 'RUNNING'),
 )
+
+const speechOrderDirection = computed(() => props.election.speechOrderDirection ?? 'ASC')
 
 const myCandidateStatus = computed(
   () => props.election.candidates.find((c) => c.userId === props.myUserId)?.status ?? null,
@@ -1255,6 +1285,27 @@ function speakerLabel(uid: string, idx: number) {
 }
 
 .bold {
+  font-weight: 700;
+}
+
+.order-toggle {
+  margin-top: 12px;
+}
+.order-label {
+  font-size: 12px;
+  color: var(--muted, #8a7a65);
+  margin-bottom: 6px;
+}
+.order-btns {
+  display: flex;
+  gap: 8px;
+}
+.order-btn {
+  flex: 1;
+}
+.order-btn.order-active {
+  border-color: var(--gold, #a07830);
+  color: var(--gold, #a07830);
   font-weight: 700;
 }
 </style>

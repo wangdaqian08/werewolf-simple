@@ -374,3 +374,59 @@ describe('SheriffElection — below-header layout (Action chip on the right)', (
     expect(wrapper.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
   })
 })
+
+describe('SheriffElection — speech order toggle (SIGNUP)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('host sees ASC/DESC toggle during SIGNUP, ASC active by default', () => {
+    const wrapper = mount(SheriffElection, {
+      props: { ...DEFAULT_PROPS, isHost: true, election: makeElection({ subPhase: 'SIGNUP' }) },
+    })
+    const asc = wrapper.find('[data-testid="speech-order-asc"]')
+    const desc = wrapper.find('[data-testid="speech-order-desc"]')
+    expect(asc.exists()).toBe(true)
+    expect(desc.exists()).toBe(true)
+    expect(asc.classes()).toContain('order-active')
+    expect(desc.classes()).not.toContain('order-active')
+  })
+
+  it('toggle reflects DESC from game state', () => {
+    const wrapper = mount(SheriffElection, {
+      props: {
+        ...DEFAULT_PROPS,
+        isHost: true,
+        election: makeElection({ subPhase: 'SIGNUP', speechOrderDirection: 'DESC' }),
+      },
+    })
+    expect(wrapper.find('[data-testid="speech-order-desc"]').classes()).toContain('order-active')
+    expect(wrapper.find('[data-testid="speech-order-asc"]').classes()).not.toContain('order-active')
+  })
+
+  it('clicking DESC emits set-speech-order', async () => {
+    const wrapper = mount(SheriffElection, {
+      props: { ...DEFAULT_PROPS, isHost: true, election: makeElection({ subPhase: 'SIGNUP' }) },
+    })
+    await wrapper.find('[data-testid="speech-order-desc"]').trigger('click')
+    expect(wrapper.emitted('set-speech-order')).toEqual([['DESC']])
+  })
+
+  it('non-host never sees the toggle', () => {
+    const wrapper = mount(SheriffElection, {
+      props: { ...DEFAULT_PROPS, isHost: false, election: makeElection({ subPhase: 'SIGNUP' }) },
+    })
+    expect(wrapper.find('[data-testid="speech-order-asc"]').exists()).toBe(false)
+  })
+
+  it('toggle is not rendered outside SIGNUP', () => {
+    const wrapper = mount(SheriffElection, {
+      props: {
+        ...DEFAULT_PROPS,
+        isHost: true,
+        election: makeElection({ subPhase: 'SPEECH', currentSpeakerId: 'u2' }),
+      },
+    })
+    expect(wrapper.find('[data-testid="speech-order-asc"]').exists()).toBe(false)
+  })
+})

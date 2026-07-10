@@ -348,6 +348,8 @@ export interface SheriffElectionState {
   /** Decision progress during SIGNUP — backs the "X / Y 已选择" indicator. */
   decisionProgress?: { decided: number; total: number }
   speakingOrder: string[] // userIds in order
+  // Host-chosen speaking order direction (default ASC); set during SIGNUP
+  speechOrderDirection?: 'ASC' | 'DESC'
   currentSpeakerId?: string
   hasPassed?: boolean // true if I chose to pass on signup
   myVote?: string // userId I voted for
