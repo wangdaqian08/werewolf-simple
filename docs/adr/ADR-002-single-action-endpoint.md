@@ -31,7 +31,7 @@ POST /api/game/action
 | Night: witch     | `WITCH_ACT`                                                                                                                                              |
 | Night: guard     | `GUARD_PROTECT`, `GUARD_SKIP`                                                                                                                            |
 | Idiot            | `IDIOT_REVEAL`                                                                                                                                           |
-| Sheriff election | `SHERIFF_CAMPAIGN`, `SHERIFF_QUIT`, `SHERIFF_QUIT_CAMPAIGN`, `SHERIFF_PASS`, `SHERIFF_START_SPEECH`, `SHERIFF_ADVANCE_SPEECH`, `SHERIFF_VOTE`, `SHERIFF_CONFIRM_VOTE`, `SHERIFF_ABSTAIN`, `SHERIFF_REVEAL_RESULT`, `SHERIFF_APPOINT` |
+| Sheriff election | `SHERIFF_CAMPAIGN`, `SHERIFF_QUIT`, `SHERIFF_QUIT_CAMPAIGN`, `SHERIFF_PASS`, `SHERIFF_START_SPEECH`, `SHERIFF_ADVANCE_SPEECH`, `SHERIFF_VOTE`, `SHERIFF_CONFIRM_VOTE`, `SHERIFF_ABSTAIN`, `SHERIFF_REVEAL_RESULT`, `SHERIFF_APPOINT`, `SHERIFF_SET_SPEECH_ORDER` |
 
 `GameActionDispatcher` routes each `ActionType` to the appropriate pipeline or role handler. Jackson deserializes the
 string from JSON to the enum automatically.

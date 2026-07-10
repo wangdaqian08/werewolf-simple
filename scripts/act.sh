@@ -46,6 +46,7 @@
 #     SHERIFF_ADVANCE_SPEECH    host advances to next speaker
 #     SHERIFF_REVEAL_RESULT     host reveals election result
 #     SHERIFF_APPOINT           host appoints sheriff after tied vote  (requires --target)
+#     SHERIFF_SET_SPEECH_ORDER  host sets speaking order direction (requires --payload '{"direction":"ASC"}' or DESC; SIGNUP phase)
 #
 # PSEUDO-ACTIONS:
 #   STATUS            print phase/subPhase/dayNumber for the current game and exit
@@ -105,6 +106,7 @@
 #   ./scripts/act.sh SHERIFF_QUIT <nick>                          # candidate drops out (SIGNUP)
 #   ./scripts/act.sh SHERIFF_QUIT_CAMPAIGN <nick>                 # candidate quits mid-speech (SPEECH)
 #   ./scripts/act.sh SHERIFF_APPOINT --target 3                   # host appoints seat 3 after tie
+#   ./scripts/act.sh SHERIFF_SET_SPEECH_ORDER --payload '{"direction":"DESC"}'   # host: speak in descending seat order
 # =============================================================================
 
 set -euo pipefail
@@ -132,7 +134,7 @@ Usage: $0 <ACTION_TYPE> [PLAYER] [--target PLAYER] [--payload JSON] [--room CODE
             HUNTER_SHOOT HUNTER_PASS BADGE_PASS BADGE_DESTROY
             SHERIFF_CAMPAIGN SHERIFF_PASS SHERIFF_QUIT SHERIFF_QUIT_CAMPAIGN
             SHERIFF_VOTE SHERIFF_ABSTAIN SHERIFF_CONFIRM_VOTE
-            SHERIFF_START_SPEECH SHERIFF_ADVANCE_SPEECH SHERIFF_REVEAL_RESULT SHERIFF_APPOINT
+            SHERIFF_START_SPEECH SHERIFF_ADVANCE_SPEECH SHERIFF_REVEAL_RESULT SHERIFF_APPOINT SHERIFF_SET_SPEECH_ORDER
   Player  : all (default) | <index> | <seat> | <nick>
   Target  : <seat> | <nick> | <userId>   (required for some actions)
   Payload : raw JSON object fields, e.g. '{"useAntidote":true}'
@@ -193,7 +195,7 @@ case "$ACTION_TYPE" in
   HUNTER_SHOOT|HUNTER_PASS|BADGE_PASS|BADGE_DESTROY| \
   SHERIFF_CAMPAIGN|SHERIFF_PASS|SHERIFF_QUIT|SHERIFF_QUIT_CAMPAIGN| \
   SHERIFF_VOTE|SHERIFF_ABSTAIN|SHERIFF_CONFIRM_VOTE| \
-  SHERIFF_START_SPEECH|SHERIFF_ADVANCE_SPEECH|SHERIFF_REVEAL_RESULT|SHERIFF_APPOINT) ;;
+  SHERIFF_START_SPEECH|SHERIFF_ADVANCE_SPEECH|SHERIFF_REVEAL_RESULT|SHERIFF_APPOINT|SHERIFF_SET_SPEECH_ORDER) ;;
   *) fail "Unknown action '$ACTION_TYPE'" ;;
 esac
 
@@ -207,6 +209,12 @@ esac
 case "$ACTION_TYPE" in
   WITCH_ACT)
     [ -z "$PAYLOAD_JSON" ] && fail "'WITCH_ACT' requires --payload (e.g. {\"useAntidote\":false})" ;;
+esac
+
+# SHERIFF_SET_SPEECH_ORDER requires --payload
+case "$ACTION_TYPE" in
+  SHERIFF_SET_SPEECH_ORDER)
+    [ -z "$PAYLOAD_JSON" ] && fail "'SHERIFF_SET_SPEECH_ORDER' requires --payload (e.g. {\"direction\":\"DESC\"})" ;;
 esac
 
 # ── Resolve state file ────────────────────────────────────────────────────────
