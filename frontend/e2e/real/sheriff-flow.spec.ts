@@ -191,6 +191,29 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       { timeout: 10_000 },
     )
 
+    // Host chooses DESCENDING speaking order while still in SIGNUP. DOM-driven
+    // (e2e principle 1): click the toggle on the host page, then assert both
+    // the active-state class flip AND the state round-trip — either alone can
+    // false-pass (class could be local-only; state could change without UI).
+    const descBtn = ctx.hostPage.getByTestId('speech-order-desc')
+    await expect(descBtn).toBeVisible({ timeout: 10_000 })
+    await descBtn.click()
+    await expect(descBtn).toHaveClass(/order-active/, { timeout: 10_000 })
+    await waitForCondition(
+      async () => {
+        const state = await ctx.hostPage.evaluate(async (id: string) => {
+          const token = localStorage.getItem('jwt')
+          const res = await fetch(`/api/game/${id}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          return res.ok ? res.json() : null
+        }, ctx.gameId)
+        return state?.sheriffElection?.speechOrderDirection === 'DESC'
+      },
+      'sheriffElection.speechOrderDirection to round-trip as DESC',
+      10_000,
+    )
+
     // Record campaigner userIds so test 3 can leave them alone when driving
     // remaining alive players to pass.
     test2CampaignerUserIds = new Set<string>([
@@ -266,6 +289,43 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       'sheriff election to auto-transition to SPEECH after every alive player decides',
       15_000,
     )
+
+    // Host chose DESC in test 2 → speakingOrder must be strictly descending
+    // by seat index. Read order + seats in one state fetch and assert the
+    // mapped seat sequence. This is the feature's core end-to-end contract:
+    // DOM toggle → REST action → DB column → order builder → state.
+    const { orderSeats } = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const state = await res.json()
+      const seatByUserId = new Map(
+        ((state?.players ?? []) as Array<{ userId: string; seatIndex: number }>).map((p) => [
+          p.userId,
+          p.seatIndex,
+        ]),
+      )
+      const order = (state?.sheriffElection?.speakingOrder ?? []) as string[]
+      return { orderSeats: order.map((uid) => seatByUserId.get(uid) ?? -1) }
+    }, ctx.gameId)
+    expect(orderSeats.length, 'speaking order must not be empty').toBeGreaterThan(1)
+    expect(orderSeats, 'no unmapped userIds in speaking order').not.toContain(-1)
+    const sortedDesc = [...orderSeats].sort((a, b) => b - a)
+    expect(orderSeats, 'speaking order must be descending by seat').toEqual(sortedDesc)
+
+    // And the first current speaker shown must be the highest-seat candidate.
+    const firstSpeakerSeat = await ctx.hostPage.evaluate(async (id: string) => {
+      const token = localStorage.getItem('jwt')
+      const res = await fetch(`/api/game/${id}/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const state = await res.json()
+      const cur = state?.sheriffElection?.currentSpeakerId as string | undefined
+      const players = (state?.players ?? []) as Array<{ userId: string; seatIndex: number }>
+      return players.find((p) => p.userId === cur)?.seatIndex ?? -1
+    }, ctx.gameId)
+    expect(firstSpeakerSeat).toBe(orderSeats[0])
 
     // Verify all browsers show the speech UI.
     for (const [, page] of Array.from(ctx.pages.entries())) {
