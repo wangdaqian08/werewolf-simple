@@ -108,7 +108,8 @@ class GameActionDispatcher(
             ActionType.SHERIFF_REVEAL_RESULT, ActionType.SHERIFF_APPOINT,
             ActionType.SHERIFF_PASS, ActionType.SHERIFF_QUIT_CAMPAIGN,
             ActionType.SHERIFF_VOTE, ActionType.SHERIFF_CONFIRM_VOTE,
-            ActionType.SHERIFF_ABSTAIN, ActionType.SHERIFF_END_RESULT
+            ActionType.SHERIFF_ABSTAIN, ActionType.SHERIFF_END_RESULT,
+            ActionType.SHERIFF_SET_SPEECH_ORDER
                 -> gamePhasePipeline.handleSheriffElection(request, context)
 
             // ── Wolf self-destruction (day action) ─────────────────────────────
