@@ -244,7 +244,7 @@ class SheriffService(
         }
 
         election.subPhase = ElectionSubPhase.SPEECH
-        election.speakingOrder = running.map { it.userId }.shuffled().joinToString(",")
+        election.speakingOrder = buildSpeakingOrder(election, running, context)
         election.currentSpeakerIdx = 0
         sheriffElectionRepository.save(election)
         broadcastAfterCommit(
@@ -297,7 +297,7 @@ class SheriffService(
         }
 
         election.subPhase = ElectionSubPhase.SPEECH
-        election.speakingOrder = candidates.map { it.userId }.shuffled().joinToString(",")
+        election.speakingOrder = buildSpeakingOrder(election, candidates, context)
         election.currentSpeakerIdx = 0
         sheriffElectionRepository.save(election)
         broadcastAfterCommit(
@@ -454,6 +454,23 @@ class SheriffService(
         // Sheriff is shown on the RESULT screen until the host clicks 显示结果
         // (SHERIFF_END_RESULT) — no auto-timer.
         return GameActionResult.Success()
+    }
+
+    /**
+     * Speaking order = running candidates sorted by seat index, ascending or
+     * descending per the host's SIGNUP-time choice (default ASC). Replaces
+     * the historical shuffled() order.
+     */
+    private fun buildSpeakingOrder(
+        election: SheriffElection,
+        running: List<SheriffCandidate>,
+        context: GameContext,
+    ): String {
+        val seatByUserId = context.players.associate { it.userId to it.seatIndex }
+        val asc = running.sortedBy { seatByUserId[it.userId] ?: Int.MAX_VALUE }
+        val ordered =
+            if (election.speechOrderDirection == SpeechOrderDirection.DESC) asc.asReversed() else asc
+        return ordered.joinToString(",") { it.userId }
     }
 
     private fun electSheriff(winnerUserId: String, context: GameContext) {

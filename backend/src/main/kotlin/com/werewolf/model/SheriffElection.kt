@@ -28,6 +28,11 @@ class SheriffElection(
     @Column(name = "current_speaker_idx", nullable = false)
     var currentSpeakerIdx: Int = 0,
 
+    // Host-chosen speech order direction (set during SIGNUP, default ASC).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "speech_order_direction", nullable = false, length = 4)
+    var speechOrderDirection: SpeechOrderDirection = SpeechOrderDirection.ASC,
+
     @Column(name = "elected_sheriff_user_id", length = 128)
     var electedSheriffUserId: String? = null,
 

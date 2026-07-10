@@ -290,4 +290,30 @@ class SheriffElectionIntegrationTest {
         // No sheriff was elected
         assertThat(savedGame.sheriffUserId).isNull()
     }
+
+    // ── Speech order: default ASC ─────────────────────────────────────────────
+
+    @Test
+    fun `sheriff speeches - speaking order defaults to ascending seat order`() {
+        val r = setupSheriffRoom("SOA")
+        val gameId = startGameAndOpenSheriffElection(
+            r.host, listOf(r.host, r.g1, r.g2, r.g3, r.g4, r.g5), r.roomId
+        )
+
+        // All five guests campaign, deliberately in scrambled order so a pass
+        // can only come from seat sorting (not signup/insertion order). With 5
+        // candidates the old shuffled() order matches ASC with p = 1/120.
+        listOf(r.g5, r.g2, r.g4, r.g1, r.g3).forEach { p ->
+            assertThat(action(p.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
+        }
+        // Host passes → every alive player has decided → auto-advance to SPEECH
+        assertThat(action(r.host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
+
+        val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
+        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.SPEECH)
+        // Seats: host=0, g1=1 … g5=5 (setupSheriffRoom). Ascending seat order:
+        assertThat(election.speakingOrder).isEqualTo(
+            listOf(r.g1, r.g2, r.g3, r.g4, r.g5).joinToString(",") { it.userId }
+        )
+    }
 }

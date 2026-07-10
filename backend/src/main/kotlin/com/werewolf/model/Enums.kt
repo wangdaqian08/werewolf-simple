@@ -23,6 +23,8 @@ enum class ElectionSubPhase { SIGNUP, SPEECH, VOTING, RESULT, TIED }
 
 enum class CandidateStatus { RUNNING, QUIT }
 
+enum class SpeechOrderDirection { ASC, DESC }
+
 enum class VoteContext { SHERIFF_ELECTION, ELIMINATION }
 
 enum class WinnerSide { WEREWOLF, VILLAGER }
