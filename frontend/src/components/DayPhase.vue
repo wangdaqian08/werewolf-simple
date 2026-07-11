@@ -243,7 +243,11 @@
 
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
-    <GameSettingsModal :settings="gameSettings" :open="showSettings" @close="showSettings = false" />
+    <GameSettingsModal
+      :settings="gameSettings"
+      :open="showSettings"
+      @close="showSettings = false"
+    />
 
     <!-- Footer -->
     <footer class="day-footer">
