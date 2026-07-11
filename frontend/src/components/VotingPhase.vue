@@ -40,6 +40,15 @@
             <span class="log-fab-icon" aria-hidden="true">📋</span>
             <span class="log-fab-label">游戏记录</span>
           </button>
+          <button
+            class="log-fab"
+            aria-label="房间信息"
+            data-testid="settings-fab"
+            @click="showSettings = true"
+          >
+            <span class="log-fab-icon" aria-hidden="true">ℹ️</span>
+            <span class="log-fab-label">房间信息</span>
+          </button>
           <ActionMenu
             v-if="myRole"
             phase="DAY_VOTING"
@@ -583,15 +592,17 @@
 
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
+    <GameSettingsModal :settings="gameSettings" :open="showSettings" @close="showSettings = false" />
   </div>
 </template>
 
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { GamePlayer, PlayerRole, VoteRoundHistory, VotingState } from '@/types'
+import type { GamePlayer, GameSettings, PlayerRole, VoteRoundHistory, VotingState } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
+import GameSettingsModal from '@/components/GameSettingsModal.vue'
 import Avatar from '@/components/Avatar.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
 
@@ -611,6 +622,7 @@ const props = defineProps<{
   currentSheriffUserId?: string | null
   voteHistory?: VoteRoundHistory[]
   actionPending?: boolean
+  gameSettings?: GameSettings | null
 }>()
 
 const emit = defineEmits<{
@@ -797,6 +809,7 @@ const ROLE_ZH: Record<string, string> = {
 const showHistory = ref(false)
 const showRoleCard = ref(false)
 const showLog = ref(false)
+const showSettings = ref(false)
 
 watch([showHistory, showRoleCard], ([h, r]) => {
   document.body.style.overflow = h || r ? 'hidden' : ''

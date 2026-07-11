@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import DayPhase from '@/components/DayPhase.vue'
-import type { DayPhaseState, GamePlayer } from '@/types'
+import type { DayPhaseState, GamePlayer, GameSettings } from '@/types'
 
 const PLAYERS: GamePlayer[] = [
   { userId: 'u1', nickname: 'Alice', seatIndex: 1, isAlive: true, isSheriff: false },
@@ -43,7 +43,7 @@ describe('DayPhase — game log button visibility', () => {
     const wrapper = mount(DayPhase, {
       props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_HIDDEN') },
     })
-    expect(wrapper.find('.log-fab').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="log-fab"]').exists()).toBe(false)
   })
 
   it('RESULT_REVEALED: log button IS rendered', () => {
@@ -221,7 +221,7 @@ describe('DayPhase — below-arch layout (my-role-chip left, log-fab + ActionMen
     })
     expect(wrapper.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
     // log-fab is hidden in RESULT_HIDDEN to prevent spoilers, ActionMenu is not
-    expect(wrapper.find('.log-fab').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="log-fab"]').exists()).toBe(false)
   })
 })
 
@@ -424,5 +424,54 @@ describe('DayPhase — hunter night-death shoot', () => {
     // a live player enables it
     await wrapper.find('[data-seat="2"]').trigger('click')
     expect(shootBtn().attributes('disabled')).toBeUndefined()
+  })
+})
+
+const GAME_SETTINGS: GameSettings = {
+  roomCode: '358',
+  totalPlayers: 6,
+  wolfCount: 2,
+  roles: ['WEREWOLF', 'WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'],
+  hasSheriff: true,
+  witchSelfSaveAllowed: true,
+  winCondition: 'CLASSIC',
+}
+
+describe('DayPhase — room info button (settings-fab)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('renders the settings-fab and opens the room info modal on click', async () => {
+    const wrapper = mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        dayPhase: makeDay('RESULT_REVEALED'),
+        gameSettings: GAME_SETTINGS,
+      },
+      attachTo: document.body,
+    })
+
+    const fab = wrapper.find('[data-testid="settings-fab"]')
+    expect(fab.exists()).toBe(true)
+
+    await fab.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const modal = document.body.querySelector('[data-testid="settings-modal"]')
+    expect(modal).not.toBeNull()
+    expect(
+      document.body.querySelector('[data-testid="settings-room-code"]')?.textContent,
+    ).toContain('358')
+
+    wrapper.unmount()
+  })
+
+  it('RESULT_HIDDEN: settings-fab is still rendered (no night-result spoiler in settings)', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_HIDDEN'), gameSettings: GAME_SETTINGS },
+    })
+    expect(wrapper.find('[data-testid="settings-fab"]').exists()).toBe(true)
+    wrapper.unmount()
   })
 })
