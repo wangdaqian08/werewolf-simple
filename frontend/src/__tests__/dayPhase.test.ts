@@ -50,7 +50,7 @@ describe('DayPhase — game log button visibility', () => {
     const wrapper = mount(DayPhase, {
       props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_REVEALED') },
     })
-    expect(wrapper.find('.log-fab').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="log-fab"]').exists()).toBe(true)
   })
 })
 
@@ -202,7 +202,7 @@ describe('DayPhase — below-arch layout (my-role-chip left, log-fab + ActionMen
     })
     const rightStack = wrapper.find('.below-arch-row > .right-stack')
     expect(rightStack.exists()).toBe(true)
-    expect(rightStack.find('.log-fab').exists()).toBe(true)
+    expect(rightStack.find('[data-testid="log-fab"]').exists()).toBe(true)
     expect(rightStack.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
   })
 

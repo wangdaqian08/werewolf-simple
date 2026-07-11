@@ -39,7 +39,7 @@ async function goToDayScenario(page: Page, scenario: 'HOST_HIDDEN' | 'HOST_REVEA
 
 test('📋 FAB is visible in day phase', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  const fab = page.locator('button.log-fab')
+  const fab = page.getByTestId('log-fab')
   await expect(fab).toBeVisible()
   await expect(fab).toHaveAttribute('aria-label', '游戏记录')
 })
@@ -48,7 +48,7 @@ test('📋 FAB is visible for non-host alive player', async ({ page }) => {
   // FAB is hidden during RESULT_HIDDEN to prevent spoilers (see DayPhase.vue),
   // so assert visibility after the host has revealed the night result.
   await goToDayScenario(page, 'ALIVE_REVEALED')
-  await expect(page.locator('button.log-fab')).toBeVisible()
+  await expect(page.getByTestId('log-fab')).toBeVisible()
 })
 
 // ── Drawer open / close ───────────────────────────────────────────────────────
@@ -56,14 +56,14 @@ test('📋 FAB is visible for non-host alive player', async ({ page }) => {
 test('clicking FAB opens the drawer', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
   await expect(page.locator('.action-log-drawer')).not.toBeVisible()
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
   await expect(page.locator('.action-log-drawer')).toBeVisible()
   await expect(page.locator('.drawer-title')).toHaveText('游戏记录')
 })
 
 test('✕ button closes the drawer', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
   await expect(page.locator('.action-log-drawer')).toBeVisible()
   await page.locator('.drawer-close').click()
   // v-if removes element from DOM after slide-up leave transition (0.25s)
@@ -72,7 +72,7 @@ test('✕ button closes the drawer', async ({ page }) => {
 
 test('clicking backdrop closes the drawer', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
   // Wait for both drawer AND backdrop to finish their enter transitions
   const backdrop = page.locator('.drawer-backdrop')
   await expect(backdrop).toBeVisible()
@@ -85,7 +85,7 @@ test('clicking backdrop closes the drawer', async ({ page }) => {
 
 test('drawer shows 昨夜出局 section with night death data', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
 
   // Round 1 block
   const round = page.locator('.round-block').first()
@@ -103,7 +103,7 @@ test('drawer shows 昨夜出局 section with night death data', async ({ page })
 
 test('night death row has no cause or killedBy text', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
 
   const deathSection = page
     .locator('.round-block')
@@ -122,7 +122,7 @@ test('night death row has no cause or killedBy text', async ({ page }) => {
 
 test('drawer shows ⭐ 警长选举 section at the top of day 1 when game has a sheriff', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
 
   // Sheriff section is the FIRST section inside the day-1 round-block — before
   // 昨夜出局 — so players see who became sheriff before reading the round.
@@ -139,7 +139,7 @@ test('drawer shows ⭐ 警长选举 section at the top of day 1 when game has a 
 
 test('drawer shows sheriff election tally so players can analyse alliances', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
 
   const sheriffSection = page.locator('.round-block').first().locator('.log-section').first()
   // Bob got 4 votes (winning row of the tally)
@@ -153,7 +153,7 @@ test('drawer shows sheriff election tally so players can analyse alliances', asy
 
 test('sheriff section surfaces abstain voters so analysts can flag silent wolves', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
 
   const sheriffSection = page.locator('.round-block').first().locator('.log-section').first()
   const abstainRow = sheriffSection.locator('.tally-abstain')
@@ -168,7 +168,7 @@ test('sheriff section surfaces abstain voters so analysts can flag silent wolves
 
 test('drawer shows 投票结果 section with eliminated player', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
 
   // Vote result section — locate by title text so it survives reorderings
   const voteSection = page
@@ -187,7 +187,7 @@ test('drawer shows 投票结果 section with eliminated player', async ({ page }
 
 test('drawer shows vote tally breakdown', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
 
   const voteSection = page
     .locator('.round-block')
@@ -209,7 +209,7 @@ test('drawer shows vote tally breakdown', async ({ page }) => {
 
 test('vote-result section surfaces abstain voters', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
 
   const voteSection = page
     .locator('.round-block')
@@ -236,7 +236,7 @@ async function goToVotingScenario(page: Page) {
 
 test('📋 FAB is visible in voting phase', async ({ page }) => {
   await goToVotingScenario(page)
-  const fab = page.locator('button.log-fab')
+  const fab = page.getByTestId('log-fab')
   await expect(fab).toBeVisible()
   await expect(fab).toHaveAttribute('aria-label', '游戏记录')
 })
@@ -244,7 +244,7 @@ test('📋 FAB is visible in voting phase', async ({ page }) => {
 test('clicking FAB opens the drawer in voting phase', async ({ page }) => {
   await goToVotingScenario(page)
   await expect(page.locator('.action-log-drawer')).not.toBeVisible()
-  await page.locator('button.log-fab').click()
+  await page.getByTestId('log-fab').click()
   await expect(page.locator('.action-log-drawer')).toBeVisible()
   await expect(page.locator('.drawer-title')).toHaveText('游戏记录')
 })

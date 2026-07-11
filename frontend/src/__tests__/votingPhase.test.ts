@@ -586,7 +586,7 @@ describe('VotingPhase — below-arch layout', () => {
     const wrapper = mountVoting()
     const rightStack = wrapper.find('.role-history-row > .right-stack')
     expect(rightStack.exists()).toBe(true)
-    expect(rightStack.find('.log-fab').exists()).toBe(true)
+    expect(rightStack.find('[data-testid="log-fab"]').exists()).toBe(true)
     expect(rightStack.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
   })
 
