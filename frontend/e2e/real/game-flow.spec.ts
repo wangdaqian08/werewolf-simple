@@ -388,6 +388,54 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     await captureSnapshot(ctx.pages, testInfo, '05-day-reveal')
   })
 
+  test('5b. Day — room info modal shows room code + settings on a player browser', async ({}, testInfo) => {
+    // Any in-game player can open it — use the villager browser (not host)
+    // to prove it is not host-gated.
+    const villagerPage = ctx.pages.get('VILLAGER')
+    if (!villagerPage) throw new Error('VILLAGER browser page missing from ctx.pages')
+
+    // The backend serves gameSettings only to game members; wait until the
+    // villager's own state poll carries it (guards against a stale client).
+    let wolfCount = 0
+    await waitForCondition(
+      async () => {
+        const state = await villagerPage.evaluate(async (id: string) => {
+          const token = localStorage.getItem('jwt')
+          const res = await fetch(`/api/game/${id}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          return res.ok ? res.json() : null
+        }, ctx.gameId)
+        if (!state?.gameSettings) return false
+        wolfCount = state.gameSettings.wolfCount
+        return state.gameSettings.roomCode === ctx.roomCode
+      },
+      'villager state carries gameSettings with the harness room code',
+      15_000,
+    )
+
+    // Open the modal via the fab
+    await villagerPage.getByTestId('settings-fab').click()
+    await expect(villagerPage.getByTestId('settings-modal')).toBeVisible()
+
+    // Room code matches the code the harness created the room with
+    await expect(villagerPage.getByTestId('settings-room-code')).toHaveText(ctx.roomCode)
+
+    // Settings match this spec's setupGame options (9 players, no sheriff)
+    await expect(villagerPage.getByTestId('settings-player-count')).toContainText('9')
+    await expect(villagerPage.getByTestId('settings-sheriff')).toContainText('无')
+
+    // Role composition reflects the server-reported wolf count
+    await expect(villagerPage.getByTestId('settings-role-WEREWOLF')).toContainText(`×${wolfCount}`)
+
+    // Close and confirm the game screen is intact for the next test
+    await villagerPage.getByTestId('settings-close').click()
+    await expect(villagerPage.getByTestId('settings-modal')).not.toBeVisible()
+
+    await captureSnapshot(ctx.pages, testInfo, '05b-room-info-modal')
+    invariants = await assertGameInvariants(ctx.hostPage, ctx.gameId, invariants, testInfo.title)
+  })
+
   // ── Test 6: Day → Voting transition ──────────────────────────────────
 
   test('6. Day → Voting — host starts vote, all browsers transition', async ({}, testInfo) => {
