@@ -101,8 +101,8 @@ describe('DemoView — public no-backend showcase', () => {
     const wrapper = mount(DemoView)
     const section = wrapper.find('[data-testid="demo-section-day"]')
     // RESULT_HIDDEN: log FAB hidden
-    expect(section.find('.log-fab').exists()).toBe(false)
+    expect(section.find('[data-testid="log-fab"]').exists()).toBe(false)
     await section.find('[data-testid="demo-day-tab-RESULT_REVEALED"]').trigger('click')
-    expect(section.find('.log-fab').exists()).toBe(true)
+    expect(section.find('[data-testid="log-fab"]').exists()).toBe(true)
   })
 })

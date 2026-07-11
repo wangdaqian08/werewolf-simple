@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import VotingPhase from '@/components/VotingPhase.vue'
-import type { GamePlayer, VotingState } from '@/types'
+import type { GamePlayer, GameSettings, VotingState } from '@/types'
 
 describe('VotingPhase - Badge Handover UI Bug', () => {
   let pinia: ReturnType<typeof createPinia>
@@ -586,7 +586,7 @@ describe('VotingPhase — below-arch layout', () => {
     const wrapper = mountVoting()
     const rightStack = wrapper.find('.role-history-row > .right-stack')
     expect(rightStack.exists()).toBe(true)
-    expect(rightStack.find('.log-fab').exists()).toBe(true)
+    expect(rightStack.find('[data-testid="log-fab"]').exists()).toBe(true)
     expect(rightStack.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
   })
 
@@ -594,5 +594,95 @@ describe('VotingPhase — below-arch layout', () => {
     const wrapper = mountVoting()
     // The old role-action-col wrapper must be gone — ActionMenu lives on the right now.
     expect(wrapper.find('.role-action-col').exists()).toBe(false)
+  })
+})
+
+describe('VotingPhase — room info button (settings-fab)', () => {
+  let pinia: ReturnType<typeof createPinia>
+  let router: ReturnType<typeof createRouter>
+
+  beforeEach(() => {
+    pinia = createPinia()
+    setActivePinia(pinia)
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+  })
+
+  const GAME_SETTINGS: GameSettings = {
+    roomCode: '358',
+    totalPlayers: 6,
+    wolfCount: 2,
+    roles: ['WEREWOLF', 'WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'],
+    hasSheriff: true,
+    witchSelfSaveAllowed: true,
+    winCondition: 'CLASSIC',
+  }
+
+  const votingPhase: VotingState = {
+    dayNumber: 1,
+    subPhase: 'VOTING',
+    phaseStarted: Date.now() - 10000,
+    phaseDeadline: Date.now() + 60000,
+    canVote: true,
+    myVoteSkipped: false,
+    votesSubmitted: 0,
+    totalVoters: 2,
+    tallyRevealed: false,
+    tally: [],
+    badgeDestroyed: false,
+  } as VotingState
+
+  const players: GamePlayer[] = [
+    {
+      userId: 'u1',
+      nickname: 'Alice',
+      seatIndex: 1,
+      isAlive: true,
+      isSheriff: false,
+      canVote: true,
+      idiotRevealed: false,
+    },
+    {
+      userId: 'u2',
+      nickname: 'Bob',
+      seatIndex: 2,
+      isAlive: true,
+      isSheriff: false,
+      canVote: true,
+      idiotRevealed: false,
+    },
+  ]
+
+  it('renders the settings-fab and opens the room info modal on click', async () => {
+    const wrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        gameId: 1,
+        votingPhase,
+        players,
+        myUserId: 'u1',
+        isHost: false,
+        // myRole present so the role-history-row (which hosts the right-stack) renders
+        myRole: 'VILLAGER',
+        isAlive: true,
+        gameSettings: GAME_SETTINGS,
+      },
+      attachTo: document.body,
+    })
+
+    const fab = wrapper.find('[data-testid="settings-fab"]')
+    expect(fab.exists()).toBe(true)
+
+    await fab.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(document.body.querySelector('[data-testid="settings-modal"]')).not.toBeNull()
+    expect(
+      document.body.querySelector('[data-testid="settings-room-code"]')?.textContent,
+    ).toContain('358')
+
+    wrapper.unmount()
   })
 })

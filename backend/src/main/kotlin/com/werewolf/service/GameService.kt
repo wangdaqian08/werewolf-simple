@@ -374,6 +374,18 @@ class GameService(
             // it from gameStore as a fallback when roomStore is empty.
             "bgmTrack" to room?.config?.bgmTrack,
             "witchSelfSaveAllowed" to (room?.config?.witchSelfSaveAllowed ?: true),
+            // Room code + full game config for the in-game info modal.
+            // Members only: non-members get null (never a 403) so existing
+            // bots/scripts that poll state as outsiders keep working.
+            "gameSettings" to if (myPlayer != null && room != null) mapOf(
+                "roomCode" to room.roomCode,
+                "totalPlayers" to room.totalPlayers,
+                "wolfCount" to room.wolfCount,
+                "roles" to buildRoleList(room, players.size).map { it.name },
+                "hasSheriff" to room.hasSheriff,
+                "witchSelfSaveAllowed" to (room.config?.witchSelfSaveAllowed ?: true),
+                "winCondition" to room.winCondition.name,
+            ) else null,
             "winner" to game.winner?.name,
             "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,

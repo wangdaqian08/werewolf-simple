@@ -33,6 +33,15 @@
           <span class="log-fab-icon" aria-hidden="true">📋</span>
           <span class="log-fab-label">游戏记录</span>
         </button>
+        <button
+          class="log-fab"
+          aria-label="房间信息"
+          data-testid="settings-fab"
+          @click="showSettings = true"
+        >
+          <span class="log-fab-icon" aria-hidden="true">ℹ️</span>
+          <span class="log-fab-label">房间信息</span>
+        </button>
         <ActionMenu
           v-if="myRole"
           phase="DAY_DISCUSSION"
@@ -234,6 +243,11 @@
 
     <!-- Action log drawer -->
     <ActionLogDrawer :game-id="gameId" :open="showLog" @close="showLog = false" />
+    <GameSettingsModal
+      :settings="gameSettings"
+      :open="showSettings"
+      @close="showSettings = false"
+    />
 
     <!-- Footer -->
     <footer class="day-footer">
@@ -378,10 +392,11 @@
 
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
-import type { DayPhaseState, GamePlayer, PlayerRole, TimerState } from '@/types'
+import type { DayPhaseState, GamePlayer, GameSettings, PlayerRole, TimerState } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
+import GameSettingsModal from '@/components/GameSettingsModal.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
 import CountdownArc from '@/components/CountdownArc.vue'
 
@@ -397,6 +412,7 @@ const props = defineProps<{
   daySkipVoting?: boolean
   sheriffUserId?: string | null
   actionPending?: boolean
+  gameSettings?: GameSettings | null
 }>()
 
 const isBadgeHandover = computed(() => props.dayPhase.subPhase === 'BADGE_HANDOVER')
@@ -428,6 +444,7 @@ function onHunterTap(player: GamePlayer) {
 }
 
 const showLog = ref(false)
+const showSettings = ref(false)
 const showRoleCard = ref(false)
 
 interface RoleMeta {

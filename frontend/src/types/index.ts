@@ -127,6 +127,22 @@ export interface RoomConfig {
   perksAllowed?: boolean
 }
 
+/**
+ * Room code + game config surfaced on game state for the in-game info modal.
+ * Backend: GameService.getGameState "gameSettings" — present only when the
+ * requesting user is a player in the game.
+ */
+export interface GameSettings {
+  roomCode: string
+  totalPlayers: number
+  wolfCount: number
+  /** Full per-seat role multiset, PlayerRole names (e.g. ["WEREWOLF","WEREWOLF","SEER",...]). */
+  roles: string[]
+  hasSheriff: boolean
+  witchSelfSaveAllowed: boolean
+  winCondition: WinConditionMode
+}
+
 export interface Room {
   roomId: string
   roomCode: string
@@ -240,6 +256,8 @@ export interface GameState {
   bgmTrack?: string | null
   /** Whether the witch may use her antidote to save herself (room config). */
   witchSelfSaveAllowed?: boolean
+  /** Room code + config for the in-game info modal; null/absent for non-members. */
+  gameSettings?: GameSettings | null
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
   /** Game-end credit rewards (present once settled when phase is GAME_OVER). */
   settlement?: GameSettlement | null
