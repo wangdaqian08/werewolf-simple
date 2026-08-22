@@ -75,7 +75,14 @@ class AudioService {
   private bgmBaseVolume = 0.5
   private bgmLevel: BgmLevel = 'LOW'
   private bgmNarrationActive = false
-  private bgmPendingStart: (() => void) | null = null
+  private _bgmPendingStart: (() => void) | null = null
+  private get bgmPendingStart(): (() => void) | null {
+    return this._bgmPendingStart
+  }
+  private set bgmPendingStart(v: (() => void) | null) {
+    this._bgmPendingStart = v
+    this.notifyAudioBlocked()
+  }
   private bgmTweenHandle: number | null = null
 
   constructor() {
@@ -99,7 +106,14 @@ class AudioService {
   private lastPlaybackStartTime = 0
   // Narration blocked by the autoplay policy waits here for a user gesture
   // (the narration counterpart of bgmPendingStart, PR #119).
-  private pendingGestureResume = false
+  private _pendingGestureResume = false
+  private get pendingGestureResume(): boolean {
+    return this._pendingGestureResume
+  }
+  private set pendingGestureResume(v: boolean) {
+    this._pendingGestureResume = v
+    this.notifyAudioBlocked()
+  }
   private primedFiles = new Set<string>()
   private currentAudio: HTMLAudioElement | null = null
 
@@ -391,10 +405,17 @@ class AudioService {
               el.pause()
               el.currentTime = 0
             }
-            el.muted = false
+            // Stay muted, deliberately. pause() does not guarantee WebKit has
+            // stopped emitting by the time the next statement runs, so
+            // restoring muted=false here leaked an audible fragment of every
+            // primed cue on each gesture — on a real iPhone (game 93) players
+            // heard guard_close_eyes in a game that had no Guard, and day cues
+            // in the middle of the night. A permanently muted element cannot
+            // make sound whichever way that race falls. Nothing audible
+            // depends on this: playNextInQueue unmutes before real playback,
+            // and it is the only path that plays a cached narration element.
           })
           .catch(() => {
-            el.muted = false
             this.primedFiles.delete(filename)
           })
       } catch {
@@ -585,6 +606,39 @@ class AudioService {
 
   private notifyMuteListeners(): void {
     for (const fn of this.muteListeners) fn(this.muted)
+  }
+
+  // Audio-blocked subscription. Narration parked by the autoplay policy and a
+  // deferred BGM start are both invisible to the player: cues queue up, get
+  // discarded by the next sequence, and the night passes in silence with no UI
+  // hint that one tap would fix it (reproduced on a real iPhone, game 94 — a
+  // reloaded tab lost every cue of night 1 plus BGM). Both flags are private
+  // accessors so every existing assignment funnels through notifyAudioBlocked
+  // and no mutation site can be missed.
+  private blockedListeners = new Set<(blocked: boolean) => void>()
+  private lastBlocked = false
+
+  /** True while any audio is waiting on a user gesture to start. */
+  isAudioBlocked(): boolean {
+    return this._pendingGestureResume || this._bgmPendingStart !== null
+  }
+
+  onAudioBlockedChange(listener: (blocked: boolean) => void): () => void {
+    this.blockedListeners.add(listener)
+    return () => {
+      this.blockedListeners.delete(listener)
+    }
+  }
+
+  /** Edge-triggered: fires only when the blocked state actually flips. */
+  private notifyAudioBlocked(): void {
+    // Guard construction-order: the accessors above can fire before the class
+    // fields down here are initialised.
+    if (!this.blockedListeners) return
+    const blocked = this.isAudioBlocked()
+    if (blocked === this.lastBlocked) return
+    this.lastBlocked = blocked
+    for (const fn of this.blockedListeners) fn(blocked)
   }
 
   /**
@@ -814,6 +868,37 @@ class AudioService {
       filename: this.bgmFilename,
       userInteracted: this.userInteracted,
       pendingStart: !!this.bgmPendingStart,
+    }
+  }
+
+  /**
+   * Diagnostics snapshot of the narration queue — the counterpart to
+   * [getBgmState]. Narration state lives in private fields, so a console or an
+   * e2e helper can otherwise only reach it through `as any`. These are exactly
+   * the fields that separate "muted" from "parked by the autoplay policy" from
+   * "the cue never arrived".
+   */
+  getNarrationState(): {
+    muted: boolean
+    userInteracted: boolean
+    isPlayingQueue: boolean
+    pendingGestureResume: boolean
+    queue: string[]
+    primed: string[]
+    cached: string[]
+    msSinceLastStart: number | null
+  } {
+    return {
+      muted: this.muted,
+      userInteracted: this.userInteracted,
+      isPlayingQueue: this.isPlayingQueue,
+      pendingGestureResume: this.pendingGestureResume,
+      queue: this.audioQueue.map((q) => q.filename),
+      primed: [...this.primedFiles],
+      cached: [...this.audioCache.keys()],
+      msSinceLastStart: this.lastPlaybackStartTime
+        ? Math.round(performance.now() - this.lastPlaybackStartTime)
+        : null,
     }
   }
 
