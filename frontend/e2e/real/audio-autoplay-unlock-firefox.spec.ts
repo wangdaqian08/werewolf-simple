@@ -49,6 +49,9 @@ test('denied head is parked with the full sequence; a tap plays it in-gesture an
   )
   expect(parked.userInteracted).toBe(true)
   expect(parked.queueLen).toBe(NIGHT1_SEQUENCE.length)
+  // The player must be TOLD. Same banner as the Chromium half, but reached via
+  // a real browser NotAllowedError rather than our pre-interaction gate.
+  await expect(page.getByTestId('audio-unlock-banner')).toBeVisible({ timeout: 10_000 })
   expect(countIn(lines, 'Failed to play')).toBe(0)
   expect(parked.elements.every((e) => e.paused && e.currentTime === 0)).toBe(true)
 

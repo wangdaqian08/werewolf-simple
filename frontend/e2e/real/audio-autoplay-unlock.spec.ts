@@ -78,3 +78,24 @@ test('night sequence parks untouched, then plays through after one tap', async (
   expect(resumed.queueLen).toBe(NIGHT1_SEQUENCE.length - 1)
   expect(countIn(lines, 'narration file(s) during user gesture')).toBeGreaterThan(0)
 })
+
+/**
+ * The affordance half of the same bug. Parking a cue keeps it recoverable, but
+ * on a real iPhone (game 94) that was not enough: the host's tab reloaded, all
+ * eight cues of night 1 were blocked, and NOTHING on screen said a tap would
+ * fix it. A host narrating a night has no reason to tap, so the whole night
+ * passed in silence — and because a parked backlog is replaced rather than
+ * stacked, those cues were discarded, not merely delayed.
+ */
+test('parked narration surfaces the tap-to-enable banner until the first tap', async ({ page }) => {
+  await installTrigger(page, 'pristine')
+  await page.goto('/#unlock-repro')
+
+  const banner = page.getByTestId('audio-unlock-banner')
+  await expect(banner).toBeVisible({ timeout: 15_000 })
+
+  // Top-left, clear of the centred banner — any document-level gesture works.
+  await page.locator('body').click({ position: { x: 10, y: 10 }, force: true })
+
+  await expect(banner).toBeHidden({ timeout: 10_000 })
+})

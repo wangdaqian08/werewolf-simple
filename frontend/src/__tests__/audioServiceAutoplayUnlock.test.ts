@@ -94,7 +94,14 @@ describe('audioService autoplay unlock', () => {
   beforeEach(async () => {
     localStorage.clear()
     mockAudioInstances = []
+    // mockClear() resets calls but NOT implementations, so a persistent
+    // mockImplementation from an earlier test (see "priming a rejected file
+    // retries") would otherwise leak into every test after it. Restore the
+    // default factory so each test is order-independent.
     ;(Audio as unknown as ReturnType<typeof vi.fn>).mockClear()
+    ;(Audio as unknown as ReturnType<typeof vi.fn>).mockImplementation(function (src: string) {
+      return createMockAudio(src ?? '')
+    })
     vi.resetModules()
     const mod = await import('@/services/audioService')
     audioService = mod.audioService
@@ -206,7 +213,7 @@ describe('audioService autoplay unlock', () => {
 
   // ── 3: gesture-time pool priming ─────────────────────────────────────────
 
-  it('primes the known narration pool muted on the first gesture and restores element state', async () => {
+  it('primes the known narration pool muted and leaves it muted so priming can never emit sound', async () => {
     fireGesture()
 
     expect(KNOWN_NARRATION_FILES.length).toBeGreaterThan(0)
@@ -221,7 +228,11 @@ describe('audioService autoplay unlock', () => {
     for (const file of KNOWN_NARRATION_FILES) {
       const el = instFor(file)!
       expect(el.pause).toHaveBeenCalled()
-      expect(el.muted).toBe(false)
+      // Regression (real iPhone, game 93): restoring muted=false straight after
+      // pause() let WebKit emit a fragment of every primed cue on each gesture —
+      // players heard guard_close_eyes in a game that had no Guard. Primed
+      // elements stay muted; playNextInQueue unmutes them for real playback.
+      expect(el.muted, `${file} must stay muted after priming`).toBe(true)
       expect(el.currentTime).toBe(0)
     }
   })
@@ -275,5 +286,59 @@ describe('audioService autoplay unlock', () => {
       (p: any) => (p.mock?.calls?.length ?? 0) === 0,
     )
     expect(audioService.isQueueActive()).toBe(false)
+  })
+
+  // ── 6: the blocked signal that drives AudioUnlockBanner ───────────────────
+  //
+  // Parked narration and a deferred BGM start are both silent AND invisible.
+  // On a real iPhone (game 94) a mid-game reload lost all 8 cues of night 1
+  // plus BGM, because a parked backlog is replaced by the next sequence rather
+  // than stacked — the cues were discarded, not merely delayed. The UI needs a
+  // subscribable signal so it can tell the player a single tap fixes it.
+
+  it('reports blocked while narration is parked and clears it on the resuming gesture', async () => {
+    const seen: boolean[] = []
+    const unsub = audioService.onAudioBlockedChange((b) => seen.push(b))
+
+    expect(audioService.isAudioBlocked()).toBe(false)
+
+    audioService.playSequential(['goes_dark_close_eyes.mp3'])
+    expect(audioService.isAudioBlocked()).toBe(true)
+
+    fireGesture()
+    await flush()
+    expect(audioService.isAudioBlocked()).toBe(false)
+
+    expect(seen).toEqual([true, false])
+    unsub()
+  })
+
+  it('reports blocked when a BGM start is deferred before the first gesture', () => {
+    expect(audioService.isAudioBlocked()).toBe(false)
+    audioService.startBgm('suspicion.mp3')
+    expect(audioService.isAudioBlocked()).toBe(true)
+  })
+
+  it('is edge-triggered — repeated parks do not re-notify', () => {
+    const seen: boolean[] = []
+    const unsub = audioService.onAudioBlockedChange((b) => seen.push(b))
+
+    audioService.playSequential(['a.mp3'])
+    audioService.playSequential(['b.mp3'])
+    audioService.playSequential(['c.mp3'])
+
+    expect(seen).toEqual([true])
+    unsub()
+  })
+
+  it('stops reporting blocked to an unsubscribed listener', () => {
+    const seen: boolean[] = []
+    const unsub = audioService.onAudioBlockedChange((b) => seen.push(b))
+    unsub()
+
+    audioService.playSequential(['a.mp3'])
+
+    expect(seen).toEqual([])
+    expect(audioService.isAudioBlocked()).toBe(true)
   })
 })
