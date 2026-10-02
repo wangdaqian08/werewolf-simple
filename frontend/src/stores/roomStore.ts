@@ -15,6 +15,11 @@ export const useRoomStore = defineStore('room', () => {
     }
   }
 
+  function setHostId(hostId: string) {
+    if (room.value) {
+      room.value.hostId = hostId
+    }
+  }
   function updateMyStatus(userId: string, status: RoomPlayer['status']) {
     if (!room.value) return
     // Use toRaw to avoid reactive proxy spread issues across environments
@@ -46,6 +51,7 @@ export const useRoomStore = defineStore('room', () => {
     room,
     setRoom,
     updatePlayers,
+    setHostId,
     updateMyStatus,
     updateSeatIndex,
     updatePerkActivations,

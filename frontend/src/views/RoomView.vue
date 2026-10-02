@@ -375,7 +375,12 @@ async function handleReady(ready: boolean) {
 }
 
 async function handleLeave() {
-  await roomService.leaveRoom()
+  try {
+    await roomService.leaveRoom()
+  } catch (e) {
+    console.warn('[RoomView] leaveRoom failed; leaving locally anyway', e)
+  }
+
   roomStore.clearRoom()
   disconnectStomp()
   router.push({ name: 'lobby' })
@@ -480,6 +485,7 @@ onMounted(async () => {
         const data = JSON.parse(msg.body)
         if (data.type === 'ROOM_UPDATE') {
           roomStore.updatePlayers(data.payload.players)
+          if (data.payload.hostId) roomStore.setHostId(data.payload.hostId)
         }
         if (data.type === 'PERK_UPDATE') {
           roomStore.updatePerkActivations(data.payload.perkActivations)

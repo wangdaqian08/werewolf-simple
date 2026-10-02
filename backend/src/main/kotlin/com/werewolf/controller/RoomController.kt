@@ -136,6 +136,13 @@ class RoomController(private val roomService: RoomService) {
         }
     }
 
+    @PostMapping("/leave")
+    fun leaveRoom(authentication: Authentication):ResponseEntity<Any> {
+        val (userId, _, _)= authentication.userClaims()
+        roomService.leaveRoom(userId)
+        return ResponseEntity.ok(mapOf("success" to true))
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private data class UserTriple(val userId: String, val nickname: String, val avatarUrl: String?)
