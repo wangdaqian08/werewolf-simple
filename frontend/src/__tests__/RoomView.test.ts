@@ -18,6 +18,7 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import RoomView from '@/views/RoomView.vue'
 import { useRoomStore } from '@/stores/roomStore'
 import type { Room, RoomPlayer } from '@/types'
+import { roomService } from '@/services/roomService.ts'
 
 const h = vi.hoisted(() => {
   const fakeClient = {
@@ -203,5 +204,42 @@ describe('RoomView — STOMP reconnect recovers missed ROOM_UPDATEs', () => {
     expect(h.getRoomMock).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).not.toContain('Carol')
     expect(wrapper.find('.count-ready').text()).toBe('3')
+  })
+})
+
+describe('RoomView — leaving the room', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    h.fakeClient.onConnect = null
+    h.fakeClient.active = true
+    h.getRoomMock.mockReset()
+    h.subscribeToTopicMock.mockReset()
+    vi.mocked(roomService.leaveRoom).mockReset()
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('clears the room and routes to lobby on a normal leave', async () => {
+    const { wrapper, router } = await mountRoom('u2')
+    vi.mocked(roomService.leaveRoom).mockResolvedValueOnce(undefined)
+
+    await wrapper.find('button.back-btn').trigger('click')
+    await flushPromises()
+
+    expect(roomService.leaveRoom).toHaveBeenCalledTimes(1)
+    expect(roomService.leaveRoom).toHaveBeenCalledWith('1')
+    expect(router.currentRoute.value.name).toBe('lobby')
+    expect(useRoomStore().room).toBeNull()
+  })
+
+  it('still routes to lobby when leaveRoom() rejects (never traps the player)', async () => {
+    const { wrapper, router } = await mountRoom('u2')
+    vi.mocked(roomService.leaveRoom).mockRejectedValueOnce(new Error('network 500'))
+
+    await wrapper.find('button.back-btn').trigger('click')
+    await flushPromises()
+
+    expect(roomService.leaveRoom).toHaveBeenCalledTimes(1)
+    expect(router.currentRoute.value.name).toBe('lobby')
+    expect(useRoomStore().room).toBeNull()
   })
 })

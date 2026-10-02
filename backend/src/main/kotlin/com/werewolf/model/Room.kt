@@ -1,7 +1,5 @@
 package com.werewolf.model
 
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.persistence.*
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.JdbcTypeCode
@@ -23,7 +21,7 @@ class Room(
     val roomCode: String,
 
     @Column(name = "host_user_id", nullable = false, length = 128)
-    val hostUserId: String,
+    var hostUserId: String,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)

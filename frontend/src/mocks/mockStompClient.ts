@@ -25,6 +25,7 @@ export class MockStompClient {
 
   private subs: Map<string, MsgCallback[]> = new Map()
   private scheduled: ScheduledEvent[] = []
+  private subscribeWaiters: Map<string, (() => void)[]> = new Map()
 
   scheduleEvent(delayMs: number, topic: string, payload: unknown | PayloadFn) {
     this.scheduled.push({ delayMs, topic, payload })
@@ -53,6 +54,8 @@ export class MockStompClient {
   subscribe(topic: string, callback: MsgCallback) {
     const list = this.subs.get(topic) ?? []
     this.subs.set(topic, [...list, callback])
+    this.subscribeWaiters.get(topic)?.forEach((resolve) => resolve())
+    this.subscribeWaiters.delete(topic)
     return {
       id: topic,
       unsubscribe: () => {},
@@ -63,6 +66,21 @@ export class MockStompClient {
   push(topic: string, payload: unknown) {
     const fakeMsg = { body: JSON.stringify(payload) } as IMessage
     this.subs.get(topic)?.forEach((cb) => cb(fakeMsg))
+  }
+
+  whenSubscribed(topic: string, timeoutMs = 5000): Promise<void> {
+    if (this.subs.get(topic)?.length) return Promise.resolve()
+    return new Promise((resolve) => {
+      const timer = setTimeout(resolve, timeoutMs)
+      const list = this.subscribeWaiters.get(topic) ?? []
+      this.subscribeWaiters.set(topic, [
+        ...list,
+        () => {
+          clearTimeout(timer)
+          resolve()
+        },
+      ])
+    })
   }
 
   /** Immediately deliver a message (alias for push; useful for debug endpoints). */

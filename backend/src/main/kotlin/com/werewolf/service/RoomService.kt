@@ -17,6 +17,7 @@ import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 
 @Service
 class RoomService(
@@ -160,10 +161,18 @@ class RoomService(
         // game they can no longer play in.
         perkService.refundActiveForUser(roomId, targetUserId)
 
-        stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "PLAYER_KICKED",
-            "payload" to mapOf("userId" to targetUserId)))
-        stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "ROOM_UPDATE",
-            "payload" to mapOf("players" to buildRoomDto(room).players)))
+        stompPublisher.broadcastRoomAfterCommit(
+            roomId, mapOf(
+                "type" to "PLAYER_KICKED",
+                "payload" to mapOf("userId" to targetUserId)
+            )
+        )
+        stompPublisher.broadcastRoomAfterCommit(
+            roomId, mapOf(
+                "type" to "ROOM_UPDATE",
+                "payload" to mapOf("players" to buildRoomDto(room).players)
+            )
+        )
     }
 
     @Transactional
@@ -178,8 +187,46 @@ class RoomService(
         }
         if (affected == 0) throw PlayerNotInRoomException("Player not in room or seat not yet claimed")
 
-        stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "ROOM_UPDATE",
-            "payload" to mapOf("players" to buildRoomDto(room).players)))
+        stompPublisher.broadcastRoomAfterCommit(
+            roomId, mapOf(
+                "type" to "ROOM_UPDATE",
+                "payload" to mapOf("players" to buildRoomDto(room).players)
+            )
+        )
+    }
+
+    @Transactional
+    fun leaveRoom(userId: String, roomId: Int) {
+        val room = roomRepository.findByIdForUpdate(roomId).orElse(null) ?: return
+        if (room.status != RoomStatus.WAITING) return
+        val leaver = roomPlayerRepository.findByRoomIdAndUserId(roomId, userId).orElse(null) ?: return
+        roomPlayerRepository.delete(leaver)
+        perkService.refundActiveForUser(roomId, userId)
+        val remaining = roomPlayerRepository.findByRoomId(roomId)
+        if (remaining.isEmpty()) {
+            room.status = RoomStatus.CLOSED
+            room.closedAt = LocalDateTime.now()
+            roomRepository.save(room)
+            return
+        }
+        if (room.hostUserId == userId) {
+            // Earliest-joined remaining player = lowest auto-increment id
+            val newHost = remaining.minByOrNull { it.id ?: Int.MAX_VALUE }!!
+            newHost.host = true
+            roomPlayerRepository.save(newHost)
+            room.hostUserId = newHost.userId
+            roomRepository.save(room)
+        }
+        stompPublisher.broadcastRoomAfterCommit(
+            roomId,
+            mapOf(
+                "type" to "ROOM_UPDATE",
+                "payload" to mapOf(
+                    "players" to buildRoomDto(room).players,
+                    "hostId" to room.hostUserId,
+                ),
+            )
+        )
     }
 
     @Transactional
@@ -193,8 +240,12 @@ class RoomService(
         val affected = roomPlayerRepository.updateSeatIndex(roomId, userId, seatIndex)
         if (affected == 0) throw PlayerNotInRoomException("Player not in room")
 
-        stompPublisher.broadcastRoomAfterCommit(roomId, mapOf("type" to "ROOM_UPDATE",
-            "payload" to mapOf("players" to buildRoomDto(room).players)))
+        stompPublisher.broadcastRoomAfterCommit(
+            roomId, mapOf(
+                "type" to "ROOM_UPDATE",
+                "payload" to mapOf("players" to buildRoomDto(room).players)
+            )
+        )
     }
 
     @Transactional(readOnly = true)
@@ -247,13 +298,13 @@ class RoomService(
         }
 
         val activeGameId = if (room.status == RoomStatus.IN_GAME) {
-            gameRepository.findByRoomIdAndEndedAtIsNull(room.roomId!!).map { it.gameId }.orElse(null)
+            gameRepository.findByRoomIdAndEndedAtIsNull(room.roomId).map { it.gameId }.orElse(null)
         } else null
 
         // Live perk activations are public to the whole room (fairness rule).
         val perkNames = perkRepository.findAll().associate { it.perkCode to it.name }
         val perkActivations = perkActivationRepository
-            .findByRoomIdAndStatus(room.roomId!!, PerkActivationStatus.ACTIVE)
+            .findByRoomIdAndStatus(room.roomId, PerkActivationStatus.ACTIVE)
             .map { PerkActivationDto(it.userId, it.perkCode, perkNames[it.perkCode] ?: it.perkCode) }
 
         return RoomDto(
@@ -262,7 +313,16 @@ class RoomService(
             hostId = room.hostUserId,
             status = room.status.name,
             players = playerDtos,
-            config = RoomConfigDto(totalPlayers = room.totalPlayers, wolfCount = room.wolfCount, roles = roles, hasSheriff = room.hasSheriff, winCondition = room.winCondition, bgmTrack = room.config?.bgmTrack, witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true, perksAllowed = room.config?.perksAllowed ?: true),
+            config = RoomConfigDto(
+                totalPlayers = room.totalPlayers,
+                wolfCount = room.wolfCount,
+                roles = roles,
+                hasSheriff = room.hasSheriff,
+                winCondition = room.winCondition,
+                bgmTrack = room.config?.bgmTrack,
+                witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true,
+                perksAllowed = room.config?.perksAllowed ?: true
+            ),
             activeGameId = activeGameId,
             perkActivations = perkActivations,
         )
@@ -317,17 +377,18 @@ class RoomService(
      * overrides. Production leaves the properties unset and gets the compile-time
      * role defaults; the test profile sets small values so CI completes quickly.
      */
-    private fun buildGameConfig(bgmTrack: String?, witchSelfSaveAllowed: Boolean, perksAllowed: Boolean): GameConfig = GameConfig(
-        roleDelays = mapOf(
-            PlayerRole.WEREWOLF to timing.applyTo(PlayerRole.WEREWOLF),
-            PlayerRole.SEER to timing.applyTo(PlayerRole.SEER),
-            PlayerRole.WITCH to timing.applyTo(PlayerRole.WITCH),
-            PlayerRole.GUARD to timing.applyTo(PlayerRole.GUARD),
-        ),
-        bgmTrack = bgmTrack,
-        witchSelfSaveAllowed = witchSelfSaveAllowed,
-        perksAllowed = perksAllowed,
-    )
+    private fun buildGameConfig(bgmTrack: String?, witchSelfSaveAllowed: Boolean, perksAllowed: Boolean): GameConfig =
+        GameConfig(
+            roleDelays = mapOf(
+                PlayerRole.WEREWOLF to timing.applyTo(PlayerRole.WEREWOLF),
+                PlayerRole.SEER to timing.applyTo(PlayerRole.SEER),
+                PlayerRole.WITCH to timing.applyTo(PlayerRole.WITCH),
+                PlayerRole.GUARD to timing.applyTo(PlayerRole.GUARD),
+            ),
+            bgmTrack = bgmTrack,
+            witchSelfSaveAllowed = witchSelfSaveAllowed,
+            perksAllowed = perksAllowed,
+        )
 }
 
 private const val ROOM_CODE_MAX_ATTEMPTS = 200
