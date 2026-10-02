@@ -12,8 +12,8 @@ export const roomService = {
     return data
   },
 
-  async leaveRoom(): Promise<void> {
-    await http.post('/room/leave')
+  async leaveRoom(roomId: string): Promise<void> {
+    await http.post('/room/leave', {roomId: Number(roomId)})
   },
 
   async getRoom(roomId: string): Promise<Room> {

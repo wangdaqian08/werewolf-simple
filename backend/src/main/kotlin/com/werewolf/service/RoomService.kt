@@ -196,9 +196,8 @@ class RoomService(
     }
 
     @Transactional
-    fun leaveRoom(userId: String) {
-        val room = roomRepository.findActiveRoomsForUser(userId).firstOrNull() ?: return
-        val roomId = room.roomId ?: return
+    fun leaveRoom(userId: String, roomId: Int) {
+        val room = roomRepository.findByIdForUpdate(roomId).orElse(null) ?: return
         if (room.status != RoomStatus.WAITING) return
         val leaver = roomPlayerRepository.findByRoomIdAndUserId(roomId, userId).orElse(null) ?: return
         roomPlayerRepository.delete(leaver)

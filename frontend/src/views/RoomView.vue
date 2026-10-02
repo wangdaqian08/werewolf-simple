@@ -375,8 +375,9 @@ async function handleReady(ready: boolean) {
 }
 
 async function handleLeave() {
+  const roomId = roomStore.room?.roomId
   try {
-    await roomService.leaveRoom()
+    if(roomId) await roomService.leaveRoom(roomId)
   } catch (e) {
     console.warn('[RoomView] leaveRoom failed; leaving locally anyway', e)
   }

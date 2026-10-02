@@ -5,6 +5,7 @@ import com.werewolf.dto.ClaimSeatRequest
 import com.werewolf.dto.CreateRoomRequest
 import com.werewolf.dto.JoinRoomRequest
 import com.werewolf.dto.KickPlayerRequest
+import com.werewolf.dto.LeaveRoomRequest
 import com.werewolf.dto.SetReadyRequest
 import com.werewolf.service.*
 import jakarta.validation.Valid
@@ -137,9 +138,12 @@ class RoomController(private val roomService: RoomService) {
     }
 
     @PostMapping("/leave")
-    fun leaveRoom(authentication: Authentication):ResponseEntity<Any> {
+    fun leaveRoom(
+        @RequestBody body: LeaveRoomRequest,
+        authentication: Authentication
+    ):ResponseEntity<Any> {
         val (userId, _, _)= authentication.userClaims()
-        roomService.leaveRoom(userId)
+        roomService.leaveRoom(userId,body.roomId)
         return ResponseEntity.ok(mapOf("success" to true))
     }
 

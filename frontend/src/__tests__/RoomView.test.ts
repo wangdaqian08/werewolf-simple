@@ -226,6 +226,7 @@ describe('RoomView — leaving the room', () => {
     await flushPromises()
 
     expect(roomService.leaveRoom).toHaveBeenCalledTimes(1)
+    expect(roomService.leaveRoom).toHaveBeenCalledWith('1')
     expect(router.currentRoute.value.name).toBe('lobby')
     expect(useRoomStore().room).toBeNull()
   })

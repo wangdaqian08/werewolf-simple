@@ -48,10 +48,10 @@ class RoomServiceLeaveTest {
         RoomPlayer(id = id, roomId = 1, userId = userId, host = host)
 
     @Test
-    fun `leaveRoom - not in an active room is a no-op`() {
-        whenever(roomRepository.findActiveRoomsForUser(guestId)).thenReturn(emptyList())
+    fun `leaveRoom - unknown room is a no-op`() {
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.empty())
 
-        roomService.leaveRoom(guestId)
+        roomService.leaveRoom(guestId, 1)
 
         verify(roomPlayerRepository, never()).delete(any())
         verifyNoInteractions(stompPublisher)
@@ -59,10 +59,10 @@ class RoomServiceLeaveTest {
 
     @Test
     fun `leaveRoom - IN_GAME room never removes the player`() {
-        whenever(roomRepository.findActiveRoomsForUser(guestId))
-            .thenReturn(listOf(room(status = RoomStatus.IN_GAME)))
+        whenever(roomRepository.findByIdForUpdate(1))
+            .thenReturn(Optional.of(room(status = RoomStatus.IN_GAME)))
 
-        roomService.leaveRoom(guestId)
+        roomService.leaveRoom(guestId, 1)
 
         verify(roomPlayerRepository, never()).delete(any())
         verifyNoInteractions(stompPublisher)
@@ -72,13 +72,13 @@ class RoomServiceLeaveTest {
     fun `leaveRoom - non-host leaves - row deleted, perks refunded, ROOM_UPDATE broadcast, host unchanged`() {
         val r = room()
         val guest = player(id = 2, userId = guestId)
-        whenever(roomRepository.findActiveRoomsForUser(guestId)).thenReturn(listOf(r))
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(r))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, guestId)).thenReturn(Optional.of(guest))
         whenever(roomPlayerRepository.findByRoomId(1))
             .thenReturn(listOf(player(id = 1, userId = hostId, host = true)))
         whenever(userRepository.findAllById(any<List<String>>())).thenReturn(emptyList())
 
-        roomService.leaveRoom(guestId)
+        roomService.leaveRoom(guestId, 1)
 
         verify(roomPlayerRepository).delete(guest)
         verify(perkService).refundActiveForUser(1, guestId)
@@ -93,13 +93,13 @@ class RoomServiceLeaveTest {
         val host = player(id = 1, userId = hostId, host = true)
         val early = player(id = 2, userId = "guest:early")
         val late = player(id = 3, userId = "guest:late")
-        whenever(roomRepository.findActiveRoomsForUser(hostId)).thenReturn(listOf(r))
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(r))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, hostId)).thenReturn(Optional.of(host))
         // Returned unordered on purpose: transfer must pick the lowest id, not the first row.
         whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(listOf(late, early))
         whenever(userRepository.findAllById(any<List<String>>())).thenReturn(emptyList())
 
-        roomService.leaveRoom(hostId)
+        roomService.leaveRoom(hostId, 1)
 
         verify(roomPlayerRepository).delete(host)
         assertThat(early.host).isTrue()
@@ -113,16 +113,35 @@ class RoomServiceLeaveTest {
     fun `leaveRoom - last player leaving closes the room and does not broadcast`() {
         val r = room(host = hostId)
         val host = player(id = 1, userId = hostId, host = true)
-        whenever(roomRepository.findActiveRoomsForUser(hostId)).thenReturn(listOf(r))
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(r))
         whenever(roomPlayerRepository.findByRoomIdAndUserId(1, hostId)).thenReturn(Optional.of(host))
         whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
 
-        roomService.leaveRoom(hostId)
+        roomService.leaveRoom(hostId, 1)
 
         verify(roomPlayerRepository).delete(host)
         assertThat(r.status).isEqualTo(RoomStatus.CLOSED)
         assertThat(r.closedAt).isNotNull()
         verify(roomRepository).save(r)
         verifyNoInteractions(stompPublisher)
+    }
+
+    @Test
+    fun `leaveRoom - targets the given room, never the user's newest avtive room`(){
+        val r = room()
+        val guest = player(id = 2, userId = guestId)
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(r))
+        whenever(roomPlayerRepository.findByRoomIdAndUserId(1, guestId)).thenReturn(Optional.of(guest))
+        whenever(roomPlayerRepository.findByRoomId(1))
+            .thenReturn(listOf(player(id = 1, userId = hostId, host = true)))
+        whenever(userRepository.findAllById(any<List<String>>())).thenReturn(emptyList())
+
+        roomService.leaveRoom(guestId, 1)
+
+        verify(roomPlayerRepository).delete(guest)
+        verify(roomRepository).findByIdForUpdate(1)
+        verify(roomRepository, never()).findActiveRoomsForUser(any())
+        verify(roomRepository, never()).findById(any())
+
     }
 }
