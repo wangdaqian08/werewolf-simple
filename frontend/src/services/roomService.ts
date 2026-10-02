@@ -13,7 +13,7 @@ export const roomService = {
   },
 
   async leaveRoom(roomId: string): Promise<void> {
-    await http.post('/room/leave', {roomId: Number(roomId)})
+    await http.post('/room/leave', { roomId: Number(roomId) })
   },
 
   async getRoom(roomId: string): Promise<Room> {
