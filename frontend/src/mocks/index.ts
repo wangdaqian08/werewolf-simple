@@ -204,7 +204,7 @@ export function setupMocks() {
   mock.onGet('/room/list').reply(200, [MOCK_ROOM_AS_HOST])
 
   // ── Debug: start game (fires GAME_STARTED on room topic, then ROLE_REVEAL) ───
-  mock.onPost('/debug/game/start').reply((config) => {
+  mock.onPost('/debug/game/start').reply(async (config) => {
     const body = JSON.parse(config.data ?? '{}')
     const hasSheriff = body.hasSheriff !== false // default true
     confirmedUserIds = new Set()
@@ -216,6 +216,7 @@ export function setupMocks() {
       myRole: 'SEER',
       roleReveal: makeRoleRevealState(mockPlayers.length),
     }
+    await mockStompClient.whenSubscribed(`/topic/room/${mockRoomId}`)
     mockStompClient.fireNow(`/topic/room/${mockRoomId}`, {
       type: 'GAME_STARTED',
       payload: { gameId: mockGameState.gameId },
