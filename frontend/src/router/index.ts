@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
-import { isSupportedBrowser } from '@/composables/useBrowserCompat'
+import { isSupportedBrowser, isWeChatBrowser } from '@/composables/useBrowserCompat'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -76,18 +76,25 @@ const router = createRouter({
   ],
 })
 
+// Same-app paths only: "//host" and "/\host" are read by browsers as another origin.
+function safeReturnPath(from: unknown): string | null {
+  return typeof from === 'string' && /^\/(?![/\\])/.test(from) ? from : null
+}
+
 router.beforeEach((to) => {
   // Browser compatibility check first — short-circuits before any auth /
-  // STOMP / store work. Skip if the user is already on the unsupported page
-  // (avoids redirect loops) and skip the dev `/dev/*` routes so contributors
-  // can still preview those in any browser.
-  if (
-    to.name !== 'unsupported' &&
-    to.name !== 'demo' &&
-    !String(to.name ?? '').startsWith('dev-') &&
-    !isSupportedBrowser()
-  ) {
-    return { name: 'unsupported' }
+  // STOMP / store work. Skip `/demo` and the dev `/dev/*` routes so
+  // contributors can still preview those in any browser — except WeChat,
+  // which is blocked on every route.
+  if (to.name === 'unsupported') {
+    // WeChat's "open in browser" reopens this URL in Safari/Chrome: send a
+    // supported browser on to the page the user originally asked for.
+    if (isSupportedBrowser()) return safeReturnPath(to.query.from) ?? { name: 'lobby' }
+  } else {
+    const exempt = to.name === 'demo' || String(to.name ?? '').startsWith('dev-')
+    if (isWeChatBrowser() || (!exempt && !isSupportedBrowser())) {
+      return { name: 'unsupported', query: { from: to.fullPath } }
+    }
   }
 
   const userStore = useUserStore()

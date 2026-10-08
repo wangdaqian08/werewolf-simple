@@ -14,6 +14,11 @@
         iOS Safari is also supported.
       </p>
 
+      <div v-if="inWeChat" class="hint" data-testid="wechat-hint">
+        <p class="wechat-line">点击右上角「···」，选择「在浏览器打开」或「在 Safari 中打开」</p>
+        <p class="hint-line en">Tap ··· (top right), then "Open in Browser" or "Open in Safari".</p>
+      </div>
+
       <div class="hint">
         <p class="hint-line">在 Chrome 中打开：</p>
         <p class="hint-line en">Open this URL in Chrome:</p>
@@ -25,6 +30,9 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
+import { isWeChatBrowser } from '@/composables/useBrowserCompat'
+
+const inWeChat = isWeChatBrowser()
 
 // Show the user the URL they should re-open in Chrome.
 const currentUrl = computed(() => (typeof window === 'undefined' ? '' : window.location.href))
@@ -97,6 +105,13 @@ const currentUrl = computed(() => (typeof window === 'undefined' ? '' : window.l
 .hint-line {
   font-size: 0.8rem;
   color: var(--muted);
+  margin: 0 0 0.25rem;
+}
+
+.wechat-line {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
   margin: 0 0 0.25rem;
 }
 

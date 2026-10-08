@@ -7,9 +7,12 @@
  *     they all behave the same — we'd rather have iOS users than not).
  *
  * Blocked list:
+ *   - WeChat's in-app browser on every platform (UA token `MicroMessenger`),
+ *     even though it is Chromium/WebKit underneath.
  *   - Desktop Safari, Firefox, legacy IE, anything else.
  *
  * Detection precedence:
+ *   0. WeChat — blocked before anything else.
  *   1. UA Client Hints (`navigator.userAgentData`) — modern Chromium only.
  *      Decisive: if present and brand list mentions any Chromium variant,
  *      allow; if present but no Chromium brand (rare, theoretical), block.
@@ -30,10 +33,18 @@ interface UserAgentData {
   brands?: UserAgentBrand[]
 }
 
+export function isWeChatBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /MicroMessenger/i.test(navigator.userAgent ?? '')
+}
+
 export function isSupportedBrowser(): boolean {
   if (typeof navigator === 'undefined') return true // SSR / non-browser env
 
   const ua = navigator.userAgent ?? ''
+
+  // 0. WeChat in-app browser — its UA also matches the Chromium / iOS rules below.
+  if (isWeChatBrowser()) return false
 
   // 1. UA Client Hints — present on modern Chromium, absent on Firefox/Safari.
   const uaData = (navigator as { userAgentData?: UserAgentData }).userAgentData
@@ -65,7 +76,7 @@ export function isIosSafari(): boolean {
 
 export function isStandalonePwa(): boolean {
   if (typeof navigator === 'undefined') return false
-  if ((navigator as { standalone?: boolean }).standalone === true) return true
+  if ((navigator as { standalone?: boolean }).standalone) return true
   if (typeof window === 'undefined') return false
   return window.matchMedia('(display-mode: standalone)').matches
 }
