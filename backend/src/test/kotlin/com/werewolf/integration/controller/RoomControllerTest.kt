@@ -149,25 +149,25 @@ class RoomControllerTest {
 
         // WAITING room → code reserved
         roomRepository.save(
-            Room(roomCode = "111", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.WAITING),
+            Room(roomCode = "A11", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.WAITING),
         )
-        assertThat(roomRepository.findActiveByRoomCode("111")).isPresent
+        assertThat(roomRepository.findActiveByRoomCode("A11")).isPresent
 
         // IN_GAME room whose game ENDED → code reusable
         val finished = roomRepository.save(
-            Room(roomCode = "222", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
+            Room(roomCode = "A22", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
         )
         gameRepository.save(
             Game(roomId = finished.roomId!!, hostUserId = hostId, endedAt = LocalDateTime.now()),
         )
-        assertThat(roomRepository.findActiveByRoomCode("222")).isEmpty
+        assertThat(roomRepository.findActiveByRoomCode("A22")).isEmpty
 
         // IN_GAME room with a LIVE game → code reserved
         val live = roomRepository.save(
-            Room(roomCode = "333", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
+            Room(roomCode = "A33", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
         )
         gameRepository.save(Game(roomId = live.roomId!!, hostUserId = hostId, endedAt = null))
-        assertThat(roomRepository.findActiveByRoomCode("333")).isPresent
+        assertThat(roomRepository.findActiveByRoomCode("A33")).isPresent
     }
 
     @Test

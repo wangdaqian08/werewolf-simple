@@ -5,7 +5,8 @@ import com.werewolf.model.GamePhase
 import com.werewolf.repository.*
 import org.springframework.stereotype.Service
 
-class GameNotFoundException(gameId: Int): IllegalArgumentException("Game $gameId not found")
+class GameNotFoundException(gameId: Int) : IllegalArgumentException("Game $gameId not found")
+
 @Service
 class GameContextLoader(
     private val gameRepository: GameRepository,

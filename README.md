@@ -112,7 +112,7 @@ The game ends — the winning team is revealed and all roles are shown.
 
 | Tool           | Version | Install                                                       |
 |----------------|--------|---------------------------------------------------------------|
-| Java           | 25     | `brew install openjdk@17`                                     |
+| Java           | 25     | `brew install openjdk@25`                                     |
 | Node           | 18+    | `brew install node`                                           |
 | Docker Desktop | any    | [docker.com](https://www.docker.com/products/docker-desktop/) |
 

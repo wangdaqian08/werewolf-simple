@@ -24,7 +24,8 @@ if [ -z "$STRIPE_WEBHOOK_SECRET" ]; then
 fi
 export STRIPE_WEBHOOK_SECRET
 
-stripe listen --forward-to localhost:8080/api/payment/webhook >/tmp/stripe-listen.log 2>&1 &
+stripe listen --events checkout.session.completed,checkout.session.expired \
+ --forward-to localhost:8080/api/payment/webhook >/tmp/stripe-listen.log 2>&1 &
 LISTEN_PID=$!
 # NOTE: a SIGKILL bypasses this trap; recover leaked forwarders with: pkill -f "stripe listen"
 trap 'kill "$LISTEN_PID" 2>/dev/null || true' EXIT
