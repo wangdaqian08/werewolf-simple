@@ -487,7 +487,10 @@ describe('DayPhase — hunter role card', () => {
       attachTo: document.body,
     })
     await wrapper.find('.my-role-chip').trigger('click')
-    expect(document.body.querySelector('.rc-desc')?.textContent).toContain('被女巫毒死时无法开枪')
+    // Exact text, matching VotingPhase / RoleRevealCard — catches punctuation typos.
+    expect(document.body.querySelector('.rc-desc')?.textContent).toBe(
+      '死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。',
+    )
     wrapper.unmount()
   })
 })

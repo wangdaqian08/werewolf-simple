@@ -212,7 +212,10 @@ class GameServiceVotingPhaseTest {
         assertThat(tally[0]["playerId"]).isEqualTo("u2")
         assertThat(tally[0]["votes"]).isEqualTo(2.0)
         val voters = tally[0]["voters"] as List<Map<String, Any?>>
-        assertThat(voters).hasSize(2)
+        assertThat(voters).containsExactlyInAnyOrder(
+            mapOf("userId" to hostId, "nickname" to "Host", "seatIndex" to 0),
+            mapOf("userId" to "u3", "nickname" to "Carol", "seatIndex" to 2),
+        )
     }
 
 

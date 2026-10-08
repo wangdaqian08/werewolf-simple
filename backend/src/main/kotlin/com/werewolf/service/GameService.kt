@@ -274,19 +274,19 @@ class GameService(
 
             val rawTally: Map<String, Double> = TallyCalculator.calculateWeightedTally(votes)
 
+            val voterInfo = { v: Vote ->
+                mapOf(
+                    "userId" to v.voterUserId,
+                    "nickname" to (userLookup[v.voterUserId]?.nickname ?: v.voterUserId),
+                    "seatIndex" to (playerMap[v.voterUserId]?.seatIndex ?: 0),
+                )
+            }
+
             val tallyList = if (tallyRevealed) {
                 rawTally.entries.map { (targetId, voteCount) ->
                     val targetPlayer = playerMap[targetId]
                     val targetUser = userLookup[targetId]
-                    val voters = votes.filter { it.targetUserId == targetId }.map { v ->
-                        val vp = playerMap[v.voterUserId]
-                        val vu = userLookup[v.voterUserId]
-                        mapOf(
-                            "userId" to v.voterUserId,
-                            "nickname" to (vu?.nickname ?: v.voterUserId),
-                            "seatIndex" to (vp?.seatIndex ?: 0),
-                        )
-                    }
+                    val voters = votes.filter { it.targetUserId == targetId }.map(voterInfo)
                     mapOf(
                         "playerId" to targetId,
                         "nickname" to (targetUser?.nickname ?: targetId),
@@ -298,13 +298,7 @@ class GameService(
             } else null
 
             val abstainVoters = if (tallyRevealed) {
-                votes.filter { it.targetUserId == null }.map { v ->
-                    mapOf(
-                        "userId" to v.voterUserId,
-                        "nickname" to (userLookup[v.voterUserId]?.nickname ?: v.voterUserId),
-                        "seatIndex" to (playerMap[v.voterUserId]?.seatIndex ?: 0),
-                    )
-                }
+                votes.filter { it.targetUserId == null }.map(voterInfo)
             } else null
 
             val elimHistory = eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
