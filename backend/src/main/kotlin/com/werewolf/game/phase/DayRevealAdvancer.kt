@@ -87,6 +87,7 @@ class DayRevealAdvancer(
         if (!wolfKilled) return null
         if (wolfTarget == nightPhase.witchPoisonTargetUserId) return null // poisoned → cannot shoot
         val player = players.find { it.userId == wolfTarget } ?: return null
+        if(player.alive) return null //survived (e.g. night-1 immunity perk)
         return if (player.role == PlayerRole.HUNTER) wolfTarget else null
     }
 }

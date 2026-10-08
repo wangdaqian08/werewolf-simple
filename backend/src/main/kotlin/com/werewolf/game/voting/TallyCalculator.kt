@@ -13,19 +13,19 @@ object TallyCalculator {
     /**
      * Calculates weighted vote tallies for a list of votes.
      *
+     * The 1.5x weight comes from [Vote.sheriffVote] — who held the badge when
+     * the vote was cast — never from the current sheriff, so a badge handover
+     * after the tally (voted-out sheriff passes the badge) cannot re-weight it.
+     *
      * @param votes List of votes to count
-     * @param sheriffUserId User ID of the current sheriff (null if no sheriff)
      * @return Map of target user IDs to their weighted vote counts (as Double)
      */
-    fun calculateWeightedTally(
-        votes: List<Vote>,
-        sheriffUserId: String?
-    ): Map<String, Double> {
+    fun calculateWeightedTally(votes: List<Vote>): Map<String, Double> {
         val result = mutableMapOf<String, Double>()
 
         for (vote in votes) {
             val targetId = vote.targetUserId ?: continue // Skip abstain votes
-            val weight = if (vote.voterUserId == sheriffUserId) 1.5 else 1.0
+            val weight = if (vote.sheriffVote) 1.5 else 1.0
             result[targetId] = (result[targetId] ?: 0.0) + weight
         }
 

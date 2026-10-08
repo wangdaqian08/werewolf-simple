@@ -136,6 +136,28 @@
               </div>
             </div>
           </div>
+          <div v-if="votingPhase.abstainVoters?.length" class="vote-col vote-col-abstain">
+            <div class="vote-col-head">
+              <div class="vote-col-avatar">—</div>
+              <div class="vote-col-cname">弃票</div>
+              <div class="vote-col-count tally-abstain">
+                {{ votingPhase.abstainVoters.length }}
+              </div>
+            </div>
+            <div class="vote-col-body">
+              <div v-for="v in votingPhase.abstainVoters" :key="v.userId" class="vcol-row">
+                <Avatar
+                  class="vcol-avatar"
+                  :avatar="v.avatar"
+                  :nickname="v.nickname"
+                  emoji="😊"
+                  size="sm"
+                />
+                <span class="vcol-seat">{{ v.seatIndex }}</span>
+                <span class="vcol-name">{{ v.nickname }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -861,7 +883,7 @@ const ROLE_META: Record<string, RoleMeta> = {
     nameEn: 'HUNTER',
     emoji: '🏹',
     team: 'special',
-    description: '死亡时可开枪带走一名玩家。',
+    description: '死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。',
   },
   GUARD: {
     nameZh: '守卫',
@@ -966,6 +988,14 @@ function onBadgeTap(player: GamePlayer) {
   align-items: center;
   padding: 0.25rem 1rem 0.5rem;
   min-height: 2.5rem;
+}
+
+.tally-abstain {
+  color: var(--muted);
+}
+
+.vote-col-abstain {
+  opacity: 0.7;
 }
 
 .tally-chip {

@@ -215,6 +215,41 @@ class GameServiceVotingPhaseTest {
         assertThat(voters).hasSize(2)
     }
 
+
+    @Test
+    fun `getGameState VOTING - abstainVoters lists players who abstained once tally is revealed`() {
+        val players = listOf(player(hostId, 0), player("u2", 1), player("u3", 2))
+        val users = listOf(user(hostId, "Host"), user("u2", "Bob"), user("u3", "Carol"))
+        setupGameAndPlayers(game(VotingSubPhase.VOTE_RESULT.name), players, users)
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, day))
+            .thenReturn(listOf(vote(hostId, "u2"), vote("u3", null)))
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.empty())
+
+        val voting = votingResult(gameService.getGameState(gameId, hostId))
+
+        val abstainers = voting["abstainVoters"] as List<Map<String, Any?>>
+        assertThat(abstainers).hasSize(1)
+        assertThat(abstainers[0]["userId"]).isEqualTo("u3")
+        assertThat(abstainers[0]["nickname"]).isEqualTo("Carol")
+        assertThat(abstainers[0]["seatIndex"]).isEqualTo(2)
+    }
+
+    @Test
+    fun `getGameState VOTING - abstainVoters hidden before tally is revealed`() {
+        val players = listOf(player(hostId, 0), player("u2", 1))
+        val users = listOf(user(hostId, "Host"), user("u2", "Bob"))
+        setupGameAndPlayers(game(), players, users)
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, day))
+            .thenReturn(listOf(vote("u2", null)))
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.empty())
+
+        val voting = votingResult(gameService.getGameState(gameId, hostId))
+
+        assertThat(voting["abstainVoters"]).isNull()
+    }
+
     // ── Eliminated player ────────────────────────────────────────────────────
 
     @Test

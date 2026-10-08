@@ -36,6 +36,9 @@ class Vote(
     @Column(name = "target_user_id", length = 128)
     var targetUserId: String? = null,
 
+    @Column(name = "sheriff_vote", nullable = false)
+    val sheriffVote: Boolean = false,
+
     @Column(name = "voted_at", nullable = false, updatable = false)
     @CreationTimestamp
     val votedAt: LocalDateTime? = null,

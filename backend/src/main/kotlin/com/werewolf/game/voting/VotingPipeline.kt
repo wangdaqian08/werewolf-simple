@@ -81,6 +81,7 @@ class VotingPipeline(
                 dayNumber = context.game.dayNumber,
                 voterUserId = request.actorUserId,
                 targetUserId = target,
+                sheriffVote = request.actorUserId == context.game.sheriffUserId,
             )
         )
 
@@ -118,10 +119,7 @@ class VotingPipeline(
         val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
             context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
         )
-        val tally: Map<String, Double> = TallyCalculator.calculateWeightedTally(
-            votes,
-            context.game.sheriffUserId
-        )
+        val tally: Map<String, Double> = TallyCalculator.calculateWeightedTally(votes)
 
         val eliminated = TallyCalculator.findTopCandidate(tally)
         val wasRevote = context.game.subPhase == VotingSubPhase.RE_VOTING.name

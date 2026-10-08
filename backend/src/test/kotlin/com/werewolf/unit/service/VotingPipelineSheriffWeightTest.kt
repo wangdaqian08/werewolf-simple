@@ -89,7 +89,7 @@ class VotingPipelineSheriffWeightTest {
         GameContext(game, room(), players.toList())
 
     private fun vote(voter: String, target: String?) =
-        Vote(gameId = gameId, voteContext = VoteContext.ELIMINATION, dayNumber = 1, voterUserId = voter, targetUserId = target)
+        Vote(gameId = gameId, voteContext = VoteContext.ELIMINATION, dayNumber = 1, voterUserId = voter, targetUserId = target, sheriffVote = voter == sheriffId)
 
     private fun req(actorId: String, actionType: ActionType, target: String? = null) =
         GameActionRequest(gameId = gameId, actorUserId = actorId, actionType = actionType, targetUserId = target)

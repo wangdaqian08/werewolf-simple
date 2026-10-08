@@ -463,6 +463,7 @@ export interface VotingState {
   votesSubmitted?: number // how many players have cast a vote (shown before reveal)
   totalVoters?: number // total players eligible to vote
   tally?: VoteTally[] // per-player vote counts — hidden until tallyRevealed
+  abstainVoters?: VoteVoter[]
   tallyRevealed?: boolean // host has publicly revealed the tally
   revealDeadline?: number // epoch ms — 30s countdown after tally revealed
   // VOTE_RESULT / HUNTER_SHOOT / BADGE_HANDOVER
