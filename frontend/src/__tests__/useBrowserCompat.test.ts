@@ -169,6 +169,44 @@ describe('isSupportedBrowser', () => {
     expect(isSupportedBrowser()).toBe(false)
   })
 
+  it('WeChat Android (XWEB, UA-CH reports Chromium) → blocked', () => {
+    stubNavigator({
+      ua:
+        'Mozilla/5.0 (Linux; Android 13; V2227A Build/TP1A.220624.014; wv) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Version/4.0 Chrome/116.0.0.0 Mobile Safari/537.36 XWEB/1160065 ' +
+        'MMWEBSDK/20231202 MMWEBID/2247 MicroMessenger/8.0.47.2560(0x28002F30) WeChat/arm64 ' +
+        'Weixin NetType/WIFI Language/zh_CN ABI/arm64',
+      uaData: {
+        brands: [
+          { brand: 'Chromium', version: '116' },
+          { brand: 'Android WebView', version: '116' },
+        ],
+      },
+    })
+    expect(isSupportedBrowser()).toBe(false)
+  })
+
+  it('WeChat Android (no UA-CH, Chrome/ in UA) → blocked', () => {
+    stubNavigator({
+      ua:
+        'Mozilla/5.0 (Linux; Android 10; MI 8 Build/QKQ1.190828.002; wv) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Version/4.0 Chrome/89.0.4389.72 MQQBrowser/6.2 TBS/046011 ' +
+        'Mobile Safari/537.36 MMWEBID/1234 MicroMessenger/8.0.10.1960(0x28000A3D) ' +
+        'Process/tools WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
+    })
+    expect(isSupportedBrowser()).toBe(false)
+  })
+
+  it('WeChat iOS (WebKit) → blocked', () => {
+    stubNavigator({
+      ua:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 ' +
+        '(KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.47(0x18002f2c) NetType/WIFI ' +
+        'Language/zh_CN',
+    })
+    expect(isSupportedBrowser()).toBe(false)
+  })
+
   it('UA-CH present but no Chromium brand → blocked', () => {
     stubNavigator({
       ua: '(spoofed-ua)',
