@@ -747,6 +747,50 @@ class VotingPipelineTest {
         verify(stompPublisher, atLeastOnce()).broadcastGameAfterCommit(eq(gameId), any())
     }
 
+    // ── submitVote — sheriff weight snapshot ──────────────────────────────────
+    // The 1.5x weight is frozen onto the vote when it is cast (whoever holds the
+    // badge at that moment), so a later badge handover cannot re-weight it.
+
+    /** Submits a vote from [actorId] for u2 and returns the Vote that was saved. */
+    private fun savedVote(actorId: String, game: Game, vararg players: GamePlayer): Vote {
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, game.dayNumber))
+            .thenReturn(emptyList())
+        whenever(voteRepository.save(any<Vote>())).thenAnswer { it.arguments[0] }
+
+        val result = votingPipeline.submitVote(req(actorId, ActionType.SUBMIT_VOTE, "u2"), ctx(game, *players))
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        val saved = argumentCaptor<Vote>()
+        verify(voteRepository).save(saved.capture())
+        return saved.firstValue
+    }
+
+    @Test
+    fun `submitVote - the sheriff's vote is saved as a sheriff vote`() {
+        val vote = savedVote(hostId, game(sheriff = hostId), player(hostId, 0), player("u2", 2))
+        assertThat(vote.sheriffVote).isTrue()
+    }
+
+    @Test
+    fun `submitVote - a non-sheriff's vote is not a sheriff vote`() {
+        val vote = savedVote("u1", game(sheriff = hostId), player(hostId, 0), player("u1", 1), player("u2", 2))
+        assertThat(vote.sheriffVote).isFalse()
+    }
+
+    @Test
+    fun `submitVote - with no sheriff (badge destroyed) no vote is a sheriff vote`() {
+        val vote = savedVote(hostId, game(sheriff = null), player(hostId, 0), player("u2", 2))
+        assertThat(vote.sheriffVote).isFalse()
+    }
+
+    @Test
+    fun `submitVote - the sheriff re-casting in RE_VOTING is saved as a sheriff vote`() {
+        val vote = savedVote(
+            hostId, game(VotingSubPhase.RE_VOTING.name, sheriff = hostId), player(hostId, 0), player("u2", 2),
+        )
+        assertThat(vote.sheriffVote).isTrue()
+    }
+
     @Test
     fun `submitVote - rejected when actor is dead`() {
         val deadVoter = player(hostId, 0).also { it.alive = false }
@@ -1098,7 +1142,7 @@ class VotingPipelineTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
         whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1))
-            .thenReturn(java.util.Optional.empty())
+            .thenReturn(Optional.empty())
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
 

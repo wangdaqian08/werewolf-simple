@@ -125,15 +125,23 @@ class SheriffVotedOutWeightIntegrationTest {
         return gameId to players
     }
 
-    @Test
-    fun `voted-out sheriff passes badge - VOTE_RESULT tally keeps the weights from when votes were cast`() {
-        val (gameId, players) = startGame("SVOW")
+    /** A = sheriff who gets voted out, B = the heir, X = A's vote target. */
+    private data class VotedOutSheriff(
+        val gameId: Int, val host: TestPlayer, val a: TestPlayer, val b: TestPlayer, val x: TestPlayer,
+    )
+
+    /**
+     * Day 2 vote with A holding the badge: A (sheriff, 1.5) + o3 → X = 2.5 ;
+     * B + o1 + o2 → A = 3.0 ; X abstains. A is voted out, so the game stops at
+     * BADGE_HANDOVER with A still holding the badge.
+     */
+    private fun voteOutSheriff(prefix: String): VotedOutSheriff {
+        val (gameId, players) = startGame(prefix)
         val host = players[0]
         val byUserId = players.associateBy { it.userId }
         val roles = gamePlayerRepository.findByGameId(gameId).associate { it.userId to it.role }
 
-        // A = sheriff who gets voted out (a villager, so the exile cannot end
-        // the game — the other villager survives). B = heir. X = A's target.
+        // A is a villager, so the exile cannot end the game (the other villager survives).
         val a = byUserId.getValue(roles.entries.first { it.value == PlayerRole.VILLAGER }.key)
         val b = byUserId.getValue(roles.entries.first { it.value == PlayerRole.SEER }.key)
         val x = byUserId.getValue(roles.entries.first { it.value == PlayerRole.WITCH }.key)
@@ -150,7 +158,6 @@ class SheriffVotedOutWeightIntegrationTest {
             it.sheriff = true; gamePlayerRepository.save(it)
         }
 
-        // A (sheriff, 1.5) + o3 → X = 2.5 ; B + o1 + o2 → A = 3.0 ; X abstains.
         assertThat(action(a.token, gameId, "SUBMIT_VOTE", x.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(o3.token, gameId, "SUBMIT_VOTE", x.userId).statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(b.token, gameId, "SUBMIT_VOTE", a.userId).statusCode).isEqualTo(HttpStatus.OK)
@@ -161,6 +168,17 @@ class SheriffVotedOutWeightIntegrationTest {
         assertThat(action(host.token, gameId, "VOTING_REVEAL_TALLY").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(gameRepository.findById(gameId).orElseThrow().subPhase)
             .isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+        return VotedOutSheriff(gameId, host, a, b, x)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun tally(token: String, gameId: Int): Map<String, Double> =
+        (votingPhase(token, gameId)["tally"] as List<Map<String, Any?>>)
+            .associate { it["playerId"] as String to (it["votes"] as Number).toDouble() }
+
+    @Test
+    fun `voted-out sheriff passes badge - VOTE_RESULT tally keeps the weights from when votes were cast`() {
+        val (gameId, host, a, b, x) = voteOutSheriff("SVOW")
 
         // A hands the badge to B.
         assertThat(action(a.token, gameId, "BADGE_PASS", b.userId).statusCode).isEqualTo(HttpStatus.OK)
@@ -168,9 +186,20 @@ class SheriffVotedOutWeightIntegrationTest {
         assertThat(after.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
         assertThat(after.sheriffUserId).isEqualTo(b.userId)
 
-        @Suppress("UNCHECKED_CAST")
-        val tally = (votingPhase(host.token, gameId)["tally"] as List<Map<String, Any?>>)
-            .associate { it["playerId"] as String to (it["votes"] as Number).toDouble() }
-        assertThat(tally).containsExactlyInAnyOrderEntriesOf(mapOf(a.userId to 3.0, x.userId to 2.5))
+        assertThat(tally(host.token, gameId)).containsExactlyInAnyOrderEntriesOf(mapOf(a.userId to 3.0, x.userId to 2.5))
+    }
+
+    @Test
+    fun `voted-out sheriff destroys badge - VOTE_RESULT tally keeps the sheriff's 1_5`() {
+        val (gameId, host, a, _, x) = voteOutSheriff("SVOD")
+
+        // A destroys the badge instead of passing it: nobody is sheriff now, but
+        // A's vote was cast while holding the badge, so it still counts 1.5.
+        assertThat(action(a.token, gameId, "BADGE_DESTROY").statusCode).isEqualTo(HttpStatus.OK)
+        val after = gameRepository.findById(gameId).orElseThrow()
+        assertThat(after.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+        assertThat(after.sheriffUserId).isNull()
+
+        assertThat(tally(host.token, gameId)).containsExactlyInAnyOrderEntriesOf(mapOf(a.userId to 3.0, x.userId to 2.5))
     }
 }
