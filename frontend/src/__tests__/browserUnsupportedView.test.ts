@@ -1,82 +1,32 @@
-/**
- * Browser compatibility detection.
- *
- * Allowed list:
- *   - Chromium-based browsers (Chrome, Edge, Brave, Opera, Samsung Internet, …)
- *   - iOS Safari and any iOS browser (all forced through WebKit by Apple, so
- *     they all behave the same — we'd rather have iOS users than not).
- *
- * Blocked list:
- *   - WeChat's in-app browser on every platform (UA token `MicroMessenger`),
- *     even though it is Chromium/WebKit underneath.
- *   - Desktop Safari, Firefox, legacy IE, anything else.
- *
- * Detection precedence:
- *   0. WeChat — blocked before anything else.
- *   1. UA Client Hints (`navigator.userAgentData`) — modern Chromium only.
- *      Decisive: if present and brand list mentions any Chromium variant,
- *      allow; if present but no Chromium brand (rare, theoretical), block.
- *   2. iOS WebKit by `userAgent` (covers Safari, CriOS, FxiOS, EdgiOS).
- *   3. UA-string fallback for Chromium-based browsers that don't ship UA-CH.
- *   4. Otherwise blocked.
- *
- * Pure client-side defense — not a security boundary. Goal is to avoid users
- * landing on a UI that doesn't work for them, not to enforce policy.
- */
+import { afterEach, describe, expect, it } from 'vitest'
+import { mount } from '@vue/test-utils'
+import BrowserUnsupportedView from '@/views/BrowserUnsupportedView.vue'
 
-interface UserAgentBrand {
-  brand: string
-  version: string
+const WECHAT_ANDROID =
+    'Mozilla/5.0 (Linux; Android 13; V2227A Build/TP1A.220624.014; wv) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Version/4.0 Chrome/116.0.0.0 Mobile Safari/537.36 XWEB/1160065 ' +
+    'MicroMessenger/8.0.47.2560(0x28002F30) WeChat/arm64 Weixin NetType/WIFI Language/zh_CN'
+const FIREFOX = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
+
+const ORIGINAL_UA = navigator.userAgent
+
+function stubUa(ua: string) {
+  Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true })
 }
 
-interface UserAgentData {
-  brands?: UserAgentBrand[]
-}
+afterEach(() => stubUa(ORIGINAL_UA))
 
-export function isWeChatBrowser(): boolean {
-  if (typeof navigator === 'undefined') return false
-  return /MicroMessenger/i.test(navigator.userAgent ?? '')
-}
+describe('BrowserUnsupportedView', () => {
+  it('tells WeChat users how to open the page in their browser', () => {
+    stubUa(WECHAT_ANDROID)
+    const hint = mount(BrowserUnsupportedView).find('[data-testid="wechat-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('在浏览器打开')
+    expect(hint.text()).toContain('Open in Browser')
+  })
 
-export function isSupportedBrowser(): boolean {
-  if (typeof navigator === 'undefined') return true // SSR / non-browser env
-
-  const ua = navigator.userAgent ?? ''
-
-  // 0. WeChat in-app browser — its UA also matches the Chromium / iOS rules below.
-  if (isWeChatBrowser()) return false
-
-  // 1. UA Client Hints — present on modern Chromium, absent on Firefox/Safari.
-  const uaData = (navigator as { userAgentData?: UserAgentData }).userAgentData
-  if (uaData?.brands && uaData.brands.length > 0) {
-    const brandStr = uaData.brands.map((b) => String(b.brand ?? '').toLowerCase()).join('|')
-    return /chromium|chrome|edge|brave|opera/.test(brandStr)
-  }
-
-  // 2. iOS — every browser is WebKit; allow them all.
-  if (/iPhone|iPad|iPod/.test(ua) && /AppleWebKit/.test(ua)) return true
-
-  // 3. UA-string fallback for Chromium variants without UA-CH (older Android
-  //    Chrome, custom WebViews). Edg/ catches Edge Chromium; Chrome/ catches
-  //    Chrome, Brave, Opera, Samsung Internet, etc.
-  if (/Chrome\/\d+/.test(ua) || /Edg\//.test(ua)) return true
-
-  // 4. Firefox, desktop Safari, anything else.
-  return false
-}
-
-export function isIosSafari(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent ?? ''
-  if (!/iPhone|iPad|iPod/.test(ua)) return false
-  // CriOS = Chrome iOS, FxiOS = Firefox iOS, EdgiOS = Edge iOS.
-  // All are WKWebView wrappers without Add-to-Home-Screen self-install.
-  return !/CriOS|FxiOS|EdgiOS/.test(ua) && /Safari/.test(ua)
-}
-
-export function isStandalonePwa(): boolean {
-  if (typeof navigator === 'undefined') return false
-  if ((navigator as { standalone?: boolean }).standalone) return true
-  if (typeof window === 'undefined') return false
-  return window.matchMedia('(display-mode: standalone)').matches
-}
+  it('shows no WeChat hint in other browsers', () => {
+    stubUa(FIREFOX)
+    expect(mount(BrowserUnsupportedView).find('[data-testid="wechat-hint"]').exists()).toBe(false)
+  })
+})
