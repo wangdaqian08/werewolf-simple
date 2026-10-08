@@ -25,7 +25,10 @@ spring:
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
             scope: openid,profile,email
-
+  web:
+    error:
+      include-stacktrace: never
+      include-message: never
 app:
   jwt:
     secret: ${JWT_SECRET}
@@ -50,9 +53,6 @@ server:
     remoteip:
       protocol-header: x-forwarded-proto
       remote-ip-header: x-forwarded-for
-  error:
-    include-stacktrace: never
-    include-message: never
 
 websocket:
   allowed-origins: ${FRONTEND_ORIGIN}

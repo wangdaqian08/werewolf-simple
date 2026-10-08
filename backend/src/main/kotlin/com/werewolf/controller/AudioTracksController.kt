@@ -1,10 +1,10 @@
 package com.werewolf.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.stereotype.Component
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
+import tools.jackson.databind.json.JsonMapper
 
 data class AudioTrackDto(
     val id: String?,
@@ -14,7 +14,7 @@ data class AudioTrackDto(
 
 @Component
 class BgmTrackRegistry(
-    private val objectMapper: ObjectMapper,
+    private val jsonMapper: JsonMapper,
 ) {
     @Volatile private var cached: List<AudioTrackDto> = emptyList()
     @Volatile private var cachedAt: Long = 0L
@@ -39,7 +39,7 @@ class BgmTrackRegistry(
             val sidecar = resolver.getResource("classpath:/static/audio/bgm/tracks.json")
             if (sidecar.exists()) {
                 @Suppress("UNCHECKED_CAST")
-                objectMapper.readValue(sidecar.inputStream, Map::class.java) as Map<String, String>
+                jsonMapper.readValue(sidecar.inputStream, Map::class.java) as Map<String, String>
             } else emptyMap()
         } catch (e: Exception) {
             emptyMap()

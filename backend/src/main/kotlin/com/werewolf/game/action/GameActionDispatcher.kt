@@ -7,6 +7,7 @@ import com.werewolf.game.voting.VotingPipeline
 import com.werewolf.model.ActionType
 import com.werewolf.model.PlayerRole
 import com.werewolf.service.GameContextLoader
+import com.werewolf.service.GameNotFoundException
 import com.werewolf.service.SelfDestructService
 import com.werewolf.service.StompPublisher
 import org.springframework.stereotype.Service
@@ -24,7 +25,11 @@ class GameActionDispatcher(
 ) {
     @Transactional
     fun dispatch(request: GameActionRequest): GameActionResult {
-        val context = contextLoader.load(request.gameId)
+        val context = try {
+            contextLoader.load(request.gameId)
+        } catch (e: GameNotFoundException) {
+            return GameActionResult.Rejected(e.message!!)
+        }
 
         return when (request.actionType) {
             // ── Role confirmation ──────────────────────────────────────────────

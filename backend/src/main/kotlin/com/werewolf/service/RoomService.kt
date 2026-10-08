@@ -8,7 +8,13 @@ import com.werewolf.dto.RoomConfigDto
 import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.dto.RoomDto
 import com.werewolf.dto.RoomPlayerDto
-import com.werewolf.model.*
+import com.werewolf.model.GameConfig
+import com.werewolf.model.PerkActivationStatus
+import com.werewolf.model.PlayerRole
+import com.werewolf.model.ReadyStatus
+import com.werewolf.model.Room
+import com.werewolf.model.RoomPlayer
+import com.werewolf.model.RoomStatus
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.PerkActivationRepository
 import com.werewolf.repository.PerkRepository
@@ -270,7 +276,8 @@ class RoomService(
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildRoomDto(room: Room): RoomDto {
-        val players = roomPlayerRepository.findByRoomId(room.roomId ?: error("Room has no ID"))
+        val roomId = room.roomId ?: error("Room has no ID")
+        val players = roomPlayerRepository.findByRoomId(roomId)
         val userMap = userRepository.findAllById(players.map { it.userId }).associateBy { it.userId }
 
         val playerDtos = players.map { rp ->
@@ -298,13 +305,13 @@ class RoomService(
         }
 
         val activeGameId = if (room.status == RoomStatus.IN_GAME) {
-            gameRepository.findByRoomIdAndEndedAtIsNull(room.roomId).map { it.gameId }.orElse(null)
+            gameRepository.findByRoomIdAndEndedAtIsNull(roomId).map { it.gameId }.orElse(null)
         } else null
 
         // Live perk activations are public to the whole room (fairness rule).
         val perkNames = perkRepository.findAll().associate { it.perkCode to it.name }
         val perkActivations = perkActivationRepository
-            .findByRoomIdAndStatus(room.roomId, PerkActivationStatus.ACTIVE)
+            .findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)
             .map { PerkActivationDto(it.userId, it.perkCode, perkNames[it.perkCode] ?: it.perkCode) }
 
         return RoomDto(

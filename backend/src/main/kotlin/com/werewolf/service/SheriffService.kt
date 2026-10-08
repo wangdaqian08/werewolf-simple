@@ -6,8 +6,25 @@ import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.config.GameTimingProperties
 import com.werewolf.game.timer.HostTimerService
-import com.werewolf.model.*
-import com.werewolf.repository.*
+import com.werewolf.model.ActionType
+import com.werewolf.model.CandidateStatus
+import com.werewolf.model.DaySubPhase
+import com.werewolf.model.ElectionSubPhase
+import com.werewolf.model.Game
+import com.werewolf.model.GamePhase
+import com.werewolf.model.GamePlayer
+import com.werewolf.model.SheriffCandidate
+import com.werewolf.model.SheriffElection
+import com.werewolf.model.SpeechOrderDirection
+import com.werewolf.model.User
+import com.werewolf.model.Vote
+import com.werewolf.model.VoteContext
+import com.werewolf.repository.GamePlayerRepository
+import com.werewolf.repository.GameRepository
+import com.werewolf.repository.SheriffCandidateRepository
+import com.werewolf.repository.SheriffElectionRepository
+import com.werewolf.repository.UserRepository
+import com.werewolf.repository.VoteRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -82,7 +99,7 @@ class SheriffService(
         val alivePlayerIds = players.filter { it.alive }.map { it.userId }.toSet()
         val ineligibleIds = candidates.filter { c ->
             c.status == CandidateStatus.RUNNING ||
-            (c.status == CandidateStatus.QUIT && speakingOrderIds.contains(c.userId))
+                    (c.status == CandidateStatus.QUIT && speakingOrderIds.contains(c.userId))
         }.map { it.userId }.toSet().intersect(alivePlayerIds)
         val totalAlivePlayers = alivePlayerIds.size
         val eligibleVoterCount = totalAlivePlayers - ineligibleIds.size
@@ -141,9 +158,9 @@ class SheriffService(
             "abstained" to (myVoteRecord != null && myVoteRecord.targetUserId == null),
             // canVote: RUNNING candidates and speech-quitters (QUIT in speaking order) cannot vote
             "canVote" to !(
-                myCandidate?.status == CandidateStatus.RUNNING ||
-                (myCandidate?.status == CandidateStatus.QUIT && speakingOrderIds.contains(myPlayer?.userId))
-            ),
+                    myCandidate?.status == CandidateStatus.RUNNING ||
+                            (myCandidate?.status == CandidateStatus.QUIT && speakingOrderIds.contains(myPlayer?.userId))
+                    ),
             "allVoted" to allVoted,
             // voteProgress: ineligible voters (RUNNING candidates + speech-quitters) count as auto-voted
             "voteProgress" to mapOf("voted" to submittedVoteCount + autoCountedVoters, "total" to totalAlivePlayers),
@@ -509,7 +526,8 @@ class SheriffService(
         if (election.subPhase != ElectionSubPhase.SPEECH)
             return GameActionResult.Rejected("Not in SPEECH sub-phase")
 
-        val candidate = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
+        val electionId = election.id ?: error("Election has no ID")
+        val candidate = sheriffCandidateRepository.findByElectionId(electionId)
             .firstOrNull { it.userId == request.actorUserId }
             ?: return GameActionResult.Rejected("Not a candidate")
 
@@ -518,7 +536,7 @@ class SheriffService(
 
         // If no running candidates remain in the speaking order, skip to night
         val speakingOrderIds = election.speakingOrder?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
-        val allCandidates = sheriffCandidateRepository.findByElectionId(election.id)
+        val allCandidates = sheriffCandidateRepository.findByElectionId(electionId)
         val anyRunningLeft = allCandidates.any { it.status == CandidateStatus.RUNNING && speakingOrderIds.contains(it.userId) }
         if (!anyRunningLeft) {
             hostTimerService.cancel(context.gameId)

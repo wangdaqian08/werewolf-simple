@@ -1,6 +1,5 @@
 package com.werewolf.unit.service
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.werewolf.model.*
 import com.werewolf.repository.GameEventRepository
 import com.werewolf.repository.GamePlayerRepository
@@ -13,6 +12,7 @@ import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
+import tools.jackson.module.kotlin.jacksonObjectMapper
 import java.util.*
 
 @ExtendWith(MockitoExtension::class)

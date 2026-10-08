@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Stage 1: build the fat jar ------------------------------------------
-FROM eclipse-temurin:17-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /src
 
 # Gradle wrapper + build scripts first — maximises Docker layer cache hits.
@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew bootJar --no-daemon -x test
 
 # ---- Stage 2: runtime ----------------------------------------------------
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 
 # curl for the docker-compose healthcheck (busybox wget would also work).

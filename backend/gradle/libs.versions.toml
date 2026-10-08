@@ -1,0 +1,27 @@
+# Every version the build pins explicitly lives here, once.
+# Dependencies managed by the Spring Boot BOM (starters, Jackson, Kotlin libraries,
+# coroutines, H2, ...) are declared in build.gradle.kts without a version.
+
+[versions]
+spring-boot = "4.1.1"
+spring-dependency-management = "1.1.7"
+# Also applied to the Spring Boot BOM's kotlin.version (see build.gradle.kts), so the
+# Kotlin plugins and the Kotlin libraries always use the same version.
+kotlin = "2.3.21"
+jjwt = "0.12.5"
+stripe = "33.0.0"
+mockito-kotlin = "5.2.1"
+
+[libraries]
+jjwt-api = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
+jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
+jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
+stripe-java = { module = "com.stripe:stripe-java", version.ref = "stripe" }
+mockito-kotlin = { module = "org.mockito.kotlin:mockito-kotlin", version.ref = "mockito-kotlin" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+kotlin-jpa = { id = "org.jetbrains.kotlin.plugin.jpa", version.ref = "kotlin" }

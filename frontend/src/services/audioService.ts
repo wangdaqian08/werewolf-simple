@@ -37,8 +37,8 @@ const STUCK_QUEUE_MS = 15_000
  * gesture. iOS Safari removes its autoplay restriction PER ELEMENT on the
  * element's first gestured play() — page-level interaction history is not
  * enough — so cues pushed later over STOMP would otherwise be denied on
- * every night. Mirrors backend/src/main/resources/static/audio/ minus the
- * unreferenced crow_night.mp3; a cue missing from this list still works via
+ * every night. Mirrors backend/src/main/resources/static/audio/
+ * a cue missing from this list still works via
  * the park-and-resume path, it just needs one extra tap on iOS.
  */
 export const KNOWN_NARRATION_FILES: readonly string[] = [
