@@ -30,9 +30,12 @@ import java.util.Optional
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DayRevealAdvancerTest {
 
-    @Mock lateinit var gameRepository: GameRepository
-    @Mock lateinit var gamePlayerRepository: GamePlayerRepository
-    @Mock lateinit var nightPhaseRepository: NightPhaseRepository
+    @Mock
+    lateinit var gameRepository: GameRepository
+    @Mock
+    lateinit var gamePlayerRepository: GamePlayerRepository
+    @Mock
+    lateinit var nightPhaseRepository: NightPhaseRepository
 
     private val advancer by lazy { DayRevealAdvancer(gameRepository, gamePlayerRepository, nightPhaseRepository) }
 
@@ -118,6 +121,13 @@ class DayRevealAdvancerTest {
             night(wolf = "h"),
         )
         assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER)
+    }
+
+    @Test
+    fun `RESULT_REVEALED when the wolf-targeted hunter is still alive (e g night-1 immunity perk)`() {
+        stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = true)), night(wolf = "h"))
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED)
+        assertThat(advancer.pendingHunterUserId(gameId)).isNull()
     }
 
     @Test

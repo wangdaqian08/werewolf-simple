@@ -13,24 +13,26 @@ class TallyCalculatorTest {
 
     // ── Helper functions ───────────────────────────────────────────────────────
 
-    private fun createVote(voterId: String, targetId: String): Vote {
+    private fun createVote(voterId: String, targetId: String, sheriff: Boolean = false): Vote {
         return Vote(
             gameId = gameId,
             voteContext = VoteContext.ELIMINATION,
             dayNumber = dayNumber,
             voterUserId = voterId,
             targetUserId = targetId,
+            sheriffVote = sheriff,
             votedAt = LocalDateTime.now()
         )
     }
 
-    private fun createAbstainVote(voterId: String): Vote {
+    private fun createAbstainVote(voterId: String, sheriff: Boolean = false): Vote {
         return Vote(
             gameId = gameId,
             voteContext = VoteContext.ELIMINATION,
             dayNumber = dayNumber,
             voterUserId = voterId,
             targetUserId = null, // Abstain
+            sheriffVote = sheriff,
             votedAt = LocalDateTime.now()
         )
     }
@@ -41,12 +43,12 @@ class TallyCalculatorTest {
     fun sheriffVoteHas1_5xWeight() {
         val sheriffId = "sheriff"
         val votes = listOf(
-            createVote(voterId = sheriffId, targetId = "playerA"),
+            createVote(voterId = sheriffId, targetId = "playerA", sheriff = true),
             createVote(voterId = "playerB", targetId = "playerA"),
             createVote(voterId = "playerC", targetId = "playerB")
         )
 
-        val tally = TallyCalculator.calculateWeightedTally(votes, sheriffId)
+        val tally = TallyCalculator.calculateWeightedTally(votes)
 
         assertThat(tally).hasSize(2)
         assertThat(tally["playerA"]).isEqualTo(2.5) // Sheriff (1.5) + playerB (1.0)
@@ -55,14 +57,13 @@ class TallyCalculatorTest {
 
     @Test
     fun regularVoteHas1_0xWeight() {
-        val sheriffId = "sheriff"
         val votes = listOf(
             createVote(voterId = "playerA", targetId = "playerX"),
             createVote(voterId = "playerB", targetId = "playerX"),
             createVote(voterId = "playerC", targetId = "playerY")
         )
 
-        val tally = TallyCalculator.calculateWeightedTally(votes, sheriffId)
+        val tally = TallyCalculator.calculateWeightedTally(votes)
 
         assertThat(tally).hasSize(2)
         assertThat(tally["playerX"]).isEqualTo(2.0) // Two regular votes
@@ -73,12 +74,12 @@ class TallyCalculatorTest {
     fun sheriffAbstentionDoesNotAddWeight() {
         val sheriffId = "sheriff"
         val votes = listOf(
-            createAbstainVote(voterId = sheriffId), // Sheriff abstains
+            createAbstainVote(voterId = sheriffId, sheriff = true), // Sheriff abstains
             createVote(voterId = "playerB", targetId = "playerA"),
             createVote(voterId = "playerC", targetId = "playerB")
         )
 
-        val tally = TallyCalculator.calculateWeightedTally(votes, sheriffId)
+        val tally = TallyCalculator.calculateWeightedTally(votes)
 
         assertThat(tally).hasSize(2)
         assertThat(tally["playerA"]).isEqualTo(1.0) // Only playerB's vote
@@ -93,7 +94,7 @@ class TallyCalculatorTest {
             createVote(voterId = "playerC", targetId = "playerY")
         )
 
-        val tally = TallyCalculator.calculateWeightedTally(votes, null)
+        val tally = TallyCalculator.calculateWeightedTally(votes)
 
         assertThat(tally).hasSize(2)
         assertThat(tally["playerX"]).isEqualTo(2.0) // Two regular votes
@@ -104,7 +105,7 @@ class TallyCalculatorTest {
     fun emptyVotesReturnsEmptyTally() {
         val votes = emptyList<Vote>()
 
-        val tally = TallyCalculator.calculateWeightedTally(votes, "sheriff")
+        val tally = TallyCalculator.calculateWeightedTally(votes)
 
         assertThat(tally).isEmpty()
     }
@@ -117,7 +118,7 @@ class TallyCalculatorTest {
             createAbstainVote(voterId = "playerC")
         )
 
-        val tally = TallyCalculator.calculateWeightedTally(votes, "sheriff")
+        val tally = TallyCalculator.calculateWeightedTally(votes)
 
         assertThat(tally).isEmpty()
     }
@@ -127,12 +128,12 @@ class TallyCalculatorTest {
         // This shouldn't happen in real gameplay, but test defensive behavior
         val sheriffId = "sheriff1"
         val votes = listOf(
-            createVote(voterId = sheriffId, targetId = "playerA"),
+            createVote(voterId = sheriffId, targetId = "playerA", sheriff = true),
             createVote(voterId = "sheriff2", targetId = "playerA"), // Another "sheriff"
             createVote(voterId = "playerB", targetId = "playerB")
         )
 
-        val tally = TallyCalculator.calculateWeightedTally(votes, sheriffId)
+        val tally = TallyCalculator.calculateWeightedTally(votes)
 
         assertThat(tally).hasSize(2)
         assertThat(tally["playerA"]).isEqualTo(2.5) // sheriff1 (1.5) + sheriff2 (1.0, not the sheriff)
@@ -143,12 +144,12 @@ class TallyCalculatorTest {
     fun floatingPointPrecisionHandling() {
         val sheriffId = "sheriff"
         val votes = listOf(
-            createVote(voterId = sheriffId, targetId = "playerA"),
+            createVote(voterId = sheriffId, targetId = "playerA", sheriff = true),
             createVote(voterId = "playerB", targetId = "playerA"),
             createVote(voterId = "playerC", targetId = "playerA")
         )
 
-        val tally = TallyCalculator.calculateWeightedTally(votes, sheriffId)
+        val tally = TallyCalculator.calculateWeightedTally(votes)
 
         assertThat(tally["playerA"]).isEqualTo(3.5) // 1.5 + 1.0 + 1.0
     }

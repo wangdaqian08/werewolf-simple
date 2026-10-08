@@ -12,11 +12,14 @@ import com.werewolf.model.DaySubPhase
 import com.werewolf.model.GamePhase
 import com.werewolf.model.NightPhase
 import com.werewolf.model.NightSubPhase
+import com.werewolf.model.PerkActivation
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinnerSide
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
+import com.werewolf.repository.PerkActivationRepository
+import com.werewolf.service.PERK_NIGHT1_IMMUNITY
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -53,6 +56,7 @@ class HunterNightDeathShootIntegrationTest {
     @Autowired lateinit var gameRepository: GameRepository
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
+    @Autowired lateinit var perkActivationRepository: PerkActivationRepository
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -293,6 +297,35 @@ class HunterNightDeathShootIntegrationTest {
         // And a HUNTER_SHOOT attempt is rejected (not in the shoot sub-phase).
         val resp = action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId)
         assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+    }
+
+    @Test
+    fun `night-1 immunity perk saves the wolf-targeted hunter - no shoot prompt`() {
+        val room = setupRoom("HNS9")
+        val gameId = openDay2(room)
+        // The perk only covers night 1 — park on Day 1 instead of Day 2.
+        val game = gameRepository.findById(gameId).orElseThrow()
+        game.dayNumber = 1
+        gameRepository.save(game)
+        perkActivationRepository.save(
+            PerkActivation(
+                roomId = room.roomId, gameId = gameId, userId = room.g1.userId,
+                perkCode = PERK_NIGHT1_IMMUNITY, pricePaid = 30,
+            ),
+        )
+        nightPhaseRepository.save(NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.subPhase = NightSubPhase.COMPLETE
+            it.wolfTargetUserId = room.g1.userId // g1 = hunter, holds the perk
+        })
+
+        reveal(room, gameId)
+
+        // The perk saved him: he is alive, so there is no death shot to take.
+        assertThat(alive(gameId, room.g1.userId)).isTrue()
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        val resp = action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId)
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(alive(gameId, room.g4.userId)).isTrue()
     }
 
     @Test

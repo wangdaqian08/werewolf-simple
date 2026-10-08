@@ -106,7 +106,7 @@ class GameService(
         stompPublisher.broadcastGame(gameId, DomainEvent.PhaseChanged(gameId, GamePhase.ROLE_REVEAL, null))
     }
 
-@Transactional
+    @Transactional
     fun getGameState(gameId: Int, requestingUserId: String): Map<String, Any?> {
         val game = gameRepository.findById(gameId).orElse(null)
             ?: return mapOf("error" to "Game not found")
@@ -272,10 +272,7 @@ class GameService(
                 VotingSubPhase.BADGE_HANDOVER.name,
             )
 
-            val rawTally: Map<String, Double> = TallyCalculator.calculateWeightedTally(
-                votes,
-                game.sheriffUserId
-            )
+            val rawTally: Map<String, Double> = TallyCalculator.calculateWeightedTally(votes)
 
             val tallyList = if (tallyRevealed) {
                 rawTally.entries.map { (targetId, voteCount) ->
@@ -298,6 +295,16 @@ class GameService(
                         "voters" to voters,
                     )
                 }.sortedByDescending { it["votes"] as Double }
+            } else null
+
+            val abstainVoters = if (tallyRevealed) {
+                votes.filter { it.targetUserId == null }.map { v ->
+                    mapOf(
+                        "userId" to v.voterUserId,
+                        "nickname" to (userLookup[v.voterUserId]?.nickname ?: v.voterUserId),
+                        "seatIndex" to (playerMap[v.voterUserId]?.seatIndex ?: 0),
+                    )
+                }
             } else null
 
             val elimHistory = eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
@@ -323,6 +330,7 @@ class GameService(
                 "votesSubmitted" to votes.size,
                 "totalVoters" to players.count { it.alive && it.canVote },
                 "tally" to tallyList,
+                "abstainVoters" to abstainVoters,
                 "tallyRevealed" to tallyRevealed,
                 "eliminatedPlayerId" to elimHistory?.eliminatedUserId,
                 "eliminatedNickname" to eliminatedUser?.nickname,

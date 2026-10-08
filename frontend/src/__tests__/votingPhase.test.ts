@@ -686,3 +686,97 @@ describe('VotingPhase — room info button (settings-fab)', () => {
     wrapper.unmount()
   })
 })
+
+describe('VotingPhase — abstainers on the revealed tally', () => {
+  const players: GamePlayer[] = [1, 2, 3].map((seat) => ({
+    userId: `p${seat}`,
+    nickname: `P${seat}`,
+    avatar: '😊',
+    seatIndex: seat,
+    role: 'VILLAGER' as const,
+    isAlive: true,
+    isSheriff: false,
+    canVote: true,
+    idiotRevealed: false,
+  }))
+
+  const mountResult = (abstainVoters: VotingState['abstainVoters']) => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+    return mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        gameId: 1,
+        players,
+        myUserId: 'p1',
+        isHost: false,
+        votingPhase: {
+          subPhase: 'VOTE_RESULT',
+          dayNumber: 1,
+          phaseDeadline: 0,
+          phaseStarted: 0,
+          tallyRevealed: true,
+          tally: [
+            {
+              playerId: 'p2',
+              nickname: 'P2',
+              seatIndex: 2,
+              votes: 1,
+              voters: [{ userId: 'p1', nickname: 'P1', seatIndex: 1 }],
+            },
+          ],
+          abstainVoters,
+        } as VotingState,
+      },
+    })
+  }
+
+  it('shows a 弃票 column naming every abstainer', () => {
+    const wrapper = mountResult([{ userId: 'p3', nickname: 'P3', seatIndex: 3 }])
+    const col = wrapper.find('.vote-col-abstain')
+    expect(col.exists()).toBe(true)
+    expect(col.text()).toContain('弃票')
+    expect(col.text()).toContain('P3')
+    expect(col.find('.vote-col-count').text()).toBe('1')
+  })
+
+  it('omits the 弃票 column when nobody abstained', () => {
+    const wrapper = mountResult([])
+    expect(wrapper.find('.vote-col-abstain').exists()).toBe(false)
+  })
+})
+
+describe('VotingPhase — hunter role card', () => {
+  it('states that a poisoned hunter cannot shoot', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+    const wrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+      props: {
+        gameId: 1,
+        players: [],
+        myUserId: 'p1',
+        isHost: false,
+        myRole: 'HUNTER',
+        votingPhase: {
+          subPhase: 'VOTING',
+          dayNumber: 1,
+          phaseDeadline: 0,
+          phaseStarted: 0,
+        } as VotingState,
+      },
+    })
+    await wrapper.find('.my-role-chip').trigger('click')
+    expect(document.body.querySelector('.rc-desc')?.textContent).toContain('被女巫毒死时无法开枪')
+    wrapper.unmount()
+  })
+})

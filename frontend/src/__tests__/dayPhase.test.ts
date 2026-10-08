@@ -475,3 +475,19 @@ describe('DayPhase — room info button (settings-fab)', () => {
     wrapper.unmount()
   })
 })
+
+describe('DayPhase — hunter role card', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('states that a poisoned hunter cannot shoot', async () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_REVEALED'), myRole: 'HUNTER' },
+      attachTo: document.body,
+    })
+    await wrapper.find('.my-role-chip').trigger('click')
+    expect(document.body.querySelector('.rc-desc')?.textContent).toContain('被女巫毒死时无法开枪')
+    wrapper.unmount()
+  })
+})
