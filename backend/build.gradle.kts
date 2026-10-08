@@ -1,17 +1,21 @@
+// All explicit versions live in gradle/libs.versions.toml.
 plugins {
-    id("org.springframework.boot") version "3.2.5"
-    id("io.spring.dependency-management") version "1.1.5"
-    kotlin("jvm") version "1.9.23"
-    kotlin("plugin.spring") version "1.9.23"
-    kotlin("plugin.jpa") version "1.9.23"
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.kotlin.jpa)
 }
 
 group = "com.werewolf"
 version = "0.0.1-SNAPSHOT"
 
+// Kotlin libraries managed by the Spring Boot BOM follow the Kotlin plugin version.
+extra["kotlin.version"] = libs.versions.kotlin.get()
+
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -19,11 +23,9 @@ repositories {
     mavenCentral()
 }
 
-val jjwtVersion = "0.12.5"
-
 dependencies {
-    // Web
-    implementation("org.springframework.boot:spring-boot-starter-web")
+    // Web (Spring MVC)
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
 
     // Data JPA
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -35,42 +37,47 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
 
     // OAuth2 Client
-    implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-client")
 
     // Validation
     implementation("org.springframework.boot:spring-boot-starter-validation")
 
-    // PostgreSQL
+    // Databases: PostgreSQL in dev/prod, in-memory H2 for the e2e profile and tests
     runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("com.h2database:h2")
 
-    // Flyway (PostgreSQL support is built into flyway-core for Flyway 9.x / Spring Boot 3.2.x)
-    implementation("org.flywaydb:flyway-core")
+    // Flyway: Spring Boot 4 only auto-runs migrations via the starter; Flyway 10+
+    // moved PostgreSQL support out of flyway-core into its own module.
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
+    implementation("org.flywaydb:flyway-database-postgresql")
 
     // Stripe (credit purchases — Checkout sessions + webhook fulfillment)
-    implementation("com.stripe:stripe-java:33.0.0")
+    implementation(libs.stripe.java)
 
     // JWT
-    implementation("io.jsonwebtoken:jjwt-api:$jjwtVersion")
-    runtimeOnly("io.jsonwebtoken:jjwt-impl:$jjwtVersion")
-    runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
+    implementation(libs.jjwt.api)
+    runtimeOnly(libs.jjwt.impl)
+    runtimeOnly(libs.jjwt.jackson)
 
-    // Kotlin
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    // Kotlin (Jackson 3 Kotlin module — Spring Boot 4's JSON stack)
+    implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
-    
-    // Kotlin Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.7.3")
+
+    // Kotlin Coroutines (the old -jdk8 module has been folded into core since 1.7)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 
     // DevTools
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
-    // Test
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("org.springframework.security:spring-security-test")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
-    runtimeOnly("com.h2database:h2")
-    implementation(kotlin("stdlib"))
+    // Test (webmvc-test brings TestRestTemplate, whose auto-config needs the
+    // restclient module's RestTemplateBuilder; security-test brings spring-security-test)
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-restclient")
+    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
+    testImplementation(libs.mockito.kotlin)
+    // PaymentWebhookIntegrationTest parses events via Stripe's ApiResource.GSON;
+    // stripe-java only ships Gson on the runtime classpath.
+    testImplementation("com.google.code.gson:gson")
 }
 
 kotlin {

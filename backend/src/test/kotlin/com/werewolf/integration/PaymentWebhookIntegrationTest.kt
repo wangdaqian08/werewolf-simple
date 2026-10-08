@@ -16,15 +16,16 @@ import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
-import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
-import java.util.UUID
+import java.util.*
 
 private const val TEST_WEBHOOK_SECRET = "whsec_test_secret"
 
@@ -34,6 +35,7 @@ private const val TEST_WEBHOOK_SECRET = "whsec_test_secret"
  * wallet is credited exactly once. Events are built from raw Stripe JSON
  * (same shape `stripe trigger checkout.session.completed` delivers).
  */
+@AutoConfigureTestRestTemplate
 @SpringBootTest(
     webEnvironment = WebEnvironment.RANDOM_PORT,
     properties = ["app.payment.stripe-webhook-secret=" + TEST_WEBHOOK_SECRET],

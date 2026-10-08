@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is a **Werewolf (狼人杀) mobile-web game** targeting mobile Safari and Chrome, built with **Vue 3 + TypeScript** (
-frontend) and **Spring Boot 3** (backend). The design resolution is 417x614 (portrait mode for mobile).
+frontend) and **Spring Boot 4** (backend). The design resolution is 417x614 (portrait mode for mobile).
 
 ## Tech Stack
 
@@ -21,22 +21,22 @@ frontend) and **Spring Boot 3** (backend). The design resolution is 417x614 (por
 
 ### Backend
 
-- **Spring Boot 3 (Java 17+)** — REST + WebSocket (STOMP)
+- **Spring Boot 4 (Java 25)** — REST + WebSocket (STOMP)
 - **Spring Data JPA + PostgreSQL** — persistence (Flyway migrations)
 - **Spring Security + JWT** — stateless auth (nickname-based for MVP)
 - **spring-boot-starter-websocket** — built-in STOMP broker
 
 ### Deployment
 
-```
-[ Mobile Browser ]
-       |
-    [ Nginx ]
-    /       \
-[Vue static] [Spring Boot :8080]
-              /api/*  →  REST
-              /ws/*   →  WebSocket proxy
-```
+ ```
+ [ Mobile Browser ]
+        |
+     [ Nginx ]
+     /       \
+ [Vue static] [Spring Boot :8080]
+               /api/*  →  REST
+               /ws/*   →  WebSocket proxy
+ ```
 
 - Nginx serves `frontend/dist/` as static files
 - Nginx reverse-proxies `/api` and `/ws` to Spring Boot on port 8080
@@ -45,27 +45,27 @@ frontend) and **Spring Boot 3** (backend). The design resolution is 417x614 (por
 
 ## Project Structure
 
-```
-werewolf-simple/
-├── frontend/                   # Vue 3 app
-│   ├── src/
-│   │   ├── views/              # Pages: Lobby, Room, Game, Result
-│   │   ├── components/         # Reusable UI components
-│   │   ├── services/           # axios HTTP calls + STOMP subscriptions
-│   │   ├── stores/             # Pinia stores (user, room, game state)
-│   │   └── types/              # TypeScript interfaces (mirror backend DTOs)
-│   ├── package.json
-│   └── vite.config.ts
-│
-└── backend/                    # Spring Boot app
-    └── src/main/java/
-        ├── controller/         # REST controllers + WebSocket message handlers
-        ├── service/            # Game logic (server-authoritative)
-        ├── model/              # JPA entities
-        ├── dto/                # Request/Response DTOs
-        ├── config/             # WebSocket config, Security config
-        └── websocket/          # STOMP event publishers
-```
+ ```
+ werewolf-simple/
+ ├── frontend/                   # Vue 3 app
+ │   ├── src/
+ │   │   ├── views/              # Pages: Lobby, Room, Game, Result
+ │   │   ├── components/         # Reusable UI components
+ │   │   ├── services/           # axios HTTP calls + STOMP subscriptions
+ │   │   ├── stores/             # Pinia stores (user, room, game state)
+ │   │   └── types/              # TypeScript interfaces (mirror backend DTOs)
+ │   ├── package.json
+ │   └── vite.config.ts
+ │
+ └── backend/                    # Spring Boot app
+     └── src/main/java/
+         ├── controller/         # REST controllers + WebSocket message handlers
+         ├── service/            # Game logic (server-authoritative)
+         ├── model/              # JPA entities
+         ├── dto/                # Request/Response DTOs
+         ├── config/             # WebSocket config, Security config
+         └── websocket/          # STOMP event publishers
+ ```
 
 ## Architecture Philosophy
 
@@ -89,12 +89,12 @@ must be handled by the backend API.
 
 ### STOMP Topic Design
 
-```
-/topic/room/{roomId}       → room state updates (player join/leave, ready status)
-/topic/game/{gameId}       → public game events (phase change, vote results, deaths)
-/user/queue/private        → private messages (your role, werewolf night channel)
-/app/game/action           → client → server game actions (vote, skill use)
-```
+ ```
+ /topic/room/{roomId}       → room state updates (player join/leave, ready status)
+ /topic/game/{gameId}       → public game events (phase change, vote results, deaths)
+ /user/queue/private        → private messages (your role, werewolf night channel)
+ /app/game/action           → client → server game actions (vote, skill use)
+ ```
 
 ## Authentication (MVP)
 
@@ -127,26 +127,26 @@ Pure presentation:
 
 ## Backend API Contract
 
-```
-// User APIs
-POST   /api/user/login           // nickname → returns JWT
-GET    /api/user/profile         // get current user info
-POST   /api/user/logout          // invalidate session
-
-// Room APIs
-POST   /api/room/create          // create new room → returns roomCode
-POST   /api/room/join            // join by roomCode → returns room info
-POST   /api/room/leave           // leave current room
-GET    /api/room/{roomId}        // get room details
-GET    /api/room/list            // list available rooms
-
-// Game APIs
-POST   /api/game/action          // perform game action (vote, skill, etc.)
-GET    /api/game/state           // get current game state
-
-// WebSocket (STOMP)
-WS     /ws                       // STOMP endpoint
-```
+ ```
+ // User APIs
+ POST   /api/user/login           // nickname → returns JWT
+ GET    /api/user/profile         // get current user info
+ POST   /api/user/logout          // invalidate session
+ 
+ // Room APIs
+ POST   /api/room/create          // create new room → returns roomCode
+ POST   /api/room/join            // join by roomCode → returns room info
+ POST   /api/room/leave           // leave current room
+ GET    /api/room/{roomId}        // get room details
+ GET    /api/room/list            // list available rooms
+ 
+ // Game APIs
+ POST   /api/game/action          // perform game action (vote, skill, etc.)
+ GET    /api/game/state           // get current game state
+ 
+ // WebSocket (STOMP)
+ WS     /ws                       // STOMP endpoint
+ ```
 
 ## Room Management Flow
 
@@ -189,24 +189,24 @@ WS     /ws                       // STOMP endpoint
 ### Data Flow Example: Player Voting
 
 **Wrong** (client-side logic):
-```typescript
-onVotePlayer(targetPlayer: string) {
-    if (this.hasVoted) return; // Client validates — WRONG
-    this.vote = targetPlayer;
-}
-```
+ ```typescript
+ onVotePlayer(targetPlayer: string) {
+     if (this.hasVoted) return; // Client validates — WRONG
+     this.vote = targetPlayer;
+ }
+ ```
 
 **Correct** (server-authoritative):
-```typescript
-async onVotePlayer(targetPlayer: string) {
-    const result = await gameService.submitVote(targetPlayer);
-    if (result.success) {
-        this.updateVoteUI(result.voteData); // display backend result
-    } else {
-        this.showError(result.message); // backend rejected
-    }
-}
-```
+ ```typescript
+ async onVotePlayer(targetPlayer: string) {
+     const result = await gameService.submitVote(targetPlayer);
+     if (result.success) {
+         this.updateVoteUI(result.voteData); // display backend result
+     } else {
+         this.showError(result.message); // backend rejected
+     }
+ }
+ ```
 
 ## UI Design Guidelines
 
@@ -289,19 +289,19 @@ glassmorphism blue) is `ui-demos/style-a-glassmorphism.html`.
 - Backend validates every action before changing state
 
 ### 2. Layer Separation
-```
-┌─────────────────────────────────────┐
-│  View/Component Layer (views/)      │  → User interactions
-├─────────────────────────────────────┤
-│  Service Layer (services/)          │  → API abstractions
-├─────────────────────────────────────┤
-│  Store Layer (stores/)              │  → State management (Pinia)
-└─────────────────────────────────────┘
-         ↕  REST + STOMP WebSocket
-┌─────────────────────────────────────┐
-│  Spring Boot Backend                │  → Business logic
-└─────────────────────────────────────┘
-```
+ ```
+ ┌─────────────────────────────────────┐
+ │  View/Component Layer (views/)      │  → User interactions
+ ├─────────────────────────────────────┤
+ │  Service Layer (services/)          │  → API abstractions
+ ├─────────────────────────────────────┤
+ │  Store Layer (stores/)              │  → State management (Pinia)
+ └─────────────────────────────────────┘
+          ↕  REST + STOMP WebSocket
+ ┌─────────────────────────────────────┐
+ │  Spring Boot Backend                │  → Business logic
+ └─────────────────────────────────────┘
+ ```
 
 ### 3. Common Mistakes to Avoid
 
@@ -318,12 +318,12 @@ glassmorphism blue) is `ui-demos/style-a-glassmorphism.html`.
 4. **Is this sensitive data?** → Never store in frontend
 
 If in doubt, default to backend implementation.
-
+ 
 ---
 
 **Remember**: This is a mobile-web game for real multiplayer gameplay. A robust client-server architecture is essential
 for security, fairness, and scalability.
-
+ 
 ---
 
 ## Behavioral Guidelines (Karpathy)

@@ -7,12 +7,13 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
-import org.springframework.boot.test.mock.mockito.MockBean
-import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpStatus
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.bean.override.mockito.MockitoBean
 import java.util.*
 
 private const val GOOGLE_AUTH_URL = "/api/auth/google"
@@ -20,12 +21,11 @@ private const val WECHAT_AUTH_URL = "/api/auth/wechat"
 
 /**
  * Integration tests for the OAuth login endpoints. Both OAuth services are
- * @MockBean'd so we never reach the real Google / WeChat APIs — we exercise
+ * @MocktioBean'd so we never reach the real Google / WeChat APIs — we exercise
  * AuthController + AuthService.loginOrRegister + JWT issuance + DB persistence.
  *
- * NOTE: Spring Boot 3.4+ deprecates @MockBean in favor of @MockitoBean.
- * Project is on 3.2.5; revisit on the next major upgrade.
  */
+@AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class AuthControllerTest {
@@ -33,8 +33,8 @@ class AuthControllerTest {
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var userRepository: UserRepository
 
-    @MockBean lateinit var googleOAuthService: GoogleOAuthService
-    @MockBean lateinit var weChatOAuthService: WeChatOAuthService
+    @MockitoBean lateinit var googleOAuthService: GoogleOAuthService
+    @MockitoBean lateinit var weChatOAuthService: WeChatOAuthService
 
     @Test
     fun `POST auth-google with valid code returns 200 with token and user fields`() {

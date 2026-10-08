@@ -23,15 +23,16 @@ import org.mockito.kotlin.atLeastOnce
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
-import org.springframework.boot.test.mock.mockito.SpyBean
-import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 
 /**
  * End-to-end guarantee that when the game transitions from DAY to NIGHT and the
@@ -52,6 +53,7 @@ import org.springframework.test.context.ActiveProfiles
  * if any link in the chain breaks (phase-transition files change, role loop
  * stops broadcasting, priority values flip), this test fails.
  */
+@AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class NightAudioSequenceGuaranteeIntegrationTest {
@@ -63,7 +65,7 @@ class NightAudioSequenceGuaranteeIntegrationTest {
     @Autowired lateinit var nightOrchestrator: NightOrchestrator
     @Autowired lateinit var timing: com.werewolf.config.GameTimingProperties
 
-    @SpyBean lateinit var stompPublisher: StompPublisher
+    @MockitoSpyBean lateinit var stompPublisher: StompPublisher
 
     companion object {
         private const val START_URL = "/api/game/start"

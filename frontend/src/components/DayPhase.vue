@@ -488,7 +488,7 @@ const ROLE_META: Record<string, RoleMeta> = {
     nameEn: 'HUNTER',
     emoji: '🏹',
     team: 'special',
-    description: '死亡时可开枪带走一名玩家。(被女巫毒死时无法开枪)。',
+    description: '死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。',
   },
   GUARD: {
     nameZh: '守卫',

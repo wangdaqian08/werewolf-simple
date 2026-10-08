@@ -11,20 +11,8 @@ import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
-import com.werewolf.model.CreditTxType
-import com.werewolf.model.Game
-import com.werewolf.model.GamePhase
-import com.werewolf.model.PerkActivation
-import com.werewolf.model.PerkActivationStatus
-import com.werewolf.model.PlayerRole
-import com.werewolf.model.ReadyStatus
-import com.werewolf.model.Room
-import com.werewolf.model.RoomStatus
-import com.werewolf.repository.CreditTransactionRepository
-import com.werewolf.repository.GameRepository
-import com.werewolf.repository.PerkActivationRepository
-import com.werewolf.repository.RoomPlayerRepository
-import com.werewolf.repository.RoomRepository
+import com.werewolf.model.*
+import com.werewolf.repository.*
 import com.werewolf.service.OrphanedGameRecovery
 import com.werewolf.service.PERK_NIGHT1_IMMUNITY
 import com.werewolf.service.StompPublisher
@@ -35,15 +23,16 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
-import org.springframework.boot.test.mock.mockito.SpyBean
-import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 
 /**
  * Regression for the prod incident on 2026-04-29 (game=10): a backend
@@ -56,6 +45,7 @@ import org.springframework.test.context.ActiveProfiles
  * NOT_READY, and a GameOver event is broadcast so any client still on
  * GameView auto-routes to the Result screen.
  */
+@AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class OrphanedGameRecoveryIntegrationTest {
@@ -69,7 +59,7 @@ class OrphanedGameRecoveryIntegrationTest {
     @Autowired lateinit var walletService: WalletService
     @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
 
-    @SpyBean lateinit var stompPublisher: StompPublisher
+    @MockitoSpyBean lateinit var stompPublisher: StompPublisher
 
     companion object {
         private const val SEAT_URL = "/api/room/seat"

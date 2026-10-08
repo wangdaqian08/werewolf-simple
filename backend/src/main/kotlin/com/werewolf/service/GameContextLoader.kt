@@ -5,6 +5,8 @@ import com.werewolf.model.GamePhase
 import com.werewolf.repository.*
 import org.springframework.stereotype.Service
 
+class GameNotFoundException(gameId: Int) : IllegalArgumentException("Game $gameId not found")
+
 @Service
 class GameContextLoader(
     private val gameRepository: GameRepository,
@@ -15,7 +17,7 @@ class GameContextLoader(
 ) {
     fun load(gameId: Int): GameContext {
         val game = gameRepository.findById(gameId)
-            .orElseThrow { IllegalArgumentException("Game $gameId not found") }
+            .orElseThrow { GameNotFoundException(gameId) }
         val players = gamePlayerRepository.findByGameId(gameId)
         val room = roomRepository.findById(game.roomId)
             .orElseThrow { IllegalArgumentException("Room ${game.roomId} not found") }

@@ -8,7 +8,6 @@ import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.PaymentOrder
 import com.werewolf.model.PaymentOrderStatus
 import com.werewolf.model.Product
-import com.werewolf.model.User
 import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.UserRepository
@@ -16,20 +15,22 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
-import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.test.context.ActiveProfiles
-import java.util.UUID
+import java.util.*
 
 /**
  * GET /api/payment/orders contract: owner-scoped list of Stripe orders with
  * all 7 fields, most-recent first, and unauthenticated rejection.
  */
+@AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class PaymentControllerTest {

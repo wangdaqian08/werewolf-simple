@@ -19,22 +19,18 @@ import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
-import org.mockito.kotlin.any
-import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.atLeastOnce
-import org.mockito.kotlin.eq
-import org.mockito.kotlin.times
-import org.mockito.kotlin.verify
+import org.mockito.kotlin.*
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
-import org.springframework.boot.test.mock.mockito.SpyBean
-import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -49,6 +45,7 @@ import org.springframework.transaction.support.TransactionTemplate
  * a TransactionTemplate and asserts the spy sees nothing until the outer tx
  * commits, then sees all three.
  */
+@AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class GameStartAfterCommitIntegrationTest {
@@ -57,7 +54,7 @@ class GameStartAfterCommitIntegrationTest {
     @Autowired lateinit var gameService: GameService
     @Autowired lateinit var txManager: PlatformTransactionManager
 
-    @SpyBean lateinit var stompPublisher: StompPublisher
+    @MockitoSpyBean lateinit var stompPublisher: StompPublisher
 
     private val txTemplate by lazy { TransactionTemplate(txManager) }
 

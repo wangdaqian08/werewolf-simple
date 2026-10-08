@@ -39,7 +39,7 @@ class WeChatOAuthService(
 
     @Suppress("UNCHECKED_CAST")
     private fun fetchAccessToken(code: String): Map<String, Any> {
-        val url = UriComponentsBuilder.fromHttpUrl(ACCESS_TOKEN_URI)
+        val url = UriComponentsBuilder.fromUriString(ACCESS_TOKEN_URI)
             .queryParam("appid", appId)
             .queryParam("secret", appSecret)
             .queryParam("code", code)
@@ -55,7 +55,7 @@ class WeChatOAuthService(
 
     @Suppress("UNCHECKED_CAST")
     private fun fetchUserInfo(accessToken: String, openId: String): WeChatUserProfile {
-        val url = UriComponentsBuilder.fromHttpUrl(USER_INFO_URI)
+        val url = UriComponentsBuilder.fromUriString(USER_INFO_URI)
             .queryParam("access_token", accessToken)
             .queryParam("openid", openId)
             .queryParam("lang", "zh_CN")

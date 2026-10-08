@@ -24,20 +24,22 @@ import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
-import java.time.LocalDateTime
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
-import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
+import java.time.LocalDateTime
 import java.util.*
 
+@AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class RoomControllerTest {
@@ -147,25 +149,25 @@ class RoomControllerTest {
 
         // WAITING room → code reserved
         roomRepository.save(
-            Room(roomCode = "111", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.WAITING),
+            Room(roomCode = "A11", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.WAITING),
         )
-        assertThat(roomRepository.findActiveByRoomCode("111")).isPresent
+        assertThat(roomRepository.findActiveByRoomCode("A11")).isPresent
 
         // IN_GAME room whose game ENDED → code reusable
         val finished = roomRepository.save(
-            Room(roomCode = "222", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
+            Room(roomCode = "A22", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
         )
         gameRepository.save(
             Game(roomId = finished.roomId!!, hostUserId = hostId, endedAt = LocalDateTime.now()),
         )
-        assertThat(roomRepository.findActiveByRoomCode("222")).isEmpty
+        assertThat(roomRepository.findActiveByRoomCode("A22")).isEmpty
 
         // IN_GAME room with a LIVE game → code reserved
         val live = roomRepository.save(
-            Room(roomCode = "333", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
+            Room(roomCode = "A33", hostUserId = hostId, totalPlayers = 6, status = RoomStatus.IN_GAME),
         )
         gameRepository.save(Game(roomId = live.roomId!!, hostUserId = hostId, endedAt = null))
-        assertThat(roomRepository.findActiveByRoomCode("333")).isPresent
+        assertThat(roomRepository.findActiveByRoomCode("A33")).isPresent
     }
 
     @Test

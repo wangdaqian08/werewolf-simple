@@ -239,8 +239,8 @@ class HookInvocationTest {
         val passThroughHandler = object : RoleHandler {
             override val role = PlayerRole.VILLAGER
             override fun acceptedActions(phase: GamePhase, subPhase: String?) = emptySet<ActionType>()
-            override fun handle(action: GameActionRequest, ctx: GameContext) = GameActionResult.Success()
-            override fun onEliminationPending(ctx: GameContext, targetId: String): EliminationModifier? = null
+            override fun handle(action: GameActionRequest, context: GameContext) = GameActionResult.Success()
+            override fun onEliminationPending(context: GameContext, targetId: String): EliminationModifier? = null
         }
         val pipeline = makeVotingPipeline(listOf(passThroughHandler))
 

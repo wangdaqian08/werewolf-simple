@@ -189,8 +189,8 @@ class TestSupportCleanupIntegrationTest {
 
     @Test
     fun `unknown room code returns null - controller answers 404`() {
-        assertThat(service.deleteRoomCascade("000")).isNull()
-        assertThat(controller.deleteRoom("000").statusCode.value()).isEqualTo(404)
+        assertThat(service.deleteRoomCascade(TestConstants.INVALID_ROOM_CODE)).isNull()
+        assertThat(controller.deleteRoom(TestConstants.INVALID_ROOM_CODE).statusCode.value()).isEqualTo(404)
     }
 
     @Test

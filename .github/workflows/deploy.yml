@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-java@v4
         with:
-          java-version: 17
+          java-version: 25
           distribution: temurin
 
       - name: Cache Gradle packages
@@ -27,7 +27,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('backend/**/*.gradle.kts', 'backend/gradle/wrapper/gradle-wrapper.properties') }}
+          key: gradle-${{ runner.os }}-${{ hashFiles('backend/**/*.gradle.kts', 'backend/gradle/libs.versions.toml', 'backend/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
       - name: Build JAR (skip tests — covered by CI)
