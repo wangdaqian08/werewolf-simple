@@ -7,37 +7,37 @@ Docker is the only supported deployment path.
 
 ## One-time host setup (Ubuntu 22.04)
 
-```bash
-# 1. Docker + Nginx
-sudo apt update
-sudo apt install -y docker.io docker-compose-plugin nginx
-sudo systemctl enable --now docker nginx
-
-# 2. Allow yourself to run docker without sudo (optional)
-sudo usermod -aG docker "$USER"
-# log out / back in for the group change to take effect
-
-# 3. Clone the repo (any location; these docs assume /opt/werewolf-simple)
-sudo git clone https://github.com/<your>/werewolf-simple.git /opt/werewolf-simple
-sudo chown -R "$USER":"$USER" /opt/werewolf-simple
-cd /opt/werewolf-simple
-
-# 4. Install the host Nginx site (edit server_name to your domain first)
-sudo cp deploy/nginx-site.conf /etc/nginx/sites-available/werewolf
-sudo ln -sf /etc/nginx/sites-available/werewolf /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-
-# 5. TLS via Let's Encrypt (required — mobile Safari blocks ws://)
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d werewolf.example.com
-```
+ ```bash
+ # 1. Docker + Nginx
+ sudo apt update
+ sudo apt install -y docker.io docker-compose-plugin nginx
+ sudo systemctl enable --now docker nginx
+ 
+ # 2. Allow yourself to run docker without sudo (optional)
+ sudo usermod -aG docker "$USER"
+ # log out / back in for the group change to take effect
+ 
+ # 3. Clone the repo (any location; these docs assume /opt/werewolf-simple)
+ sudo git clone https://github.com/<your>/werewolf-simple.git /opt/werewolf-simple
+ sudo chown -R "$USER":"$USER" /opt/werewolf-simple
+ cd /opt/werewolf-simple
+ 
+ # 4. Install the host Nginx site (edit server_name to your domain first)
+ sudo cp deploy/nginx-site.conf /etc/nginx/sites-available/werewolf
+ sudo ln -sf /etc/nginx/sites-available/werewolf /etc/nginx/sites-enabled/
+ sudo nginx -t && sudo systemctl reload nginx
+ 
+ # 5. TLS via Let's Encrypt (required — mobile Safari blocks ws://)
+ sudo apt install -y certbot python3-certbot-nginx
+ sudo certbot --nginx -d werewolf.example.com
+ ```
 
 ## VM access
 
-```bash
-source scripts/.env.vm
-gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT"
-```
+ ```bash
+ source scripts/.env.vm
+ gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT"
+ ```
 
 Requires `scripts/.env.vm` populated locally (copy from `.env.vm.example`).
 For one-shot commands use `./scripts/vm-ssh.sh '<cmd>'` — same auth, but
@@ -51,25 +51,25 @@ Postgres binds to `127.0.0.1:5432` on the VM (loopback only — see
 
 ### Option A — SSH tunnel + local psql (port 15432)
 
-```bash
-# Terminal 1 — leave running
-source scripts/.env.vm
-gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT" \
-  -- -L 15432:localhost:5432 -N
-
-# Terminal 2 — connect to the forwarded port
-psql -h localhost -p 15432 -U werewolf -d werewolf
-# password is in .env.prod on the VM:
-#   ./scripts/vm-ssh.sh 'sudo grep POSTGRES_PASSWORD /opt/werewolf-simple/.env.prod'
-```
+ ```bash
+ # Terminal 1 — leave running
+ source scripts/.env.vm
+ gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT" \
+   -- -L 15432:localhost:5432 -N
+ 
+ # Terminal 2 — connect to the forwarded port
+ psql -h localhost -p 15432 -U werewolf -d werewolf
+ # password is in .env.prod on the VM:
+ #   ./scripts/vm-ssh.sh 'sudo grep POSTGRES_PASSWORD /opt/werewolf-simple/.env.prod'
+ ```
 
 ### Option B — psql inside the postgres container (no tunnel)
 
-```bash
-source scripts/.env.vm
-gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT" \
-  --command='sudo docker exec -it $(sudo docker ps -qf name=postgres) psql -U werewolf -d werewolf'
-```
+ ```bash
+ source scripts/.env.vm
+ gcloud compute ssh "$VM_NAME" --zone="$VM_ZONE" --project="$VM_PROJECT" \
+   --command='sudo docker exec -it $(sudo docker ps -qf name=postgres) psql -U werewolf -d werewolf'
+ ```
 
 ## Deploy
 
@@ -79,14 +79,14 @@ VM, so deploys are ~1 min instead of ~30 min.
 
 ### First-time install
 
-```bash
-cd /opt/werewolf-simple
-cp .env.prod.example .env.prod
-# edit .env.prod — fill in JWT_SECRET, POSTGRES_PASSWORD, GOOGLE_*, FRONTEND_ORIGIN
-# set WEREWOLF_VERSION=v0.2.0 (or whichever release tag you want to pin)
-docker compose --env-file .env.prod pull
-docker compose --env-file .env.prod up -d
-```
+ ```bash
+ cd /opt/werewolf-simple
+ cp .env.prod.example .env.prod
+ # edit .env.prod — fill in JWT_SECRET, POSTGRES_PASSWORD, GOOGLE_*, FRONTEND_ORIGIN
+ # set WEREWOLF_VERSION=v0.2.0 (or whichever release tag you want to pin)
+ docker compose --env-file .env.prod pull
+ docker compose --env-file .env.prod up -d
+ ```
 
 ### Release a new version
 
@@ -94,19 +94,19 @@ Substitute `vX.Y.Z` for the version you're shipping (e.g. `v0.3.1`).
 
 #### A. Local — tag and push (triggers the image build)
 
-```bash
-git checkout main && git pull origin main
-git tag -a vX.Y.Z -m "<one-line release summary>"
-git push origin vX.Y.Z
-```
+ ```bash
+ git checkout main && git pull origin main
+ git tag -a vX.Y.Z -m "<one-line release summary>"
+ git push origin vX.Y.Z
+ ```
 
 The `publish-images.yml` workflow builds + publishes
 `ghcr.io/.../werewolf-simple-{backend,frontend}:vX.Y.Z` + `:latest`. Wait
 ~5–10 min for it to go green:
 
-```bash
-gh run watch                            # latest workflow run
-```
+ ```bash
+ gh run watch                            # latest workflow run
+ ```
 
 Don't proceed until both images are published.
 
@@ -115,9 +115,9 @@ Don't proceed until both images are published.
 Pushing a tag does NOT auto-create a GitHub Release; the tag exists in
 git but the `/releases` page won't list it until you run:
 
-```bash
-gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
-```
+ ```bash
+ gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
+ ```
 
 `--generate-notes` builds the body from merged PRs since the previous
 tag. Use `--notes "<one-liner>"` instead if you want a custom message.
@@ -126,65 +126,65 @@ tag should be marked **Latest**.
 
 #### B. On the VM — advance the tree, pin, pull, recreate
 
-```bash
-cd /opt/werewolf-simple
-
-# 1. Move the working tree to the new tag (so docker-compose.yml matches)
-git fetch origin --tags
-git checkout vX.Y.Z
-
-# 2. Pin the version in .env.prod
-#    `sed -i` REPLACES the line; if WEREWOLF_VERSION isn't present yet,
-#    append it instead: echo 'WEREWOLF_VERSION=vX.Y.Z' | sudo tee -a .env.prod
-sudo sed -i 's/^WEREWOLF_VERSION=.*$/WEREWOLF_VERSION=vX.Y.Z/' .env.prod
-grep '^WEREWOLF_VERSION=' .env.prod      # confirm it's set
-
-# 3. Pull the published images and recreate containers.
-#    --force-recreate replaces even when compose thinks nothing changed.
-sudo docker compose --env-file .env.prod pull
-sudo docker compose --env-file .env.prod up -d --force-recreate backend frontend
-```
+ ```bash
+ cd /opt/werewolf-simple
+ 
+ # 1. Move the working tree to the new tag (so docker-compose.yml matches)
+ git fetch origin --tags
+ git checkout vX.Y.Z
+ 
+ # 2. Pin the version in .env.prod
+ #    `sed -i` REPLACES the line; if WEREWOLF_VERSION isn't present yet,
+ #    append it instead: echo 'WEREWOLF_VERSION=vX.Y.Z' | sudo tee -a .env.prod
+ sudo sed -i 's/^WEREWOLF_VERSION=.*$/WEREWOLF_VERSION=vX.Y.Z/' .env.prod
+ grep '^WEREWOLF_VERSION=' .env.prod      # confirm it's set
+ 
+ # 3. Pull the published images and recreate containers.
+ #    --force-recreate replaces even when compose thinks nothing changed.
+ sudo docker compose --env-file .env.prod pull
+ sudo docker compose --env-file .env.prod up -d --force-recreate backend frontend
+ ```
 
 > `sudo` is required throughout: the VM login user isn't in the `docker`
 > group, and `.env.prod` is root-owned.
 
 #### C. Verify
 
-```bash
-# Image refs of running containers — both should end in :vX.Y.Z
-sudo docker compose --env-file .env.prod ps --format '{{.Service}}: {{.Image}}'
-
-# Digest match: running container vs ghcr.io tag
-sudo docker inspect --format '{{.Image}}' \
-  $(sudo docker compose --env-file .env.prod ps -q backend)
-sudo docker inspect --format '{{.Id}}' \
-  ghcr.io/wangdaqian08/werewolf-simple-backend:vX.Y.Z
-# ↑ both should print the same sha256:...
-
-# Health + recent logs
-curl -sf http://127.0.0.1:8080/api/health        # {"status":"UP"}
-sudo docker compose --env-file .env.prod logs --since=2m backend | \
-  grep -iE 'Started Werewolf|active profile' | head
-```
+ ```bash
+ # Image refs of running containers — both should end in :vX.Y.Z
+ sudo docker compose --env-file .env.prod ps --format '{{.Service}}: {{.Image}}'
+ 
+ # Digest match: running container vs ghcr.io tag
+ sudo docker inspect --format '{{.Image}}' \
+   $(sudo docker compose --env-file .env.prod ps -q backend)
+ sudo docker inspect --format '{{.Id}}' \
+   ghcr.io/wangdaqian08/werewolf-simple-backend:vX.Y.Z
+ # ↑ both should print the same sha256:...
+ 
+ # Health + recent logs
+ curl -sf http://127.0.0.1:8080/api/health        # {"status":"UP"}
+ sudo docker compose --env-file .env.prod logs --since=2m backend | \
+   grep -iE 'Started Werewolf|active profile' | head
+ ```
 
 #### D. Rollback (if anything looks wrong)
 
-```bash
-git checkout vX.Y.Z-PREVIOUS                                  # e.g. v0.3.0
-sudo sed -i 's/^WEREWOLF_VERSION=.*$/WEREWOLF_VERSION=vX.Y.Z-PREVIOUS/' .env.prod
-sudo docker compose --env-file .env.prod pull
-sudo docker compose --env-file .env.prod up -d --force-recreate backend frontend
-```
+ ```bash
+ git checkout vX.Y.Z-PREVIOUS                                  # e.g. v0.3.0
+ sudo sed -i 's/^WEREWOLF_VERSION=.*$/WEREWOLF_VERSION=vX.Y.Z-PREVIOUS/' .env.prod
+ sudo docker compose --env-file .env.prod pull
+ sudo docker compose --env-file .env.prod up -d --force-recreate backend frontend
+ ```
 
 ### Emergency rebuild on the VM (fallback)
 
 If ghcr.io is unreachable or you need to patch without a release:
 
-```bash
-cd /opt/werewolf-simple
-git pull
-docker compose --env-file .env.prod up -d --build
-```
+ ```bash
+ cd /opt/werewolf-simple
+ git pull
+ docker compose --env-file .env.prod up -d --build
+ ```
 
 `build:` is still in `docker-compose.yml` as a fallback — this takes ~30 min
 on a 2-vCPU VM.
@@ -192,40 +192,27 @@ on a 2-vCPU VM.
 
 ## Home PC deployment
 
-Same Docker stack, served at `https://private.youplay123.online` through a
-Cloudflare Tunnel. Cloudflare terminates TLS, so no certbot, no public IP and
-no router port forwarding.
+The home PC (Windows + Docker Desktop) runs the same ghcr.io images at
+`https://private.youplay123.online`. The Cloudflare Tunnel `werewolf-home`
+publishes it: Cloudflare terminates TLS, sends `^/(api/|ws|audio/)` to the
+backend and everything else to the frontend — no host Nginx, no certbot.
 
- ```
- Browser → Cloudflare (TLS) → cloudflared → host Nginx :80 → backend :8080 / frontend :8081
- ```
+Start the stack:
 
-### 1. Stack and Nginx
-
-Follow [One-time host setup](#one-time-host-setup-ubuntu-2204) steps 1–4 (skip
-step 5, certbot) and [First-time install](#first-time-install). In the Nginx
-site, set:
-
- ```nginx
- server_name private.youplay123.online;
+ ```bash
+ docker compose --env-file .env.prod up -d
  ```
 
-### 2. Cloudflare Tunnel
+Deploy a new release (once its images are published — see
+[Release a new version](#release-a-new-version) A):
 
-Cloudflare dashboard → Zero Trust → Networks → Tunnels → **Create a tunnel**
-(type cloudflared):
+ ```bash
+ ./deploy/release.sh vX.Y.Z
+ ```
 
-1. Run the install command it shows on the home PC. It installs cloudflared as
-   a service that starts on boot:
-   ```bash
-   sudo cloudflared service install <TOKEN>
-   ```
-2. Add a public hostname: `private.youplay123.online` → service `HTTP`,
-   URL `localhost:80`.
+### Host-specific settings
 
-### 3. Host-specific settings
-
-In `.env.prod`:
+`.env.prod` must name the home host:
 
  ```bash
  GOOGLE_REDIRECT_URI=https://private.youplay123.online/auth/callback/google
@@ -233,38 +220,31 @@ In `.env.prod`:
  FRONTEND_BASE_URL=https://private.youplay123.online   # Stripe return page
  ```
 
-Google Cloud Console → APIs & Services → Credentials → the OAuth client →
-**Authorized redirect URIs** → add
-`https://private.youplay123.online/auth/callback/google`. Without it, Google
-rejects the sign-in with `redirect_uri_mismatch`.
+Recreate after editing it:
+`docker compose --env-file .env.prod up -d --force-recreate backend frontend`.
 
-If payments run here, point the Stripe webhook endpoint at
+Google Cloud Console → APIs & Services → Credentials → the OAuth client →
+**Authorized redirect URIs** must include
+`https://private.youplay123.online/auth/callback/google`, or Google rejects the
+sign-in with `redirect_uri_mismatch`.
+
+If payments run here, the Stripe webhook endpoint is
 `https://private.youplay123.online/api/payment/webhook`.
 
-Apply the new settings:
+### Verify
 
- ```bash
- sudo docker compose --env-file .env.prod up -d --force-recreate backend frontend
- ```
-
-### 4. Verify
-
- ```bash
- curl -sf https://private.youplay123.online/api/health   # {"status":"UP"}
- ```
-
-Cloudflare **error 1033** means the tunnel has no running connector — check
-`sudo systemctl status cloudflared` on the home PC.
+Open `https://private.youplay123.online/api/health` — expect `{"status":"UP"}`.
+Cloudflare **error 1033** means the tunnel connector on the PC isn't running.
 
 ## Verify
 
-```bash
-# Should return {"status":"UP"}
-curl -sf http://127.0.0.1:8080/api/health
-
-# Via host Nginx (HTTPS after certbot)
-curl -sf https://werewolf.example.com/api/health
-```
+ ```bash
+ # Should return {"status":"UP"}
+ curl -sf http://127.0.0.1:8080/api/health
+ 
+ # Via host Nginx (HTTPS after certbot)
+ curl -sf https://werewolf.example.com/api/health
+ ```
 
 ## Required env vars
 
@@ -277,11 +257,11 @@ refuses to start if any of these are unset:
 
 ## Lifecycle
 
-```bash
-docker compose ps                       # status
-docker compose logs -f backend          # live logs
-docker compose logs -f frontend
-docker compose restart backend          # restart one service
-docker compose down                     # stop (keeps volumes / data)
-docker compose down -v                  # stop AND wipe postgres data
-```
+ ```bash
+ docker compose ps                       # status
+ docker compose logs -f backend          # live logs
+ docker compose logs -f frontend
+ docker compose restart backend          # restart one service
+ docker compose down                     # stop (keeps volumes / data)
+ docker compose down -v                  # stop AND wipe postgres data
+ ```
