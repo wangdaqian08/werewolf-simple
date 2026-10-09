@@ -189,6 +189,73 @@ docker compose --env-file .env.prod up -d --build
 `build:` is still in `docker-compose.yml` as a fallback — this takes ~30 min
 on a 2-vCPU VM.
 
+
+## Home PC deployment
+
+Same Docker stack, served at `https://private.youplay123.online` through a
+Cloudflare Tunnel. Cloudflare terminates TLS, so no certbot, no public IP and
+no router port forwarding.
+
+ ```
+ Browser → Cloudflare (TLS) → cloudflared → host Nginx :80 → backend :8080 / frontend :8081
+ ```
+
+### 1. Stack and Nginx
+
+Follow [One-time host setup](#one-time-host-setup-ubuntu-2204) steps 1–4 (skip
+step 5, certbot) and [First-time install](#first-time-install). In the Nginx
+site, set:
+
+ ```nginx
+ server_name private.youplay123.online;
+ ```
+
+### 2. Cloudflare Tunnel
+
+Cloudflare dashboard → Zero Trust → Networks → Tunnels → **Create a tunnel**
+(type cloudflared):
+
+1. Run the install command it shows on the home PC. It installs cloudflared as
+   a service that starts on boot:
+   ```bash
+   sudo cloudflared service install <TOKEN>
+   ```
+2. Add a public hostname: `private.youplay123.online` → service `HTTP`,
+   URL `localhost:80`.
+
+### 3. Host-specific settings
+
+In `.env.prod`:
+
+ ```bash
+ GOOGLE_REDIRECT_URI=https://private.youplay123.online/auth/callback/google
+ FRONTEND_ORIGIN=https://private.youplay123.online
+ FRONTEND_BASE_URL=https://private.youplay123.online   # Stripe return page
+ ```
+
+Google Cloud Console → APIs & Services → Credentials → the OAuth client →
+**Authorized redirect URIs** → add
+`https://private.youplay123.online/auth/callback/google`. Without it, Google
+rejects the sign-in with `redirect_uri_mismatch`.
+
+If payments run here, point the Stripe webhook endpoint at
+`https://private.youplay123.online/api/payment/webhook`.
+
+Apply the new settings:
+
+ ```bash
+ sudo docker compose --env-file .env.prod up -d --force-recreate backend frontend
+ ```
+
+### 4. Verify
+
+ ```bash
+ curl -sf https://private.youplay123.online/api/health   # {"status":"UP"}
+ ```
+
+Cloudflare **error 1033** means the tunnel has no running connector — check
+`sudo systemctl status cloudflared` on the home PC.
+
 ## Verify
 
 ```bash
