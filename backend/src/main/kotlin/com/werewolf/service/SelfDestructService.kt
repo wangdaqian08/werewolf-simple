@@ -5,6 +5,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.model.*
@@ -19,6 +20,8 @@ import java.time.LocalDateTime
 /**
  * Handles `WOLF_SELF_DESTRUCT` action: a werewolf publicly kills themselves during
  * SHERIFF_ELECTION, DAY_DISCUSSION, or DAY_VOTING to end the day without a vote.
+ * A White Wolf King (白狼王) may name a target (`targetUserId`) to take with it: the
+ * target dies too, a taken hunter gets no shot, and a taken sheriff hands the badge over.
  *
  * Per memory no-bang-bang-in-production: NEVER use `!!` in this file. Use `?: error("...")`.
  */
@@ -34,6 +37,7 @@ class SelfDestructService(
     private val nightOrchestrator: NightOrchestrator,
     private val winConditionChecker: WinConditionChecker,
     private val rewardSettlementService: RewardSettlementService,
+    private val dayRevealAdvancer: DayRevealAdvancer,
 ) {
     private val log = LoggerFactory.getLogger(SelfDestructService::class.java)
 
@@ -48,10 +52,23 @@ class SelfDestructService(
         val actor = context.playerById(request.actorUserId)
             ?: return GameActionResult.Rejected("Player not found")
         if (!actor.alive) return GameActionResult.Rejected("Dead players cannot act")
-        if (actor.role != PlayerRole.WEREWOLF)
+        if (!actor.role.isWolf)
             return GameActionResult.Rejected("Only werewolves can self-destruct")
         if (context.game.phase !in allowedPhases)
             return GameActionResult.Rejected("Self-destruct not allowed in phase ${context.game.phase}")
+
+        // Validate the optional take before changing anything.
+        if (request.targetUserId != null) {
+            if (actor.role != PlayerRole.WHITE_WOLF_KING)
+                return GameActionResult.Rejected("Only the White Wolf King can take a player")
+            if (request.targetUserId == actor.userId)
+                return GameActionResult.Rejected("The White Wolf King cannot take itself")
+            context.alivePlayerById(request.targetUserId)
+                ?: return GameActionResult.Rejected("Target not found or dead")
+        }
+        // House rule: the last wolf may still self-destruct, but takes no one.
+        val isLastWolf = context.alivePlayers.none { it.role.isWolf && it.userId != actor.userId }
+        val takenUserId = if (isLastWolf) null else request.targetUserId
 
         val user = userRepository.findById(request.actorUserId).orElse(null)
         val nickname = user?.nickname ?: request.actorUserId
@@ -61,6 +78,10 @@ class SelfDestructService(
         // enough — PlayerSlot reads GamePlayer.sheriff).
         val wolfPlayer = gamePlayerRepository.findByGameIdAndUserId(context.gameId, request.actorUserId)
             .orElse(null) ?: return GameActionResult.Rejected("Player not found in DB")
+        val takenPlayer = takenUserId?.let {
+            gamePlayerRepository.findByGameIdAndUserId(context.gameId, it).orElse(null)
+                ?: return GameActionResult.Rejected("Target not found in DB")
+        }
         wolfPlayer.alive = false
         wolfPlayer.diedDay = context.game.dayNumber
         val wasSheriff = context.game.sheriffUserId == request.actorUserId
@@ -70,10 +91,19 @@ class SelfDestructService(
         }
         gamePlayerRepository.save(wolfPlayer)
 
-        // Set daySkipVoting flag + record who self-destructed (for the day death
-        // banner). Both are cleared at night-init.
+        // The taken player just dies: no hunter shot. A taken sheriff keeps the
+        // badge for now so they can hand it over (routed below).
+        if (takenPlayer != null) {
+            takenPlayer.alive = false
+            takenPlayer.diedDay = context.game.dayNumber
+            gamePlayerRepository.save(takenPlayer)
+        }
+
+        // Set daySkipVoting flag + record who self-destructed (and whom they took)
+        // for the day death banner. All three are cleared at night-init.
         context.game.daySkipVoting = true
         context.game.selfDestructUserId = request.actorUserId
+        context.game.selfDestructTakenUserId = takenPlayer?.userId
 
         // Phase transition
         when (context.game.phase) {
@@ -100,11 +130,22 @@ class SelfDestructService(
             }
         }
 
+        // A taken sheriff hands the badge over next (DayRevealAdvancer: badge first).
+        // While the night result is still hidden, the host's reveal does this routing.
+        val tookSheriff = takenPlayer != null && takenPlayer.userId == context.game.sheriffUserId
+        if (tookSheriff && context.game.phase == GamePhase.DAY_DISCUSSION &&
+            context.game.subPhase == DaySubPhase.RESULT_REVEALED.name
+        ) {
+            context.game.subPhase = dayRevealAdvancer.nextSubPhase(context.gameId).name
+        }
+
         gameRepository.save(context.game)
 
         // Record event
+        val takenNickname = takenPlayer?.let { userRepository.findById(it.userId).orElse(null)?.nickname ?: it.userId }
         actionLogService.recordSelfDestruct(
             context.gameId, context.game.dayNumber, request.actorUserId, nickname, actor.seatIndex,
+            takenPlayer?.userId, takenNickname, takenPlayer?.seatIndex,
         )
 
         // Broadcast after commit
@@ -116,7 +157,9 @@ class SelfDestructService(
         eventsToSend.add(DomainEvent.PhaseChanged(context.gameId, context.game.phase, context.game.subPhase))
 
         // Win-condition check (last wolf dying → villager win)
-        val freshAlivePlayers = context.players.filter { it.userId != request.actorUserId && it.alive }
+        val freshAlivePlayers = context.players.filter {
+            it.userId != request.actorUserId && it.userId != takenUserId && it.alive
+        }
         val winner = winConditionChecker.check(
             alivePlayers = freshAlivePlayers,
             mode = context.room.winCondition,
@@ -138,8 +181,8 @@ class SelfDestructService(
 
         broadcastAllAfterCommit(context.gameId, eventsToSend)
 
-        log.info("[selfDestruct] game={} actor={} phase={} subPhase={} wasSheriff={} winner={}",
-            context.gameId, request.actorUserId, context.game.phase, context.game.subPhase, wasSheriff, winner)
+        log.info("[selfDestruct] game={} actor={} taken={} phase={} subPhase={} wasSheriff={} winner={}",
+            context.gameId, request.actorUserId, takenUserId, context.game.phase, context.game.subPhase, wasSheriff, winner)
 
         return GameActionResult.Success()
     }

@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import SheriffElection from '@/components/SheriffElection.vue'
+import ActionMenu from '@/components/ActionMenu.vue'
 import type { SheriffElectionState } from '@/types'
 
 const CANDIDATES = [
@@ -360,6 +361,19 @@ describe('SheriffElection — below-header layout (Action chip on the right)', (
       })
       expect(wrapper.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
     }
+  })
+
+  it('passes the ActionMenu take target up with self-destruct', () => {
+    const wrapper = mount(SheriffElection, {
+      props: {
+        election: makeElection({ subPhase: 'SIGNUP' }),
+        ...DEFAULT_PROPS,
+        myRole: 'WHITE_WOLF_KING',
+        isAlive: true,
+      },
+    })
+    wrapper.findComponent(ActionMenu).vm.$emit('self-destruct', 'u2')
+    expect(wrapper.emitted('self-destruct')?.[0]).toEqual(['u2'])
   })
 
   it('non-wolf still gets the universal Action chip (with 暂无操作 inside on tap)', () => {

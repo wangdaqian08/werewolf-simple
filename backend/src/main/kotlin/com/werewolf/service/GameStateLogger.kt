@@ -122,7 +122,7 @@ class GameStateLogger(
             .orElse(null) ?: return emptyList()
         return when (np.subPhase) {
             NightSubPhase.WAITING, NightSubPhase.COMPLETE -> emptyList()  // auto-advance
-            NightSubPhase.WEREWOLF_PICK -> alivePlayers.filter { it.role == PlayerRole.WEREWOLF }.map { it.userId }
+            NightSubPhase.WEREWOLF_PICK -> alivePlayers.filter { it.role.isWolf }.map { it.userId }
             NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT ->
                 alivePlayers.filter { it.role == PlayerRole.SEER }.map { it.userId }
             NightSubPhase.WITCH_ACT -> alivePlayers.filter { it.role == PlayerRole.WITCH }.map { it.userId }

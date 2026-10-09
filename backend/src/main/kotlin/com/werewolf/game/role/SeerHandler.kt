@@ -52,7 +52,7 @@ class SeerHandler(private val nightPhaseRepository: NightPhaseRepository) : Role
                 val targetPlayer = context.alivePlayerById(target)
                     ?: return GameActionResult.Rejected("Target not found or dead")
 
-                val isWerewolf = targetPlayer.role == PlayerRole.WEREWOLF
+                val isWerewolf = targetPlayer.role.isWolf
                 nightPhase.seerCheckedUserId = target
                 nightPhase.seerResultIsWerewolf = isWerewolf
                 nightPhaseRepository.save(nightPhase)

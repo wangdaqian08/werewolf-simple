@@ -39,20 +39,20 @@ test('sheriff toggle is visible on create-room screen', async ({ page }) => {
 test('sheriff toggle is ON by default', async ({ page }) => {
   await goToCreateRoom(page)
   // The toggle button for sheriff should have class toggle-on
-  const sheriffToggle = page.locator('.toggle').first()
+  const sheriffToggle = page.locator('.role-row').filter({ hasText: /警长竞选|Sheriff/ }).locator('.toggle')
   await expect(sheriffToggle).toHaveClass(/toggle-on/)
 })
 
 test('sheriff toggle can be turned off', async ({ page }) => {
   await goToCreateRoom(page)
-  const sheriffToggle = page.locator('.toggle').first()
+  const sheriffToggle = page.locator('.role-row').filter({ hasText: /警长竞选|Sheriff/ }).locator('.toggle')
   await sheriffToggle.click()
   await expect(sheriffToggle).toHaveClass(/toggle-off/)
 })
 
 test('sheriff toggle can be toggled back on', async ({ page }) => {
   await goToCreateRoom(page)
-  const sheriffToggle = page.locator('.toggle').first()
+  const sheriffToggle = page.locator('.role-row').filter({ hasText: /警长竞选|Sheriff/ }).locator('.toggle')
   await sheriffToggle.click() // turn off
   await expect(sheriffToggle).toHaveClass(/toggle-off/)
   await sheriffToggle.click() // turn back on
@@ -109,8 +109,8 @@ test('no-sheriff: host clicks Start Night shows WAITING screen then advances to 
 
   // After 5 seconds, mock advances to WEREWOLF_PICK
   await page.waitForFunction(
-    () => !document.body.textContent?.includes('夜晚即将开始'),
-    { timeout: 8000 },
+      () => !document.body.textContent?.includes('夜晚即将开始'),
+      { timeout: 8000 },
   )
   // Night phase should now show werewolf pick UI (or still night)
   await expect(page.getByText(/黑夜|夜晚降临|Night Falls/i).first()).toBeVisible()

@@ -916,8 +916,8 @@ async function handlePassBadge(userId: string) {
 async function handleDestroyBadge() {
   await action({ actionType: 'BADGE_DESTROY' })
 }
-async function handleSelfDestruct() {
-  await action({ actionType: 'WOLF_SELF_DESTRUCT' })
+async function handleSelfDestruct(targetId?: string) {
+  await action({ actionType: 'WOLF_SELF_DESTRUCT', targetId })
 }
 
 async function debugVoting(scenario: string) {

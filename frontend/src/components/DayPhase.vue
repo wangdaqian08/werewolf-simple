@@ -48,7 +48,9 @@
           :sub-phase="dayPhase.subPhase"
           :my-role="myRole"
           :is-alive="isAlive"
-          @self-destruct="emit('self-destruct')"
+          :players="players"
+          :my-user-id="myUserId"
+          @self-destruct="(target) => emit('self-destruct', target)"
         />
       </div>
     </div>
@@ -67,6 +69,14 @@
             >{{ selfDestruct.seatIndex }}号 · {{ selfDestruct.nickname }}</span
           >
           <span class="banner-kill-muted">自爆了</span>
+          <template v-if="selfDestruct.takenSeatIndex != null">
+            <span class="banner-kill-muted">，带走了</span>
+            <span
+              class="banner-kill-red"
+              :data-testid="`day-self-destruct-taken-seat-${selfDestruct.takenSeatIndex}`"
+              >{{ selfDestruct.takenSeatIndex }}号 · {{ selfDestruct.takenNickname }}</span
+            >
+          </template>
         </div>
       </div>
 
@@ -504,6 +514,13 @@ const ROLE_META: Record<string, RoleMeta> = {
     team: 'special',
     description: '被投票驱逐时揭示身份，免于出局但失去投票权。',
   },
+  WHITE_WOLF_KING: {
+    nameZh: '白狼王',
+    nameEn: 'WHITE WOLF KING',
+    emoji: '👑',
+    team: 'wolf',
+    description: '夜晚与狼队一起袭击。白天自爆时，可选择带走一名玩家。',
+  },
 }
 
 const emit = defineEmits<{
@@ -512,7 +529,7 @@ const emit = defineEmits<{
   vote: [targetId: string]
   skip: []
   selectPlayer: [userId: string]
-  'self-destruct': []
+  'self-destruct': [targetUserId?: string]
   continueToNight: []
   passBadge: [userId: string]
   destroyBadge: []

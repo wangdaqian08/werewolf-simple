@@ -15,7 +15,13 @@ enum class GamePhase {
     GAME_OVER           // 游戏结束
 }
 
-enum class PlayerRole { WEREWOLF, VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT }
+
+// isWolf = wolf camp: wakes with the wolves, seer sees "wolf", counts as a wolf for win checks.
+enum class PlayerRole(val isWolf: Boolean = false) {
+    WEREWOLF(isWolf = true), VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT,
+    WHITE_WOLF_KING(isWolf = true),
+}
+
 
 enum class NightSubPhase { WAITING, WEREWOLF_PICK, SEER_PICK, SEER_RESULT, WITCH_ACT, GUARD_PICK, COMPLETE }
 

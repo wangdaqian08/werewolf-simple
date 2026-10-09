@@ -34,6 +34,7 @@ class SelfDestructServiceTest {
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var winConditionChecker: WinConditionChecker
     @Mock lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
+    @Mock lateinit var dayRevealAdvancer: com.werewolf.game.phase.DayRevealAdvancer
 
     private lateinit var selfDestructService: SelfDestructService
 
@@ -50,6 +51,7 @@ class SelfDestructServiceTest {
             nightOrchestrator,
             winConditionChecker,
             rewardSettlementService,
+            dayRevealAdvancer,
         )
     }
 
@@ -90,8 +92,8 @@ class SelfDestructServiceTest {
         election: SheriffElection? = null,
     ) = GameContext(game, room(), players, election = election)
 
-    private fun req(actorUserId: String = wolfId) =
-        GameActionRequest(gameId, actorUserId, ActionType.WOLF_SELF_DESTRUCT)
+    private fun req(actorUserId: String = wolfId, targetUserId: String? = null) =
+        GameActionRequest(gameId, actorUserId, ActionType.WOLF_SELF_DESTRUCT, targetUserId = targetUserId)
 
     // ── Case 1: Wolf during SHERIFF_ELECTION/SIGNUP → election aborts ──────────
 
@@ -225,6 +227,176 @@ class SelfDestructServiceTest {
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
         assertThat((result as GameActionResult.Rejected).reason).contains("Only werewolves")
         verify(gameRepository, never()).save(any<Game>())
+    }
+
+    @Test
+    fun `WHITE_WOLF_KING can self-destruct like any wolf`() {
+        val king = GamePlayer(gameId = gameId, userId = wolfId, seatIndex = 1, role = PlayerRole.WHITE_WOLF_KING)
+        val ctx = context(players = listOf(king, villagePlayer()))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId)).thenReturn(Optional.of(king))
+        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+
+        val result = selfDestructService.selfDestruct(req(), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(king.alive).isFalse()
+    }
+
+    // ── White Wolf King (白狼王): optional take ─────────────────────────────────
+
+    private val kingId = "king:001"
+
+    private fun kingPlayer() =
+        GamePlayer(gameId = gameId, userId = kingId, seatIndex = 3, role = PlayerRole.WHITE_WOLF_KING)
+
+    private fun player(userId: String, seat: Int, role: PlayerRole, alive: Boolean = true) =
+        GamePlayer(gameId = gameId, userId = userId, seatIndex = seat, role = role, alive = alive)
+
+    // Take scenarios include a second alive wolf: a last-wolf king takes no one (house rule).
+
+    /** Stubs the repositories so both the king and [taken] are loaded fresh and saved. */
+    private fun stubKingTakes(ctx: GameContext, king: GamePlayer, taken: GamePlayer) {
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, king.userId)).thenReturn(Optional.of(king))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, taken.userId)).thenReturn(Optional.of(taken))
+        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+    }
+
+    @Test
+    fun `WHITE_WOLF_KING takes the chosen player with it`() {
+        val king = kingPlayer()
+        val taken = villagePlayer()
+        val ctx = context(players = listOf(king, wolfPlayer(), taken, player("v2", 4, PlayerRole.VILLAGER)))
+        ctx.game.dayNumber = 2
+        stubKingTakes(ctx, king, taken)
+
+        val result = selfDestructService.selfDestruct(req(kingId, villageId), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(king.alive).isFalse()
+        assertThat(taken.alive).isFalse()
+        assertThat(taken.diedDay).isEqualTo(2)
+        assertThat(ctx.game.selfDestructTakenUserId).isEqualTo(villageId)
+        assertThat(ctx.game.daySkipVoting).isTrue()
+        verify(actionLogService).recordSelfDestruct(
+            eq(gameId), eq(2), eq(kingId), any(), eq(3), eq(villageId), any(), eq(2),
+        )
+    }
+
+    @Test
+    fun `win check sees both the king and the taken player as dead`() {
+        val king = kingPlayer()
+        val taken = villagePlayer()
+        val survivor = player("v2", 4, PlayerRole.VILLAGER)
+        val ctx = context(players = listOf(king, wolfPlayer(), taken, survivor))
+        stubKingTakes(ctx, king, taken)
+
+        selfDestructService.selfDestruct(req(kingId, villageId), ctx)
+
+        val captor = argumentCaptor<List<GamePlayer>>()
+        verify(winConditionChecker).check(captor.capture(), any(), any(), any())
+        assertThat(captor.firstValue.map { it.userId }).containsExactlyInAnyOrder(wolfId, "v2")
+    }
+
+    @Test
+    fun `a plain WEREWOLF cannot take a player`() {
+        val ctx = context(players = listOf(wolfPlayer(), villagePlayer()))
+
+        val result = selfDestructService.selfDestruct(req(wolfId, villageId), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        verify(gamePlayerRepository, never()).save(any<GamePlayer>())
+        verify(gameRepository, never()).save(any<Game>())
+    }
+
+    @Test
+    fun `WHITE_WOLF_KING cannot take itself`() {
+        val ctx = context(players = listOf(kingPlayer(), villagePlayer()))
+
+        val result = selfDestructService.selfDestruct(req(kingId, kingId), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        verify(gameRepository, never()).save(any<Game>())
+    }
+
+    @Test
+    fun `WHITE_WOLF_KING cannot take a dead or unknown player`() {
+        val ctx = context(players = listOf(kingPlayer(), player("dead", 4, PlayerRole.VILLAGER, alive = false)))
+
+        assertThat(selfDestructService.selfDestruct(req(kingId, "dead"), ctx))
+            .isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(selfDestructService.selfDestruct(req(kingId, "nobody"), ctx))
+            .isInstanceOf(GameActionResult.Rejected::class.java)
+        verify(gameRepository, never()).save(any<Game>())
+    }
+
+    @Test
+    fun `a taken hunter dies without a shot`() {
+        val king = kingPlayer()
+        val hunter = player("hunter", 4, PlayerRole.HUNTER)
+        val ctx = context(players = listOf(king, wolfPlayer(), hunter, villagePlayer()))
+        stubKingTakes(ctx, king, hunter)
+
+        selfDestructService.selfDestruct(req(kingId, "hunter"), ctx)
+
+        assertThat(hunter.alive).isFalse()
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+    }
+
+    @Test
+    fun `a taken sheriff hands the badge over next (day result already shown)`() {
+        val king = kingPlayer()
+        val sheriff = villagePlayer().also { it.sheriff = true }
+        val ctx = context(
+            game = game(subPhase = DaySubPhase.RESULT_REVEALED.name, sheriffUserId = villageId),
+            players = listOf(king, wolfPlayer(), sheriff, player("v2", 4, PlayerRole.VILLAGER)),
+        )
+        stubKingTakes(ctx, king, sheriff)
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.BADGE_HANDOVER)
+
+        selfDestructService.selfDestruct(req(kingId, villageId), ctx)
+
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        // The dead sheriff keeps the badge until they pass or destroy it.
+        assertThat(ctx.game.sheriffUserId).isEqualTo(villageId)
+    }
+
+    @Test
+    fun `a taken sheriff during voting hands the badge over next`() {
+        val king = kingPlayer()
+        val sheriff = villagePlayer().also { it.sheriff = true }
+        val ctx = context(
+            game = game(phase = GamePhase.DAY_VOTING, subPhase = VotingSubPhase.VOTING.name, sheriffUserId = villageId),
+            players = listOf(king, wolfPlayer(), sheriff, player("v2", 4, PlayerRole.VILLAGER)),
+        )
+        stubKingTakes(ctx, king, sheriff)
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.BADGE_HANDOVER)
+
+        selfDestructService.selfDestruct(req(kingId, villageId), ctx)
+
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+    }
+
+    @Test
+    fun `a taken sheriff before the night result is shown waits for the host's reveal`() {
+        val king = kingPlayer()
+        val sheriff = villagePlayer().also { it.sheriff = true }
+        val ctx = context(
+            game = game(subPhase = DaySubPhase.RESULT_HIDDEN.name, sheriffUserId = villageId),
+            players = listOf(king, wolfPlayer(), sheriff, player("v2", 4, PlayerRole.VILLAGER)),
+        )
+        stubKingTakes(ctx, king, sheriff)
+
+        selfDestructService.selfDestruct(req(kingId, villageId), ctx)
+
+        // The reveal runs DayRevealAdvancer, which hands the badge over first.
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
+        verify(dayRevealAdvancer, never()).nextSubPhase(any())
     }
 
     // ── Case 6: Dead wolf attempts → Rejected ──────────────────────────────────

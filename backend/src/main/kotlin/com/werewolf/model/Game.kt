@@ -52,6 +52,10 @@ class Game(
     @Column(name = "self_destruct_user_id", length = 128)
     var selfDestructUserId: String? = null,
 
+    // The player a White Wolf King took with it (same lifetime as selfDestructUserId).
+    @Column(name = "self_destruct_taken_user_id", length = 128)
+    var selfDestructTakenUserId: String? = null,
+
     @Column(name = "timer_started_at")
     var timerStartedAt: Long? = null,
 

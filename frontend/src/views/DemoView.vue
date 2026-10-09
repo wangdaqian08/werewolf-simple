@@ -112,7 +112,7 @@
             <button class="cr-stepper-btn cr-minus">−</button>
             <div class="cr-stepper-value">
               <span class="cr-stepper-num">9</span>
-              <span class="cr-stepper-range">6 – 12</span>
+              <span class="cr-stepper-range">6 – 15</span>
             </div>
             <button class="cr-stepper-btn cr-plus">+</button>
           </div>
@@ -559,6 +559,7 @@ const ROLE_LABELS: Record<PlayerRole, string> = {
   HUNTER: '猎人',
   IDIOT: '白痴',
   VILLAGER: '村民',
+  WHITE_WOLF_KING: '白狼王',
 }
 const SHERIFF_SUBPHASES: SheriffSubPhase[] = ['SIGNUP', 'SPEECH', 'VOTING', 'RESULT']
 const DAY_SUBPHASES: DaySubPhase[] = ['RESULT_HIDDEN', 'RESULT_REVEALED']

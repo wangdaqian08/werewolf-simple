@@ -60,7 +60,7 @@ class OrphanedGameRecovery(
 
     @EventListener(ApplicationReadyEvent::class)
     fun cancelInFlightGames() {
-        val orphans = txTemplate.execute { gameRepository.findByEndedAtIsNull() } ?: emptyList()
+        val orphans = txTemplate.execute { gameRepository.findByEndedAtIsNull() }
         if (orphans.isEmpty()) {
             log.info("[orphan-recovery] no in-flight games to cancel")
             return

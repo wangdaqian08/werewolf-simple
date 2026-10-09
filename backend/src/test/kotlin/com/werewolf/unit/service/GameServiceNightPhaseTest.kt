@@ -20,7 +20,6 @@ import org.mockito.InjectMocks
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
 import java.util.*
 
@@ -179,6 +178,24 @@ class GameServiceNightPhaseTest {
         val teammates = night["teammates"] as List<String>
         assertThat(teammates).containsExactly("2·Wolf2")
         assertThat(night["selectedTargetId"]).isEqualTo("u3")
+    }
+
+    @Test
+    fun `getGameState - WHITE_WOLF_KING and WEREWOLF see each other as night teammates`() {
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val king = player("u2", 2, PlayerRole.WHITE_WOLF_KING)
+        val villager = player("u3", 3, PlayerRole.VILLAGER)
+        val users = listOf(user("u1", "Wolf1"), user("u2", "King"), user("u3", "Dave"))
+        setupGameAndPlayers(game(), listOf(wolf, king, villager), users, NightSubPhase.WEREWOLF_PICK)
+        val np = nightPhase(subPhase = NightSubPhase.WEREWOLF_PICK)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+
+        @Suppress("UNCHECKED_CAST")
+        val kingTeammates = nightPhaseResult(gameService.getGameState(gameId, "u2"))["teammates"] as List<String>
+        @Suppress("UNCHECKED_CAST")
+        val wolfTeammates = nightPhaseResult(gameService.getGameState(gameId, "u1"))["teammates"] as List<String>
+        assertThat(kingTeammates).containsExactly("1·Wolf1")
+        assertThat(wolfTeammates).containsExactly("2·King")
     }
 
     @Test
@@ -405,6 +422,20 @@ class GameServiceNightPhaseTest {
         @Suppress("UNCHECKED_CAST")
         val teammates = roleReveal["teammates"] as List<String>
         assertThat(teammates).containsExactly("Wolf2")
+    }
+
+    @Test
+    fun `getGameState - ROLE_REVEAL WHITE_WOLF_KING sees WEREWOLF teammates`() {
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val king = player("u2", 2, PlayerRole.WHITE_WOLF_KING)
+        val villager = player("u3", 3, PlayerRole.VILLAGER)
+        val users = listOf(user("u1", "Wolf1"), user("u2", "King"), user("u3", "Dave"))
+        val game = game(phase = GamePhase.ROLE_REVEAL).also { it.dayNumber = 1 }
+        setupGameAndPlayers(game, listOf(wolf, king, villager), users)
+
+        @Suppress("UNCHECKED_CAST")
+        val roleReveal = gameService.getGameState(gameId, "u2")["roleReveal"] as Map<String, Any?>
+        assertThat(roleReveal["teammates"] as List<*>).containsExactly("Wolf1")
     }
 
     @Test

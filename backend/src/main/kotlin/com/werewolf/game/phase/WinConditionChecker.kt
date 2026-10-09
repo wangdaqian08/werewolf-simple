@@ -1,7 +1,6 @@
 package com.werewolf.game.phase
 
 import com.werewolf.model.GamePlayer
-import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinConditionMode
 import com.werewolf.model.WinnerSide
 import org.springframework.stereotype.Component
@@ -53,8 +52,8 @@ class WinConditionChecker {
         trigger: WinCheckTrigger,
         counterplay: HardModeCounterplay,
     ): WinnerSide? {
-        val wolves = alivePlayers.count { it.role == PlayerRole.WEREWOLF }
-        val humans = alivePlayers.count { it.role != PlayerRole.WEREWOLF }
+        val wolves = alivePlayers.count { it.role.isWolf }
+        val humans = alivePlayers.count { !it.role.isWolf }
 
         checkVillagerWin(wolves)?.let { return it }
         checkWolfWin(wolves, humans, mode, trigger, counterplay)?.let { return it }

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
 import org.mockito.Mock
+import org.mockito.Spy
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
 import java.util.*
@@ -27,8 +28,8 @@ class RoomServiceTest {
     @Mock lateinit var gameRepository: GameRepository
     @Mock lateinit var authService: AuthService
     @Mock lateinit var stompPublisher: StompPublisher
-    @org.mockito.Spy val timing: com.werewolf.config.GameTimingProperties = com.werewolf.config.GameTimingProperties()
-    @Mock(strictness = org.mockito.Mock.Strictness.LENIENT) lateinit var bgmRegistry: com.werewolf.controller.BgmTrackRegistry
+    @Spy val timing: com.werewolf.config.GameTimingProperties = com.werewolf.config.GameTimingProperties()
+    @Mock(strictness = Mock.Strictness.LENIENT) lateinit var bgmRegistry: com.werewolf.controller.BgmTrackRegistry
     @Mock lateinit var perkActivationRepository: com.werewolf.repository.PerkActivationRepository
     @Mock lateinit var perkRepository: com.werewolf.repository.PerkRepository
     @Mock lateinit var perkService: com.werewolf.service.PerkService
@@ -198,6 +199,43 @@ class RoomServiceTest {
     }
 
     @Test
+    fun `createRoom - rejects WHITE_WOLF_KING with fewer than 2 wolves (it would always be the last wolf)`() {
+        val cfg = RoomConfigRequest(
+            totalPlayers = 6,
+            wolfCount = 1,
+            roles = listOf(PlayerRole.WHITE_WOLF_KING, PlayerRole.SEER, PlayerRole.WITCH),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("White Wolf King")
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
+    @Test
+    fun `createRoom - WHITE_WOLF_KING fills a wolf seat, it is not counted as a god`() {
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+        // 2 wolves (incl. the king) + 4 gods = 6 seats exactly.
+        val cfg = RoomConfigRequest(
+            totalPlayers = 6,
+            wolfCount = 2,
+            roles = listOf(PlayerRole.WHITE_WOLF_KING, PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER, PlayerRole.GUARD),
+        )
+
+        roomService.createRoom(hostId, "Host", null, cfg)
+
+        val captor = argumentCaptor<Room>()
+        verify(roomRepository).save(captor.capture())
+        assertThat(captor.firstValue.hasWhiteWolfKing).isTrue()
+    }
+
+    @Test
     fun `createRoom - does not broadcast STOMP on create`() {
         whenever(roomRepository.save(any<Room>())).thenAnswer {
             val r = it.arguments[0] as Room
@@ -332,6 +370,16 @@ class RoomServiceTest {
         assertThat(result.hostId).isEqualTo(hostId)
     }
 
+    @Test
+    fun `getRoom - lists WHITE_WOLF_KING in the room roles when enabled`() {
+        val room = Room(roomId = 1, roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasWhiteWolfKing = true)
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        assertThat(roomService.getRoom(1).config.roles).contains(PlayerRole.WHITE_WOLF_KING)
+    }
+
     // ── findActiveRoomForUser (reconnect / quick-rejoin) ───────────────────────
 
     @Test
@@ -416,7 +464,7 @@ class RoomServiceTest {
         verify(roomPlayerRepository).delete(targetRow)
         verify(stompPublisher).broadcastRoomAfterCommit(eq(1), argThat<Map<String, Any>> {
             this["type"] == "PLAYER_KICKED" &&
-            (this["payload"] as? Map<*, *>)?.get("userId") == userId
+                    (this["payload"] as? Map<*, *>)?.get("userId") == userId
         })
         verify(stompPublisher).broadcastRoomAfterCommit(eq(1), argThat<Map<String, Any>> {
             this["type"] == "ROOM_UPDATE"

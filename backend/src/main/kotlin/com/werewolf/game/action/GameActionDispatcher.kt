@@ -63,7 +63,7 @@ class GameActionDispatcher(
                     // Broadcast selection to all alive wolves (no sub-phase advance).
                     // afterCommit ordering keeps the event consistent with what
                     // /api/game/{id}/state will return on a follow-up read.
-                    val aliveWolves = context.alivePlayers.filter { it.role == PlayerRole.WEREWOLF }
+                    val aliveWolves = context.alivePlayers.filter { it.role.isWolf }
                     result.events.forEach { event ->
                         aliveWolves.forEach { wolf -> stompPublisher.sendPrivateAfterCommit(wolf.userId, event) }
                     }

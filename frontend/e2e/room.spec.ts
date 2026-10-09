@@ -80,11 +80,12 @@ test('decrement is disabled at minimum (6)', async ({page}) => {
     await expect(page.getByTestId('player-count-decrement')).toBeDisabled()
 })
 
-test('increment is disabled at maximum (12)', async ({page}) => {
+test('increment is disabled at maximum (15)', async ({page}) => {
     await goToLobby(page)
     await page.getByPlaceholder('Enter your nickname').fill('TestHost')
     await page.getByRole('button', {name: /Create Room/i}).first().click()
-    for (let i = 0; i < 3; i++) await page.getByTestId('player-count-increment').click()
+    for (let i = 0; i < 6; i++) await page.getByTestId('player-count-increment').click()
+    await expect(page.getByTestId('player-count-value')).toHaveText('15')
     await expect(page.getByTestId('player-count-increment')).toBeDisabled()
 })
 

@@ -5,7 +5,7 @@
       <div
         v-for="chip in chips"
         :key="chip.id"
-        :class="['composition-chip', chip.id === 'WEREWOLF' ? 'chip-wolf' : 'chip-default']"
+        :class="['composition-chip', isWolfRole(chip.id) ? 'chip-wolf' : 'chip-default']"
         :data-role="chip.id"
         :data-count="chip.count"
       >
@@ -22,7 +22,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { ROLE_DEFINITIONS, roleDefinition } from '@/utils/roleDefinitions'
+import { ROLE_DEFINITIONS, isWolfRole, roleDefinition } from '@/utils/roleDefinitions'
 
 const props = defineProps<{
   totalPlayers: number
@@ -38,9 +38,15 @@ const chips = computed(() => {
 
   const out: Array<{ id: string; nameZh: string; emoji: string; count: number }> = []
 
+  // 白狼王 takes one of the wolfCount seats.
+  const king = props.roles.includes('WHITE_WOLF_KING')
+    ? roleDefinition('WHITE_WOLF_KING')
+    : undefined
   const wolf = roleDefinition('WEREWOLF')
-  if (wolf)
-    out.push({ id: wolf.id, nameZh: wolf.nameZh, emoji: wolf.emoji, count: props.wolfCount })
+  const plainWolves = props.wolfCount - (king ? 1 : 0)
+  if (wolf && plainWolves > 0)
+    out.push({ id: wolf.id, nameZh: wolf.nameZh, emoji: wolf.emoji, count: plainWolves })
+  if (king) out.push({ id: king.id, nameZh: king.nameZh, emoji: king.emoji, count: 1 })
 
   for (const def of ROLE_DEFINITIONS) {
     if (GOD_IDS.has(def.id) && enabledGods.includes(def.id)) {

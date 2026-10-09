@@ -131,6 +131,9 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
       .toMatch(/\d+号/)
 
     await captureSnapshot(ctx.pages, testInfo, 'self-destruct-post-confirm')
+
+    await ctx.hostPage.getByTestId('action-log-close').click()
+    await expect(drawer).toBeHidden({ timeout: 5_000 })
   })
 
   test('non-wolf taps Action chip → sees 暂无操作, no self-destruct option', async ({}, testInfo) => {

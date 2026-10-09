@@ -22,7 +22,9 @@
         :sub-phase="election.subPhase"
         :my-role="myRole"
         :is-alive="isAlive ?? false"
-        @self-destruct="emit('self-destruct')"
+        :players="players"
+        :my-user-id="myUserId"
+        @self-destruct="(target) => emit('self-destruct', target)"
       />
     </div>
 
@@ -655,7 +657,7 @@ const emit = defineEmits<{
   revealResult: []
   endResult: []
   appoint: [userId: string]
-  'self-destruct': []
+  'self-destruct': [targetUserId?: string]
   'start-timer': [seconds: number]
   'stop-timer': []
   'set-speech-order': [direction: 'ASC' | 'DESC']

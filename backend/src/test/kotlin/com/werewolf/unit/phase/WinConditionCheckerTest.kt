@@ -71,6 +71,17 @@ class WinConditionCheckerTest {
     // ── CLASSIC wolf path ─────────────────────────────────────────────────────
 
     @Test
+    fun `CLASSIC counts WHITE_WOLF_KING as a wolf`() {
+        val result = checker.check(
+            alivePlayers = listOf(player("wk", 1, PlayerRole.WHITE_WOLF_KING), villager(2)),
+            mode = WinConditionMode.CLASSIC,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = noCounterplay,
+        )
+        assertThat(result).isEqualTo(WinnerSide.WEREWOLF)
+    }
+
+    @Test
     fun `CLASSIC wolves strictly outnumber humans returns WEREWOLF`() {
         val result = checker.check(
             alivePlayers = listOf(wolf(1), wolf(2), villager(3)),

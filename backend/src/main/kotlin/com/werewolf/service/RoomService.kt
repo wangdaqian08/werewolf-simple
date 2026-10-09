@@ -66,6 +66,7 @@ class RoomService(
                 hasHunter = PlayerRole.HUNTER in cfg.roles,
                 hasGuard = PlayerRole.GUARD in cfg.roles,
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
+                hasWhiteWolfKing = PlayerRole.WHITE_WOLF_KING in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
                 config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed),
@@ -296,6 +297,7 @@ class RoomService(
 
         val roles = buildList {
             add(PlayerRole.WEREWOLF)
+            if (room.hasWhiteWolfKing) add(PlayerRole.WHITE_WOLF_KING)
             add(PlayerRole.VILLAGER)
             if (room.hasSeer) add(PlayerRole.SEER)
             if (room.hasWitch) add(PlayerRole.WITCH)
@@ -353,6 +355,8 @@ class RoomService(
      * Backend enforces game-correctness invariants only:
      *   1. wolfCount must be > 0 (a wolfless game is not werewolf)
      *   2. wolves + gods ≤ totalPlayers (no seat overflow)
+     *   3. a White Wolf King needs a fellow wolf (wolfCount ≥ 2): alone it is
+     *      always the last wolf and could never take anyone
      *
      * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
      * for the host-facing stepper — they intentionally do NOT gate the API,
@@ -370,11 +374,16 @@ class RoomService(
             )
         }
         val godCount = roles.count {
-            it != PlayerRole.WEREWOLF && it != PlayerRole.VILLAGER
+            !it.isWolf && it != PlayerRole.VILLAGER
         }
         if (wolfCount + godCount > totalPlayers) {
             throw InvalidRoleCompositionException(
                 "Composition overflow: $wolfCount wolves + $godCount gods > $totalPlayers seats",
+            )
+        }
+        if (PlayerRole.WHITE_WOLF_KING in roles && wolfCount < 2) {
+            throw InvalidRoleCompositionException(
+                "White Wolf King needs at least 2 wolves, got $wolfCount",
             )
         }
     }

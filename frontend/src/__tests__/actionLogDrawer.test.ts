@@ -98,3 +98,36 @@ describe('ActionLogDrawer — SELF_DESTRUCT entry', () => {
     wrapper.unmount()
   })
 })
+
+describe('ActionLogDrawer — 白狼王 take', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('shows the player the White Wolf King took', async () => {
+    vi.mocked(gameService.getActionLog).mockResolvedValue([
+      makeEntry('SELF_DESTRUCT', {
+        dayNumber: 2,
+        userId: 'u-king',
+        nickname: 'King',
+        seatIndex: 5,
+        takenUserId: 'u-eve',
+        takenNickname: 'Eve',
+        takenSeatIndex: 7,
+      }),
+    ])
+    const wrapper = mount(ActionLogDrawer, {
+      props: { gameId: 42, open: false },
+      attachTo: document.body,
+    })
+    await wrapper.setProps({ open: true })
+    await new Promise((r) => setTimeout(r, 0))
+    await wrapper.vm.$nextTick()
+
+    expect(document.body.textContent).toContain('带走')
+    expect(document.body.textContent).toContain('7号')
+    expect(document.body.textContent).toContain('Eve')
+    wrapper.unmount()
+  })
+})

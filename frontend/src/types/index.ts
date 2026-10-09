@@ -201,7 +201,15 @@ export type GamePhase =
   | 'DAY_VOTING'
   | 'GAME_OVER'
 
-export type PlayerRole = 'WEREWOLF' | 'VILLAGER' | 'SEER' | 'WITCH' | 'HUNTER' | 'GUARD' | 'IDIOT'
+export type PlayerRole =
+  | 'WEREWOLF'
+  | 'VILLAGER'
+  | 'SEER'
+  | 'WITCH'
+  | 'HUNTER'
+  | 'GUARD'
+  | 'IDIOT'
+  | 'WHITE_WOLF_KING'
 
 export interface GamePlayer {
   userId: string
@@ -409,6 +417,9 @@ export interface NightResult {
 export interface SelfDestructResult {
   seatIndex: number
   nickname: string
+  // The player a White Wolf King took with it, if any.
+  takenSeatIndex?: number | null
+  takenNickname?: string | null
 }
 
 export interface DayPhaseState {
@@ -613,6 +624,9 @@ export interface SelfDestructPayload {
   userId: string
   nickname: string
   seatIndex: number
+  takenUserId?: string
+  takenNickname?: string
+  takenSeatIndex?: number
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

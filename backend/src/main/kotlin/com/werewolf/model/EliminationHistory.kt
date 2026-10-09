@@ -24,14 +24,14 @@ class EliminationHistory(
     val eliminatedUserId: String? = null,
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "eliminated_role", length = 10)
+    @Column(name = "eliminated_role", length = 20)
     val eliminatedRole: PlayerRole? = null,
 
     @Column(name = "hunter_shot_user_id", length = 128)
     var hunterShotUserId: String? = null,
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "hunter_shot_role", length = 10)
+    @Column(name = "hunter_shot_role", length = 20)
     var hunterShotRole: PlayerRole? = null,
 
     @Column(name = "recorded_at", nullable = false, updatable = false)

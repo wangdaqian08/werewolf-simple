@@ -25,7 +25,7 @@ class GamePlayer(
     val seatIndex: Int,
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 20)
     val role: PlayerRole,
 
     @Column(name = "is_alive", nullable = false)

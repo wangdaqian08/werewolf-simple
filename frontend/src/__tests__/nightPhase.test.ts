@@ -205,3 +205,34 @@ describe('NightPhase - eliminated banner gating', () => {
     }
   })
 })
+
+describe('NightPhase - 白狼王 acts in the wolf turn', () => {
+  it('WHITE_WOLF_KING sees the wolf badge and target grid during WEREWOLF_PICK', () => {
+    const king: GamePlayer = {
+      userId: 'k1',
+      nickname: 'King',
+      seatIndex: 1,
+      isAlive: true,
+      isSheriff: false,
+    }
+    const target: GamePlayer = {
+      userId: 'v1',
+      nickname: 'Vic',
+      seatIndex: 2,
+      isAlive: true,
+      isSheriff: false,
+    }
+    const wrapper = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1, teammates: ['3·Wolf'] },
+        players: [king, target],
+        myUserId: 'k1',
+        myRole: 'WHITE_WOLF_KING',
+      },
+    })
+    expect(wrapper.text()).toContain('白狼王')
+    expect(wrapper.text()).toContain('与队友商议攻击目标')
+    expect(wrapper.text()).toContain('选择今晚的袭击目标')
+    expect(wrapper.text()).toContain('3·Wolf')
+  })
+})

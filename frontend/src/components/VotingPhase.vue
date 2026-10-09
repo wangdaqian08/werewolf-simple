@@ -55,7 +55,9 @@
             :sub-phase="votingPhase.subPhase"
             :my-role="myRole"
             :is-alive="isAlive ?? false"
-            @self-destruct="emit('self-destruct')"
+            :players="players"
+            :my-user-id="myUserId"
+            @self-destruct="(target) => emit('self-destruct', target)"
           />
         </div>
       </div>
@@ -662,7 +664,7 @@ const emit = defineEmits<{
   hunterPass: []
   passBadge: [userId: string]
   destroyBadge: []
-  'self-destruct': []
+  'self-destruct': [targetUserId?: string]
 }>()
 
 // ── Screen grouping ───────────────────────────────────────────────────────────
@@ -829,6 +831,7 @@ const ROLE_ZH: Record<string, string> = {
   HUNTER: '猎人',
   GUARD: '守卫',
   IDIOT: '白痴',
+  WHITE_WOLF_KING: '白狼王',
 }
 
 // ── Vote History panel ────────────────────────────────────────────────────────
@@ -898,6 +901,13 @@ const ROLE_META: Record<string, RoleMeta> = {
     emoji: '🃏',
     team: 'special',
     description: '被投票驱逐时揭示身份，免于出局但失去投票权。',
+  },
+  WHITE_WOLF_KING: {
+    nameZh: '白狼王',
+    nameEn: 'WHITE WOLF KING',
+    emoji: '👑',
+    team: 'wolf',
+    description: '夜晚与狼队一起袭击。白天自爆时，可选择带走一名玩家。',
   },
 }
 

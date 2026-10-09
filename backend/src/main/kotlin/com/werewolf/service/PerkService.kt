@@ -1,11 +1,6 @@
 package com.werewolf.service
 
-import com.werewolf.model.CreditTxType
-import com.werewolf.model.GamePlayer
-import com.werewolf.model.PerkActivation
-import com.werewolf.model.PerkActivationStatus
-import com.werewolf.model.PlayerRole
-import com.werewolf.model.RoomStatus
+import com.werewolf.model.*
 import com.werewolf.repository.PerkActivationRepository
 import com.werewolf.repository.PerkRepository
 import com.werewolf.repository.RoomPlayerRepository
@@ -133,7 +128,7 @@ class PerkService(
     @Transactional
     fun onGameStart(roomId: Int, gameId: Int, players: List<GamePlayer>) {
         if (perkActivationRepository.bindToGame(roomId, gameId) == 0) return
-        val wolfUserIds = players.filter { it.role == PlayerRole.WEREWOLF }.map { it.userId }
+        val wolfUserIds = players.filter { it.role.isWolf }.map { it.userId }
         if (wolfUserIds.isEmpty()) return
         if (perkActivationRepository.voidWolfHolders(gameId, wolfUserIds) > 0) {
             perkActivationRepository.findByGameId(gameId)

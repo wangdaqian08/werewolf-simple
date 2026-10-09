@@ -4,7 +4,6 @@ import com.werewolf.config.RewardProperties
 import com.werewolf.game.DomainEvent
 import com.werewolf.model.CreditTxType
 import com.werewolf.model.GamePlayer
-import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinnerSide
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
@@ -67,7 +66,7 @@ class RewardSettlementService(
     }
 
     private fun rewardFor(player: GamePlayer, winner: WinnerSide, finalDay: Int): Int {
-        val isWolf = player.role == PlayerRole.WEREWOLF
+        val isWolf = player.role.isWolf
         val won = if (winner == WinnerSide.WEREWOLF) isWolf else !isWolf
         return when {
             won -> rewards.winBonus

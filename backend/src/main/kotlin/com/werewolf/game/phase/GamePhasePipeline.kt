@@ -109,6 +109,10 @@ class GamePhasePipeline(
             log.info("[dayAdvance] ERROR: SubPhase is not RESULT_REVEALED, actual is ${context.game.subPhase}")
             return GameActionResult.Rejected("Reveal the night result before starting the vote")
         }
+        // 自爆 ends the day with no vote; the host can only go to night.
+        if (context.game.daySkipVoting)
+            return GameActionResult.Rejected("A wolf self-destructed: the day ends without a vote")
+
 
         hostTimerService.cancel(context.gameId)
         context.game.phase = GamePhase.DAY_VOTING

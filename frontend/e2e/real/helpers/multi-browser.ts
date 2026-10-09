@@ -114,8 +114,8 @@ export interface GameSetupOptions {
  * 7. Opens a browser context per desired role
  */
 export async function setupGame(
-  browser: Browser,
-  opts: GameSetupOptions = {},
+    browser: Browser,
+    opts: GameSetupOptions = {},
 ): Promise<GameContext> {
   const totalPlayers = opts.totalPlayers ?? 9
   const hasSheriff = opts.hasSheriff ?? false
@@ -141,16 +141,16 @@ export async function setupGame(
   const guestToggle = hostPage.getByRole('button', { name: /Continue as guest|继续以访客/i })
   if (await guestToggle.count())
     await guestToggle
-      .first()
-      .click()
-      .catch(() => {})
+        .first()
+        .click()
+        .catch(() => {})
 
   // Login
   await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
   await hostPage
-    .getByRole('button', { name: /Create Room/i })
-    .first()
-    .click()
+      .getByRole('button', { name: /Create Room/i })
+      .first()
+      .click()
   // Bump from 10s → 30s: CI-3 flaked repeatedly here on 2026-04-24 /
   // 2026-04-25 because the initial '/' → '/create-room' navigation after a
   // cold Vite start plus Spring Tomcat warmup sometimes exceeds 10 s. The
@@ -179,7 +179,7 @@ export async function setupGame(
     // Default optional roles that are enabled by default
     const defaultOptional = ['SEER', 'WITCH', 'HUNTER']
     const requiredRoles = ['WEREWOLF', 'VILLAGER']
-    const allOptionalRoles = ['SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT']
+    const allOptionalRoles = ['SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT', 'WHITE_WOLF_KING']
 
     // For each optional role, toggle to match desired state. Retry up to
     // 3 times if the click didn't register — on slow CI the first click
@@ -187,23 +187,33 @@ export async function setupGame(
     // which then causes the backend to skip that role during game-start
     // assignment (observed failure: "IDIOT bots not found" across all
     // idiot-flow tests when the IDIOT toggle stayed off).
-    for (const role of allOptionalRoles) {
-      const shouldBeEnabled = opts.roles.includes(
-        <'WEREWOLF' | 'SEER' | 'WITCH' | 'GUARD' | 'HUNTER' | 'IDIOT' | 'VILLAGER'>role,
-      )
+    //
+    // The screen enforces board limits (gods within wolves ± 1), so a toggle
+    // can be disabled until another one moves first — e.g. 猎人 off only after
+    // 守卫 on. Make passes, skipping disabled toggles, until nothing changes.
+    for (let pass = 0; pass < allOptionalRoles.length; pass++) {
+      let changed = false
+      for (const role of allOptionalRoles) {
+        const shouldBeEnabled = opts.roles.includes(role as RoleName)
 
-      const roleRow = hostPage.locator('.role-row').filter({ hasText: new RegExp(role, 'i') })
+        // Rows read "白狼王 White Wolf King": match WHITE_WOLF_KING as words.
+        const roleRow = hostPage
+            .locator('.role-row')
+            .filter({ hasText: new RegExp(role.replace(/_/g, ' '), 'i') })
 
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const isEnabled = (await roleRow.locator('.toggle-on').count()) > 0
-        if (isEnabled === shouldBeEnabled) break
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const isEnabled = (await roleRow.locator('.toggle-on').count()) > 0
+          if (isEnabled === shouldBeEnabled) break
 
-        const toggle = isEnabled ? roleRow.locator('.toggle-on') : roleRow.locator('.toggle-off')
-        if ((await toggle.count()) === 0) break
+          const toggle = isEnabled ? roleRow.locator('.toggle-on') : roleRow.locator('.toggle-off')
+          if ((await toggle.count()) === 0 || (await toggle.isDisabled())) break
 
-        await toggle.click()
-        await hostPage.waitForTimeout(300)
+          await toggle.click()
+          changed = true
+          await hostPage.waitForTimeout(300)
+        }
       }
+      if (!changed) break
     }
   }
 
@@ -262,11 +272,11 @@ export async function setupGame(
     await trigger.click()
     const option = hostPage.locator(`.bgm-select-option[data-filename="${opts.bgmTrack}"]`)
     await expect
-      .poll(async () => option.count(), {
-        timeout: 5_000,
-        message: `BGM track ${opts.bgmTrack} must appear in the dropdown options`,
-      })
-      .toBeGreaterThan(0)
+        .poll(async () => option.count(), {
+          timeout: 5_000,
+          message: `BGM track ${opts.bgmTrack} must appear in the dropdown options`,
+        })
+        .toBeGreaterThan(0)
     await option.first().click()
     await expect(trigger).toHaveAttribute('data-value', opts.bgmTrack, { timeout: 2_000 })
   }
@@ -392,7 +402,7 @@ export async function setupGame(
     })
     if (!res.ok) {
       throw new Error(
-        `[setupGame] /api/game/${gameId}/state returned ${res.status} after CONFIRM_ROLE — backend should have full player rows by now`,
+          `[setupGame] /api/game/${gameId}/state returned ${res.status} after CONFIRM_ROLE — backend should have full player rows by now`,
       )
     }
     // GameStateDto.players[].seatIndex — NOT `seat`. (Verified by reading
@@ -403,12 +413,12 @@ export async function setupGame(
     const hostPlayer = data.players?.find((p) => p.userId === hostUserId)
     if (hostPlayer?.seatIndex == null) {
       throw new Error(
-        `[setupGame] host (userId=${hostUserId}) seatIndex missing in /game/${gameId}/state — host present? ${data.players?.some((p) => p.userId === hostUserId)} players=${JSON.stringify(data.players)}`,
+          `[setupGame] host (userId=${hostUserId}) seatIndex missing in /game/${gameId}/state — host present? ${data.players?.some((p) => p.userId === hostUserId)} players=${JSON.stringify(data.players)}`,
       )
     }
     const stateData = JSON.parse(readFileSync(stateFilePath, 'utf-8'))
     const hostUser = (stateData.users ?? []).find(
-      (u: { userId: string; seat: number }) => u.userId === hostUserId,
+        (u: { userId: string; seat: number }) => u.userId === hostUserId,
     )
     if (hostUser) {
       hostUser.seat = hostPlayer.seatIndex
@@ -467,7 +477,7 @@ export async function setupGame(
   const expectedRoles = (opts.roles ?? []) as RoleName[]
   for (let attempt = 0; attempt < 8; attempt++) {
     const haveAllRequested =
-      expectedRoles.length === 0 || expectedRoles.every((r) => (roleMap[r]?.length ?? 0) > 0)
+        expectedRoles.length === 0 || expectedRoles.every((r) => (roleMap[r]?.length ?? 0) > 0)
     if (Object.keys(roleMap).length > 0 && haveAllRequested) break
     await hostPage.waitForTimeout(1_000)
     roleMap = getRoles(roomCode)
@@ -488,7 +498,7 @@ export async function setupGame(
 
   // Determine which roles to open browsers for
   const desiredRoles =
-    opts.browserRoles ?? (['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[])
+      opts.browserRoles ?? (['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[])
 
   const pages = new Map<string, Page>()
   const botsByRole = new Map<string, BotInfo>()
@@ -522,12 +532,12 @@ export async function setupGame(
     // Login by setting localStorage directly
     await page.goto(`${BASE_URL}/`)
     await page.evaluate(
-      ({ jwt, nickname, userId }) => {
-        localStorage.setItem('jwt', jwt)
-        localStorage.setItem('nickname', nickname)
-        localStorage.setItem('userId', userId)
-      },
-      { jwt: creds.jwt, nickname: creds.nickname, userId: creds.userId },
+        ({ jwt, nickname, userId }) => {
+          localStorage.setItem('jwt', jwt)
+          localStorage.setItem('nickname', nickname)
+          localStorage.setItem('userId', userId)
+        },
+        { jwt: creds.jwt, nickname: creds.nickname, userId: creds.userId },
     )
 
     // Navigate to game

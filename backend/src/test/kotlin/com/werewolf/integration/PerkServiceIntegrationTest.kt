@@ -173,7 +173,7 @@ class PerkServiceIntegrationTest {
         val gameId = 999_000 + seq
         perkService.onGameStart(
             roomId, gameId,
-            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.WEREWOLF)),
+            listOf(GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.WEREWOLF)),
         )
 
         val activation = perkActivationRepository.findByGameId(gameId).single()
@@ -196,6 +196,23 @@ class PerkServiceIntegrationTest {
     }
 
     @Test
+    fun `onGameStart VOIDs a WHITE_WOLF_KING holder like any wolf`() {
+        ensurePerk()
+        val host = newUser("k")
+        val roomId = newRoom(host)
+        fund(host, 100)
+        perkService.activate(host, roomId, PERK_NIGHT1_IMMUNITY)
+
+        val gameId = 999_500 + seq
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.WHITE_WOLF_KING)),
+        )
+
+        assertThat(perkActivationRepository.findByGameId(gameId).single().status).isEqualTo(PerkActivationStatus.VOID)
+    }
+
+    @Test
     fun `non-wolf holder stays ACTIVE mid-game, trigger marks triggeredAt, settlement consumes without refund`() {
         ensurePerk()
         val host = newUser("h")
@@ -206,7 +223,7 @@ class PerkServiceIntegrationTest {
         val gameId = 998_000 + seq
         perkService.onGameStart(
             roomId, gameId,
-            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
+            listOf(GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
         )
         assertThat(perkService.night1ImmuneUserIds(gameId)).containsExactly(host)
 
@@ -251,7 +268,7 @@ class PerkServiceIntegrationTest {
         val gameId = 997_000 + seq
         perkService.onGameStart(
             roomId, gameId,
-            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
+            listOf(GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
         )
 
         // The conditional bind must not touch the REFUNDED row.
@@ -280,7 +297,7 @@ class PerkServiceIntegrationTest {
         val gameId = 996_000 + seq
         perkService.onGameStart(
             roomId, gameId,
-            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
+            listOf(GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
         )
         // GameService.startGame flips the room out of WAITING in the same tx.
         val room = roomRepository.findById(roomId).orElseThrow()
@@ -311,7 +328,7 @@ class PerkServiceIntegrationTest {
         val gameId = 994_000 + seq
         perkService.onGameStart(
             roomId, gameId,
-            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
+            listOf(GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
         )
 
         // Models the kick/sweep refund path firing after a concurrent game
@@ -342,7 +359,7 @@ class PerkServiceIntegrationTest {
         val gameId = 995_000 + seq
         perkService.onGameStart(
             roomId, gameId,
-            listOf(com.werewolf.model.GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
+            listOf(GamePlayer(gameId = gameId, userId = host, seatIndex = 0, role = PlayerRole.SEER)),
         )
 
         perkService.markNight1Triggered(gameId, setOf(host))

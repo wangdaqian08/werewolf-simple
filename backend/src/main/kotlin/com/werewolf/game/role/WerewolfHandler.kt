@@ -5,12 +5,9 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
-import com.werewolf.model.ActionType
-import com.werewolf.model.GamePhase
-import com.werewolf.model.NightSubPhase
-import com.werewolf.model.PlayerRole
-import com.werewolf.model.RoleDelayConfig
+import com.werewolf.model.*
 import com.werewolf.repository.NightPhaseRepository
+import com.werewolf.service.AudioService
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
@@ -19,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Component
 class WerewolfHandler(
     private val nightPhaseRepository: NightPhaseRepository,
-    private val audioService: com.werewolf.service.AudioService
+    private val audioService: AudioService
 ) : RoleHandler {
 
     override val role = PlayerRole.WEREWOLF
@@ -50,7 +47,7 @@ class WerewolfHandler(
 
         val actor = context.playerById(action.actorUserId)
             ?: return GameActionResult.Rejected("Actor not found")
-        if (actor.role != PlayerRole.WEREWOLF) return GameActionResult.Rejected("Not a werewolf")
+        if (!actor.role.isWolf) return GameActionResult.Rejected("Not a werewolf")
         if (!actor.alive) return GameActionResult.Rejected("Actor is dead")
 
         val nightPhase = context.nightPhase

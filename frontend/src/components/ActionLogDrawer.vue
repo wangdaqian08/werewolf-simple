@@ -12,7 +12,9 @@
 
         <div class="drawer-header">
           <span class="drawer-title">游戏记录</span>
-          <button class="drawer-close" @click="$emit('close')">✕</button>
+          <button class="drawer-close" data-testid="action-log-close" @click="$emit('close')">
+            ✕
+          </button>
         </div>
 
         <div class="drawer-body">
@@ -145,6 +147,11 @@
                   <span class="seat-badge">{{ s.seatIndex }}号</span>
                   <span class="log-name">{{ s.nickname }}</span>
                   <span class="log-tag tag-red">自爆</span>
+                  <template v-if="s.takenUserId">
+                    <span class="muted">→ 带走</span>
+                    <span class="seat-badge">{{ s.takenSeatIndex }}号</span>
+                    <span class="log-name">{{ s.takenNickname }}</span>
+                  </template>
                 </div>
               </div>
             </div>
