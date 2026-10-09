@@ -90,6 +90,7 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
     const wp = wolfPage!
 
     // Action chip visible + opens the self-destruct option (wolf path).
+    await expect(wp.getByTestId('log-fab')).toBeVisible({ timeout: 10_000 })
     const actionBtn = wp.getByTestId('action-menu-btn')
     await expect(actionBtn).toBeVisible({ timeout: 10_000 })
     await actionBtn.click()

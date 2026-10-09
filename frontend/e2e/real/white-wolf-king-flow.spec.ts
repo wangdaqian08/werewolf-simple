@@ -10,17 +10,13 @@
  *  Same conventions as self-destruct-flow.spec.ts: testid locators, condition
  *  polling, assertions on observable DOM.
  */
-import { expect, test } from '@playwright/test'
-import { type GameContext, setupGame } from './helpers/multi-browser'
-import { type RoleName } from './helpers/shell-runner'
-import { verifyAllBrowsersPhase } from './helpers/assertions'
-import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-screenshot'
-import { driveMinimalNight1ViaDom } from './helpers/night-driver'
-import {
-    waitForDaySkipVoting,
-    waitForDaySubPhase,
-    waitForNightSubPhase,
-} from './helpers/state-polling'
+import {expect, test} from '@playwright/test'
+import {type GameContext, setupGame} from './helpers/multi-browser'
+import {type RoleName} from './helpers/shell-runner'
+import {verifyAllBrowsersPhase} from './helpers/assertions'
+import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import {driveMinimalNight1ViaDom} from './helpers/night-driver'
+import {waitForDaySkipVoting, waitForDaySubPhase, waitForPhase,} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -88,6 +84,7 @@ test.describe('White Wolf King (白狼王) — real-backend flow', () => {
         ).toBe(true)
 
         // ── Day: king self-destructs and takes a villager ────────────────────
+        await expect(kp.getByTestId('log-fab')).toBeVisible({ timeout: 10_000 })
         await kp.getByTestId('action-menu-btn').click()
         await kp.getByTestId('action-menu-self-destruct').click()
         const takeBtn = kp.getByTestId(`action-menu-take-${taken!.userId}`)
@@ -121,7 +118,7 @@ test.describe('White Wolf King (白狼王) — real-backend flow', () => {
         // ── Host ends the day without a vote → next night ────────────────────
         await ctx.hostPage.getByTestId('day-enter-night').click()
         expect(
-            await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 30_000),
+            await waitForPhase(ctx.hostPage, ctx.gameId, 'NIGHT', 30_000),
             'night 2 reached after the king self-destructed',
         ).toBe(true)
     })
