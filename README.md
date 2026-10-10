@@ -1,5 +1,11 @@
 # Werewolf (狼人杀) — Local Development Guide
 
+[![CI](https://github.com/wangdaqian08/werewolf-simple/actions/workflows/ci.yml/badge.svg)](https://github.com/wangdaqian08/werewolf-simple/actions/workflows/ci.yml)
+[![Publish Images](https://github.com/wangdaqian08/werewolf-simple/actions/workflows/publish-images.yml/badge.svg)](https://github.com/wangdaqian08/werewolf-simple/actions/workflows/publish-images.yml)
+[![Release](https://img.shields.io/github/v/release/wangdaqian08/werewolf-simple)](https://github.com/wangdaqian08/werewolf-simple/releases)
+![Vue 3](https://img.shields.io/badge/Vue-3-42b883) ![Spring Boot 4](https://img.shields.io/badge/Spring%20Boot-4-6db33f) ![Java
+25](https://img.shields.io/badge/Java-25-orange)
+
 Vue 3 + Spring Boot + PostgreSQL multiplayer game.
 
 ---
