@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import DayPhase from '@/components/DayPhase.vue'
+import ActionMenu from '@/components/ActionMenu.vue'
 import type { DayPhaseState, GamePlayer, GameSettings } from '@/types'
 
 const PLAYERS: GamePlayer[] = [
@@ -491,6 +492,59 @@ describe('DayPhase — hunter role card', () => {
     expect(document.body.querySelector('.rc-desc')?.textContent).toBe(
       '死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。',
     )
+    wrapper.unmount()
+  })
+})
+
+describe('DayPhase — 白狼王', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('self-destruct banner names the player the White Wolf King took', () => {
+    const day: DayPhaseState = {
+      ...makeDay('RESULT_REVEALED'),
+      selfDestruct: { seatIndex: 3, nickname: 'King', takenSeatIndex: 5, takenNickname: 'Eve' },
+    }
+    const banner = mount(DayPhase, { props: { ...BASE_PROPS, dayPhase: day } }).find(
+      '[data-testid="day-banner-self-destruct"]',
+    )
+    expect(banner.text()).toContain('3号')
+    expect(banner.text()).toContain('带走了')
+    expect(banner.find('[data-testid="day-self-destruct-taken-seat-5"]').text()).toContain('Eve')
+  })
+
+  it('plain self-destruct banner has no taken player', () => {
+    const day: DayPhaseState = {
+      ...makeDay('RESULT_REVEALED'),
+      selfDestruct: { seatIndex: 3, nickname: 'Wolf' },
+    }
+    const banner = mount(DayPhase, { props: { ...BASE_PROPS, dayPhase: day } }).find(
+      '[data-testid="day-banner-self-destruct"]',
+    )
+    expect(banner.text()).not.toContain('带走了')
+  })
+
+  it('passes the ActionMenu take target up with self-destruct', () => {
+    const wrapper = mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        dayPhase: makeDay('RESULT_REVEALED'),
+        myRole: 'WHITE_WOLF_KING',
+        isAlive: true,
+      },
+    })
+    wrapper.findComponent(ActionMenu).vm.$emit('self-destruct', 'u2')
+    expect(wrapper.emitted('self-destruct')?.[0]).toEqual(['u2'])
+  })
+
+  it('role card describes 白狼王', async () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_REVEALED'), myRole: 'WHITE_WOLF_KING' },
+      attachTo: document.body,
+    })
+    await wrapper.find('.my-role-chip').trigger('click')
+    expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('白狼王')
     wrapper.unmount()
   })
 })

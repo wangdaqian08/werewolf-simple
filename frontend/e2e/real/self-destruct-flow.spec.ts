@@ -90,6 +90,7 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
     const wp = wolfPage!
 
     // Action chip visible + opens the self-destruct option (wolf path).
+    await expect(wp.getByTestId('log-fab')).toBeVisible({ timeout: 10_000 })
     const actionBtn = wp.getByTestId('action-menu-btn')
     await expect(actionBtn).toBeVisible({ timeout: 10_000 })
     await actionBtn.click()
@@ -131,6 +132,9 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
       .toMatch(/\d+号/)
 
     await captureSnapshot(ctx.pages, testInfo, 'self-destruct-post-confirm')
+
+    await ctx.hostPage.getByTestId('action-log-close').click()
+    await expect(drawer).toBeHidden({ timeout: 5_000 })
   })
 
   test('non-wolf taps Action chip → sees 暂无操作, no self-destruct option', async ({}, testInfo) => {

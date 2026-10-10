@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import VotingPhase from '@/components/VotingPhase.vue'
 import type { GamePlayer, GameSettings, VotingState } from '@/types'
+import ActionMenu from '@/components/ActionMenu.vue'
 
 describe('VotingPhase - Badge Handover UI Bug', () => {
   let pinia: ReturnType<typeof createPinia>
@@ -594,6 +595,12 @@ describe('VotingPhase — below-arch layout', () => {
     const wrapper = mountVoting()
     // The old role-action-col wrapper must be gone — ActionMenu lives on the right now.
     expect(wrapper.find('.role-action-col').exists()).toBe(false)
+  })
+
+  it('passes the ActionMenu take target up with self-destruct', () => {
+    const wrapper = mountVoting()
+    wrapper.findComponent(ActionMenu).vm.$emit('self-destruct', 'p-2')
+    expect(wrapper.emitted('self-destruct')?.[0]).toEqual(['p-2'])
   })
 })
 

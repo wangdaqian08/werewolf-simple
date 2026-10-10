@@ -295,6 +295,27 @@ class DayPhaseResultRevealTest {
     }
 
     @Test
+    fun `Day reveal - White Wolf King take surfaces the taken player's seat + nickname`() {
+        val king = player(wolfId, 1, PlayerRole.WHITE_WOLF_KING, alive = false)
+        val taken = player(victimId, 2, PlayerRole.VILLAGER, alive = false)
+        val g = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)
+        g.selfDestructUserId = wolfId
+        g.selfDestructTakenUserId = victimId
+        whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(g))
+        whenever(roomRepository.findById(g.roomId)).thenReturn(Optional.of(room()))
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(king, taken))
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.empty())
+        whenever(userRepository.findAllById(any()))
+            .thenReturn(listOf(user(wolfId, "KingBob"), user(victimId, "Victim")))
+
+        val dayPhase = gameService.getGameState(gameId, hostId)["dayPhase"] as? Map<*, *>
+        val selfDestruct = dayPhase?.get("selfDestruct") as? Map<*, *>
+
+        assertThat(selfDestruct?.get("takenSeatIndex")).isEqualTo(2)
+        assertThat(selfDestruct?.get("takenNickname")).isEqualTo("Victim")
+    }
+
+    @Test
     fun `Day reveal - no self-destruct → dayPhase selfDestruct is null`() {
         val villager = player(victimId, 2, PlayerRole.VILLAGER)
         val g = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_REVEALED.name, dayNumber = 2)

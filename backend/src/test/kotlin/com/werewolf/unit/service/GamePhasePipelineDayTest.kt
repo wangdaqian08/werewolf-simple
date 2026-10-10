@@ -24,6 +24,7 @@ import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -133,6 +134,16 @@ class GamePhasePipelineDayTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
         assertThat((result as GameActionResult.Rejected).reason).contains("Reveal the night result")
+    }
+
+    @Test
+    fun `dayAdvance - rejected after a wolf self-destructed (the day ends without a vote)`() {
+        val game = game(subPhase = DaySubPhase.RESULT_REVEALED.name).also { it.daySkipVoting = true }
+        val result = pipeline.dayAdvance(req(hostId, ActionType.DAY_ADVANCE), ctx(game))
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        verify(gameRepository, never()).save(any<Game>())
     }
 
     @Test

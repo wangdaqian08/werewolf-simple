@@ -49,6 +49,24 @@
           <div class="action-confirm-sheet">
             <div class="action-confirm-title">确认自爆？</div>
             <div class="action-confirm-body">此操作不可撤销。你将公开死亡，今天不进行投票。</div>
+            <!-- 白狼王: may take one alive player along (optional) -->
+            <div v-if="canTake" class="action-take">
+              <div class="action-take-hint">
+                可选择带走一名玩家（可不选）· Take a player (optional)
+              </div>
+              <div class="action-take-list">
+                <button
+                  v-for="p in takeCandidates"
+                  :key="p.userId"
+                  class="action-take-item"
+                  :class="{ 'action-take-item-selected': takeTargetId === p.userId }"
+                  :data-testid="`action-menu-take-${p.userId}`"
+                  @click="toggleTake(p.userId)"
+                >
+                  {{ p.seatIndex }}号 · {{ p.nickname }}
+                </button>
+              </div>
+            </div>
             <div class="action-confirm-btns">
               <button
                 class="btn btn-secondary"
@@ -74,17 +92,20 @@
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
-import type { GamePhase, PlayerRole } from '@/types'
+import type { GamePhase, GamePlayer, PlayerRole } from '@/types'
+import { isWolfRole } from '@/utils/roleDefinitions'
 
 const props = defineProps<{
   phase: GamePhase
   subPhase?: string
   myRole?: PlayerRole
   isAlive: boolean
+  players?: GamePlayer[]
+  myUserId?: string
 }>()
 
 const emit = defineEmits<{
-  'self-destruct': []
+  'self-destruct': [targetUserId?: string]
 }>()
 
 const menuOpen = ref(false)
@@ -95,8 +116,19 @@ const ALLOWED_PHASES: GamePhase[] = ['SHERIFF_ELECTION', 'DAY_DISCUSSION', 'DAY_
 const chipVisible = computed(() => ALLOWED_PHASES.includes(props.phase))
 
 const canSelfDestruct = computed(
-  () => props.myRole === 'WEREWOLF' && props.isAlive && chipVisible.value,
+  () => isWolfRole(props.myRole) && props.isAlive && chipVisible.value,
 )
+
+// The server validates the take; this only decides whether to offer it.
+const canTake = computed(() => props.myRole === 'WHITE_WOLF_KING')
+const takeCandidates = computed(() =>
+  (props.players ?? []).filter((p) => p.isAlive && p.userId !== props.myUserId),
+)
+const takeTargetId = ref<string | undefined>()
+
+function toggleTake(userId: string) {
+  takeTargetId.value = takeTargetId.value === userId ? undefined : userId
+}
 
 function openMenu() {
   menuOpen.value = true
@@ -108,6 +140,7 @@ function closeMenu() {
 
 function onSelfDestructClick() {
   menuOpen.value = false
+  takeTargetId.value = undefined
   confirmOpen.value = true
 }
 
@@ -117,11 +150,40 @@ function cancelConfirm() {
 
 function confirmSelfDestruct() {
   confirmOpen.value = false
-  emit('self-destruct')
+  emit('self-destruct', takeTargetId.value)
 }
 </script>
 
 <style scoped>
+.action-take {
+  margin: 0 0 14px;
+}
+.action-take-hint {
+  font-size: 12px;
+  color: var(--muted, #8a7a65);
+  margin-bottom: 8px;
+}
+.action-take-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.action-take-item {
+  padding: 6px 10px;
+  border: 1px solid var(--border, #ccc2b0);
+  border-radius: 999px;
+  background: var(--paper, #f5f0e8);
+  font-size: 13px;
+  color: var(--text, #1a140c);
+  cursor: pointer;
+}
+.action-take-item-selected {
+  border-color: var(--red, #b5251a);
+  background: var(--red, #b5251a);
+  color: #fff;
+}
 .action-menu-chip {
   display: inline-flex;
   align-items: center;

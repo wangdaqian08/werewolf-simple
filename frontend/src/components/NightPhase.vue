@@ -36,9 +36,7 @@
     </div>
 
     <!-- ── WEREWOLF_PICK ──────────────────────────────────────────────── -->
-    <template
-      v-if="subPhase === 'WEREWOLF_PICK' && myRole === 'WEREWOLF' && me?.isAlive && !hasActed"
-    >
+    <template v-if="subPhase === 'WEREWOLF_PICK' && isWolfRole(myRole) && me?.isAlive && !hasActed">
       <div v-if="nightPhase.teammates?.length" class="team-row">
         <span class="tr-label">队友：</span>
         <span v-for="(t, i) in nightPhase.teammates" :key="t" class="tr-name">
@@ -396,6 +394,7 @@
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
 
+import { isWolfRole } from '@/utils/roleDefinitions'
 import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import {
@@ -508,7 +507,7 @@ const isMyTurn = computed(() => {
   // Dead players cannot take turns
   if (!me.value?.isAlive) return false
   if (!role) return false
-  if (sp === 'WEREWOLF_PICK') return role === 'WEREWOLF'
+  if (sp === 'WEREWOLF_PICK') return isWolfRole(role)
   if (sp === 'SEER_PICK' || sp === 'SEER_RESULT') return role === 'SEER'
   if (sp === 'WITCH_ACT') return role === 'WITCH'
   if (sp === 'GUARD_PICK') return role === 'GUARD'
@@ -550,6 +549,7 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
   HUNTER: { nameZh: '猎人', nameEn: 'HUNTER', emoji: '🏹', team: 'special' },
   GUARD: { nameZh: '守卫', nameEn: 'GUARD', emoji: '🛡️', team: 'special' },
   IDIOT: { nameZh: '白痴', nameEn: 'IDIOT', emoji: '🃏', team: 'special' },
+  WHITE_WOLF_KING: { nameZh: '白狼王', nameEn: 'WHITE WOLF KING', emoji: '👑', team: 'wolf' },
 }
 
 const meta = computed(() => (props.myRole ? ROLE_META[props.myRole] : null))
@@ -558,7 +558,7 @@ const badgeSub = computed(() => {
   const role = props.myRole
   switch (subPhase.value) {
     case 'WEREWOLF_PICK':
-      return role === 'WEREWOLF' ? '与队友商议攻击目标' : '请闭眼 / Eyes closed'
+      return isWolfRole(role) ? '与队友商议攻击目标' : '请闭眼 / Eyes closed'
     case 'SEER_PICK':
       return role === 'SEER' ? '查验一名玩家的身份' : '请闭眼 / Eyes closed'
     case 'SEER_RESULT':

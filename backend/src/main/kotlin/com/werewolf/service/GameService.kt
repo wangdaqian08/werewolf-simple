@@ -124,9 +124,9 @@ class GameService(
 
         val roleReveal = if (game.phase == GamePhase.ROLE_REVEAL) {
             val confirmedCount = players.count { it.confirmedRole }
-            val teammates = if (myPlayer?.role == PlayerRole.WEREWOLF) {
+            val teammates = if (myPlayer?.role?.isWolf == true) {
                 players
-                    .filter { it.role == PlayerRole.WEREWOLF && it.userId != requestingUserId }
+                    .filter { it.role.isWolf && it.userId != requestingUserId }
                     .map { userLookup[it.userId]?.nickname ?: it.userId }
             } else emptyList()
             mapOf(
@@ -149,9 +149,9 @@ class GameService(
                 val playerMap = players.associateBy { it.userId }
 
                 // ── WEREWOLF: share selected target + formatted teammate list ──────────
-                if (myPlayer?.role == PlayerRole.WEREWOLF) {
+                if (myPlayer?.role?.isWolf == true) {
                     if (np.wolfTargetUserId != null) base["selectedTargetId"] = np.wolfTargetUserId
-                    val teammates = players.filter { it.role == PlayerRole.WEREWOLF && it.userId != requestingUserId }
+                    val teammates = players.filter { it.role.isWolf && it.userId != requestingUserId }
                     base["teammates"] = teammates.map { tp ->
                         "${tp.seatIndex}·${userLookup[tp.userId]?.nickname ?: tp.userId}"
                     }
@@ -239,9 +239,12 @@ class GameService(
             // The wolf who self-destructed (自爆) this day, if any — surfaced in the
             // day death banner. Cleared at night-init so it only shows for its day.
             val selfDestruct = game.selfDestructUserId?.let { sdId ->
+                val takenId = game.selfDestructTakenUserId
                 mapOf(
-                    "seatIndex" to (playerMap[sdId]?.seatIndex ?: 0),
-                    "nickname"  to displayNameFor(sdId),
+                    "seatIndex"      to (playerMap[sdId]?.seatIndex ?: 0),
+                    "nickname"       to displayNameFor(sdId),
+                    "takenSeatIndex" to takenId?.let { playerMap[it]?.seatIndex },
+                    "takenNickname"  to takenId?.let { displayNameFor(it) },
                 )
             }
             mapOf(
@@ -429,7 +432,8 @@ class GameService(
 
     private fun buildRoleList(room: Room, playerCount: Int): MutableList<PlayerRole> {
         val roles = mutableListOf<PlayerRole>()
-        repeat(room.wolfCount) { roles.add(PlayerRole.WEREWOLF) }
+        if (room.hasWhiteWolfKing) roles.add(PlayerRole.WHITE_WOLF_KING)
+        while (roles.size < room.wolfCount) roles.add(PlayerRole.WEREWOLF)
         if (room.hasSeer) roles.add(PlayerRole.SEER)
         if (room.hasWitch) roles.add(PlayerRole.WITCH)
         if (room.hasHunter) roles.add(PlayerRole.HUNTER)

@@ -77,6 +77,34 @@ class ActionLogServiceTest {
         assertThat(payload["seatIndex"]).isEqualTo(3)
     }
 
+    // ── recordSelfDestruct ──────────────────────────────────────────────────
+
+    @Test
+    fun `recordSelfDestruct - includes the player the White Wolf King took, without their role`() {
+        service.recordSelfDestruct(gameId, 2, "king", "King", 3, "u5", "Eve", 5)
+
+        val captor = argumentCaptor<GameEvent>()
+        verify(gameEventRepository).save(captor.capture())
+        assertThat(captor.firstValue.eventType).isEqualTo("SELF_DESTRUCT")
+        @Suppress("UNCHECKED_CAST")
+        val payload = mapper.readValue(captor.firstValue.message, Map::class.java) as Map<String, Any?>
+        assertThat(payload).containsEntry("takenUserId", "u5")
+            .containsEntry("takenNickname", "Eve")
+            .containsEntry("takenSeatIndex", 5)
+        assertThat(captor.firstValue.message).doesNotContain("role", "VILLAGER")
+    }
+
+    @Test
+    fun `recordSelfDestruct - plain self-destruct has no taken player`() {
+        service.recordSelfDestruct(gameId, 2, "w1", "Wolf", 3)
+
+        val captor = argumentCaptor<GameEvent>()
+        verify(gameEventRepository).save(captor.capture())
+        @Suppress("UNCHECKED_CAST")
+        val payload = mapper.readValue(captor.firstValue.message, Map::class.java) as Map<String, Any?>
+        assertThat(payload).doesNotContainKey("takenUserId")
+    }
+
     // ── recordVoteResult ────────────────────────────────────────────────────
 
     @Test

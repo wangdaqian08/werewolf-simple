@@ -98,6 +98,14 @@ class RewardSettlementServiceTest {
     }
 
     @Test
+    fun `wolf win - WHITE_WOLF_KING is paid as a winning wolf`() {
+        stub(listOf(player("k1", PlayerRole.WHITE_WOLF_KING), player("v1", PlayerRole.VILLAGER)))
+        service.settle(gameId, WinnerSide.WEREWOLF)
+
+        verify(walletService).credit(eq("k1"), eq(20), eq(CreditTxType.GAME_REWARD), eq(gameId), anyOrNull(), anyOrNull(), anyOrNull())
+    }
+
+    @Test
     fun `losing wolf that survived to the end is scaled by the final day`() {
         stub(listOf(player("w1", PlayerRole.WEREWOLF)), finalDay = 4)
         service.settle(gameId, WinnerSide.VILLAGER)

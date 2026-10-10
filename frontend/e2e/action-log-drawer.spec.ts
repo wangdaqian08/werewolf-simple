@@ -76,7 +76,7 @@ test('clicking backdrop closes the drawer', async ({ page }) => {
   // Wait for both drawer AND backdrop to finish their enter transitions
   const backdrop = page.locator('.drawer-backdrop')
   await expect(backdrop).toBeVisible()
-  await backdrop.click()
+  await backdrop.click({position: {x: 10, y: 10}})
   // v-if removes element from DOM after slide-up leave transition (0.25s)
   await expect(page.locator('.action-log-drawer')).not.toBeAttached()
 })

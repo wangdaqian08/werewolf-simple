@@ -12,19 +12,23 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ActionMenu from '@/components/ActionMenu.vue'
-import type { GamePhase, PlayerRole } from '@/types'
+import type { GamePhase, GamePlayer, PlayerRole } from '@/types'
 
 function makeProps(overrides: {
   phase?: GamePhase
   subPhase?: string
   myRole?: PlayerRole
   isAlive?: boolean
+  players?: GamePlayer[]
+  myUserId?: string
 }) {
   return {
     phase: overrides.phase ?? 'DAY_DISCUSSION',
     subPhase: overrides.subPhase ?? 'RESULT_REVEALED',
     myRole: overrides.myRole ?? 'WEREWOLF',
     isAlive: overrides.isAlive ?? true,
+    players: overrides.players,
+    myUserId: overrides.myUserId,
   }
 }
 
@@ -159,6 +163,61 @@ describe('ActionMenu', () => {
     cancelBtn?.click()
     await wrapper.vm.$nextTick()
     expect(wrapper.emitted('self-destruct')).toBeFalsy()
+    wrapper.unmount()
+  })
+})
+
+describe('ActionMenu — 白狼王 take', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const players: GamePlayer[] = [
+    { userId: 'k1', nickname: 'King', seatIndex: 1, isAlive: true, isSheriff: false },
+    { userId: 'v2', nickname: 'Vic', seatIndex: 2, isAlive: true, isSheriff: false },
+    { userId: 'd3', nickname: 'Dead', seatIndex: 3, isAlive: false, isSheriff: false },
+  ]
+
+  async function openConfirm(myRole: PlayerRole) {
+    const wrapper = mount(ActionMenu, {
+      props: makeProps({ myRole, players, myUserId: 'k1' }),
+      attachTo: document.body,
+    })
+    await wrapper.find('[data-testid="action-menu-btn"]').trigger('click')
+    ;(document.querySelector('[data-testid="action-menu-self-destruct"]') as HTMLElement).click()
+    await wrapper.vm.$nextTick()
+    return wrapper
+  }
+
+  it('lists only alive players other than the king as take candidates', async () => {
+    const wrapper = await openConfirm('WHITE_WOLF_KING')
+    expect(document.querySelector('[data-testid="action-menu-take-v2"]')).toBeTruthy()
+    expect(document.querySelector('[data-testid="action-menu-take-k1"]')).toBeFalsy()
+    expect(document.querySelector('[data-testid="action-menu-take-d3"]')).toBeFalsy()
+    wrapper.unmount()
+  })
+
+  it('emits the chosen player when the king confirms', async () => {
+    const wrapper = await openConfirm('WHITE_WOLF_KING')
+    ;(document.querySelector('[data-testid="action-menu-take-v2"]') as HTMLElement).click()
+    await wrapper.vm.$nextTick()
+    ;(document.querySelector('[data-testid="action-menu-confirm"]') as HTMLElement).click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('self-destruct')?.[0]).toEqual(['v2'])
+    wrapper.unmount()
+  })
+
+  it('emits no target when the king confirms without choosing', async () => {
+    const wrapper = await openConfirm('WHITE_WOLF_KING')
+    ;(document.querySelector('[data-testid="action-menu-confirm"]') as HTMLElement).click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('self-destruct')?.[0]).toEqual([undefined])
+    wrapper.unmount()
+  })
+
+  it('a plain werewolf gets no take list', async () => {
+    const wrapper = await openConfirm('WEREWOLF')
+    expect(document.querySelector('[data-testid="action-menu-take-v2"]')).toBeFalsy()
     wrapper.unmount()
   })
 })

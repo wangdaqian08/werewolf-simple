@@ -164,6 +164,24 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(wolfStates).toEqual([false, true, false, true, false])
   })
 
+  it('styles 白狼王 as a wolf and shows its name', async () => {
+    const state: GameState = {
+      gameId: 'g-wk',
+      phase: 'GAME_OVER',
+      dayNumber: 2,
+      winner: 'WEREWOLF',
+      players: [
+        makePlayer(1, 'user-1', 'Alice', 'VILLAGER'),
+        makePlayer(2, 'user-2', 'King', 'WHITE_WOLF_KING'),
+      ],
+      events: [],
+    }
+    const { wrapper } = await mountResultView(state)
+    const cards = wrapper.findAll('.reveal-card')
+    expect(cards[1]?.classes()).toContain('reveal-wolf')
+    expect(cards[1]?.text()).toContain('白狼王')
+  })
+
   it('formats meta line as "{paddedSeat} · {nickname}"', async () => {
     const state: GameState = {
       gameId: 'g-5',

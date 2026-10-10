@@ -123,6 +123,19 @@ class GameActionDispatcherTest {
         }
 
         @Test
+        fun `WOLF_SELECT success - WHITE_WOLF_KING also receives the selection`() {
+            val wolf = player(wolfId, 1, PlayerRole.WEREWOLF)
+            val king = player(wolf2Id, 2, PlayerRole.WHITE_WOLF_KING)
+            val wolfHandler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success(events = listOf(selectionEvent)))
+            val ctx = GameContext(game(), room(), listOf(wolf, king))
+            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+
+            makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
+
+            verify(stompPublisher).sendPrivateAfterCommit(wolf2Id, selectionEvent)
+        }
+
+        @Test
         fun `WOLF_SELECT success - dead wolves are excluded from broadcast`() {
             val aliveWolf = player(wolfId, 1, PlayerRole.WEREWOLF, alive = true)
             val deadWolf  = player(deadWolfId, 3, PlayerRole.WEREWOLF, alive = false)

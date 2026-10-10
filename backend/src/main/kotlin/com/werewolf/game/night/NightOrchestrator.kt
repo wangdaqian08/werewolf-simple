@@ -668,7 +668,8 @@ class NightOrchestrator(
         for ((index, handler) in activeHandlers.withIndex()) {
             val role = handler.role
             val config = gameConfig.getDelayForRole(role)
-            val isAlive = context.alivePlayers.any { it.role == role }
+            // Every wolf-camp role (e.g. WHITE_WOLF_KING) acts in the WEREWOLF turn.
+            val isAlive = context.alivePlayers.any { it.role == role || (role == PlayerRole.WEREWOLF && it.role.isWolf) }
             val isLastRole = index == activeHandlers.lastIndex
 
             log.info("[nightRoleLoop] game=$gameId: role=$role alive=$isAlive")
@@ -777,6 +778,7 @@ class NightOrchestrator(
         game.dayNumber = newDayNumber
         game.daySkipVoting = false
         game.selfDestructUserId = null
+        game.selfDestructTakenUserId = null
         gameRepository.save(game)
     }
 
@@ -803,8 +805,8 @@ class NightOrchestrator(
         // covers every audio frame published, not just the role-loop ones.
         log.info(
             "[broadcastNightInit] game=$gameId day=${context.game.dayNumber} " +
-                "withWaiting=$withWaiting initialSubPhase=${initialSubPhase.name} " +
-                "audioFiles=${audioSequence.audioFiles} priority=${audioSequence.priority}"
+                    "withWaiting=$withWaiting initialSubPhase=${initialSubPhase.name} " +
+                    "audioFiles=${audioSequence.audioFiles} priority=${audioSequence.priority}"
         )
 
         stompPublisher.broadcastGame(gameId, DomainEvent.PhaseChanged(gameId, GamePhase.NIGHT, initialSubPhase.name))

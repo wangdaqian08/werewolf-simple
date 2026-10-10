@@ -47,6 +47,7 @@ class SelfDestructFlowIntegrationTest {
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
+    @Autowired lateinit var werewolfHandler: com.werewolf.game.role.WerewolfHandler
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -78,8 +79,11 @@ class SelfDestructFlowIntegrationTest {
             Map::class.java,
         )
 
-    /** 6-player room, 2 wolves + seer + witch + 2 villagers, sheriff enabled. */
-    private fun startSixPlayerGame(prefix: String): Pair<List<TestPlayer>, Int> {
+    /** 6-player room, 2 wolves + seer + witch + 2 villagers (by default), sheriff enabled. */
+    private fun startSixPlayerGame(
+        prefix: String,
+        roles: List<String> = listOf("WEREWOLF", "SEER", "WITCH", "VILLAGER", "VILLAGER"),
+    ): Pair<List<TestPlayer>, Int> {
         val host = login("${prefix}H")
         val guests = (1..5).map { login("$prefix$it") }
         val all = listOf(host) + guests
@@ -92,7 +96,7 @@ class SelfDestructFlowIntegrationTest {
                     FIELD_CONFIG to mapOf(
                         FIELD_TOTAL_PLAYERS to 6,
                         "wolfCount" to 2,
-                        "roles" to listOf("WEREWOLF", "SEER", "WITCH", "VILLAGER", "VILLAGER"),
+                        "roles" to roles,
                         "hasSheriff" to true,
                     ),
                 ),
@@ -210,7 +214,7 @@ class SelfDestructFlowIntegrationTest {
         // Arrange an open Day-2 vote (results already revealed before voting).
         val game = gameRepository.findById(gameId).orElseThrow()
         game.phase = GamePhase.DAY_VOTING
-        game.subPhase = com.werewolf.model.VotingSubPhase.VOTING.name
+        game.subPhase = VotingSubPhase.VOTING.name
         game.dayNumber = 2
         gameRepository.save(game)
         nightPhaseRepository.save(
@@ -231,5 +235,261 @@ class SelfDestructFlowIntegrationTest {
         val afterContinue = gameRepository.findById(gameId).orElseThrow()
         assertThat(afterContinue.phase).isEqualTo(GamePhase.NIGHT)
         assertThat(afterContinue.dayNumber).isEqualTo(3)
+    }
+
+    // ── White Wolf King (白狼王) ─────────────────────────────────────────────
+
+    /** Day-2 discussion, night result already shown. */
+    private fun arrangeDay2Discussion(gameId: Int, sheriffUserId: String? = null) {
+        val game = gameRepository.findById(gameId).orElseThrow()
+        game.phase = GamePhase.DAY_DISCUSSION
+        game.subPhase = DaySubPhase.RESULT_REVEALED.name
+        game.dayNumber = 2
+        game.sheriffUserId = sheriffUserId
+        gameRepository.save(game)
+        if (sheriffUserId != null) {
+            gamePlayerRepository.findByGameIdAndUserId(gameId, sheriffUserId).orElseThrow()
+                .also { it.sheriff = true }.let { gamePlayerRepository.save(it) }
+        }
+        nightPhaseRepository.save(
+            NightPhase(gameId = gameId, dayNumber = 2).also { it.subPhase = NightSubPhase.COMPLETE },
+        )
+    }
+
+    @Test
+    fun `White Wolf King takes the sheriff - sheriff hands the badge over, then the day ends to night`() {
+        val (all, gameId) = startSixPlayerGame("WK1", listOf("WEREWOLF", "WHITE_WOLF_KING", "SEER", "WITCH", "VILLAGER"))
+        val hostId = gameRepository.findById(gameId).orElseThrow().hostUserId
+        val players = gamePlayerRepository.findByGameId(gameId)
+        val king = players.single { it.role == PlayerRole.WHITE_WOLF_KING }
+        val (sheriff, heir) = players.filter { !it.role.isWolf && it.userId != hostId }.take(2)
+        arrangeDay2Discussion(gameId, sheriffUserId = sheriff.userId)
+
+        assertThat(action(tokenOf(all, king.userId), gameId, "WOLF_SELF_DESTRUCT", sheriff.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+        val afterBoom = gameRepository.findById(gameId).orElseThrow()
+        assertThat(afterBoom.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(afterBoom.selfDestructTakenUserId).isEqualTo(sheriff.userId)
+        assertThat(gamePlayerRepository.findByGameIdAndUserId(gameId, king.userId).orElseThrow().alive).isFalse()
+        assertThat(gamePlayerRepository.findByGameIdAndUserId(gameId, sheriff.userId).orElseThrow().alive).isFalse()
+
+        assertThat(action(tokenOf(all, sheriff.userId), gameId, "BADGE_PASS", heir.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+        val afterBadge = gameRepository.findById(gameId).orElseThrow()
+        assertThat(afterBadge.sheriffUserId).isEqualTo(heir.userId)
+        assertThat(afterBadge.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(afterBadge.daySkipVoting).isTrue()
+
+        assertThat(action(tokenOf(all, hostId), gameId, "VOTING_CONTINUE").statusCode).isEqualTo(HttpStatus.OK)
+        val afterContinue = gameRepository.findById(gameId).orElseThrow()
+        assertThat(afterContinue.phase).isEqualTo(GamePhase.NIGHT)
+        assertThat(afterContinue.dayNumber).isEqualTo(3)
+        assertThat(afterContinue.selfDestructTakenUserId).isNull()
+    }
+
+    @Test
+    fun `a hunter taken by the White Wolf King gets no shot - the day ends to night`() {
+        val (all, gameId) = startSixPlayerGame("WK2", listOf("WEREWOLF", "WHITE_WOLF_KING", "SEER", "HUNTER", "VILLAGER"))
+        val hostId = gameRepository.findById(gameId).orElseThrow().hostUserId
+        val players = gamePlayerRepository.findByGameId(gameId)
+        val king = players.single { it.role == PlayerRole.WHITE_WOLF_KING }
+        val hunter = players.single { it.role == PlayerRole.HUNTER }
+        arrangeDay2Discussion(gameId)
+
+        assertThat(action(tokenOf(all, king.userId), gameId, "WOLF_SELF_DESTRUCT", hunter.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+        val afterBoom = gameRepository.findById(gameId).orElseThrow()
+        assertThat(afterBoom.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(gamePlayerRepository.findByGameIdAndUserId(gameId, hunter.userId).orElseThrow().alive).isFalse()
+
+        assertThat(action(tokenOf(all, hostId), gameId, "VOTING_CONTINUE").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(gameRepository.findById(gameId).orElseThrow().phase).isEqualTo(GamePhase.NIGHT)
+    }
+
+    // ── 白狼王 rule verification ─────────────────────────────────────────────
+    // Each test asserts the written rule; a failure means the game does not
+    // follow that rule yet.
+
+    private val kingRoles = listOf("WEREWOLF", "WHITE_WOLF_KING", "SEER", "WITCH", "VILLAGER")
+
+    private fun arrange(
+        gameId: Int,
+        phase: GamePhase,
+        subPhase: String?,
+        day: Int = 2,
+        night: NightPhase.() -> Unit = {},
+    ) {
+        val game = gameRepository.findById(gameId).orElseThrow()
+        game.phase = phase
+        game.subPhase = subPhase
+        game.dayNumber = day
+        gameRepository.save(game)
+        nightPhaseRepository.save(
+            NightPhase(gameId = gameId, dayNumber = day).also { it.subPhase = NightSubPhase.COMPLETE; it.night() },
+        )
+    }
+
+    private fun alive(gameId: Int, userId: String) =
+        gamePlayerRepository.findByGameIdAndUserId(gameId, userId).orElseThrow().alive
+
+    private data class KingGame(val all: List<TestPlayer>, val gameId: Int, val hostId: String, val king: GamePlayer, val wolf: GamePlayer, val target: GamePlayer)
+
+    private fun kingGame(prefix: String, roles: List<String> = kingRoles): KingGame {
+        val (all, gameId) = startSixPlayerGame(prefix, roles)
+        val hostId = gameRepository.findById(gameId).orElseThrow().hostUserId
+        val players = gamePlayerRepository.findByGameId(gameId)
+        val king = players.single { it.role == PlayerRole.WHITE_WOLF_KING }
+        val wolf = players.single { it.role == PlayerRole.WEREWOLF }
+        val target = players.first { !it.role.isWolf && it.userId != hostId }
+        return KingGame(all, gameId, hostId, king, wolf, target)
+    }
+
+    @Test
+    fun `rule - a plain werewolf cannot take a player (server returns 400, nothing changes)`() {
+        val g = kingGame("WR0")
+        arrange(g.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
+
+        val resp = action(tokenOf(g.all, g.wolf.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.target.userId)
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(resp.body?.get("error")).isEqualTo("Only the White Wolf King can take a player")
+        assertThat(alive(g.gameId, g.wolf.userId)).isTrue()
+        assertThat(alive(g.gameId, g.target.userId)).isTrue()
+    }
+
+    @Test
+    fun `rule - king may self-destruct and take a player during the sheriff election (上警阶段)`() {
+        val g = kingGame("WR1")
+        arrange(g.gameId, GamePhase.SHERIFF_ELECTION, null, day = 1)
+        sheriffElectionRepository.save(SheriffElection(gameId = g.gameId))
+
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.target.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+
+        assertThat(alive(g.gameId, g.king.userId)).isFalse()
+        assertThat(alive(g.gameId, g.target.userId)).isFalse()
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION) // election interrupted
+        assertThat(game.daySkipVoting).isTrue()
+    }
+
+    // House rule (kept on purpose): unlike some rule sets, wolves — the king
+    // included — may self-destruct during the vote and the vote-result last words.
+    @Test
+    fun `house rule - king may self-destruct and take a player during the vote`() {
+        val g = kingGame("WR2")
+        arrange(g.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
+
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.target.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+
+        assertThat(alive(g.gameId, g.target.userId)).isFalse()
+    }
+
+    @Test
+    fun `house rule - king may self-destruct and take a player on the vote-result screen (last words)`() {
+        val g = kingGame("WR3")
+        arrange(g.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
+
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.target.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+
+        assertThat(alive(g.gameId, g.target.userId)).isFalse()
+    }
+
+    @Test
+    fun `rule - king may take any player, even a wolf teammate, both leave at once (一换一)`() {
+        val g = kingGame("WR4")
+        arrange(g.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
+
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.wolf.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+
+        assertThat(alive(g.gameId, g.king.userId)).isFalse()
+        assertThat(alive(g.gameId, g.wolf.userId)).isFalse()
+    }
+
+    @Test
+    fun `rule - after the king self-destructs the day is over, the host cannot start a vote (直接入夜)`() {
+        val g = kingGame("WR5")
+        arrange(g.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.target.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+
+        assertThat(action(tokenOf(g.all, g.hostId), g.gameId, "DAY_ADVANCE").statusCode)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(action(tokenOf(g.all, g.hostId), g.gameId, "VOTING_CONTINUE").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(gameRepository.findById(g.gameId).orElseThrow().phase).isEqualTo(GamePhase.NIGHT)
+    }
+
+    @Test
+    fun `rule - at night the king kills with the wolves and may target itself (可自刀)`() {
+        val g = kingGame("WR6")
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        game.phase = GamePhase.NIGHT
+        game.subPhase = null
+        game.dayNumber = 2
+        gameRepository.save(game)
+        nightPhaseRepository.save(NightPhase(gameId = g.gameId, dayNumber = 2).also { it.subPhase = NightSubPhase.WEREWOLF_PICK })
+        // A real night starts via initNight, which clears the per-night kill lock. This
+        // test arranges the night directly, so clear it too (game ids repeat across contexts).
+        werewolfHandler.resetKillLock(g.gameId)
+
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_KILL", g.king.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+
+        assertThat(nightPhaseRepository.findByGameIdAndDayNumber(g.gameId, 2).orElseThrow().wolfTargetUserId)
+            .isEqualTo(g.king.userId)
+    }
+
+    @Test
+    fun `rule - a king voted out cannot take anyone (被放逐无法发动)`() {
+        val g = kingGame("WR7")
+        arrange(g.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
+        g.all.filter { it.userId != g.king.userId }.forEach {
+            assertThat(action(it.token, g.gameId, "SUBMIT_VOTE", g.king.userId).statusCode).isEqualTo(HttpStatus.OK)
+        }
+        assertThat(action(tokenOf(g.all, g.hostId), g.gameId, "VOTING_REVEAL_TALLY").statusCode).isEqualTo(HttpStatus.OK)
+
+        assertThat(alive(g.gameId, g.king.userId)).isFalse()
+        assertThat(gamePlayerRepository.findByGameId(g.gameId).count { !it.alive }).isEqualTo(1) // only the king
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.target.userId).statusCode)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(alive(g.gameId, g.target.userId)).isTrue()
+    }
+
+    @Test
+    fun `rule - a king shot by the hunter cannot take anyone (被猎人带走无法发动)`() {
+        val g = kingGame("WR8", listOf("WEREWOLF", "WHITE_WOLF_KING", "SEER", "HUNTER", "VILLAGER"))
+        val hunter = gamePlayerRepository.findByGameId(g.gameId).single { it.role == PlayerRole.HUNTER }
+        arrange(g.gameId, GamePhase.DAY_VOTING, VotingSubPhase.HUNTER_SHOOT.name)
+        hunter.alive = false // voted out, now shooting
+        gamePlayerRepository.save(hunter)
+
+        assertThat(action(tokenOf(g.all, hunter.userId), g.gameId, "HUNTER_SHOOT", g.king.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+
+        assertThat(alive(g.gameId, g.king.userId)).isFalse()
+        val other = gamePlayerRepository.findByGameId(g.gameId).first { it.alive && !it.role.isWolf }
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", other.userId).statusCode)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(alive(g.gameId, other.userId)).isTrue()
+    }
+
+    @Test
+    fun `rule - the last wolf (king) may self-destruct but cannot take anyone`() {
+        val g = kingGame("WR10")
+        arrange(g.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name)
+        g.wolf.alive = false
+        gamePlayerRepository.save(g.wolf)
+
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.target.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+
+        assertThat(alive(g.gameId, g.king.userId)).isFalse()
+        assertThat(alive(g.gameId, g.target.userId)).isTrue()
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.selfDestructTakenUserId).isNull()
+        assertThat(game.winner).isEqualTo(WinnerSide.VILLAGER) // the last wolf is gone
     }
 }

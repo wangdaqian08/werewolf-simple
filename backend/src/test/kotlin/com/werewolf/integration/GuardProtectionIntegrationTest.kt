@@ -1,6 +1,5 @@
 package com.werewolf.integration
 
-import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
@@ -20,7 +19,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
-import java.util.*
 
 /**
  * Integration test for guard protection feature.
@@ -51,7 +49,7 @@ class GuardProtectionIntegrationTest {
     @BeforeEach
     fun setUp() {
         guardHandler = GuardHandler(nightPhaseRepository)
-        wolfHandler = WerewolfHandler(nightPhaseRepository, audioService)
+        wolfHandler = WerewolfHandler(nightPhaseRepository)
         nightOrchestrator = NightOrchestrator(
             handlers = listOf(wolfHandler, guardHandler),
             gameRepository = gameRepository,

@@ -10,7 +10,6 @@ import com.werewolf.game.role.WerewolfHandler
 import com.werewolf.game.role.WitchHandler
 import com.werewolf.model.*
 import com.werewolf.repository.NightPhaseRepository
-import com.werewolf.service.AudioService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -25,8 +24,6 @@ class RoleHandlerTest {
 
     @Mock lateinit var nightPhaseRepository: NightPhaseRepository
 
-    @Mock
-    private lateinit var audioService: AudioService
 
     private val gameId = 1
     private val hostId = "host:001"
@@ -63,7 +60,7 @@ class RoleHandlerTest {
 
         @BeforeEach
         fun setUp() {
-            handler = WerewolfHandler(nightPhaseRepository, audioService)
+            handler = WerewolfHandler(nightPhaseRepository)
         }
 
         private fun wolfCtx(wolfAlive: Boolean = true, targetAlive: Boolean = true): GameContext {
@@ -128,6 +125,32 @@ class RoleHandlerTest {
             val captor = argumentCaptor<NightPhase>()
             verify(nightPhaseRepository).save(captor.capture())
             assertThat(captor.firstValue.wolfTargetUserId).isEqualTo("wolf2")
+        }
+
+        @Test
+        fun `wolf kill - WHITE_WOLF_KING kills with the wolves`() {
+            val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
+            val king = player("king", 1, PlayerRole.WHITE_WOLF_KING)
+            val victim = player("u2", 2, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(king, victim), nightPhase = np)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("king", ActionType.WOLF_KILL, "u2"), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        }
+
+        @Test
+        fun `wolf select - WHITE_WOLF_KING selects with the wolves`() {
+            val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
+            val king = player("king", 1, PlayerRole.WHITE_WOLF_KING)
+            val victim = player("u2", 2, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(king, victim), nightPhase = np)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("king", ActionType.WOLF_SELECT, "u2"), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         }
 
         @Test
@@ -314,6 +337,17 @@ class RoleHandlerTest {
             assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
             val seerResult = (result as GameActionResult.Success).events[0] as DomainEvent.SeerResult
             assertThat(seerResult.isWerewolf).isFalse()
+        }
+
+        @Test
+        fun `seer check - WHITE_WOLF_KING reads as werewolf`() {
+            val ctx = seerCtx(targetRole = PlayerRole.WHITE_WOLF_KING)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("seer", ActionType.SEER_CHECK, "u2"), ctx)
+
+            val seerResult = (result as GameActionResult.Success).events[0] as DomainEvent.SeerResult
+            assertThat(seerResult.isWerewolf).isTrue()
         }
 
         @Test

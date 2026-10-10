@@ -125,6 +125,13 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
     team: 'special',
     description: '被投票驱逐时揭示出白痴身份，可免于出局（但失去投票权）。',
   },
+  WHITE_WOLF_KING: {
+    nameZh: '白狼王',
+    nameEn: 'WHITE WOLF KING',
+    emoji: '👑',
+    team: 'wolf',
+    description: '夜晚与狼队一起袭击。白天自爆时，可选择带走一名玩家。',
+  },
 }
 
 const meta = computed(() => ROLE_META[props.role])

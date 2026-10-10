@@ -41,7 +41,7 @@
         <div class="field-lbl">狼人数量 / Number of Werewolves</div>
         <div class="stepper-row">
           <button
-            :disabled="wolfCount <= currentBounds.min"
+            :disabled="!canRemoveWolf"
             class="stepper-btn stepper-minus"
             data-testid="wolf-count-decrement"
             @click="wolfDecrement"
@@ -53,7 +53,7 @@
             <span class="stepper-range">{{ currentBounds.min }} – {{ currentBounds.max }}</span>
           </div>
           <button
-            :disabled="wolfCount >= currentBounds.max"
+            :disabled="!canAddWolf"
             class="stepper-btn stepper-plus"
             data-testid="wolf-count-increment"
             @click="wolfIncrement"
@@ -67,6 +67,9 @@
       <div class="field-lbl">角色配置 / Role Configuration</div>
       <div class="balance-note">
         剩余席位自动分配为村民 · Remaining seats filled with villagers.
+      </div>
+      <div class="balance-note" data-testid="god-range">
+        神职 {{ godRange.min }}–{{ godRange.max }} 个 · Gods {{ godRange.min }}–{{ godRange.max }}
       </div>
 
       <div class="role-list">
@@ -84,6 +87,13 @@
             >
               {{ role.nameZh }} {{ role.nameEn }}
             </span>
+            <span
+              v-if="role.id === 'WHITE_WOLF_KING'"
+              class="win-cond-desc"
+              data-testid="role-hint-WHITE_WOLF_KING"
+            >
+              {{ KING_MIN_PLAYERS }} 人及以上才能开启 · {{ KING_MIN_PLAYERS }}+ players
+            </span>
           </div>
           <!-- Required roles: label only -->
           <span
@@ -98,10 +108,9 @@
             v-else
             :class="isEnabled(role.id) ? 'toggle-on' : 'toggle-off'"
             class="toggle"
-            :disabled="!canEnable(role.id)"
-            :title="
-              !canEnable(role.id) ? '增加玩家或移除其他神职 / Increase players or remove a god' : ''
-            "
+            :data-testid="`role-toggle-${role.id}`"
+            :disabled="!canToggle(role.id)"
+            :title="toggleHint(role.id)"
             @click="toggleRole(role.id)"
           >
             <span class="toggle-thumb" />
@@ -255,7 +264,7 @@ import { useUserStore } from '@/stores/userStore'
 import { roomService } from '@/services/roomService'
 import { audioTracksService, type AudioTrack } from '@/services/audioTracksService'
 import type { WinConditionMode } from '@/types'
-import { ROLE_DEFINITIONS, type RoleDefinition } from '@/utils/roleDefinitions'
+import { ROLE_DEFINITIONS, type RoleDefinition, isWolfRole } from '@/utils/roleDefinitions'
 import { wolfBounds } from '@/utils/wolfBounds'
 import RoleComposition from '@/components/RoleComposition.vue'
 
@@ -264,7 +273,9 @@ const roomStore = useRoomStore()
 const userStore = useUserStore()
 
 const MIN_PLAYERS = 6
-const MAX_PLAYERS = 12
+// 15 = 5 wolves / 5 gods / 5 villagers, the largest board the current roles balance.
+// Above 12 the day/night seat grids get a 4th row and scroll on 417×614 (accepted).
+const MAX_PLAYERS = 15
 
 const totalPlayers = ref(9)
 const wolfCount = ref(wolfBounds(totalPlayers.value).default)
@@ -275,6 +286,7 @@ const currentBounds = computed(() => wolfBounds(totalPlayers.value))
 // The host can still adjust wolves up/down within the new bounds afterward.
 watch(totalPlayers, (n) => {
   wolfCount.value = wolfBounds(n).default
+  fitRolesToBoard(n)
 })
 
 // Optional roles enabled by default
@@ -335,15 +347,50 @@ function decrement() {
   if (totalPlayers.value > MIN_PLAYERS) totalPlayers.value--
 }
 
+// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (only 5 exist) and
+// 白狼王 needs 9+ players. Within these limits there is always ≥ 1 villager.
+const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)
+const KING_MIN_PLAYERS = 9
+
+// Optional wolf roles (白狼王) take a wolf seat, so they are not gods.
+const enabledGodCount = computed(
+  () => Array.from(enabledOptional.value).filter((id) => !isWolfRole(id)).length,
+)
+const godRange = computed(() => ({
+  min: Math.max(0, wolfCount.value - 1),
+  max: Math.min(GOD_IDS.length, wolfCount.value + 1),
+}))
+
+// One wolf more/less must keep the gods inside the new range.
+const canAddWolf = computed(
+  () => wolfCount.value < currentBounds.value.max && enabledGodCount.value >= wolfCount.value,
+)
+const canRemoveWolf = computed(
+  () => wolfCount.value > currentBounds.value.min && enabledGodCount.value <= wolfCount.value,
+)
+
 function wolfIncrement() {
-  if (wolfCount.value < currentBounds.value.max) wolfCount.value++
+  if (canAddWolf.value) wolfCount.value++
 }
 function wolfDecrement() {
-  if (wolfCount.value > currentBounds.value.min) wolfCount.value--
+  if (canRemoveWolf.value) wolfCount.value--
 }
 
-const enabledGodCount = computed(() => enabledOptional.value.size)
-const villagerCount = computed(() => totalPlayers.value - wolfCount.value - enabledGodCount.value)
+// After a player-count change (wolves were just reset): drop gods from the end
+// of the list / add from the front until they fit, and drop 白狼王 below 9.
+function fitRolesToBoard(n: number) {
+  const roles = enabledOptional.value
+  if (n < KING_MIN_PLAYERS) roles.delete('WHITE_WOLF_KING')
+  const enabledGods = () => GOD_IDS.filter((id) => roles.has(id))
+  for (const id of [...GOD_IDS].reverse()) {
+    if (enabledGods().length <= godRange.value.max) break
+    roles.delete(id)
+  }
+  for (const id of GOD_IDS) {
+    if (enabledGods().length >= godRange.value.min) break
+    roles.add(id)
+  }
+}
 
 function isEnabled(roleId: string): boolean {
   const role = ROLE_DEFINITIONS.find((r) => r.id === roleId)
@@ -351,19 +398,28 @@ function isEnabled(roleId: string): boolean {
   return enabledOptional.value.has(roleId)
 }
 
-// A god toggle can be enabled iff it is already on (lets the host disable it
-// again) or there is at least one villager seat to give up to it.
-function canEnable(roleId: string): boolean {
-  if (enabledOptional.value.has(roleId)) return true
-  return villagerCount.value > 0
+function canToggle(roleId: string): boolean {
+  const on = enabledOptional.value.has(roleId)
+  if (roleId === 'WHITE_WOLF_KING') return on || totalPlayers.value >= KING_MIN_PLAYERS
+  return on
+    ? enabledGodCount.value > godRange.value.min
+    : enabledGodCount.value < godRange.value.max
+}
+
+function toggleHint(roleId: string): string {
+  if (canToggle(roleId)) return ''
+  if (roleId === 'WHITE_WOLF_KING')
+    return `${KING_MIN_PLAYERS} 人及以上才能开启 / Needs ${KING_MIN_PLAYERS}+ players`
+  const { min, max } = godRange.value
+  return enabledOptional.value.has(roleId)
+    ? `神职不能少于 ${min} 个 / At least ${min} gods`
+    : `神职最多 ${max} 个 / At most ${max} gods`
 }
 
 function toggleRole(roleId: string) {
-  if (enabledOptional.value.has(roleId)) {
-    enabledOptional.value.delete(roleId)
-  } else if (canEnable(roleId)) {
-    enabledOptional.value.add(roleId)
-  }
+  if (!canToggle(roleId)) return
+  if (enabledOptional.value.has(roleId)) enabledOptional.value.delete(roleId)
+  else enabledOptional.value.add(roleId)
 }
 
 function roleRowClass(role: RoleDefinition) {

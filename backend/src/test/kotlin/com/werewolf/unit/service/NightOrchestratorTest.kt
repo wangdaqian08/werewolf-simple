@@ -871,6 +871,40 @@ class NightOrchestratorTest {
         assertThat(seerCloseCount).isEqualTo(1)
     }
 
+    @Test
+    fun `nightRoleLoop - wolves' turn waits for an action while only WHITE_WOLF_KING is alive`() {
+        val shortConfig = RoleDelayConfig(
+            actionWindowMs = 100L,
+            deadRoleDelayMs = 100L,
+            audioWarmupMs = 30L,
+            audioCooldownMs = 30L,
+            interRoleGapMs = 30L,
+        )
+        val orchestrator = makeOrchestrator(listOf(stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)))
+        val r = room().also { it.config = GameConfig(mapOf(PlayerRole.WEREWOLF to shortConfig)) }
+        val deadWolf = player("u1", 1, PlayerRole.WEREWOLF, alive = false)
+        val king = player("u2", 2, PlayerRole.WHITE_WOLF_KING)
+        val villager = player("u3", 3, PlayerRole.VILLAGER)
+        val np = NightPhase(gameId = gameId, dayNumber = 1)
+        whenever(contextLoader.load(gameId)).thenReturn(GameContext(game(), r, listOf(deadWolf, king, villager)))
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition(r)
+
+        runBlocking {
+            val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
+            // Far longer than the dead-role path (warmup + 100ms + cooldown): a dead
+            // wolf turn would have finished the night by now.
+            delay(1500)
+            val stillWaitingForWolves = job.isActive
+            while (job.isActive) { orchestrator.submitAction(gameId); delay(50) }
+            assertThat(stillWaitingForWolves).isTrue()
+        }
+    }
+
     /**
      * Verifies that calling submitAction twice for the same gameId does not throw and does not
      * produce a second NightSubPhaseChanged broadcast (the second call is a no-op).

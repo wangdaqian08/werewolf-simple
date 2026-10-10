@@ -50,8 +50,8 @@ class ActionLogService(
         eliminatedRole: PlayerRole?,
     ) {
         val allUserIds = (votes.map { it.voterUserId } +
-            votes.mapNotNull { it.targetUserId } +
-            listOfNotNull(eliminatedUserId)).distinct()
+                votes.mapNotNull { it.targetUserId } +
+                listOfNotNull(eliminatedUserId)).distinct()
         val users = userRepository.findAllById(allUserIds).associateBy { it.userId }
         val players = gamePlayerRepository.findByGameId(gameId).associateBy { it.userId }
 
@@ -136,8 +136,8 @@ class ActionLogService(
         tally: Map<String, Int>,
     ) {
         val allUserIds = (votes.map { it.voterUserId } +
-            votes.mapNotNull { it.targetUserId } +
-            listOfNotNull(winnerUserId)).distinct()
+                votes.mapNotNull { it.targetUserId } +
+                listOfNotNull(winnerUserId)).distinct()
         val users = userRepository.findAllById(allUserIds).associateBy { it.userId }
         val players = gamePlayerRepository.findByGameId(gameId).associateBy { it.userId }
 
@@ -191,13 +191,27 @@ class ActionLogService(
         )
     }
 
-    fun recordSelfDestruct(gameId: Int, dayNumber: Int, userId: String, nickname: String, seatIndex: Int) {
-        val payload = mapOf(
-            "dayNumber" to dayNumber,
-            "userId"    to userId,
-            "nickname"  to nickname,
-            "seatIndex" to seatIndex,
-        )
+    fun recordSelfDestruct(
+        gameId: Int,
+        dayNumber: Int,
+        userId: String,
+        nickname: String,
+        seatIndex: Int,
+        takenUserId: String? = null,
+        takenNickname: String? = null,
+        takenSeatIndex: Int? = null,
+    ) {
+        val payload = buildMap {
+            put("dayNumber", dayNumber)
+            put("userId", userId)
+            put("nickname", nickname)
+            put("seatIndex", seatIndex)
+            if (takenUserId != null) {
+                put("takenUserId", takenUserId)
+                put("takenNickname", takenNickname)
+                put("takenSeatIndex", takenSeatIndex)
+            }
+        }
         gameEventRepository.save(
             GameEvent(
                 gameId       = gameId,

@@ -16,7 +16,7 @@
     <!-- Live preview -->
     <RoleRevealCard
       :role="role"
-      :teammates="role === 'WEREWOLF' ? ['Alice', 'Tom'] : []"
+      :teammates="isWolfRole(role) ? ['Alice', 'Tom'] : []"
       @confirm="onConfirm"
     />
 
@@ -27,10 +27,21 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
+
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
+import { isWolfRole } from '@/utils/roleDefinitions'
 import type { PlayerRole } from '@/types'
 
-const ROLES: PlayerRole[] = ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT']
+const ROLES: PlayerRole[] = [
+  'WEREWOLF',
+  'VILLAGER',
+  'SEER',
+  'WITCH',
+  'HUNTER',
+  'GUARD',
+  'IDIOT',
+  'WHITE_WOLF_KING',
+]
 
 const role = ref<PlayerRole>('WEREWOLF')
 const confirmed = ref(false)

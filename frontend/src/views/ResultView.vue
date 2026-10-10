@@ -15,7 +15,7 @@
           :key="player.userId"
           class="reveal-card"
           :class="{
-            'reveal-wolf': player.role === 'WEREWOLF',
+            'reveal-wolf': isWolfRole(player.role),
             'reveal-dead': !player.isAlive,
           }"
           :data-testid="`role-reveal-${player.seatIndex}`"
@@ -63,6 +63,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { gameService } from '@/services/gameService'
 import type { GamePlayer } from '@/types'
+import { isWolfRole } from '@/utils/roleDefinitions.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -93,6 +94,7 @@ const ROLE_ZH: Record<string, string> = {
   HUNTER: '猎人',
   GUARD: '守卫',
   IDIOT: '白痴',
+  WHITE_WOLF_KING: '白狼王',
 }
 
 function displayName(player: { userId: string; nickname: string }): string {
