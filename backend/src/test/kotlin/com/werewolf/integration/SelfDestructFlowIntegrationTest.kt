@@ -1,5 +1,7 @@
 package com.werewolf.integration
 
+import com.werewolf.game.night.NightTurnLedger
+import com.werewolf.game.role.WerewolfHandler
 import com.werewolf.integration.TestConstants.CREATE_ROOM_URL
 import com.werewolf.integration.TestConstants.FIELD_CONFIG
 import com.werewolf.integration.TestConstants.FIELD_ROOM_CODE
@@ -47,7 +49,8 @@ class SelfDestructFlowIntegrationTest {
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
-    @Autowired lateinit var werewolfHandler: com.werewolf.game.role.WerewolfHandler
+    @Autowired lateinit var werewolfHandler: WerewolfHandler
+    @Autowired lateinit var nightTurnLedger: NightTurnLedger
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -434,6 +437,7 @@ class SelfDestructFlowIntegrationTest {
         // A real night starts via initNight, which clears the per-night kill lock. This
         // test arranges the night directly, so clear it too (game ids repeat across contexts).
         werewolfHandler.resetKillLock(g.gameId)
+        nightTurnLedger.clear(g.gameId)
 
         assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_KILL", g.king.userId).statusCode)
             .isEqualTo(HttpStatus.OK)

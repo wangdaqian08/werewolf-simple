@@ -444,3 +444,22 @@ describe('SheriffElection — speech order toggle (SIGNUP)', () => {
     expect(wrapper.find('[data-testid="speech-order-asc"]').exists()).toBe(false)
   })
 })
+
+describe('SheriffElection — speech timer presets', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('host keeps the 1:00 and 2:00 presets during SPEECH', () => {
+    const wrapper = mount(SheriffElection, {
+      props: {
+        ...DEFAULT_PROPS,
+        isHost: true,
+        election: makeElection({ subPhase: 'SPEECH', currentSpeakerId: 'u2' }),
+      },
+    })
+    expect(wrapper.find('[data-testid="phase-countdown-start-60"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="phase-countdown-start-120"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="phase-countdown-start-75"]').exists()).toBe(false)
+  })
+})

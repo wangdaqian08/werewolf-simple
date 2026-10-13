@@ -149,4 +149,23 @@ class FlywayMigrationsIntegrationTest {
             .hasMessageContaining("game_players_role_check")
     }
 
+    @Test
+    fun `V24 stores the PK re-vote candidates on the game`() {
+        flyway().migrate()
+
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('host', 'host')")
+            exec("INSERT INTO rooms (room_id, room_code, host_user_id, total_players) VALUES (1, '101', 'host', 6)")
+            exec(
+                "INSERT INTO games (game_id, room_id, host_user_id, phase, day_number, pk_candidate_user_ids) " +
+                        "VALUES (1, 1, 'host', 'DAY_VOTING', 1, 'a,b')"
+            )
+            val pk = createStatement().use { st ->
+                st.executeQuery("SELECT pk_candidate_user_ids FROM games WHERE game_id = 1").use { rs -> rs.next(); rs.getString(1) }
+            }
+            assertThat(pk).isEqualTo("a,b")
+        }
+    }
+
+
 }

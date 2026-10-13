@@ -162,6 +162,14 @@ describe('DayPhase — daySkipVoting host footer', () => {
     expect(wrapper.find('[data-testid="day-enter-night"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="day-start-vote"]').exists()).toBe(false)
   })
+  it('host timer presets are 1:15 and 2:00', () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...hostProps, dayPhase: makeDay('RESULT_REVEALED') },
+    })
+    expect(wrapper.find('[data-testid="phase-countdown-start-75"]').text()).toBe('1:15')
+    expect(wrapper.find('[data-testid="phase-countdown-start-120"]').text()).toBe('2:00')
+    expect(wrapper.find('[data-testid="phase-countdown-start-60"]').exists()).toBe(false)
+  })
 
   it('RESULT_REVEALED + daySkipVoting=true → clicking "进入夜晚" emits continueToNight', async () => {
     const wrapper = mount(DayPhase, {

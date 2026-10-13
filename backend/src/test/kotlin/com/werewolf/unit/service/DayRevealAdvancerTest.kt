@@ -22,9 +22,9 @@ import java.util.Optional
 
 /**
  * Unit coverage for the day-reveal sub-phase decision that used to live inline
- * in GamePhasePipeline.revealNightResult. Priority: an unhandled dead sheriff
- * hands over the badge first, then a wolf-killed (not poisoned, not resolved)
- * hunter shoots, otherwise the day simply reveals its result.
+ * in GamePhasePipeline.revealNightResult. Priority: a wolf-killed (not
+ * poisoned, not resolved) hunter shoots first, then an unhandled dead sheriff
+ * hands over the badge, otherwise the day simply reveals its result.
  */
 @ExtendWith(MockitoExtension::class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -114,12 +114,27 @@ class DayRevealAdvancerTest {
     }
 
     @Test
-    fun `BADGE_HANDOVER takes priority over a pending hunter shoot`() {
+    fun `HUNTER_SHOOT_NIGHT_DEATH when the hunter died to 同守同救 (guard + antidote)`() {
+        stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h", guard = "h", antidote = true))
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
+    }
+
+    @Test
+    fun `a pending hunter shot comes before the dead sheriff's badge handover`() {
         stub(
             game(sheriff = "s"),
             listOf(player("s", alive = false), player("h", PlayerRole.HUNTER, alive = false)),
             night(wolf = "h"),
         )
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
+    }
+
+    @Test
+    fun `a hunter who is the sheriff shoots first, then hands over the badge`() {
+        stub(game(sheriff = "h"), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h"))
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
+
+        stub(game(sheriff = "h"), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h", resolved = true))
         assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER)
     }
 

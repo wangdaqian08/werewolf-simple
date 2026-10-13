@@ -63,7 +63,7 @@
               <div class="rule-row" data-testid="settings-witch-self-save">
                 <span class="rule-label">女巫自救</span>
                 <span class="rule-value">{{
-                  settings.witchSelfSaveAllowed ? '允许' : '禁止'
+                  settings.witchSelfSaveAllowed ? '仅首夜' : '禁止'
                 }}</span>
               </div>
               <div class="rule-row" data-testid="settings-win-condition">

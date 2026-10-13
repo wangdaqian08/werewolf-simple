@@ -1,6 +1,7 @@
 package com.werewolf.unit.service
 
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.night.NightTurnLedger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.model.NightPhase
 import com.werewolf.repository.GamePlayerRepository
@@ -51,6 +52,7 @@ class Night1ImmunityTest {
             timing = com.werewolf.config.GameTimingProperties(),
             rewardSettlementService = mock(),
             perkService = mock(),
+            nightTurnLedger = NightTurnLedger(),
         )
     }
 
@@ -142,6 +144,13 @@ class Night1ImmunityTest {
     fun `no decisive save - guard also protected the target`() {
         val np = night(dayNumber = 1, wolfTarget = "victim", guardTarget = "victim")
         assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).isEmpty()
+    }
+
+    @Test
+    fun `同守同救 on an immune holder - the perk alone keeps them alive and is decisive`() {
+        val np = night(dayNumber = 1, wolfTarget = "victim", guardTarget = "victim", antidoteUsed = true)
+        assertThat(orchestrator.computePendingKills(np, setOf("victim"))).isEmpty()
+        assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).containsExactly("victim")
     }
 
     @Test

@@ -181,13 +181,17 @@ class GameService(
                 // ── WITCH: share attack info + per-game potion availability ───────────
                 if (myPlayer?.role == PlayerRole.WITCH && np.subPhase == NightSubPhase.WITCH_ACT) {
                     val allNights = nightPhaseRepository.findByGameId(gameId)
-                    base["hasAntidote"] = allNights.none { it.witchAntidoteUsed }
+                    val hasAntidote = allNights.none { it.witchAntidoteUsed }
+                    base["hasAntidote"] = hasAntidote
                     base["hasPoison"]   = allNights.none { it.witchPoisonTargetUserId != null }
-                    if (np.wolfTargetUserId != null) {
+                    // The witch learns the victim only while she holds the antidote.
+                    if (hasAntidote && np.wolfTargetUserId != null) {
                         val attackedPlayer = playerMap[np.wolfTargetUserId]
                         base["attackedPlayerId"] = np.wolfTargetUserId
                         base["attackedNickname"] = userLookup[np.wolfTargetUserId]?.nickname
                         base["attackedSeatIndex"] = attackedPlayer?.seatIndex
+                        val selfSaveAllowed = (room?.config?.witchSelfSaveAllowed ?: true) && np.dayNumber == 1
+                        base["selfSaveBlocked"] = np.wolfTargetUserId == requestingUserId && !selfSaveAllowed
                     }
                 }
 
@@ -267,6 +271,7 @@ class GameService(
             )
             val playerMap = players.associateBy { it.userId }
             val myVotingPlayer = players.firstOrNull { it.userId == requestingUserId }
+            val pk = if (game.subPhase == VotingSubPhase.RE_VOTING.name) game.pkCandidates() else emptySet()
             val myVoteRecord = votes.firstOrNull { it.voterUserId == requestingUserId }
 
             val tallyRevealed = game.subPhase in setOf(
@@ -320,12 +325,13 @@ class GameService(
                 "dayNumber" to game.dayNumber,
                 "phaseDeadline" to 0L,
                 "phaseStarted" to 0L,
-                "canVote" to (myVotingPlayer != null && myVotingPlayer.alive && myVotingPlayer.canVote),
+                "canVote" to (myVotingPlayer != null && myVotingPlayer.alive && myVotingPlayer.canVote && requestingUserId !in pk),
+                "pkCandidates" to pk.toList(),
                 "myVote" to myVoteRecord?.targetUserId,
                 "myVoteSkipped" to (myVoteRecord != null && myVoteRecord.targetUserId == null),
                 "votedPlayerIds" to votes.map { it.voterUserId },
                 "votesSubmitted" to votes.size,
-                "totalVoters" to players.count { it.alive && it.canVote },
+                "totalVoters" to players.count { it.alive && it.canVote && it.userId !in pk },
                 "tally" to tallyList,
                 "abstainVoters" to abstainVoters,
                 "tallyRevealed" to tallyRevealed,

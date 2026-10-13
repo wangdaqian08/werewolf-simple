@@ -33,7 +33,7 @@ class HostTimerService(
 
     companion object {
         const val COUNTDOWN_WARNING_FILE = "countdown_warning.mp3"
-        private val ALLOWED_DURATIONS_S = setOf(60L, 120L)
+        private val ALLOWED_DURATIONS_S = setOf(60L, 75L, 120L)
     }
 
     private val expirationJobs = ConcurrentHashMap<Int, Job>()
@@ -42,7 +42,7 @@ class HostTimerService(
     @Transactional
     fun start(hostUserId: String, gameId: Int, durationSeconds: Long): GameActionResult {
         if (durationSeconds !in ALLOWED_DURATIONS_S)
-            return GameActionResult.Rejected("durationSeconds must be 60 or 120")
+            return GameActionResult.Rejected("durationSeconds must be 60, 75 or 120")
 
         val game = gameRepository.findById(gameId).orElse(null)
             ?: return GameActionResult.Rejected("Game not found")

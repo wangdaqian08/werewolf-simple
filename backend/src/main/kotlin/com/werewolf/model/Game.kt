@@ -56,6 +56,11 @@ class Game(
     @Column(name = "self_destruct_taken_user_id", length = 128)
     var selfDestructTakenUserId: String? = null,
 
+    // PK re-vote (平票PK): the players tied in the day's first round, comma-separated.
+    // Only they can be voted for and they cannot vote. Reset at night-init.
+    @Column(name = "pk_candidate_user_ids", length = 1024)
+    var pkCandidateUserIds: String? = null,
+
     @Column(name = "timer_started_at")
     var timerStartedAt: Long? = null,
 
@@ -70,3 +75,7 @@ class Game(
         require(hostUserId.isNotBlank()) { "hostUserId must not be blank" }
     }
 }
+
+/** The PK re-vote candidates; empty outside a PK re-vote. */
+fun Game.pkCandidates(): Set<String> =
+    pkCandidateUserIds?.split(',')?.filter { it.isNotBlank() }?.toSet().orEmpty()

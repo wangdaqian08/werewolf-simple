@@ -141,7 +141,7 @@
             <span class="win-cond-desc">
               {{
                 witchSelfSaveAllowed
-                  ? '允许女巫使用解药救自己 (Allowed)'
+                  ? '女巫仅首夜可用解药救自己 (Night 1 only)'
                   : '禁止女巫使用解药救自己 (Disallowed)'
               }}
             </span>

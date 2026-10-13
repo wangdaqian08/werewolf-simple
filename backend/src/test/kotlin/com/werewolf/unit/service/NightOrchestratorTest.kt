@@ -5,6 +5,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.night.NightTurnLedger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
 import com.werewolf.model.*
@@ -13,9 +14,9 @@ import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.time.delay
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -25,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.junit.jupiter.MockitoSettings
 import org.mockito.kotlin.*
 import org.mockito.quality.Strictness
+import java.time.Duration
 import java.util.*
 
 @ExtendWith(MockitoExtension::class)
@@ -81,6 +83,7 @@ class NightOrchestratorTest {
         timing = com.werewolf.config.GameTimingProperties(),
         rewardSettlementService = mock(),
         perkService = mock(lenient = true) { on { night1ImmuneUserIds(any()) } doReturn emptySet() },
+        nightTurnLedger = NightTurnLedger(),
     )
 
     private fun mockAudioServiceForDayTransition(r: Room) {
@@ -303,7 +306,7 @@ class NightOrchestratorTest {
         val r = room()
         val initialCtx = ctx(wolf, victim, roomOverride = r)
 
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         mockAudioServiceForDayTransition(r)
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
@@ -328,7 +331,7 @@ class NightOrchestratorTest {
         val initialCtx = ctx(wolf, victim, roomOverride = r)
 
         whenever(contextLoader.load(gameId)).thenReturn(ctx(wolf, victim, roomOverride = r))
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(),any(), any(), any(), any())).thenReturn(null)
         mockAudioServiceForDayTransition(r)
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
@@ -346,7 +349,7 @@ class NightOrchestratorTest {
         val initialCtx = ctx(wolf, victim, roomOverride = r)
 
         whenever(contextLoader.load(gameId)).thenReturn(ctx(wolf, victim, roomOverride = r))
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(),any(), any(), any())).thenReturn(null)
         mockAudioServiceForDayTransition(r)
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
@@ -369,7 +372,7 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(
             ctx(wolf, wolfVictim.also { it.alive = false }, poisonVictim.also { it.alive = false }, roomOverride = r)
         )
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(),any(), any(), any())).thenReturn(null)
         mockAudioServiceForDayTransition(r)
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
@@ -388,7 +391,7 @@ class NightOrchestratorTest {
         val initialCtx = ctx(wolf, v1, v2, roomOverride = r)
 
         whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         mockAudioServiceForDayTransition(r)
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
@@ -410,7 +413,7 @@ class NightOrchestratorTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(victim))
         val afterKillCtx = ctx(wolf, victim.also { it.alive = false }, roomOverride = r)
         whenever(contextLoader.load(gameId)).thenReturn(afterKillCtx)
-        whenever(winConditionChecker.check(eq(listOf(wolf)), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
+        whenever(winConditionChecker.check(eq(listOf(wolf)), any(), any(), any(),any())).thenReturn(WinnerSide.WEREWOLF)
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
 
@@ -430,7 +433,7 @@ class NightOrchestratorTest {
 
         val afterCtx = GameContext(game(), r, listOf(villager, deadWolf))
         whenever(contextLoader.load(gameId)).thenReturn(afterCtx)
-        whenever(winConditionChecker.check(eq(listOf(villager)), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
+        whenever(winConditionChecker.check(eq(listOf(villager)), any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
 
@@ -632,7 +635,7 @@ class NightOrchestratorTest {
         val initialCtx = ctx(wolf, v1, v2, roomOverride = r)
 
         whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         mockAudioServiceForDayTransition(r)
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
@@ -764,7 +767,7 @@ class NightOrchestratorTest {
         // Force GAME_OVER branch so actionLogService.recordNightDeaths runs
         // immediately. (No-game-over path defers it to revealNightResult,
         // covered by GamePipelineSheriffTest.)
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
@@ -849,13 +852,13 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
         mockAudioServiceForDayTransition(r)
 
         runBlocking {
             val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
-            launch { while (job.isActive) { delay(50); orchestrator.submitAction(gameId) } }
+            launch { while (job.isActive) { delay(Duration.ofMillis(50)); orchestrator.submitAction(gameId) } }
             job.join()
         }
 
@@ -890,7 +893,7 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
         mockAudioServiceForDayTransition(r)
 
@@ -898,9 +901,9 @@ class NightOrchestratorTest {
             val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
             // Far longer than the dead-role path (warmup + 100ms + cooldown): a dead
             // wolf turn would have finished the night by now.
-            delay(1500)
+            delay(Duration.ofMillis(1500))
             val stillWaitingForWolves = job.isActive
-            while (job.isActive) { orchestrator.submitAction(gameId); delay(50) }
+            while (job.isActive) { orchestrator.submitAction(gameId); delay(Duration.ofMillis(50)) }
             assertThat(stillWaitingForWolves).isTrue()
         }
     }
@@ -958,7 +961,7 @@ class NightOrchestratorTest {
 
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
         mockAudioServiceForDayTransition(r)
 
@@ -986,7 +989,7 @@ class NightOrchestratorTest {
 
         runBlocking {
             val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
-            launch { while (job.isActive) { delay(50); orchestrator.submitAction(gameId) } }
+            launch { while (job.isActive) { delay(Duration.ofMillis(50)); orchestrator.submitAction(gameId) } }
             job.join()
         }
 
@@ -1041,7 +1044,7 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         whenever(audioService.calculatePhaseTransition(
             eq(gameId), anyOrNull(), eq(GamePhase.NIGHT), anyOrNull(), anyOrNull(), eq(r),
         )).thenReturn(AudioSequence(
@@ -1062,7 +1065,7 @@ class NightOrchestratorTest {
             // Poll submitAction to unblock alive roles (no timeout means they wait forever)
             launch {
                 while (job.isActive) {
-                    delay(50)
+                    delay(Duration.ofMillis(50))
                     orchestrator.submitAction(gameId)
                 }
             }
@@ -1144,7 +1147,8 @@ class NightOrchestratorTest {
         assertThat(subPhases(events)).containsExactly(
             NightSubPhase.WEREWOLF_PICK,
             NightSubPhase.WITCH_ACT,
-            NightSubPhase.SEER_PICK,                             // dead: first sub-phase only
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
             NightSubPhase.GUARD_PICK,
         )
     }
@@ -1174,6 +1178,7 @@ class NightOrchestratorTest {
             NightSubPhase.WEREWOLF_PICK,
             NightSubPhase.WITCH_ACT,
             NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
             NightSubPhase.GUARD_PICK,
         )
     }
@@ -1203,6 +1208,7 @@ class NightOrchestratorTest {
             NightSubPhase.WEREWOLF_PICK,
             NightSubPhase.WITCH_ACT,
             NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
             NightSubPhase.GUARD_PICK,
         )
     }
@@ -1235,6 +1241,7 @@ class NightOrchestratorTest {
             NightSubPhase.WEREWOLF_PICK,
             NightSubPhase.WITCH_ACT,
             NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
             NightSubPhase.GUARD_PICK,
         )
     }
@@ -1268,7 +1275,7 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
         mockAudioServiceForDayTransition(r)
 
@@ -1285,6 +1292,38 @@ class NightOrchestratorTest {
         runBlocking { job.join() }
         assertThat(job.isCompleted).isTrue()
     }
+
+
+
+    @Test
+    fun `a stray action signal from before the night does not complete the wolves' turn`() {
+        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
+        val orchestrator = makeOrchestrator(listOf(wolfHandler))
+        val shortCfg = RoleDelayConfig(50L, 50L, 10L, 10L, 10L)
+        val r = room().also { it.config = GameConfig(mapOf(PlayerRole.WEREWOLF to shortCfg)) }
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val context = GameContext(game(), r, listOf(wolf))
+        val np = NightPhase(gameId = gameId, dayNumber = 2)
+
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
+        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition(r)
+
+        // A late duplicate from the previous night's last turn queues a signal.
+        orchestrator.submitAction(gameId)
+        val job = orchestrator.startNightPhase(gameId, newDayNumber = 2)
+
+        Thread.sleep(2_000)
+        assertThat(job.isActive)
+            .describedAs("the new night's wolf turn must wait for a real action")
+            .isTrue()
+        orchestrator.cancelNightPhase(gameId)
+    }
+
 
     /**
      * REGRESSION: goes_dark_close_eyes.mp3 must play before wolf_open_eyes.mp3.

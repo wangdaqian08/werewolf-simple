@@ -157,8 +157,9 @@ class WitchHandlerTest {
     @Test
     fun `When witch only has antidote - Using antidote should succeed`() {
         val witch = player(witchId, 1, PlayerRole.WITCH)
-        val np = nightPhase()
-        val context = ctx(witch, nightPhase = np)
+        val victim = player(targetId, 2)
+        val np = nightPhase().also { it.wolfTargetUserId = targetId }
+        val context = ctx(witch, victim, nightPhase = np)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
         val result = witchHandler.handle(req(payload = mapOf("useAntidote" to true)), context)

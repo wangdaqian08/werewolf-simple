@@ -19,6 +19,14 @@
       <!-- RE_VOTING banner -->
       <div v-if="votingPhase.subPhase === 'RE_VOTING'" class="revote-banner">
         🔁 第二轮投票 · Round 2
+        <template v-if="pkStage.length">
+          <span data-testid="pk-banner">
+            · PK：{{ pkSeats.map((s) => `${s}号`).join(' · ') }}
+          </span>
+        </template>
+      </div>
+      <div v-if="pkStage.includes(myUserId)" class="revote-banner" data-testid="pk-stage-note">
+        你在PK台上，本轮不能投票 / You are on the PK stage and cannot vote
       </div>
 
       <!-- Below-arch row: my-role-chip on left, right-stack (history / log-fab / Action) on right -->
@@ -745,6 +753,17 @@ const hostIsAlive = computed(() => {
   return me?.isAlive ?? false
 })
 
+// PK re-vote: the tied players (backend-decided); only they can be voted for.
+const pkStage = computed(() =>
+  props.votingPhase.subPhase === 'RE_VOTING' ? (props.votingPhase.pkCandidates ?? []) : [],
+)
+const pkSeats = computed(() =>
+  props.players
+    .filter((p) => pkStage.value.includes(p.userId))
+    .map((p) => p.seatIndex)
+    .sort((a, b) => a - b),
+)
+
 // false when idiot has been revealed (permanently lost voting right)
 const myCanVote = computed(() => {
   const me = props.players.find((p) => p.userId === props.myUserId)
@@ -958,6 +977,7 @@ function onVotingTap(player: GamePlayer) {
   if (props.votingPhase.myVote || props.votingPhase.myVoteSkipped) return
   // During HUNTER_SHOOT, only the hunter can select targets
   if (props.votingPhase.subPhase === 'HUNTER_SHOOT') return
+  if (pkStage.value.length && !pkStage.value.includes(player.userId)) return
   selectPlayer(player.userId)
 }
 
@@ -973,6 +993,7 @@ function onBadgeTap(player: GamePlayer) {
   if (badgeDone.value) return // badge already actioned
   if (!player.isAlive) return
   if (player.userId === props.votingPhase.eliminatedPlayerId) return
+  if (player.userId === props.myUserId) return // a sheriff shot by the hunter is still alive
   selectPlayer(player.userId)
 }
 </script>

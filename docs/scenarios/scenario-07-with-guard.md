@@ -3,13 +3,13 @@
 **Scenario ID:** 07
 **Complexity:** Medium (7 players; tests guard mechanic)
 **Outcome:** Partial game shown through Night 2; key mechanic = guard same-player repeat rejection
-
+ 
 ---
 
 ## Cast
 
 | Seat | Nickname | Role            |
-|------|----------|-----------------|
+|-------|----------|-----------------|
 | 1    | Alice    | WEREWOLF (host) |
 | 2    | Bob      | WEREWOLF        |
 | 3    | Carol    | SEER            |
@@ -20,16 +20,16 @@
 
 ## Room Configuration
 
-```json
-{
-  "hasSeer": true,
-  "hasWitch": true,
-  "hasHunter": true,
-  "hasGuard": true,
-  "hasSheriff": false,
-  "playerCount": 7
-}
-```
+ ```json
+ {
+   "hasSeer": true,
+   "hasWitch": true,
+   "hasHunter": true,
+   "hasGuard": true,
+   "hasSheriff": false,
+   "playerCount": 7
+ }
+ ```
 
 ## Night Subphase Sequence (with guard)
 
@@ -46,7 +46,7 @@
 | Day 1   | No deaths; discuss; vote Grace                                                                                 | 6 alive: Alice(W), Bob(W), Carol(S), Dave(Wi), Eve(H), Frank(G) |
 | Night 2 | Wolves target Carol again; Seer checks Alice (wolf!); Witch skips; **Guard tries Carol → REJECTED; picks Eve** | Carol dies (wolf kill, guard chose wrong target)                |
 | Day 2+  | Summarized; eventual villager win                                                                              | —                                                               |
-
+ 
 ---
 
 ## Game Timeline
@@ -71,11 +71,11 @@
 | **15** | **NIGHT 2 / GUARD_PICK — REJECTION** | **Frank tries: GUARD_PROTECT(Carol) → REJECTED; Frank: GUARD_PROTECT(Eve)** | **Error response; then valid `NightSubPhaseChanged(COMPLETE)` → resolve**                                       | **Frank: Carol greyed out; error shown; picks Eve**    |
 | 16     | NIGHT 2 RESOLVE                      | (server resolves)                                                           | `NightResult(kills: [carol])`; `PlayerEliminated(carol, SEER)`; `PhaseChanged(DAY, RESULT_HIDDEN)`              | Carol dies                                             |
 | 17+    | DAY 2 onwards                        | Condensed (see summary)                                                     | Bob eventually eliminated; villagers win                                                                        | —                                                      |
-
+ 
 ---
 
 ## Detailed Steps
-
+ 
 ---
 
 ### Step 0 — ROLE_REVEAL
@@ -93,7 +93,7 @@ All 7 players receive private `RoleAssigned` events. Frank receives `GUARD` role
 | Eve    | HUNTER   | `RoleRevealCard` | "猎人"                         |
 | Frank  | GUARD    | `RoleRevealCard` | "守卫"; "不能连续两晚守护同一人"          |
 | Grace  | VILLAGER | `RoleRevealCard` | "平民"                         |
-
+ 
 ---
 
 ### Step 5 — NIGHT 1 / GUARD_PICK (Active)
@@ -130,7 +130,7 @@ This is Night 1 — first night, no restriction on who guard can protect.
 | Channel                | Event                  | Key Fields           |
 |------------------------|------------------------|----------------------|
 | `/topic/game/{gameId}` | `NightSubPhaseChanged` | `subPhase: COMPLETE` |
-
+ 
 ---
 
 > ### Night 1 Resolve Summary
@@ -144,7 +144,7 @@ This is Night 1 — first night, no restriction on who guard can protect.
 > **Key distinction from antidote save:** The `NightResult(kills: [])` is identical whether guard saved or antidote
 > saved. The game does not reveal HOW someone was saved — only that no one died. Neither Carol nor anyone else is told who
 > saved her or how.
-
+ 
 ---
 
 ### Step 15 — NIGHT 2 / GUARD_PICK — Rejection Then Re-pick
@@ -207,7 +207,7 @@ action is rejected.
 >
 > **Key point:** Guard's protection of Eve is irrelevant to the wolf kill outcome. Eve was not targeted. Guard's "
 > wasted" protection on Eve demonstrates that guard must make their choice carefully.
-
+ 
 ---
 
 ### Day 2 and Beyond (Condensed)
@@ -222,7 +222,7 @@ After Night 2: Alive = Alice(W), Bob(W), Dave(Wi), Eve(H), Frank(G). 2W vs 3 non
 
 > Full detail for Day 2+ is intentionally condensed — the purpose of this scenario is to test the guard mechanic in
 > Nights 1 and 2. For a complete game narrative, see Scenario 01 or 02.
-
+ 
 ---
 
 ## Guard Mechanic Reference
@@ -243,13 +243,13 @@ Both guard protection and witch antidote can save a player in the same night. Th
 | Guard picks X | Witch antidote (saves wolf target) | Wolf target | Result                                       |
 |---------------|------------------------------------|-------------|----------------------------------------------|
 | X             | Not used                           | X           | X lives (guard saved)                        |
-| X             | Used                               | X           | X lives (both tried to save; one sufficient) |
+| X             | Used                               | X           | X dies (同守同救 — the two saves cancel)       |
 | Y (not X)     | Not used                           | X           | X dies                                       |
 | Y (not X)     | Used                               | X           | X lives (witch antidote saved)               |
 
-> **Backend rule:** If both guard and antidote would save the same player, they are treated as a single save. The player
-> lives. No "double save" bonus or error.
-
+> **Backend rule:** If both guard and antidote save the same player, the saves cancel and the player dies (同守同救 /
+> 奶穿, official rule). `NightOrchestrator.wolfKillLands` is the single source of truth.
+ 
 ---
 
 ## Gating Tests
@@ -284,13 +284,13 @@ Both guard protection and witch antidote can save a player in the same night. Th
 | Phase            | `NIGHT / WEREWOLF_PICK` |
 | Expected         | HTTP 400 / STOMP error  |
 | Rejection Reason | "当前阶段不允许此操作"            |
-
+ 
 ---
 
 ## Full Role Reveal Table (End State — partial game shown)
 
 | Seat | Player | Role     | Status at Night 2 end |
-|------|--------|----------|-----------------------|
+|-------|--------|----------|-----------------------|
 | 1    | Alice  | WEREWOLF | Alive                 |
 | 2    | Bob    | WEREWOLF | Alive                 |
 | 3    | Carol  | SEER     | Eliminated Night 2    |
@@ -298,7 +298,7 @@ Both guard protection and witch antidote can save a player in the same night. Th
 | 5    | Eve    | HUNTER   | Alive                 |
 | 6    | Frank  | GUARD    | Alive                 |
 | 7    | Grace  | VILLAGER | Eliminated Day 1      |
-
+ 
 ---
 
 ## Assertions Summary

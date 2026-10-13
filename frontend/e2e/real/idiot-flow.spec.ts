@@ -39,23 +39,23 @@ import {
  * violation ("host's seat must be populated") rather than a generic Error.
  */
 async function resolveIdiotTarget(
-  localCtx: GameContext,
-  hostPage: Page,
+    localCtx: GameContext,
+    hostPage: Page,
 ): Promise<{ seat: number; nickname: string; isHost: boolean }> {
   if (localCtx.isHostRole('IDIOT')) {
     // roles.sh's host entry has `seat: 0` (initial value before the seat-claim
     // click is reflected); read the real seat from /api/game/{id}/state.
     const hostSeat = await readHostSeat(hostPage, localCtx.gameId)
     expect(
-      hostSeat,
-      `host's state.players row must include a seat when host rolled IDIOT (game=${localCtx.gameId})`,
+        hostSeat,
+        `host's state.players row must include a seat when host rolled IDIOT (game=${localCtx.gameId})`,
     ).not.toBeNull()
     return { seat: hostSeat as number, nickname: 'Host', isHost: true }
   }
   const idiotBots = localCtx.roleMap['IDIOT'] ?? []
   expect(
-    idiotBots.length,
-    `roleMap.IDIOT must contain at least one bot when hostRole=${localCtx.hostRole} — ` +
+      idiotBots.length,
+      `roleMap.IDIOT must contain at least one bot when hostRole=${localCtx.hostRole} — ` +
       `setupGame's role-assignment loop did not produce an IDIOT.`,
   ).toBeGreaterThan(0)
   const idiotBot = idiotBots[0]
@@ -76,8 +76,8 @@ async function runNight1ToDay(localCtx: GameContext): Promise<void> {
   // the host on the role-reveal panel; testid verified in GameView.vue:57).
   await hostPage.getByTestId('start-night').click()
   expect(
-    await waitForPhase(hostPage, localCtx.gameId, 'NIGHT', 15_000),
-    'expected NIGHT phase after host clicked start-night',
+      await waitForPhase(hostPage, localCtx.gameId, 'NIGHT', 15_000),
+      'expected NIGHT phase after host clicked start-night',
   ).toBe(true)
 
   // Don't filter Host out of role rosters: when the random role-assignment
@@ -94,25 +94,19 @@ async function runNight1ToDay(localCtx: GameContext): Promise<void> {
   const wolfBots = localCtx.roleMap.WEREWOLF ?? []
   const seerBots = localCtx.roleMap.SEER ?? []
   const witchBots = localCtx.roleMap.WITCH ?? []
-  const idiotBots = localCtx.roleMap['IDIOT'] ?? []
 
-  // Wolf attacks a non-IDIOT non-wolf alive seat — IDIOT must survive to D1.
-  // When host is IDIOT, roleMap.IDIOT is empty (it tracks bots only), so we
-  // also need to exclude the host from the target pool in that case.
+  // Wolf attacks the seer or the witch — IDIOT must survive to D1, and the
+  // board's only villager must too (killing him ends the game by 屠边).
+  // allBots excludes the host, so one of seer/witch is always a bot.
   expect(wolfBots.length, 'kit must have at least one wolf').toBeGreaterThan(0)
   const wolfBot = wolfBots[0]
-  const hostIsIdiot = localCtx.isHostRole('IDIOT')
-  const wolfTarget = localCtx.allBots.find(
-    (b) =>
-      b.userId !== wolfBot.userId &&
-      !idiotBots.some((i) => i.userId === b.userId) &&
-      !wolfBots.some((w) => w.userId === b.userId) &&
-      !(hostIsIdiot && b.nick === 'Host'),
+  const wolfTarget = localCtx.allBots.find((b) =>
+      [...seerBots, ...witchBots].some((g) => g.userId === b.userId),
   )
-  expect(wolfTarget, 'kit must have a non-IDIOT non-wolf target').toBeDefined()
+  expect(wolfTarget, 'kit must have a bot seer or witch to target').toBeDefined()
   expect(
-    await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
-    'expected NIGHT/WEREWOLF_PICK',
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
+      'expected NIGHT/WEREWOLF_PICK',
   ).toBe(true)
   act('WOLF_KILL', actName(wolfBot), {
     target: String(wolfTarget!.seat),
@@ -125,8 +119,8 @@ async function runNight1ToDay(localCtx: GameContext): Promise<void> {
   expect(witchBots.length, 'kit must have a WITCH').toBeGreaterThan(0)
   const witchBot = witchBots[0]
   expect(
-    await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
-    'expected NIGHT/WITCH_ACT',
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
+      'expected NIGHT/WITCH_ACT',
   ).toBe(true)
   act('WITCH_ACT', actName(witchBot), {
     room: localCtx.roomCode,
@@ -139,22 +133,22 @@ async function runNight1ToDay(localCtx: GameContext): Promise<void> {
   expect(seerBots.length, 'kit must have a SEER').toBeGreaterThan(0)
   const seerBot = seerBots[0]
   expect(
-    await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
-    'expected NIGHT/SEER_PICK',
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
+      'expected NIGHT/SEER_PICK',
   ).toBe(true)
   act('SEER_CHECK', actName(seerBot), {
     target: String(wolfBot.seat),
     room: localCtx.roomCode,
   })
   expect(
-    await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
-    'expected NIGHT/SEER_RESULT after SEER_CHECK',
+      await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
+      'expected NIGHT/SEER_RESULT after SEER_CHECK',
   ).toBe(true)
   act('SEER_CONFIRM', actName(seerBot), { room: localCtx.roomCode })
 
   expect(
-    await waitForPhase(hostPage, localCtx.gameId, 'DAY_DISCUSSION', 30_000),
-    'expected DAY_DISCUSSION after night resolved',
+      await waitForPhase(hostPage, localCtx.gameId, 'DAY_DISCUSSION', 30_000),
+      'expected DAY_DISCUSSION after night resolved',
   ).toBe(true)
 }
 
@@ -163,7 +157,7 @@ async function runNight1ToDay(localCtx: GameContext): Promise<void> {
  * Returns the resolved IDIOT info so callers can assert banner contents.
  */
 async function voteIdiotOut(
-  localCtx: GameContext,
+    localCtx: GameContext,
 ): Promise<{ seat: number; nickname: string; isHost: boolean }> {
   const hostPage = localCtx.hostPage
 
@@ -195,8 +189,8 @@ async function voteIdiotOut(
   // Reveal tally → backend transitions to VOTE_RESULT.
   act('VOTING_REVEAL_TALLY', 'HOST', { room: localCtx.roomCode })
   expect(
-    await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTE_RESULT', 10_000),
-    'expected DAY_VOTING/VOTE_RESULT after VOTING_REVEAL_TALLY',
+      await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTE_RESULT', 10_000),
+      'expected DAY_VOTING/VOTE_RESULT after VOTING_REVEAL_TALLY',
   ).toBe(true)
 
   return idiot
@@ -265,21 +259,21 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       // IDIOT's nickname AND the 🃏 overlay on the IDIOT's card.
       for (const [roleName, page] of localCtx.pages) {
         const idiotBanner = page
-          .locator('.elim-banner-body')
-          .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
+            .locator('.elim-banner-body')
+            .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
         await expect(
-          idiotBanner,
-          `[${roleName} browser] elim-banner-body must show IDIOT-reveal text`,
+            idiotBanner,
+            `[${roleName} browser] elim-banner-body must show IDIOT-reveal text`,
         ).toBeVisible({ timeout: 10_000 })
         await expect(
-          idiotBanner.filter({ hasText: idiot.nickname }),
-          `[${roleName} browser] reveal banner must contain IDIOT nickname (${idiot.nickname})`,
+            idiotBanner.filter({ hasText: idiot.nickname }),
+            `[${roleName} browser] reveal banner must contain IDIOT nickname (${idiot.nickname})`,
         ).toBeVisible()
 
         const idiotOverlay = page.locator('.slot-overlay.idiot-overlay')
         await expect(
-          idiotOverlay,
-          `[${roleName} browser] .slot-overlay.idiot-overlay must be visible after reveal`,
+            idiotOverlay,
+            `[${roleName} browser] .slot-overlay.idiot-overlay must be visible after reveal`,
         ).toBeVisible({ timeout: 10_000 })
       }
     } finally {
@@ -306,8 +300,8 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       // before continue is clicked.
       const hostPage = localCtx.hostPage
       const idiotBanner = hostPage
-        .locator('.elim-banner-body')
-        .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
+          .locator('.elim-banner-body')
+          .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
       await expect(idiotBanner).toBeVisible({ timeout: 10_000 })
 
       // Host clicks voting-continue to advance D1 → N2.
@@ -319,12 +313,11 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       // IDIOT-reveal banner is no longer visible (we left day-voting).
       await verifyAllBrowsersPhase(localCtx.pages, 'NIGHT', 15_000)
       await expect(
-        idiotBanner,
-        'IDIOT reveal banner must hide once we leave day-voting',
+          idiotBanner,
+          'IDIOT reveal banner must hide once we leave day-voting',
       ).not.toBeVisible({ timeout: 5_000 })
     } finally {
       await localCtx.cleanup()
     }
   })
 })
-

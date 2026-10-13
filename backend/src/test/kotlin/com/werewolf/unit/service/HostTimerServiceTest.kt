@@ -143,6 +143,14 @@ class HostTimerServiceTest {
     // ── Duration validation ────────────────────────────────────────────────────
 
     @Test
+    fun `start - accepted for the 75s day-discussion preset`() {
+        val g = game(phase = GamePhase.DAY_DISCUSSION)
+        mockGame(g)
+        val result = service.start(hostId, gameId, 75L)
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+    }
+
+    @Test
     fun `start - rejected for invalid duration 30s`() {
         val g = game(phase = GamePhase.DAY_DISCUSSION)
         mockGame(g)

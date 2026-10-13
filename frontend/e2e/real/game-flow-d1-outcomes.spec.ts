@@ -49,7 +49,7 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       expect(witch, 'kit must have 1 witch').toBeDefined()
       // eslint-disable-next-line no-console
       console.warn(
-        `[row 2] hostRole=${localCtx.hostRole} wolves=${wolves.map((b) => b.nick).join(',')} ` +
+          `[row 2] hostRole=${localCtx.hostRole} wolves=${wolves.map((b) => b.nick).join(',')} ` +
           `seer=${seer.nick} witch=${witch.nick}`,
       )
 
@@ -66,14 +66,14 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       // wolves[0] then closes out the wolves → villager-win.
       const wolfIds = new Set(wolves.map((w) => w.userId))
       const victim =
-        (localCtx.roleMap.VILLAGER ?? []).find((b) => !wolfIds.has(b.userId)) ??
-        localCtx.allBots.find(
-          (b) => !wolfIds.has(b.userId) && b.userId !== seer.userId && b.userId !== witch.userId,
-        )
+          (localCtx.roleMap.VILLAGER ?? []).find((b) => !wolfIds.has(b.userId)) ??
+          localCtx.allBots.find(
+              (b) => !wolfIds.has(b.userId) && b.userId !== seer.userId && b.userId !== witch.userId,
+          )
       expect(victim, 'need a non-wolf victim for the wolves to kill').toBeDefined()
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
-        'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
+          'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
       ).toBe(true)
       act('WOLF_KILL', actName(wolves[0]), {
         target: String(victim!.seat),
@@ -83,8 +83,8 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       // Witch: poison-only on wolves[1]. No antidote (backend forbids
       // combined antidote+poison in a single WITCH_ACT).
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
-        'expected NIGHT/WITCH_ACT before firing WITCH_ACT',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
+          'expected NIGHT/WITCH_ACT before firing WITCH_ACT',
       ).toBe(true)
       act('WITCH_ACT', actName(witch), {
         room: localCtx.roomCode,
@@ -98,13 +98,13 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       // each gate so a wrong-sub-phase doesn't silently fire act() with
       // a "Not in <X> sub-phase" rejection in the CI log.
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
-        'expected NIGHT/SEER_PICK before firing SEER_CHECK',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
+          'expected NIGHT/SEER_PICK before firing SEER_CHECK',
       ).toBe(true)
       act('SEER_CHECK', actName(seer), { target: String(wolves[0].seat), room: localCtx.roomCode })
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
-        'expected NIGHT/SEER_RESULT before firing SEER_CONFIRM',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
+          'expected NIGHT/SEER_RESULT before firing SEER_CONFIRM',
       ).toBe(true)
       act('SEER_CONFIRM', actName(seer), { room: localCtx.roomCode })
 
@@ -152,8 +152,8 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
     }
   })
 
-  // ── Row 3: wolf-win at parity when D1 vote eliminates a villager ──
-  test('row 3 — wolf-win at parity after D1 mis-vote', async ({ browser }, testInfo) => {
+  // ── Row 3: wolf-win by 屠边 when D1 vote eliminates the last villager ──
+  test('row 3 — wolf-win by 屠边 after D1 mis-vote', async ({ browser }, testInfo) => {
     testInfo.setTimeout(240_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
@@ -173,7 +173,7 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       expect(villagers.length, 'kit must have 2 villagers').toBe(2)
       // eslint-disable-next-line no-console
       console.warn(
-        `[row 3] hostRole=${localCtx.hostRole} villagers=${villagers.map((b) => b.nick).join(',')}`,
+          `[row 3] hostRole=${localCtx.hostRole} villagers=${villagers.map((b) => b.nick).join(',')}`,
       )
 
       await hostPage.getByTestId('start-night').click()
@@ -183,8 +183,8 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       // Assert each sub-phase gate so a wrong-sub-phase doesn't silently
       // fire act() with a "Not in <X> sub-phase" rejection in CI logs.
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
-        'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
+          'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
       ).toBe(true)
       act('WOLF_KILL', actName(wolves[0]), {
         target: String(villagers[0].seat),
@@ -192,8 +192,8 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       })
 
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
-        'expected NIGHT/WITCH_ACT before firing WITCH_ACT',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
+          'expected NIGHT/WITCH_ACT before firing WITCH_ACT',
       ).toBe(true)
       act('WITCH_ACT', actName(witch), {
         room: localCtx.roomCode,
@@ -201,20 +201,20 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       })
 
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
-        'expected NIGHT/SEER_PICK before firing SEER_CHECK',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
+          'expected NIGHT/SEER_PICK before firing SEER_CHECK',
       ).toBe(true)
       act('SEER_CHECK', actName(seer), { target: String(wolves[0].seat), room: localCtx.roomCode })
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
-        'expected NIGHT/SEER_RESULT before firing SEER_CONFIRM',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
+          'expected NIGHT/SEER_RESULT before firing SEER_CONFIRM',
       ).toBe(true)
       act('SEER_CONFIRM', actName(seer), { room: localCtx.roomCode })
 
       // After N1: 2 wolves + 3 humans (host + seer + witch + villagers[1] minus villagers[0]).
       await waitForPhase(hostPage, localCtx.gameId, 'DAY_DISCUSSION', 20_000)
 
-      // ── D1 ── vote villagers[1] (NOT a wolf). After D1: 2 wolves + 2 humans → parity.
+      // ── D1 ── vote villagers[1] (NOT a wolf). After D1 both villagers are dead → 屠边.
       await hostPage.getByTestId('day-reveal-result').click()
       await hostPage.getByTestId('day-start-vote').click()
       await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
@@ -241,7 +241,7 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
         return res.ok ? res.json() : null
       }, localCtx.gameId)
       expect(finalState?.phase, 'phase=GAME_OVER expected').toBe('GAME_OVER')
-      expect(finalState?.winner, 'winner=WEREWOLF expected (parity)').toBe('WEREWOLF')
+      expect(finalState?.winner, 'winner=WEREWOLF expected (屠边)').toBe('WEREWOLF')
       await captureSnapshot(localCtx.pages, testInfo, 'row3-wolf-win')
     } finally {
       await localCtx.cleanup()
@@ -272,7 +272,7 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       expect(villagers.length, 'kit must have a villager for the wolf to kill').toBeGreaterThan(0)
       // eslint-disable-next-line no-console
       console.warn(
-        `[row 4] hostRole=${localCtx.hostRole} hunter=${hunter.nick}(seat=${hunter.seat})`,
+          `[row 4] hostRole=${localCtx.hostRole} hunter=${hunter.nick}(seat=${hunter.seat})`,
       )
 
       await hostPage.getByTestId('start-night').click()
@@ -283,8 +283,8 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       // event. Assert each sub-phase gate so a wrong-sub-phase doesn't
       // silently fire act() with a "Not in <X> sub-phase" rejection.
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
-        'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'WEREWOLF_PICK', 15_000),
+          'expected NIGHT/WEREWOLF_PICK before firing WOLF_KILL',
       ).toBe(true)
       act('WOLF_KILL', actName(wolves[0]), {
         target: String(villagers[0].seat),
@@ -292,8 +292,8 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       })
 
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
-        'expected NIGHT/WITCH_ACT before firing WITCH_ACT',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'WITCH_ACT', 15_000),
+          'expected NIGHT/WITCH_ACT before firing WITCH_ACT',
       ).toBe(true)
       act('WITCH_ACT', actName(witch), {
         room: localCtx.roomCode,
@@ -301,13 +301,13 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       })
 
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
-        'expected NIGHT/SEER_PICK before firing SEER_CHECK',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_PICK', 15_000),
+          'expected NIGHT/SEER_PICK before firing SEER_CHECK',
       ).toBe(true)
       act('SEER_CHECK', actName(seer), { target: String(wolves[0].seat), room: localCtx.roomCode })
       expect(
-        await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
-        'expected NIGHT/SEER_RESULT before firing SEER_CONFIRM',
+          await waitForNightSubPhase(hostPage, localCtx.gameId, 'SEER_RESULT', 10_000),
+          'expected NIGHT/SEER_RESULT before firing SEER_CONFIRM',
       ).toBe(true)
       act('SEER_CONFIRM', actName(seer), { room: localCtx.roomCode })
 
@@ -335,13 +335,13 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
 
       // Backend transitions to HUNTER_SHOOT (not VOTE_RESULT or GAME_OVER yet).
       const reachedHunterShoot = await waitForVotingSubPhase(
-        hostPage,
-        localCtx.gameId,
-        'HUNTER_SHOOT',
-        15_000,
+          hostPage,
+          localCtx.gameId,
+          'HUNTER_SHOOT',
+          15_000,
       )
       expect(reachedHunterShoot, 'expected DAY_VOTING/HUNTER_SHOOT after voting hunter out').toBe(
-        true,
+          true,
       )
       await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-entered')
 
@@ -361,10 +361,10 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       // can speak. Before the fix this auto-jumped straight to NIGHT, which is
       // why the loose "left HUNTER_SHOOT" assertion here never caught the gap.
       const reachedVoteResult = await waitForVotingSubPhase(
-        hostPage,
-        localCtx.gameId,
-        'VOTE_RESULT',
-        15_000,
+          hostPage,
+          localCtx.gameId,
+          'VOTE_RESULT',
+          15_000,
       )
       expect(reachedVoteResult, 'expected DAY_VOTING/VOTE_RESULT after the hunter shot').toBe(true)
       await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-vote-result')

@@ -66,6 +66,15 @@
       </section>
       <footer class="nf">
         <button
+          class="btn btn-secondary nf-btn"
+          data-testid="wolf-skip-kill"
+          :class="{ 'is-loading': actionPending }"
+          :disabled="actionPending"
+          @click="confirmWolfSkip"
+        >
+          空刀 No kill
+        </button>
+        <button
           class="btn btn-danger nf-btn"
           data-testid="wolf-confirm-kill"
           :class="{ 'is-loading': actionPending }"
@@ -185,23 +194,30 @@
         <div class="ws-hdr">
           <span class="ws-pill ws-pill-green">解药 · ANTIDOTE ×1</span>
         </div>
-        <p class="ws-desc">
+        <p v-if="nightPhase.attackedPlayerId" class="ws-desc">
           今晚
           <span class="ws-killed">
             {{ nightPhase.attackedSeatIndex }}号·{{ nightPhase.attackedNickname }}
           </span>
           被狼人袭击，是否使用解药？
         </p>
+        <p v-else class="ws-desc" data-testid="witch-no-victim">
+          今晚无人被袭击 / No one was attacked tonight
+        </p>
         <p
           v-if="witchSelfSaveBlocked"
           class="ws-desc ws-blocked-note"
           data-testid="witch-self-save-blocked"
         >
-          本局禁止自救 / Self-save disabled this game
+          {{
+            witchSelfSaveAllowed
+              ? '仅首夜可以自救 / Self-save on night 1 only'
+              : '本局禁止自救 / Self-save disabled this game'
+          }}
         </p>
         <div class="ws-row">
           <button
-            v-if="!witchSelfSaveBlocked"
+            v-if="nightPhase.attackedPlayerId && !witchSelfSaveBlocked"
             class="btn btn-primary ws-btn"
             data-testid="witch-antidote"
             :class="{ 'is-loading': actionPending }"
@@ -416,6 +432,8 @@ const props = withDefaults(
     myRole?: PlayerRole
     actionPending?: boolean
     witchSelfSaveAllowed?: boolean
+    // Bumped by the parent when the backend rejects this player's night action.
+    rejectionCount?: number
   }>(),
   {
     // Vue 3 coerces a missing boolean prop to `false`, but the safe default
@@ -427,13 +445,18 @@ const props = withDefaults(
   },
 )
 
+// The backend decides (night-1-only rule + room toggle); the prop fallback serves
+// payloads without the flag (mock mode).
 const witchSelfSaveBlocked = computed(
-  () => !props.witchSelfSaveAllowed && props.nightPhase.attackedPlayerId === props.myUserId,
+  () =>
+    props.nightPhase.selfSaveBlocked ??
+    (!props.witchSelfSaveAllowed && props.nightPhase.attackedPlayerId === props.myUserId),
 )
 
 const emit = defineEmits<{
   selectPlayer: [userId: string]
   confirm: [targetId?: string]
+  wolfSkip: []
   witchAntidote: []
   witchPassAntidote: []
   witchPoison: [targetId: string]
@@ -455,10 +478,21 @@ const poisonMode = ref(false)
 // which is a different screen on the same component — showing sleep in between
 // would flash for the seer).
 const hasActed = ref(false)
+// A rejected action did not use up the turn: show the controls again.
+watch(
+  () => props.rejectionCount,
+  () => {
+    hasActed.value = false
+  },
+)
 
 function confirmWolfKill() {
   hasActed.value = true
   emit('confirm', localSelected.value)
+}
+function confirmWolfSkip() {
+  hasActed.value = true
+  emit('wolfSkip')
 }
 function confirmSeerDone() {
   hasActed.value = true

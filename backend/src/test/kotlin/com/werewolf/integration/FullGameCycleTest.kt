@@ -186,12 +186,13 @@ class FullGameCycleTest {
     // ── Tests ─────────────────────────────────────────────────────────────────
 
     /**
-     * CLASSIC mode: 4 players (2 wolves + 2 villagers), no sheriff, no special roles.
-     * Night 1: wolf kills one villager → 2 wolves vs 1 villager → WEREWOLF wins.
+     * CLASSIC mode (屠边): 4 players (2 wolves + IDIOT + 1 villager), no sheriff. The idiot
+     * has no night action. Night 1: the wolf kill wipes the god side or the villager side
+     * → WEREWOLF wins.
      */
     @Test
     fun `CLASSIC - game reaches GAME_OVER with WEREWOLF winner after first night kill`() {
-        val (hostToken, roomId, tokenByUserId) = setupRoom("C1")
+        val (hostToken, roomId, tokenByUserId) = setupRoom("C1", extraConfig = mapOf("roles" to listOf("IDIOT")))
 
         // Start game
         val startResp = restTemplate.postForEntity(START_URL, HttpEntity(mapOf("roomId" to roomId), headers(hostToken)), Map::class.java)
@@ -220,9 +221,8 @@ class FullGameCycleTest {
 
         val resolvedPhase = waitForNightToResolve(gameId)
 
-        // With 4 players: 2 wolves vs 1 remaining villager → CLASSIC wolves(2) >= others(1) → WEREWOLF wins.
-        // Win fires from NightOrchestrator's POST_NIGHT check: CLASSIC ignores trigger,
-        // so wolves ≥ humans immediately ⇒ GAME_OVER.
+        // The only god or the only villager died → 屠边. Win fires from NightOrchestrator's
+        // POST_NIGHT check: CLASSIC ignores trigger ⇒ GAME_OVER.
         assertThat(resolvedPhase).isEqualTo(GamePhase.GAME_OVER)
         val finalGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(finalGame.phase).isEqualTo(GamePhase.GAME_OVER)
@@ -293,7 +293,7 @@ class FullGameCycleTest {
      */
     @Test
     fun `duplicate WOLF_KILL from second wolf is rejected and night still resolves`() {
-        val (hostToken, roomId, tokenByUserId) = setupRoom("DK1")
+        val (hostToken, roomId, tokenByUserId) = setupRoom("DK1", extraConfig = mapOf("roles" to listOf("IDIOT")))
 
         restTemplate.postForEntity(START_URL, HttpEntity(mapOf("roomId" to roomId), headers(hostToken)), Map::class.java)
 

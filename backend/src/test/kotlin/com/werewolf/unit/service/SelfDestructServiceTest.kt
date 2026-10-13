@@ -7,7 +7,10 @@ import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.model.*
-import com.werewolf.repository.*
+import com.werewolf.repository.EliminationHistoryRepository
+import com.werewolf.repository.GamePlayerRepository
+import com.werewolf.repository.GameRepository
+import com.werewolf.repository.UserRepository
 import com.werewolf.service.ActionLogService
 import com.werewolf.service.SelfDestructService
 import com.werewolf.service.StompPublisher
@@ -26,8 +29,6 @@ class SelfDestructServiceTest {
 
     @Mock lateinit var gameRepository: GameRepository
     @Mock lateinit var gamePlayerRepository: GamePlayerRepository
-    @Mock lateinit var sheriffCandidateRepository: SheriffCandidateRepository
-    @Mock lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var actionLogService: ActionLogService
@@ -35,6 +36,7 @@ class SelfDestructServiceTest {
     @Mock lateinit var winConditionChecker: WinConditionChecker
     @Mock lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
     @Mock lateinit var dayRevealAdvancer: com.werewolf.game.phase.DayRevealAdvancer
+    @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
 
     private lateinit var selfDestructService: SelfDestructService
 
@@ -43,8 +45,6 @@ class SelfDestructServiceTest {
         selfDestructService = SelfDestructService(
             gameRepository,
             gamePlayerRepository,
-            sheriffCandidateRepository,
-            sheriffElectionRepository,
             userRepository,
             stompPublisher,
             actionLogService,
@@ -52,6 +52,7 @@ class SelfDestructServiceTest {
             winConditionChecker,
             rewardSettlementService,
             dayRevealAdvancer,
+            eliminationHistoryRepository,
         )
     }
 
@@ -113,7 +114,7 @@ class SelfDestructServiceTest {
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
 
         val result = selfDestructService.selfDestruct(req(), ctx)
 
@@ -128,7 +129,6 @@ class SelfDestructServiceTest {
     @Test
     fun `wolf during SHERIFF_ELECTION VOTING aborts election and clears candidates`() {
         val elec = election(ElectionSubPhase.VOTING)
-        val wolfCandidate = SheriffCandidate(electionId = electionId, userId = wolfId, status = CandidateStatus.RUNNING)
         val ctx = context(
             game = game(phase = GamePhase.SHERIFF_ELECTION, subPhase = null.toString()),
             players = listOf(wolfPlayer(), villagePlayer()),
@@ -137,13 +137,12 @@ class SelfDestructServiceTest {
         ctx.game.phase = GamePhase.SHERIFF_ELECTION
         ctx.game.subPhase = null
 
-        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(wolfCandidate))
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId))
             .thenReturn(Optional.of(wolfPlayer()))
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
 
         val result = selfDestructService.selfDestruct(req(), ctx)
 
@@ -168,7 +167,7 @@ class SelfDestructServiceTest {
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
 
         val result = selfDestructService.selfDestruct(req(), ctx)
 
@@ -204,7 +203,7 @@ class SelfDestructServiceTest {
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
 
         val result = selfDestructService.selfDestruct(req(), ctx)
 
@@ -236,7 +235,7 @@ class SelfDestructServiceTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId)).thenReturn(Optional.of(king))
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
 
         val result = selfDestructService.selfDestruct(req(), ctx)
 
@@ -262,7 +261,7 @@ class SelfDestructServiceTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, taken.userId)).thenReturn(Optional.of(taken))
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
     }
 
     @Test
@@ -297,8 +296,86 @@ class SelfDestructServiceTest {
         selfDestructService.selfDestruct(req(kingId, villageId), ctx)
 
         val captor = argumentCaptor<List<GamePlayer>>()
-        verify(winConditionChecker).check(captor.capture(), any(), any(), any())
+        verify(winConditionChecker).check(captor.capture(), any(), any(), any(), any())
         assertThat(captor.firstValue.map { it.userId }).containsExactlyInAnyOrder(wolfId, "v2")
+    }
+
+    @Test
+    fun `before the night result is shown the win check counts last night's pending kills`() {
+        val poisonedWolf = wolfPlayer("wolf:002", seat = 3)
+        val np = NightPhase(gameId = gameId, dayNumber = 1).also { it.witchPoisonTargetUserId = poisonedWolf.userId }
+        // Like GameContextLoader outside NIGHT: no nightPhase, last night only in allNightPhases.
+        val ctx = GameContext(
+            game(subPhase = DaySubPhase.RESULT_HIDDEN.name).also { it.dayNumber = 1 }, room(),
+            listOf(wolfPlayer(), poisonedWolf, villagePlayer()), allNightPhases = listOf(np),
+        )
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId)).thenReturn(Optional.of(wolfPlayer()))
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf(poisonedWolf.userId))
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
+
+        selfDestructService.selfDestruct(req(), ctx)
+
+        val captor = argumentCaptor<List<GamePlayer>>()
+        verify(winConditionChecker).check(captor.capture(), any(), any(), any(), any())
+        assertThat(captor.firstValue.map { it.userId }).containsExactly(villageId)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.GAME_OVER)
+        verify(nightOrchestrator).applyNightKills(gameId, listOf(poisonedWolf.userId))
+    }
+
+    /** Stubs that let a self-destruct go through, so a rejection test cannot pass by accident. */
+    private fun stubCanSucceed(ctx: GameContext) {
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId)).thenReturn(Optional.of(wolfPlayer()))
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
+    }
+
+    @Test
+    fun `a second self-destruct on the same day is rejected`() {
+        val ctx = context(players = listOf(wolfPlayer(), wolfPlayer("wolf:002", seat = 3), villagePlayer()))
+        ctx.game.daySkipVoting = true
+        stubCanSucceed(ctx)
+
+        val result = selfDestructService.selfDestruct(req(), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+    }
+
+    @Test
+    fun `self-destruct waits while a voted-out hunter is about to shoot`() {
+        val ctx = context(game = game(phase = GamePhase.DAY_VOTING, subPhase = VotingSubPhase.HUNTER_SHOOT.name))
+        stubCanSucceed(ctx)
+        assertThat(selfDestructService.selfDestruct(req(), ctx)).isInstanceOf(GameActionResult.Rejected::class.java)
+    }
+
+    @Test
+    fun `self-destruct waits while the night-killed sheriff hands over the badge`() {
+        val ctx = context(game = game(subPhase = DaySubPhase.BADGE_HANDOVER.name))
+        stubCanSucceed(ctx)
+        assertThat(selfDestructService.selfDestruct(req(), ctx)).isInstanceOf(GameActionResult.Rejected::class.java)
+    }
+
+    @Test
+    fun `HARD_MODE counterplay after a self-destruct ignores a witch with no potions left`() {
+        val witch = GamePlayer(gameId = gameId, userId = "witch:001", seatIndex = 3, role = PlayerRole.WITCH)
+        val used = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.witchAntidoteUsed = true
+            it.witchPoisonTargetUserId = villageId
+        }
+        val ctx = GameContext(
+            game(), room(), listOf(wolfPlayer(), wolfPlayer("wolf:002", seat = 4), witch),
+            allNightPhases = listOf(used),
+        )
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId)).thenReturn(Optional.of(wolfPlayer()))
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
+
+        selfDestructService.selfDestruct(req(), ctx)
+
+        val captor = argumentCaptor<com.werewolf.game.phase.HardModeCounterplay>()
+        verify(winConditionChecker).check(any(), any(), any(), captor.capture(), any())
+        assertThat(captor.firstValue.hasWitchWithPotions).isFalse()
     }
 
     @Test
@@ -444,7 +521,7 @@ class SelfDestructServiceTest {
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
 
         val result = selfDestructService.selfDestruct(req(), ctx)
 
@@ -474,7 +551,7 @@ class SelfDestructServiceTest {
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(WinnerSide.VILLAGER)
 
         selfDestructService.selfDestruct(req(), ctx)
 
@@ -500,7 +577,7 @@ class SelfDestructServiceTest {
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
 
         val result = selfDestructService.selfDestruct(req(), ctx)
 
@@ -522,7 +599,7 @@ class SelfDestructServiceTest {
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
 
         selfDestructService.selfDestruct(req(), ctx)
 

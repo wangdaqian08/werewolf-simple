@@ -26,27 +26,27 @@ full game across **Night 1 → Day 1 (with sheriff election) → Night 2 → Day
 
 ## Chart A — Game phase flow (no audio)
 
-```mermaid
-flowchart TB
-    START([game start]) --> RR["ROLE_REVEAL"]
-    RR -->|"host START_NIGHT"| N1["NIGHT D1<br/>WEREWOLF_PICK → WITCH_ACT → SEER_PICK<br/>→ SEER_RESULT → GUARD_PICK → COMPLETE"]
+ ```mermaid
+ flowchart TB
+     START([game start]) --> RR["ROLE_REVEAL"]
+     RR -->|"host START_NIGHT"| N1["NIGHT D1<br/>WEREWOLF_PICK → WITCH_ACT → SEER_PICK<br/>→ SEER_RESULT → GUARD_PICK → COMPLETE"]
+ 
+     N1 -->|"wolves win"| GO["GAME_OVER"]
+     N1 -->|"Day 1 + hasSheriff<br/>kills DEFERRED"| SE["SHERIFF_ELECTION<br/>SIGNUP → SPEECH → VOTING → RESULT"]
+ 
+     SE -->|"host clicks 显示结果 (SHERIFF_END_RESULT)"| DH1["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 1"]
+     DH1 -->|"host REVEAL_NIGHT_RESULT<br/>kills APPLIED"| DR1["DAY_DISCUSSION / RESULT_REVEALED<br/>Day 1"]
+     DR1 -->|"host dayAdvance"| DV1["DAY_VOTING<br/>VOTING → VOTE_RESULT"]
+ 
+     DV1 -->|"voted-out HUNTER"| HS1["DAY_VOTING / HUNTER_SHOOT<br/>vote-out path only"]
+     DV1 -->|"voted-out sheriff"| BH1["DAY_VOTING / BADGE_HANDOVER<br/>vote-out path only"]
+     HS1 -->|"hunter shot sheriff"| BH1
+     HS1 -->|"shot/pass → VOTE_RESULT → host 进入夜晚"| N2["NIGHT D2+"]
+     BH1 --> N2
+     DV1 -->|"normal vote-out"| N2
+     DV1 -->|"post-vote win"| GO
 
-    N1 -->|"wolves-parity"| GO["GAME_OVER"]
-    N1 -->|"Day 1 + hasSheriff<br/>kills DEFERRED"| SE["SHERIFF_ELECTION<br/>SIGNUP → SPEECH → VOTING → RESULT"]
-
-    SE -->|"host clicks 显示结果 (SHERIFF_END_RESULT)"| DH1["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 1"]
-    DH1 -->|"host REVEAL_NIGHT_RESULT<br/>kills APPLIED"| DR1["DAY_DISCUSSION / RESULT_REVEALED<br/>Day 1"]
-    DR1 -->|"host dayAdvance"| DV1["DAY_VOTING<br/>VOTING → VOTE_RESULT"]
-
-    DV1 -->|"voted-out HUNTER"| HS1["DAY_VOTING / HUNTER_SHOOT<br/>vote-out path only"]
-    DV1 -->|"voted-out sheriff"| BH1["DAY_VOTING / BADGE_HANDOVER<br/>vote-out path only"]
-    HS1 -->|"hunter shot sheriff"| BH1
-    HS1 -->|"shot/pass → VOTE_RESULT → host 进入夜晚"| N2["NIGHT D2+"]
-    BH1 --> N2
-    DV1 -->|"normal vote-out"| N2
-    DV1 -->|"post-vote win"| GO
-
-    N2 -->|"wolves-parity"| GO
+     N2 -->|"wolves win"| GO
     N2 -->|"Day 2+ — no sheriff election"| DH2["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 2+"]
     DH2 -->|"host REVEAL_NIGHT_RESULT"| DR2["DAY_DISCUSSION / RESULT_REVEALED<br/>Day 2+"]
     DR2 -->|"host dayAdvance"| DV2["DAY_VOTING D2+"]
@@ -75,7 +75,7 @@ flowchart TB
 | `SHERIFF_ELECTION → DAY_DISCUSSION/RESULT_HIDDEN` | `SheriffService.endResult` | Host clicks 显示结果 (SHERIFF_END_RESULT). Replaced the old 60s auto-timer. |
 | `DAY_DISCUSSION/RESULT_HIDDEN → /RESULT_REVEALED` | `GamePhasePipeline.kt:39-85` | Host clicks reveal; kills applied here |
 | `NIGHT → DAY_DISCUSSION/RESULT_HIDDEN` (Day 2+) | `NightOrchestrator.kt:355-408` | Day 2+, no sheriff election |
-| `NIGHT → GAME_OVER` | `NightOrchestrator.kt:286-321` | Wolves-parity short-circuit on projected alive |
+| `NIGHT → GAME_OVER` | `NightOrchestrator.kt:286-321` | Win check (CLASSIC 屠边 / HARD_MODE) on projected alive |
 | **`NIGHT-kill sheriff` does NOT go through BADGE_HANDOVER** | `GamePhasePipeline.kt:69` | Post-revert: always `RESULT_REVEALED` regardless of who died |
 | **`NIGHT-kill hunter` does NOT go through HUNTER_SHOOT** | `GamePhasePipeline.kt:69` | Same |
 | `Vote-out sheriff` → `DAY_VOTING/BADGE_HANDOVER` | `VotingPipeline.kt:handleBadge` | Vote-out path only |
@@ -95,7 +95,7 @@ flowchart TB
     START([game start]) --> RR["ROLE_REVEAL<br/>silent"]
     RR -->|"START_NIGHT<br/>goes_dark_close_eyes.mp3<br/>wolf_howl.mp3<br/>priority 10"| N1["NIGHT D1<br/>per-role audio loop"]
 
-    N1 -->|"wolves-parity<br/>silent (no morning)"| GO["GAME_OVER<br/>silent"]
+    N1 -->|"wolves win<br/>silent (no morning)"| GO["GAME_OVER<br/>silent"]
     N1 -->|"Day 1 + hasSheriff<br/>PhaseChanged immediate<br/>~2.5s silence pause<br/>rooster_crowing.mp3 + day_time.mp3<br/>priority 10"| SE["SHERIFF_ELECTION<br/>SIGNUP → SPEECH → VOTING → RESULT<br/>silent throughout"]
     N1 -->|"Day 2+ no sheriff<br/>rooster_crowing.mp3<br/>day_time.mp3<br/>priority 10"| DH2["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 2+"]
 
@@ -111,7 +111,7 @@ flowchart TB
     DV1 -->|"post-vote win"| GO
     DV2 -->|"post-vote win"| GO
 
-    N2 -->|"wolves-parity"| GO
+    N2 -->|"wolves win"| GO
     N2 -->|"Day 2+<br/>rooster_crowing.mp3<br/>day_time.mp3"| DH2
 
     GO --> END([end])
@@ -126,13 +126,13 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    NSTART(["NIGHT entry"]) -->|"goes_dark_close_eyes<br/>wolf_howl"| WP["WEREWOLF_PICK<br/>wolf_open_eyes"]
-    WP -->|"wolf_close + seer_open"| SP["SEER_PICK"]
-    SP -->|"seer_close"| SR["SEER_RESULT"]
-    SR -->|"witch_open"| WA["WITCH_ACT"]
-    WA -->|"witch_close + guard_open"| GP["GUARD_PICK"]
-    GP -->|"guard_close"| NC["COMPLETE"]
-    NC --> NEND(["resolveNightKills"])
+  NSTART(["NIGHT entry"]) -->|"goes_dark_close_eyes<br/>wolf_howl"| WP["WEREWOLF_PICK<br/>wolf_open_eyes"]
+  WP -->|"wolf_close + seer_open"| SP["SEER_PICK"]
+  SP -->|"seer_close"| SR["SEER_RESULT"]
+  SR -->|"witch_open"| WA["WITCH_ACT"]
+  WA -->|"witch_close + guard_open"| GP["GUARD_PICK"]
+  GP -->|"guard_close"| NC["COMPLETE"]
+  NC --> NEND(["resolveNightKills"])
 ```
 
 Source: `AudioService.calculateNightSubPhaseTransition` at
@@ -179,7 +179,7 @@ These pinned-down points back the contract. Don't relitigate without
 opening a PR that updates this file.
 
 1. **Day-1 morning audio plays after a small silence pause**, not back-to-back with `guard_close_eyes`. The pause separates "night ended" from "campaign begins" semantically. Implemented as a server-side `delay(sheriffMorningCueDelayMs)` between the `PhaseChanged` and `AudioSequence` broadcasts (see `NightOrchestrator.resolveNightKills` SHERIFF_ELECTION branch).
-2. **A wolves-parity-N1 GAME_OVER plays no morning audio.** Game ends in the dark; the night-init / role-loop audio remains the only night audio that played.
+2. **A night-1 wolf-win GAME_OVER plays no morning audio.** Game ends in the dark; the night-init / role-loop audio remains the only night audio that played.
 3. **`SHERIFF_ELECTION → DAY_DISCUSSION` is silent.** No "campaign closed" jingle. The morning cue already played at SHERIFF_ELECTION entry, and DAY_DISCUSSION on Day 1 is just the host walking players through the result-reveal click.
 4. **`DAY_VOTING/*` is the only place BADGE_HANDOVER and HUNTER_SHOOT fire.** Night kills go straight to `DAY_DISCUSSION/RESULT_REVEALED`; the badge silently disappears, the hunter just dies. Last actions only on **vote-out**, when the player still has agency at the moment of elimination.
 5. **Sheriff election is one-shot per game (Day 1 only).** If the sheriff is voted out / killed and the badge is destroyed, no re-election happens.

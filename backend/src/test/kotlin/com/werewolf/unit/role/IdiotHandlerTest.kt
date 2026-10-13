@@ -136,29 +136,32 @@ class IdiotHandlerTest {
         val idiot = player("u1", 2, PlayerRole.IDIOT).also { it.canVote = false; it.idiotRevealed = true }
         val villager = player("v1", 3, PlayerRole.VILLAGER)
 
-        // wolves(1) < others(2 = idiot + villager) → no win yet
+        // a god (the idiot) and a villager are alive → no 屠边 yet
         val result = checker.check(
             alivePlayers = listOf(wolf, idiot, villager),
             mode = WinConditionMode.CLASSIC,
             trigger = WinCheckTrigger.POST_VOTE,
             counterplay = HardModeCounterplay(false, false, false),
+            roster = listOf(wolf, idiot, villager),
         )
         assertThat(result).isNull()
     }
 
     @Test
-    fun `WinConditionChecker CLASSIC - wolves win when outnumbering alive players including revealed Idiot`() {
+    fun `WinConditionChecker CLASSIC - wolves win when every villager is dead even with the revealed Idiot alive`() {
         val checker = WinConditionChecker()
         val wolf1 = player("w1", 1, PlayerRole.WEREWOLF)
         val wolf2 = player("w2", 2, PlayerRole.WEREWOLF)
         val idiot = player("u1", 3, PlayerRole.IDIOT).also { it.canVote = false; it.idiotRevealed = true }
+        val deadVillager = player("v1", 4, PlayerRole.VILLAGER).also { it.alive = false }
 
-        // wolves(2) > others(1 = idiot) → WEREWOLF wins
+        // the villager side is wiped (屠边) → WEREWOLF wins
         val result = checker.check(
             alivePlayers = listOf(wolf1, wolf2, idiot),
             mode = WinConditionMode.CLASSIC,
             trigger = WinCheckTrigger.POST_VOTE,
             counterplay = HardModeCounterplay(false, false, false),
+            roster = listOf(wolf1, wolf2, idiot, deadVillager),
         )
         assertThat(result).isEqualTo(WinnerSide.WEREWOLF)
     }

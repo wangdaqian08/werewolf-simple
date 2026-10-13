@@ -29,8 +29,6 @@ import java.time.LocalDateTime
 class SelfDestructService(
     private val gameRepository: GameRepository,
     private val gamePlayerRepository: GamePlayerRepository,
-    private val sheriffCandidateRepository: SheriffCandidateRepository,
-    private val sheriffElectionRepository: SheriffElectionRepository,
     private val userRepository: UserRepository,
     private val stompPublisher: StompPublisher,
     private val actionLogService: ActionLogService,
@@ -38,6 +36,7 @@ class SelfDestructService(
     private val winConditionChecker: WinConditionChecker,
     private val rewardSettlementService: RewardSettlementService,
     private val dayRevealAdvancer: DayRevealAdvancer,
+    private val eliminationHistoryRepository: EliminationHistoryRepository,
 ) {
     private val log = LoggerFactory.getLogger(SelfDestructService::class.java)
 
@@ -45,6 +44,13 @@ class SelfDestructService(
         GamePhase.SHERIFF_ELECTION,
         GamePhase.DAY_DISCUSSION,
         GamePhase.DAY_VOTING,
+    )
+
+    private val skillPendingSubPhases = setOf(
+        VotingSubPhase.HUNTER_SHOOT.name,
+        VotingSubPhase.BADGE_HANDOVER.name,
+        DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name,
+        DaySubPhase.BADGE_HANDOVER.name,
     )
 
     @Transactional
@@ -56,6 +62,21 @@ class SelfDestructService(
             return GameActionResult.Rejected("Only werewolves can self-destruct")
         if (context.game.phase !in allowedPhases)
             return GameActionResult.Rejected("Self-destruct not allowed in phase ${context.game.phase}")
+        // A self-destruct ends the day at once, so a second one has nothing to end.
+        if (context.game.daySkipVoting)
+            return GameActionResult.Rejected("A wolf already self-destructed today")
+        // A pending hunter shot or badge handover resolves first.
+        if (context.game.subPhase in skillPendingSubPhases)
+            return GameActionResult.Rejected("Wait for the hunter shot or badge handover to finish")
+
+        // Before the night result is shown, last night's victims are still alive in the DB.
+        val resultHidden = context.game.phase == GamePhase.SHERIFF_ELECTION ||
+                context.game.subPhase == DaySubPhase.RESULT_HIDDEN.name
+        // GameContext.nightPhase is loaded only at NIGHT, so read last night's row directly.
+        val lastNight = context.allNightPhases.firstOrNull { it.dayNumber == context.game.dayNumber }
+        val pendingNightKills = if (resultHidden && lastNight != null) {
+            nightOrchestrator.computePendingKills(context.gameId, lastNight)
+        } else emptyList()
 
         // Validate the optional take before changing anything.
         if (request.targetUserId != null) {
@@ -67,7 +88,9 @@ class SelfDestructService(
                 ?: return GameActionResult.Rejected("Target not found or dead")
         }
         // House rule: the last wolf may still self-destruct, but takes no one.
-        val isLastWolf = context.alivePlayers.none { it.role.isWolf && it.userId != actor.userId }
+        val isLastWolf = context.alivePlayers.none {
+            it.role.isWolf && it.userId != actor.userId && it.userId !in pendingNightKills
+        }
         val takenUserId = if (isLastWolf) null else request.targetUserId
 
         val user = userRepository.findById(request.actorUserId).orElse(null)
@@ -130,7 +153,7 @@ class SelfDestructService(
             }
         }
 
-        // A taken sheriff hands the badge over next (DayRevealAdvancer: badge first).
+        // A taken sheriff hands the badge over next (DayRevealAdvancer decides).
         // While the night result is still hidden, the host's reveal does this routing.
         val tookSheriff = takenPlayer != null && takenPlayer.userId == context.game.sheriffUserId
         if (tookSheriff && context.game.phase == GamePhase.DAY_DISCUSSION &&
@@ -158,19 +181,24 @@ class SelfDestructService(
 
         // Win-condition check (last wolf dying → villager win)
         val freshAlivePlayers = context.players.filter {
-            it.userId != request.actorUserId && it.userId != takenUserId && it.alive
+            it.userId != request.actorUserId && it.userId != takenUserId && it.alive && it.userId !in pendingNightKills
         }
         val winner = winConditionChecker.check(
             alivePlayers = freshAlivePlayers,
             mode = context.room.winCondition,
             trigger = WinCheckTrigger.POST_VOTE,
-            counterplay = com.werewolf.game.phase.HardModeCounterplay(
-                hasGuard = freshAlivePlayers.any { it.role == PlayerRole.GUARD },
-                hasWitchWithPotions = freshAlivePlayers.any { it.role == PlayerRole.WITCH },
-                hasHunterWithBullet = freshAlivePlayers.any { it.role == PlayerRole.HUNTER },
+            counterplay = com.werewolf.game.phase.HardModeCounterplay.of(
+                freshAlivePlayers, context.allNightPhases,
+                hunterHasShot = eliminationHistoryRepository.findByGameId(context.gameId).any { it.hunterShotUserId != null },
             ),
+            roster = context.players,
         )
         if (winner != null) {
+            // The game ends before the reveal, so last night's deaths become real now.
+            if (pendingNightKills.isNotEmpty()) {
+                nightOrchestrator.applyNightKills(context.gameId, pendingNightKills)
+                actionLogService.recordNightDeaths(context.gameId, context.game.dayNumber, pendingNightKills)
+            }
             context.game.winner = winner
             context.game.phase = GamePhase.GAME_OVER
             context.game.endedAt = LocalDateTime.now()

@@ -324,6 +324,42 @@ class GameServiceNightPhaseTest {
 
         assertThat(night["hasAntidote"]).isEqualTo(false)
         assertThat(night["hasPoison"]).isEqualTo(true)  // poison not yet used
+        // Without the antidote the witch is no longer told who the wolves attacked.
+        assertThat(night.containsKey("attackedPlayerId")).isFalse()
+        assertThat(night.containsKey("attackedSeatIndex")).isFalse()
+    }
+
+    @Test
+    fun `getGameState - WITCH attacked after night 1 gets selfSaveBlocked=true`() {
+        val witch = player("u1", 1, PlayerRole.WITCH)
+        val players = listOf(witch, player("u4", 4, PlayerRole.VILLAGER))
+        val users = listOf(user("u1", "Witch"), user("u4", "Dave"))
+        setupGameAndPlayers(game(), players, users, NightSubPhase.WITCH_ACT)
+
+        val np = nightPhase(subPhase = NightSubPhase.WITCH_ACT, wolfTarget = "u1")
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night["attackedPlayerId"]).isEqualTo("u1")
+        assertThat(night["selfSaveBlocked"]).isEqualTo(true)
+    }
+
+    @Test
+    fun `getGameState - WITCH attacked someone else gets selfSaveBlocked=false`() {
+        val witch = player("u1", 1, PlayerRole.WITCH)
+        val players = listOf(witch, player("u4", 4, PlayerRole.VILLAGER))
+        val users = listOf(user("u1", "Witch"), user("u4", "Dave"))
+        setupGameAndPlayers(game(), players, users, NightSubPhase.WITCH_ACT)
+
+        val np = nightPhase(subPhase = NightSubPhase.WITCH_ACT, wolfTarget = "u4")
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night["selfSaveBlocked"]).isEqualTo(false)
     }
 
     @Test

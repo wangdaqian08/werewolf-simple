@@ -52,6 +52,11 @@ object TallyCalculator {
         return if (topCandidates.size == 1) topCandidates.first() else null
     }
 
+    fun topCandidates(tally: Map<String, Double>): Set<String> {
+        val maxVotes = tally.values.maxOrNull() ?: return emptySet()
+        if (maxVotes <= 0) return emptySet()
+        return tally.filterValues { abs(it - maxVotes) < 0.001 }.keys
+    }
     /**
      * Helper function to calculate absolute difference between two doubles.
      * This is used for floating-point comparison with tolerance.

@@ -163,7 +163,7 @@ class NightPhaseDeadRoleIntegrationTest {
     ) {
         val deadline = System.currentTimeMillis() + timeoutMs
         var lastObservedSubPhase: NightSubPhase? = null
-        var lastObservedGamePhase: com.werewolf.model.GamePhase? = null
+        var lastObservedGamePhase: GamePhase? = null
         while (System.currentTimeMillis() < deadline) {
             val np = nightPhaseRepository.findByGameIdAndDayNumber(gameId, dayNumber).orElse(null)
             lastObservedSubPhase = np?.subPhase
@@ -176,7 +176,7 @@ class NightPhaseDeadRoleIntegrationTest {
         }
         error(
             "Night role loop did not reach $targetSubPhase on day $dayNumber within ${timeoutMs}ms " +
-                "— last observed: game.phase=$lastObservedGamePhase, nightPhase.subPhase=$lastObservedSubPhase"
+                    "— last observed: game.phase=$lastObservedGamePhase, nightPhase.subPhase=$lastObservedSubPhase"
         )
     }
 
@@ -247,10 +247,10 @@ class NightPhaseDeadRoleIntegrationTest {
         val dayGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(dayGame.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
 
-        // ── Night 2: Wolf kills villager, dead seer audio plays ──
-        // Find a second target (not seer, not wolf, alive)
+        // ── Night 2: Wolf kills the guard, dead seer audio plays ──
+        // Not the last villager: that would wipe the villager side (屠边) and end the game.
         val alivePlayers = gamePlayerRepository.findByGameId(gameId).filter { it.alive }
-        val night2Target = alivePlayers.first { it.role == PlayerRole.VILLAGER }
+        val night2Target = alivePlayers.first { it.role == PlayerRole.GUARD }
 
         nightOrchestrator.initNight(gameId, 2)
 
@@ -283,9 +283,9 @@ class NightPhaseDeadRoleIntegrationTest {
         val n2Phase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2).orElseThrow()
         nightOrchestrator.applyNightKills(gameId, nightOrchestrator.computePendingKills(n2Phase))
 
-        // Verify villager is dead
-        val villagerPlayer = gamePlayerRepository.findByGameIdAndUserId(gameId, night2Target.userId).orElseThrow()
-        assertThat(villagerPlayer.alive).isFalse()
+        // Verify the N2 target is dead
+        val night2Victim = gamePlayerRepository.findByGameIdAndUserId(gameId, night2Target.userId).orElseThrow()
+        assertThat(night2Victim.alive).isFalse()
 
         // Verify Bug 1 fix: night 2's NightPhase was used (not night 1's)
         val night1Phase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElseThrow()

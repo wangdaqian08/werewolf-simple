@@ -99,6 +99,30 @@ class RoleHandlerTest {
         }
 
         @Test
+        fun `wolf kill - an invalid target does not lock the teammates out`() {
+            val ctx = wolfCtx()
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            assertThat(handler.handle(req("wolf", ActionType.WOLF_KILL, "nonexistent"), ctx))
+                .isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat(handler.handle(req("wolf", ActionType.WOLF_KILL, "u2"), ctx))
+                .isInstanceOf(GameActionResult.Success::class.java)
+        }
+
+        @Test
+        fun `wolf skip - 空刀 clears any selection and locks the turn`() {
+            val ctx = wolfCtx().also { it.nightPhase!!.wolfTargetUserId = "u2" }
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("wolf", ActionType.WOLF_SKIP), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+            assertThat(ctx.nightPhase!!.wolfTargetUserId).isNull()
+            assertThat(handler.handle(req("wolf", ActionType.WOLF_SELECT, "u2"), ctx))
+                .isInstanceOf(GameActionResult.Rejected::class.java)
+        }
+
+        @Test
         fun `wolf kill - sets wolfTargetUserId and saves on valid action`() {
             val ctx = wolfCtx()
             whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
@@ -397,8 +421,10 @@ class RoleHandlerTest {
         private fun witchCtx(
             allNightPhases: List<NightPhase> = emptyList(),
             wolfTarget: String? = "u2",
+            dayNumber: Int = 1,
         ): GameContext {
-            val np = nightPhase(NightSubPhase.WITCH_ACT).also {
+            val np = NightPhase(gameId = gameId, dayNumber = dayNumber).also {
+                it.subPhase = NightSubPhase.WITCH_ACT
                 it.wolfTargetUserId = wolfTarget
             }
             val witch = player("witch", 1, PlayerRole.WITCH)
@@ -428,6 +454,39 @@ class RoleHandlerTest {
             )
             assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
             assertThat((result as GameActionResult.Rejected).reason).contains("antidote and poison")
+        }
+
+        @Test
+        fun `witch antidote - self-save allowed on night 1`() {
+            val ctx = witchCtx(wolfTarget = "witch")
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+            val result = handler.handle(req("witch", ActionType.WITCH_ACT, payload = mapOf("useAntidote" to true)), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        }
+
+        @Test
+        fun `witch antidote - self-save rejected after night 1`() {
+            val ctx = witchCtx(wolfTarget = "witch", dayNumber = 2)
+            val result = handler.handle(req("witch", ActionType.WITCH_ACT, payload = mapOf("useAntidote" to true)), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((result as GameActionResult.Rejected).reason).contains("night 1")
+        }
+
+        @Test
+        fun `witch antidote - rejected when the wolves chose no target (空刀)`() {
+            val ctx = witchCtx(wolfTarget = null)
+            val result = handler.handle(req("witch", ActionType.WITCH_ACT, payload = mapOf("useAntidote" to true)), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        }
+
+        @Test
+        fun `witch poison - rejected on herself`() {
+            val ctx = witchCtx()
+            val result = handler.handle(
+                req("witch", ActionType.WITCH_ACT, payload = mapOf("poisonTargetUserId" to "witch")),
+                ctx,
+            )
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
         }
 
         @Test

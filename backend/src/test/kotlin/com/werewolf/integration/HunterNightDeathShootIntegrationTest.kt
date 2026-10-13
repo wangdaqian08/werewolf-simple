@@ -155,7 +155,7 @@ class HunterNightDeathShootIntegrationTest {
     /** Overwrite a player's (val) role in the DB — the night flow isn't under test. */
     private fun forceRole(gameId: Int, userId: String, role: PlayerRole) {
         val gp = gamePlayerRepository.findByGameIdAndUserId(gameId, userId).orElseThrow()
-        val f = com.werewolf.model.GamePlayer::class.java.getDeclaredField("role")
+        val f = GamePlayer::class.java.getDeclaredField("role")
         f.isAccessible = true
         f.set(gp, role)
         gamePlayerRepository.save(gp)
@@ -163,7 +163,7 @@ class HunterNightDeathShootIntegrationTest {
 
     /**
      * Start the game, confirm roles, and park it at Day-2 RESULT_HIDDEN with a
-     * fixed role layout: host=VILLAGER, g1=HUNTER, g2=WEREWOLF, g3=SEER,
+     * fixed role layout: host=GUARD (keeps a god alive for 屠边), g1=HUNTER, g2=WEREWOLF, g3=SEER,
      * g4/g5=VILLAGER. Returns the gameId.
      */
     private fun openDay2(room: Room6): Int {
@@ -179,7 +179,7 @@ class HunterNightDeathShootIntegrationTest {
             assertThat(action(player.token, gameId, "CONFIRM_ROLE").statusCode).isEqualTo(HttpStatus.OK)
         }
 
-        forceRole(gameId, room.host.userId, PlayerRole.VILLAGER)
+        forceRole(gameId, room.host.userId, PlayerRole.GUARD)
         forceRole(gameId, room.g1.userId, PlayerRole.HUNTER)
         forceRole(gameId, room.g2.userId, PlayerRole.WEREWOLF)
         forceRole(gameId, room.g3.userId, PlayerRole.SEER)
@@ -325,7 +325,7 @@ class HunterNightDeathShootIntegrationTest {
     }
 
     @Test
-    fun `sheriff and a different hunter both die - badge handover first then hunter shoot`() {
+    fun `sheriff and a different hunter both die - hunter shoot first then badge handover`() {
         val room = setupRoom("HNS6")
         val gameId = openDay2(room)
         setSheriff(gameId, room.g3.userId) // g3 (SEER) holds the badge
@@ -333,38 +333,40 @@ class HunterNightDeathShootIntegrationTest {
         saveNight(gameId, wolfTarget = room.g1.userId, poisonTarget = room.g3.userId)
 
         reveal(room, gameId)
-        // Badge handover comes first (国标-style: badge before the hunter shoots).
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
-
-        // Sheriff passes the badge to g4 → chains into the hunter shoot.
-        assertThat(action(room.g3.token, gameId, "BADGE_PASS", room.g4.userId).statusCode)
-            .isEqualTo(HttpStatus.OK)
+        // The hunter shoots first (网易 order: skill at death, badge afterwards).
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
 
-        // Hunter fires at g5 (villager) → finally lands on RESULT_REVEALED.
+        // Hunter fires at g5 (villager) → chains into the dead sheriff's handover.
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
             .isEqualTo(HttpStatus.OK)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
         assertThat(alive(gameId, room.g5.userId)).isFalse()
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+
+        // Sheriff passes the badge to g4 → finally lands on RESULT_REVEALED.
+        assertThat(action(room.g3.token, gameId, "BADGE_PASS", room.g4.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
     }
 
     @Test
-    fun `hunter is the sheriff - badge handover then shoot then RESULT_REVEALED with no loop`() {
+    fun `hunter is the sheriff - shoot then badge handover then RESULT_REVEALED with no loop`() {
         val room = setupRoom("HNS7")
         val gameId = openDay2(room)
         setSheriff(gameId, room.g1.userId) // the hunter also holds the badge
         saveNight(gameId, wolfTarget = room.g1.userId)
 
         reveal(room, gameId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
-
-        // Dead sheriff-hunter passes the badge to g4 → now gets the shoot turn.
-        assertThat(action(room.g1.token, gameId, "BADGE_PASS", room.g4.userId).statusCode)
-            .isEqualTo(HttpStatus.OK)
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
 
-        // Shoots g5 (villager) → terminal RESULT_REVEALED, no re-entry.
+        // Shoots g5 (villager) → now hands over the badge.
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+
+        // The shot player cannot inherit the badge; g4 can → terminal RESULT_REVEALED, no re-entry.
+        assertThat(action(room.g1.token, gameId, "BADGE_PASS", room.g5.userId).statusCode)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(action(room.g1.token, gameId, "BADGE_PASS", room.g4.userId).statusCode)
             .isEqualTo(HttpStatus.OK)
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
     }
@@ -470,7 +472,7 @@ class HunterNightDeathShootIntegrationTest {
     }
 
     @Test
-    fun `sheriff BADGE_DESTROY at reveal still chains into the hunter shoot`() {
+    fun `hunter pass at reveal still chains into the sheriff BADGE_DESTROY`() {
         val room = setupRoom("HNS14")
         val gameId = openDay2(room)
         setSheriff(gameId, room.g3.userId)
@@ -478,15 +480,14 @@ class HunterNightDeathShootIntegrationTest {
         saveNight(gameId, wolfTarget = room.g1.userId, poisonTarget = room.g3.userId)
 
         reveal(room, gameId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
-
-        // Sheriff destroys the badge → chains into the hunter shoot (badge-first).
-        assertThat(action(room.g3.token, gameId, "BADGE_DESTROY").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
 
-        // Hunter fires → RESULT_REVEALED.
-        assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
-            .isEqualTo(HttpStatus.OK)
+        // Hunter passes → chains into the dead sheriff's handover (hunter first).
+        assertThat(action(room.g1.token, gameId, "HUNTER_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+
+        // Sheriff destroys the badge → RESULT_REVEALED.
+        assertThat(action(room.g3.token, gameId, "BADGE_DESTROY").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
     }
 }

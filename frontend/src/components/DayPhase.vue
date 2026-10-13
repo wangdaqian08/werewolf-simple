@@ -8,6 +8,7 @@
         :duration-ms="timer?.durationMs ?? 0"
         :running="timer?.running ?? false"
         :is-host="isHost"
+        :presets="[75, 120]"
         @start-timer="(s) => emit('start-timer', s)"
         @stop-timer="emit('stop-timer')"
       />

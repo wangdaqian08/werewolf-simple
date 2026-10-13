@@ -13,9 +13,9 @@
  *   - poison pierces guard protection: the guard self-protects and still
  *     dies to the poison → TWO deaths at the reveal
  *
- * 8 players (2 WEREWOLF + WITCH + GUARD + 4 VILLAGER) so the projected
- * 2W/4H after the double kill stays clear of the CLASSIC POST_NIGHT parity
- * check — the reveal under test must happen, not GAME_OVER.
+ * 8 players (2 WEREWOLF + WITCH + GUARD + IDIOT + 3 VILLAGER): the idiot (no
+ * night action) keeps a god alive after the double kill, so the CLASSIC 屠边
+ * check does not end the game — the reveal under test must happen, not GAME_OVER.
  */
 import { expect, test } from '@playwright/test'
 import { type GameContext, setupGame } from './helpers/multi-browser'
@@ -41,7 +41,7 @@ test.describe('Witch self-save blocked — victim witch poisons the guard', () =
       totalPlayers: 8,
       hasSheriff: false,
       witchSelfSaveAllowed: false,
-      roles: ['WEREWOLF', 'VILLAGER', 'WITCH', 'GUARD'] as RoleName[],
+      roles: ['WEREWOLF', 'VILLAGER', 'WITCH', 'GUARD', 'IDIOT'] as RoleName[],
       browserRoles: ['WEREWOLF', 'WITCH', 'GUARD'] as RoleName[],
     })
   })
@@ -112,12 +112,12 @@ test.describe('Witch self-save blocked — victim witch poisons the guard', () =
     // WITCH_ACT: the attacked witch sees the blocked banner, no save button.
     expect(await waitForNightSubPhase(hostPage, gameId, 'WITCH_ACT', 15_000)).toBe(true)
     await expect(
-      witchPage.getByTestId('witch-self-save-blocked'),
-      'attacked witch must see the self-save-blocked banner when the toggle is off',
+        witchPage.getByTestId('witch-self-save-blocked'),
+        'attacked witch must see the self-save-blocked banner when the toggle is off',
     ).toBeVisible({ timeout: 10_000 })
     expect(
-      await witchPage.getByTestId('witch-antidote').count(),
-      'the save button must NOT render for a blocked self-save',
+        await witchPage.getByTestId('witch-antidote').count(),
+        'the save button must NOT render for a blocked self-save',
     ).toBe(0)
     await captureSnapshot(ctx.pages, testInfo, 'wssb-01-blocked-banner')
 
@@ -127,19 +127,19 @@ test.describe('Witch self-save blocked — victim witch poisons the guard', () =
     assertNonNull(witchBot, 'roleMap must contain the witch')
     assertActorRole(ctx, witchBot, 'WITCH', 'WITCH_ACT')
     expect(
-      tryAct('WITCH_ACT', actName(witchBot), {
-        payload: '{"useAntidote":true}',
-        room: ctx.roomCode,
-      }),
-      'backend must reject the blocked self-save',
+        tryAct('WITCH_ACT', actName(witchBot), {
+          payload: '{"useAntidote":true}',
+          room: ctx.roomCode,
+        }),
+        'backend must reject the blocked self-save',
     ).toBe(false)
 
     // The dying witch still acts: poison the GUARD via the real UI.
     await witchPage.getByTestId('use-poison').click()
     const guardSlot = witchPage.locator(`.player-grid [data-seat="${guard.seat}"]`)
     await expect(
-      guardSlot,
-      `guard seat ${guard.seat} must render in the poison picker`,
+        guardSlot,
+        `guard seat ${guard.seat} must render in the poison picker`,
     ).toBeVisible({ timeout: 10_000 })
     await guardSlot.click()
     await witchPage.getByTestId('witch-poison-confirm').click()
@@ -161,12 +161,12 @@ test.describe('Witch self-save blocked — victim witch poisons the guard', () =
     await revealBtn.click()
     await expect(hostPage.getByTestId('day-banner-kill')).toBeVisible({ timeout: 10_000 })
     await expect(
-      hostPage.getByTestId(`day-killed-seat-${witch.seat}`),
-      'the witch dies — self-save was blocked',
+        hostPage.getByTestId(`day-killed-seat-${witch.seat}`),
+        'the witch dies — self-save was blocked',
     ).toBeVisible({ timeout: 5_000 })
     await expect(
-      hostPage.getByTestId(`day-killed-seat-${guard.seat}`),
-      'the guard dies — poison pierces his own protection',
+        hostPage.getByTestId(`day-killed-seat-${guard.seat}`),
+        'the guard dies — poison pierces his own protection',
     ).toBeVisible({ timeout: 5_000 })
     await captureSnapshot(ctx.pages, testInfo, 'wssb-02-two-dead-revealed')
 
