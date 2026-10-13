@@ -473,6 +473,7 @@ export interface VotingState {
   votedPlayerIds?: string[] // userIds of players who have cast a vote (public, no target revealed)
   votesSubmitted?: number // how many players have cast a vote (shown before reveal)
   totalVoters?: number // total players eligible to vote
+  pkCandidates?: string[] // RE_VOTING: the tied players; only they can be voted
   tally?: VoteTally[] // per-player vote counts — hidden until tallyRevealed
   abstainVoters?: VoteVoter[]
   tallyRevealed?: boolean // host has publicly revealed the tally
@@ -530,6 +531,7 @@ export interface NightPhaseState {
   attackedSeatIndex?: number
   hasAntidote?: boolean
   hasPoison?: boolean
+  selfSaveBlocked?: boolean // backend: the witch is the victim and may not save herself
   antidoteDecided?: boolean // true once witch made any antidote decision
   antidoteUsed?: boolean // true if she actually used it
   poisonDecided?: boolean // true once witch made any poison decision

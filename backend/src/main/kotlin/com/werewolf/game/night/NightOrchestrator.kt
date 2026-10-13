@@ -45,6 +45,7 @@ class NightOrchestrator(
     private val timing: GameTimingProperties,
     private val rewardSettlementService: com.werewolf.service.RewardSettlementService,
     private val perkService: com.werewolf.service.PerkService,
+    private val nightTurnLedger: NightTurnLedger,
 ) {
     private val log = LoggerFactory.getLogger(NightOrchestrator::class.java)
 
@@ -69,11 +70,9 @@ class NightOrchestrator(
         fun computeKills(nightPhase: NightPhase, immuneUserIds: Set<String> = emptySet()): List<String> {
             val kills = mutableListOf<String>()
             val wolfTarget = nightPhase.wolfTargetUserId
-            if (wolfTarget != null) {
-                val antidoteSaved = nightPhase.witchAntidoteUsed
-                val guardSaved = nightPhase.guardTargetUserId == wolfTarget
+            if (wolfTarget != null && wolfKillLands(nightPhase)) {
                 val perkSaved = nightPhase.dayNumber == 1 && wolfTarget in immuneUserIds
-                if (!antidoteSaved && !guardSaved && !perkSaved) {
+                if (!perkSaved) {
                     kills.add(wolfTarget)
                 }
             }
@@ -85,19 +84,26 @@ class NightOrchestrator(
         }
 
         /**
+         * Whether the wolf attack kills its target, before the night-1 perk.
+         * Exactly one save (witch antidote or guard) blocks it. Both on the same
+         * target is 同守同救: the saves cancel and the target dies (奶穿).
+         */
+        fun wolfKillLands(nightPhase: NightPhase): Boolean {
+            val wolfTarget = nightPhase.wolfTargetUserId ?: return false
+            val saves = listOf(nightPhase.witchAntidoteUsed, nightPhase.guardTargetUserId == wolfTarget).count { it }
+            return saves != 1
+        }
+
+        /**
          * Users whose night-1 immunity perk was the DECISIVE save: attacked by wolves
-         * on night 1 and not otherwise saved (witch antidote / guard). Settlement
-         * marks these CONSUMED at game end; all other holders are refunded.
-         *
-         * Mirrors [computeKills] exactly: the perk is decisive iff `perkSaved` is
-         * the only one of the three save conditions that holds for the wolf target.
+         * on night 1 and the attack would otherwise land ([wolfKillLands]).
+         * Settlement marks these CONSUMED at game end; all other holders are refunded.
          */
         fun night1PerkDecisiveSaves(nightPhase: NightPhase, immuneUserIds: Set<String>): Set<String> {
             if (nightPhase.dayNumber != 1) return emptySet()
             val wolfTarget = nightPhase.wolfTargetUserId ?: return emptySet()
             if (wolfTarget !in immuneUserIds) return emptySet()
-            if (nightPhase.witchAntidoteUsed) return emptySet()
-            if (nightPhase.guardTargetUserId == wolfTarget) return emptySet()
+            if (!wolfKillLands(nightPhase)) return emptySet()
             return setOf(wolfTarget)
         }
     }
@@ -340,6 +346,7 @@ class NightOrchestrator(
             mode = context.room.winCondition,
             trigger = WinCheckTrigger.POST_NIGHT,
             counterplay = buildCounterplay(context),
+            roster = context.players,
         )
 
         if (winner != null) {
@@ -537,9 +544,9 @@ class NightOrchestrator(
      * call it to figure out which players to flip alive=false on the reveal
      * click.
      *
-     * Wolf target dies unless witch antidote was used, guard protected the
-     * same target, or (night 1 only) the target holds the first-night
-     * immunity perk — indistinguishable from a save: only the final kill
+     * Wolf target dies unless exactly one of witch antidote / guard saved it
+     * (both = 同守同救, the target dies), or (night 1 only) the target holds the
+     * first-night immunity perk — indistinguishable from a save: only the final kill
      * list is filtered, the witch still saw the attack. Witch poison target
      * dies unconditionally (poison is not a wolf kill, immunity does not
      * cover it).
@@ -604,6 +611,7 @@ class NightOrchestrator(
         pendingActions.remove(gameId)
         queuedActionSignals.remove(gameId)
         (handlers.firstOrNull { it.role == PlayerRole.WEREWOLF } as? WerewolfHandler)?.resetKillLock(gameId)
+        nightTurnLedger.clear(gameId)
     }
 
     // ── Internal helpers ────────────────────────────────────────────────────
@@ -719,18 +727,21 @@ class NightOrchestrator(
                     log.info("[nightRoleLoop] game=$gameId: sub-phase $subPhase completed")
                 }
             } else {
-                // Dead role: show first sub-phase in UI, wait fixed time
-                val firstSubPhase = handler.nightSubPhases().firstOrNull()
-                if (firstSubPhase != null) {
+                // Dead role: walk the same sub-phases a live holder shows (e.g. the seer's
+                // SEER_RESULT) so the night does not reveal who is dead. Same total delay.
+                val subPhases = handler.nightSubPhases()
+                val perSubPhaseMs = config.deadRoleDelayMs / subPhases.size.coerceAtLeast(1)
+                if (subPhases.isEmpty()) delay(config.deadRoleDelayMs.milliseconds)
+                for (subPhase in subPhases) {
                     val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, dayNumber)
                         .orElseThrow { IllegalStateException("[nightRoleLoop] NightPhase not found for game $gameId, day $dayNumber") }
-                    logNightPhaseFields("read-dead-role", gameId, dayNumber, firstSubPhase, nightPhase)
-                    nightPhase.subPhase = firstSubPhase
-                    logNightPhaseFields("save-dead-role", gameId, dayNumber, firstSubPhase, nightPhase)
+                    logNightPhaseFields("read-dead-role", gameId, dayNumber, subPhase, nightPhase)
+                    nightPhase.subPhase = subPhase
+                    logNightPhaseFields("save-dead-role", gameId, dayNumber, subPhase, nightPhase)
                     nightPhaseRepository.save(nightPhase)
-                    stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstSubPhase))
+                    stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, subPhase))
+                    delay(perSubPhaseMs.milliseconds)
                 }
-                delay(config.deadRoleDelayMs.milliseconds)
             }
 
             // 3. Close eyes
@@ -758,8 +769,11 @@ class NightOrchestrator(
      * Called synchronously by [initNight] and inside the coroutine by [startNightPhase].
      */
     private fun initNightInternal(gameId: Int, newDayNumber: Int, previousGuardTarget: String? = null, withWaiting: Boolean = false) {
-        // Clear per-night locks so each new night starts fresh.
+        // Clear per-night locks so each new night starts fresh. A signal queued by a
+        // late duplicate from the previous night must not complete this night's first turn.
         (handlers.firstOrNull { it.role == PlayerRole.WEREWOLF } as? WerewolfHandler)?.resetKillLock(gameId)
+        queuedActionSignals.remove(gameId)
+        nightTurnLedger.clear(gameId)
 
         val context = contextLoader.load(gameId)
         val initialSubPhase = if (withWaiting) NightSubPhase.WAITING else firstSubPhase(context)
@@ -779,6 +793,7 @@ class NightOrchestrator(
         game.daySkipVoting = false
         game.selfDestructUserId = null
         game.selfDestructTakenUserId = null
+        game.pkCandidateUserIds = null
         gameRepository.save(game)
     }
 
@@ -883,25 +898,9 @@ class NightOrchestrator(
      * the same @Transactional where any hunter-shot row was just saved — JPA auto-flushes
      * before the query.
      */
-    private fun buildCounterplay(context: GameContext): HardModeCounterplay {
-        val alive = context.alivePlayers
-        val hasGuard = alive.any { it.role == PlayerRole.GUARD }
-
-        val hasWitchWithPotions = run {
-            if (alive.none { it.role == PlayerRole.WITCH }) return@run false
-            val antidoteUnused = context.allNightPhases.none { it.witchAntidoteUsed }
-            val poisonUnused = context.allNightPhases.none { it.witchPoisonTargetUserId != null }
-            antidoteUnused || poisonUnused
-        }
-
-        val hasHunterWithBullet = run {
-            if (alive.none { it.role == PlayerRole.HUNTER }) return@run false
-            val hunterHasShot = eliminationHistoryRepository
-                .findByGameId(context.gameId)
-                .any { it.hunterShotUserId != null }
-            !hunterHasShot
-        }
-
-        return HardModeCounterplay(hasGuard, hasWitchWithPotions, hasHunterWithBullet)
-    }
+    private fun buildCounterplay(context: GameContext): HardModeCounterplay =
+        HardModeCounterplay.of(
+            context.alivePlayers, context.allNightPhases,
+            hunterHasShot = eliminationHistoryRepository.findByGameId(context.gameId).any { it.hunterShotUserId != null },
+        )
 }

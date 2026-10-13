@@ -117,6 +117,23 @@ class GameServiceVotingPhaseTest {
         assertThat(voting["totalVoters"]).isEqualTo(2) // alive1 + alive2
     }
 
+    @Test
+    fun `getGameState RE_VOTING - PK candidates are exposed and do not count as voters`() {
+        val players = listOf(player(hostId, 0), player("u1", 1), player("u2", 2), player("u3", 3))
+        val users = listOf(user(hostId, "Host"), user("u1", "A"), user("u2", "B"), user("u3", "C"))
+        setupGameAndPlayers(game(VotingSubPhase.RE_VOTING.name).also { it.pkCandidateUserIds = "u1,u2" }, players, users)
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, day))
+            .thenReturn(emptyList())
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.empty())
+
+        val voting = votingResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(voting["pkCandidates"] as List<*>).containsExactlyInAnyOrder("u1", "u2")
+        assertThat(voting["totalVoters"]).isEqualTo(2) // host + u3
+        assertThat(voting["canVote"]).isEqualTo(false) // u1 is on the PK stage
+    }
+
     // ── myVote and votedPlayerIds ─────────────────────────────────────────────
 
     @Test

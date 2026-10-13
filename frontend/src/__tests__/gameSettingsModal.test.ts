@@ -46,7 +46,7 @@ describe('GameSettingsModal — content', () => {
     expect(bodyEl('settings-room-code')?.textContent).toContain('358')
     expect(bodyEl('settings-player-count')?.textContent).toContain('9')
     expect(bodyEl('settings-sheriff')?.textContent).toContain('无')
-    expect(bodyEl('settings-witch-self-save')?.textContent).toContain('允许')
+    expect(bodyEl('settings-witch-self-save')?.textContent).toContain('仅首夜')
     expect(bodyEl('settings-win-condition')?.textContent).toContain('屠城')
 
     wrapper.unmount()

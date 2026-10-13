@@ -6,6 +6,7 @@ import com.werewolf.game.action.GameActionDispatcher
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.night.NightTurnLedger
 import com.werewolf.game.phase.GamePhasePipeline
 import com.werewolf.game.role.RoleHandler
 import com.werewolf.game.voting.VotingPipeline
@@ -13,6 +14,7 @@ import com.werewolf.model.*
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.SelfDestructService
 import com.werewolf.service.StompPublisher
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -63,6 +65,7 @@ class GameActionDispatcherTest {
     private fun makeDispatcher(handlers: List<RoleHandler>) = GameActionDispatcher(
         handlers = handlers,
         nightOrchestrator = nightOrchestrator,
+        nightTurnLedger = NightTurnLedger(),
         votingPipeline = votingPipeline,
         gamePhasePipeline = gamePhasePipeline,
         contextLoader = contextLoader,
@@ -95,6 +98,116 @@ class GameActionDispatcherTest {
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_KILL, "u2"))
 
             verify(nightOrchestrator, never()).submitAction(any())
+        }
+    }
+
+    // ── One completing action per night turn ──────────────────────────────────
+
+    @Nested
+    inner class NightTurnTests {
+
+        private val witchId = "witch:001"
+
+        private fun witchTurn() = GameContext(
+            game(subPhase = NightSubPhase.WITCH_ACT.name),
+            room(),
+            listOf(player(witchId, 1, PlayerRole.WITCH), player(wolfId, 2, PlayerRole.WEREWOLF)),
+            nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.WITCH_ACT },
+        )
+
+        @Test
+        fun `a repeated WITCH_ACT in the same turn is rejected and signals the night loop once`() {
+            whenever(contextLoader.load(gameId)).thenReturn(witchTurn())
+            val dispatcher = makeDispatcher(listOf(stubHandler(PlayerRole.WITCH, GameActionResult.Success())))
+
+            val first = dispatcher.dispatch(req(witchId, ActionType.WITCH_ACT))
+            val repeat = dispatcher.dispatch(req(witchId, ActionType.WITCH_ACT))
+
+            assertThat(first).isInstanceOf(GameActionResult.Success::class.java)
+            assertThat(repeat).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((repeat as GameActionResult.Rejected).reason).contains("already confirmed")
+            verify(nightOrchestrator, times(1)).submitAction(gameId)
+        }
+
+        @Test
+        fun `a rejected turn action reopens the turn so the player can retry`() {
+            whenever(contextLoader.load(gameId)).thenReturn(witchTurn())
+            var calls = 0
+            val flaky = object : RoleHandler {
+                override val role = PlayerRole.WITCH
+                override fun acceptedActions(phase: GamePhase, subPhase: String?) = emptySet<ActionType>()
+                override fun nightSubPhases() = emptyList<NightSubPhase>()
+                override fun handle(action: GameActionRequest, context: GameContext): GameActionResult =
+                    if (calls++ == 0) GameActionResult.Rejected("Poison target not found or dead") else GameActionResult.Success()
+            }
+            val dispatcher = makeDispatcher(listOf(flaky))
+
+            assertThat(dispatcher.dispatch(req(witchId, ActionType.WITCH_ACT))).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat(dispatcher.dispatch(req(witchId, ActionType.WITCH_ACT))).isInstanceOf(GameActionResult.Success::class.java)
+            verify(nightOrchestrator, times(1)).submitAction(gameId)
+        }
+
+        @Test
+        fun `a non-holder cannot use up the witch's turn`() {
+            whenever(contextLoader.load(gameId)).thenReturn(witchTurn())
+            val witchHandler = object : RoleHandler {
+                override val role = PlayerRole.WITCH
+                override fun acceptedActions(phase: GamePhase, subPhase: String?) = emptySet<ActionType>()
+                override fun nightSubPhases() = emptyList<NightSubPhase>()
+                override fun handle(action: GameActionRequest, context: GameContext): GameActionResult =
+                    if (action.actorUserId == witchId) GameActionResult.Success() else GameActionResult.Rejected("Not the witch")
+            }
+            val dispatcher = makeDispatcher(listOf(witchHandler))
+
+            dispatcher.dispatch(req(wolfId, ActionType.WITCH_ACT))
+            assertThat(dispatcher.dispatch(req(witchId, ActionType.WITCH_ACT))).isInstanceOf(GameActionResult.Success::class.java)
+        }
+
+        @Test
+        fun `an out-of-turn action never holds the live turn (guard request during WITCH_ACT)`() {
+            val guardId = "guard:001"
+            val ctx = GameContext(
+                game(subPhase = NightSubPhase.WITCH_ACT.name), room(),
+                listOf(player(witchId, 1, PlayerRole.WITCH), player(guardId, 2, PlayerRole.GUARD)),
+                nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.WITCH_ACT },
+            )
+            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            val guardInHandler = java.util.concurrent.CountDownLatch(1)
+            val releaseGuard = java.util.concurrent.CountDownLatch(1)
+            val slowGuard = object : RoleHandler {
+                override val role = PlayerRole.GUARD
+                override fun acceptedActions(phase: GamePhase, subPhase: String?) = emptySet<ActionType>()
+                override fun nightSubPhases() = emptyList<NightSubPhase>()
+                override fun handle(action: GameActionRequest, context: GameContext): GameActionResult {
+                    guardInHandler.countDown()
+                    releaseGuard.await()
+                    return GameActionResult.Rejected("Not in GUARD_PICK sub-phase")
+                }
+            }
+            val dispatcher = makeDispatcher(listOf(slowGuard, stubHandler(PlayerRole.WITCH, GameActionResult.Success())))
+
+            val guardCall = java.util.concurrent.Executors.newSingleThreadExecutor()
+                .submit<GameActionResult> { dispatcher.dispatch(req(guardId, ActionType.GUARD_PROTECT, witchId)) }
+            guardInHandler.await()
+            val witchResult = dispatcher.dispatch(req(witchId, ActionType.WITCH_ACT))
+            releaseGuard.countDown()
+            guardCall.get()
+
+            assertThat(witchResult).isInstanceOf(GameActionResult.Success::class.java)
+        }
+
+        @Test
+        fun `WOLF_SKIP completes the wolves' turn`() {
+            val ctx = GameContext(
+                game(), room(), listOf(player(wolfId, 1, PlayerRole.WEREWOLF)),
+                nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.WEREWOLF_PICK },
+            )
+            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+
+            makeDispatcher(listOf(stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success())))
+                .dispatch(req(wolfId, ActionType.WOLF_SKIP))
+
+            verify(nightOrchestrator).submitAction(gameId)
         }
     }
 

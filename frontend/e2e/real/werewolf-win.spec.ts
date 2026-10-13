@@ -90,10 +90,10 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     const wolfPage = ctx.pages.get('WEREWOLF')
     if (reachedWolf && wolfPage) {
       await wolfPage
-        .locator('.player-grid')
-        .first()
-        .waitFor({ state: 'visible', timeout: 10_000 })
-        .catch(() => {})
+          .locator('.player-grid')
+          .first()
+          .waitFor({ state: 'visible', timeout: 10_000 })
+          .catch(() => {})
     }
     let wolfDone = false
     if (reachedWolf) {
@@ -117,19 +117,19 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // Wait for seer sub-phase (or timeout if dead/skipped)
     if (seerPage) {
       await seerPage
-        .getByText(/选择查验目标|Select a player to check/i)
-        .first()
-        .waitFor({ state: 'visible', timeout: 8_000 })
-        .catch(() => {})
+          .getByText(/选择查验目标|Select a player to check/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 8_000 })
+          .catch(() => {})
     }
 
     // Wait for witch sub-phase (or timeout if dead/skipped)
     if (witchPage) {
       await witchPage
-        .locator('.w-section')
-        .first()
-        .waitFor({ state: 'visible', timeout: 8_000 })
-        .catch(() => {})
+          .locator('.w-section')
+          .first()
+          .waitFor({ state: 'visible', timeout: 8_000 })
+          .catch(() => {})
     }
 
     // ── Witch ── (may be dead in later rounds)
@@ -170,10 +170,10 @@ test.describe('Werewolf win — result screen shows all roles', () => {
             // Wait for seer result before confirming
             if (seerPage) {
               await seerPage
-                .locator('.sr-wrap')
-                .first()
-                .waitFor({ state: 'visible', timeout: 8_000 })
-                .catch(() => {})
+                  .locator('.sr-wrap')
+                  .first()
+                  .waitFor({ state: 'visible', timeout: 8_000 })
+                  .catch(() => {})
             }
             tryAct('SEER_CONFIRM', actName(sb), { room: ctx.roomCode })
             break
@@ -184,11 +184,11 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
     if (!seerDone && seerPage) {
       if (
-        await seerPage
-          .getByText(/选择查验目标|Select a player to check/i)
-          .first()
-          .isVisible()
-          .catch(() => false)
+          await seerPage
+              .getByText(/选择查验目标|Select a player to check/i)
+              .first()
+              .isVisible()
+              .catch(() => false)
       ) {
         await seerPage.locator('.player-grid .slot-alive').first().click()
         await seerPage.getByTestId('seer-check').click()
@@ -200,10 +200,10 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // Wait for guard sub-phase (or timeout if dead/skipped)
     if (guardPage) {
       await guardPage
-        .getByText(/选择守护目标|Protect a player/i)
-        .first()
-        .waitFor({ state: 'visible', timeout: 8_000 })
-        .catch(() => {})
+          .getByText(/选择守护目标|Protect a player/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 8_000 })
+          .catch(() => {})
     }
 
     // ── Guard ── (may be dead in later rounds)
@@ -221,11 +221,11 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
     if (!guardDone && guardPage) {
       if (
-        await guardPage
-          .getByText(/选择守护目标|Protect a player/i)
-          .first()
-          .isVisible()
-          .catch(() => false)
+          await guardPage
+              .getByText(/选择守护目标|Protect a player/i)
+              .first()
+              .isVisible()
+              .catch(() => false)
       ) {
         // Pick LAST alive player to avoid protecting the wolf's target (which is first)
         await guardPage.locator('.player-grid .slot-alive').last().click()
@@ -324,13 +324,15 @@ test.describe('Werewolf win — result screen shows all roles', () => {
   test('2. Play rounds until werewolf wins, verify result screen', async ({}, testInfo) => {
     const villagerBots = ctx.roleMap.VILLAGER ?? []
     const seerBots = ctx.roleMap.SEER ?? []
-    const guardBots = ctx.roleMap.GUARD ?? []
     const witchBots = ctx.roleMap.WITCH ?? []
+    const hunterBots = ctx.roleMap.HUNTER ?? []
 
-    // Targets: kill non-wolf, non-host players each round (host must stay alive for game management)
-    const targets = [...villagerBots, ...seerBots, ...guardBots, ...witchBots]
-      .filter((b) => b.nick !== 'Host')
-      .map((b) => b.seat)
+    // Targets: kill non-wolf, non-host players each round (host must stay alive for game management).
+    // 屠边: wipe a whole side the bots cover; the hunter dies last, so the game ends at dawn (no shot).
+    const side = ctx.isHostRole('VILLAGER')
+        ? [...seerBots, ...witchBots, ...hunterBots]
+        : villagerBots
+    const targets = side.filter((b) => b.nick !== 'Host').map((b) => b.seat)
 
     const maxRounds = 6
 

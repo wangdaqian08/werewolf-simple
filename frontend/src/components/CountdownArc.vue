@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 
-const props = defineProps<{
-  remainingMs: number
-  durationMs: number
-  running: boolean
-  isHost: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    remainingMs: number
+    durationMs: number
+    running: boolean
+    isHost: boolean
+    presets?: number[]
+  }>(),
+  { presets: () => [60, 120] },
+)
 
 const emit = defineEmits<{
   'start-timer': [seconds: number]
@@ -15,7 +19,6 @@ const emit = defineEmits<{
 
 const CIRCUM = 2 * Math.PI * 22 // r=22 in viewBox 50×50
 const URGENT_THRESHOLD_MS = 10_000
-const PRESETS = [60, 120]
 
 // Snapshot: when the prop changes, record the prop value and the local clock
 const snapshotRemainingMs = ref(props.remainingMs)
@@ -116,7 +119,7 @@ const displayLabel = computed(() => (visuallyIdle.value ? '—' : fmt(localRemai
       </button>
       <template v-else>
         <button
-          v-for="seconds in PRESETS"
+          v-for="seconds in presets"
           :key="seconds"
           type="button"
           class="ca-pill"

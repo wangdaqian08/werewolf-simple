@@ -10,7 +10,7 @@
  *   // ctx.pages.get('SEER')     — seer's browser page
  *   // ctx.hostPage              — host's browser page
  */
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, rmSync, writeFileSync } from 'fs'
 import path from 'path'
 import {
   type Browser,
@@ -176,9 +176,6 @@ export async function setupGame(
 
   // Configure custom roles if provided
   if (opts.roles && opts.roles.length > 0) {
-    // Default optional roles that are enabled by default
-    const defaultOptional = ['SEER', 'WITCH', 'HUNTER']
-    const requiredRoles = ['WEREWOLF', 'VILLAGER']
     const allOptionalRoles = ['SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT', 'WHITE_WOLF_KING']
 
     // For each optional role, toggle to match desired state. Retry up to
@@ -196,10 +193,13 @@ export async function setupGame(
       for (const role of allOptionalRoles) {
         const shouldBeEnabled = opts.roles.includes(role as RoleName)
 
-        // Rows read "白狼王 White Wolf King": match WHITE_WOLF_KING as words.
-        const roleRow = hostPage
-            .locator('.role-row')
-            .filter({ hasText: new RegExp(role.replace(/_/g, ' '), 'i') })
+        // Rows read "白狼王 White Wolf King": match WHITE_WOLF_KING as words, anchored
+        // at the end of the name so "女巫自救 Witch Self-Save" is not the WITCH row.
+        const roleRow = hostPage.locator('.role-row').filter({
+          has: hostPage.locator('.role-name', {
+            hasText: new RegExp(`${role.replace(/_/g, ' ')}\\s*$`, 'i'),
+          }),
+        })
 
         for (let attempt = 0; attempt < 3; attempt++) {
           const isEnabled = (await roleRow.locator('.toggle-on').count()) > 0
@@ -307,6 +307,9 @@ export async function setupGame(
 
   // ── Step 2: Bots join + ready ──────────────────────────────────────────
 
+  // Room codes recycle and join-room.sh MERGES into an existing state file, so a
+  // stale file from an earlier room with this code would leak its bots in.
+  rmSync(path.join('/tmp', `werewolf-${roomCode.toUpperCase()}.json`), { force: true })
   joinBots(roomCode, totalPlayers - 1, true)
 
   // Inject host into state file so scripts (roles.sh) and getRoles() can discover the host's role.

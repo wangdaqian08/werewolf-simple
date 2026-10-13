@@ -3,7 +3,6 @@ package com.werewolf.unit.service
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
-import com.werewolf.config.GameTimingProperties
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
@@ -12,11 +11,9 @@ import com.werewolf.service.ActionLogService
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import org.junit.jupiter.api.BeforeEach
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
@@ -42,8 +39,7 @@ class SheriffServiceTest {
         sheriffService = SheriffService(
             gameRepository, gamePlayerRepository, sheriffElectionRepository,
             sheriffCandidateRepository, voteRepository, userRepository,
-            stompPublisher, CoroutineScope(Dispatchers.Default),
-            GameTimingProperties(),
+            stompPublisher,
             actionLogService,
             hostTimerService,
         )
@@ -601,6 +597,23 @@ class SheriffServiceTest {
         val captor = argumentCaptor<DomainEvent>()
         verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
         assertThat((captor.firstValue as DomainEvent.PhaseChanged).subPhase).isEqualTo(ElectionSubPhase.VOTING.name)
+    }
+
+    @Test
+    fun `vote - a user who is not in the game is rejected`() {
+        val targetId = "other:001"
+        val election = election(subPhase = ElectionSubPhase.VOTING, speakingOrder = targetId)
+        val ctx = context(election = election)
+        val runningTarget = SheriffCandidate(electionId = electionId, userId = targetId, status = CandidateStatus.RUNNING)
+        // Stubs that would let the vote through, so the rejection cannot pass by accident.
+        org.mockito.Mockito.lenient().`when`(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(listOf(runningTarget))
+        org.mockito.Mockito.lenient().`when`(voteRepository.save(any<Vote>())).thenAnswer { it.arguments[0] }
+
+        val req = GameActionRequest(gameId, "outsider:001", ActionType.SHERIFF_VOTE, targetUserId = targetId)
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        verify(voteRepository, never()).save(any<Vote>())
     }
 
     // ── Group 6: buildState() — allVoted and voteProgress ────────────────────

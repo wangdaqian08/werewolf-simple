@@ -1,6 +1,8 @@
 package com.werewolf.game.phase
 
 import com.werewolf.model.GamePlayer
+import com.werewolf.model.NightPhase
+import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinConditionMode
 import com.werewolf.model.WinnerSide
 import org.springframework.stereotype.Component
@@ -31,12 +33,24 @@ data class HardModeCounterplay(
     val hasHunterWithBullet: Boolean,
 ) {
     val any: Boolean get() = hasGuard || hasWitchWithPotions || hasHunterWithBullet
+
+    companion object {
+        /** Counterplay held by [alive]; [hunterHasShot] = the game's hunter already fired. */
+        fun of(alive: List<GamePlayer>, allNightPhases: List<NightPhase>, hunterHasShot: Boolean) = HardModeCounterplay(
+            hasGuard = alive.any { it.role == PlayerRole.GUARD },
+            hasWitchWithPotions = alive.any { it.role == PlayerRole.WITCH } &&
+                    (allNightPhases.none { it.witchAntidoteUsed } || allNightPhases.none { it.witchPoisonTargetUserId != null }),
+            hasHunterWithBullet = alive.any { it.role == PlayerRole.HUNTER } && !hunterHasShot,
+        )
+    }
 }
 
 @Component
 class WinConditionChecker {
     /**
      * Returns the winning side if the game has ended, or null if play must continue.
+     * [roster] is every player in the game, dead or alive (the 屠边 rule needs to
+     * know which sides the board dealt).
      *
      * The two winning sides are determined independently and explicitly:
      *   • VILLAGER wins iff [checkVillagerWin] returns non-null (wolves fully eliminated).
@@ -51,12 +65,13 @@ class WinConditionChecker {
         mode: WinConditionMode,
         trigger: WinCheckTrigger,
         counterplay: HardModeCounterplay,
+        roster: List<GamePlayer>,
     ): WinnerSide? {
         val wolves = alivePlayers.count { it.role.isWolf }
         val humans = alivePlayers.count { !it.role.isWolf }
 
         checkVillagerWin(wolves)?.let { return it }
-        checkWolfWin(wolves, humans, mode, trigger, counterplay)?.let { return it }
+        checkWolfWin(alivePlayers, roster, wolves, humans, mode, trigger, counterplay)?.let { return it }
         return null
     }
 
@@ -66,19 +81,28 @@ class WinConditionChecker {
 
     /** Wolf path: dispatch by win-condition mode; each mode owns its full rule. */
     private fun checkWolfWin(
+        alivePlayers: List<GamePlayer>,
+        roster: List<GamePlayer>,
         wolves: Int,
         humans: Int,
         mode: WinConditionMode,
         trigger: WinCheckTrigger,
         counterplay: HardModeCounterplay,
     ): WinnerSide? = when (mode) {
-        WinConditionMode.CLASSIC -> checkClassicWolfWin(wolves, humans)
+        WinConditionMode.CLASSIC -> checkClassicWolfWin(alivePlayers, roster)
         WinConditionMode.HARD_MODE -> checkHardModeWolfWin(humans, wolves, trigger, counterplay)
     }
 
-    /** CLASSIC (屠边): wolves win at numeric parity — wolves ≥ humans. */
-    private fun checkClassicWolfWin(wolves: Int, humans: Int): WinnerSide? =
-        if (wolves >= humans) WinnerSide.WEREWOLF else null
+    /**
+     * CLASSIC (屠边): wolves win once every villager OR every god is dead. A side
+     * the board never dealt (e.g. an API-built room with no gods) cannot be wiped.
+     */
+    private fun checkClassicWolfWin(alivePlayers: List<GamePlayer>, roster: List<GamePlayer>): WinnerSide? {
+        fun wiped(side: (PlayerRole) -> Boolean) = roster.any { side(it.role) } && alivePlayers.none { side(it.role) }
+        val villagersWiped = wiped { it == PlayerRole.VILLAGER }
+        val godsWiped = wiped { it.isGod }
+        return if (villagersWiped || godsWiped) WinnerSide.WEREWOLF else null
+    }
 
     /**
      * HARD_MODE (屠城):

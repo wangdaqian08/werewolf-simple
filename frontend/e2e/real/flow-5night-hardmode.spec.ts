@@ -115,7 +115,7 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     // non-host wolves for A/B (their pages/tokens drive badge + vote UI),
     // though every path also works host-side.
     const sortedWolves = [...wolves].sort((a, b) =>
-      a.nick === 'Host' ? 1 : b.nick === 'Host' ? -1 : 0,
+        a.nick === 'Host' ? 1 : b.nick === 'Host' ? -1 : 0,
     )
     const [wolfA, wolfB, wolfC, wolfD] = sortedWolves
     assertNonNull(wolfA, 'wolfA')
@@ -126,8 +126,8 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     const villagers = ctx.roleMap.VILLAGER ?? []
     const nonHostVillagers = villagers.filter((b) => b.nick !== 'Host')
     expect(
-      nonHostVillagers.length,
-      'plan needs 2 non-host villagers (N1 kill + N1 poison targets)',
+        nonHostVillagers.length,
+        'plan needs 2 non-host villagers (N1 kill + N1 poison targets)',
     ).toBeGreaterThanOrEqual(2)
     const v1 = nonHostVillagers[0]
     const v2 = nonHostVillagers[1]
@@ -138,7 +138,7 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
 
     // eslint-disable-next-line no-console
     console.warn(
-      `[spine] cast — seer=${seer.nick}@${seer.seat} witch=${witch.nick}@${witch.seat} ` +
+        `[spine] cast — seer=${seer.nick}@${seer.seat} witch=${witch.nick}@${witch.seat} ` +
         `guard=${guard.nick}@${guard.seat} hunter=${hunter.nick}@${hunter.seat} ` +
         `idiot=${idiot.nick}@${idiot.seat} wolves=[${sortedWolves.map((w) => `${w.nick}@${w.seat}`).join(', ')}] ` +
         `villagers=[${villagers.map((v) => `${v.nick}@${v.seat}`).join(', ')}] hostRole=${ctx.hostRole}`,
@@ -190,14 +190,14 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
       hunterShootTargetSeat: wolfD.seat,
     })
     expect(d1Outcome, 'D1 (hunter executed + wolfD shot) must not end the game').not.toBe(
-      'GAME_OVER',
+        'GAME_OVER',
     )
     await step('04-d1-done')
 
-    // ══ NIGHT 2 (API): wolves hit the WITCH; she SELF-SAVES (toggle default
-    // allows it); guard parks protection on wolfA; seer checks wolfB. ══════
+    // ══ NIGHT 2 (API): wolves hit V3; the witch saves him (self-save is
+    // night-1 only); guard parks protection on wolfA; seer checks wolfB. ════
     await completeNight(ctx, {
-      wolfKillSeat: witch.seat,
+      wolfKillSeat: v3.seat,
       witch: { mode: 'save' },
       guard: { mode: 'protect', targetSeat: wolfA.seat },
       seerCheckSeat: wolfB.seat,
@@ -209,15 +209,15 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     await revealBtnD2.waitFor({ state: 'visible', timeout: 30_000 })
     await revealBtnD2.click()
     await expect(
-      hostPage.getByTestId('day-banner-peaceful'),
-      'witch antidote must cancel the kill → 平安夜 banner',
+        hostPage.getByTestId('day-banner-peaceful'),
+        'witch antidote must cancel the kill → 平安夜 banner',
     ).toBeVisible({ timeout: 10_000 })
     await step('06-d2-peaceful-antidote')
 
     const d2Outcome = await completeDay(ctx, testInfo, { targetSeat: null, label: 'spine-d2' })
     expect(
-      d2Outcome,
-      'double tie (mass abstain ×2) must AUTO-advance to NIGHT with no elimination and no host click',
+        d2Outcome,
+        'double tie (mass abstain ×2) must AUTO-advance to NIGHT with no elimination and no host click',
     ).toBe('NIGHT')
     await step('07-d2-double-tie-auto-night')
 
@@ -232,14 +232,15 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     })
     await step('08-n3-done')
 
-    // ══ DAY 3: 平安夜 via guard → engineered 1:1 tie (sheriff abstains) →
-    // revote piles onto the SEER/sheriff → BADGE_HANDOVER → badge to wolfA ═
+    // ══ DAY 3: 平安夜 via guard → engineered 1:1 tie SEER vs IDIOT (sheriff
+    // abstains) → PK revote piles onto the SEER/sheriff → BADGE_HANDOVER →
+    // badge to wolfA ═══════════════════════════════════════════════════════
     const revealBtnD3 = hostPage.getByTestId('day-reveal-result')
     await revealBtnD3.waitFor({ state: 'visible', timeout: 30_000 })
     await revealBtnD3.click()
     await expect(
-      hostPage.getByTestId('day-banner-peaceful'),
-      'guard protection must cancel the kill → second 平安夜',
+        hostPage.getByTestId('day-banner-peaceful'),
+        'guard protection must cancel the kill → second 平安夜',
     ).toBeVisible({ timeout: 10_000 })
     await step('09-d3-peaceful-guard')
 
@@ -251,7 +252,7 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
       sheriffPage: seerPage,
       badgeRecipientSeat: wolfA.seat,
       round1Votes: [
-        { voterNick: witch.nick, targetSeat: wolfB.seat },
+        { voterNick: witch.nick, targetSeat: seer.seat },
         { voterNick: guard.nick, targetSeat: idiot.seat },
       ],
     })
@@ -277,8 +278,8 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     // game at the POST_NIGHT check; HARD_MODE suppresses parity at night.
     const phaseAfterN4 = await readTopPhase(hostPage, gameId)
     expect(
-      phaseAfterN4,
-      'HARD_MODE must suppress the POST_NIGHT parity check at 3W/3H — game continues to D4',
+        phaseAfterN4,
+        'HARD_MODE must suppress the POST_NIGHT parity check at 3W/3H — game continues to D4',
     ).not.toBe('GAME_OVER')
     await step('11-n4-done-parity-suppressed')
 
@@ -293,8 +294,8 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     })
     const d4Outcome = await completeDay(ctx, testInfo, { targetSeat: v3.seat, label: 'spine-d4' })
     expect(
-      d4Outcome,
-      'D4 must not end the game: 3W/2H at POST_VOTE but the guard is alive (counterplay)',
+        d4Outcome,
+        'D4 must not end the game: 3W/2H at POST_VOTE but the guard is alive (counterplay)',
     ).not.toBe('GAME_OVER')
     await step('12-d4-done-counterplay-held')
 
@@ -320,8 +321,8 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
 
     const finalPhase = await readTopPhase(hostPage, gameId)
     expect(
-      finalPhase,
-      'D5 wolf-elimination leaves 2W vs 1H with no counterplay → HARD_MODE wolf win',
+        finalPhase,
+        'D5 wolf-elimination leaves 2W vs 1H with no counterplay → HARD_MODE wolf win',
     ).toBe('GAME_OVER')
     const winner = await hostPage.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
@@ -336,7 +337,7 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     await hostPage.waitForURL(/\/result\//, { timeout: 60_000 })
     await expect(hostPage.locator('.outcome-title')).toBeVisible({ timeout: 10_000 })
     expect((await hostPage.locator('.outcome-title').textContent()) ?? '').toMatch(
-      /狼人|Werewolf|WOLF/i,
+        /狼人|Werewolf|WOLF/i,
     )
     await expect(hostPage.getByTestId('settlement')).toBeVisible({ timeout: 10_000 })
     await expect(hostPage.getByTestId('play-again')).toBeVisible({ timeout: 5_000 })
@@ -349,7 +350,7 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     const settleDeadline = Date.now() + 30_000
     while (Date.now() < settleDeadline) {
       const roosters = capture.stompFrames.filter(
-        (f) => f.includes('AudioSequence') && f.includes('rooster_crowing.mp3'),
+          (f) => f.includes('AudioSequence') && f.includes('rooster_crowing.mp3'),
       ).length
       if (roosters >= 5) break
       await hostPage.waitForTimeout(500)
@@ -363,14 +364,14 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
       gameId,
     })
     expect(
-      violations,
-      `audio manifest must hold (60 files: 5 nights + 5 day cues).\n${violations.join('\n')}`,
+        violations,
+        `audio manifest must hold (60 files: 5 nights + 5 day cues).\n${violations.join('\n')}`,
     ).toEqual([])
 
     const orderViolations = findNightOrderViolations(backendLines, gameId, 5)
     expect(
-      orderViolations,
-      `per-night role audio must broadcast in Werewolf→Witch→Seer→Guard open/close order.\n${orderViolations.join('\n')}`,
+        orderViolations,
+        `per-night role audio must broadcast in Werewolf→Witch→Seer→Guard open/close order.\n${orderViolations.join('\n')}`,
     ).toEqual([])
 
     // Masking pins: the seer is dead for N4+N5, the witch for N5 — their
@@ -391,11 +392,11 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     const replayFrames = capture.audioEvents.filter((e) => e.includes('AudioSequence (replay)'))
     if (replayFrames.length === 0) {
       const roosterCount = capture.stompFrames.filter(
-        (f) => f.includes('AudioSequence') && f.includes('rooster_crowing.mp3'),
+          (f) => f.includes('AudioSequence') && f.includes('rooster_crowing.mp3'),
       ).length
       expect(
-        roosterCount,
-        'exactly 5 rooster cues: one per day, D1 election morning not double-played',
+          roosterCount,
+          'exactly 5 rooster cues: one per day, D1 election morning not double-played',
       ).toBe(5)
     }
 

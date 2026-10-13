@@ -3,43 +3,10 @@ import type { GameContext } from './multi-browser'
 import type { WitchPlan } from './flow-drivers'
 import { waitForCondition, waitForNightSubPhase, waitForPhase } from './state-polling'
 
-/**
- * Drive a Night 1 to completion via DOM clicks on each special-role browser.
- *
- * Wolf, seer, witch, and guard each take their action through their own
- * browser context — never through act.sh. This keeps the test honest about
- * what real users do (per the e2e-six-design-principles memory: "Special-role
- * browsers + the host browser fire each gameplay action via Playwright clicks
- * on real testids, not via act.sh"). It catches button-render bugs, click-
- * handler wiring, target-grid filters, and reactive watchers — the very
- * regressions that prompted Variant B in the first place.
- *
- * Preconditions:
- *  - ctx.game in ROLE_REVEAL with all roles confirmed.
- *  - ctx.pages has entries for WEREWOLF, SEER, WITCH, GUARD.
- *
- * Postcondition: backend state is DAY_DISCUSSION/RESULT_HIDDEN, ready for
- * the host to click `day-reveal-result`.
- */
-export async function driveMinimalNight1ViaDom(
-  ctx: GameContext,
-  opts: {
-    wolfTargetSeat: number
-    seerCheckSeat?: number
-    guardTargetSeat?: number
-    /**
-     * Witch decision for N1. Default keeps the historical behavior: pass on
-     * antidote and poison. A single click submits a COMPLETE WITCH_ACT
-     * (NightPhase.vue emits one terminal action per button), so 'save' and
-     * 'poison' are one-decision paths.
-     */
-    witch?: WitchPlan
-  },
-): Promise<void> {
+/** Host clicks 开始夜晚 and waits for NIGHT, healing a stale role card first. */
+export async function hostStartsNight(ctx: GameContext): Promise<void> {
   const hostPage = ctx.hostPage
   const gameId = ctx.gameId
-
-  // ── Host starts night ────────────────────────────────────────────────
   // Self-heal a stale role card first. GameView's `hasConfirmedRole` is a
   // LOCAL ref: any transient phase flicker (a STOMP reconnect momentarily
   // clearing state) resets it, bringing the un-revealed card back even
@@ -67,8 +34,47 @@ export async function driveMinimalNight1ViaDom(
   // (Flake observed in PR #89 CI run 73954244714: the helper was called
   // mid-transition while phase still showed ROLE_REVEAL.)
   if (!(await waitForPhase(hostPage, gameId, 'NIGHT', 15_000))) {
-    throw new Error('driveMinimalNight1ViaDom: NIGHT phase not reached after start-night click')
+    throw new Error('hostStartsNight: NIGHT phase not reached after start-night click')
   }
+}
+
+/**
+ * Drive a Night 1 to completion via DOM clicks on each special-role browser.
+ *
+ * Wolf, seer, witch, and guard each take their action through their own
+ * browser context — never through act.sh. This keeps the test honest about
+ * what real users do (per the e2e-six-design-principles memory: "Special-role
+ * browsers + the host browser fire each gameplay action via Playwright clicks
+ * on real testids, not via act.sh"). It catches button-render bugs, click-
+ * handler wiring, target-grid filters, and reactive watchers — the very
+ * regressions that prompted Variant B in the first place.
+ *
+ * Preconditions:
+ *  - ctx.game in ROLE_REVEAL with all roles confirmed.
+ *  - ctx.pages has entries for WEREWOLF, SEER, WITCH, GUARD.
+ *
+ * Postcondition: backend state is DAY_DISCUSSION/RESULT_HIDDEN, ready for
+ * the host to click `day-reveal-result`.
+ */
+export async function driveMinimalNight1ViaDom(
+    ctx: GameContext,
+    opts: {
+      wolfTargetSeat: number
+      seerCheckSeat?: number
+      guardTargetSeat?: number
+      /**
+       * Witch decision for N1. Default keeps the historical behavior: pass on
+       * antidote and poison. A single click submits a COMPLETE WITCH_ACT
+       * (NightPhase.vue emits one terminal action per button), so 'save' and
+       * 'poison' are one-decision paths.
+       */
+      witch?: WitchPlan
+    },
+): Promise<void> {
+  const hostPage = ctx.hostPage
+  const gameId = ctx.gameId
+
+  await hostStartsNight(ctx)
 
   // ── Wolf kill ────────────────────────────────────────────────────────
   const reachedWolfPick = await waitForNightSubPhase(hostPage, gameId, 'WEREWOLF_PICK', 25_000)
@@ -102,8 +108,8 @@ export async function driveMinimalNight1ViaDom(
       await witchPage.getByTestId('use-poison').click()
       const poisonSlot = witchPage.locator(`.player-grid [data-seat="${witchPlan.targetSeat}"]`)
       await expect(
-        poisonSlot,
-        `poison target seat ${witchPlan.targetSeat} must render`,
+          poisonSlot,
+          `poison target seat ${witchPlan.targetSeat} must render`,
       ).toBeVisible({ timeout: 10_000 })
       await poisonSlot.click()
       await witchPage.getByTestId('witch-poison-confirm').click()
@@ -195,19 +201,19 @@ export async function driveMinimalNight1ViaDom(
  *                                   reveals)
  */
 export async function waitForSheriffOrDayDiscussion(
-  ctx: GameContext,
-  timeoutMs = 30_000,
+    ctx: GameContext,
+    timeoutMs = 30_000,
 ): Promise<void> {
   await waitForCondition(
-    async () => {
-      const state = await fetchGameState(ctx.hostPage, ctx.gameId)
-      if (state?.phase === 'SHERIFF_ELECTION' && state?.sheriffElection?.subPhase === 'SIGNUP')
-        return true
-      if (state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN') return true
-      return false
-    },
-    'end-of-night transition to SHERIFF_ELECTION/SIGNUP (Day 1 + hasSheriff) or DAY_DISCUSSION/RESULT_HIDDEN',
-    timeoutMs,
+      async () => {
+        const state = await fetchGameState(ctx.hostPage, ctx.gameId)
+        if (state?.phase === 'SHERIFF_ELECTION' && state?.sheriffElection?.subPhase === 'SIGNUP')
+          return true
+        if (state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN') return true
+        return false
+      },
+      'end-of-night transition to SHERIFF_ELECTION/SIGNUP (Day 1 + hasSheriff) or DAY_DISCUSSION/RESULT_HIDDEN',
+      timeoutMs,
   )
 }
 
@@ -221,8 +227,8 @@ export async function waitForSheriffOrDayDiscussion(
  * RESULT_REVEALED. Use [waitForResultRevealed] after the host reveal click.
  */
 export async function waitForDayDiscussionAfterSheriff(
-  ctx: GameContext,
-  timeoutMs = 20_000,
+    ctx: GameContext,
+    timeoutMs = 20_000,
 ): Promise<void> {
   // Wait for RESULT sub-phase to be reachable (the backend may still be
   // settling after the SHERIFF_REVEAL_RESULT click).
@@ -231,12 +237,12 @@ export async function waitForDayDiscussionAfterSheriff(
   await endBtn.click()
 
   await waitForCondition(
-    async () => {
-      const state = await fetchGameState(ctx.hostPage, ctx.gameId)
-      return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
-    },
-    'SHERIFF_END_RESULT click landed on DAY_DISCUSSION/RESULT_HIDDEN',
-    timeoutMs,
+      async () => {
+        const state = await fetchGameState(ctx.hostPage, ctx.gameId)
+        return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
+      },
+      'SHERIFF_END_RESULT click landed on DAY_DISCUSSION/RESULT_HIDDEN',
+      timeoutMs,
   )
 }
 
@@ -246,7 +252,7 @@ function pageOrThrow(ctx: GameContext, role: string): Page {
   const page = ctx.pages.get(role)
   if (!page) {
     throw new Error(
-      `ctx.pages missing browser for role=${role}. Pass browserRoles including '${role}' to setupGame.`,
+        `ctx.pages missing browser for role=${role}. Pass browserRoles including '${role}' to setupGame.`,
     )
   }
   return page
@@ -267,13 +273,4 @@ async function fetchGameState(page: Page, gameId: string): Promise<PhaseSnapshot
     })
     return res.ok ? await res.json() : null
   }, gameId)
-}
-
-async function fetchPhaseAndSubPhase(
-  page: Page,
-  gameId: string,
-): Promise<{ phase?: string; subPhase?: string | null } | null> {
-  const state = await fetchGameState(page, gameId)
-  if (!state) return null
-  return { phase: state.phase, subPhase: state.subPhase ?? null }
 }

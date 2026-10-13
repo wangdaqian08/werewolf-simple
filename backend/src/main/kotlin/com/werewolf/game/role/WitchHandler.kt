@@ -31,7 +31,7 @@ class WitchHandler(private val nightPhaseRepository: NightPhaseRepository) : Rol
 
     override fun handle(action: GameActionRequest, context: GameContext): GameActionResult {
         log.info("[WitchHandler] Handling WITCH_ACT action for game ${context.gameId} by ${action.actorUserId}")
-        
+
         if (action.actionType != ActionType.WITCH_ACT) return GameActionResult.Rejected("Unknown action: ${action.actionType}")
 
         val actor = context.playerById(action.actorUserId)
@@ -65,12 +65,19 @@ class WitchHandler(private val nightPhaseRepository: NightPhaseRepository) : Rol
 
         if (poisonTarget != null && context.alivePlayerById(poisonTarget) == null)
             return GameActionResult.Rejected("Poison target not found or dead")
+        if (poisonTarget == actor.userId)
+            return GameActionResult.Rejected("Witch cannot poison herself")
 
-        // Self-save gate: when the room has disabled self-save and the wolves'
-        // victim tonight is the witch herself, reject the antidote.
-        val selfSaveAllowed = context.room.config?.witchSelfSaveAllowed ?: true
-        if (useAntidote && !selfSaveAllowed && nightPhase.wolfTargetUserId == actor.userId) {
-            return GameActionResult.Rejected("Witch cannot self-save in this game")
+        // 空刀: no one was attacked, so the antidote has nothing to save.
+        if (useAntidote && nightPhase.wolfTargetUserId == null)
+            return GameActionResult.Rejected("No one was attacked tonight")
+
+        // Self-save gate: the witch may save herself on night 1 only, and never
+        // when the room has disabled self-save.
+        if (useAntidote && nightPhase.wolfTargetUserId == actor.userId) {
+            val selfSaveAllowed = context.room.config?.witchSelfSaveAllowed ?: true
+            if (!selfSaveAllowed) return GameActionResult.Rejected("Witch cannot self-save in this game")
+            if (nightPhase.dayNumber > 1) return GameActionResult.Rejected("Witch can self-save on night 1 only")
         }
 
         if (useAntidote) {

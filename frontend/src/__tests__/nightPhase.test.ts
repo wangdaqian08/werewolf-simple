@@ -236,3 +236,105 @@ describe('NightPhase - 白狼王 acts in the wolf turn', () => {
     expect(wrapper.text()).toContain('3·Wolf')
   })
 })
+
+describe('NightPhase - 空刀 and witch self-save rules', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const p = (userId: string, seatIndex: number): GamePlayer => ({
+    userId,
+    nickname: userId,
+    seatIndex,
+    isAlive: true,
+    isSheriff: false,
+  })
+
+  it('a wolf can choose 空刀 (no kill) and the click emits wolfSkip', async () => {
+    const wrapper = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1 } as NightPhaseState,
+        players: [p('w1', 1), p('v1', 2)],
+        myUserId: 'w1',
+        myRole: 'WEREWOLF' as PlayerRole,
+      },
+    })
+    await wrapper.find('[data-testid="wolf-skip-kill"]').trigger('click')
+    expect(wrapper.emitted('wolfSkip')).toHaveLength(1)
+  })
+
+  it('after 空刀 the witch is told no one was attacked and cannot use the antidote', () => {
+    const wrapper = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'WITCH_ACT', dayNumber: 1, hasAntidote: true } as NightPhaseState,
+        players: [p('witch1', 1), p('v1', 2)],
+        myUserId: 'witch1',
+        myRole: 'WITCH' as PlayerRole,
+      },
+    })
+    expect(wrapper.find('[data-testid="witch-no-victim"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="witch-antidote"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="switch-pass-antidote"]').exists()).toBe(true)
+  })
+
+  it('the backend selfSaveBlocked flag hides the antidote and explains the night-1 rule', () => {
+    const wrapper = mount(NightPhase, {
+      props: {
+        nightPhase: {
+          subPhase: 'WITCH_ACT',
+          dayNumber: 2,
+          hasAntidote: true,
+          attackedPlayerId: 'witch1',
+          attackedNickname: 'witch1',
+          attackedSeatIndex: 1,
+          selfSaveBlocked: true,
+        } as NightPhaseState,
+        players: [p('witch1', 1), p('v1', 2)],
+        myUserId: 'witch1',
+        myRole: 'WITCH' as PlayerRole,
+      },
+    })
+    const note = wrapper.find('[data-testid="witch-self-save-blocked"]')
+    expect(note.exists()).toBe(true)
+    expect(note.text()).toContain('首夜')
+    expect(wrapper.find('[data-testid="witch-antidote"]').exists()).toBe(false)
+  })
+})
+
+describe('NightPhase - a rejected action gives the turn back', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('after a rejection the guard sees the protect controls again', async () => {
+    const guard: GamePlayer = {
+      userId: 'g1',
+      nickname: 'G',
+      seatIndex: 1,
+      isAlive: true,
+      isSheriff: false,
+    }
+    const other: GamePlayer = {
+      userId: 'v1',
+      nickname: 'V',
+      seatIndex: 2,
+      isAlive: true,
+      isSheriff: false,
+    }
+    const wrapper = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'GUARD_PICK', dayNumber: 2 } as NightPhaseState,
+        players: [guard, other],
+        myUserId: 'g1',
+        myRole: 'GUARD' as PlayerRole,
+        rejectionCount: 0,
+      },
+    })
+    await wrapper.find('.player-grid [data-seat="2"]').trigger('click')
+    await wrapper.find('[data-testid="guard-confirm-protect"]').trigger('click')
+    expect(wrapper.find('[data-testid="guard-confirm-protect"]').exists()).toBe(false)
+
+    await wrapper.setProps({ rejectionCount: 1 })
+    expect(wrapper.find('[data-testid="guard-confirm-protect"]').exists()).toBe(true)
+  })
+})

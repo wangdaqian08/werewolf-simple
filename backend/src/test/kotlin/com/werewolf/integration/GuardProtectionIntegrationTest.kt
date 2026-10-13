@@ -4,6 +4,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.night.NightTurnLedger
 import com.werewolf.game.role.GuardHandler
 import com.werewolf.game.role.WerewolfHandler
 import com.werewolf.model.*
@@ -66,6 +67,7 @@ class GuardProtectionIntegrationTest {
             timing = com.werewolf.config.GameTimingProperties(),
             rewardSettlementService = mock(),
             perkService = mock(lenient = true) { on { night1ImmuneUserIds(any()) } doReturn emptySet() },
+            nightTurnLedger = NightTurnLedger(),
         )
     }
 
@@ -171,7 +173,7 @@ class GuardProtectionIntegrationTest {
 
         // Step 3: Resolve night kills (Variant B: kills deferred; no
         // contextLoader.load call needed by the new resolveNightKills.)
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         mockAudioSequenceForDayTransition()
 
         nightOrchestrator.resolveNightKills(guardCtx, np)
@@ -218,7 +220,7 @@ class GuardProtectionIntegrationTest {
         guardHandler.handle(guardRequest, wolfCtx)
 
         // Resolve night kills (Variant B: kills deferred; no save/lookup yet.)
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         mockAudioSequenceForDayTransition()
 
         nightOrchestrator.resolveNightKills(wolfCtx, np)

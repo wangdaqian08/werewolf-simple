@@ -787,3 +787,79 @@ describe('VotingPhase — hunter role card', () => {
     wrapper.unmount()
   })
 })
+
+describe('VotingPhase — PK re-vote and badge heir rules', () => {
+  let pinia: ReturnType<typeof createPinia>
+  let router: ReturnType<typeof createRouter>
+
+  beforeEach(() => {
+    pinia = createPinia()
+    setActivePinia(pinia)
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+  })
+
+  const players: GamePlayer[] = [1, 2, 3, 4].map((n) => ({
+    userId: `p${n}`,
+    nickname: `P${n}`,
+    seatIndex: n,
+    isAlive: true,
+    isSheriff: n === 3,
+    canVote: true,
+  }))
+
+  const voting = (over: Partial<VotingState>): VotingState => ({
+    dayNumber: 1,
+    subPhase: 'RE_VOTING',
+    phaseStarted: Date.now() - 1000,
+    phaseDeadline: 0,
+    canVote: true,
+    votesSubmitted: 0,
+    totalVoters: 2,
+    tallyRevealed: false,
+    tally: [],
+    ...over,
+  })
+
+  const mountAs = (myUserId: string, votingPhase: VotingState) =>
+    mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        gameId: 1,
+        votingPhase,
+        players,
+        myUserId,
+        isHost: false,
+        currentSheriffUserId: 'p3',
+      },
+    })
+
+  it('a PK re-vote names the tied players and only they can be picked', async () => {
+    const wrapper = mountAs('p1', voting({ pkCandidates: ['p2', 'p3'] }))
+    expect(wrapper.find('[data-testid="pk-banner"]').text()).toContain('2号')
+    expect(wrapper.find('[data-testid="pk-banner"]').text()).toContain('3号')
+
+    await wrapper.find('.player-grid [data-seat="4"]').trigger('click')
+    expect(wrapper.emitted('selectPlayer')).toBeUndefined()
+    await wrapper.find('.player-grid [data-seat="2"]').trigger('click')
+    expect(wrapper.emitted('selectPlayer')?.[0]).toEqual(['p2'])
+  })
+
+  it('a PK candidate is told they cannot vote this round', () => {
+    const wrapper = mountAs('p2', voting({ pkCandidates: ['p2', 'p3'], canVote: false }))
+    expect(wrapper.find('[data-testid="pk-stage-note"]').exists()).toBe(true)
+  })
+
+  it('the dying sheriff cannot pick himself as the badge heir', async () => {
+    const wrapper = mountAs(
+      'p3',
+      voting({ subPhase: 'BADGE_HANDOVER', eliminatedPlayerId: 'p4', canVote: false }),
+    )
+    await wrapper.find('.player-grid [data-seat="3"]').trigger('click')
+    expect(wrapper.emitted('selectPlayer')).toBeUndefined()
+    await wrapper.find('.player-grid [data-seat="1"]').trigger('click')
+    expect(wrapper.emitted('selectPlayer')?.[0]).toEqual(['p1'])
+  })
+})

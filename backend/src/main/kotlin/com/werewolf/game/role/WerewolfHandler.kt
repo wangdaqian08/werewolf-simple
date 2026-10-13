@@ -34,13 +34,13 @@ class WerewolfHandler(
 
     override fun acceptedActions(phase: GamePhase, subPhase: String?): Set<ActionType> =
         if (phase == GamePhase.NIGHT && subPhase == NightSubPhase.WEREWOLF_PICK.name)
-            setOf(ActionType.WOLF_KILL, ActionType.WOLF_SELECT)
+            setOf(ActionType.WOLF_KILL, ActionType.WOLF_SELECT, ActionType.WOLF_SKIP)
         else emptySet()
 
     override fun nightSubPhases(): List<NightSubPhase> = listOf(NightSubPhase.WEREWOLF_PICK)
 
     override fun handle(action: GameActionRequest, context: GameContext): GameActionResult {
-        if (action.actionType != ActionType.WOLF_KILL && action.actionType != ActionType.WOLF_SELECT)
+        if (action.actionType !in setOf(ActionType.WOLF_KILL, ActionType.WOLF_SELECT, ActionType.WOLF_SKIP))
             return GameActionResult.Rejected("Unknown action: ${action.actionType}")
 
         val actor = context.playerById(action.actorUserId)
@@ -60,18 +60,26 @@ class WerewolfHandler(
         // Regression: prod game 15 (2026-05-01) — wolf1 confirmed kill on
         // player A, wolf2 then SELECTed player B; B died, contradicting the
         // confirmation.
-        if (action.actionType == ActionType.WOLF_KILL) {
-            if (killConfirmed.putIfAbsent(action.gameId, true) != null) {
-                return GameActionResult.Rejected("Kill already confirmed by teammate")
-            }
-        } else if (killConfirmed.containsKey(action.gameId)) {
+        if (killConfirmed.containsKey(action.gameId))
             return GameActionResult.Rejected("Kill already confirmed by teammate")
+
+        // 空刀: no kill tonight. Clears any target a wolf had selected.
+        if (action.actionType == ActionType.WOLF_SKIP) {
+            if (killConfirmed.putIfAbsent(action.gameId, true) != null)
+                return GameActionResult.Rejected("Kill already confirmed by teammate")
+            nightPhase.wolfTargetUserId = null
+            nightPhaseRepository.save(nightPhase)
+            return GameActionResult.Success()
         }
 
         val target = action.targetUserId
             ?: return GameActionResult.Rejected("Target required")
         if (context.alivePlayerById(target) == null)
             return GameActionResult.Rejected("Target not found or dead")
+
+        // Lock only a valid kill: an invalid one must not shut the wolves out.
+        if (action.actionType == ActionType.WOLF_KILL && killConfirmed.putIfAbsent(action.gameId, true) != null)
+            return GameActionResult.Rejected("Kill already confirmed by teammate")
 
         nightPhase.wolfTargetUserId = target
         nightPhaseRepository.save(nightPhase)

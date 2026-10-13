@@ -102,8 +102,10 @@
         :my-role="gameStore.state.myRole"
         :action-pending="actionPending"
         :witch-self-save-allowed="gameStore.state.witchSelfSaveAllowed"
+        :rejection-count="nightRejections"
         @select-player="handleNightSelect"
         @confirm="handleNightConfirm"
+        @wolf-skip="handleWolfSkip"
         @witch-antidote="handleWitchAntidote"
         @witch-pass-antidote="handleWitchPassAntidote"
         @witch-poison="handleWitchPoison"
@@ -535,6 +537,17 @@ const isMock = import.meta.env.VITE_MOCK === 'true'
 const hasConfirmedRole = ref(false)
 const isRoleRevealed = ref(false)
 const actionPending = ref(false)
+// Night turn actions the backend rejected for a real reason (see NightPhase.rejectionCount).
+const nightRejections = ref(0)
+const NIGHT_TURN_ACTIONS = new Set([
+  'WOLF_KILL',
+  'WOLF_SKIP',
+  'SEER_CHECK',
+  'SEER_CONFIRM',
+  'WITCH_ACT',
+  'GUARD_PROTECT',
+  'GUARD_SKIP',
+])
 
 // Wraps gameService.submitAction to always include the gameId from the route
 async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) {
@@ -544,8 +557,9 @@ async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) 
     const res = await gameService.submitAction({ ...req, gameId })
     if (res && !res.success && res.message) {
       // Concurrent WOLF_KILL races (two wolves both clicking confirm at the
-      // same moment) are still swallowed silently — the UI is already correct
-      // and showing an error would just confuse the second wolf.
+      // same moment) and repeats of any confirmed night turn (double tap,
+      // retry) are swallowed silently — the UI is already correct and showing
+      // an error would just confuse the player.
       //
       // BUT: a WOLF_SELECT rejection after a teammate has already confirmed
       // the kill DOES need to be visible. The lock (PR #88) means the second
@@ -553,10 +567,11 @@ async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) 
       // wouldn't know why their re-pick didn't take effect, and might keep
       // clicking thinking the UI is broken.
       const isHarmlessKillRace =
-        req.actionType === 'WOLF_KILL' && res.message.includes('already confirmed')
+        req.actionType !== 'WOLF_SELECT' && res.message.includes('already confirmed')
       if (isHarmlessKillRace) {
         console.info('[GameView] Action silently rejected:', res.message)
       } else {
+        if (NIGHT_TURN_ACTIONS.has(req.actionType)) nightRejections.value++
         console.error('[GameView] Action failed:', res.message)
         ElMessage({ message: res.message, type: 'error', duration: 3000 })
       }
@@ -800,6 +815,9 @@ async function handleNightSelect(userId: string) {
   if (gameStore.state?.nightPhase?.subPhase === 'WEREWOLF_PICK') {
     await action({ actionType: 'WOLF_SELECT', targetId: userId })
   }
+}
+async function handleWolfSkip() {
+  await action({ actionType: 'WOLF_SKIP' })
 }
 async function handleNightConfirm(targetId?: string) {
   //console.log('[GameView] handleNightConfirm called with targetId:', targetId)

@@ -4,31 +4,9 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
-import com.werewolf.config.GameTimingProperties
 import com.werewolf.game.timer.HostTimerService
-import com.werewolf.model.ActionType
-import com.werewolf.model.CandidateStatus
-import com.werewolf.model.DaySubPhase
-import com.werewolf.model.ElectionSubPhase
-import com.werewolf.model.Game
-import com.werewolf.model.GamePhase
-import com.werewolf.model.GamePlayer
-import com.werewolf.model.SheriffCandidate
-import com.werewolf.model.SheriffElection
-import com.werewolf.model.SpeechOrderDirection
-import com.werewolf.model.User
-import com.werewolf.model.Vote
-import com.werewolf.model.VoteContext
-import com.werewolf.repository.GamePlayerRepository
-import com.werewolf.repository.GameRepository
-import com.werewolf.repository.SheriffCandidateRepository
-import com.werewolf.repository.SheriffElectionRepository
-import com.werewolf.repository.UserRepository
-import com.werewolf.repository.VoteRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.werewolf.model.*
+import com.werewolf.repository.*
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -44,17 +22,21 @@ class SheriffService(
     private val voteRepository: VoteRepository,
     private val userRepository: UserRepository,
     private val stompPublisher: StompPublisher,
-    private val coroutineScope: CoroutineScope,
-    private val timingProperties: GameTimingProperties,
     private val actionLogService: ActionLogService,
     private val hostTimerService: HostTimerService,
 ) {
     val log = LoggerFactory.getLogger(SheriffService::class.java)
-    private val scheduledJobs = mutableMapOf<Int, Job>()
     // ── Action dispatcher ──────────────────────────────────────────────────────
 
     @Transactional
-    fun handle(request: GameActionRequest, context: GameContext): GameActionResult = when (request.actionType) {
+    fun handle(request: GameActionRequest, context: GameContext): GameActionResult {
+        // Only players in this game take part in its election (an outsider's token could vote).
+        if (context.playerById(request.actorUserId) == null)
+            return GameActionResult.Rejected("Not a player in this game")
+        return route(request, context)
+    }
+
+    private fun route(request: GameActionRequest, context: GameContext): GameActionResult = when (request.actionType) {
         ActionType.SHERIFF_CAMPAIGN -> signUp(request, context)
         ActionType.SHERIFF_QUIT -> quit(request, context)
         ActionType.SHERIFF_START_SPEECH -> startSpeech(request, context)
@@ -564,6 +546,8 @@ class SheriffService(
     }
 
     private fun vote(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (context.alivePlayerById(request.actorUserId) == null)
+            return GameActionResult.Rejected("Dead players cannot vote")
         if (context.game.phase != GamePhase.SHERIFF_ELECTION)
             return GameActionResult.Rejected("Not in SHERIFF_ELECTION phase")
         val election = context.election ?: return GameActionResult.Rejected("No election in progress")
@@ -591,6 +575,8 @@ class SheriffService(
     }
 
     private fun abstain(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (context.alivePlayerById(request.actorUserId) == null)
+            return GameActionResult.Rejected("Dead players cannot vote")
         if (context.game.phase != GamePhase.SHERIFF_ELECTION)
             return GameActionResult.Rejected("Not in SHERIFF_ELECTION phase")
         val election = context.election ?: return GameActionResult.Rejected("No election in progress")
@@ -725,17 +711,6 @@ class SheriffService(
             DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name),
         )
         return GameActionResult.Success()
-    }
-
-    /**
-     * Cancel any scheduled auto-advance jobs for the given game. The auto-
-     * advance timer at SHERIFF/RESULT was removed in favour of the
-     * SHERIFF_END_RESULT host action, so this is now a no-op left in place
-     * for callers that defensively call it (e.g. GamePhasePipeline.startNight,
-     * a few integration tests).
-     */
-    fun cancelScheduledJob(gameId: Int) {
-        // intentionally empty — timer was removed
     }
 
     /**

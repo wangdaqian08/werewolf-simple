@@ -2,6 +2,7 @@ package com.werewolf.integration
 
 import com.werewolf.game.GameContext
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.night.NightTurnLedger
 import com.werewolf.model.*
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
@@ -64,8 +65,9 @@ class NightImmunityIntegrationTest {
             timing = com.werewolf.config.GameTimingProperties(),
             rewardSettlementService = rewardSettlementService,
             perkService = perkService,
+            nightTurnLedger = NightTurnLedger(),
         )
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(
             audioService.calculatePhaseTransition(eq(gameId), eq(GamePhase.NIGHT), eq(GamePhase.DAY_DISCUSSION), isNull(), any(), any()),
@@ -138,7 +140,7 @@ class NightImmunityIntegrationTest {
     fun `night 1 decisive save with immediate game over - trigger is recorded before settlement`() {
         whenever(perkService.night1ImmuneUserIds(gameId)).thenReturn(setOf(immuneId))
         // Immediate game over on night 1 (e.g. wolf parity short-circuit).
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
+        whenever(winConditionChecker.check( any(),any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
         val np = nightPhase(dayNumber = 1, wolfTarget = immuneId)
         val ctx = GameContext(
             game(1), room(),

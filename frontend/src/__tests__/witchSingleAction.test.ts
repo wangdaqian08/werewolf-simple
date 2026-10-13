@@ -34,6 +34,7 @@ function makeNight(over: Partial<NightPhaseState> = {}): NightPhaseState {
     hasPoison: true,
     antidoteDecided: false,
     poisonDecided: false,
+    attackedPlayerId: 'u2',
     attackedSeatIndex: 2,
     attackedNickname: 'Bot2',
     ...over,

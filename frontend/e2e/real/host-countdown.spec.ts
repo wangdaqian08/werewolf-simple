@@ -10,7 +10,7 @@
  */
 import { expect, type Page, test } from '@playwright/test'
 import { type GameContext, setupGame } from './helpers/multi-browser'
-import { act, actName, type RoleName } from './helpers/shell-runner'
+import { type RoleName } from './helpers/shell-runner'
 import { waitForCondition, waitForPhase } from './helpers/state-polling'
 import { attachCompositeOnFailure } from './helpers/composite-screenshot'
 import { driveMinimalNight1ViaDom } from './helpers/night-driver'
@@ -20,39 +20,39 @@ import { driveMinimalNight1ViaDom } from './helpers/night-driver'
 /** Wait until all provided pages show [data-testid="phase-countdown"] with
  *  data-remaining-ms within [minMs, maxMs]. */
 async function waitForTimerOnAllPages(
-  pages: Page[],
-  minMs: number,
-  maxMs: number,
-  timeoutMs = 5_000,
+    pages: Page[],
+    minMs: number,
+    maxMs: number,
+    timeoutMs = 5_000,
 ) {
   await Promise.all(
-    pages.map((page, idx) =>
-      waitForCondition(
-        async () => {
-          const el = await page.$('[data-testid="phase-countdown"]')
-          if (!el) return false
-          const raw = await el.getAttribute('data-remaining-ms')
-          if (!raw) return false
-          const ms = Number(raw)
-          return ms >= minMs && ms <= maxMs
-        },
-        `page[${idx}] phase-countdown remainingMs in [${minMs},${maxMs}]`,
-        timeoutMs,
-        200,
+      pages.map((page, idx) =>
+          waitForCondition(
+              async () => {
+                const el = await page.$('[data-testid="phase-countdown"]')
+                if (!el) return false
+                const raw = await el.getAttribute('data-remaining-ms')
+                if (!raw) return false
+                const ms = Number(raw)
+                return ms >= minMs && ms <= maxMs
+              },
+              `page[${idx}] phase-countdown remainingMs in [${minMs},${maxMs}]`,
+              timeoutMs,
+              200,
+          ),
       ),
-    ),
   )
 }
 
 /** Return the data-remaining-ms attribute value from all pages. */
 async function getRemainingMsAll(pages: Page[]): Promise<number[]> {
   return Promise.all(
-    pages.map(async (p) => {
-      const el = await p.$('[data-testid="phase-countdown"]')
-      if (!el) return 0
-      const raw = await el.getAttribute('data-remaining-ms')
-      return raw ? Number(raw) : 0
-    }),
+      pages.map(async (p) => {
+        const el = await p.$('[data-testid="phase-countdown"]')
+        if (!el) return 0
+        const raw = await el.getAttribute('data-remaining-ms')
+        return raw ? Number(raw) : 0
+      }),
   )
 }
 
@@ -63,16 +63,16 @@ async function driveToDay(ctx: GameContext) {
 
   // Reveal night result
   await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_DISCUSSION', 30_000)
-  const hostBot = ctx.allBots.find((b) => b.nick === 'Host') ?? ctx.allBots[0]
-  act('REVEAL_NIGHT_RESULT', actName(hostBot), { room: ctx.roomCode })
+  await ctx.hostPage.getByTestId('day-reveal-result').click()
+  await expect(ctx.hostPage.getByTestId('day-start-vote')).toBeVisible({ timeout: 10_000 })
   await waitForCondition(
-    async () => {
-      const el = await ctx.hostPage.$('[data-testid="phase-countdown"]')
-      return el !== null
-    },
-    'host page sees [data-testid="phase-countdown"]',
-    10_000,
-    300,
+      async () => {
+        const el = await ctx.hostPage.$('[data-testid="phase-countdown"]')
+        return el !== null
+      },
+      'host page sees [data-testid="phase-countdown"]',
+      10_000,
+      300,
   )
 }
 
@@ -88,7 +88,7 @@ test.describe('Flow A — DAY_DISCUSSION timer start/stop syncs to all clients',
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000)
     ctx = await setupGame(browser, {
-      totalPlayers: 4,
+      totalPlayers: 6,
       hasSheriff: false,
       roles: ['WEREWOLF', 'SEER', 'WITCH'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'VILLAGER'] as RoleName[],
@@ -109,13 +109,13 @@ test.describe('Flow A — DAY_DISCUSSION timer start/stop syncs to all clients',
     await driveToDay(ctx)
   })
 
-  test('A.2 host starts 60s timer — all clients see remaining ≈ 60s within 1s', async () => {
+  test('A.2 host starts 75s timer — all clients see remaining ≈ 75s within 1s', async () => {
     const allPages = [ctx.hostPage, ...ctx.pages.values()]
 
-    // Click 1:00 pill on host browser
-    await ctx.hostPage.click('[data-testid="phase-countdown-start-60"]')
+    // Click 1:15 pill on host browser
+    await ctx.hostPage.click('[data-testid="phase-countdown-start-75"]')
 
-    await waitForTimerOnAllPages(allPages, 55_000, 60_500)
+    await waitForTimerOnAllPages(allPages, 70_000, 75_500)
   })
 
   test('A.3 wait 3s — data-remaining-ms decrements by 2500-3500 on every client', async () => {
@@ -142,7 +142,7 @@ test.describe('Flow A — DAY_DISCUSSION timer start/stop syncs to all clients',
     await waitForTimerOnAllPages(allPages, 0, 0, 3_000)
 
     // Host sees preset pills again
-    await ctx.hostPage.waitForSelector('[data-testid="phase-countdown-start-60"]', { timeout: 3_000 })
+    await ctx.hostPage.waitForSelector('[data-testid="phase-countdown-start-75"]', { timeout: 3_000 })
   })
 })
 
@@ -158,7 +158,7 @@ test.describe('Flow C — reconnect mid-timer recovers correct remaining', () =>
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000)
     ctx = await setupGame(browser, {
-      totalPlayers: 4,
+      totalPlayers: 6,
       hasSheriff: false,
       roles: ['WEREWOLF', 'SEER', 'WITCH'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'VILLAGER'] as RoleName[],
@@ -175,13 +175,13 @@ test.describe('Flow C — reconnect mid-timer recovers correct remaining', () =>
     }
   })
 
-  test('C.1 drive to DAY_DISCUSSION and start 60s timer', async () => {
+  test('C.1 drive to DAY_DISCUSSION and start 75s timer', async () => {
     await driveToDay(ctx)
-    await ctx.hostPage.click('[data-testid="phase-countdown-start-60"]')
-    await waitForTimerOnAllPages([ctx.hostPage], 55_000, 60_500)
+    await ctx.hostPage.click('[data-testid="phase-countdown-start-75"]')
+    await waitForTimerOnAllPages([ctx.hostPage], 70_000, 75_500)
   })
 
-  test('C.2 wait 5s, one player reloads — recovers 50-56s remaining', async () => {
+  test('C.2 wait 5s, one player reloads — recovers 65-71s remaining', async () => {
     await new Promise((r) => setTimeout(r, 5_000))
 
     // Pick any non-host page to reload
@@ -192,8 +192,8 @@ test.describe('Flow C — reconnect mid-timer recovers correct remaining', () =>
     const el = await playerPage.$('[data-testid="phase-countdown"]')!
     const raw = await el!.getAttribute('data-remaining-ms')
     const ms = Number(raw ?? '0')
-    expect(ms).toBeGreaterThanOrEqual(50_000)
-    expect(ms).toBeLessThanOrEqual(56_000)
+    expect(ms).toBeGreaterThanOrEqual(65_000)
+    expect(ms).toBeLessThanOrEqual(71_000)
   })
 })
 
@@ -209,7 +209,7 @@ test.describe('Flow D — DAY_DISCUSSION exit cancels timer', () => {
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(120_000)
     ctx = await setupGame(browser, {
-      totalPlayers: 4,
+      totalPlayers: 6,
       hasSheriff: false,
       roles: ['WEREWOLF', 'SEER', 'WITCH'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'VILLAGER'] as RoleName[],
@@ -234,10 +234,9 @@ test.describe('Flow D — DAY_DISCUSSION exit cancels timer', () => {
 
   test('D.2 host starts vote — all clients see timer running=false within 2s', async () => {
     const allPages = [ctx.hostPage, ...ctx.pages.values()]
-    const hostBot = ctx.allBots.find((b) => b.nick === 'Host') ?? ctx.allBots[0]
 
     // Advance DAY_DISCUSSION to DAY_VOTING
-    act('START_VOTE', actName(hostBot), { room: ctx.roomCode })
+    await ctx.hostPage.getByTestId('day-start-vote').click()
 
     await waitForTimerOnAllPages(allPages, 0, 0, 3_000)
   })

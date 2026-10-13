@@ -1,5 +1,6 @@
 package com.werewolf.service
 
+import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.repository.CreditTransactionRepository
 import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GameEventRepository
@@ -50,6 +51,7 @@ class TestSupportService(
     private val perkActivationRepository: PerkActivationRepository,
     private val creditTransactionRepository: CreditTransactionRepository,
     private val gameSettlementRepository: GameSettlementRepository,
+    private val nightOrchestrator: NightOrchestrator,
 ) {
 
     private val log = LoggerFactory.getLogger(TestSupportService::class.java)
@@ -75,6 +77,7 @@ class TestSupportService(
             val games = gameRepository.findByRoomId(roomId)
             val gameIds = games.mapNotNull { it.gameId }
             val activationIds = perkActivationRepository.findByRoomId(roomId).mapNotNull { it.id }
+            gameIds.forEach { nightOrchestrator.cancelNightPhase(it) }
 
             // Children first — the e2e H2 schema has no FK constraints, but
             // the same order must hold on a Flyway-provisioned Postgres.

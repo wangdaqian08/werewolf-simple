@@ -5,6 +5,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.night.NightTurnLedger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.EliminationModifier
 import com.werewolf.game.role.RoleHandler
@@ -106,6 +107,7 @@ class HookInvocationTest {
         timing = com.werewolf.config.GameTimingProperties(),
         rewardSettlementService = mock(),
         perkService = mock(lenient = true) { on { night1ImmuneUserIds(any()) } doReturn emptySet() },
+        nightTurnLedger = NightTurnLedger(),
     )
 
     private fun makeVotingPipeline(handlers: List<RoleHandler>) = VotingPipeline(
@@ -137,7 +139,7 @@ class HookInvocationTest {
         val villagerHandler = dayEnterHandler(PlayerRole.VILLAGER)
         val orchestrator = makeOrchestrator(listOf(wolfHandler, villagerHandler))
 
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
         // Mock audioService to avoid NullPointerException
@@ -179,7 +181,7 @@ class HookInvocationTest {
         val wolfHandler = dayEnterHandler(PlayerRole.WEREWOLF)
         val orchestrator = makeOrchestrator(listOf(wolfHandler))
 
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
@@ -213,7 +215,7 @@ class HookInvocationTest {
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
         // contextLoader needed for afterElimination after hook cancels
         whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
 
         pipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
@@ -250,7 +252,7 @@ class HookInvocationTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
         whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(winConditionChecker.check(any(), any(), any(), any())).thenReturn(null)
+        whenever(winConditionChecker.check(any(), any(),any(), any(), any())).thenReturn(null)
 
         pipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 

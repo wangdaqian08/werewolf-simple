@@ -28,12 +28,17 @@ class NightKillMatrixTest {
     }
 
     @Test
-    fun `guard AND antidote on the same wolf target - target LIVES (同守同救 house rule)`() {
-        // Traditional 狼人杀 kills a same-night guarded-and-saved target (奶穿);
-        // this codebase treats any save as a save. Pinned so a future rule
-        // change is a deliberate decision, not an accident.
+    fun `guard AND antidote on the same wolf target - target DIES (同守同救 奶穿)`() {
         val kills = NightOrchestrator.computeKills(
             night(wolfTarget = "u1", guardTarget = "u1", antidoteUsed = true),
+        )
+        assertThat(kills).containsExactly("u1")
+    }
+
+    @Test
+    fun `guard and antidote on different players - antidote still saves the wolf target`() {
+        val kills = NightOrchestrator.computeKills(
+            night(wolfTarget = "u1", guardTarget = "u2", antidoteUsed = true),
         )
         assertThat(kills).isEmpty()
     }

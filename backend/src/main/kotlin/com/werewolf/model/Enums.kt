@@ -4,7 +4,7 @@ enum class RoomStatus { WAITING, IN_GAME, CLOSED }
 
 enum class ReadyStatus { NOT_READY, READY }
 
-enum class GamePhase { 
+enum class GamePhase {
     ROLE_REVEAL,        // 角色揭示阶段
     SHERIFF_ELECTION,   // 警长选举阶段
     WAITING,            // 等待进入夜阶段
@@ -17,9 +17,12 @@ enum class GamePhase {
 
 
 // isWolf = wolf camp: wakes with the wolves, seer sees "wolf", counts as a wolf for win checks.
+// isGod = 神职: every good-camp role except the plain villager (the 屠边 "gods" side).
 enum class PlayerRole(val isWolf: Boolean = false) {
     WEREWOLF(isWolf = true), VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT,
-    WHITE_WOLF_KING(isWolf = true),
+    WHITE_WOLF_KING(isWolf = true);
+
+    val isGod: Boolean get() = !isWolf && this != VILLAGER
 }
 
 
@@ -60,8 +63,8 @@ enum class ActionType {
     // Hunter + badge (post-elimination)
     HUNTER_SHOOT, HUNTER_PASS, BADGE_PASS, BADGE_DESTROY,
 
-    // Night: werewolf
-    WOLF_KILL, WOLF_SELECT,
+    // Night: werewolf (WOLF_SKIP = 空刀: the wolves kill no one tonight)
+    WOLF_KILL, WOLF_SELECT, WOLF_SKIP,
 
     // Night: seer
     SEER_CHECK, SEER_CONFIRM,

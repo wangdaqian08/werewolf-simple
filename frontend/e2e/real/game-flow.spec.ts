@@ -328,7 +328,10 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     await expect(guardConfirmBtn).toBeVisible({ timeout: 10_000 })
     await captureSnapshot(ctx.pages, testInfo, '04-guard-ui')
 
-    const guardTargetSlot = guardPage.locator('.player-grid .slot-alive').first()
+    const guardTargetSlot = guardPage
+        .locator(`.player-grid .slot-alive:not([data-seat="${nightOneOutcome.wolfTargetSeat}"])`)
+        .first()
+
     await guardTargetSlot.waitFor({ state: 'visible', timeout: 5_000 })
     await guardTargetSlot.click()
     await guardConfirmBtn.click()

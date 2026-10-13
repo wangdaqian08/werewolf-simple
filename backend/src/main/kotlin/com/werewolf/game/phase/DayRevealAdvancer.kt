@@ -1,5 +1,6 @@
 package com.werewolf.game.phase
 
+import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.DaySubPhase
 import com.werewolf.model.GamePlayer
 import com.werewolf.model.NightPhase
@@ -15,10 +16,10 @@ import org.springframework.stereotype.Component
  * hunter's shot). Centralises the priority so [GamePhasePipeline] and
  * [com.werewolf.game.voting.VotingPipeline] agree.
  *
- * Priority (confirmed product order — badge first, then hunter):
- *   1. An unhandled dead sheriff hands over the badge → BADGE_HANDOVER.
- *   2. A wolf-killed hunter (not poisoned, not yet resolved) shoots →
+ * Priority (confirmed product order, 网易 flow — hunter first, then badge):
+ *   1. A wolf-killed hunter (not poisoned, not yet resolved) shoots →
  *      HUNTER_SHOOT_NIGHT_DEATH.
+ *   2. An unhandled dead sheriff hands over the badge → BADGE_HANDOVER.
  *   3. Otherwise the day simply shows its result → RESULT_REVEALED.
  *
  * Always reads FRESH from the DB: a caller's in-memory GameContext is stale
@@ -37,17 +38,18 @@ class DayRevealAdvancer(
         val game = gameRepository.findById(gameId).orElse(null) ?: return DaySubPhase.RESULT_REVEALED
         val players = gamePlayerRepository.findByGameId(gameId)
 
-        // 1. Unhandled dead sheriff → badge handover first. After a handover the
+        // 1. Wolf-killed hunter who hasn't shot/passed yet → hunter shoot first: a
+        //    skill resolves at death, the badge is handed over afterwards (网易 order).
+        val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
+        if (pendingHunterId(nightPhase, players) != null) {
+            return DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH
+        }
+
+        // 2. Unhandled dead sheriff → badge handover. After a handover the
         //    sheriff points at an alive heir (or null), so this clears.
         val sheriff = game.sheriffUserId
         if (sheriff != null && players.find { it.userId == sheriff }?.alive == false) {
             return DaySubPhase.BADGE_HANDOVER
-        }
-
-        // 2. Wolf-killed hunter who hasn't shot/passed yet → hunter shoot.
-        val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
-        if (pendingHunterId(nightPhase, players) != null) {
-            return DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH
         }
 
         // 3. Nothing pending — the host can start the vote from here.
@@ -76,15 +78,14 @@ class DayRevealAdvancer(
 
     /**
      * Pure predicate: returns the wolf-target userId when that player is a
-     * HUNTER who actually died to the wolves this night (not antidote-saved, not
-     * guard-protected), was NOT also poisoned (poison disables the gun), and has
+     * HUNTER who actually died to the wolves this night ([NightOrchestrator.wolfKillLands],
+     * so 同守同救 counts), was NOT also poisoned (poison disables the gun), and has
      * not yet shot or passed. Otherwise null.
      */
     fun pendingHunterId(nightPhase: NightPhase?, players: List<GamePlayer>): String? {
         if (nightPhase == null || nightPhase.hunterNightShootResolved) return null
         val wolfTarget = nightPhase.wolfTargetUserId ?: return null
-        val wolfKilled = !nightPhase.witchAntidoteUsed && nightPhase.guardTargetUserId != wolfTarget
-        if (!wolfKilled) return null
+        if (!NightOrchestrator.wolfKillLands(nightPhase)) return null
         if (wolfTarget == nightPhase.witchPoisonTargetUserId) return null // poisoned → cannot shoot
         val player = players.find { it.userId == wolfTarget } ?: return null
         if(player.alive) return null //survived (e.g. night-1 immunity perk)
