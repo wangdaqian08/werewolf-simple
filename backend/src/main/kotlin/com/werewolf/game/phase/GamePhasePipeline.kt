@@ -6,11 +6,11 @@ import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.timer.HostTimerService
-import com.werewolf.model.*
+import com.werewolf.model.DaySubPhase
+import com.werewolf.model.GamePhase
+import com.werewolf.model.VotingSubPhase
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
-import com.werewolf.repository.SheriffElectionRepository
-import com.werewolf.service.GameContextLoader
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
 import org.slf4j.Logger
@@ -25,9 +25,7 @@ class GamePhasePipeline(
     private val gameRepository: GameRepository,
     private val gamePlayerRepository: GamePlayerRepository,
     private val nightPhaseRepository: com.werewolf.repository.NightPhaseRepository,
-    private val sheriffElectionRepository: SheriffElectionRepository,
     private val stompPublisher: StompPublisher,
-    private val contextLoader: GameContextLoader,
     private val sheriffService: SheriffService,
     private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: com.werewolf.service.ActionLogService,
@@ -181,8 +179,6 @@ class GamePhasePipeline(
         val allPlayers = gamePlayerRepository.findByGameId(context.gameId)
         if (!allPlayers.all { it.confirmedRole })
             return GameActionResult.Rejected("Not all players have confirmed their role")
-        // Cancel any scheduled auto-advance jobs
-        sheriffService.cancelScheduledJob(context.gameId)
         nightOrchestrator.initNight(context.gameId, context.game.dayNumber, withWaiting = true)
         return GameActionResult.Success()
     }

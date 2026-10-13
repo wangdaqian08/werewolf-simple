@@ -13,7 +13,6 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.SheriffElectionRepository
-import com.werewolf.service.SheriffService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -37,7 +36,6 @@ class SheriffElectionIntegrationTest {
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
-    @Autowired lateinit var sheriffService: SheriffService
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -198,9 +196,6 @@ class SheriffElectionIntegrationTest {
         // RESULT: host reveals → single winner → g1 elected
         assertThat(action(host.token, gameId, "SHERIFF_REVEAL_RESULT").statusCode).isEqualTo(HttpStatus.OK)
 
-        // Cancel auto-advance immediately after result reveal
-        sheriffService.cancelScheduledJob(gameId)
-
         // Assert election is in RESULT sub-phase
         val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
         assertThat(election.subPhase).isEqualTo(ElectionSubPhase.RESULT)
@@ -251,9 +246,6 @@ class SheriffElectionIntegrationTest {
 
         // APPOINT: host appoints g1
         assertThat(action(host.token, gameId, "SHERIFF_APPOINT", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
-
-        // Cancel auto-advance immediately after appointment
-        sheriffService.cancelScheduledJob(gameId)
 
         // Assert election moves to RESULT with g1 elected
         val resultElection = sheriffElectionRepository.findByGameId(gameId).orElseThrow()

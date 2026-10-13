@@ -13,7 +13,6 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.SheriffElectionRepository
-import com.werewolf.service.SheriffService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -37,7 +36,6 @@ class SheriffElectionEdgeCaseIntegrationTest {
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
-    @Autowired lateinit var sheriffService: SheriffService
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -197,8 +195,6 @@ class SheriffElectionEdgeCaseIntegrationTest {
 
         // Host reveals → single winner g1
         assertThat(action(host.token, gameId, "SHERIFF_REVEAL_RESULT").statusCode).isEqualTo(HttpStatus.OK)
-        sheriffService.cancelScheduledJob(gameId)
-
         val resultElection = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
         assertThat(resultElection.subPhase).isEqualTo(ElectionSubPhase.RESULT)
         assertThat(resultElection.electedSheriffUserId).isEqualTo(g1.userId)
@@ -287,8 +283,6 @@ class SheriffElectionEdgeCaseIntegrationTest {
 
         // Host appoints g1 as sheriff
         assertThat(action(host.token, gameId, "SHERIFF_APPOINT", g1.userId).statusCode).isEqualTo(HttpStatus.OK)
-        sheriffService.cancelScheduledJob(gameId)
-
         val resultElection = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
         assertThat(resultElection.subPhase).isEqualTo(ElectionSubPhase.RESULT)
         assertThat(resultElection.electedSheriffUserId).isEqualTo(g1.userId)
