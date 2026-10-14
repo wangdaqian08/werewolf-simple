@@ -250,6 +250,19 @@ describe('NightPhase - 空刀 and witch self-save rules', () => {
     isSheriff: false,
   })
 
+  it('the 空刀 button is hidden when the room has not enabled 空刀 (default)', () => {
+    const wrapper = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1 } as NightPhaseState,
+        players: [p('w1', 1), p('v1', 2)],
+        myUserId: 'w1',
+        myRole: 'WEREWOLF' as PlayerRole,
+      },
+    })
+    expect(wrapper.find('[data-testid="wolf-skip-kill"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="wolf-confirm-kill"]').exists()).toBe(true)
+  })
+
   it('a wolf can choose 空刀 (no kill) and the click emits wolfSkip', async () => {
     const wrapper = mount(NightPhase, {
       props: {
@@ -257,6 +270,7 @@ describe('NightPhase - 空刀 and witch self-save rules', () => {
         players: [p('w1', 1), p('v1', 2)],
         myUserId: 'w1',
         myRole: 'WEREWOLF' as PlayerRole,
+        noKillAllowed: true,
       },
     })
     await wrapper.find('[data-testid="wolf-skip-kill"]').trigger('click')

@@ -19,6 +19,7 @@ data class RoomConfigRequest(
     val witchSelfSaveAllowed: Boolean = true,
     /** Whether players may activate paid perks in this room (host fairness toggle). */
     val perksAllowed: Boolean = true,
+    val noKillAllowed: Boolean = false,
 )
 
 data class CreateRoomRequest(
@@ -55,7 +56,7 @@ data class RoomPlayerDto(
     val isHost: Boolean,
 )
 
-data class RoomConfigDto(val totalPlayers: Int, val wolfCount: Int, val roles: List<PlayerRole>, val hasSheriff: Boolean = true, val winCondition: WinConditionMode = WinConditionMode.CLASSIC, val bgmTrack: String? = null, val witchSelfSaveAllowed: Boolean = true, val perksAllowed: Boolean = true)
+data class RoomConfigDto(val totalPlayers: Int, val wolfCount: Int, val roles: List<PlayerRole>, val hasSheriff: Boolean = true, val winCondition: WinConditionMode = WinConditionMode.CLASSIC, val bgmTrack: String? = null, val witchSelfSaveAllowed: Boolean = true, val perksAllowed: Boolean = true, val noKillAllowed: Boolean = false)
 
 /** A live (ACTIVE) perk activation in the room — visible to every room member. */
 data class PerkActivationDto(

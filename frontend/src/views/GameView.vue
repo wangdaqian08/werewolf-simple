@@ -70,6 +70,7 @@
         :is-host="isHost"
         :players="gameStore.state.players"
         :timer="gameStore.state?.timer ?? null"
+        :timer-presets="gameStore.state?.timerPresetsSeconds ?? []"
         :my-role="gameStore.state?.myRole"
         :is-alive="
           gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
@@ -85,7 +86,6 @@
         @reveal-result="handleSheriffRevealResult"
         @end-result="handleSheriffEndResult"
         @appoint="handleSheriffAppoint"
-        @set-speech-order="handleSheriffSetSpeechOrder"
         @self-destruct="handleSelfDestruct"
         @start-timer="(s) => handleTimerStart(Number(route.params.gameId), s)"
         @stop-timer="() => handleTimerStop(Number(route.params.gameId))"
@@ -102,6 +102,7 @@
         :my-role="gameStore.state.myRole"
         :action-pending="actionPending"
         :witch-self-save-allowed="gameStore.state.witchSelfSaveAllowed"
+        :no-kill-allowed="gameStore.state.noKillAllowed ?? false"
         :rejection-count="nightRejections"
         @select-player="handleNightSelect"
         @confirm="handleNightConfirm"
@@ -118,6 +119,7 @@
     <template v-else-if="gameStore.state?.phase === 'DAY_VOTING' && gameStore.state?.votingPhase">
       <VotingPhase
         :key="`voting-${gameStore.state.votingPhase.subPhase}-${gameStore.state.dayNumber}`"
+        :role-history="gameStore.state?.roleHistory ?? null"
         :game-id="Number(route.params.gameId)"
         :voting-phase="gameStore.state.votingPhase"
         :players="gameStore.state.players"
@@ -149,12 +151,14 @@
     <template v-else-if="gameStore.state?.phase === 'DAY_DISCUSSION' && gameStore.state?.dayPhase">
       <DayPhase
         :key="`${gameStore.state.dayPhase.subPhase}-${gameStore.state.dayPhase.dayNumber}`"
+        :role-history="gameStore.state?.roleHistory ?? null"
         :game-id="Number(route.params.gameId)"
         :day-phase="gameStore.state.dayPhase"
         :players="gameStore.state.players"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"
         :timer="gameStore.state?.timer ?? null"
+        :timer-presets="gameStore.state?.timerPresetsSeconds ?? []"
         :my-role="gameStore.state?.myRole"
         :is-alive="
           gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
@@ -749,9 +753,6 @@ async function handleSheriffEndResult() {
 }
 async function handleSheriffAppoint(userId: string) {
   await action({ actionType: 'SHERIFF_APPOINT', targetId: userId })
-}
-async function handleSheriffSetSpeechOrder(direction: 'ASC' | 'DESC') {
-  await action({ actionType: 'SHERIFF_SET_SPEECH_ORDER', payload: { direction } })
 }
 async function handleRevealResult() {
   await action({ actionType: 'REVEAL_NIGHT_RESULT' })

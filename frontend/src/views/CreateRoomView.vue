@@ -156,6 +156,28 @@
             <span class="toggle-thumb" />
           </button>
         </div>
+        <div class="role-row" :class="noKillAllowed ? 'row-on' : 'row-off'">
+          <span class="role-emoji">🔪</span>
+          <div class="role-names">
+            <span class="role-name">空刀 No Kill</span>
+            <span class="win-cond-desc">
+              {{
+                noKillAllowed
+                  ? '狼人夜晚可选择不杀人 (Allowed)'
+                  : '狼人每晚必须选择袭击目标 (Disallowed)'
+              }}
+            </span>
+          </div>
+          <button
+            :class="noKillAllowed ? 'toggle-on' : 'toggle-off'"
+            class="toggle"
+            data-testid="noKill-toggle"
+            :data-no-kill="noKillAllowed"
+            @click="noKillAllowed = !noKillAllowed"
+          >
+            <span class="toggle-thumb" />
+          </button>
+        </div>
         <div class="role-row" :class="perksAllowed ? 'row-on' : 'row-off'">
           <span class="role-emoji">🛡</span>
           <div class="role-names">
@@ -294,6 +316,7 @@ const enabledOptional = ref(new Set(['SEER', 'WITCH', 'HUNTER']))
 const hasSheriff = ref(true)
 const witchSelfSaveAllowed = ref(true)
 const perksAllowed = ref(true)
+const noKillAllowed = ref(false)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
 const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: '无 (None)' }])
@@ -448,6 +471,7 @@ async function handleCreate() {
         bgmTrack: bgmTrack.value,
         witchSelfSaveAllowed: witchSelfSaveAllowed.value,
         perksAllowed: perksAllowed.value,
+        noKillAllowed: noKillAllowed.value,
       },
     }
     // Carry the per-room display-name override that the lobby may have set.

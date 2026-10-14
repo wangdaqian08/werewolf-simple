@@ -1,5 +1,6 @@
 package com.werewolf.game.timer
 
+import com.werewolf.config.HostTimerProperties
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.model.*
@@ -28,21 +29,24 @@ class HostTimerService(
     private val sheriffElectionRepository: SheriffElectionRepository,
     private val stompPublisher: StompPublisher,
     private val coroutineScope: CoroutineScope,
+    hostTimerProperties: HostTimerProperties,
 ) {
     private val log = LoggerFactory.getLogger(HostTimerService::class.java)
 
     companion object {
         const val COUNTDOWN_WARNING_FILE = "countdown_warning.mp3"
-        private val ALLOWED_DURATIONS_S = setOf(60L, 75L, 120L)
     }
+
+    /** Allowed countdown durations, in seconds, as configured in application.yml. */
+    val presetsSeconds: List<Long> = hostTimerProperties.presetsSeconds
 
     private val expirationJobs = ConcurrentHashMap<Int, Job>()
     private val warningJobs    = ConcurrentHashMap<Int, Job>()
 
     @Transactional
     fun start(hostUserId: String, gameId: Int, durationSeconds: Long): GameActionResult {
-        if (durationSeconds !in ALLOWED_DURATIONS_S)
-            return GameActionResult.Rejected("durationSeconds must be 60, 75 or 120")
+        if (durationSeconds !in presetsSeconds)
+            return GameActionResult.Rejected("durationSeconds must be one of $presetsSeconds")
 
         val game = gameRepository.findById(gameId).orElse(null)
             ?: return GameActionResult.Rejected("Game not found")

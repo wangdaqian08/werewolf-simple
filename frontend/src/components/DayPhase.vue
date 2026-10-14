@@ -8,7 +8,7 @@
         :duration-ms="timer?.durationMs ?? 0"
         :running="timer?.running ?? false"
         :is-host="isHost"
-        :presets="[75, 120]"
+        :presets="timerPresets"
         @start-timer="(s) => emit('start-timer', s)"
         @stop-timer="emit('stop-timer')"
       />
@@ -47,8 +47,9 @@
           v-if="myRole"
           phase="DAY_DISCUSSION"
           :sub-phase="dayPhase.subPhase"
+          :day-skip-voting="daySkipVoting"
           :my-role="myRole"
-          :is-alive="isAlive"
+          :is-alive="isAlive ?? false"
           :players="players"
           :my-user-id="myUserId"
           @self-destruct="(target) => emit('self-destruct', target)"
@@ -393,7 +394,11 @@
             <div class="rc-label" :class="`rc-label-${ROLE_META[myRole]?.team}`">
               {{ ROLE_META[myRole]?.nameEn }}
             </div>
+            <div v-if="myPlayer" class="rc-identity" data-testid="rc-identity">
+              {{ myPlayer.seatIndex }}号 · {{ myPlayer.nickname }}
+            </div>
             <p class="rc-desc">{{ ROLE_META[myRole]?.description }}</p>
+            <RoleHistory :history="roleHistory" />
           </div>
         </div>
       </div>
@@ -403,8 +408,16 @@
 
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
-import type { DayPhaseState, GamePlayer, GameSettings, PlayerRole, TimerState } from '@/types'
+import type {
+  DayPhaseState,
+  GamePlayer,
+  GameSettings,
+  PlayerRole,
+  TimerState,
+  RoleHistory as RoleHistoryData,
+} from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
+import RoleHistory from '@/components/RoleHistory.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 import GameSettingsModal from '@/components/GameSettingsModal.vue'
@@ -418,6 +431,8 @@ const props = defineProps<{
   myUserId: string
   isHost: boolean
   timer?: TimerState | null
+  roleHistory?: RoleHistoryData | null
+  timerPresets?: number[]
   myRole?: PlayerRole
   isAlive?: boolean
   daySkipVoting?: boolean
@@ -457,6 +472,7 @@ function onHunterTap(player: GamePlayer) {
 const showLog = ref(false)
 const showSettings = ref(false)
 const showRoleCard = ref(false)
+const myPlayer = computed(() => props.players.find((p) => p.userId === props.myUserId))
 
 interface RoleMeta {
   nameZh: string
@@ -790,6 +806,11 @@ function onTap(player: GamePlayer) {
 }
 .rc-label-special {
   color: var(--gold);
+}
+.rc-identity {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
 }
 .rc-desc {
   font-size: 0.8125rem;

@@ -76,3 +76,43 @@ describe('CreateRoomView perks toggle', () => {
     )
   })
 })
+describe('CreateRoomView 空刀 (no kill) toggle', () => {
+  beforeEach(() => {
+    h.createRoomMock.mockReset().mockResolvedValue({
+      roomId: '1',
+      roomCode: '123',
+      hostId: 'u1',
+      status: 'WAITING',
+      config: { totalPlayers: 9, roles: [] },
+      players: [],
+    })
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('defaults to disabled and sends noKillAllowed:false', async () => {
+    const wrapper = await mountCreateRoom()
+    const toggle = wrapper.find('[data-testid="noKill-toggle"]')
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.attributes('data-no-kill')).toBe('false')
+
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(h.createRoomMock).toHaveBeenCalledWith(
+      expect.objectContaining({ config: expect.objectContaining({ noKillAllowed: false }) }),
+    )
+  })
+
+  it('flips on when clicked and sends noKillAllowed:true', async () => {
+    const wrapper = await mountCreateRoom()
+    await wrapper.find('[data-testid="noKill-toggle"]').trigger('click')
+    expect(wrapper.find('[data-testid="noKill-toggle"]').attributes('data-no-kill')).toBe('true')
+
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(h.createRoomMock).toHaveBeenCalledWith(
+      expect.objectContaining({ config: expect.objectContaining({ noKillAllowed: true }) }),
+    )
+  })
+})

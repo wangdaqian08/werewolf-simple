@@ -142,6 +142,9 @@ class GameSettingsStateTest {
         assertThat(gs?.get("hasSheriff")).isEqualTo(true)
         // config is null → defaults to true
         assertThat(gs?.get("witchSelfSaveAllowed")).isEqualTo(true)
+        // config is null → 空刀 defaults to disabled
+        assertThat(gs?.get("noKillAllowed")).isEqualTo(false)
+        assertThat(result["noKillAllowed"]).isEqualTo(false)
         assertThat(gs?.get("winCondition")).isEqualTo("CLASSIC")
 
         @Suppress("UNCHECKED_CAST")
@@ -156,7 +159,7 @@ class GameSettingsStateTest {
         stubGame(
             room(
                 winCondition = WinConditionMode.HARD_MODE,
-                config = GameConfig(witchSelfSaveAllowed = false),
+                config = GameConfig(witchSelfSaveAllowed = false, noKillAllowed = true),
             ),
             sixPlayers(),
         )
@@ -166,6 +169,8 @@ class GameSettingsStateTest {
         val gs = result["gameSettings"] as? Map<*, *>
         assertThat(gs).isNotNull
         assertThat(gs?.get("witchSelfSaveAllowed")).isEqualTo(false)
+        assertThat(gs?.get("noKillAllowed")).isEqualTo(true)
+        assertThat(result["noKillAllowed"]).isEqualTo(true)
         assertThat(gs?.get("winCondition")).isEqualTo("HARD_MODE")
     }
 
@@ -178,5 +183,23 @@ class GameSettingsStateTest {
         // Response still succeeds — public state is served, only the settings block is withheld.
         assertThat(result["phase"]).isEqualTo("DAY_DISCUSSION")
         assertThat(result["gameSettings"]).isNull()
+    }
+
+    // ── Private role history (role card "历史记录") ───────────────────────────
+
+    @Test
+    fun `roleHistory gives the seer their own checks and nothing to a villager`() {
+        stubGame(room(), sixPlayers())
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(
+            NightPhase(gameId = gameId, dayNumber = 1).also {
+                it.seerCheckedUserId = hostId; it.seerResultIsWerewolf = true
+            },
+        ))
+
+        val seerHistory = gameService.getGameState(gameId, "g2")["roleHistory"] as? Map<*, *>
+        assertThat(seerHistory?.get("role")).isEqualTo("SEER")
+        assertThat((seerHistory?.get("entries") as List<*>)).hasSize(1)
+
+        assertThat(gameService.getGameState(gameId, "g5")["roleHistory"]).isNull()
     }
 }

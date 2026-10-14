@@ -141,6 +141,7 @@ export const MOCK_GAME_STATE: GameState = {
     roles: ['WEREWOLF', 'WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'],
     hasSheriff: true,
     witchSelfSaveAllowed: true,
+    noKillAllowed: false,
     winCondition: 'CLASSIC',
   },
   players: [

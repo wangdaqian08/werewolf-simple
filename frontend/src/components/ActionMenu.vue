@@ -102,6 +102,7 @@ const props = defineProps<{
   isAlive: boolean
   players?: GamePlayer[]
   myUserId?: string
+  daySkipVoting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -115,8 +116,17 @@ const ALLOWED_PHASES: GamePhase[] = ['SHERIFF_ELECTION', 'DAY_DISCUSSION', 'DAY_
 
 const chipVisible = computed(() => ALLOWED_PHASES.includes(props.phase))
 
+// Mirrors the server's self-destruct window: the sheriff campaign, or after the
+// night result is revealed and before voting starts — and only once per day.
+const inSelfDestructWindow = computed(
+  () =>
+    props.phase === 'SHERIFF_ELECTION' ||
+    (props.phase === 'DAY_DISCUSSION' && props.subPhase === 'RESULT_REVEALED'),
+)
+
 const canSelfDestruct = computed(
-  () => isWolfRole(props.myRole) && props.isAlive && chipVisible.value,
+  () =>
+    isWolfRole(props.myRole) && props.isAlive && inSelfDestructWindow.value && !props.daySkipVoting,
 )
 
 // The server validates the take; this only decides whether to offer it.

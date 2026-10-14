@@ -29,7 +29,7 @@ baked into the corrected script:
 House rules this codebase pins (divergences from traditional 狼人杀 are deliberate):
 同守同救 → the target **dies** (official rule, browser-pinned by
 `guard-witch-same-target-flow`); poison **pierces** guard protection; wolves may
-target fellow wolves (内刀, no role check); 空刀 is allowed (`WOLF_SKIP`);
+target fellow wolves (内刀, no role check); 空刀 is allowed (`WOLF_SKIP`), only when the room enable it(default off);
 witch self-save is night-1 only (the room toggle can forbid it entirely); the witch
 cannot save + poison the same night; guard may self-protect but not repeat a
 target on consecutive nights; a poisoned hunter cannot shoot; night kills are

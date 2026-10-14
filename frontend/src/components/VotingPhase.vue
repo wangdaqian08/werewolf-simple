@@ -146,15 +146,16 @@
               </div>
             </div>
           </div>
-          <div v-if="votingPhase.abstainVoters?.length" class="vote-col vote-col-abstain">
+          <div class="vote-col vote-col-abstain">
             <div class="vote-col-head">
               <div class="vote-col-avatar">—</div>
               <div class="vote-col-cname">弃票</div>
               <div class="vote-col-count tally-abstain">
-                {{ votingPhase.abstainVoters.length }}
+                {{ votingPhase.abstainVoters?.length ?? 0 }}
               </div>
             </div>
             <div class="vote-col-body">
+              <div v-if="!votingPhase.abstainVoters?.length" class="vcol-row vcol-empty">无</div>
               <div v-for="v in votingPhase.abstainVoters" :key="v.userId" class="vcol-row">
                 <Avatar
                   class="vcol-avatar"
@@ -202,7 +203,12 @@
              client-side timer previously fired VOTING_CONTINUE against
              HUNTER_SHOOT sub-phases and produced 400s. -->
         <template v-if="isRevealed">
-          <template v-if="isHost">
+          <!-- A voted-out hunter is still deciding: keep the screen neutral so
+               the hunter's identity stays private, and hold the host back. -->
+          <template v-if="votingPhase.subPhase === 'HUNTER_SHOOT'">
+            <p class="footer-hint">等待中 · Waiting…</p>
+          </template>
+          <template v-else-if="isHost">
             <div class="vote-actions">
               <button
                 class="btn btn-primary vote-btn"
@@ -340,7 +346,11 @@
               <div class="rc-label" :class="`rc-label-${ROLE_META[myRole]?.team}`">
                 {{ ROLE_META[myRole]?.nameEn }}
               </div>
+              <div v-if="myPlayer" class="rc-identity" data-testid="rc-identity">
+                {{ myPlayer.seatIndex }}号 · {{ myPlayer.nickname }}
+              </div>
               <p class="rc-desc">{{ ROLE_META[myRole]?.description }}</p>
+              <RoleHistory :history="roleHistory" />
             </div>
           </div>
         </div>
@@ -439,11 +449,7 @@
     <!-- ── HUNTER_SHOOT screen ── -->
     <template v-else-if="votingPhase.subPhase === 'HUNTER_SHOOT'">
       <header class="day-header">
-        <div class="day-pill">
-          第 {{ votingPhase.dayNumber }} 天
-          <span class="day-pill-sep">·</span>
-          猎人 · Hunter
-        </div>
+        <div class="day-pill">第 {{ votingPhase.dayNumber }} 天</div>
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
@@ -502,9 +508,6 @@
               放弃 · Pass
             </button>
           </div>
-        </template>
-        <template v-else>
-          <p class="footer-hint">等待猎人行动 · Waiting for hunter...</p>
         </template>
       </footer>
     </template>
@@ -634,8 +637,16 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { GamePlayer, GameSettings, PlayerRole, VoteRoundHistory, VotingState } from '@/types'
+import type {
+  GamePlayer,
+  GameSettings,
+  PlayerRole,
+  VoteRoundHistory,
+  VotingState,
+  RoleHistory as RoleHistoryData,
+} from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
+import RoleHistory from '@/components/RoleHistory.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 import GameSettingsModal from '@/components/GameSettingsModal.vue'
@@ -649,6 +660,7 @@ const props = defineProps<{
   myUserId: string
   isHost: boolean
   myRole?: PlayerRole
+  roleHistory?: RoleHistoryData | null
   isAlive?: boolean
   // userId of the game's current sheriff (null after BADGE_DESTROY).
   // Drives badge-handover UI: the dying sheriff to pass is whoever holds
@@ -676,12 +688,16 @@ const emit = defineEmits<{
 }>()
 
 // ── Screen grouping ───────────────────────────────────────────────────────────
-// VOTE_RESULT is merged into the VOTING screen (shown when tallyRevealed)
+// VOTE_RESULT is merged into the VOTING screen (shown when tallyRevealed).
+// During HUNTER_SHOOT only the voted-out hunter gets the shoot screen; everyone
+// else keeps the vote result so the hunter's identity is not exposed.
 const isVotingScreen = computed(
   () =>
     props.votingPhase.subPhase === 'VOTING' ||
     props.votingPhase.subPhase === 'RE_VOTING' ||
-    props.votingPhase.subPhase === 'VOTE_RESULT',
+    props.votingPhase.subPhase === 'VOTE_RESULT' ||
+    (props.votingPhase.subPhase === 'HUNTER_SHOOT' &&
+      props.myUserId !== props.votingPhase.eliminatedPlayerId),
 )
 // BADGE_RECEIVED is merged into the BADGE_HANDOVER screen
 const isBadgeScreen = computed(
@@ -690,9 +706,13 @@ const isBadgeScreen = computed(
     props.votingPhase.subPhase === 'BADGE_RECEIVED',
 )
 
-// Tally/result is revealed when tallyRevealed flag is set or we're on VOTE_RESULT sub-phase
+// Tally/result is revealed when tallyRevealed flag is set or we're on VOTE_RESULT
+// (or HUNTER_SHOOT, which only follows a revealed vote) sub-phase
 const isRevealed = computed(
-  () => props.votingPhase.tallyRevealed || props.votingPhase.subPhase === 'VOTE_RESULT',
+  () =>
+    props.votingPhase.tallyRevealed ||
+    props.votingPhase.subPhase === 'VOTE_RESULT' ||
+    props.votingPhase.subPhase === 'HUNTER_SHOOT',
 )
 
 // Debug: watch votingPhase changes
@@ -856,6 +876,7 @@ const ROLE_ZH: Record<string, string> = {
 // ── Vote History panel ────────────────────────────────────────────────────────
 const showHistory = ref(false)
 const showRoleCard = ref(false)
+const myPlayer = computed(() => props.players.find((p) => p.userId === props.myUserId))
 const showLog = ref(false)
 const showSettings = ref(false)
 
@@ -1323,6 +1344,11 @@ function onBadgeTap(player: GamePlayer) {
 }
 .rc-label-special {
   color: var(--gold);
+}
+.rc-identity {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
 }
 .rc-desc {
   font-size: 0.8125rem;

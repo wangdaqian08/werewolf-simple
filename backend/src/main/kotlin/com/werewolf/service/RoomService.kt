@@ -69,7 +69,7 @@ class RoomService(
                 hasWhiteWolfKing = PlayerRole.WHITE_WOLF_KING in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
-                config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed),
+                config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed, cfg.noKillAllowed),
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")
@@ -330,7 +330,8 @@ class RoomService(
                 winCondition = room.winCondition,
                 bgmTrack = room.config?.bgmTrack,
                 witchSelfSaveAllowed = room.config?.witchSelfSaveAllowed ?: true,
-                perksAllowed = room.config?.perksAllowed ?: true
+                perksAllowed = room.config?.perksAllowed ?: true,
+                noKillAllowed = room.config?.noKillAllowed ?: false,
             ),
             activeGameId = activeGameId,
             perkActivations = perkActivations,
@@ -393,7 +394,7 @@ class RoomService(
      * overrides. Production leaves the properties unset and gets the compile-time
      * role defaults; the test profile sets small values so CI completes quickly.
      */
-    private fun buildGameConfig(bgmTrack: String?, witchSelfSaveAllowed: Boolean, perksAllowed: Boolean): GameConfig =
+    private fun buildGameConfig(bgmTrack: String?, witchSelfSaveAllowed: Boolean, perksAllowed: Boolean, noKillAllowed: Boolean): GameConfig =
         GameConfig(
             roleDelays = mapOf(
                 PlayerRole.WEREWOLF to timing.applyTo(PlayerRole.WEREWOLF),
@@ -404,6 +405,7 @@ class RoomService(
             bgmTrack = bgmTrack,
             witchSelfSaveAllowed = witchSelfSaveAllowed,
             perksAllowed = perksAllowed,
+            noKillAllowed = noKillAllowed,
         )
 }
 

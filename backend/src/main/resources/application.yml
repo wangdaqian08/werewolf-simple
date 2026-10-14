@@ -59,8 +59,10 @@ server:
 websocket:
   allowed-origins: "*"
 
-# Game-end credit rewards (see RewardSettlementService)
 werewolf:
+  host-timer:
+    presets-seconds: [75, 180]
+  # Game-end credit rewards (see RewardSettlementService)
   rewards:
     win-bonus: 20
     participation: 5

@@ -112,6 +112,14 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, witch self-s
             assertNonNull(v1, 'need a villager')
 
             await startNight(ctx)
+            // 空刀 is off by default: the wolves get no skip button.
+            expect(await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 25_000)).toBe(
+                true,
+            )
+            await expect(page(ctx, 'WEREWOLF').getByTestId('wolf-confirm-kill')).toBeVisible({
+                timeout: 10_000,
+            })
+            await expect(page(ctx, 'WEREWOLF').getByTestId('wolf-skip-kill')).toHaveCount(0)
             await wolvesKill(ctx, witch.seat)
             expect(await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 15_000)).toBe(true)
             const [save, repeat] = await page(ctx, 'WITCH').evaluate(
@@ -220,7 +228,7 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, witch self-s
     test('wolves choose 空刀: the witch sees no victim and the night is peaceful', async ({
                                                                                               browser,
                                                                                           }, testInfo) => {
-        const ctx = await setupGame(browser, BOARD)
+        const ctx = await setupGame(browser, { ...BOARD, noKillAllowed: true })
         try {
             const [v1] = villagers(ctx)
             assertNonNull(v1, 'need a villager')

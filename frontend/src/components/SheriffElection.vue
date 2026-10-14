@@ -9,6 +9,7 @@
         :duration-ms="timer?.durationMs ?? 0"
         :running="timer?.running ?? false"
         :is-host="isHost"
+        :presets="timerPresets"
         @start-timer="(s) => emit('start-timer', s)"
         @stop-timer="emit('stop-timer')"
       />
@@ -51,33 +52,6 @@
             >{{ election.decisionProgress?.decided ?? 0 }} /
             {{ election.decisionProgress?.total ?? 0 }}</span
           >
-        </div>
-      </div>
-
-      <!-- Host-only: candidate speaking order for the SPEECH sub-phase.
-           Server-authoritative — this only fires SHERIFF_SET_SPEECH_ORDER;
-           the backend stores it and builds the order at SIGNUP→SPEECH. -->
-      <div v-if="isHost" class="order-toggle">
-        <div class="order-label">发言顺序 / Speaking order</div>
-        <div class="order-btns">
-          <button
-            class="btn btn-outline order-btn"
-            :class="{ 'order-active': speechOrderDirection === 'ASC' }"
-            data-testid="speech-order-asc"
-            :disabled="actionPending"
-            @click="emit('set-speech-order', 'ASC')"
-          >
-            正序 / Seat ↑
-          </button>
-          <button
-            class="btn btn-outline order-btn"
-            :class="{ 'order-active': speechOrderDirection === 'DESC' }"
-            data-testid="speech-order-desc"
-            :disabled="actionPending"
-            @click="emit('set-speech-order', 'DESC')"
-          >
-            倒序 / Seat ↓
-          </button>
         </div>
       </div>
 
@@ -412,13 +386,14 @@
             </div>
           </div>
         </div>
-        <div v-if="election.result.abstainCount > 0" class="vote-col vote-col-abstain">
+        <div class="vote-col vote-col-abstain">
           <div class="vote-col-head">
             <div class="vote-col-avatar">—</div>
             <div class="vote-col-cname">弃票</div>
             <div class="vote-col-count tally-abstain">{{ election.result.abstainCount }}</div>
           </div>
           <div class="vote-col-body">
+            <div v-if="!election.result.abstainVoters.length" class="vcol-row vcol-empty">无</div>
             <div v-for="v in election.result.abstainVoters" :key="v.userId" class="vcol-row">
               <Avatar
                 class="vcol-avatar"
@@ -555,13 +530,14 @@
             </div>
           </div>
 
-          <div v-if="election.result.abstainCount > 0" class="vote-col vote-col-abstain">
+          <div class="vote-col vote-col-abstain">
             <div class="vote-col-head">
               <div class="vote-col-avatar">—</div>
               <div class="vote-col-cname">弃票</div>
               <div class="vote-col-count tally-abstain">{{ election.result.abstainCount }}</div>
             </div>
             <div class="vote-col-body">
+              <div v-if="!election.result.abstainVoters.length" class="vcol-row vcol-empty">无</div>
               <div v-for="v in election.result.abstainVoters" :key="v.userId" class="vcol-row">
                 <Avatar
                   class="vcol-avatar"
@@ -641,6 +617,7 @@ const props = defineProps<{
   isHost: boolean
   players?: GamePlayer[]
   timer?: TimerState | null
+  timerPresets?: number[]
   myRole?: PlayerRole
   isAlive?: boolean
   actionPending?: boolean
@@ -660,14 +637,11 @@ const emit = defineEmits<{
   'self-destruct': [targetUserId?: string]
   'start-timer': [seconds: number]
   'stop-timer': []
-  'set-speech-order': [direction: 'ASC' | 'DESC']
 }>()
 
 const iAmCandidate = computed(() =>
   props.election.candidates.some((c) => c.userId === props.myUserId && c.status === 'RUNNING'),
 )
-
-const speechOrderDirection = computed(() => props.election.speechOrderDirection ?? 'ASC')
 
 const myCandidateStatus = computed(
   () => props.election.candidates.find((c) => c.userId === props.myUserId)?.status ?? null,
@@ -1287,27 +1261,6 @@ function speakerLabel(uid: string, idx: number) {
 }
 
 .bold {
-  font-weight: 700;
-}
-
-.order-toggle {
-  margin-top: 12px;
-}
-.order-label {
-  font-size: 12px;
-  color: var(--muted, #8a7a65);
-  margin-bottom: 6px;
-}
-.order-btns {
-  display: flex;
-  gap: 8px;
-}
-.order-btn {
-  flex: 1;
-}
-.order-btn.order-active {
-  border-color: var(--gold, #a07830);
-  color: var(--gold, #a07830);
   font-weight: 700;
 }
 </style>

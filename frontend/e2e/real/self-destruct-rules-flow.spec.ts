@@ -3,7 +3,7 @@ import { setupGame, type GameContext } from './helpers/multi-browser'
 import { actName, type BotInfo, type RoleName } from './helpers/shell-runner'
 import { captureSnapshot } from './helpers/composite-screenshot'
 import { completeNight, type WitchPlan, tryAct } from './helpers/flow-drivers'
-import { waitForCondition, waitForPhase } from './helpers/state-polling'
+import { waitForCondition, waitForDaySubPhase, waitForPhase } from './helpers/state-polling'
 import { cleanupRoomData } from './helpers/test-support'
 import { hostStartsNight } from './helpers/night-driver'
 
@@ -58,7 +58,7 @@ async function waitForResultHidden(ctx: GameContext) {
     )
 }
 
-test.describe('Self-destruct rules — pending night kills, no skipped reveal, one per day', () => {
+test.describe('Self-destruct rules — pending night kills, window, one per day', () => {
     test.setTimeout(process.env.CI ? 360_000 : 240_000)
 
     test('the last wolf self-destructing in the election (the other wolf poisoned last night) ends the game', async ({
@@ -86,8 +86,8 @@ test.describe('Self-destruct rules — pending night kills, no skipped reveal, o
             const state = await readState(ctx.hostPage, ctx.gameId)
             await captureSnapshot(ctx.pages, testInfo, 'self-destruct-pending-kill-game-over')
             expect(state?.phase, 'wolf A died to last night\'s poison and wolf B self-destructed').toBe(
-            'GAME_OVER',
-        )
+                'GAME_OVER',
+            )
             expect(state?.winner).toBe('VILLAGER')
         } finally {
             await cleanupRoomData(ctx.hostPage, ctx.roomCode)
@@ -95,9 +95,9 @@ test.describe('Self-destruct rules — pending night kills, no skipped reveal, o
         }
     })
 
-    test('after a self-destruct the host cannot skip the night reveal', async ({
-                                                                                   browser,
-                                                                               }, testInfo) => {
+    test('a wolf cannot self-destruct before the host reveals the night result', async ({
+                                                                                            browser,
+                                                                                        }, testInfo) => {
         const ctx = await setupGame(browser, {
             totalPlayers: 6,
             hasSheriff: false,
@@ -110,20 +110,22 @@ test.describe('Self-destruct rules — pending night kills, no skipped reveal, o
 
             await playNightOne(ctx, v1.seat, { mode: 'pass' })
             await waitForResultHidden(ctx)
-            expect(tryAct('WOLF_SELF_DESTRUCT', actName(wolfA), { room: ctx.roomCode })).toBe(true)
+            expect(
+                tryAct('WOLF_SELF_DESTRUCT', actName(wolfA), { room: ctx.roomCode }),
+                'self-destruct opens only after the night result is revealed',
+            ).toBe(false)
 
-            const skipped = await postAction(ctx.hostPage, {
-                gameId: Number(ctx.gameId),
-                actionType: 'VOTING_CONTINUE',
-            })
-            expect(skipped, 'going to night must not skip the reveal of last night\'s kill').toBe(false)
             const revealBtn = ctx.hostPage.getByTestId('day-reveal-result')
             await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
             await revealBtn.click()
             await expect(ctx.hostPage.getByTestId(`day-killed-seat-${v1.seat}`)).toBeVisible({
                 timeout: 10_000,
             })
-            await captureSnapshot(ctx.pages, testInfo, 'self-destruct-reveal-not-skipped')
+            const state = await readState(ctx.hostPage, ctx.gameId)
+            await captureSnapshot(ctx.pages, testInfo, 'self-destruct-rejected-before-reveal')
+            expect(
+                state?.players?.find((p: { userId: string }) => p.userId === wolfA.userId)?.isAlive,
+            ).toBe(true)
         } finally {
             await cleanupRoomData(ctx.hostPage, ctx.roomCode)
             await ctx.cleanup()
@@ -143,6 +145,10 @@ test.describe('Self-destruct rules — pending night kills, no skipped reveal, o
 
             await playNightOne(ctx, v1.seat, { mode: 'pass' })
             await waitForResultHidden(ctx)
+            await ctx.hostPage.getByTestId('day-reveal-result').click()
+            expect(
+                await waitForDaySubPhase(ctx.hostPage, ctx.gameId, 'RESULT_REVEALED', 15_000),
+            ).toBe(true)
             expect(tryAct('WOLF_SELF_DESTRUCT', actName(wolfA), { room: ctx.roomCode })).toBe(true)
             expect(
                 tryAct('WOLF_SELF_DESTRUCT', actName(wolfB), { room: ctx.roomCode }),

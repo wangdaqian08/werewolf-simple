@@ -2,6 +2,7 @@ package com.werewolf.unit.service
 
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
+import com.werewolf.config.HostTimerProperties
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.GameRepository
@@ -40,6 +41,7 @@ class HostTimerServiceTest {
             sheriffElectionRepository,
             stompPublisher,
             CoroutineScope(Dispatchers.Default),
+            HostTimerProperties(presetsSeconds = listOf(75L, 180L)),
         )
     }
 
@@ -72,7 +74,7 @@ class HostTimerServiceTest {
     fun `start - rejected when phase is DAY_VOTING`() {
         val g = game(phase = GamePhase.DAY_VOTING)
         mockGame(g)
-        val result = service.start(hostId, gameId, 60L)
+        val result = service.start(hostId, gameId, 75L)
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
         verify(stompPublisher, never()).broadcastGame(any(), any())
     }
@@ -81,7 +83,7 @@ class HostTimerServiceTest {
     fun `start - rejected when phase is NIGHT`() {
         val g = game(phase = GamePhase.NIGHT)
         mockGame(g)
-        val result = service.start(hostId, gameId, 60L)
+        val result = service.start(hostId, gameId, 75L)
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
     }
 
@@ -90,7 +92,7 @@ class HostTimerServiceTest {
         val g = game(phase = GamePhase.SHERIFF_ELECTION)
         mockGame(g)
         mockSheriffElection(ElectionSubPhase.SIGNUP)
-        val result = service.start(hostId, gameId, 60L)
+        val result = service.start(hostId, gameId, 75L)
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
     }
 
@@ -99,7 +101,7 @@ class HostTimerServiceTest {
         val g = game(phase = GamePhase.SHERIFF_ELECTION)
         mockGame(g)
         mockSheriffElection(ElectionSubPhase.VOTING)
-        val result = service.start(hostId, gameId, 60L)
+        val result = service.start(hostId, gameId, 75L)
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
     }
 
@@ -108,7 +110,7 @@ class HostTimerServiceTest {
         val g = game(phase = GamePhase.SHERIFF_ELECTION)
         mockGame(g)
         mockSheriffElection(ElectionSubPhase.RESULT)
-        val result = service.start(hostId, gameId, 60L)
+        val result = service.start(hostId, gameId, 75L)
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
     }
 
@@ -116,7 +118,7 @@ class HostTimerServiceTest {
     fun `start - accepted during DAY_DISCUSSION`() {
         val g = game(phase = GamePhase.DAY_DISCUSSION)
         mockGame(g)
-        val result = service.start(hostId, gameId, 60L)
+        val result = service.start(hostId, gameId, 75L)
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
     }
 
@@ -125,7 +127,7 @@ class HostTimerServiceTest {
         val g = game(phase = GamePhase.SHERIFF_ELECTION)
         mockGame(g)
         mockSheriffElection(ElectionSubPhase.SPEECH)
-        val result = service.start(hostId, gameId, 60L)
+        val result = service.start(hostId, gameId, 75L)
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
     }
 
@@ -135,7 +137,7 @@ class HostTimerServiceTest {
     fun `start - rejected when caller is not host`() {
         val g = game(phase = GamePhase.DAY_DISCUSSION)
         mockGame(g)
-        val result = service.start(guestId, gameId, 60L)
+        val result = service.start(guestId, gameId, 75L)
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
         assertThat((result as GameActionResult.Rejected).reason).contains("host")
     }
@@ -148,6 +150,24 @@ class HostTimerServiceTest {
         mockGame(g)
         val result = service.start(hostId, gameId, 75L)
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+    }
+
+    @Test
+    fun `start - accepted for the 3 minute preset`() {
+        mockGame(game(phase = GamePhase.DAY_DISCUSSION))
+        assertThat(service.start(hostId, gameId, 180L)).isInstanceOf(GameActionResult.Success::class.java)
+    }
+
+    @Test
+    fun `start - rejected for the retired 60s and 120s durations`() {
+        mockGame(game(phase = GamePhase.DAY_DISCUSSION))
+        assertThat(service.start(hostId, gameId, 60L)).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(service.start(hostId, gameId, 120L)).isInstanceOf(GameActionResult.Rejected::class.java)
+    }
+
+    @Test
+    fun `presetsSeconds exposes the configured presets`() {
+        assertThat(service.presetsSeconds).containsExactly(75L, 180L)
     }
 
     @Test
@@ -172,20 +192,20 @@ class HostTimerServiceTest {
     fun `start - writes timerRunning=true and broadcasts TimerUpdated(running=true)`() {
         val g = game(phase = GamePhase.DAY_DISCUSSION)
         mockGame(g)
-        service.start(hostId, gameId, 60L)
+        service.start(hostId, gameId, 75L)
 
         val savedCaptor = argumentCaptor<Game>()
         verify(gameRepository).save(savedCaptor.capture())
         assertThat(savedCaptor.firstValue.timerRunning).isTrue()
-        assertThat(savedCaptor.firstValue.timerDurationMs).isEqualTo(60_000L)
+        assertThat(savedCaptor.firstValue.timerDurationMs).isEqualTo(75_000L)
         assertThat(savedCaptor.firstValue.timerStartedAt).isNotNull()
 
         val eventCaptor = argumentCaptor<Any>()
         verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), eventCaptor.capture())
         val timerEvent = eventCaptor.allValues.filterIsInstance<DomainEvent.TimerUpdated>().first()
         assertThat(timerEvent.running).isTrue()
-        assertThat(timerEvent.durationMs).isEqualTo(60_000L)
-        assertThat(timerEvent.remainingMs).isEqualTo(60_000L)
+        assertThat(timerEvent.durationMs).isEqualTo(75_000L)
+        assertThat(timerEvent.remainingMs).isEqualTo(75_000L)
     }
 
     // ── Stop ──────────────────────────────────────────────────────────────────
@@ -264,14 +284,14 @@ class HostTimerServiceTest {
     // ── Concurrent re-start cancels prior jobs ─────────────────────────────────
 
     @Test
-    fun `start - re-starting does not leave orphan jobs`() = runBlocking {
+    fun `start - re-starting does not leave orphan jobs`(): Unit = runBlocking {
         val g = game(phase = GamePhase.DAY_DISCUSSION)
         mockGame(g)
 
         // Start a 120s timer
-        service.start(hostId, gameId, 120L)
+        service.start(hostId, gameId, 180L)
         // Immediately start a 60s timer — must cancel the 120s jobs
-        service.start(hostId, gameId, 60L)
+        service.start(hostId, gameId, 75L)
 
         // Stop it immediately so no jobs linger past test teardown
         val runningGame = game(phase = GamePhase.DAY_DISCUSSION, running = true, durationMs = 60_000L)

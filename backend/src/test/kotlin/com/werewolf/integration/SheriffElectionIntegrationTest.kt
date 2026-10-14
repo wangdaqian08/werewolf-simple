@@ -291,19 +291,16 @@ class SheriffElectionIntegrationTest {
         assertThat(savedGame.sheriffUserId).isNull()
     }
 
-    // ── Speech order: default ASC ─────────────────────────────────────────────
+    // ── Speech order: random (shuffled) ───────────────────────────────────────
 
     @Test
-    fun `sheriff speeches - speaking order defaults to ascending seat order`() {
+    fun `sheriff speeches - speaking order contains exactly the running candidates`() {
         val r = setupSheriffRoom("SOA")
         val gameId = startGameAndOpenSheriffElection(
             r.host, listOf(r.host, r.g1, r.g2, r.g3, r.g4, r.g5), r.roomId
         )
-
-        // All five guests campaign, deliberately in scrambled order so a pass
-        // can only come from seat sorting (not signup/insertion order). With 5
-        // candidates the old shuffled() order matches ASC with p = 1/120.
-        listOf(r.g5, r.g2, r.g4, r.g1, r.g3).forEach { p ->
+        val candidates = listOf(r.g5, r.g2, r.g4, r.g1, r.g3)
+        candidates.forEach { p ->
             assertThat(action(p.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
         }
         // Host passes → every alive player has decided → auto-advance to SPEECH
@@ -311,90 +308,19 @@ class SheriffElectionIntegrationTest {
 
         val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
         assertThat(election.subPhase).isEqualTo(ElectionSubPhase.SPEECH)
-        // Seats: host=0, g1=1 … g5=5 (setupSheriffRoom). Ascending seat order:
-        assertThat(election.speakingOrder).isEqualTo(
-            listOf(r.g1, r.g2, r.g3, r.g4, r.g5).joinToString(",") { it.userId }
-        )
+        // Order itself is random (see SheriffServiceTest); here only membership is pinned.
+        assertThat(election.speakingOrder!!.split(","))
+            .containsExactlyInAnyOrderElementsOf(candidates.map { it.userId })
     }
 
-    // ── Speech order: host-selected DESC + guards ─────────────────────────────
-
     @Test
-    fun `sheriff speeches - host sets DESC during SIGNUP, speaking order is descending seat order`() {
+    fun `sheriff speech order - host can no longer set a direction`() {
         val r = setupSheriffRoom("SOD")
         val gameId = startGameAndOpenSheriffElection(
             r.host, listOf(r.host, r.g1, r.g2, r.g3, r.g4, r.g5), r.roomId
         )
-
         assertThat(
             action(r.host.token, gameId, "SHERIFF_SET_SPEECH_ORDER", payload = mapOf("direction" to "DESC")).statusCode
-        ).isEqualTo(HttpStatus.OK)
-
-        // State must expose the host's choice (UI reflects it after reconnect)
-        @Suppress("UNCHECKED_CAST")
-        val state = restTemplate.exchange(
-            "/api/game/$gameId/state",
-            org.springframework.http.HttpMethod.GET,
-            HttpEntity<Void>(headers(r.host.token)),
-            Map::class.java,
-        ).body!! as Map<String, Any?>
-        @Suppress("UNCHECKED_CAST")
-        val sheriffState = state["sheriffElection"] as Map<String, Any?>
-        assertThat(sheriffState["speechOrderDirection"]).isEqualTo("DESC")
-
-        listOf(r.g5, r.g2, r.g4, r.g1, r.g3).forEach { p ->
-            assertThat(action(p.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
-        }
-        assertThat(action(r.host.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
-
-        val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
-        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.SPEECH)
-        assertThat(election.speakingOrder).isEqualTo(
-            listOf(r.g5, r.g4, r.g3, r.g2, r.g1).joinToString(",") { it.userId }
-        )
-    }
-
-    @Test
-    fun `sheriff speech order - non-host is rejected`() {
-        val r = setupSheriffRoom("SON")
-        val gameId = startGameAndOpenSheriffElection(
-            r.host, listOf(r.host, r.g1, r.g2, r.g3, r.g4, r.g5), r.roomId
-        )
-        val resp = action(r.g1.token, gameId, "SHERIFF_SET_SPEECH_ORDER", payload = mapOf("direction" to "DESC"))
-        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
-        val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
-        assertThat(election.speechOrderDirection).isEqualTo(SpeechOrderDirection.ASC)
-    }
-
-    @Test
-    fun `sheriff speech order - rejected outside SIGNUP sub-phase`() {
-        val r = setupSheriffRoom("SOS")
-        val gameId = startGameAndOpenSheriffElection(
-            r.host, listOf(r.host, r.g1, r.g2, r.g3, r.g4, r.g5), r.roomId
-        )
-        // Drive to SPEECH: one candidate, everyone else passes
-        assertThat(action(r.g1.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK)
-        listOf(r.host, r.g2, r.g3, r.g4, r.g5).forEach { p ->
-            assertThat(action(p.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK)
-        }
-        val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
-        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.SPEECH)
-
-        val resp = action(r.host.token, gameId, "SHERIFF_SET_SPEECH_ORDER", payload = mapOf("direction" to "DESC"))
-        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
-    }
-
-    @Test
-    fun `sheriff speech order - invalid or missing direction is rejected`() {
-        val r = setupSheriffRoom("SOI")
-        val gameId = startGameAndOpenSheriffElection(
-            r.host, listOf(r.host, r.g1, r.g2, r.g3, r.g4, r.g5), r.roomId
-        )
-        assertThat(
-            action(r.host.token, gameId, "SHERIFF_SET_SPEECH_ORDER", payload = mapOf("direction" to "RANDOM")).statusCode
-        ).isEqualTo(HttpStatus.BAD_REQUEST)
-        assertThat(
-            action(r.host.token, gameId, "SHERIFF_SET_SPEECH_ORDER").statusCode
         ).isEqualTo(HttpStatus.BAD_REQUEST)
     }
 }

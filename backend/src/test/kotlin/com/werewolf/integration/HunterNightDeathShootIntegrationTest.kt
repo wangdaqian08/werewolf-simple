@@ -235,6 +235,33 @@ class HunterNightDeathShootIntegrationTest {
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
         assertThat(alive(gameId, room.g1.userId)).isFalse() // dead from the wolf attack
     }
+    @Test
+    fun `wolf-killed hunter cannot shoot before the host reveals the night result`() {
+        val room = setupRoom("HNW1")
+        val gameId = openDay2(room)
+        saveNight(gameId, wolfTarget = room.g1.userId)
+
+        val resp = action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId)
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(alive(gameId, room.g4.userId)).isTrue()
+    }
+
+    @Test
+    fun `wolf-killed hunter who passed on the reveal cannot shoot later during the vote`() {
+        val room = setupRoom("HNW2")
+        val gameId = openDay2(room)
+        saveNight(gameId, wolfTarget = room.g1.userId)
+        reveal(room, gameId)
+        assertThat(action(room.g1.token, gameId, "HUNTER_PASS").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(action(room.host.token, gameId, "DAY_ADVANCE").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(phase(gameId)).isEqualTo(GamePhase.DAY_VOTING)
+
+        val resp = action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId)
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(alive(gameId, room.g4.userId)).isTrue()
+    }
 
     @Test
     fun `hunter shoot kills the target and lands on RESULT_REVEALED`() {

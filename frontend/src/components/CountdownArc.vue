@@ -9,7 +9,8 @@ const props = withDefaults(
     isHost: boolean
     presets?: number[]
   }>(),
-  { presets: () => [60, 120] },
+  //   use the backend werewolf.host-timer.presets-seconds
+  { presets: () => [] },
 )
 
 const emit = defineEmits<{

@@ -65,6 +65,8 @@ class WerewolfHandler(
 
         // 空刀: no kill tonight. Clears any target a wolf had selected.
         if (action.actionType == ActionType.WOLF_SKIP) {
+            if (context.room.config?.noKillAllowed != true)
+                return GameActionResult.Rejected("空刀 (no kill) is not enabled in this room")
             if (killConfirmed.putIfAbsent(action.gameId, true) != null)
                 return GameActionResult.Rejected("Kill already confirmed by teammate")
             nightPhase.wolfTargetUserId = null

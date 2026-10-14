@@ -113,4 +113,21 @@ class GameServiceStateTimerTest {
         assertThat(timer["durationMs"]).isEqualTo(60_000L)
         assertThat(timer["running"]).isEqualTo(true)
     }
+    @Test
+    fun `getGameState exposes the host timer presets from the backend config`() {
+        val players = listOf(player(hostId, 0))
+        whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(game()))
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room()))
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(players)
+        whenever(userRepository.findAllById(players.map { it.userId })).thenReturn(listOf(user(hostId, "Host")))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(audioReplayCache.snapshot(gameId)).thenReturn(emptyList())
+        whenever(hostTimerService.snapshot(gameId)).thenReturn(TimerSnapshot(0L, 0L, false))
+        whenever(hostTimerService.presetsSeconds).thenReturn(listOf(75L, 180L))
+
+        val result = gameService.getGameState(gameId, hostId)
+
+        assertThat(result["timerPresetsSeconds"]).isEqualTo(listOf(75L, 180L))
+    }
+
 }

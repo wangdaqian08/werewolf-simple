@@ -225,6 +225,11 @@
   border-bottom: none;
 }
 
+.vcol-empty {
+  justify-content: center;
+  color: var(--muted);
+}
+
 .vcol-avatar {
   font-size: 0.875rem;
   width: 1.25rem;
