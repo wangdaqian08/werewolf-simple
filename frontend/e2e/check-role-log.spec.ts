@@ -163,10 +163,15 @@ test('history panel closes when clicking overlay backdrop', async ({ page }) => 
   await expect(page.locator('.history-sheet')).not.toBeVisible()
 })
 
-test('role-history row hidden on HUNTER_SHOOT screen (different template)', async ({ page }) => {
+test('non-hunter keeps the vote screen (with role-history row) during HUNTER_SHOOT', async ({
+                                                                                              page,
+                                                                                            }) => {
   await goToVotingScenario(page, 'Hunter')
-  // The role+history row is only inside the isVotingScreen template block
-  await expect(page.locator('.role-history-row')).not.toBeVisible()
+  // Only the voted-out hunter gets the shoot screen; everyone else (the mock
+  // viewer u1 here) stays on the vote screen so the hunter's role stays private.
+  await expect(page.locator('.role-history-row')).toBeVisible()
+  await expect(page.getByText('猎人出局')).toHaveCount(0)
+  await expect(page.getByTestId('voting-vote')).toHaveCount(0)
 })
 
 // ── HIGH: Body scroll lock ────────────────────────────────────────────────────

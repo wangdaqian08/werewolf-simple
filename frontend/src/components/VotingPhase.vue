@@ -706,9 +706,13 @@ const isBadgeScreen = computed(
     props.votingPhase.subPhase === 'BADGE_RECEIVED',
 )
 
-// Tally/result is revealed when tallyRevealed flag is set or we're on VOTE_RESULT sub-phase
+// Tally/result is revealed when tallyRevealed flag is set or we're on VOTE_RESULT
+// (or HUNTER_SHOOT, which only follows a revealed vote) sub-phase
 const isRevealed = computed(
-  () => props.votingPhase.tallyRevealed || props.votingPhase.subPhase === 'VOTE_RESULT',
+  () =>
+    props.votingPhase.tallyRevealed ||
+    props.votingPhase.subPhase === 'VOTE_RESULT' ||
+    props.votingPhase.subPhase === 'HUNTER_SHOOT',
 )
 
 // Debug: watch votingPhase changes

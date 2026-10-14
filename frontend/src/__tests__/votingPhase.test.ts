@@ -881,7 +881,7 @@ describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
     idiotRevealed: false,
   }))
 
-  const mountHunterShoot = (myUserId: string, isHost = false) => {
+  const mountHunterShoot = (myUserId: string, isHost = false, tallyRevealed = true) => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const router = createRouter({
@@ -900,7 +900,7 @@ describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
           dayNumber: 2,
           phaseDeadline: 0,
           phaseStarted: 0,
-          tallyRevealed: true,
+          tallyRevealed,
           tally: [
             {
               playerId: 'p2',
@@ -945,6 +945,13 @@ describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
     const wrapper = mountHunterShoot('p1', true)
     expect(wrapper.find('[data-testid="voting-continue"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('猎人')
+  })
+
+  it('other players get no vote buttons even if the payload lacks tallyRevealed', () => {
+    const wrapper = mountHunterShoot('p3', false, false)
+    expect(wrapper.find('[data-testid="voting-vote"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voting-skip"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('等待中')
   })
 
   it('the hunter header shows only the day', () => {
