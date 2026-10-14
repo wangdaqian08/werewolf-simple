@@ -63,11 +63,16 @@ class RoleHandlerTest {
             handler = WerewolfHandler(nightPhaseRepository)
         }
 
-        private fun wolfCtx(wolfAlive: Boolean = true, targetAlive: Boolean = true): GameContext {
+        private fun wolfCtx(
+            wolfAlive: Boolean = true,
+            targetAlive: Boolean = true,
+            noKillAllowed: Boolean = false,
+        ): GameContext {
             val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
             val wolf = player("wolf", 1, PlayerRole.WEREWOLF, wolfAlive)
             val victim = player("u2", 2, PlayerRole.VILLAGER, targetAlive)
-            return GameContext(game(), room(), listOf(wolf, victim), nightPhase = np)
+            val room = room().also { it.config = GameConfig(noKillAllowed = noKillAllowed) }
+            return GameContext(game(), room, listOf(wolf, victim), nightPhase = np)
         }
 
         @Test
@@ -110,8 +115,21 @@ class RoleHandlerTest {
         }
 
         @Test
+        fun `wolf skip - rejected when 空刀 is not enabled for the room (default)`() {
+            val ctx = wolfCtx()
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("wolf", ActionType.WOLF_SKIP), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+            // The wolves must still be able to pick a target afterwards.
+            assertThat(handler.handle(req("wolf", ActionType.WOLF_KILL, "u2"), ctx))
+                .isInstanceOf(GameActionResult.Success::class.java)
+        }
+
+        @Test
         fun `wolf skip - 空刀 clears any selection and locks the turn`() {
-            val ctx = wolfCtx().also { it.nightPhase!!.wolfTargetUserId = "u2" }
+            val ctx = wolfCtx(noKillAllowed = true).also { it.nightPhase!!.wolfTargetUserId = "u2" }
             whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
             val result = handler.handle(req("wolf", ActionType.WOLF_SKIP), ctx)

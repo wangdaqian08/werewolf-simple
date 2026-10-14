@@ -104,6 +104,8 @@ data class GameConfig(
      * this room. Host-controlled fairness toggle; default on.
      */
     val perksAllowed: Boolean = true,
+
+    val noKillAllowed: Boolean = false,
 ) {
     /**
      * 获取指定角色的延迟配置

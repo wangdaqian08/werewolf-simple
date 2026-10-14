@@ -40,18 +40,15 @@ class SelfDestructService(
 ) {
     private val log = LoggerFactory.getLogger(SelfDestructService::class.java)
 
-    private val allowedPhases = setOf(
-        GamePhase.SHERIFF_ELECTION,
-        GamePhase.DAY_DISCUSSION,
-        GamePhase.DAY_VOTING,
-    )
-
-    private val skillPendingSubPhases = setOf(
-        VotingSubPhase.HUNTER_SHOOT.name,
-        VotingSubPhase.BADGE_HANDOVER.name,
-        DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name,
-        DaySubPhase.BADGE_HANDOVER.name,
-    )
+    /**
+     * Self-destruct window: the sheriff campaign (警上自爆), or the day after the
+     * host has revealed the night result and before voting starts. Rejected
+     * before the reveal, while a hunter shot / badge handover is pending, and
+     * in every DAY_VOTING sub-phase.
+     */
+    private fun inSelfDestructWindow(game: Game): Boolean =
+        game.phase == GamePhase.SHERIFF_ELECTION ||
+                (game.phase == GamePhase.DAY_DISCUSSION && game.subPhase == DaySubPhase.RESULT_REVEALED.name)
 
     @Transactional
     fun selfDestruct(request: GameActionRequest, context: GameContext): GameActionResult {
@@ -60,18 +57,18 @@ class SelfDestructService(
         if (!actor.alive) return GameActionResult.Rejected("Dead players cannot act")
         if (!actor.role.isWolf)
             return GameActionResult.Rejected("Only werewolves can self-destruct")
-        if (context.game.phase !in allowedPhases)
-            return GameActionResult.Rejected("Self-destruct not allowed in phase ${context.game.phase}")
+        if (!inSelfDestructWindow(context.game))
+            return GameActionResult.Rejected(
+                "Self-destruct is only allowed during the sheriff campaign, " +
+                        "or after the night result is revealed and before voting starts"
+            )
         // A self-destruct ends the day at once, so a second one has nothing to end.
         if (context.game.daySkipVoting)
             return GameActionResult.Rejected("A wolf already self-destructed today")
-        // A pending hunter shot or badge handover resolves first.
-        if (context.game.subPhase in skillPendingSubPhases)
-            return GameActionResult.Rejected("Wait for the hunter shot or badge handover to finish")
 
-        // Before the night result is shown, last night's victims are still alive in the DB.
-        val resultHidden = context.game.phase == GamePhase.SHERIFF_ELECTION ||
-                context.game.subPhase == DaySubPhase.RESULT_HIDDEN.name
+        // During the sheriff campaign the night result is still hidden, so last
+        // night's victims are still alive in the DB.
+        val resultHidden = context.game.phase == GamePhase.SHERIFF_ELECTION
         // GameContext.nightPhase is loaded only at NIGHT, so read last night's row directly.
         val lastNight = context.allNightPhases.firstOrNull { it.dayNumber == context.game.dayNumber }
         val pendingNightKills = if (resultHidden && lastNight != null) {
@@ -138,18 +135,8 @@ class SelfDestructService(
             GamePhase.DAY_DISCUSSION -> {
                 // Stay in current sub-phase — flag change enables host's "进入夜晚" button
             }
-            GamePhase.DAY_VOTING -> {
-                // Standard 自爆 rule: the day ends with NO vote. Don't leave the
-                // game on a DAY_VOTING vote-result screen (reported as "still goes
-                // to voting"); the night deaths were already revealed before voting
-                // began, so route to DAY_DISCUSSION/RESULT_REVEALED. The host's
-                // single 进入夜晚 button (daySkipVoting=true) then advances straight
-                // to night — identical to a self-destruct during discussion.
-                context.game.phase = GamePhase.DAY_DISCUSSION
-                context.game.subPhase = DaySubPhase.RESULT_REVEALED.name
-            }
             else -> {
-                // allowedPhases guard above prevents other phases reaching here
+                // inSelfDestructWindow guard above prevents other phases reaching here
             }
         }
 

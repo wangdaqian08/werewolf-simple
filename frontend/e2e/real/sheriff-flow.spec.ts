@@ -69,12 +69,12 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // running mate works, because deferred kills mean no one is dead in
     // DB yet during sheriff signup.
     const villagerSeats = (ctx.roleMap.VILLAGER ?? [])
-      .filter((b) => b.nick !== 'Host')
-      .map((b) => b.seat)
+        .filter((b) => b.nick !== 'Host')
+        .map((b) => b.seat)
     const wolfTargetSeat = villagerSeats[0]
     expect(
-      wolfTargetSeat,
-      'kit must include at least one non-host VILLAGER for the wolf to target',
+        wolfTargetSeat,
+        'kit must include at least one non-host VILLAGER for the wolf to target',
     ).toBeDefined()
 
     // driveMinimalNight1ViaDom drives the 4 night sub-phases via DOM and
@@ -121,11 +121,11 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // host's role guarantees a bot's browser and removes that edge case
     // entirely.
     const candidateRole = (['SEER', 'WITCH', 'GUARD', 'WEREWOLF', 'VILLAGER'] as const).find(
-      (r) => r !== ctx.hostRole && ctx.pages.has(r),
+        (r) => r !== ctx.hostRole && ctx.pages.has(r),
     )
     if (!candidateRole) {
       throw new Error(
-        `No non-host browser available for DOM signup. ` +
+          `No non-host browser available for DOM signup. ` +
           `hostRole=${ctx.hostRole}, pages=${Array.from(ctx.pages.keys()).join(',')}`,
       )
     }
@@ -133,7 +133,7 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     const candidateBot = (ctx.roleMap[candidateRole] ?? []).find((b) => b.nick !== 'Host')
     if (!candidateBot) {
       throw new Error(
-        `roleMap[${candidateRole}] has no non-host bot — host pinning is wrong`,
+          `roleMap[${candidateRole}] has no non-host bot — host pinning is wrong`,
       )
     }
     test2BrowserCandidateNick = candidateBot.nick
@@ -141,18 +141,18 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // Wait for SHERIFF_ELECTION/SIGNUP — only sub-phase where `sheriff-run`
     // renders. Backend may take a moment after role-reveal-end to enter it.
     await waitForCondition(
-      async () => {
-        const state = await candidatePage.evaluate(async (id: string) => {
-          const token = localStorage.getItem('jwt')
-          const res = await fetch(`/api/game/${id}/state`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          return res.ok ? res.json() : null
-        }, ctx.gameId)
-        return state?.sheriffElection?.subPhase === 'SIGNUP'
-      },
-      'sheriffElection.subPhase to reach SIGNUP',
-      15_000,
+        async () => {
+          const state = await candidatePage.evaluate(async (id: string) => {
+            const token = localStorage.getItem('jwt')
+            const res = await fetch(`/api/game/${id}/state`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            return res.ok ? res.json() : null
+          }, ctx.gameId)
+          return state?.sheriffElection?.subPhase === 'SIGNUP'
+        },
+        'sheriffElection.subPhase to reach SIGNUP',
+        15_000,
     )
 
     // (a) sheriff-run must render. If it doesn't, that's a regression in
@@ -174,7 +174,7 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     const wolfBots = ctx.roleMap.WEREWOLF ?? []
     const villagerBots = ctx.roleMap.VILLAGER ?? []
     const campaigners = [...wolfBots.slice(0, 1), ...villagerBots.slice(0, 2)].filter(
-      (b) => b.nick !== 'Host' && b.userId !== candidateBot.userId,
+        (b) => b.nick !== 'Host' && b.userId !== candidateBot.userId,
     )
     expect(campaigners.length, 'need at least one non-host bot to campaign').toBeGreaterThan(0)
     for (const bot of campaigners) {
@@ -187,32 +187,12 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // reflect the count of decided alive players. The candidate signed up
     // via (b) above, so the expected `decided` is 1 + campaigners.length.
     await expect(candidatePage.getByTestId('sheriff-decision-progress')).toContainText(
-      new RegExp(`${1 + campaigners.length}\\s*/`),
-      { timeout: 10_000 },
+        new RegExp(`${1 + campaigners.length}\\s*/`),
+        { timeout: 10_000 },
     )
 
-    // Host chooses DESCENDING speaking order while still in SIGNUP. DOM-driven
-    // (e2e principle 1): click the toggle on the host page, then assert both
-    // the active-state class flip AND the state round-trip — either alone can
-    // false-pass (class could be local-only; state could change without UI).
-    const descBtn = ctx.hostPage.getByTestId('speech-order-desc')
-    await expect(descBtn).toBeVisible({ timeout: 10_000 })
-    await descBtn.click()
-    await expect(descBtn).toHaveClass(/order-active/, { timeout: 10_000 })
-    await waitForCondition(
-      async () => {
-        const state = await ctx.hostPage.evaluate(async (id: string) => {
-          const token = localStorage.getItem('jwt')
-          const res = await fetch(`/api/game/${id}/state`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          return res.ok ? res.json() : null
-        }, ctx.gameId)
-        return state?.sheriffElection?.speechOrderDirection === 'DESC'
-      },
-      'sheriffElection.speechOrderDirection to round-trip as DESC',
-      10_000,
-    )
+    // Speaking order is random (server-side shuffle) — the host has no toggle.
+    await expect(ctx.hostPage.getByTestId('speech-order-desc')).toHaveCount(0)
 
     // Record campaigner userIds so test 3 can leave them alone when driving
     // remaining alive players to pass.
@@ -229,13 +209,13 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
   // election already wrapped). Used to gate every host-only action so the
   // backend isn't spammed with "Not in <X> sub-phase" rejections.
   const readSheriffSubPhase = async (page: Page, gameId: string): Promise<string | null> =>
-    page.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      return res.ok ? ((await res.json())?.sheriffElection?.subPhase ?? null) : null
-    }, gameId)
+      page.evaluate(async (id: string) => {
+        const token = localStorage.getItem('jwt')
+        const res = await fetch(`/api/game/${id}/state`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        return res.ok ? ((await res.json())?.sheriffElection?.subPhase ?? null) : null
+      }, gameId)
 
   // ── Test 3: Speeches — host advances, speaker shown ────────────────────
 
@@ -248,13 +228,13 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // hides other candidates' identities, so we can't recover the set from
     // a state poll).
     await waitForCondition(
-      async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'SIGNUP',
-      'sheriff election to reach SIGNUP before driving remaining passes',
-      15_000,
+        async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'SIGNUP',
+        'sheriff election to reach SIGNUP before driving remaining passes',
+        15_000,
     )
     expect(
-      test2CampaignerUserIds.size,
-      'test 2 must have populated test2CampaignerUserIds before test 3 runs',
+        test2CampaignerUserIds.size,
+        'test 2 must have populated test2CampaignerUserIds before test 3 runs',
     ).toBeGreaterThan(0)
 
     const hostUserId = await ctx.hostPage.evaluate(() => localStorage.getItem('userId'))
@@ -266,14 +246,14 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       if (!res.ok) return [] as string[]
       const state = await res.json()
       return ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
-        .filter((p) => p.isAlive)
-        .map((p) => p.userId)
+          .filter((p) => p.isAlive)
+          .map((p) => p.userId)
     }, ctx.gameId)
     const allBots = Object.values(ctx.roleMap).flatMap((b) => b ?? [])
     for (const userId of aliveIds) {
       if (test2CampaignerUserIds.has(userId)) continue // campaigner — leave RUNNING
       const selector =
-        userId === hostUserId ? 'HOST' : allBots.find((b) => b.userId === userId)?.nick
+          userId === hostUserId ? 'HOST' : allBots.find((b) => b.userId === userId)?.nick
       if (!selector) continue
       try {
         sheriff('pass', { player: selector, room: ctx.roomCode })
@@ -285,15 +265,14 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
 
     // Backend auto-transitions SIGNUP → SPEECH once all alive players have decided.
     await waitForCondition(
-      async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'SPEECH',
-      'sheriff election to auto-transition to SPEECH after every alive player decides',
-      15_000,
+        async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'SPEECH',
+        'sheriff election to auto-transition to SPEECH after every alive player decides',
+        15_000,
     )
 
-    // Host chose DESC in test 2 → speakingOrder must be strictly descending
-    // by seat index. Read order + seats in one state fetch and assert the
-    // mapped seat sequence. This is the feature's core end-to-end contract:
-    // DOM toggle → REST action → DB column → order builder → state.
+    // Speaking order is a random shuffle of the campaigners. Read order + seats
+    // in one state fetch: every entry must map to a seated player and the
+    // first current speaker must be the head of that order.
     const { orderSeats } = await ctx.hostPage.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
       const res = await fetch(`/api/game/${id}/state`, {
@@ -301,20 +280,19 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       })
       const state = await res.json()
       const seatByUserId = new Map(
-        ((state?.players ?? []) as Array<{ userId: string; seatIndex: number }>).map((p) => [
-          p.userId,
-          p.seatIndex,
-        ]),
+          ((state?.players ?? []) as Array<{ userId: string; seatIndex: number }>).map((p) => [
+            p.userId,
+            p.seatIndex,
+          ]),
       )
       const order = (state?.sheriffElection?.speakingOrder ?? []) as string[]
       return { orderSeats: order.map((uid) => seatByUserId.get(uid) ?? -1) }
     }, ctx.gameId)
     expect(orderSeats.length, 'speaking order must not be empty').toBeGreaterThan(1)
     expect(orderSeats, 'no unmapped userIds in speaking order').not.toContain(-1)
-    const sortedDesc = [...orderSeats].sort((a, b) => b - a)
-    expect(orderSeats, 'speaking order must be descending by seat').toEqual(sortedDesc)
+    expect(new Set(orderSeats).size, 'no duplicate speakers').toBe(orderSeats.length)
 
-    // And the first current speaker shown must be the highest-seat candidate.
+    // And the first current speaker shown must be the head of the order.
     const firstSpeakerSeat = await ctx.hostPage.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
       const res = await fetch(`/api/game/${id}/state`, {
@@ -343,9 +321,9 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
       const sub = await readSheriffSubPhase(ctx.hostPage, ctx.gameId)
       if (sub !== 'SPEECH') break
       const reappeared = await advanceBtn
-        .waitFor({ state: 'visible', timeout: 5_000 })
-        .then(() => true)
-        .catch(() => false)
+          .waitFor({ state: 'visible', timeout: 5_000 })
+          .then(() => true)
+          .catch(() => false)
       if (!reappeared) continue
       await advanceBtn.click()
     }
@@ -353,9 +331,9 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // After all speeches, backend should be in VOTING. Assert it — if not,
     // the test fails loudly instead of silently leaving the phase wrong.
     await waitForCondition(
-      async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'VOTING',
-      'sheriff election to reach VOTING after last speaker',
-      15_000,
+        async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'VOTING',
+        'sheriff election to reach VOTING after last speaker',
+        15_000,
     )
 
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-03-speeches')
@@ -366,9 +344,9 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
   test('4. Sheriff voting — bots vote, result revealed on all browsers', async ({}, testInfo) => {
     // Test 3 left us in VOTING. Assert that explicitly.
     await waitForCondition(
-      async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'VOTING',
-      'sheriff election VOTING sub-phase reached after test 3',
-      15_000,
+        async () => (await readSheriffSubPhase(ctx.hostPage, ctx.gameId)) === 'VOTING',
+        'sheriff election VOTING sub-phase reached after test 3',
+        15_000,
     )
 
     // All non-host non-candidate bots vote for the bot that signed up via
@@ -377,8 +355,8 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // instead.
     const targetNick = test2BrowserCandidateNick
     expect(
-      targetNick,
-      'test 2 must have recorded the DOM-signup candidate nick before test 4',
+        targetNick,
+        'test 2 must have recorded the DOM-signup candidate nick before test 4',
     ).toBeTruthy()
     sheriff('vote', { target: targetNick!, room: ctx.roomCode })
     sheriff('abstain', { player: targetNick!, room: ctx.roomCode })
@@ -398,12 +376,12 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
 
     // Backend transitions VOTING → RESULT (or TIED). Assert it.
     await waitForCondition(
-      async () => {
-        const sub = await readSheriffSubPhase(ctx.hostPage, ctx.gameId)
-        return sub === 'RESULT' || sub === 'TIED'
-      },
-      'sheriff election RESULT/TIED reached after sheriff-reveal-result',
-      15_000,
+        async () => {
+          const sub = await readSheriffSubPhase(ctx.hostPage, ctx.gameId)
+          return sub === 'RESULT' || sub === 'TIED'
+        },
+        'sheriff election RESULT/TIED reached after sheriff-reveal-result',
+        15_000,
     )
 
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-04-result')
@@ -426,18 +404,18 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     await endBtn.click()
 
     await waitForCondition(
-      async () => {
-        const state = await ctx.hostPage.evaluate(async (id: string) => {
-          const token = localStorage.getItem('jwt')
-          const res = await fetch(`/api/game/${id}/state`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          return res.ok ? await res.json() : null
-        }, ctx.gameId)
-        return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
-      },
-      'SHERIFF_END_RESULT click landed on DAY_DISCUSSION/RESULT_HIDDEN',
-      15_000,
+        async () => {
+          const state = await ctx.hostPage.evaluate(async (id: string) => {
+            const token = localStorage.getItem('jwt')
+            const res = await fetch(`/api/game/${id}/state`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            return res.ok ? await res.json() : null
+          }, ctx.gameId)
+          return state?.phase === 'DAY_DISCUSSION' && state?.subPhase === 'RESULT_HIDDEN'
+        },
+        'SHERIFF_END_RESULT click landed on DAY_DISCUSSION/RESULT_HIDDEN',
+        15_000,
     )
 
     // All browsers transition to DAY (PHASE_DATA_VALUES maps "DAY" to

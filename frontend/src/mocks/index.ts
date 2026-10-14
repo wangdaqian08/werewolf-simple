@@ -668,14 +668,6 @@ export function setupMocks() {
           }
         }
         pushGameStateUpdate()
-      } else if (actionType === 'SHERIFF_SET_SPEECH_ORDER') {
-        const direction =
-          (payload as { direction?: 'ASC' | 'DESC' } | undefined)?.direction ?? 'ASC'
-        mockGameState = {
-          ...mockGameState,
-          sheriffElection: { ...e, speechOrderDirection: direction },
-        }
-        pushGameStateUpdate()
       } else if (actionType === 'SHERIFF_VOTE') {
         const t = e.voteProgress?.total ?? 8
         mockGameState = {

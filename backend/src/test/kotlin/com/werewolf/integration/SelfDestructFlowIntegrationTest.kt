@@ -209,35 +209,22 @@ class SelfDestructFlowIntegrationTest {
     }
 
     @Test
-    fun `wolf self-destruct during DAY_VOTING ends the day to night, never a vote-result screen`() {
+    fun `wolf self-destruct is rejected once DAY_VOTING has started`() {
         val (all, gameId) = startSixPlayerGame("SD3")
-        val players = gamePlayerRepository.findByGameId(gameId)
-        val wolf = players.first { it.role == PlayerRole.WEREWOLF }
+        val wolf = gamePlayerRepository.findByGameId(gameId).first { it.role == PlayerRole.WEREWOLF }
 
-        // Arrange an open Day-2 vote (results already revealed before voting).
         val game = gameRepository.findById(gameId).orElseThrow()
         game.phase = GamePhase.DAY_VOTING
         game.subPhase = VotingSubPhase.VOTING.name
         game.dayNumber = 2
         gameRepository.save(game)
-        nightPhaseRepository.save(
-            NightPhase(gameId = gameId, dayNumber = 2).also { it.subPhase = NightSubPhase.COMPLETE },
-        )
 
         assertThat(action(tokenOf(all, wolf.userId), gameId, "WOLF_SELF_DESTRUCT").statusCode)
-            .isEqualTo(HttpStatus.OK)
-
-        // Standard rule: the day ends with NO vote → no DAY_VOTING vote-result screen.
-        val afterBoom = gameRepository.findById(gameId).orElseThrow()
-        assertThat(afterBoom.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
-        assertThat(afterBoom.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
-        assertThat(afterBoom.daySkipVoting).isTrue()
-
-        assertThat(action(tokenOf(all, game.hostUserId), gameId, "VOTING_CONTINUE").statusCode)
-            .isEqualTo(HttpStatus.OK)
-        val afterContinue = gameRepository.findById(gameId).orElseThrow()
-        assertThat(afterContinue.phase).isEqualTo(GamePhase.NIGHT)
-        assertThat(afterContinue.dayNumber).isEqualTo(3)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        val after = gameRepository.findById(gameId).orElseThrow()
+        assertThat(after.phase).isEqualTo(GamePhase.DAY_VOTING)
+        assertThat(after.daySkipVoting).isFalse()
+        assertThat(alive(gameId, wolf.userId)).isTrue()
     }
 
     // ── White Wolf King (白狼王) ─────────────────────────────────────────────
@@ -376,28 +363,39 @@ class SelfDestructFlowIntegrationTest {
         assertThat(game.daySkipVoting).isTrue()
     }
 
-    // House rule (kept on purpose): unlike some rule sets, wolves — the king
-    // included — may self-destruct during the vote and the vote-result last words.
+    // Self-destruct window ends when voting starts: the king cannot self-destruct
+    // (or take anyone) during the vote or on the vote-result screen.
     @Test
-    fun `house rule - king may self-destruct and take a player during the vote`() {
+    fun `rule - king cannot self-destruct during the vote`() {
         val g = kingGame("WR2")
         arrange(g.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
 
         assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.target.userId).statusCode)
-            .isEqualTo(HttpStatus.OK)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
 
-        assertThat(alive(g.gameId, g.target.userId)).isFalse()
+        assertThat(alive(g.gameId, g.target.userId)).isTrue()
+        assertThat(alive(g.gameId, g.king.userId)).isTrue()
     }
 
     @Test
-    fun `house rule - king may self-destruct and take a player on the vote-result screen (last words)`() {
+    fun `rule - king cannot self-destruct on the vote-result screen`() {
         val g = kingGame("WR3")
         arrange(g.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
 
         assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT", g.target.userId).statusCode)
-            .isEqualTo(HttpStatus.OK)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
 
-        assertThat(alive(g.gameId, g.target.userId)).isFalse()
+        assertThat(alive(g.gameId, g.target.userId)).isTrue()
+    }
+
+    @Test
+    fun `rule - king cannot self-destruct before the host reveals the night result`() {
+        val g = kingGame("WR11")
+        arrange(g.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name)
+
+        assertThat(action(tokenOf(g.all, g.king.userId), g.gameId, "WOLF_SELF_DESTRUCT").statusCode)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(alive(g.gameId, g.king.userId)).isTrue()
     }
 
     @Test

@@ -226,10 +226,10 @@ test.describe('Flow D — DAY_DISCUSSION exit cancels timer', () => {
     }
   })
 
-  test('D.1 drive to DAY_DISCUSSION and start 120s timer', async () => {
+  test('D.1 drive to DAY_DISCUSSION and start 3 minutes timer', async () => {
     await driveToDay(ctx)
-    await ctx.hostPage.click('[data-testid="phase-countdown-start-120"]')
-    await waitForTimerOnAllPages([ctx.hostPage], 115_000, 120_500)
+    await ctx.hostPage.click('[data-testid="phase-countdown-start-180"]')
+    await waitForTimerOnAllPages([ctx.hostPage], 175_000, 180_500)
   })
 
   test('D.2 host starts vote — all clients see timer running=false within 2s', async () => {

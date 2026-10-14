@@ -389,59 +389,17 @@ describe('SheriffElection — below-header layout (Action chip on the right)', (
   })
 })
 
-describe('SheriffElection — speech order toggle (SIGNUP)', () => {
+describe('SheriffElection — speaking order is random (no host toggle)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  it('host sees ASC/DESC toggle during SIGNUP, ASC active by default', () => {
+  it('host sees no ASC/DESC speaking-order toggle during SIGNUP', () => {
     const wrapper = mount(SheriffElection, {
       props: { ...DEFAULT_PROPS, isHost: true, election: makeElection({ subPhase: 'SIGNUP' }) },
     })
-    const asc = wrapper.find('[data-testid="speech-order-asc"]')
-    const desc = wrapper.find('[data-testid="speech-order-desc"]')
-    expect(asc.exists()).toBe(true)
-    expect(desc.exists()).toBe(true)
-    expect(asc.classes()).toContain('order-active')
-    expect(desc.classes()).not.toContain('order-active')
-  })
-
-  it('toggle reflects DESC from game state', () => {
-    const wrapper = mount(SheriffElection, {
-      props: {
-        ...DEFAULT_PROPS,
-        isHost: true,
-        election: makeElection({ subPhase: 'SIGNUP', speechOrderDirection: 'DESC' }),
-      },
-    })
-    expect(wrapper.find('[data-testid="speech-order-desc"]').classes()).toContain('order-active')
-    expect(wrapper.find('[data-testid="speech-order-asc"]').classes()).not.toContain('order-active')
-  })
-
-  it('clicking DESC emits set-speech-order', async () => {
-    const wrapper = mount(SheriffElection, {
-      props: { ...DEFAULT_PROPS, isHost: true, election: makeElection({ subPhase: 'SIGNUP' }) },
-    })
-    await wrapper.find('[data-testid="speech-order-desc"]').trigger('click')
-    expect(wrapper.emitted('set-speech-order')).toEqual([['DESC']])
-  })
-
-  it('non-host never sees the toggle', () => {
-    const wrapper = mount(SheriffElection, {
-      props: { ...DEFAULT_PROPS, isHost: false, election: makeElection({ subPhase: 'SIGNUP' }) },
-    })
     expect(wrapper.find('[data-testid="speech-order-asc"]').exists()).toBe(false)
-  })
-
-  it('toggle is not rendered outside SIGNUP', () => {
-    const wrapper = mount(SheriffElection, {
-      props: {
-        ...DEFAULT_PROPS,
-        isHost: true,
-        election: makeElection({ subPhase: 'SPEECH', currentSpeakerId: 'u2' }),
-      },
-    })
-    expect(wrapper.find('[data-testid="speech-order-asc"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="speech-order-desc"]').exists()).toBe(false)
   })
 })
 
@@ -450,16 +408,53 @@ describe('SheriffElection — speech timer presets', () => {
     setActivePinia(createPinia())
   })
 
-  it('host keeps the 1:00 and 2:00 presets during SPEECH', () => {
+  it('host gets the same backend presets as day discussion (1:15 and 3:00) during SPEECH', () => {
     const wrapper = mount(SheriffElection, {
       props: {
         ...DEFAULT_PROPS,
         isHost: true,
+        timerPresets: [75, 180],
         election: makeElection({ subPhase: 'SPEECH', currentSpeakerId: 'u2' }),
       },
     })
-    expect(wrapper.find('[data-testid="phase-countdown-start-60"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="phase-countdown-start-120"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="phase-countdown-start-75"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="phase-countdown-start-75"]').text()).toBe('1:15')
+    expect(wrapper.find('[data-testid="phase-countdown-start-180"]').text()).toBe('3:00')
+    expect(wrapper.find('[data-testid="phase-countdown-start-60"]').exists()).toBe(false)
   })
+})
+
+describe('SheriffElection — abstain column is always shown on reveal', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const result = {
+    sheriffId: 'u2',
+    sheriffNickname: 'Alice',
+    sheriffAvatar: '😊',
+    tally: [
+      {
+        candidateId: 'u2',
+        nickname: 'Alice',
+        seatIndex: 2,
+        votes: 1,
+        voters: [{ userId: 'u1', nickname: 'Host', avatar: '😊', seatIndex: 1 }],
+      },
+    ],
+    abstainCount: 0,
+    abstainVoters: [],
+  }
+
+  it.each(['RESULT', 'TIED'] as const)(
+    '%s: shows 弃票 with 无 when nobody abstained',
+    (subPhase) => {
+      const wrapper = mount(SheriffElection, {
+        props: { election: makeElection({ subPhase, result }), ...DEFAULT_PROPS },
+      })
+      const col = wrapper.find('.vote-col-abstain')
+      expect(col.exists()).toBe(true)
+      expect(col.find('.vote-col-count').text()).toBe('0')
+      expect(col.find('.vote-col-body').text()).toContain('无')
+    },
+  )
 })

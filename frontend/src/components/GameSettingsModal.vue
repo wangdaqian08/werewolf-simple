@@ -66,6 +66,10 @@
                   settings.witchSelfSaveAllowed ? '仅首夜' : '禁止'
                 }}</span>
               </div>
+              <div class="rule-row" data-testid="settings-no-kill">
+                <span class="rule-label">空刀</span>
+                <span class="rule-value">{{ settings.noKillAllowed ? '允许' : '禁止' }}</span>
+              </div>
               <div class="rule-row" data-testid="settings-win-condition">
                 <span class="rule-label">胜利条件</span>
                 <span class="rule-value">

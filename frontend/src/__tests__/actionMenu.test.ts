@@ -221,3 +221,60 @@ describe('ActionMenu — 白狼王 take', () => {
     wrapper.unmount()
   })
 })
+describe('ActionMenu — self-destruct window', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  async function offersSelfDestruct(props: {
+    phase: GamePhase
+    subPhase: string
+    daySkipVoting?: boolean
+  }) {
+    const wrapper = mount(ActionMenu, {
+      props: { myRole: 'WEREWOLF', isAlive: true, ...props },
+      attachTo: document.body,
+    })
+    await wrapper.find('[data-testid="action-menu-btn"]').trigger('click')
+    const offered = !!document.body.querySelector('[data-testid="action-menu-self-destruct"]')
+    wrapper.unmount()
+    return offered
+  }
+
+  it.each(['SIGNUP', 'SPEECH', 'VOTING', 'RESULT', 'TIED'])(
+    'offered during the sheriff campaign (%s)',
+    async (subPhase) => {
+      expect(await offersSelfDestruct({ phase: 'SHERIFF_ELECTION', subPhase })).toBe(true)
+    },
+  )
+
+  it('offered after the night result is revealed', async () => {
+    expect(await offersSelfDestruct({ phase: 'DAY_DISCUSSION', subPhase: 'RESULT_REVEALED' })).toBe(
+      true,
+    )
+  })
+
+  it.each(['RESULT_HIDDEN', 'HUNTER_SHOOT_NIGHT_DEATH', 'BADGE_HANDOVER'])(
+    'not offered in DAY_DISCUSSION/%s',
+    async (subPhase) => {
+      expect(await offersSelfDestruct({ phase: 'DAY_DISCUSSION', subPhase })).toBe(false)
+    },
+  )
+
+  it.each(['VOTING', 'RE_VOTING', 'VOTE_RESULT', 'HUNTER_SHOOT'])(
+    'not offered in DAY_VOTING/%s',
+    async (subPhase) => {
+      expect(await offersSelfDestruct({ phase: 'DAY_VOTING', subPhase })).toBe(false)
+    },
+  )
+
+  it('not offered once a wolf already self-destructed today', async () => {
+    expect(
+      await offersSelfDestruct({
+        phase: 'DAY_DISCUSSION',
+        subPhase: 'RESULT_REVEALED',
+        daySkipVoting: true,
+      }),
+    ).toBe(false)
+  })
+})

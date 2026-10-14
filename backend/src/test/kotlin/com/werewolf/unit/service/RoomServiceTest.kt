@@ -70,7 +70,7 @@ class RoomServiceTest {
         whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
 
-        val result = roomService.createRoom(hostId, "Host", null, cfg)
+        roomService.createRoom(hostId, "Host", null, cfg)
 
         val roomCaptor = argumentCaptor<Room>()
         verify(roomRepository).save(roomCaptor.capture())
@@ -485,6 +485,30 @@ class RoomServiceTest {
         verify(perkService).refundActiveForUser(1, userId)
     }
 
+    // ── 空刀 (no kill): room config, default disabled ──────────────────────────
+
+    @Test
+    fun `createRoom - noKillAllowed defaults to false and persists when enabled`() {
+        val captor = argumentCaptor<Room>()
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        val defaultDto = roomService.createRoom(hostId, "Host", null, RoomConfigRequest())
+        val enabledDto = roomService.createRoom(hostId, "Host", null, RoomConfigRequest(noKillAllowed = true))
+
+        verify(roomRepository, times(2)).save(captor.capture())
+        assertThat(captor.firstValue.config?.noKillAllowed).isFalse()
+        assertThat(captor.secondValue.config?.noKillAllowed).isTrue()
+        assertThat(defaultDto.config.noKillAllowed).isFalse()
+        assertThat(enabledDto.config.noKillAllowed).isTrue()
+    }
+
     // ── perks: room config + DTO exposure ──────────────────────────────────────
 
     @Test
@@ -502,7 +526,7 @@ class RoomServiceTest {
         roomService.createRoom(hostId, "Host", null, RoomConfigRequest(perksAllowed = false))
         roomService.createRoom(hostId, "Host", null, RoomConfigRequest(perksAllowed = true))
 
-        verify(roomRepository, org.mockito.kotlin.times(2)).save(captor.capture())
+        verify(roomRepository, times(2)).save(captor.capture())
         assertThat(captor.firstValue.config?.perksAllowed).isFalse()
         assertThat(captor.secondValue.config?.perksAllowed).isTrue()
     }

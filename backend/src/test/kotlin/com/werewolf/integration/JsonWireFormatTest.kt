@@ -154,7 +154,7 @@ class JsonWireFormatTest {
             ) to """{"roomId":"10","roomCode":"1234","hostId":"u1","status":"WAITING",""" +
                     """"players":[{"userId":"u1","nickname":"Alice","avatar":null,"seatIndex":0,"status":"READY","isHost":true}],""" +
                     """"config":{"totalPlayers":9,"wolfCount":3,"roles":["SEER","WITCH"],"hasSheriff":true,""" +
-                    """"winCondition":"CLASSIC","bgmTrack":null,"witchSelfSaveAllowed":true,"perksAllowed":true},""" +
+                    """"winCondition":"CLASSIC","bgmTrack":null,"witchSelfSaveAllowed":true,"perksAllowed":true,"noKillAllowed":false},""" +
                     """"activeGameId":null,"perkActivations":[{"userId":"u1","perkCode":"NIGHT1_IMMUNITY","perkName":"Night shield"}]}""",
             ActionLogEntryDto(5, "NIGHT_DEATH", """{"dayNumber":1}""", "u2", null) to
                     """{"id":5,"eventType":"NIGHT_DEATH","message":"{\"dayNumber\":1}","targetUserId":"u2","createdAt":null}""",

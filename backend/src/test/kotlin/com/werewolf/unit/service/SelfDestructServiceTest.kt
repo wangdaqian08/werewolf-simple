@@ -17,6 +17,8 @@ import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
@@ -191,26 +193,13 @@ class SelfDestructServiceTest {
     // route to DAY_DISCUSSION/RESULT_REVEALED so the host's single 进入夜晚 button
     // advances straight to night, identical to a self-destruct during discussion.
 
-    @Test
-    fun `wolf during DAY_VOTING ends the day to DAY_DISCUSSION RESULT_REVEALED (no vote screen)`() {
-        val ctx = context(
-            game = game(phase = GamePhase.DAY_VOTING, subPhase = VotingSubPhase.VOTING.name),
-            players = listOf(wolfPlayer(), villagePlayer()),
-        )
-
-        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId))
-            .thenReturn(Optional.of(wolfPlayer()))
-        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
-        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
-        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-
-        val result = selfDestructService.selfDestruct(req(), ctx)
-
-        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
-        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
-        assertThat(ctx.game.daySkipVoting).isTrue()
+    @ParameterizedTest
+    @ValueSource(strings = ["VOTING", "RE_VOTING", "VOTE_RESULT"])
+    fun `self-destruct is rejected once day voting has started`(subPhase: String) {
+        val ctx = context(game = game(phase = GamePhase.DAY_VOTING, subPhase = subPhase))
+        stubCanSucceed(ctx)
+        assertThat(selfDestructService.selfDestruct(req(), ctx)).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(ctx.game.daySkipVoting).isFalse()
     }
 
     // ── Case 5: Non-wolf attempts → Rejected ───────────────────────────────────
@@ -301,12 +290,12 @@ class SelfDestructServiceTest {
     }
 
     @Test
-    fun `before the night result is shown the win check counts last night's pending kills`() {
+    fun `during the sheriff campaign the win check counts last night's pending kills`() {
         val poisonedWolf = wolfPlayer("wolf:002", seat = 3)
         val np = NightPhase(gameId = gameId, dayNumber = 1).also { it.witchPoisonTargetUserId = poisonedWolf.userId }
         // Like GameContextLoader outside NIGHT: no nightPhase, last night only in allNightPhases.
         val ctx = GameContext(
-            game(subPhase = DaySubPhase.RESULT_HIDDEN.name).also { it.dayNumber = 1 }, room(),
+            game(phase = GamePhase.SHERIFF_ELECTION, subPhase = ElectionSubPhase.SIGNUP.name).also { it.dayNumber = 1 }, room(),
             listOf(wolfPlayer(), poisonedWolf, villagePlayer()), allNightPhases = listOf(np),
         )
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId)).thenReturn(Optional.of(wolfPlayer()))
@@ -443,37 +432,18 @@ class SelfDestructServiceTest {
     }
 
     @Test
-    fun `a taken sheriff during voting hands the badge over next`() {
-        val king = kingPlayer()
-        val sheriff = villagePlayer().also { it.sheriff = true }
-        val ctx = context(
-            game = game(phase = GamePhase.DAY_VOTING, subPhase = VotingSubPhase.VOTING.name, sheriffUserId = villageId),
-            players = listOf(king, wolfPlayer(), sheriff, player("v2", 4, PlayerRole.VILLAGER)),
-        )
-        stubKingTakes(ctx, king, sheriff)
-        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.BADGE_HANDOVER)
-
-        selfDestructService.selfDestruct(req(kingId, villageId), ctx)
-
-        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
-        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+    fun `self-destruct is rejected before the host reveals the night result`() {
+        val ctx = context(game = game(subPhase = DaySubPhase.RESULT_HIDDEN.name))
+        stubCanSucceed(ctx)
+        assertThat(selfDestructService.selfDestruct(req(), ctx)).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(ctx.game.daySkipVoting).isFalse()
     }
 
     @Test
-    fun `a taken sheriff before the night result is shown waits for the host's reveal`() {
-        val king = kingPlayer()
-        val sheriff = villagePlayer().also { it.sheriff = true }
-        val ctx = context(
-            game = game(subPhase = DaySubPhase.RESULT_HIDDEN.name, sheriffUserId = villageId),
-            players = listOf(king, wolfPlayer(), sheriff, player("v2", 4, PlayerRole.VILLAGER)),
-        )
-        stubKingTakes(ctx, king, sheriff)
-
-        selfDestructService.selfDestruct(req(kingId, villageId), ctx)
-
-        // The reveal runs DayRevealAdvancer, which hands the badge over first.
-        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
-        verify(dayRevealAdvancer, never()).nextSubPhase(any())
+    fun `self-destruct is rejected while the night-killed hunter is shooting`() {
+        val ctx = context(game = game(subPhase = DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name))
+        stubCanSucceed(ctx)
+        assertThat(selfDestructService.selfDestruct(req(), ctx)).isInstanceOf(GameActionResult.Rejected::class.java)
     }
 
     // ── Case 6: Dead wolf attempts → Rejected ──────────────────────────────────
@@ -503,7 +473,7 @@ class SelfDestructServiceTest {
         val result = selfDestructService.selfDestruct(req(), ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
-        assertThat((result as GameActionResult.Rejected).reason).contains("not allowed")
+        assertThat((result as GameActionResult.Rejected).reason).contains("only allowed")
         verify(gameRepository, never()).save(any<Game>())
     }
 
@@ -561,28 +531,6 @@ class SelfDestructServiceTest {
         val captor = argumentCaptor<GamePlayer>()
         verify(gamePlayerRepository).save(captor.capture())
         assertThat(captor.firstValue.diedDay).isEqualTo(1)
-    }
-
-    // ── Case 9: Wolf during DAY_DISCUSSION RESULT_HIDDEN → pending kills applied ─
-
-    @Test
-    fun `wolf during DAY_DISCUSSION RESULT_HIDDEN sets daySkipVoting true`() {
-        val ctx = context(
-            game = game(phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_HIDDEN.name),
-            players = listOf(wolfPlayer(), villagePlayer()),
-        )
-
-        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId))
-            .thenReturn(Optional.of(wolfPlayer()))
-        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
-        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
-        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
-        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-
-        val result = selfDestructService.selfDestruct(req(), ctx)
-
-        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.daySkipVoting).isTrue()
     }
 
     // ── Case 10: records the self-destructed player on the game (for the banner) ─

@@ -162,13 +162,13 @@ describe('DayPhase — daySkipVoting host footer', () => {
     expect(wrapper.find('[data-testid="day-enter-night"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="day-start-vote"]').exists()).toBe(false)
   })
-  it('host timer presets are 1:15 and 2:00', () => {
+  it('host timer presets come from the backend (1:15 and 3:00)', () => {
     const wrapper = mount(DayPhase, {
-      props: { ...hostProps, dayPhase: makeDay('RESULT_REVEALED') },
+      props: { ...hostProps, dayPhase: makeDay('RESULT_REVEALED'), timerPresets: [75, 180] },
     })
     expect(wrapper.find('[data-testid="phase-countdown-start-75"]').text()).toBe('1:15')
-    expect(wrapper.find('[data-testid="phase-countdown-start-120"]').text()).toBe('2:00')
-    expect(wrapper.find('[data-testid="phase-countdown-start-60"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="phase-countdown-start-180"]').text()).toBe('3:00')
+    expect(wrapper.find('[data-testid="phase-countdown-start-120"]').exists()).toBe(false)
   })
 
   it('RESULT_REVEALED + daySkipVoting=true → clicking "进入夜晚" emits continueToNight', async () => {
@@ -443,6 +443,7 @@ const GAME_SETTINGS: GameSettings = {
   roles: ['WEREWOLF', 'WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'],
   hasSheriff: true,
   witchSelfSaveAllowed: true,
+  noKillAllowed: false,
   winCondition: 'CLASSIC',
 }
 
@@ -553,6 +554,45 @@ describe('DayPhase — 白狼王', () => {
     })
     await wrapper.find('.my-role-chip').trigger('click')
     expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('白狼王')
+    wrapper.unmount()
+  })
+})
+
+describe('DayPhase — role card shows my name and seat', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('shows seat number and nickname of the viewing player', async () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_REVEALED'), myRole: 'SEER' },
+      attachTo: document.body,
+    })
+    await wrapper.find('.my-role-chip').trigger('click')
+    expect(document.body.querySelector('[data-testid="rc-identity"]')?.textContent?.trim()).toBe(
+      '1号 · Alice',
+    )
+    wrapper.unmount()
+  })
+})
+
+describe('DayPhase — role card history', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('the role card offers the private history for a role with night tools', async () => {
+    const wrapper = mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        dayPhase: makeDay('RESULT_REVEALED'),
+        myRole: 'GUARD',
+        roleHistory: { role: 'GUARD', entries: [] },
+      },
+      attachTo: document.body,
+    })
+    await wrapper.find('.my-role-chip').trigger('click')
+    expect(document.body.querySelector('[data-testid="role-history-btn"]')).not.toBeNull()
     wrapper.unmount()
   })
 })

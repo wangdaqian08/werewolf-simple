@@ -17,6 +17,7 @@ function make(overrides: {
   durationMs?: number
   running?: boolean
   isHost?: boolean
+  presets?: number[]
 }) {
   return mount(CountdownArc, {
     props: {
@@ -35,16 +36,21 @@ describe('CountdownArc — idle state', () => {
     expect(w.find('.ca-inner').text()).toBe('—')
   })
 
-  it('host sees 1:00 and 2:00 preset pills when idle', () => {
-    const w = make({ remainingMs: 0, durationMs: 0, running: false, isHost: true })
-    expect(w.find('[data-testid="phase-countdown-start-60"]').exists()).toBe(true)
-    expect(w.find('[data-testid="phase-countdown-start-120"]').exists()).toBe(true)
+  it('host sees one pill per backend preset when idle', () => {
+    const w = make({ isHost: true, presets: [75, 180] })
+    expect(w.find('[data-testid="phase-countdown-start-75"]').text()).toBe('1:15')
+    expect(w.find('[data-testid="phase-countdown-start-180"]').text()).toBe('3:00')
     expect(w.find('[data-testid="phase-countdown-stop"]').exists()).toBe(false)
   })
 
+  it('has no hardcoded presets of its own', () => {
+    const w = make({ isHost: true })
+    expect(w.findAll('[data-testid^="phase-countdown-start-"]')).toHaveLength(0)
+  })
+
   it('non-host does not see preset pills', () => {
-    const w = make({ remainingMs: 0, durationMs: 0, running: false, isHost: false })
-    expect(w.find('[data-testid="phase-countdown-start-60"]').exists()).toBe(false)
+    const w = make({ isHost: false, presets: [75, 180] })
+    expect(w.find('[data-testid="phase-countdown-start-75"]').exists()).toBe(false)
   })
 })
 
@@ -126,16 +132,16 @@ describe('CountdownArc — prop reset', () => {
 })
 
 describe('CountdownArc — emit events', () => {
-  it('emits start-timer with 60 when host clicks 1:00 pill', async () => {
-    const w = make({ remainingMs: 0, durationMs: 0, running: false, isHost: true })
-    await w.find('[data-testid="phase-countdown-start-60"]').trigger('click')
-    expect(w.emitted('start-timer')?.[0]).toEqual([60])
+  it('emits start-timer with 75 when host clicks 1:15 pill', async () => {
+    const w = make({ isHost: true, presets: [75, 180] })
+    await w.find('[data-testid="phase-countdown-start-75"]').trigger('click')
+    expect(w.emitted('start-timer')?.[0]).toEqual([75])
   })
 
-  it('emits start-timer with 120 when host clicks 2:00 pill', async () => {
-    const w = make({ remainingMs: 0, durationMs: 0, running: false, isHost: true })
-    await w.find('[data-testid="phase-countdown-start-120"]').trigger('click')
-    expect(w.emitted('start-timer')?.[0]).toEqual([120])
+  it('emits start-timer with 180 when host clicks 3:00 pill', async () => {
+    const w = make({ isHost: true, presets: [75, 180] })
+    await w.find('[data-testid="phase-countdown-start-180"]').trigger('click')
+    expect(w.emitted('start-timer')?.[0]).toEqual([180])
   })
 
   it('emits stop-timer when host clicks Stop pill', async () => {

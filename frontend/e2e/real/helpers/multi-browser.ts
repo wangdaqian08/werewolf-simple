@@ -90,6 +90,9 @@ export interface GameSetupOptions {
   /** 女巫自救 toggle. Defaults to true (room default); pass false to flip the
    *  CreateRoom DOM toggle so the witch cannot self-save. */
   witchSelfSaveAllowed?: boolean
+  /** 空刀 toggle. Defaults to false (room default); pass true to flip the
+   *  CreateRoom DOM toggle so the wolves may skip the kill. */
+  noKillAllowed?: boolean
   /**
    * Optional BGM track filename (e.g. 'suspicion.mp3'). When set, the host
    * picks the matching option from the BGM dropdown on the CreateRoom page
@@ -241,6 +244,16 @@ export async function setupGame(
       await expect(selfSaveToggle).toHaveAttribute('data-witch-self-save', 'false', {
         timeout: 5_000,
       })
+    }
+  }
+
+  // Flip the 空刀 toggle when no-kill is explicitly enabled (default disabled).
+  if (opts.noKillAllowed === true) {
+    const noKillToggle = hostPage.getByTestId('noKill-toggle')
+    await noKillToggle.waitFor({ state: 'visible', timeout: 5_000 })
+    if ((await noKillToggle.getAttribute('data-no-kill')) !== 'true') {
+      await noKillToggle.click()
+      await expect(noKillToggle).toHaveAttribute('data-no-kill', 'true', { timeout: 5_000 })
     }
   }
 

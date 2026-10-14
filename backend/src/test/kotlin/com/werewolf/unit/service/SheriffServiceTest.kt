@@ -249,6 +249,30 @@ class SheriffServiceTest {
     // ── Group 2c: advanceSpeech() action ──────────────────────────────────────
 
     @Test
+    fun `startSpeech - speaking order is a random shuffle of the running candidates`() {
+        val candidateIds = (1..5).map { "cand:00$it" }
+        val players = listOf(player(hostId, 0)) + candidateIds.mapIndexed { i, id -> player(id, i + 1) }
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(
+            candidateIds.map { SheriffCandidate(electionId = electionId, userId = it, status = CandidateStatus.RUNNING) }
+        )
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+
+        // 30 runs × 5! = 120 orders: a deterministic (seat-sorted) order would give 1 distinct result.
+        val orders = (1..30).map {
+            val election = election(subPhase = ElectionSubPhase.SIGNUP)
+            val result = sheriffService.handle(
+                GameActionRequest(gameId, hostId, ActionType.SHERIFF_START_SPEECH),
+                context(election = election, players = players),
+            )
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+            election.speakingOrder!!.split(",")
+        }
+
+        orders.forEach { assertThat(it).containsExactlyInAnyOrderElementsOf(candidateIds) }
+        assertThat(orders.toSet().size).isGreaterThan(1)
+    }
+
+    @Test
     fun `advanceSpeech - advances to next RUNNING candidate, skipping QUIT`() {
         // Speaking order: guest (idx 0), quit:001 (idx 1, QUIT), other:001 (idx 2, RUNNING)
         val quitId = "quit:001"
@@ -404,7 +428,7 @@ class SheriffServiceTest {
     }
 
     @Test
-    fun `quitCampaign_lastCandidateInSpeech_advancesToDayDiscussionRESULT_HIDDEN`() {
+    fun quitCampaign_lastCandidateInSpeech_advancesToDayDiscussionRESULT_HIDDEN() {
         // Regression: game 18 / room 22 (2026-05-09) got stuck 14+ hours in
         // SHERIFF_ELECTION/RESULT because all 8 candidates quit during SPEECH.
         // The quitCampaign path landed on ELECTION/RESULT (waiting for host to

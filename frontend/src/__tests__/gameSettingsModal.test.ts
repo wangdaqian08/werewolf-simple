@@ -26,6 +26,7 @@ const SETTINGS: GameSettings = {
   ],
   hasSheriff: false,
   witchSelfSaveAllowed: true,
+  noKillAllowed: false,
   winCondition: 'HARD_MODE',
 }
 
@@ -48,6 +49,8 @@ describe('GameSettingsModal — content', () => {
     expect(bodyEl('settings-sheriff')?.textContent).toContain('无')
     expect(bodyEl('settings-witch-self-save')?.textContent).toContain('仅首夜')
     expect(bodyEl('settings-win-condition')?.textContent).toContain('屠城')
+    expect(bodyEl('settings-no-kill')?.textContent).toContain('空刀')
+    expect(bodyEl('settings-no-kill')?.textContent).toContain('禁止')
 
     wrapper.unmount()
   })
@@ -108,6 +111,14 @@ describe('GameSettingsModal — close behaviour', () => {
     ;(bodyEl('settings-backdrop') as HTMLElement).click()
     await wrapper.vm.$nextTick()
     expect(wrapper.emitted('close')).toHaveLength(1)
+    wrapper.unmount()
+  })
+})
+
+describe('GameSettingsModal — 空刀 rule', () => {
+  it('shows 允许 when the room enables 空刀', () => {
+    const wrapper = mountModal({ settings: { ...SETTINGS, noKillAllowed: true } })
+    expect(bodyEl('settings-no-kill')?.textContent).toContain('允许')
     wrapper.unmount()
   })
 })

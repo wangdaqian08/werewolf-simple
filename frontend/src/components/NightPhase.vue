@@ -66,6 +66,7 @@
       </section>
       <footer class="nf">
         <button
+          v-if="noKillAllowed"
           class="btn btn-secondary nf-btn"
           data-testid="wolf-skip-kill"
           :class="{ 'is-loading': actionPending }"
@@ -432,6 +433,7 @@ const props = withDefaults(
     myRole?: PlayerRole
     actionPending?: boolean
     witchSelfSaveAllowed?: boolean
+    noKillAllowed?: boolean
     // Bumped by the parent when the backend rejects this player's night action.
     rejectionCount?: number
   }>(),

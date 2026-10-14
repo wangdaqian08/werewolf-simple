@@ -125,6 +125,8 @@ export interface RoomConfig {
   witchSelfSaveAllowed?: boolean
   /** Whether players may activate paid perks in this room (host fairness toggle). */
   perksAllowed?: boolean
+  /** Whether the wolves may choose 空刀 (no kill) at night. Default false. */
+  noKillAllowed?: boolean
 }
 
 /**
@@ -140,6 +142,7 @@ export interface GameSettings {
   roles: string[]
   hasSheriff: boolean
   witchSelfSaveAllowed: boolean
+  noKillAllowed: boolean
   winCondition: WinConditionMode
 }
 
@@ -179,6 +182,32 @@ export interface AudioSequence {
   audioFiles: string[]
   priority: number
   timestamp: number
+}
+
+// ── Role history (role card "历史记录") ──────────────────────────────────────
+// Backend: RoleHistoryBuilder via GameService.getGameState "roleHistory".
+// Present only for the requesting player, while alive, for roles with night tools.
+
+export interface RoleHistoryPlayer {
+  userId: string
+  nickname: string
+  seatIndex: number
+}
+
+export interface RoleHistoryEntry {
+  round: number
+  action: 'CHECK' | 'GUARD' | 'KILL' | 'ANTIDOTE' | 'POISON'
+  /** null = 空守 (guard) / 空刀 (wolf) */
+  target: RoleHistoryPlayer | null
+  /** SEER only */
+  isWerewolf?: boolean
+}
+
+export interface RoleHistory {
+  role: 'WITCH' | 'SEER' | 'GUARD' | 'WOLF'
+  entries: RoleHistoryEntry[]
+  /** WITCH only: last night's victim, shown only while the antidote is unused. */
+  lastNightAttacked?: { round: number; target: RoleHistoryPlayer | null } | null
 }
 
 // ── Timer ─────────────────────────────────────────────────────────────────────
@@ -264,6 +293,8 @@ export interface GameState {
   bgmTrack?: string | null
   /** Whether the witch may use her antidote to save herself (room config). */
   witchSelfSaveAllowed?: boolean
+  noKillAllowed?: boolean // room toggle: wolves may choose 空刀
+  roleHistory?: RoleHistory | null
   /** Room code + config for the in-game info modal; null/absent for non-members. */
   gameSettings?: GameSettings | null
   winner?: 'WEREWOLF' | 'VILLAGER' // set by backend when phase is GAME_OVER
@@ -273,6 +304,7 @@ export interface GameState {
   daySkipVoting?: boolean
   events: GameEvent[]
   timer?: TimerState
+  timerPresetsSeconds?: number[] // host countdown presets from backend config
   roleReveal?: RoleRevealState
   sheriffElection?: SheriffElectionState
   dayPhase?: DayPhaseState
@@ -375,7 +407,6 @@ export interface SheriffElectionState {
   decisionProgress?: { decided: number; total: number }
   speakingOrder: string[] // userIds in order
   // Host-chosen speaking order direction (default ASC); set during SIGNUP
-  speechOrderDirection?: 'ASC' | 'DESC'
   currentSpeakerId?: string
   hasPassed?: boolean // true if I chose to pass on signup
   myVote?: string // userId I voted for

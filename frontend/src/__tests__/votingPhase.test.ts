@@ -624,6 +624,7 @@ describe('VotingPhase — room info button (settings-fab)', () => {
     roles: ['WEREWOLF', 'WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'],
     hasSheriff: true,
     witchSelfSaveAllowed: true,
+    noKillAllowed: false,
     winCondition: 'CLASSIC',
   }
 
@@ -751,9 +752,12 @@ describe('VotingPhase — abstainers on the revealed tally', () => {
     expect(col.find('.vote-col-count').text()).toBe('1')
   })
 
-  it('omits the 弃票 column when nobody abstained', () => {
+  it('still shows the 弃票 column with 无 when nobody abstained', () => {
     const wrapper = mountResult([])
-    expect(wrapper.find('.vote-col-abstain').exists()).toBe(false)
+    const col = wrapper.find('.vote-col-abstain')
+    expect(col.exists()).toBe(true)
+    expect(col.find('.vote-col-count').text()).toBe('0')
+    expect(col.find('.vote-col-body').text()).toContain('无')
   })
 })
 
@@ -861,5 +865,157 @@ describe('VotingPhase — PK re-vote and badge heir rules', () => {
     expect(wrapper.emitted('selectPlayer')).toBeUndefined()
     await wrapper.find('.player-grid [data-seat="1"]').trigger('click')
     expect(wrapper.emitted('selectPlayer')?.[0]).toEqual(['p1'])
+  })
+})
+
+describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
+  const players: GamePlayer[] = [1, 2, 3].map((seat) => ({
+    userId: `p${seat}`,
+    nickname: `P${seat}`,
+    avatar: '😊',
+    seatIndex: seat,
+    role: seat === 2 ? ('HUNTER' as const) : undefined,
+    isAlive: seat !== 2,
+    isSheriff: false,
+    canVote: true,
+    idiotRevealed: false,
+  }))
+
+  const mountHunterShoot = (myUserId: string, isHost = false) => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+    return mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        gameId: 1,
+        players,
+        myUserId,
+        isHost,
+        votingPhase: {
+          subPhase: 'HUNTER_SHOOT',
+          dayNumber: 2,
+          phaseDeadline: 0,
+          phaseStarted: 0,
+          tallyRevealed: true,
+          tally: [
+            {
+              playerId: 'p2',
+              nickname: 'P2',
+              seatIndex: 2,
+              votes: 2,
+              voters: [
+                { userId: 'p1', nickname: 'P1', seatIndex: 1 },
+                { userId: 'p3', nickname: 'P3', seatIndex: 3 },
+              ],
+            },
+          ],
+          abstainVoters: [],
+          eliminatedPlayerId: 'p2',
+          eliminatedNickname: 'P2',
+          eliminatedSeatIndex: 2,
+        } as VotingState,
+      },
+    })
+  }
+
+  it('the hunter sees the hunter banner and the shoot buttons', () => {
+    const wrapper = mountHunterShoot('p2')
+    expect(wrapper.text()).toContain('猎人出局')
+    expect(wrapper.text()).toContain('开枪')
+  })
+
+  it('other players see no hunter wording at all', () => {
+    const wrapper = mountHunterShoot('p1')
+    expect(wrapper.text()).not.toContain('猎人')
+    expect(wrapper.text()).not.toContain('Hunter')
+    expect(wrapper.text()).not.toContain('开枪')
+  })
+
+  it('other players keep seeing the normal vote result with the eliminated player', () => {
+    const wrapper = mountHunterShoot('p3')
+    expect(wrapper.find('.elim-banner-name').text()).toContain('P2')
+    expect(wrapper.find('.vote-columns').exists()).toBe(true)
+  })
+
+  it('the host sees no continue button and no hunter wording while the shot is pending', () => {
+    const wrapper = mountHunterShoot('p1', true)
+    expect(wrapper.find('[data-testid="voting-continue"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('猎人')
+  })
+
+  it('the hunter header shows only the day', () => {
+    const wrapper = mountHunterShoot('p2')
+    expect(wrapper.find('.day-pill').text().replace(/\s+/g, ' ').trim()).toBe('第 2 天')
+  })
+})
+
+describe('VotingPhase — role card shows my name and seat', () => {
+  it('shows seat number and nickname of the viewing player', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+    const wrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+      props: {
+        gameId: 1,
+        players: [
+          { userId: 'p1', nickname: 'Zed', seatIndex: 4, isAlive: true, isSheriff: false },
+        ] as GamePlayer[],
+        myUserId: 'p1',
+        isHost: false,
+        myRole: 'GUARD',
+        votingPhase: {
+          subPhase: 'VOTING',
+          dayNumber: 1,
+          phaseDeadline: 0,
+          phaseStarted: 0,
+        } as VotingState,
+      },
+    })
+    await wrapper.find('.my-role-chip').trigger('click')
+    expect(document.body.querySelector('[data-testid="rc-identity"]')?.textContent?.trim()).toBe(
+      '4号 · Zed',
+    )
+    wrapper.unmount()
+  })
+})
+
+describe('VotingPhase — role card history', () => {
+  it('the role card offers the private history for a role with night tools', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+    const wrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+      props: {
+        gameId: 1,
+        players: [],
+        myUserId: 'p1',
+        isHost: false,
+        myRole: 'SEER',
+        roleHistory: { role: 'SEER', entries: [] },
+        votingPhase: {
+          subPhase: 'VOTING',
+          dayNumber: 1,
+          phaseDeadline: 0,
+          phaseStarted: 0,
+        } as VotingState,
+      },
+    })
+    await wrapper.find('.my-role-chip').trigger('click')
+    expect(document.body.querySelector('[data-testid="role-history-btn"]')).not.toBeNull()
+    wrapper.unmount()
   })
 })

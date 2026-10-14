@@ -373,6 +373,7 @@ class GameService(
                 "durationMs"  to timerSnapshot.durationMs,
                 "running"     to timerSnapshot.running,
             ),
+            "timerPresetsSeconds" to hostTimerService.presetsSeconds,
             "phase" to game.phase.name,
             "subPhase" to game.subPhase,
             "dayNumber" to game.dayNumber,
@@ -385,6 +386,11 @@ class GameService(
             // it from gameStore as a fallback when roomStore is empty.
             "bgmTrack" to room?.config?.bgmTrack,
             "witchSelfSaveAllowed" to (room?.config?.witchSelfSaveAllowed ?: true),
+            "noKillAllowed" to (room?.config?.noKillAllowed ?: false),
+            // Private night-action history for the requester's role (role card).
+            "roleHistory" to myPlayer?.let {
+                RoleHistoryBuilder.build(it, game, nightPhaseRepository.findByGameId(gameId), players, ::displayNameFor)
+            },
             // Room code + full game config for the in-game info modal.
             // Members only: non-members get null (never a 403) so existing
             // bots/scripts that poll state as outsiders keep working.
@@ -395,6 +401,7 @@ class GameService(
                 "roles" to buildRoleList(room, players.size).map { it.name },
                 "hasSheriff" to room.hasSheriff,
                 "witchSelfSaveAllowed" to (room.config?.witchSelfSaveAllowed ?: true),
+                "noKillAllowed" to (room.config?.noKillAllowed ?: false),
                 "winCondition" to room.winCondition.name,
             ) else null,
             "winner" to game.winner?.name,
