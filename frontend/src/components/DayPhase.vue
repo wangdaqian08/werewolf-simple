@@ -49,7 +49,7 @@
           :sub-phase="dayPhase.subPhase"
           :day-skip-voting="daySkipVoting"
           :my-role="myRole"
-          :is-alive="isAlive"
+          :is-alive="isAlive ?? false"
           :players="players"
           :my-user-id="myUserId"
           @self-destruct="(target) => emit('self-destruct', target)"
