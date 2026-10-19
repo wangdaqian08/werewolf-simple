@@ -199,8 +199,8 @@ export interface RoleHistoryPlayer {
 
 export interface RoleHistoryEntry {
   round: number
-  action: 'CHECK' | 'GUARD' | 'KILL' | 'ANTIDOTE' | 'POISON'
-  /** null = 空守 (guard) / 空刀 (wolf) */
+  action: 'CHECK' | 'GUARD' | 'KILL' | 'ATTACKED' | 'ANTIDOTE' | 'POISON'
+  /** null = 空守 (guard) / 空刀 (wolf KILL, WITCH attacked) */
   target: RoleHistoryPlayer | null
   /** SEER only */
   isWerewolf?: boolean
@@ -209,8 +209,6 @@ export interface RoleHistoryEntry {
 export interface RoleHistory {
   role: 'WITCH' | 'SEER' | 'GUARD' | 'WOLF'
   entries: RoleHistoryEntry[]
-  /** WITCH only: last night's victim, shown only while the antidote is unused. */
-  lastNightAttacked?: { round: number; target: RoleHistoryPlayer | null } | null
 }
 
 // ── Timer ─────────────────────────────────────────────────────────────────────

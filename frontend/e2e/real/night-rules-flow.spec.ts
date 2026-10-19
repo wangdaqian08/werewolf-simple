@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Page, test, type TestInfo } from '@playwright/test'
 import { setupGame, type GameContext } from './helpers/multi-browser'
 import { actName, type BotInfo, type RoleName } from './helpers/shell-runner'
 import { captureSnapshot } from './helpers/composite-screenshot'
@@ -95,6 +95,36 @@ async function revealDay(ctx: GameContext) {
     await expect(ctx.hostPage.getByTestId('day-start-vote')).toBeVisible({ timeout: 10_000 })
 }
 
+async function guardActs(ctx: GameContext, protectSeat: number | null) {
+    expect(await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 15_000)).toBe(true)
+    const guard = actName(only(ctx, 'GUARD'))
+    const acted =
+        protectSeat === null
+            ? tryAct('GUARD_SKIP', guard, { room: ctx.roomCode })
+            : tryAct('GUARD_PROTECT', guard, { target: String(protectSeat), room: ctx.roomCode })
+    expect(acted).toBe(true)
+}
+
+async function witchActs(ctx: GameContext, payload: Record<string, unknown>) {
+    expect(await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 15_000)).toBe(true)
+    const r = await postAction(page(ctx, 'WITCH'), {
+        gameId: Number(ctx.gameId),
+        actionType: 'WITCH_ACT',
+        payload,
+    })
+    expect(r.ok, `witch ${JSON.stringify(payload)}: ${r.error}`).toBe(true)
+}
+
+async function expectWitchHistory(ctx: GameContext, testInfo: TestInfo, label: string, rows: RegExp[]) {
+    expect(await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_DISCUSSION', 30_000)).toBe(true)
+    const witchPage = page(ctx, 'WITCH')
+    await witchPage.locator('.my-role-chip').click()
+    await witchPage.getByTestId('role-history-btn').click()
+    await expect(witchPage.getByTestId('role-history-entry')).toHaveText(rows, { timeout: 10_000 })
+    await captureSnapshot(ctx.pages, testInfo, label)
+    await witchPage.locator('.role-card-header .history-close').click()
+}
+
 async function witchPasses(ctx: GameContext) {
     expect(await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WITCH_ACT', 15_000)).toBe(true)
     const r = await postAction(page(ctx, 'WITCH'), {
@@ -105,7 +135,7 @@ async function witchPasses(ctx: GameContext) {
     expect(r.ok, `witch pass: ${r.error}`).toBe(true)
 }
 
-test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witch self-save', () => {
+test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witch self-save, witch history', () => {
     test.setTimeout(process.env.CI ? 360_000 : 240_000)
 
     test('a repeated witch action is rejected and the seer keeps her turn', async ({
@@ -364,6 +394,56 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witc
             await guardPage.getByTestId('guard-confirm-protect').click()
             await revealDay(ctx)
             await expect(ctx.hostPage.getByTestId('day-banner-peaceful')).toBeVisible({ timeout: 10_000 })
+        } finally {
+            await cleanupRoomData(ctx.hostPage, ctx.roomCode)
+            await ctx.cleanup()
+        }
+    })
+
+    test('witch history: while she holds the antidote, she sees every wolf victim on her role card', async ({
+                                                                                                                browser,
+                                                                                                            }, testInfo) => {
+        test.setTimeout(process.env.CI ? 600_000 : 420_000)
+        const ctx = await setupGame(browser, {
+            ...GUARD_BOARD,
+            totalPlayers: 8,
+            noKillAllowed: true,
+            guardSkipAllowed: true,
+        })
+        try {
+            const [v1, v2, v3] = villagers(ctx).filter((b) => b.nick !== 'Host')
+            assertNonNull(v3, 'need three non-host villagers')
+
+            await startNight(ctx)
+            await wolvesKill(ctx, v1.seat)
+            await witchPasses(ctx)
+            await guardActs(ctx, v1.seat)
+            await expectWitchHistory(ctx, testInfo, 'witch-history-d1', [
+                new RegExp(`第1夜 · ${v1.seat}号 .+ 被狼人袭击`),
+            ])
+            expect(await completeDay(ctx, testInfo, { targetSeat: null, label: 'witch-history-d1' })).toBe('NIGHT')
+
+            expect(await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 25_000)).toBe(true)
+            await page(ctx, 'WEREWOLF').getByTestId('wolf-skip-kill').click()
+            await witchActs(ctx, { useAntidote: false, poisonTargetUserId: v2.userId })
+            await guardActs(ctx, null)
+            await expectWitchHistory(ctx, testInfo, 'witch-history-d2', [
+                new RegExp(`第1夜 · ${v1.seat}号 .+ 被狼人袭击`),
+                /第2夜 · 无人被袭击/,
+                new RegExp(`第2夜 · 毒药毒了 ${v2.seat}号 `),
+            ])
+            expect(await completeDay(ctx, testInfo, { targetSeat: null, label: 'witch-history-d2' })).toBe('NIGHT')
+
+            await wolvesKill(ctx, v3.seat)
+            await witchActs(ctx, { useAntidote: true })
+            await guardActs(ctx, null)
+            await expectWitchHistory(ctx, testInfo, 'witch-history-d3', [
+                new RegExp(`第1夜 · ${v1.seat}号 .+ 被狼人袭击`),
+                /第2夜 · 无人被袭击/,
+                new RegExp(`第2夜 · 毒药毒了 ${v2.seat}号 `),
+                new RegExp(`第3夜 · 解药救了 ${v3.seat}号 `),
+            ])
+            await ctx.assertNoBackendErrors(testInfo)
         } finally {
             await cleanupRoomData(ctx.hostPage, ctx.roomCode)
             await ctx.cleanup()

@@ -5,10 +5,6 @@
     </button>
 
     <div v-if="open" class="rh-panel" data-testid="role-history">
-      <div v-if="history.lastNightAttacked" class="rh-last" data-testid="role-history-last-night">
-        第{{ history.lastNightAttacked.round }}夜被刀 ·
-        {{ who(history.lastNightAttacked.target) }}
-      </div>
       <div
         v-for="(e, i) in history.entries"
         :key="i"
@@ -17,9 +13,7 @@
       >
         第{{ e.round }}夜 · {{ describe(e) }}
       </div>
-      <div v-if="!history.entries.length && !history.lastNightAttacked" class="rh-empty">
-        暂无记录
-      </div>
+      <div v-if="!history.entries.length" class="rh-empty">暂无记录</div>
     </div>
   </div>
 </template>
@@ -44,6 +38,8 @@ function describe(e: RoleHistoryEntry): string {
       return e.target ? `守护 ${who(e.target)}` : '空守'
     case 'KILL':
       return e.target ? `刀了 ${who(e.target)}` : '空刀'
+    case 'ATTACKED':
+      return e.target ? `${who(e.target)} 被狼人袭击` : '无人被袭击'
     case 'ANTIDOTE':
       return `解药救了 ${who(e.target)}`
     case 'POISON':
@@ -67,15 +63,11 @@ function describe(e: RoleHistoryEntry): string {
   max-height: 10rem;
   overflow-y: auto;
 }
-.rh-last,
 .rh-row,
 .rh-empty {
   padding: 0.4rem 0.6rem;
   font-size: 0.8125rem;
   border-bottom: 1px solid var(--border-l);
-}
-.rh-last {
-  font-weight: 600;
 }
 .rh-row:last-child,
 .rh-empty {

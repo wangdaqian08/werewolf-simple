@@ -74,31 +74,31 @@ class RoleHistoryBuilderTest {
     }
 
     @Test
-    fun `witch sees antidote save and poison with their rounds`() {
+    fun `witch holding the antidote sees every night's wolf victim, 空刀 nights included`() {
         val nights = listOf(
-            night(1) { wolfTargetUserId = "v1"; witchAntidoteUsed = true },
-            night(2) { wolfTargetUserId = "v2"; witchPoisonTargetUserId = "wolf" },
+            night(1) { wolfTargetUserId = "v1" },
+            night(2),
+            night(3) { wolfTargetUserId = "v2"; witchPoisonTargetUserId = "wolf" },
         )
-        val h = build(witch, game(GamePhase.DAY_DISCUSSION, 2), nights)
+        val e = entries(build(witch, game(GamePhase.DAY_DISCUSSION, 3), nights))
 
-        val e = entries(h)
-        assertThat(e.map { it["round"] to it["action"] }).containsExactly(1 to "ANTIDOTE", 2 to "POISON")
-        assertThat(target(e[0])!!["userId"]).isEqualTo("v1")
-        assertThat(target(e[1])!!["userId"]).isEqualTo("wolf")
-        // Antidote already used → last night's victim is not shown.
-        assertThat(h!!["lastNightAttacked"]).isNull()
+        assertThat(e.map { it["round"] to it["action"] })
+            .containsExactly(1 to "ATTACKED", 2 to "ATTACKED", 3 to "ATTACKED", 3 to "POISON")
+        assertThat(e.map { target(it)?.get("userId") }).containsExactly("v1", null, "v2", "wolf")
     }
 
     @Test
-    fun `witch sees last night's victim while the antidote is unused`() {
-        val nights = listOf(night(1), night(2) { wolfTargetUserId = "v2" })
-        val h = build(witch, game(GamePhase.DAY_DISCUSSION, 2), nights)
+    fun `witch keeps the victims she saw up to the antidote night but is told no victim after it`() {
+        val nights = listOf(
+            night(1) { wolfTargetUserId = "v1" },
+            night(2) { wolfTargetUserId = "v2"; witchAntidoteUsed = true },
+            night(3) { wolfTargetUserId = "seer"; witchPoisonTargetUserId = "wolf" },
+        )
+        val e = entries(build(witch, game(GamePhase.DAY_VOTING, 3), nights))
 
-        @Suppress("UNCHECKED_CAST")
-        val last = h!!["lastNightAttacked"] as Map<String, Any?>
-        assertThat(last["round"]).isEqualTo(2)
-        assertThat(target(last)!!["userId"]).isEqualTo("v2")
-        assertThat(entries(h)).isEmpty()
+        assertThat(e.map { it["round"] to it["action"] })
+            .containsExactly(1 to "ATTACKED", 2 to "ANTIDOTE", 3 to "POISON")
+        assertThat(e.map { target(it)?.get("userId") }).containsExactly("v1", "v2", "wolf")
     }
 
     @Test
