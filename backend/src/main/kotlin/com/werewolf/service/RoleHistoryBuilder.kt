@@ -13,8 +13,8 @@ import com.werewolf.model.PlayerRole
  *  - SEER:  every check (round, player, result)
  *  - GUARD: every protected player (null target = skipped)
  *  - WOLF:  every wolf-team kill (null target = 空刀), for all wolves incl. 白狼王
- *  - WITCH: antidote save + poison (round, player), plus last night's victim
- *           while the antidote is still unused
+ *  - WITCH: every night's wolf victim (null target = 空刀) she was told while
+ *           holding the antidote, then the antidote save + poison (round, player)
  *
  * Built from the NightPhase rows; the night still in progress is excluded.
  */
@@ -54,16 +54,17 @@ object RoleHistoryBuilder {
                 "entries" to done.map { entry(it.dayNumber, "KILL", it.wolfTargetUserId) },
             )
             me.role == PlayerRole.WITCH -> {
-                val antidoteUnused = done.none { it.witchAntidoteUsed }
-                val lastNight = done.lastOrNull()
+                // Mirrors GameService's WITCH_ACT view: the victim is told only while she holds the antidote.
+                val antidoteNight = done.firstOrNull { it.witchAntidoteUsed }?.dayNumber ?: Int.MAX_VALUE
                 mapOf(
                     "role" to "WITCH",
-                    "lastNightAttacked" to if (antidoteUnused && lastNight?.wolfTargetUserId != null) {
-                        mapOf("round" to lastNight.dayNumber, "target" to ref(lastNight.wolfTargetUserId))
-                    } else null,
                     "entries" to done.flatMap { n ->
                         listOfNotNull(
-                            if (n.witchAntidoteUsed) entry(n.dayNumber, "ANTIDOTE", n.wolfTargetUserId) else null,
+                            when {
+                                n.witchAntidoteUsed -> entry(n.dayNumber, "ANTIDOTE", n.wolfTargetUserId)
+                                n.dayNumber < antidoteNight -> entry(n.dayNumber, "ATTACKED", n.wolfTargetUserId)
+                                else -> null
+                            },
                             n.witchPoisonTargetUserId?.let { entry(n.dayNumber, "POISON", it) },
                         )
                     },

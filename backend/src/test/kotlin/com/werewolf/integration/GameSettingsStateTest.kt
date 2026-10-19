@@ -206,4 +206,22 @@ class GameSettingsStateTest {
 
         assertThat(gameService.getGameState(gameId, "g5")["roleHistory"]).isNull()
     }
+
+    @Test
+    fun `roleHistory gives the witch holding the antidote every night's victim and her poison`() {
+        stubGame(room(), sixPlayers())
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(
+            NightPhase(gameId = gameId, dayNumber = 1).also { it.wolfTargetUserId = "g5" },
+            NightPhase(gameId = gameId, dayNumber = 2).also { it.witchPoisonTargetUserId = "g1" },
+        ))
+
+        val witchHistory = gameService.getGameState(gameId, "g3")["roleHistory"] as Map<*, *>
+        assertThat(witchHistory["role"]).isEqualTo("WITCH")
+        val entries = witchHistory["entries"] as List<*>
+        assertThat(entries.map { (it as Map<*, *>)["round"] to it["action"] })
+            .containsExactly(1 to "ATTACKED", 2 to "ATTACKED", 2 to "POISON")
+        assertThat(entries.map { ((it as Map<*, *>)["target"] as Map<*, *>?)?.get("seatIndex") })
+            .containsExactly(5, null, 1)
+    }
+
 }

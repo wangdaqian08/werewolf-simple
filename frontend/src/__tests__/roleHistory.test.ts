@@ -24,26 +24,22 @@ describe('RoleHistory', () => {
     expect(wrapper.find('[data-testid="role-history-btn"]').exists()).toBe(false)
   })
 
-  it('witch: last night victim, antidote save and poison with rounds', async () => {
+  it('witch: every wolf victim she was told, 空刀 nights, then antidote save and poison', async () => {
     const wrapper = await openPanel({
       role: 'WITCH',
-      lastNightAttacked: { round: 3, target: ref('Amy', 2) },
       entries: [
-        { round: 1, action: 'ANTIDOTE', target: ref('Bob', 4) },
-        { round: 2, action: 'POISON', target: ref('Cat', 5) },
+        { round: 1, action: 'ATTACKED', target: ref('Amy', 2) },
+        { round: 2, action: 'ATTACKED', target: null },
+        { round: 3, action: 'ANTIDOTE', target: ref('Bob', 4) },
+        { round: 4, action: 'POISON', target: ref('Cat', 5) },
       ],
     })
-    expect(wrapper.find('[data-testid="role-history-last-night"]').text()).toContain('2号 Amy')
-    expect(rows(wrapper)).toEqual(['第1夜 · 解药救了 4号 Bob', '第2夜 · 毒药毒了 5号 Cat'])
-  })
-
-  it('witch: no last-night line once the antidote is used', async () => {
-    const wrapper = await openPanel({
-      role: 'WITCH',
-      lastNightAttacked: null,
-      entries: [{ round: 1, action: 'ANTIDOTE', target: ref('Bob', 4) }],
-    })
-    expect(wrapper.find('[data-testid="role-history-last-night"]').exists()).toBe(false)
+    expect(rows(wrapper)).toEqual([
+      '第1夜 · 2号 Amy 被狼人袭击',
+      '第2夜 · 无人被袭击',
+      '第3夜 · 解药救了 4号 Bob',
+      '第4夜 · 毒药毒了 5号 Cat',
+    ])
   })
 
   it('seer: each check with round and result', async () => {
