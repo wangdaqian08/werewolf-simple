@@ -92,6 +92,7 @@ class NightPhaseDeadRoleIntegrationTest {
                     FIELD_TOTAL_PLAYERS to 6,
                     "roles" to listOf("WEREWOLF", "SEER", "WITCH", "GUARD", "VILLAGER"),
                     "hasSheriff" to false,
+                    "guardSkipAllowed" to true,
                 )),
                 headers(hostToken)
             ),

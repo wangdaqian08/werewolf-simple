@@ -127,6 +127,8 @@ export interface RoomConfig {
   perksAllowed?: boolean
   /** Whether the wolves may choose 空刀 (no kill) at night. Default false. */
   noKillAllowed?: boolean
+  /** Whether the guard may choose 空守 (no protect) at night. Default false. */
+  guardSkipAllowed?: boolean
 }
 
 /**
@@ -143,6 +145,7 @@ export interface GameSettings {
   hasSheriff: boolean
   witchSelfSaveAllowed: boolean
   noKillAllowed: boolean
+  guardSkipAllowed: boolean
   winCondition: WinConditionMode
 }
 
@@ -294,6 +297,7 @@ export interface GameState {
   /** Whether the witch may use her antidote to save herself (room config). */
   witchSelfSaveAllowed?: boolean
   noKillAllowed?: boolean // room toggle: wolves may choose 空刀
+  guardSkipAllowed?: boolean // room toggle: guard may choose 空守
   roleHistory?: RoleHistory | null
   /** Room code + config for the in-game info modal; null/absent for non-members. */
   gameSettings?: GameSettings | null

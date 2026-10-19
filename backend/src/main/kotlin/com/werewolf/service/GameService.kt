@@ -387,6 +387,7 @@ class GameService(
             "bgmTrack" to room?.config?.bgmTrack,
             "witchSelfSaveAllowed" to (room?.config?.witchSelfSaveAllowed ?: true),
             "noKillAllowed" to (room?.config?.noKillAllowed ?: false),
+            "guardSkipAllowed" to (room?.config?.guardSkipAllowed ?: false),
             // Private night-action history for the requester's role (role card).
             "roleHistory" to myPlayer?.let {
                 RoleHistoryBuilder.build(it, game, nightPhaseRepository.findByGameId(gameId), players, ::displayNameFor)
@@ -402,6 +403,7 @@ class GameService(
                 "hasSheriff" to room.hasSheriff,
                 "witchSelfSaveAllowed" to (room.config?.witchSelfSaveAllowed ?: true),
                 "noKillAllowed" to (room.config?.noKillAllowed ?: false),
+                "guardSkipAllowed" to (room.config?.guardSkipAllowed ?: false),
                 "winCondition" to room.winCondition.name,
             ) else null,
             "winner" to game.winner?.name,

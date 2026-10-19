@@ -313,6 +313,7 @@ class NightAudioSequenceGuaranteeIntegrationTest {
                     FIELD_TOTAL_PLAYERS to 6,
                     "roles" to listOf("SEER", "WITCH", "GUARD"),
                     "hasSheriff" to false,
+                    "guardSkipAllowed" to true,
                 )),
                 headers(hostToken),
             ),

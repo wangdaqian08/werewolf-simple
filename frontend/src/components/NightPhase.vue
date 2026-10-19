@@ -363,6 +363,16 @@
         </PlayerSlot>
       </section>
       <footer class="nf">
+        <button
+          v-if="guardSkipAllowed"
+          class="btn btn-secondary nf-btn"
+          data-testid="guard-skip"
+          :class="{ 'is-loading': actionPending }"
+          :disabled="actionPending"
+          @click="confirmGuardSkip"
+        >
+          空守 Not protect anyone
+        </button>
         <!-- Guard confirm is RED per design -->
         <button
           class="btn btn-danger nf-btn"
@@ -434,6 +444,7 @@ const props = withDefaults(
     actionPending?: boolean
     witchSelfSaveAllowed?: boolean
     noKillAllowed?: boolean
+    guardSkipAllowed?: boolean
     // Bumped by the parent when the backend rejects this player's night action.
     rejectionCount?: number
   }>(),
@@ -459,6 +470,7 @@ const emit = defineEmits<{
   selectPlayer: [userId: string]
   confirm: [targetId?: string]
   wolfSkip: []
+  guardSkip: []
   witchAntidote: []
   witchPassAntidote: []
   witchPoison: [targetId: string]
@@ -503,6 +515,10 @@ function confirmSeerDone() {
 function confirmGuardProtect() {
   hasActed.value = true
   emit('confirm', localSelected.value)
+}
+function confirmGuardSkip() {
+  hasActed.value = true
+  emit('guardSkip')
 }
 function confirmWitchSkip() {
   hasActed.value = true

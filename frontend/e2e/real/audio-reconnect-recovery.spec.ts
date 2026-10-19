@@ -73,6 +73,7 @@ test('STOMP reconnect during night replays missed AudioSequence via getGameState
 
   const ctx = await setupGame(browser, {
       totalPlayers: 6,
+      guardSkipAllowed: true,
       hasSheriff: false,
       roles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD'] as RoleName[],

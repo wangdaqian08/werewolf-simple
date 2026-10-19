@@ -27,6 +27,7 @@ const SETTINGS: GameSettings = {
   hasSheriff: false,
   witchSelfSaveAllowed: true,
   noKillAllowed: false,
+  guardSkipAllowed: false,
   winCondition: 'HARD_MODE',
 }
 
@@ -120,5 +121,16 @@ describe('GameSettingsModal — 空刀 rule', () => {
     const wrapper = mountModal({ settings: { ...SETTINGS, noKillAllowed: true } })
     expect(bodyEl('settings-no-kill')?.textContent).toContain('允许')
     wrapper.unmount()
+  })
+})
+
+describe('GameSettingsModal — 空守 rule', () => {
+  it('shows 禁止 by default and 允许 when the room enables 空守', () => {
+    const off = mountModal()
+    expect(bodyEl('settings-guard-skip')?.textContent).toContain('禁止')
+    off.unmount()
+    const on = mountModal({ settings: { ...SETTINGS, guardSkipAllowed: true } })
+    expect(bodyEl('settings-guard-skip')?.textContent).toContain('允许')
+    on.unmount()
   })
 })

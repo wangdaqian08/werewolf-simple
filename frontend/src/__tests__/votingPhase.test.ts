@@ -625,6 +625,7 @@ describe('VotingPhase — room info button (settings-fab)', () => {
     hasSheriff: true,
     witchSelfSaveAllowed: true,
     noKillAllowed: false,
+    guardSkipAllowed: false,
     winCondition: 'CLASSIC',
   }
 

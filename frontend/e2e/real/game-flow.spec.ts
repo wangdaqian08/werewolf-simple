@@ -73,6 +73,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
+      guardSkipAllowed: true,
       roles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'HUNTER', 'VILLAGER'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
     })

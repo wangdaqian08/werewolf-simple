@@ -70,6 +70,10 @@
                 <span class="rule-label">空刀</span>
                 <span class="rule-value">{{ settings.noKillAllowed ? '允许' : '禁止' }}</span>
               </div>
+              <div class="rule-row" data-testid="settings-guard-skip">
+                <span class="rule-label">空守</span>
+                <span class="rule-value">{{ settings.guardSkipAllowed ? '允许' : '禁止' }}</span>
+              </div>
               <div class="rule-row" data-testid="settings-win-condition">
                 <span class="rule-label">胜利条件</span>
                 <span class="rule-value">

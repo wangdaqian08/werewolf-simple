@@ -145,6 +145,8 @@ class GameSettingsStateTest {
         // config is null → 空刀 defaults to disabled
         assertThat(gs?.get("noKillAllowed")).isEqualTo(false)
         assertThat(result["noKillAllowed"]).isEqualTo(false)
+        assertThat(gs?.get("guardSkipAllowed")).isEqualTo(false)
+        assertThat(result["guardSkipAllowed"]).isEqualTo(false)
         assertThat(gs?.get("winCondition")).isEqualTo("CLASSIC")
 
         @Suppress("UNCHECKED_CAST")
@@ -159,7 +161,7 @@ class GameSettingsStateTest {
         stubGame(
             room(
                 winCondition = WinConditionMode.HARD_MODE,
-                config = GameConfig(witchSelfSaveAllowed = false, noKillAllowed = true),
+                config = GameConfig(witchSelfSaveAllowed = false, noKillAllowed = true, guardSkipAllowed = true),
             ),
             sixPlayers(),
         )
@@ -171,6 +173,8 @@ class GameSettingsStateTest {
         assertThat(gs?.get("witchSelfSaveAllowed")).isEqualTo(false)
         assertThat(gs?.get("noKillAllowed")).isEqualTo(true)
         assertThat(result["noKillAllowed"]).isEqualTo(true)
+        assertThat(gs?.get("guardSkipAllowed")).isEqualTo(true)
+        assertThat(result["guardSkipAllowed"]).isEqualTo(true)
         assertThat(gs?.get("winCondition")).isEqualTo("HARD_MODE")
     }
 

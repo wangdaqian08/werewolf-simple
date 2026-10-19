@@ -48,7 +48,11 @@ class GuardHandler(private val nightPhaseRepository: NightPhaseRepository) : Rol
                 nightPhase.guardTargetUserId = target
             }
 
-            ActionType.GUARD_SKIP -> nightPhase.guardTargetUserId = null
+            ActionType.GUARD_SKIP -> {
+                if (context.room.config?.guardSkipAllowed != true)
+                    return GameActionResult.Rejected("空守 (no protect) is not enabled in this room")
+                nightPhase.guardTargetUserId = null
+            }
             else -> return GameActionResult.Rejected("Unknown guard action: ${action.actionType}")
         }
 

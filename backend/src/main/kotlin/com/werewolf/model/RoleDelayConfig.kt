@@ -106,6 +106,8 @@ data class GameConfig(
     val perksAllowed: Boolean = true,
 
     val noKillAllowed: Boolean = false,
+
+    val guardSkipAllowed: Boolean = false,
 ) {
     /**
      * 获取指定角色的延迟配置

@@ -142,6 +142,7 @@ export const MOCK_GAME_STATE: GameState = {
     hasSheriff: true,
     witchSelfSaveAllowed: true,
     noKillAllowed: false,
+    guardSkipAllowed: false,
     winCondition: 'CLASSIC',
   },
   players: [

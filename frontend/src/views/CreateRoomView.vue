@@ -178,6 +178,28 @@
             <span class="toggle-thumb" />
           </button>
         </div>
+        <div class="role-row" :class="guardSkipAllowed ? 'row-on' : 'row-off'">
+          <span class="role-emoji">🛡️</span>
+          <div class="role-names">
+            <span class="role-name">空守 No Protect</span>
+            <span class="win-cond-desc">
+              {{
+                guardSkipAllowed
+                  ? '守卫夜晚可选择不守护任何人 (Allowed)'
+                  : '守卫每晚必须选择守护目标 (Disallowed)'
+              }}
+            </span>
+          </div>
+          <button
+            :class="guardSkipAllowed ? 'toggle-on' : 'toggle-off'"
+            class="toggle"
+            data-testid="guardSkip-toggle"
+            :data-guard-skip="guardSkipAllowed"
+            @click="guardSkipAllowed = !guardSkipAllowed"
+          >
+            <span class="toggle-thumb" />
+          </button>
+        </div>
         <div class="role-row" :class="perksAllowed ? 'row-on' : 'row-off'">
           <span class="role-emoji">🛡</span>
           <div class="role-names">
@@ -317,6 +339,7 @@ const hasSheriff = ref(true)
 const witchSelfSaveAllowed = ref(true)
 const perksAllowed = ref(true)
 const noKillAllowed = ref(false)
+const guardSkipAllowed = ref(false)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
 const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: '无 (None)' }])
@@ -472,6 +495,7 @@ async function handleCreate() {
         witchSelfSaveAllowed: witchSelfSaveAllowed.value,
         perksAllowed: perksAllowed.value,
         noKillAllowed: noKillAllowed.value,
+        guardSkipAllowed: guardSkipAllowed.value,
       },
     }
     // Carry the per-room display-name override that the lobby may have set.

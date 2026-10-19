@@ -56,6 +56,7 @@ test.describe('Witch audio — open_eyes must play during WITCH_ACT', () => {
     // we can witness the witch sub-phase from her own page if needed.
     const ctx = await setupGame(browser, {
       totalPlayers: 6,
+      guardSkipAllowed: true,
       hasSheriff: false,
       roles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
