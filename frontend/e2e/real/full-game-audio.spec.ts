@@ -266,6 +266,7 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
     const ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
+      guardSkipAllowed: true,
       bgmTrack: BGM_TRACK,
       // Explicit role kit — required so SEER, WITCH, GUARD all roll. Default
       // optional set ('SEER','WITCH','HUNTER') would skip GUARD.

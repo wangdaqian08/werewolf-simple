@@ -69,6 +69,7 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     testInfo.setTimeout(process.env.CI ? 360_000 : 180_000)
     ctx = await setupGame(browser, {
       totalPlayers: 12,
+      guardSkipAllowed: true,
       hasSheriff: true,
       winCondition: 'HARD_MODE',
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT'] as RoleName[],

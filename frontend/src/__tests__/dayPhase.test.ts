@@ -444,6 +444,7 @@ const GAME_SETTINGS: GameSettings = {
   hasSheriff: true,
   witchSelfSaveAllowed: true,
   noKillAllowed: false,
+  guardSkipAllowed: false,
   winCondition: 'CLASSIC',
 }
 

@@ -29,6 +29,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     testInfo.setTimeout(120_000)
     ctx = await setupGame(browser, {
       totalPlayers: 9,
+      guardSkipAllowed: true,
       hasSheriff: false,
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
     })

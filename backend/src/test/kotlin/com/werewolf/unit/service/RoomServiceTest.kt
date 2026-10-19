@@ -509,6 +509,28 @@ class RoomServiceTest {
         assertThat(enabledDto.config.noKillAllowed).isTrue()
     }
 
+    @Test
+    fun `createRoom - guardSkipAllowed defaults to false and persists when enabled`() {
+        val captor = argumentCaptor<Room>()
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        val defaultDto = roomService.createRoom(hostId, "Host", null, RoomConfigRequest())
+        val enabledDto = roomService.createRoom(hostId, "Host", null, RoomConfigRequest(guardSkipAllowed = true))
+
+        verify(roomRepository, times(2)).save(captor.capture())
+        assertThat(captor.firstValue.config?.guardSkipAllowed).isFalse()
+        assertThat(captor.secondValue.config?.guardSkipAllowed).isTrue()
+        assertThat(defaultDto.config.guardSkipAllowed).isFalse()
+        assertThat(enabledDto.config.guardSkipAllowed).isTrue()
+    }
+
     // ── perks: room config + DTO exposure ──────────────────────────────────────
 
     @Test

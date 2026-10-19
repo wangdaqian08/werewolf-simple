@@ -352,3 +352,36 @@ describe('NightPhase - a rejected action gives the turn back', () => {
     expect(wrapper.find('[data-testid="guard-confirm-protect"]').exists()).toBe(true)
   })
 })
+describe('NightPhase - 空守 (guard protects no one)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const p = (userId: string, seatIndex: number): GamePlayer => ({
+    userId,
+    nickname: userId,
+    seatIndex,
+    isAlive: true,
+    isSheriff: false,
+  })
+  const guardProps = (extra: Record<string, unknown> = {}) => ({
+    nightPhase: { subPhase: 'GUARD_PICK', dayNumber: 1 } as NightPhaseState,
+    players: [p('g1', 1), p('v1', 2)],
+    myUserId: 'g1',
+    myRole: 'GUARD' as PlayerRole,
+    ...extra,
+  })
+
+  it('the 空守 button is hidden when the room has not enabled 空守 (default)', () => {
+    const wrapper = mount(NightPhase, { props: guardProps() })
+    expect(wrapper.find('[data-testid="guard-skip"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="guard-confirm-protect"]').exists()).toBe(true)
+  })
+
+  it('the guard can choose 空守 and the click emits guardSkip and ends the turn', async () => {
+    const wrapper = mount(NightPhase, { props: guardProps({ guardSkipAllowed: true }) })
+    await wrapper.find('[data-testid="guard-skip"]').trigger('click')
+    expect(wrapper.emitted('guardSkip')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="guard-confirm-protect"]').exists()).toBe(false)
+  })
+})

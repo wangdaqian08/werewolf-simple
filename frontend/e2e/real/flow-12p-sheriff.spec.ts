@@ -45,6 +45,7 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
     ctx = await setupGame(browser, {
       totalPlayers: 12,
       hasSheriff: true,
+      guardSkipAllowed: true,
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
       browserRoles: BROWSER_ROLES,
     })
@@ -191,6 +192,7 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     testInfo.setTimeout(process.env.CI ? 360_000 : 180_000)
     ctx = await setupGame(browser, {
       totalPlayers: 12,
+      guardSkipAllowed: true,
       hasSheriff: true,
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
       browserRoles: BROWSER_ROLES,
@@ -398,6 +400,7 @@ test.describe('12p sheriff — night-killed sheriff hands over badge at day reve
     testInfo.setTimeout(process.env.CI ? 360_000 : 180_000)
     ctx = await setupGame(browser, {
       totalPlayers: 12,
+      guardSkipAllowed: true,
       hasSheriff: true,
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
       browserRoles: BROWSER_ROLES,

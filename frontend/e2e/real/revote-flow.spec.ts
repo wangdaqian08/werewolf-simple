@@ -65,6 +65,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     testInfo.setTimeout(120_000)
     ctx = await setupGame(browser, {
       totalPlayers: 9,
+      guardSkipAllowed: true,
       hasSheriff: false,
       // Explicit roles: deliberately exclude HUNTER so HUNTER_SHOOT sub-phase
       // can't fire between day-vote and the next night — that sub-phase makes

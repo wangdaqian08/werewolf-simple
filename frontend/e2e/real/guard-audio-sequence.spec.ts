@@ -70,6 +70,7 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     // guardPage and crashes on `.on('console', ...)` with a TypeError.
     ctx = await setupGame(browser, {
       totalPlayers: 9,
+      guardSkipAllowed: true,
       hasSheriff: false,
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD'],

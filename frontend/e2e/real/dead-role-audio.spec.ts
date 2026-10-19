@@ -74,6 +74,7 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
     // GameService.kt:316 → 2 wolves at totalPlayers=6.
     const ctx = await setupGame(browser, {
       totalPlayers: 6,
+      guardSkipAllowed: true,
       hasSheriff: false,
       roles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD'] as RoleName[],
@@ -271,6 +272,7 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
     // (5 or 4 alive after N1) for the game to continue past D1 into N2.
     const ctx = await setupGame(browser, {
       totalPlayers: 9,
+      guardSkipAllowed: true,
       hasSheriff: false,
       roles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'VILLAGER'] as RoleName[],
       browserRoles: ['WEREWOLF', 'SEER', 'WITCH', 'GUARD'] as RoleName[],

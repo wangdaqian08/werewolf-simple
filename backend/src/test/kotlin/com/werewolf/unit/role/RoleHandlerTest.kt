@@ -563,11 +563,12 @@ class RoleHandlerTest {
             handler = GuardHandler(nightPhaseRepository)
         }
 
-        private fun guardCtx(prevTarget: String? = null): GameContext {
+        private fun guardCtx(prevTarget: String? = null, guardSkipAllowed: Boolean = false): GameContext {
             val np = nightPhase(NightSubPhase.GUARD_PICK, prevGuardTarget = prevTarget)
             val guard = player("guard", 1, PlayerRole.GUARD)
             val target = player("u2", 2, PlayerRole.VILLAGER)
-            return GameContext(game(), room(), listOf(guard, target), nightPhase = np)
+            val room = room().also { it.config = GameConfig(guardSkipAllowed = guardSkipAllowed) }
+            return GameContext(game(), room, listOf(guard, target), nightPhase = np)
         }
 
         @Test
@@ -592,8 +593,18 @@ class RoleHandlerTest {
         }
 
         @Test
-        fun `guard skip - sets guardTargetUserId to null`() {
+        fun `guard skip - rejected when 空守 is not enabled in the room`() {
             val ctx = guardCtx()
+
+            val result = handler.handle(req("guard", ActionType.GUARD_SKIP), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+            verify(nightPhaseRepository, never()).save(any<NightPhase>())
+        }
+
+        @Test
+        fun `guard skip - sets guardTargetUserId to null`() {
+            val ctx = guardCtx(guardSkipAllowed = true)
             whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
 
             val result = handler.handle(req("guard", ActionType.GUARD_SKIP), ctx)

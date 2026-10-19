@@ -93,6 +93,7 @@ export interface GameSetupOptions {
   /** 空刀 toggle. Defaults to false (room default); pass true to flip the
    *  CreateRoom DOM toggle so the wolves may skip the kill. */
   noKillAllowed?: boolean
+  guardSkipAllowed?: boolean
   /**
    * Optional BGM track filename (e.g. 'suspicion.mp3'). When set, the host
    * picks the matching option from the BGM dropdown on the CreateRoom page
@@ -254,6 +255,15 @@ export async function setupGame(
     if ((await noKillToggle.getAttribute('data-no-kill')) !== 'true') {
       await noKillToggle.click()
       await expect(noKillToggle).toHaveAttribute('data-no-kill', 'true', { timeout: 5_000 })
+    }
+  }
+
+  if (opts.guardSkipAllowed === true) {
+    const guardSkipToggle = hostPage.getByTestId('guardSkip-toggle')
+    await guardSkipToggle.waitFor({ state: 'visible', timeout: 5_000 })
+    if ((await guardSkipToggle.getAttribute('data-guard-skip')) !== 'true') {
+      await guardSkipToggle.click()
+      await expect(guardSkipToggle).toHaveAttribute('data-guard-skip', 'true', { timeout: 5_000 })
     }
   }
 

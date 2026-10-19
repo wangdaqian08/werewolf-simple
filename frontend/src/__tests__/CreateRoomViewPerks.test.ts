@@ -116,3 +116,46 @@ describe('CreateRoomView 空刀 (no kill) toggle', () => {
     )
   })
 })
+
+describe('CreateRoomView 空守 (guard skip) toggle', () => {
+  beforeEach(() => {
+    h.createRoomMock.mockReset().mockResolvedValue({
+      roomId: '1',
+      roomCode: '123',
+      hostId: 'u1',
+      status: 'WAITING',
+      config: { totalPlayers: 9, roles: [] },
+      players: [],
+    })
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('defaults to disabled and sends guardSkipAllowed:false', async () => {
+    const wrapper = await mountCreateRoom()
+    const toggle = wrapper.find('[data-testid="guardSkip-toggle"]')
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.attributes('data-guard-skip')).toBe('false')
+
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(h.createRoomMock).toHaveBeenCalledWith(
+      expect.objectContaining({ config: expect.objectContaining({ guardSkipAllowed: false }) }),
+    )
+  })
+
+  it('flips on when clicked and sends guardSkipAllowed:true', async () => {
+    const wrapper = await mountCreateRoom()
+    await wrapper.find('[data-testid="guardSkip-toggle"]').trigger('click')
+    expect(wrapper.find('[data-testid="guardSkip-toggle"]').attributes('data-guard-skip')).toBe(
+      'true',
+    )
+
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(h.createRoomMock).toHaveBeenCalledWith(
+      expect.objectContaining({ config: expect.objectContaining({ guardSkipAllowed: true }) }),
+    )
+  })
+})

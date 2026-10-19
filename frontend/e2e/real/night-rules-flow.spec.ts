@@ -14,6 +14,13 @@ const BOARD = {
     browserRoles: ['WEREWOLF', 'SEER', 'WITCH'] as RoleName[],
 }
 
+const GUARD_BOARD = {
+    totalPlayers: 6,
+    hasSheriff: false,
+    roles: ['WEREWOLF', 'VILLAGER', 'WITCH', 'GUARD'] as RoleName[],
+    browserRoles: ['WEREWOLF', 'WITCH', 'GUARD'] as RoleName[],
+}
+
 type ActionResult = { ok: boolean; error: string | null }
 
 async function postAction(page: Page, body: Record<string, unknown>): Promise<ActionResult> {
@@ -98,7 +105,7 @@ async function witchPasses(ctx: GameContext) {
     expect(r.ok, `witch pass: ${r.error}`).toBe(true)
 }
 
-test.describe('Night rules — repeated actions, dead seer, 空刀, witch self-save', () => {
+test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witch self-save', () => {
     test.setTimeout(process.env.CI ? 360_000 : 240_000)
 
     test('a repeated witch action is rejected and the seer keeps her turn', async ({
@@ -298,6 +305,65 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, witch self-s
             })
             expect(selfPoison.ok, 'self-poison must be rejected').toBe(false)
             await witchPasses(ctx)
+        } finally {
+            await cleanupRoomData(ctx.hostPage, ctx.roomCode)
+            await ctx.cleanup()
+        }
+    })
+
+    test('空守 on: the guard protects no one and the wolf target dies', async ({ browser }, testInfo) => {
+        const ctx = await setupGame(browser, { ...GUARD_BOARD, guardSkipAllowed: true })
+        try {
+            const v1 = villagers(ctx).find((b) => b.nick !== 'Host')
+            assertNonNull(v1, 'need a non-host villager')
+
+            await startNight(ctx)
+            await wolvesKill(ctx, v1.seat)
+            await witchPasses(ctx)
+            expect(await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 15_000)).toBe(true)
+            const guardPage = page(ctx, 'GUARD')
+            await expect(guardPage.getByTestId('guard-skip')).toBeVisible({ timeout: 10_000 })
+            await expect(guardPage.getByTestId('guard-confirm-protect')).toBeVisible()
+            await captureSnapshot(ctx.pages, testInfo, 'guard-skip-on')
+            await guardPage.getByTestId('guard-skip').click()
+
+            await revealDay(ctx)
+            await expect(ctx.hostPage.getByTestId('day-banner-kill')).toBeVisible({ timeout: 10_000 })
+            await expect(ctx.hostPage.getByTestId(`day-killed-seat-${v1.seat}`)).toBeVisible()
+            await captureSnapshot(ctx.pages, testInfo, 'guard-skip-on-reveal')
+        } finally {
+            await cleanupRoomData(ctx.hostPage, ctx.roomCode)
+            await ctx.cleanup()
+        }
+    })
+
+    test('空守 off (default): no skip button, the server rejects GUARD_SKIP, the guard keeps the turn', async ({
+                                                                                                                   browser,
+                                                                                                               }, testInfo) => {
+        const ctx = await setupGame(browser, GUARD_BOARD)
+        try {
+            const v1 = villagers(ctx).find((b) => b.nick !== 'Host')
+            assertNonNull(v1, 'need a non-host villager')
+
+            await startNight(ctx)
+            await wolvesKill(ctx, v1.seat)
+            await witchPasses(ctx)
+            expect(await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'GUARD_PICK', 15_000)).toBe(true)
+            const guardPage = page(ctx, 'GUARD')
+            await expect(guardPage.getByTestId('guard-confirm-protect')).toBeVisible({ timeout: 10_000 })
+            await expect(guardPage.getByTestId('guard-skip')).toHaveCount(0)
+            await captureSnapshot(ctx.pages, testInfo, 'guard-skip-off')
+            const skip = await postAction(guardPage, {
+                gameId: Number(ctx.gameId),
+                actionType: 'GUARD_SKIP',
+            })
+            expect(skip.ok, '空守 is off, so GUARD_SKIP must be rejected').toBe(false)
+            expect(skip.error).toContain('空守')
+
+            await guardPage.locator(`.player-grid [data-seat="${v1.seat}"]`).click()
+            await guardPage.getByTestId('guard-confirm-protect').click()
+            await revealDay(ctx)
+            await expect(ctx.hostPage.getByTestId('day-banner-peaceful')).toBeVisible({ timeout: 10_000 })
         } finally {
             await cleanupRoomData(ctx.hostPage, ctx.roomCode)
             await ctx.cleanup()

@@ -103,10 +103,12 @@
         :action-pending="actionPending"
         :witch-self-save-allowed="gameStore.state.witchSelfSaveAllowed"
         :no-kill-allowed="gameStore.state.noKillAllowed ?? false"
+        :guard-skip-allowed="gameStore.state.guardSkipAllowed ?? false"
         :rejection-count="nightRejections"
         @select-player="handleNightSelect"
         @confirm="handleNightConfirm"
         @wolf-skip="handleWolfSkip"
+        @guard-skip="handleGuardSkip"
         @witch-antidote="handleWitchAntidote"
         @witch-pass-antidote="handleWitchPassAntidote"
         @witch-poison="handleWitchPoison"
@@ -819,6 +821,9 @@ async function handleNightSelect(userId: string) {
 }
 async function handleWolfSkip() {
   await action({ actionType: 'WOLF_SKIP' })
+}
+async function handleGuardSkip() {
+  await action({ actionType: 'GUARD_SKIP' })
 }
 async function handleNightConfirm(targetId?: string) {
   //console.log('[GameView] handleNightConfirm called with targetId:', targetId)
