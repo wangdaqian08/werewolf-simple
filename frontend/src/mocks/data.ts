@@ -10,6 +10,7 @@
 import type {
   ActionLogEntry,
   DayPhaseState,
+  GameReview,
   GameState,
   LoginResponse,
   MyPerkActivation,
