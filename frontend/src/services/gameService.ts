@@ -1,5 +1,11 @@
 import http from './http'
-import type { ActionLogEntry, GameActionRequest, GameActionResponse, GameState } from '@/types'
+import type {
+  ActionLogEntry,
+  GameActionRequest,
+  GameActionResponse,
+  GameReview,
+  GameState,
+} from '@/types'
 
 export const gameService = {
   async getState(gameId: string): Promise<GameState> {
@@ -33,6 +39,11 @@ export const gameService = {
 
   async startTimer(gameId: number, durationSeconds: number): Promise<void> {
     await http.post(`/game/${gameId}/timer/start`, { durationSeconds })
+  },
+
+  async getReview(gameId: string): Promise<GameReview> {
+    const { data } = await http.get<GameReview>(`/game/${gameId}/review`)
+    return data
   },
 
   async stopTimer(gameId: number): Promise<void> {

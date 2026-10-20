@@ -10,6 +10,7 @@
 import type {
   ActionLogEntry,
   DayPhaseState,
+  GameReview,
   GameState,
   LoginResponse,
   MyPerkActivation,
@@ -1278,3 +1279,61 @@ export const MOCK_PAYMENT_ORDERS: PaymentOrderSummary[] = [
     createdAt: '2026-06-10T19:55:00',
   },
 ]
+
+// ── Game review (上帝视角复盘) ─────────────────────────────────────────────────
+
+export const MOCK_GAME_REVIEW: GameReview = {
+  winner: 'VILLAGER',
+  players: [
+    { userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' },
+    { userId: 'u2', nickname: 'Bob', seatIndex: 2, role: 'SEER' },
+    { userId: 'u3', nickname: 'Cat', seatIndex: 3, role: 'VILLAGER' },
+  ],
+  rounds: [
+    {
+      day: 1,
+      night: {
+        wolf: {
+          actors: [{ userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' }],
+          action: 'KILL',
+          target: { userId: 'u3', nickname: 'Cat', seatIndex: 3, role: 'VILLAGER' },
+        },
+        seer: {
+          actor: { userId: 'u2', nickname: 'Bob', seatIndex: 2, role: 'SEER' },
+          dead: false,
+          target: { userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' },
+          isWerewolf: true,
+        },
+        witch: null,
+        guard: null,
+        dawn: {
+          deaths: [
+            {
+              player: { userId: 'u3', nickname: 'Cat', seatIndex: 3, role: 'VILLAGER' },
+              cause: 'WOLF',
+            },
+          ],
+          saved: null,
+        },
+      },
+      events: [
+        {
+          type: 'VOTE',
+          kind: 'EXILE',
+          round: 1,
+          tally: [
+            {
+              target: { userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' },
+              votes: 1,
+              voters: [{ userId: 'u2', nickname: 'Bob', seatIndex: 2, role: 'SEER' }],
+            },
+          ],
+          abstain: [],
+          result: { userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' },
+          appointed: false,
+          wolfPlay: null,
+        },
+      ],
+    },
+  ],
+}

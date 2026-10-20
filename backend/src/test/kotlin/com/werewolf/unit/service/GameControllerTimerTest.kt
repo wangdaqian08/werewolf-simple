@@ -7,6 +7,7 @@ import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.service.ActionLogService
+import com.werewolf.service.GameReviewService
 import com.werewolf.service.GameService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -14,8 +15,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
-import org.mockito.kotlin.any
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -28,6 +27,7 @@ class GameControllerTimerTest {
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var actionLogService: ActionLogService
     @Mock lateinit var hostTimerService: HostTimerService
+    @Mock lateinit var gameReviewService: GameReviewService
     @Mock lateinit var authentication: Authentication
 
     private lateinit var controller: GameController
@@ -40,7 +40,7 @@ class GameControllerTimerTest {
     fun setUp() {
         controller = GameController(
             gameService, gameActionDispatcher, nightOrchestrator,
-            actionLogService, hostTimerService,
+            actionLogService, hostTimerService,gameReviewService
         )
         whenever(authentication.principal).thenReturn(hostId)
     }

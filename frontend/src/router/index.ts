@@ -50,6 +50,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/review/:gameId',
+      name: 'review',
+      component: () => import('@/views/GameReviewView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       // No requiresAuth: the view itself renders a sign-in prompt when the
       // visitor has no session (the lobby ☰ entry point is login-gated anyway).
       path: '/account',

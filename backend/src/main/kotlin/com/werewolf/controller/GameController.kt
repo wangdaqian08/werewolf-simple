@@ -8,7 +8,10 @@ import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.service.ActionLogService
+import com.werewolf.service.GameNotFoundException
+import com.werewolf.service.GameReviewService
 import com.werewolf.service.GameService
+import com.werewolf.service.ReviewForbiddenException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -25,6 +28,7 @@ class GameController(
     private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: ActionLogService,
     private val hostTimerService: HostTimerService,
+    private val gameReviewService: GameReviewService,
 ) {
     val log: Logger = LoggerFactory.getLogger(GameController::class.java)
     @PostMapping("/start")
@@ -88,8 +92,22 @@ class GameController(
     @GetMapping("/{gameId}/events")
     fun getActionLog(
         @PathVariable gameId: Int,
-        authentication: Authentication,
     ) = ResponseEntity.ok(actionLogService.getLog(gameId))
+
+    @GetMapping("/{gameId}/review")
+    fun getReview(
+        @PathVariable gameId: Int,
+        authentication: Authentication,
+    ): ResponseEntity<Any> {
+        val userId = authentication.principal as String
+        return try {
+            ResponseEntity.ok(gameReviewService.getReview(gameId, userId))
+        } catch (e: GameNotFoundException) {
+            ResponseEntity.status(404).body(mapOf("error" to e.message))
+        } catch (e: ReviewForbiddenException) {
+            ResponseEntity.status(403).body(mapOf("error" to e.message))
+        }
+    }
 
     @PostMapping("/{gameId}/timer/start")
     fun startTimer(
