@@ -27,6 +27,15 @@
         </div>
       </section>
 
+      <button
+        v-if="sortedPlayers.length"
+        class="btn btn-outline review-btn"
+        data-testid="open-review"
+        @click="openReview"
+      >
+        📜 上帝视角复盘
+      </button>
+
       <template v-if="settlement">
         <div class="divider-label">
           <span>积分结算 / REWARDS</span>
@@ -120,6 +129,9 @@ const outcomeSub = computed(() => {
   return winner.value === 'WEREWOLF' ? 'WOLVES WIN' : 'VILLAGE WINS'
 })
 
+function openReview() {
+  router.push({ name: 'review', params: { gameId: String(route.params.gameId) } })
+}
 function goLobby() {
   gameStore.clearGame()
   router.push({ name: 'lobby' })
@@ -345,6 +357,16 @@ function goLobby() {
 .reward-amount {
   color: var(--gold);
   font-weight: 600;
+}
+
+.review-btn {
+  width: 100%;
+  margin: 0 0 1.25rem;
+}
+
+.result-wolves .review-btn {
+  color: #f5f0e8;
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .play-again-btn {

@@ -16,6 +16,7 @@ import {
   MOCK_DAY_SCENARIO_HOST_REVEALED,
   MOCK_GAME_RESULT,
   MOCK_GAME_RESULT_WOLVES,
+  MOCK_GAME_REVIEW,
   MOCK_GAME_STATE,
   MOCK_LOGIN,
   MOCK_MY_PERKS,
@@ -507,6 +508,7 @@ export function setupMocks() {
   mock.onGet(/\/game\/[^/]+\/state/).reply(() => [200, mockGameState])
   mock.onGet(/\/game\/result/).reply((_config) => [200, MOCK_GAME_RESULT])
   mock.onGet(/\/game\/[^/]+\/events/).reply(() => [200, MOCK_ACTION_LOG])
+  mock.onGet(/\/game\/[^/]+\/review/).reply(() => [200, MOCK_GAME_REVIEW])
   mock.onPost('/game/action').reply((config) => {
     const { actionType, targetId, payload } = JSON.parse(config.data ?? '{}')
     if (mockGameState.phase === 'ROLE_REVEAL') {

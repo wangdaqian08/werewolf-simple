@@ -210,6 +210,73 @@ export interface RoleHistory {
   role: 'WITCH' | 'SEER' | 'GUARD' | 'WOLF'
   entries: RoleHistoryEntry[]
 }
+// ── Game review (上帝视角复盘) ────────────────────────────────────────────────
+
+export interface ReviewPlayer {
+  userId: string
+  nickname: string
+  seatIndex: number
+  role: PlayerRole
+}
+
+export interface ReviewNight {
+  wolf: {
+    actors: ReviewPlayer[]
+    action: 'KILL' | 'SKIP' | 'SELF_KILL'
+    target: ReviewPlayer | null
+  }
+  /** seer / witch / guard: null when the role is not in the game */
+  seer: {
+    actor: ReviewPlayer
+    dead: boolean
+    target: ReviewPlayer | null
+    isWerewolf: boolean
+  } | null
+  witch: {
+    actor: ReviewPlayer
+    dead: boolean
+    antidote: ReviewPlayer | null
+    poison: ReviewPlayer | null
+  } | null
+  guard: { actor: ReviewPlayer; dead: boolean; target: ReviewPlayer | null } | null
+  dawn: {
+    deaths: { player: ReviewPlayer; cause: 'WOLF' | 'POISON' | 'BOTH_SAVES' }[]
+    saved: { player: ReviewPlayer; by: 'GUARD' | 'ANTIDOTE' | 'PERK' } | null
+  }
+}
+
+export interface ReviewVote {
+  type: 'VOTE'
+  kind: 'SHERIFF' | 'EXILE'
+  /** 2 = PK re-vote */
+  round: number
+  tally: { target: ReviewPlayer; votes: number; voters: ReviewPlayer[] }[]
+  abstain: ReviewPlayer[]
+  /** exiled player / elected sheriff; null = tie or no sheriff */
+  result: ReviewPlayer | null
+  /** sheriff only: the host picked the sheriff after a tie or a vote nobody won */
+  appointed: boolean
+  /** PUSH = 冲票, BUS = 倒钩 */
+  wolfPlay: 'PUSH' | 'BUS' | null
+}
+
+export type ReviewDayEvent =
+  | ReviewVote
+  | { type: 'HUNTER_SHOT'; hunter: ReviewPlayer; target: ReviewPlayer }
+  | { type: 'SELF_DESTRUCT'; player: ReviewPlayer; taken: ReviewPlayer | null }
+  | { type: 'IDIOT_REVEAL'; player: ReviewPlayer }
+
+export interface ReviewRound {
+  day: number
+  night: ReviewNight | null
+  events: ReviewDayEvent[]
+}
+
+export interface GameReview {
+  winner: 'WEREWOLF' | 'VILLAGER' | null
+  players: ReviewPlayer[]
+  rounds: ReviewRound[]
+}
 
 // ── Timer ─────────────────────────────────────────────────────────────────────
 

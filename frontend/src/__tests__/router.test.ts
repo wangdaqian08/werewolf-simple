@@ -37,6 +37,7 @@ describe('router browser-compat guard', () => {
     '/room/1',
     '/game/1',
     '/result/1',
+    '/review/1',
     '/account',
     '/pay/result?session_id=cs_test_1',
     '/no-such-page',

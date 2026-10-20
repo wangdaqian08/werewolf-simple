@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import ResultView from '@/views/ResultView.vue'
 import { useGameStore } from '@/stores/gameStore'
@@ -32,6 +32,7 @@ async function mountResultView(state: GameState, options: { authedUserId?: strin
     routes: [
       { path: '/', name: 'lobby', component: { template: '<div>Lobby</div>' } },
       { path: '/result/:gameId', name: 'result', component: ResultView },
+      { path: '/review/:gameId', name: 'review', component: { template: '<div>Review</div>' } },
     ],
   })
 
@@ -349,5 +350,20 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(wrapper.find('[data-testid="settlement"]').exists()).toBe(true)
     expect(wrapper.find('.my-earned').exists()).toBe(false)
     expect(wrapper.findAll('.reward-row')).toHaveLength(1)
+  })
+
+  it('📜 上帝视角复盘 opens the review page of this game', async () => {
+    const state: GameState = {
+      gameId: '42',
+      phase: 'GAME_OVER',
+      dayNumber: 3,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Alice', 'SEER')],
+      events: [],
+    }
+    const { wrapper, router } = await mountResultView(state)
+    await wrapper.find('[data-testid="open-review"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/review/42')
   })
 })

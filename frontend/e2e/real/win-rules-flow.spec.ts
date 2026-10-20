@@ -156,4 +156,55 @@ test.describe('Win rules — 屠边 and "the game ends before the hunter shoots"
             await ctx.cleanup()
         }
     })
+
+    test('game review: the result page opens a God-view replay of the night and the vote', async ({
+                                                                                                      browser,
+                                                                                                  }, testInfo) => {
+        const ctx = await setupGame(browser, {
+            totalPlayers: 6,
+            hasSheriff: false,
+            roles: ['WEREWOLF', 'VILLAGER', 'SEER'] as RoleName[],
+            browserRoles: ['WEREWOLF', 'SEER'] as RoleName[],
+        })
+        try {
+            const seer = await resolveRolePlayer(ctx, 'SEER')
+            assertNonNull(seer, 'kit must have a SEER')
+            const victim = nonHostVillagers(ctx)[0]
+            assertNonNull(victim, 'need a non-host villager as the wolf target')
+            const wolves = [...(ctx.roleMap.WEREWOLF ?? [])].sort((a, b) => a.seat - b.seat)
+            const wolf = wolves[0]
+            assertNonNull(wolf, 'kit must have a wolf')
+            const wolfSeats = `${wolves.map((w) => w.seat).join('·')}号`
+            const wolfList = wolves.map((w) => `${w.seat}号`).join('、')
+
+            await startNight(ctx)
+            await completeNight(ctx, { wolfKillSeat: victim.seat, seerCheckSeat: wolf.seat })
+            expect(await waitForTopPhaseIn(ctx.hostPage, ctx.gameId, ['DAY_DISCUSSION'])).toBe(
+                'DAY_DISCUSSION',
+            )
+
+            await completeDay(ctx, testInfo, { targetSeat: seer.seat, label: 'review-seer-out' })
+            expect(await waitForTopPhaseIn(ctx.hostPage, ctx.gameId, ['GAME_OVER'], 15_000)).toBe(
+                'GAME_OVER',
+            )
+
+            await ctx.hostPage.waitForURL(/\/result\//, { timeout: 15_000 })
+            await ctx.hostPage.getByTestId('open-review').click()
+            await ctx.hostPage.waitForURL(/\/review\//)
+            const lines = ctx.hostPage.locator('.rv-line')
+            await expect(lines).toContainText([
+                '第1夜',
+                new RegExp(`🐺 狼人（${wolfSeats}） 刀 ${victim.seat}号 .*〔村民〕`),
+                new RegExp(`🔮 预言家 ${seer.seat}号 验 ${wolf.seat}号 .* → 狼人`),
+                new RegExp(`☀ 天亮 ${victim.seat}号 .*〔村民〕 被刀出局`),
+                '第1天',
+                new RegExp(`🗳 放逐投票：${seer.seat}号 .*〔预言家〕 被投出`),
+                `🐺 狼人投票：${wolfList} → ${seer.seat}号〔预言家〕（冲票）`,
+            ])
+            await captureSnapshot(ctx.pages, testInfo, 'game-review')
+        } finally {
+            await cleanupRoomData(ctx.hostPage, ctx.roomCode)
+            await ctx.cleanup()
+        }
+    })
 })
