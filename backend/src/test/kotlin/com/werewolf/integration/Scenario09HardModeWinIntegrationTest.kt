@@ -9,7 +9,6 @@ import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.*
-import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
@@ -45,8 +44,7 @@ import org.springframework.test.context.ActiveProfiles
  * What the tests genuinely verify end-to-end:
  *   • WinConditionChecker is invoked with the correct trigger (POST_VOTE).
  *   • buildCounterplay reads witch potions (NightPhase.witchAntidoteUsed /
- *     witchPoisonTargetUserId) and hunter shot (EliminationHistory.hunterShotUserId)
- *     from the DB and produces the right flags.
+ *     witchPoisonTargetUserId) and living roles from the DB and produces the right flags.
  *   • endGame persists game.winner = WEREWOLF and broadcasts DomainEvent.GameOver.
  */
 @AutoConfigureTestRestTemplate
@@ -58,7 +56,6 @@ class Scenario09HardModeWinIntegrationTest {
     @Autowired lateinit var gameRepository: GameRepository
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
-    @Autowired lateinit var eliminationHistoryRepository: EliminationHistoryRepository
 
     companion object {
         private const val START_URL = "/api/game/start"
@@ -186,11 +183,7 @@ class Scenario09HardModeWinIntegrationTest {
      * Builds post-N1 / pre-Day-2-vote state directly in the DB:
      *   • Marks [nightVictimUserId] dead (the N1 wolf kill).
      *   • Creates a NightPhase row for day 1 with witch potions optionally consumed.
-     *   • Creates a day-1 EliminationHistory row with hunter shot optionally recorded
-     *     (simulating a past hunter shot from a prior day's flow).
-     *   • Positions the Game on day 2 in DAY_DISCUSSION / RESULT_REVEALED so the next
-     *     voting flow creates a separate day-2 EliminationHistory row (no PK clash with
-     *     the pre-seeded day-1 row).
+     *   • Positions the Game on day 2 in DAY_DISCUSSION / RESULT_REVEALED.
      *
      * This sidesteps the real-time coroutine nightRoleLoop, which would otherwise take
      * ~15s per multi-role night. The state we seed matches what a legitimate prior
@@ -201,7 +194,6 @@ class Scenario09HardModeWinIntegrationTest {
         nightVictimUserId: String,
         witchAntidoteSpent: Boolean = false,
         witchPoisonTarget: String? = null,
-        hunterHasShot: Boolean = false,
     ) {
         val victim = gamePlayerRepository.findByGameIdAndUserId(room.gameId, nightVictimUserId).orElseThrow()
         victim.alive = false
@@ -218,22 +210,9 @@ class Scenario09HardModeWinIntegrationTest {
             )
         )
 
-        if (hunterHasShot) {
-            eliminationHistoryRepository.save(
-                EliminationHistory(
-                    gameId = room.gameId,
-                    dayNumber = 1,
-                    hunterShotUserId = "${nightVictimUserId}-shot-placeholder",
-                    hunterShotRole = PlayerRole.HUNTER,
-                )
-            )
-        }
-
         val game = gameRepository.findById(room.gameId).orElseThrow()
         game.phase = GamePhase.DAY_DISCUSSION
         game.subPhase = DaySubPhase.RESULT_REVEALED.name
-        // Advance to day 2 so the voting pipeline's EliminationHistory row (keyed on dayNumber)
-        // does not collide with the optional day-1 hunter-shot row we seeded above.
         game.dayNumber = 2
         gameRepository.save(game)
     }
@@ -319,7 +298,7 @@ class Scenario09HardModeWinIntegrationTest {
         val room = setupHardModeGame(prefix = "HMH", counterplayRole = PlayerRole.HUNTER)
         val villagers = villagerUserIds(room)
 
-        // Hunter has not fired — no EliminationHistory row with hunterShotUserId.
+        // Hunter is alive, so has not fired.
         seedEndOfNight1(room, nightVictimUserId = villagers[0])
 
         voteOutAndRevealTally(room, villagers[1])
@@ -360,24 +339,21 @@ class Scenario09HardModeWinIntegrationTest {
     }
 
     /**
-     * Hunter counterplay falls away once the bullet is spent — the logical branch then fires
-     * even with the hunter still alive. Matches the scenario-09 D1 checkpoint where Grace has
-     * already fired, so `hasHunterWithBullet=false` at D2 even if she were somehow alive.
+     * Hunter counterplay falls away with the hunter: a hunter only fires once dead, so a
+     * dead hunter is the only one without a bullet. Matches the scenario-09 D1 checkpoint
+     * where Grace has already died and fired.
      */
     @Test
-    fun `HARD_MODE POST_VOTE logical win fires after hunter has spent the bullet`() {
+    fun `HARD_MODE POST_VOTE logical win fires once the hunter is dead`() {
         val room = setupHardModeGame(prefix = "HMH2", counterplayRole = PlayerRole.HUNTER)
         val villagers = villagerUserIds(room)
+        val hunter = gamePlayerRepository.findByGameId(room.gameId).first { it.role == PlayerRole.HUNTER }
 
-        seedEndOfNight1(
-            room,
-            nightVictimUserId = villagers[0],
-            hunterHasShot = true,
-        )
+        seedEndOfNight1(room, nightVictimUserId = hunter.userId)
 
-        voteOutAndRevealTally(room, villagers[1])
+        voteOutAndRevealTally(room, villagers[0])
 
-        // Post-vote state: 2W + HUNTER (bullet spent) + V3 = 2W vs 2 humans.
+        // Post-vote state: 2W + V2 + V3 = 2W vs 2 humans, hunter dead.
         // hasHunterWithBullet=false → LOGICAL WIN.
         val finalGame = gameRepository.findById(room.gameId).orElseThrow()
         assertThat(finalGame.phase).isEqualTo(GamePhase.GAME_OVER)

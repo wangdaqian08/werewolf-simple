@@ -51,8 +51,12 @@ const vote = (over: Partial<ReviewVote> = {}): ReviewVote => ({
   ...over,
 })
 
-function render(rounds: ReviewRound[], winner: GameReviewData['winner'] = 'WEREWOLF') {
-  return mount(GameReview, { props: { review: { winner, players, rounds } } })
+function render(
+  rounds: ReviewRound[],
+  winner: GameReviewData['winner'] = 'WEREWOLF',
+  roster: ReviewPlayer[] = players,
+) {
+  return mount(GameReview, { props: { review: { winner, players: roster, rounds } } })
 }
 const lines = (wrapper: ReturnType<typeof render>) =>
   wrapper.findAll('.rv-line').map((l) => l.text())
@@ -65,6 +69,33 @@ describe('GameReview', () => {
       '狼人阵营：1号 Wolf1 · 2号 Wolf2 · 3号 King（白狼王）',
     )
     expect(render([], 'VILLAGER').find('.rv-outcome').text()).toBe('好人胜')
+  })
+
+  it('黑狼王: tagged in the wolf team, and a chain shows each shooter with its role', () => {
+    const bk = P(3, 'Black', 'BLACK_WOLF_KING')
+    const roster = [w1, w2, bk, seer, hunter, vil]
+    const wrapper = render(
+      [
+        {
+          day: 2,
+          night: null,
+          events: [
+            { type: 'HUNTER_SHOT', hunter: bk, target: hunter },
+            { type: 'HUNTER_SHOT', hunter, target: vil },
+          ],
+        },
+      ],
+      'WEREWOLF',
+      roster,
+    )
+    expect(wrapper.find('.rv-team').text()).toBe(
+      '狼人阵营：1号 Wolf1 · 2号 Wolf2 · 3号 Black（黑狼王）',
+    )
+    expect(lines(wrapper)).toEqual([
+      '第2天',
+      '🔫 3号 Black〔黑狼王〕 开枪带走 7号 Hal〔猎人〕',
+      '🔫 7号 Hal〔猎人〕 开枪带走 9号 Val〔村民〕',
+    ])
   })
 
   it('empty review: a cancelled game with nothing played shows 比赛取消 and 暂无记录', () => {
@@ -259,7 +290,7 @@ describe('GameReview', () => {
     ])
     expect(lines(wrapper)).toEqual([
       '第2天',
-      '🔫 猎人 7号 Hal 开枪带走 1号 Wolf1〔狼人〕',
+      '🔫 7号 Hal〔猎人〕 开枪带走 1号 Wolf1〔狼人〕',
       '💥 3号 King〔白狼王〕 自爆，带走 4号 Sia〔预言家〕',
       '💥 2号 Wolf2〔狼人〕 自爆',
       '🃏 8号 Ida 白痴翻牌，免于出局',

@@ -137,4 +137,25 @@ class GameServiceStartTest {
         assertThat(roles.count { it == PlayerRole.WEREWOLF }).isEqualTo(1)
     }
 
+    @Test
+    fun `startGame deals one BLACK_WOLF_KING in place of a werewolf when the room enables it`() {
+        val room = Room(roomId = roomId, roomCode = "XYZW", hostUserId = hostId, totalPlayers = 4, wolfCount = 2, hasBlackWolfKing = true)
+            .also { it.status = RoomStatus.WAITING }
+        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(fourReadyGuests())
+        whenever(gameRepository.save(any<Game>())).thenAnswer { invocation ->
+            invocation.getArgument<Game>(0).also {
+                val field = Game::class.java.getDeclaredField("gameId"); field.isAccessible = true; field.set(it, 99)
+            }
+        }
+        whenever(gamePlayerRepository.saveAll(any<List<GamePlayer>>())).thenAnswer { it.arguments[0] }
+
+        gameService.startGame(hostId, roomId)
+
+        val captor = argumentCaptor<List<GamePlayer>>()
+        verify(gamePlayerRepository).saveAll(captor.capture())
+        val roles = captor.firstValue.map { it.role }
+        assertThat(roles.count { it == PlayerRole.BLACK_WOLF_KING }).isEqualTo(1)
+        assertThat(roles.count { it == PlayerRole.WEREWOLF }).isEqualTo(1)
+    }
 }

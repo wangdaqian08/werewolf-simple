@@ -259,7 +259,7 @@ jobs:
             specs: e2e/real/flow-12p-sheriff.spec.ts
             grep: 'HARD_MODE wolf win'
           - id: 3
-            specs: e2e/real/game-flow.spec.ts e2e/real/sheriff-flow.spec.ts e2e/real/white-wolf-king-flow.spec.ts
+            specs: e2e/real/game-flow.spec.ts e2e/real/sheriff-flow.spec.ts e2e/real/white-wolf-king-flow.spec.ts e2e/real/black-wolf-king-scenarios.spec.ts
             grep: ''
           - id: 4
             specs: e2e/real/revote-flow.spec.ts e2e/real/idiot-flow.spec.ts e2e/real/game-flow-d1-outcomes.spec.ts

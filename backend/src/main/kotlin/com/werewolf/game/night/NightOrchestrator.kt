@@ -10,7 +10,6 @@ import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
 import com.werewolf.game.role.WerewolfHandler
 import com.werewolf.model.*
-import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
@@ -35,7 +34,6 @@ class NightOrchestrator(
     private val gamePlayerRepository: GamePlayerRepository,
     private val nightPhaseRepository: NightPhaseRepository,
     private val sheriffElectionRepository: SheriffElectionRepository,
-    private val eliminationHistoryRepository: EliminationHistoryRepository,
     private val winConditionChecker: WinConditionChecker,
     private val stompPublisher: StompPublisher,
     private val contextLoader: GameContextLoader,
@@ -892,15 +890,6 @@ class NightOrchestrator(
         stompPublisher.broadcastGame(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
     }
 
-    /**
-     * Computes HARD_MODE counterplay flags from the just-loaded GameContext.
-     * Read-your-writes on EliminationHistory is guaranteed because callers run inside
-     * the same @Transactional where any hunter-shot row was just saved — JPA auto-flushes
-     * before the query.
-     */
     private fun buildCounterplay(context: GameContext): HardModeCounterplay =
-        HardModeCounterplay.of(
-            context.alivePlayers, context.allNightPhases,
-            hunterHasShot = eliminationHistoryRepository.findByGameId(context.gameId).any { it.hunterShotUserId != null },
-        )
+        HardModeCounterplay.of(context.alivePlayers, context.allNightPhases)
 }

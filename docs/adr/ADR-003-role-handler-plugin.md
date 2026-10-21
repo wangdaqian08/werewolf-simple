@@ -30,11 +30,15 @@ in the room config (`hasSeer`, `hasWitch`, etc.) and flattening their `nightSubP
 
 **Exception**: Hunter and Badge actions are handled directly by `VotingPipeline` because they require DB access to
 `EliminationHistory` and don't fit the night-only handler model. `HunterHandler` implements the interface for
-`acceptedActions()` registration only; its `handle()` returns a rejection.
+`acceptedActions()` registration only; its `handle()` returns a rejection. The same `HUNTER_SHOOT` / `HUNTER_PASS`
+flow serves every `PlayerRole.shootsOnDeath` role (HUNTER, BLACK_WOLF_KING); the 黑狼王 has no handler of its own
+(it wakes in the wolves' turn).
 
 ## Consequences
 
-- Adding a new role = add one `@Component` class, no changes to dispatcher or orchestrator
+- Adding a new role = add a `@Component` handler (if it has its own actions), **plus** the touchpoints in
+  `docs/new-role.md` — the dispatcher routes, the `NightOrchestrator` active-role lists, room flags, migrations
+  and audio config are not derived automatically
 - Room config flags (`hasSeer`, `hasWitch`, `hasHunter`, `hasGuard`) control which handlers participate at runtime
 - Night order is determined by the order handlers appear in Spring's injected list — currently ordered by class name;
   can be made explicit with `@Order` if needed

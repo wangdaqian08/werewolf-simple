@@ -23,8 +23,9 @@ import java.util.Optional
 /**
  * Unit coverage for the day-reveal sub-phase decision that used to live inline
  * in GamePhasePipeline.revealNightResult. Priority: a wolf-killed (not
- * poisoned, not resolved) hunter shoots first, then an unhandled dead sheriff
- * hands over the badge, otherwise the day simply reveals its result.
+ * poisoned, not resolved) shooter — HUNTER or BLACK_WOLF_KING — or a chained
+ * shooter fires first, then an unhandled dead sheriff hands over the badge,
+ * otherwise the day simply reveals its result.
  */
 @ExtendWith(MockitoExtension::class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -42,10 +43,18 @@ class DayRevealAdvancerTest {
     private val gameId = 1
     private val day = 2
 
-    private fun game(sheriff: String? = null) = Game(roomId = 1, hostUserId = "h").also {
+    private fun game(
+        sheriff: String? = null,
+        chainShooter: String? = null,
+        selfDestruct: String? = null,
+        taken: String? = null,
+    ) = Game(roomId = 1, hostUserId = "h").also {
         val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
         it.dayNumber = day
         it.sheriffUserId = sheriff
+        it.chainShooterUserId = chainShooter
+        it.selfDestructUserId = selfDestruct
+        it.selfDestructTakenUserId = taken
     }
 
     private fun player(id: String, role: PlayerRole = PlayerRole.VILLAGER, alive: Boolean = true) =
@@ -142,7 +151,7 @@ class DayRevealAdvancerTest {
     fun `RESULT_REVEALED when the wolf-targeted hunter is still alive (e g night-1 immunity perk)`() {
         stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = true)), night(wolf = "h"))
         assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED)
-        assertThat(advancer.pendingHunterUserId(gameId)).isNull()
+        assertThat(advancer.pendingShooterUserId(gameId)).isNull()
     }
 
     @Test
@@ -158,15 +167,65 @@ class DayRevealAdvancerTest {
     }
 
     @Test
-    fun `pendingHunterUserId returns the eligible hunter id`() {
+    fun `pendingShooterUserId returns the eligible hunter id`() {
         stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h"))
-        assertThat(advancer.pendingHunterUserId(gameId)).isEqualTo("h")
+        assertThat(advancer.pendingShooterUserId(gameId)).isEqualTo("h")
     }
 
     @Test
-    fun `pendingHunterUserId is null when the hunter was poisoned`() {
+    fun `pendingShooterUserId is null when the hunter was poisoned`() {
         stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h", poison = "h"))
-        assertThat(advancer.pendingHunterUserId(gameId)).isNull()
+        assertThat(advancer.pendingShooterUserId(gameId)).isNull()
+    }
+
+    // ── BLACK_WOLF_KING + chained shots ──────────────────────────────────────
+
+    @Test
+    fun `HUNTER_SHOOT_NIGHT_DEATH when a self-knifed BLACK_WOLF_KING is pending`() {
+        stub(game(), listOf(player("k", PlayerRole.BLACK_WOLF_KING, alive = false)), night(wolf = "k"))
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
+        assertThat(advancer.pendingShooterUserId(gameId)).isEqualTo("k")
+    }
+
+    @Test
+    fun `RESULT_REVEALED when the wolf-killed BLACK_WOLF_KING was also poisoned`() {
+        stub(game(), listOf(player("k", PlayerRole.BLACK_WOLF_KING, alive = false)), night(wolf = "k", poison = "k"))
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED)
+    }
+
+    @Test
+    fun `HUNTER_SHOOT_NIGHT_DEATH while a chain shooter is pending after the first shot resolved`() {
+        stub(
+            game(chainShooter = "h"),
+            listOf(player("k", PlayerRole.BLACK_WOLF_KING, alive = false), player("h", PlayerRole.HUNTER, alive = false)),
+            night(wolf = "k", resolved = true),
+        )
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
+        assertThat(advancer.pendingShooterUserId(gameId)).isEqualTo("h")
+    }
+
+    @Test
+    fun `a pending chain shot comes before the dead sheriff's badge handover`() {
+        stub(
+            game(sheriff = "s", chainShooter = "h"),
+            listOf(player("s", alive = false), player("h", PlayerRole.HUNTER, alive = false)),
+            night(wolf = "s", resolved = true),
+        )
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
+    }
+
+    // Night victims are still alive during the sheriff campaign, so they can 自爆 / be taken there.
+    @Test
+    fun `RESULT_REVEALED when the knifed BLACK_WOLF_KING self-destructed in the sheriff campaign`() {
+        stub(game(selfDestruct = "k"), listOf(player("k", PlayerRole.BLACK_WOLF_KING, alive = false)), night(wolf = "k"))
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED)
+        assertThat(advancer.pendingShooterUserId(gameId)).isNull()
+    }
+
+    @Test
+    fun `RESULT_REVEALED when the knifed hunter was taken by the White Wolf King in the sheriff campaign`() {
+        stub(game(selfDestruct = "w", taken = "h"), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h"))
+        assertThat(advancer.nextSubPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED)
     }
 
     @Test

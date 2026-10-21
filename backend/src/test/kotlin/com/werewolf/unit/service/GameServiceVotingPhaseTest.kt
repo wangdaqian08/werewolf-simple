@@ -296,6 +296,48 @@ class GameServiceVotingPhaseTest {
         assertThat(voting["eliminatedRole"]).isEqualTo("WEREWOLF")
     }
 
+    @Test
+    fun `getGameState VOTING - hunterUserId is the voted-out shooter during HUNTER_SHOOT`() {
+        setupGameAndPlayers(
+            game(VotingSubPhase.HUNTER_SHOOT.name),
+            listOf(player(hostId, 0), player("k", 1, PlayerRole.BLACK_WOLF_KING)),
+            listOf(user(hostId, "Host"), user("k", "King")),
+        )
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(
+            Optional.of(EliminationHistory(gameId = gameId, dayNumber = day, eliminatedUserId = "k", eliminatedRole = PlayerRole.BLACK_WOLF_KING))
+        )
+
+        assertThat(votingResult(gameService.getGameState(gameId, hostId))["hunterUserId"]).isEqualTo("k")
+    }
+
+    @Test
+    fun `getGameState VOTING - hunterUserId is the chain shooter after the first shot`() {
+        setupGameAndPlayers(
+            game(VotingSubPhase.HUNTER_SHOOT.name).also { it.chainShooterUserId = "h" },
+            listOf(player(hostId, 0), player("k", 1, PlayerRole.BLACK_WOLF_KING), player("h", 2, PlayerRole.HUNTER)),
+            listOf(user(hostId, "Host"), user("k", "King"), user("h", "Hunter")),
+        )
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(
+            Optional.of(EliminationHistory(gameId = gameId, dayNumber = day, eliminatedUserId = "k", eliminatedRole = PlayerRole.BLACK_WOLF_KING))
+        )
+
+        assertThat(votingResult(gameService.getGameState(gameId, hostId))["hunterUserId"]).isEqualTo("h")
+    }
+
+    @Test
+    fun `getGameState VOTING - hunterUserId is null outside HUNTER_SHOOT`() {
+        setupGameAndPlayers(
+            game(VotingSubPhase.VOTE_RESULT.name),
+            listOf(player(hostId, 0), player("k", 1, PlayerRole.BLACK_WOLF_KING)),
+            listOf(user(hostId, "Host"), user("k", "King")),
+        )
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(
+            Optional.of(EliminationHistory(gameId = gameId, dayNumber = day, eliminatedUserId = "k", eliminatedRole = PlayerRole.BLACK_WOLF_KING))
+        )
+
+        assertThat(votingResult(gameService.getGameState(gameId, hostId))["hunterUserId"]).isNull()
+    }
+
     // ── Idiot revealed ───────────────────────────────────────────────────────
 
     @Test

@@ -392,6 +392,23 @@ describe('DayPhase — hunter night-death shoot', () => {
     expect(wrapper.find('[data-testid="day-killed-seat-1"]').exists()).toBe(true)
   })
 
+  // The hunter and the 黑狼王 share this screen: it must not tell which one fires,
+  // nor claim the wolves killed the shooter (a chained shooter was shot instead).
+  it('shooter and waiting texts name no role and no cause of death', () => {
+    const roleWords = ['猎人', 'Hunter', '狼王', 'Wolf King', '狼人杀害']
+    const shooter = mountAs('hunter').get('[data-testid="day-hunter-night-banner"]').text()
+    const waiting = mountAs('alice')
+    const waitText =
+      waiting.get('[data-testid="day-hunter-night-wait-banner"]').text() +
+      waiting.get('.footer-hint').text()
+    for (const word of roleWords) {
+      expect(shooter).not.toContain(word)
+      expect(waitText).not.toContain(word)
+    }
+    expect(shooter).toContain('开枪')
+    expect(waitText).toContain('开枪')
+  })
+
   it('non-hunter players see the waiting hint — no shoot/pass buttons', () => {
     const wrapper = mountAs('alice')
     expect(wrapper.find('[data-testid="day-hunter-night-wait-banner"]').exists()).toBe(true)
@@ -555,6 +572,25 @@ describe('DayPhase — 白狼王', () => {
     })
     await wrapper.find('.my-role-chip').trigger('click')
     expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('白狼王')
+    wrapper.unmount()
+  })
+})
+
+describe('DayPhase — 黑狼王', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('role card shows the 黑狼王 shot rule', async () => {
+    const wrapper = mount(DayPhase, {
+      props: { ...BASE_PROPS, dayPhase: makeDay('RESULT_REVEALED'), myRole: 'BLACK_WOLF_KING' },
+      attachTo: document.body,
+    })
+    await wrapper.find('.my-role-chip').trigger('click')
+    expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('黑狼王')
+    expect(document.body.querySelector('.rc-desc')?.textContent).toBe(
+      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
+    )
     wrapper.unmount()
   })
 })

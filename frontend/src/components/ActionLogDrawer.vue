@@ -128,15 +128,20 @@
                 </div>
               </div>
 
-              <!-- Hunter shot -->
-              <div v-if="round.hunterShot" class="log-section">
-                <div class="section-title">🔫 猎人开枪</div>
-                <div class="log-row">
-                  <span class="seat-badge">{{ round.hunterShot.hunterSeatIndex }}号</span>
-                  <span class="log-name">{{ round.hunterShot.hunterNickname }}</span>
+              <!-- Shots (hunter / 黑狼王 — the shooter's role is not named; a chain has two) -->
+              <div v-if="round.hunterShots.length > 0" class="log-section">
+                <div class="section-title">🔫 开枪</div>
+                <div
+                  v-for="(s, i) in round.hunterShots"
+                  :key="i"
+                  class="log-row"
+                  data-testid="log-shot-row"
+                >
+                  <span class="seat-badge">{{ s.hunterSeatIndex }}号</span>
+                  <span class="log-name">{{ s.hunterNickname }}</span>
                   <span class="muted">→ 击中</span>
-                  <span class="seat-badge">{{ round.hunterShot.targetSeatIndex }}号</span>
-                  <span class="log-name">{{ round.hunterShot.targetNickname }}</span>
+                  <span class="seat-badge">{{ s.targetSeatIndex }}号</span>
+                  <span class="log-name">{{ s.targetNickname }}</span>
                 </div>
               </div>
 
@@ -183,7 +188,7 @@ interface Round {
   sheriffResult: SheriffResultPayload | null
   deaths: NightDeathPayload[]
   voteResult: VoteResultPayload | null
-  hunterShot: HunterShotPayload | null
+  hunterShots: HunterShotPayload[]
   idiotReveals: IdiotRevealPayload[]
   selfDestructs: SelfDestructPayload[]
 }
@@ -201,7 +206,7 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         sheriffResult: null,
         deaths: [],
         voteResult: null,
-        hunterShot: null,
+        hunterShots: [],
         idiotReveals: [],
         selfDestructs: [],
       })
@@ -221,7 +226,7 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         getOrCreate(day).voteResult = payload as VoteResultPayload
         break
       case 'HUNTER_SHOT':
-        getOrCreate(day).hunterShot = payload as HunterShotPayload
+        getOrCreate(day).hunterShots.push(payload as HunterShotPayload)
         break
       case 'IDIOT_REVEAL':
         getOrCreate(day).idiotReveals.push(payload as IdiotRevealPayload)

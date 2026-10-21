@@ -41,6 +41,7 @@ const ROLES: PlayerRole[] = [
   'GUARD',
   'IDIOT',
   'WHITE_WOLF_KING',
+  'BLACK_WOLF_KING',
 ]
 
 const role = ref<PlayerRole>('WEREWOLF')

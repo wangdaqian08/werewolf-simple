@@ -307,6 +307,7 @@ export type PlayerRole =
   | 'GUARD'
   | 'IDIOT'
   | 'WHITE_WOLF_KING'
+  | 'BLACK_WOLF_KING'
 
 export interface GamePlayer {
   userId: string
@@ -588,7 +589,9 @@ export interface VotingState {
   idiotRevealedId?: string
   idiotRevealedNickname?: string
   idiotRevealedSeatIndex?: number
-  // HUNTER_SHOOT — hunter's selected target
+  // HUNTER_SHOOT — who may fire now (HUNTER or BLACK_WOLF_KING: the voted-out
+  // player, or a chained shooter they shot) and their selected target
+  hunterUserId?: string
   hunterSelectedId?: string
   // BADGE_HANDOVER + BADGE_RECEIVED
   badgeTargetId?: string

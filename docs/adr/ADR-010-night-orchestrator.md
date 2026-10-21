@@ -27,17 +27,20 @@ declares the `NightSubPhase` values it owns (`nightSubPhases()`), so the sequenc
 active roles rather than hard-coded.
 
 Other collaborators (injected): `GameRepository`, `GamePlayerRepository`, `NightPhaseRepository`,
-`EliminationHistoryRepository`, `WinConditionChecker`, `StompPublisher`, `GameContextLoader`,
+`WinConditionChecker`, `StompPublisher`, `GameContextLoader`,
 `AudioService`, `ActionLogService`, `GameTimingProperties`, and a `CoroutineScope`.
 
 ## Night Order
 
 Driven by `@Order` on each handler (lowest runs first):
 
-1. Werewolves — `WEREWOLF_PICK`
-2. Seer — `SEER_PICK`, `SEER_RESULT`
-3. Witch — `WITCH_ACT`
+1. Werewolves — `WEREWOLF_PICK` (every wolf-camp role — 白狼王, 黑狼王 — acts in this turn)
+2. Witch — `WITCH_ACT`
+3. Seer — `SEER_PICK`, `SEER_RESULT`
 4. Guard — `GUARD_PICK`
+
+(`WerewolfHandler` `@Order(1)`, `WitchHandler` `@Order(2)`, `SeerHandler` `@Order(3)`,
+`GuardHandler` `@Order(4)`.)
 
 Role sub-phases whose `hasXxx` flag is `false` are skipped entirely (no open-eyes, no close-eyes,
 no audio).
@@ -64,8 +67,10 @@ migration) to match the typical acting time of a live role.
   Can't use both the same night. State persists in `night_phases` columns.
 - **Guard consecutive rule.** Guard cannot protect the same player two nights in a row; prior
   target is stored in `night_phases.prev_guard_target_user_id`. Self-protect is allowed.
-- **Hunter — day-vote only.** Hunter's revenge shot is triggered exclusively by
-  `DAY_VOTING / HUNTER_SHOOT`. Night kills do **not** trigger the hunter.
+- **On-death shot (HUNTER, BLACK_WOLF_KING) — not a night step.** A voted-out shooter fires in
+  `DAY_VOTING / HUNTER_SHOOT`; a wolf-killed (not poisoned) shooter fires at the day reveal in
+  `DAY_DISCUSSION / HUNTER_SHOOT_NIGHT_DEATH` (`DayRevealAdvancer`). A shooter killed by a shot
+  fires next (chain). See `docs/black-wolf-king.md`.
 - **Idiot — day-vote reveal.** On first vote-elimination the idiot is revealed, stays alive, and
   loses their vote right (`game_players.idiot_revealed = true`, `can_vote = false`). Second
   vote-elimination kills normally.
@@ -78,7 +83,8 @@ migration) to match the typical acting time of a live role.
 - The orchestrator is the only driver of the night timeline; `StompPublisher` is the only class
   that calls `SimpMessagingTemplate` (see ADR-006).
 - Adding a new night role = implementing `RoleHandler` with the right `@Order` and
-  `nightSubPhases()`; no change to `NightOrchestrator`.
+  `nightSubPhases()`, **plus** adding the role to the active-role lists in
+  `NightOrchestrator` (`nightSequence` and `nightRoleLoop`), which are not derived automatically.
 - The dead-role delay is a real gameplay cost (nights get longer when many special roles die) —
   accepted in exchange for information hiding.
 - `job.cancel()` on the stored orchestrator `Job` cleanly aborts the night without orphaned

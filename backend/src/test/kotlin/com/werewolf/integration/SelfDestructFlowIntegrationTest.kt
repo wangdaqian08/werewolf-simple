@@ -11,6 +11,7 @@ import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.*
+import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
@@ -47,6 +48,7 @@ class SelfDestructFlowIntegrationTest {
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var gameRepository: GameRepository
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
+    @Autowired lateinit var eliminationHistoryRepository: EliminationHistoryRepository
     @Autowired lateinit var sheriffElectionRepository: SheriffElectionRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
     @Autowired lateinit var werewolfHandler: WerewolfHandler
@@ -467,6 +469,9 @@ class SelfDestructFlowIntegrationTest {
         arrange(g.gameId, GamePhase.DAY_VOTING, VotingSubPhase.HUNTER_SHOOT.name)
         hunter.alive = false // voted out, now shooting
         gamePlayerRepository.save(hunter)
+        eliminationHistoryRepository.save(
+            EliminationHistory(gameId = g.gameId, dayNumber = 2, eliminatedUserId = hunter.userId, eliminatedRole = PlayerRole.HUNTER)
+        )
 
         assertThat(action(tokenOf(g.all, hunter.userId), g.gameId, "HUNTER_SHOOT", g.king.userId).statusCode)
             .isEqualTo(HttpStatus.OK)

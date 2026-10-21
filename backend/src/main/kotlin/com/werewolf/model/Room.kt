@@ -48,9 +48,12 @@ class Room(
     @Column(name = "has_idiot", nullable = false)
     val hasIdiot: Boolean = false,
 
-    // Takes one of the wolfCount seats; it is not an extra seat.
+    // Each king takes one of the wolfCount seats; it is not an extra seat.
     @Column(name = "has_white_wolf_king", nullable = false)
     val hasWhiteWolfKing: Boolean = false,
+
+    @Column(name = "has_black_wolf_king", nullable = false)
+    val hasBlackWolfKing: Boolean = false,
 
     @Column(name = "has_sheriff", nullable = false)
     val hasSheriff: Boolean = true,

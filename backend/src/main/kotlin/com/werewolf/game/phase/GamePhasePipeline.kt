@@ -68,8 +68,9 @@ class GamePhasePipeline(
         }
 
         // Decide the next sub-phase now that the night deaths are applied: a
-        // dead sheriff hands over the badge first, then a wolf-killed hunter
-        // gets to shoot, otherwise the result is simply revealed. The advancer
+        // wolf-killed shooter (hunter / black wolf king) fires first, then a
+        // dead sheriff hands over the badge, otherwise the result is simply
+        // revealed. The advancer
         // reads fresh state from the DB (applyNightKills already flushed the
         // alive flags). See DayRevealAdvancer.
         val nextSubPhase = dayRevealAdvancer.nextSubPhase(context.gameId)

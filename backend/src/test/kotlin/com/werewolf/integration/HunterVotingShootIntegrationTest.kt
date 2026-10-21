@@ -8,9 +8,11 @@ import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
+import com.werewolf.model.EliminationHistory
 import com.werewolf.model.GamePhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.VotingSubPhase
+import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import org.assertj.core.api.Assertions.assertThat
@@ -47,6 +49,7 @@ class HunterVotingShootIntegrationTest {
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var gameRepository: GameRepository
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
+    @Autowired lateinit var eliminationHistoryRepository: EliminationHistoryRepository
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -181,12 +184,15 @@ class HunterVotingShootIntegrationTest {
         forceRole(gameId, room.g4.userId, PlayerRole.VILLAGER)
         forceRole(gameId, room.g5.userId, PlayerRole.VILLAGER)
 
-        // Hunter voted out → mirrors collectEliminationEvents: dead player,
-        // sub-phase parked at HUNTER_SHOOT awaiting the shot.
+        // Hunter voted out → mirrors collectEliminationEvents: dead player, the
+        // day's elimination row (names the shooter), sub-phase parked at HUNTER_SHOOT.
         gamePlayerRepository.findByGameIdAndUserId(gameId, room.g1.userId).orElseThrow().also {
             it.alive = false
             gamePlayerRepository.save(it)
         }
+        eliminationHistoryRepository.save(
+            EliminationHistory(gameId = gameId, dayNumber = 1, eliminatedUserId = room.g1.userId, eliminatedRole = PlayerRole.HUNTER)
+        )
         game.phase = GamePhase.DAY_VOTING
         game.subPhase = VotingSubPhase.HUNTER_SHOOT.name
         game.dayNumber = 1

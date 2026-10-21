@@ -55,7 +55,6 @@ class NightImmunityIntegrationTest {
             gamePlayerRepository = gamePlayerRepository,
             nightPhaseRepository = nightPhaseRepository,
             sheriffElectionRepository = mock(),
-            eliminationHistoryRepository = mock(),
             winConditionChecker = winConditionChecker,
             stompPublisher = stompPublisher,
             contextLoader = contextLoader,

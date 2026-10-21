@@ -180,7 +180,15 @@ export async function setupGame(
 
   // Configure custom roles if provided
   if (opts.roles && opts.roles.length > 0) {
-    const allOptionalRoles = ['SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT', 'WHITE_WOLF_KING']
+    const allOptionalRoles = [
+      'SEER',
+      'WITCH',
+      'HUNTER',
+      'GUARD',
+      'IDIOT',
+      'WHITE_WOLF_KING',
+      'BLACK_WOLF_KING',
+    ]
 
     // For each optional role, toggle to match desired state. Retry up to
     // 3 times if the click didn't register — on slow CI the first click
@@ -199,6 +207,7 @@ export async function setupGame(
 
         // Rows read "白狼王 White Wolf King": match WHITE_WOLF_KING as words, anchored
         // at the end of the name so "女巫自救 Witch Self-Save" is not the WITCH row.
+        // (The two kings are mutually exclusive: the multi-pass loop handles it.)
         const roleRow = hostPage.locator('.role-row').filter({
           has: hostPage.locator('.role-name', {
             hasText: new RegExp(`${role.replace(/_/g, ' ')}\\s*$`, 'i'),

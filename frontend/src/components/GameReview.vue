@@ -77,7 +77,11 @@ const outcome = computed(() => {
 const wolfTeam = computed(() =>
   props.review.players
     .filter((p) => isWolfRole(p.role))
-    .map((p) => `${p.seatIndex}号 ${p.nickname}${p.role === 'WHITE_WOLF_KING' ? '（白狼王）' : ''}`)
+    // Tag the special wolves (白狼王 / 黑狼王).
+    .map(
+      (p) =>
+        `${p.seatIndex}号 ${p.nickname}${p.role !== 'WEREWOLF' ? `（${roleDefinition(p.role)?.nameZh}）` : ''}`,
+    )
     .join(' · '),
 )
 
@@ -176,7 +180,8 @@ function voteLines(v: ReviewVote): Line[] {
 function eventSegs(e: Exclude<ReviewDayEvent, ReviewVote>): Seg[] {
   switch (e.type) {
     case 'HUNTER_SHOT':
-      return [t('🔫 猎人 '), name(e.hunter), t(' 开枪带走 '), ...withRole(e.target)]
+      // The shooter is a HUNTER or a BLACK_WOLF_KING; the review is post-game, so name it.
+      return [t('🔫 '), ...withRole(e.hunter), t(' 开枪带走 '), ...withRole(e.target)]
     case 'SELF_DESTRUCT':
       return [
         t('💥 '),

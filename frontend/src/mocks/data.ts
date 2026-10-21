@@ -931,6 +931,7 @@ export function makeVotingScenario(
           subPhase: 'HUNTER_SHOOT',
           ...commonTiming,
           ...eliminated,
+          hunterUserId: eliminated.eliminatedPlayerId,
         } satisfies VotingState,
       }
     case 'BADGE_HANDOVER':

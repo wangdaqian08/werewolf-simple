@@ -67,6 +67,7 @@ class RoomService(
                 hasGuard = PlayerRole.GUARD in cfg.roles,
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
                 hasWhiteWolfKing = PlayerRole.WHITE_WOLF_KING in cfg.roles,
+                hasBlackWolfKing = PlayerRole.BLACK_WOLF_KING in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
                 config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed, cfg.noKillAllowed, cfg.guardSkipAllowed),
@@ -298,6 +299,7 @@ class RoomService(
         val roles = buildList {
             add(PlayerRole.WEREWOLF)
             if (room.hasWhiteWolfKing) add(PlayerRole.WHITE_WOLF_KING)
+            if (room.hasBlackWolfKing) add(PlayerRole.BLACK_WOLF_KING)
             add(PlayerRole.VILLAGER)
             if (room.hasSeer) add(PlayerRole.SEER)
             if (room.hasWitch) add(PlayerRole.WITCH)
@@ -357,8 +359,10 @@ class RoomService(
      * Backend enforces game-correctness invariants only:
      *   1. wolfCount must be > 0 (a wolfless game is not werewolf)
      *   2. wolves + gods ≤ totalPlayers (no seat overflow)
-     *   3. a White Wolf King needs a fellow wolf (wolfCount ≥ 2): alone it is
-     *      always the last wolf and could never take anyone
+     *   3. at most one wolf king (白狼王 / 黑狼王) per room
+     *   4. a wolf king needs a fellow wolf (wolfCount ≥ 2). For the White Wolf
+     *      King alone it is always the last wolf and could never take anyone;
+     *      the Black Wolf King shares the gate (owner's call: one rule for both)
      *
      * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
      * for the host-facing stepper — they intentionally do NOT gate the API,
@@ -383,9 +387,13 @@ class RoomService(
                 "Composition overflow: $wolfCount wolves + $godCount gods > $totalPlayers seats",
             )
         }
-        if (PlayerRole.WHITE_WOLF_KING in roles && wolfCount < 2) {
+        val kings = roles.filter { it == PlayerRole.WHITE_WOLF_KING || it == PlayerRole.BLACK_WOLF_KING }.distinct()
+        if (kings.size > 1) {
+            throw InvalidRoleCompositionException("Only one wolf king per room, got $kings")
+        }
+        if (kings.isNotEmpty() && wolfCount < 2) {
             throw InvalidRoleCompositionException(
-                "White Wolf King needs at least 2 wolves, got $wolfCount",
+                "${if (kings[0] == PlayerRole.WHITE_WOLF_KING) "White" else "Black"} Wolf King needs at least 2 wolves, got $wolfCount",
             )
         }
     }

@@ -793,6 +793,40 @@ describe('VotingPhase — hunter role card', () => {
   })
 })
 
+describe('VotingPhase — 黑狼王 role card', () => {
+  it('role card shows the 黑狼王 shot rule', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+    const wrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+      props: {
+        gameId: 1,
+        players: [],
+        myUserId: 'p1',
+        isHost: false,
+        myRole: 'BLACK_WOLF_KING',
+        votingPhase: {
+          subPhase: 'VOTING',
+          dayNumber: 1,
+          phaseDeadline: 0,
+          phaseStarted: 0,
+        } as VotingState,
+      },
+    })
+    await wrapper.find('.my-role-chip').trigger('click')
+    expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('黑狼王')
+    expect(document.body.querySelector('.rc-desc')?.textContent).toBe(
+      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
+    )
+    wrapper.unmount()
+  })
+})
+
 describe('VotingPhase — PK re-vote and badge heir rules', () => {
   let pinia: ReturnType<typeof createPinia>
   let router: ReturnType<typeof createRouter>
@@ -882,7 +916,13 @@ describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
     idiotRevealed: false,
   }))
 
-  const mountHunterShoot = (myUserId: string, isHost = false, tallyRevealed = true) => {
+  // hunterUserId = who may fire now: the voted-out p2, or a chained shooter.
+  const mountHunterShoot = (
+    myUserId: string,
+    isHost = false,
+    tallyRevealed = true,
+    hunterUserId = 'p2',
+  ) => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const router = createRouter({
@@ -918,15 +958,33 @@ describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
           eliminatedPlayerId: 'p2',
           eliminatedNickname: 'P2',
           eliminatedSeatIndex: 2,
+          hunterUserId,
         } as VotingState,
       },
     })
   }
 
-  it('the hunter sees the hunter banner and the shoot buttons', () => {
+  it('the shooter sees the shot banner and the shoot buttons', () => {
     const wrapper = mountHunterShoot('p2')
-    expect(wrapper.text()).toContain('猎人出局')
-    expect(wrapper.text()).toContain('开枪')
+    expect(wrapper.find('[data-testid="voting-shoot-banner"]').text()).toContain('开枪')
+    expect(wrapper.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voting-hunter-pass"]').exists()).toBe(true)
+  })
+
+  // The hunter and the 黑狼王 share this screen: it must not tell which one fires.
+  it('the shoot screen names no role', () => {
+    const text = mountHunterShoot('p2').text()
+    for (const word of ['猎人', 'Hunter', '狼王', 'Wolf King']) expect(text).not.toContain(word)
+  })
+
+  it('the chain shooter (not the voted-out player) gets the shoot buttons', async () => {
+    const shooter = mountHunterShoot('p3', false, true, 'p3')
+    expect(shooter.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(true)
+    await shooter.find('.player-grid [data-seat="1"]').trigger('click')
+    expect(shooter.emitted('selectPlayer')?.[0]).toEqual(['p1'])
+
+    const votedOut = mountHunterShoot('p2', false, true, 'p3')
+    expect(votedOut.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(false)
   })
 
   it('other players see no hunter wording at all', () => {

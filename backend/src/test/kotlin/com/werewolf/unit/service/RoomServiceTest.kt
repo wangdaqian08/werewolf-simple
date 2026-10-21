@@ -32,7 +32,7 @@ class RoomServiceTest {
     @Mock(strictness = Mock.Strictness.LENIENT) lateinit var bgmRegistry: com.werewolf.controller.BgmTrackRegistry
     @Mock lateinit var perkActivationRepository: com.werewolf.repository.PerkActivationRepository
     @Mock lateinit var perkRepository: com.werewolf.repository.PerkRepository
-    @Mock lateinit var perkService: com.werewolf.service.PerkService
+    @Mock lateinit var perkService: PerkService
     @InjectMocks lateinit var roomService: RoomService
 
     @org.junit.jupiter.api.BeforeEach
@@ -236,6 +236,57 @@ class RoomServiceTest {
     }
 
     @Test
+    fun `createRoom - rejects BLACK_WOLF_KING with fewer than 2 wolves`() {
+        val cfg = RoomConfigRequest(
+            totalPlayers = 6,
+            wolfCount = 1,
+            roles = listOf(PlayerRole.BLACK_WOLF_KING, PlayerRole.SEER, PlayerRole.WITCH),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("at least 2 wolves")
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
+    @Test
+    fun `createRoom - rejects WHITE_WOLF_KING and BLACK_WOLF_KING together (one king per room)`() {
+        val cfg = RoomConfigRequest(
+            totalPlayers = 9,
+            wolfCount = 3,
+            roles = listOf(PlayerRole.WHITE_WOLF_KING, PlayerRole.BLACK_WOLF_KING, PlayerRole.SEER, PlayerRole.WITCH),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("one wolf king")
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
+    @Test
+    fun `createRoom - BLACK_WOLF_KING fills a wolf seat, it is not counted as a god`() {
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+        // 2 wolves (incl. the king) + 4 gods = 6 seats exactly.
+        val cfg = RoomConfigRequest(
+            totalPlayers = 6,
+            wolfCount = 2,
+            roles = listOf(PlayerRole.BLACK_WOLF_KING, PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER, PlayerRole.GUARD),
+        )
+
+        roomService.createRoom(hostId, "Host", null, cfg)
+
+        val captor = argumentCaptor<Room>()
+        verify(roomRepository).save(captor.capture())
+        assertThat(captor.firstValue.hasBlackWolfKing).isTrue()
+        assertThat(captor.firstValue.hasWhiteWolfKing).isFalse()
+    }
+
+    @Test
     fun `createRoom - does not broadcast STOMP on create`() {
         whenever(roomRepository.save(any<Room>())).thenAnswer {
             val r = it.arguments[0] as Room
@@ -378,6 +429,18 @@ class RoomServiceTest {
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
 
         assertThat(roomService.getRoom(1).config.roles).contains(PlayerRole.WHITE_WOLF_KING)
+    }
+
+    @Test
+    fun `getRoom - lists BLACK_WOLF_KING in the room roles when enabled`() {
+        val room = Room(roomId = 1, roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasBlackWolfKing = true)
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        assertThat(roomService.getRoom(1).config.roles)
+            .contains(PlayerRole.BLACK_WOLF_KING)
+            .doesNotContain(PlayerRole.WHITE_WOLF_KING)
     }
 
     // ── findActiveRoomForUser (reconnect / quick-rejoin) ───────────────────────

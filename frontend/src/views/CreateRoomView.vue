@@ -88,9 +88,9 @@
               {{ role.nameZh }} {{ role.nameEn }}
             </span>
             <span
-              v-if="role.id === 'WHITE_WOLF_KING'"
+              v-if="KING_IDS.includes(role.id)"
               class="win-cond-desc"
-              data-testid="role-hint-WHITE_WOLF_KING"
+              :data-testid="`role-hint-${role.id}`"
             >
               {{ KING_MIN_PLAYERS }} 人及以上才能开启 · {{ KING_MIN_PLAYERS }}+ players
             </span>
@@ -393,12 +393,17 @@ function decrement() {
   if (totalPlayers.value > MIN_PLAYERS) totalPlayers.value--
 }
 
-// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (only 5 exist) and
-// 白狼王 needs 9+ players. Within these limits there is always ≥ 1 villager.
+// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (only 5 exist), and a
+// wolf king (白狼王 / 黑狼王) needs 9+ players, one king per room (the backend
+// enforces both too). Within these limits there is always ≥ 1 villager.
 const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)
+const KING_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
 const KING_MIN_PLAYERS = 9
 
-// Optional wolf roles (白狼王) take a wolf seat, so they are not gods.
+const otherKingOn = (roleId: string) =>
+  KING_IDS.some((id) => id !== roleId && enabledOptional.value.has(id))
+
+// Optional wolf roles (the kings) take a wolf seat, so they are not gods.
 const enabledGodCount = computed(
   () => Array.from(enabledOptional.value).filter((id) => !isWolfRole(id)).length,
 )
@@ -423,10 +428,10 @@ function wolfDecrement() {
 }
 
 // After a player-count change (wolves were just reset): drop gods from the end
-// of the list / add from the front until they fit, and drop 白狼王 below 9.
+// of the list / add from the front until they fit, and drop the kings below 9.
 function fitRolesToBoard(n: number) {
   const roles = enabledOptional.value
-  if (n < KING_MIN_PLAYERS) roles.delete('WHITE_WOLF_KING')
+  if (n < KING_MIN_PLAYERS) KING_IDS.forEach((id) => roles.delete(id))
   const enabledGods = () => GOD_IDS.filter((id) => roles.has(id))
   for (const id of [...GOD_IDS].reverse()) {
     if (enabledGods().length <= godRange.value.max) break
@@ -446,7 +451,8 @@ function isEnabled(roleId: string): boolean {
 
 function canToggle(roleId: string): boolean {
   const on = enabledOptional.value.has(roleId)
-  if (roleId === 'WHITE_WOLF_KING') return on || totalPlayers.value >= KING_MIN_PLAYERS
+  if (KING_IDS.includes(roleId))
+    return on || (totalPlayers.value >= KING_MIN_PLAYERS && !otherKingOn(roleId))
   return on
     ? enabledGodCount.value > godRange.value.min
     : enabledGodCount.value < godRange.value.max
@@ -454,8 +460,10 @@ function canToggle(roleId: string): boolean {
 
 function toggleHint(roleId: string): string {
   if (canToggle(roleId)) return ''
-  if (roleId === 'WHITE_WOLF_KING')
-    return `${KING_MIN_PLAYERS} 人及以上才能开启 / Needs ${KING_MIN_PLAYERS}+ players`
+  if (KING_IDS.includes(roleId))
+    return otherKingOn(roleId)
+      ? '一局只能选一个狼王 / One wolf king per room'
+      : `${KING_MIN_PLAYERS} 人及以上才能开启 / Needs ${KING_MIN_PLAYERS}+ players`
   const { min, max } = godRange.value
   return enabledOptional.value.has(roleId)
     ? `神职不能少于 ${min} 个 / At least ${min} gods`

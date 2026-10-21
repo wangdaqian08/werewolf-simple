@@ -19,7 +19,12 @@
 
     <!-- Below-arch row: my-role-chip on left, log-fab + Action stacked on right -->
     <div class="below-arch-row">
-      <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
+      <button
+        v-if="myRole"
+        class="my-role-chip my-role-locked"
+        data-testid="my-role-chip"
+        @click="showRoleCard = true"
+      >
         🔒 身份 · Tap to reveal
       </button>
       <div v-else />
@@ -147,18 +152,19 @@
             <span class="banner-kill-muted">出局了</span>
           </div>
         </div>
+        <!-- Shared by the hunter and the 黑狼王: never name the shooter's role. -->
         <div v-if="isActingHunter" class="banner banner-gold" data-testid="day-hunter-night-banner">
-          <span class="banner-avatar">🏹</span>
+          <span class="banner-avatar">🔫</span>
           <div>
-            <div class="banner-title">猎人开枪 · Hunter</div>
-            <div class="banner-sub">你被狼人杀害，可开枪带走一人 / fire one shot</div>
+            <div class="banner-title">你可以开枪 · Your Shot</div>
+            <div class="banner-sub">你已出局，可开枪带走一人 / fire one shot</div>
           </div>
         </div>
         <div v-else class="banner banner-info" data-testid="day-hunter-night-wait-banner">
-          <span class="banner-avatar">🏹</span>
+          <span class="banner-avatar">🔫</span>
           <div>
-            <div class="banner-title">猎人正在开枪</div>
-            <div class="banner-sub">Hunter is choosing a target…</div>
+            <div class="banner-title">有玩家正在开枪</div>
+            <div class="banner-sub">A player is choosing a target…</div>
           </div>
         </div>
       </template>
@@ -321,7 +327,7 @@
           </div>
         </template>
         <template v-else>
-          <p class="footer-hint">等待猎人开枪 · Waiting for hunter…</p>
+          <p class="footer-hint">等待玩家开枪 · Waiting for the shot…</p>
         </template>
       </template>
 
@@ -397,7 +403,7 @@
             <div v-if="myPlayer" class="rc-identity" data-testid="rc-identity">
               {{ myPlayer.seatIndex }}号 · {{ myPlayer.nickname }}
             </div>
-            <p class="rc-desc">{{ ROLE_META[myRole]?.description }}</p>
+            <p class="rc-desc" data-testid="role-card-desc">{{ ROLE_META[myRole]?.description }}</p>
             <RoleHistory :history="roleHistory" />
           </div>
         </div>
@@ -537,6 +543,14 @@ const ROLE_META: Record<string, RoleMeta> = {
     emoji: '👑',
     team: 'wolf',
     description: '夜晚与狼队一起袭击。白天自爆时，可选择带走一名玩家。',
+  },
+  BLACK_WOLF_KING: {
+    nameZh: '黑狼王',
+    nameEn: 'BLACK WOLF KING',
+    emoji: '🖤',
+    team: 'wolf',
+    description:
+      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
   },
 }
 
