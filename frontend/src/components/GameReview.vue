@@ -5,18 +5,39 @@
       狼人阵营：<span class="rv-wolf">{{ wolfTeam }}</span>
     </p>
     <div v-if="!lines.length" class="rv-empty">暂无记录</div>
+    <p v-if="hasTally" class="rv-legend">
+      投票中 <span class="rv-seat rv-seat-wolf" aria-hidden="true">1</span> 红色座位为狼人
+    </p>
     <template v-for="(line, i) in lines" :key="i">
       <div v-if="line.kind === 'tally'" class="rv-tally">
-        <div v-for="(row, r) in line.rows" :key="r" class="rv-line rv-tally-row">
-          <span v-for="(cell, c) in row" :key="c" class="rv-cell">
-            <span v-for="(s, j) in cell" :key="j" :class="{ 'rv-wolf': s.wolf }">{{ s.text }}</span>
+        <div v-for="(row, r) in line.rows" :key="r" class="rv-tally-row">
+          <span class="rv-target" :class="{ 'rv-muted': row.abstain }">
+            <span v-for="(s, j) in row.target" :key="j" :class="{ 'rv-wolf': s.wolf }">{{
+              s.text
+            }}</span>
+          </span>
+          <span class="rv-votes" :class="{ 'rv-out': row.out }">{{ row.votes }}</span>
+          <span class="rv-arrow">←</span>
+          <span class="rv-voters" role="list">
+            <span
+              v-for="p in row.voters"
+              :key="p.userId"
+              role="listitem"
+              class="rv-seat"
+              :class="{ 'rv-seat-wolf': isWolfRole(p.role) }"
+              :aria-label="`${p.seatIndex}号${isWolfRole(p.role) ? ' 狼人' : ''}`"
+              >{{ p.seatIndex }}</span
+            >
           </span>
         </div>
       </div>
       <div v-else class="rv-line" :class="`rv-${line.kind}`">
-        <span v-for="(s, j) in line.segs" :key="j" :class="{ 'rv-wolf': s.wolf }">{{
-          s.text
-        }}</span>
+        <span
+          v-for="(s, j) in line.segs"
+          :key="j"
+          :class="{ 'rv-wolf': s.wolf, 'rv-pill': s.pill, 'rv-muted': s.muted }"
+          >{{ s.text }}</span
+        >
       </div>
     </template>
   </div>
@@ -36,13 +57,22 @@ import { isWolfRole, roleDefinition } from '@/utils/roleDefinitions'
 
 const props = defineProps<{ review: GameReview }>()
 
-/** A run of text in a line; wolf seats render red. */
+/** A run of text in a line; wolf seats render red, a pill is the vote's label. */
 interface Seg {
   text: string
   wolf?: boolean
+  pill?: boolean
+  muted?: boolean
 }
-/** A 'tally' is a vote table: each row is the cells [voters, →, target, votes]. */
-type Line = { kind: 'title' | 'row' | 'sub'; segs: Seg[] } | { kind: 'tally'; rows: Seg[][][] }
+/** One vote-table row: "9号〔村民〕 3票 ← ①②④", the voters as seat badges. */
+interface TallyRow {
+  target: Seg[]
+  votes: string
+  out: boolean
+  abstain: boolean
+  voters: ReviewPlayer[]
+}
+type Line = { kind: 'title' | 'row'; segs: Seg[] } | { kind: 'tally'; rows: TallyRow[] }
 
 const CAUSE = { WOLF: '被刀出局', POISON: '被毒出局', BOTH_SAVES: '同守同救出局' } as const
 const SAVED_BY = { GUARD: '被守卫守住', ANTIDOTE: '被女巫救下', PERK: '首夜免死生效' } as const
@@ -60,14 +90,7 @@ const seats = (ps: ReviewPlayer[]) => `${ps.map((p) => p.seatIndex).join('·')}�
 const joined = (parts: Seg[][], sep: string): Seg[] =>
   parts.flatMap((part, i) => (i ? [t(sep), ...part] : part))
 const votes = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}票`
-const seatList = (ps: ReviewPlayer[], mark = seat): Seg[] =>
-  joined(
-    ps.map((p) => [mark(p)]),
-    '、',
-  )
-/** A voter's seat; wolves also carry 🐺 so the vote table shows who the wolves backed. */
-const voterSeat = (p: ReviewPlayer): Seg =>
-  isWolfRole(p.role) ? { text: `${p.seatIndex}号🐺`, wolf: true } : seat(p)
+const pill = (text: string): Seg => ({ text, pill: true })
 
 const outcome = computed(() => {
   if (!props.review.winner) return '比赛取消'
@@ -139,41 +162,34 @@ function nightLines(n: ReviewNight): Line[] {
 
 function voteHead(v: ReviewVote): Seg[] {
   if (v.kind === 'SHERIFF') {
-    const head = t('⭐ 警长投票：')
+    const head = pill('警长')
     if (!v.result) return [head, t('无警长')]
     if (!v.appointed) return [head, name(v.result), t(' 当选')]
     const why = v.tally.length ? '平票，房主指定 ' : '无人投票，房主指定 '
     return [head, t(why), name(v.result), t(' 当警长')]
   }
-  const head = t(v.round > 1 ? '🗳 PK 投票：' : '🗳 放逐投票：')
-  return [head, ...(v.result ? [...withRole(v.result), t(' 被投出')] : [t('平票，无人出局')])]
+  const head = pill(v.round > 1 ? 'PK' : '放逐')
+  const play = v.wolfPlay ? [{ text: `（狼人${WOLF_PLAY[v.wolfPlay]}）`, muted: true }] : []
+  return [
+    head,
+    ...(v.result ? [...withRole(v.result), t(' 被投出')] : [t('平票，无人出局')]),
+    ...play,
+  ]
 }
 
-/** A vote table, one row per target: "2号🐺、6号 → 9号 小红〔村民〕 2票", abstainers last. */
+/** A vote table, one row per target, abstainers last; red seat badges are the wolves. */
 function voteLines(v: ReviewVote): Line[] {
-  const arrow = t(' → ')
-  const rows: Seg[][][] = v.tally.map((e) => [
-    seatList(e.voters, voterSeat),
-    [arrow],
-    withRole(e.target),
-    [t(` ${votes(e.votes)}`)],
-  ])
-  if (v.abstain.length) rows.push([seatList(v.abstain, voterSeat), [arrow], [t('弃权')], []])
+  const rows: TallyRow[] = v.tally.map((e) => ({
+    target: [seat(e.target), roleTag(e.target)],
+    votes: votes(e.votes),
+    out: e.target.userId === v.result?.userId,
+    abstain: false,
+    voters: e.voters,
+  }))
+  if (v.abstain.length)
+    rows.push({ target: [t('弃权')], votes: '', out: false, abstain: true, voters: v.abstain })
   const lines: Line[] = [{ kind: 'row', segs: voteHead(v) }]
   if (rows.length) lines.push({ kind: 'tally', rows })
-  const wolfGroups = v.tally
-    .map((e) => ({ target: e.target, wolves: e.voters.filter((p) => isWolfRole(p.role)) }))
-    .filter((g) => g.wolves.length)
-  if (wolfGroups.length) {
-    const groups = wolfGroups.map((g) => [
-      ...seatList(g.wolves),
-      arrow,
-      seat(g.target),
-      roleTag(g.target),
-    ])
-    const tag = v.wolfPlay ? [t(`（${WOLF_PLAY[v.wolfPlay]}）`)] : []
-    lines.push({ kind: 'sub', segs: [t('🐺 狼人投票：'), ...joined(groups, '；'), ...tag] })
-  }
   return lines
 }
 
@@ -191,6 +207,12 @@ function eventSegs(e: Exclude<ReviewDayEvent, ReviewVote>): Seg[] {
       ]
     case 'IDIOT_REVEAL':
       return [t('🃏 '), name(e.player), t(' 白痴翻牌，免于出局')]
+    case 'BADGE_HANDOVER':
+      return [
+        t('⭐ '),
+        ...withRole(e.from),
+        ...(e.to ? [t(' 移交警徽给 '), ...withRole(e.to)] : [t(' 撕毁警徽')]),
+      ]
   }
 }
 
@@ -208,6 +230,7 @@ function roundLines(r: ReviewRound): Line[] {
 }
 
 const lines = computed(() => props.review.rounds.flatMap(roundLines))
+const hasTally = computed(() => lines.value.some((l) => l.kind === 'tally'))
 </script>
 
 <style scoped>
@@ -241,31 +264,72 @@ const lines = computed(() => props.review.rounds.flatMap(roundLines))
 .rv-row {
   padding: 0.2rem 0;
 }
-.rv-sub {
-  padding-left: 1.25rem;
-  font-size: 0.8125rem;
+.rv-legend {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin: -0.5rem 0 0.5rem;
+  text-align: center;
+}
+.rv-pill {
+  display: inline-block;
+  margin-right: 0.375rem;
+  padding: 0 0.375rem;
+  border-radius: 3px;
+  background: var(--text);
+  color: var(--paper);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.125rem;
+  vertical-align: 1px;
+}
+.rv-muted {
   color: var(--muted);
 }
-/* Vote table: voters | → | target | votes, columns aligned across rows. */
+/* Vote table: target | votes | ← | voter seats, columns aligned across rows. */
 .rv-tally {
   display: grid;
-  grid-template-columns: fit-content(45%) auto minmax(0, 1fr) auto;
-  column-gap: 0.375rem;
-  row-gap: 0.125rem;
-  align-items: baseline;
-  padding: 0.125rem 0 0.25rem 1.25rem;
+  grid-template-columns: auto auto auto minmax(0, 1fr);
+  column-gap: 0.5rem;
+  row-gap: 0.25rem;
+  align-items: center;
+  padding: 0.125rem 0 0.375rem 1.25rem;
+  font-size: 0.8125rem;
 }
 .rv-tally-row {
   display: contents;
-  font-size: 0.8125rem;
 }
-.rv-cell:nth-child(2) {
-  color: var(--muted);
-}
-.rv-cell:nth-child(4) {
-  color: var(--muted);
-  text-align: right;
+.rv-votes {
+  font-weight: 700;
   white-space: nowrap;
+}
+.rv-out {
+  color: var(--red);
+}
+.rv-arrow {
+  color: var(--muted);
+}
+.rv-voters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.rv-seat {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--card);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+.rv-seat-wolf {
+  border-color: var(--red);
+  background: var(--red);
+  color: #fff;
 }
 .rv-wolf {
   color: var(--red);

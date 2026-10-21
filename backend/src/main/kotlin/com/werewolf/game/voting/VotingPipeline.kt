@@ -346,6 +346,7 @@ class VotingPipeline(
                 val postSubPhase = resolvePostSubPhase()
                 context.game.subPhase = postSubPhase
                 gameRepository.save(context.game)
+                actionLogService.recordBadgeHandover(context.gameId, context.game.dayNumber, actor.userId, target)
 
                 if (fromVoting) commitDeferredHunterShotIfAny(context, actor.userId)
 
@@ -372,6 +373,7 @@ class VotingPipeline(
                 val postSubPhase = resolvePostSubPhase()
                 context.game.subPhase = postSubPhase
                 gameRepository.save(context.game)
+                actionLogService.recordBadgeHandover(context.gameId, context.game.dayNumber, actor.userId, null)
                 if (fromVoting) commitDeferredHunterShotIfAny(context, actor.userId)
                 gamePlayerRepository.findByGameIdAndUserId(context.gameId, actor.userId).ifPresent {
                     it.sheriff = false; gamePlayerRepository.save(it)

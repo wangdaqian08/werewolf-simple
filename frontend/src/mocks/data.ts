@@ -17,6 +17,7 @@ import type {
   NightPhaseState,
   PaymentOrderSummary,
   PlayerRole,
+  ReviewPlayer,
   RoleRevealState,
   Room,
   SheriffElectionState,
@@ -1283,57 +1284,129 @@ export const MOCK_PAYMENT_ORDERS: PaymentOrderSummary[] = [
 
 // ── Game review (上帝视角复盘) ─────────────────────────────────────────────────
 
+// A 12-player 狼王守卫 + 白痴 game that shows every review line: guard / witch
+// save, poison, seer checks, sheriff vote, tie → PK, night-killed sheriff's
+// badge handover, idiot reveal, the hunter → 黑狼王 chain shot and a 自爆.
+const RP = (seatIndex: number, nickname: string, role: PlayerRole): ReviewPlayer => ({
+  userId: `u${seatIndex}`,
+  nickname,
+  seatIndex,
+  role,
+})
+const R1 = RP(1, 'Alice', 'WEREWOLF')
+const R2 = RP(2, 'Bob', 'SEER')
+const R3 = RP(3, 'Cat', 'VILLAGER')
+const R4 = RP(4, 'Dan', 'BLACK_WOLF_KING')
+const R5 = RP(5, 'Eve', 'WITCH')
+const R6 = RP(6, 'Fay', 'VILLAGER')
+const R7 = RP(7, 'Gus', 'GUARD')
+const R8 = RP(8, 'Hal', 'HUNTER')
+const R9 = RP(9, 'Ivy', 'WEREWOLF')
+const R10 = RP(10, 'Jay', 'VILLAGER')
+const R11 = RP(11, 'Kim', 'WEREWOLF')
+const R12 = RP(12, 'Lia', 'IDIOT')
+
 export const MOCK_GAME_REVIEW: GameReview = {
   winner: 'VILLAGER',
-  players: [
-    { userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' },
-    { userId: 'u2', nickname: 'Bob', seatIndex: 2, role: 'SEER' },
-    { userId: 'u3', nickname: 'Cat', seatIndex: 3, role: 'VILLAGER' },
-  ],
+  players: [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12],
   rounds: [
     {
       day: 1,
       night: {
-        wolf: {
-          actors: [{ userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' }],
-          action: 'KILL',
-          target: { userId: 'u3', nickname: 'Cat', seatIndex: 3, role: 'VILLAGER' },
-        },
-        seer: {
-          actor: { userId: 'u2', nickname: 'Bob', seatIndex: 2, role: 'SEER' },
-          dead: false,
-          target: { userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' },
-          isWerewolf: true,
-        },
-        witch: null,
-        guard: null,
-        dawn: {
-          deaths: [
-            {
-              player: { userId: 'u3', nickname: 'Cat', seatIndex: 3, role: 'VILLAGER' },
-              cause: 'WOLF',
-            },
-          ],
-          saved: null,
-        },
+        wolf: { actors: [R1, R4, R9, R11], action: 'KILL', target: R3 },
+        seer: { actor: R2, dead: false, target: R9, isWerewolf: true },
+        witch: { actor: R5, dead: false, antidote: R3, poison: null },
+        guard: { actor: R7, dead: false, target: R2 },
+        dawn: { deaths: [], saved: { player: R3, by: 'ANTIDOTE' } },
       },
       events: [
+        {
+          type: 'VOTE',
+          kind: 'SHERIFF',
+          round: 1,
+          tally: [
+            { target: R2, votes: 6, voters: [R3, R5, R6, R7, R8, R10] },
+            { target: R9, votes: 3, voters: [R1, R4, R11] },
+          ],
+          abstain: [R12],
+          result: R2,
+          appointed: false,
+          wolfPlay: null,
+        },
         {
           type: 'VOTE',
           kind: 'EXILE',
           round: 1,
           tally: [
-            {
-              target: { userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' },
-              votes: 1,
-              voters: [{ userId: 'u2', nickname: 'Bob', seatIndex: 2, role: 'SEER' }],
-            },
+            { target: R9, votes: 4, voters: [R5, R6, R7, R10] },
+            { target: R3, votes: 4, voters: [R1, R4, R11, R12] },
+          ],
+          abstain: [R2, R3, R8, R9],
+          result: null,
+          appointed: false,
+          wolfPlay: 'PUSH',
+        },
+        {
+          type: 'VOTE',
+          kind: 'EXILE',
+          round: 2,
+          tally: [
+            { target: R9, votes: 6.5, voters: [R2, R5, R6, R7, R8, R10] },
+            { target: R3, votes: 4, voters: [R1, R4, R11, R12] },
           ],
           abstain: [],
-          result: { userId: 'u1', nickname: 'Alice', seatIndex: 1, role: 'WEREWOLF' },
+          result: R9,
           appointed: false,
-          wolfPlay: null,
+          wolfPlay: 'PUSH',
         },
+      ],
+    },
+    {
+      day: 2,
+      night: {
+        wolf: { actors: [R1, R4, R11], action: 'KILL', target: R2 },
+        seer: { actor: R2, dead: false, target: R12, isWerewolf: false },
+        witch: { actor: R5, dead: false, antidote: null, poison: R11 },
+        guard: { actor: R7, dead: false, target: R8 },
+        dawn: {
+          deaths: [
+            { player: R2, cause: 'WOLF' },
+            { player: R11, cause: 'POISON' },
+          ],
+          saved: null,
+        },
+      },
+      events: [
+        { type: 'BADGE_HANDOVER', from: R2, to: R7 },
+        {
+          type: 'VOTE',
+          kind: 'EXILE',
+          round: 1,
+          tally: [
+            { target: R12, votes: 5, voters: [R1, R3, R4, R6, R10] },
+            { target: R1, votes: 2.5, voters: [R7, R8] },
+          ],
+          abstain: [R5, R12],
+          result: R12,
+          appointed: false,
+          wolfPlay: 'PUSH',
+        },
+        { type: 'IDIOT_REVEAL', player: R12 },
+      ],
+    },
+    {
+      day: 3,
+      night: {
+        wolf: { actors: [R1, R4], action: 'KILL', target: R8 },
+        seer: { actor: R2, dead: true, target: null, isWerewolf: false },
+        witch: { actor: R5, dead: false, antidote: null, poison: null },
+        guard: { actor: R7, dead: false, target: R10 },
+        dawn: { deaths: [{ player: R8, cause: 'WOLF' }], saved: null },
+      },
+      events: [
+        { type: 'HUNTER_SHOT', hunter: R8, target: R4 },
+        { type: 'HUNTER_SHOT', hunter: R4, target: R6 },
+        { type: 'SELF_DESTRUCT', player: R1, taken: null },
       ],
     },
   ],

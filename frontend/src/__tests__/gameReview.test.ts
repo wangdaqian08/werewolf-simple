@@ -60,6 +60,16 @@ function render(
 }
 const lines = (wrapper: ReturnType<typeof render>) =>
   wrapper.findAll('.rv-line').map((l) => l.text())
+/** Vote-table rows as "target votes ← seats", a wolf seat marked 🐺; out = the voted-out row. */
+const tally = (wrapper: ReturnType<typeof render>) =>
+  wrapper.findAll('.rv-tally-row').map((r) => {
+    const seats = r
+      .findAll('.rv-seat')
+      .map((s) => s.text() + (s.classes('rv-seat-wolf') ? '🐺' : ''))
+      .join(',')
+    const out = r.find('.rv-votes').classes('rv-out') ? ' out' : ''
+    return `${r.find('.rv-target').text()} ${r.find('.rv-votes').text()} ← ${seats}${out}`
+  })
 
 describe('GameReview', () => {
   it('header: the outcome and the wolf team', () => {
@@ -195,14 +205,15 @@ describe('GameReview', () => {
         ],
       },
     ])
-    expect(lines(wrapper)).toEqual([
-      '第1天',
-      '🗳 放逐投票：9号 Val〔村民〕 被投出',
-      '1号🐺、2号🐺、4号 → 9号 Val〔村民〕 3票',
-      '6号 → 1号 Wolf1〔狼人〕 1票',
-      '7号 → 弃权',
-      '🐺 狼人投票：1号、2号 → 9号〔村民〕（冲票）',
+    expect(lines(wrapper)).toEqual(['第1天', '放逐9号 Val〔村民〕 被投出（狼人冲票）'])
+    expect(tally(wrapper)).toEqual([
+      '9号〔村民〕 3票 ← 1🐺,2🐺,4 out',
+      '1号〔狼人〕 1票 ← 6',
+      '弃权  ← 7',
     ])
+    expect(wrapper.find('.rv-pill').text()).toBe('放逐')
+    expect(wrapper.find('.rv-tally .rv-seat-wolf').attributes('aria-label')).toBe('1号 狼人')
+    expect(wrapper.find('.rv-legend').exists()).toBe(true)
   })
 
   it('a sheriff the host picked says so: after a tie, or when nobody got a vote', () => {
@@ -227,14 +238,10 @@ describe('GameReview', () => {
       { day: 1, night: null, events: [vote({ kind: 'SHERIFF', result: vil, appointed: true })] },
     ])
 
-    expect(lines(tie)).toEqual([
-      '第1天',
-      '⭐ 警长投票：平票，房主指定 9号 Val 当警长',
-      '1号🐺、5号 → 4号 Sia〔预言家〕 2票',
-      '2号🐺、6号 → 9号 Val〔村民〕 2票',
-      '🐺 狼人投票：1号 → 4号〔预言家〕；2号 → 9号〔村民〕',
-    ])
-    expect(lines(noVotes)).toEqual(['第1天', '⭐ 警长投票：无人投票，房主指定 9号 Val 当警长'])
+    expect(lines(tie)).toEqual(['第1天', '警长平票，房主指定 9号 Val 当警长'])
+    expect(tally(tie)).toEqual(['4号〔预言家〕 2票 ← 1🐺,5', '9号〔村民〕 2票 ← 2🐺,6 out'])
+    expect(lines(noVotes)).toEqual(['第1天', '警长无人投票，房主指定 9号 Val 当警长'])
+    expect(noVotes.find('.rv-legend').exists()).toBe(false)
   })
 
   it('PK re-vote, 倒钩, tie, sheriff vote, and the 1.5 sheriff weight', () => {
@@ -262,16 +269,16 @@ describe('GameReview', () => {
     ])
     expect(lines(wrapper)).toEqual([
       '第2天',
-      '⭐ 警长投票：4号 Sia 当选',
-      '5号、6号 → 4号 Sia〔预言家〕 2票',
-      '🗳 放逐投票：平票，无人出局',
-      '1号🐺 → 9号 Val〔村民〕 1票',
-      '3号🐺 → 2号 Wolf2〔狼人〕 1票',
-      '🐺 狼人投票：1号 → 9号〔村民〕；3号 → 2号〔狼人〕（倒钩）',
-      '🗳 PK 投票：9号 Val〔村民〕 被投出',
-      '1号🐺、4号 → 9号 Val〔村民〕 2.5票',
-      '🐺 狼人投票：1号 → 9号〔村民〕',
-      '⭐ 警长投票：无警长',
+      '警长4号 Sia 当选',
+      '放逐平票，无人出局（狼人倒钩）',
+      'PK9号 Val〔村民〕 被投出',
+      '警长无警长',
+    ])
+    expect(tally(wrapper)).toEqual([
+      '4号〔预言家〕 2票 ← 5,6 out',
+      '9号〔村民〕 1票 ← 1🐺',
+      '2号〔狼人〕 1票 ← 3🐺',
+      '9号〔村民〕 2.5票 ← 1🐺,4 out',
     ])
   })
 
@@ -294,6 +301,24 @@ describe('GameReview', () => {
       '💥 3号 King〔白狼王〕 自爆，带走 4号 Sia〔预言家〕',
       '💥 2号 Wolf2〔狼人〕 自爆',
       '🃏 8号 Ida 白痴翻牌，免于出局',
+    ])
+  })
+
+  it('a badge handover names the old and new sheriff; a destroyed badge has none', () => {
+    const wrapper = render([
+      {
+        day: 2,
+        night: null,
+        events: [
+          { type: 'BADGE_HANDOVER', from: seer, to: witch },
+          { type: 'BADGE_HANDOVER', from: witch, to: null },
+        ],
+      },
+    ])
+    expect(lines(wrapper)).toEqual([
+      '第2天',
+      '⭐ 4号 Sia〔预言家〕 移交警徽给 5号 Wen〔女巫〕',
+      '⭐ 5号 Wen〔女巫〕 撕毁警徽',
     ])
   })
 

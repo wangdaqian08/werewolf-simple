@@ -305,6 +305,43 @@ class ActionLogServiceTest {
         assertThat(payload["targetSeatIndex"]).isEqualTo(7)
     }
 
+    // ── recordBadgeHandover ─────────────────────────────────────────────────
+
+    @Test
+    fun `recordBadgeHandover - saves BADGE_HANDOVER row with the old and new sheriff`() {
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(player("s1", 2), player("s2", 5)))
+
+        service.recordBadgeHandover(gameId, dayNumber = 2, fromUserId = "s1", toUserId = "s2")
+
+        val captor = argumentCaptor<GameEvent>()
+        verify(gameEventRepository).save(captor.capture())
+        val event = captor.firstValue
+        assertThat(event.eventType).isEqualTo("BADGE_HANDOVER")
+        assertThat(event.targetUserId).isEqualTo("s2")
+        @Suppress("UNCHECKED_CAST")
+        val payload = mapper.readValue(event.message, Map::class.java) as Map<String, Any?>
+        assertThat(payload["dayNumber"]).isEqualTo(2)
+        assertThat(payload["fromUserId"]).isEqualTo("s1")
+        assertThat(payload["toUserId"]).isEqualTo("s2")
+        assertThat(payload["fromSeatIndex"]).isEqualTo(2)
+        assertThat(payload["toSeatIndex"]).isEqualTo(5)
+    }
+
+    @Test
+    fun `recordBadgeHandover - a destroyed badge has no new sheriff`() {
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(player("s1", 2)))
+
+        service.recordBadgeHandover(gameId, dayNumber = 2, fromUserId = "s1", toUserId = null)
+
+        val captor = argumentCaptor<GameEvent>()
+        verify(gameEventRepository).save(captor.capture())
+        assertThat(captor.firstValue.targetUserId).isNull()
+        @Suppress("UNCHECKED_CAST")
+        val payload = mapper.readValue(captor.firstValue.message, Map::class.java) as Map<String, Any?>
+        assertThat(payload["toUserId"]).isNull()
+        assertThat(payload["toSeatIndex"]).isNull()
+    }
+
     // ── recordIdiotReveal ───────────────────────────────────────────────────
 
     @Test

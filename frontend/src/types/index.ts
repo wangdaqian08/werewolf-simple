@@ -265,6 +265,8 @@ export type ReviewDayEvent =
   | { type: 'HUNTER_SHOT'; hunter: ReviewPlayer; target: ReviewPlayer }
   | { type: 'SELF_DESTRUCT'; player: ReviewPlayer; taken: ReviewPlayer | null }
   | { type: 'IDIOT_REVEAL'; player: ReviewPlayer }
+  /** to = null: the badge was destroyed */
+  | { type: 'BADGE_HANDOVER'; from: ReviewPlayer; to: ReviewPlayer | null }
 
 export interface ReviewRound {
   day: number
@@ -654,6 +656,7 @@ export interface ActionLogEntry {
     | 'IDIOT_REVEAL'
     | 'SHERIFF_RESULT'
     | 'SELF_DESTRUCT'
+    | 'BADGE_HANDOVER'
   message: string // raw JSON — parse per eventType
   targetUserId: string | null
   createdAt: string | null

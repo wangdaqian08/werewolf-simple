@@ -572,12 +572,13 @@ class VotingPipelineTest {
         // Night-reveal handover now defers the next sub-phase to the advancer.
         whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
 
-        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
+        val result = makeVotingPipelineWithLog().handleBadge(req("u2", ActionType.BADGE_PASS, "u3"), context)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(game.sheriffUserId).isEqualTo("u3")
         assertThat(game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
         assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        verify(actionLogService).recordBadgeHandover(gameId, game.dayNumber, "u2", "u3")
         // No afterElimination — contextLoader.load must NOT be called.
         verify(contextLoader, never()).load(any())
         verify(winConditionChecker, never()).check(any(), any(), any(), any(), any())
@@ -593,12 +594,13 @@ class VotingPipelineTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
 
-        val result = votingPipeline.handleBadge(req("u2", ActionType.BADGE_DESTROY), context)
+        val result = makeVotingPipelineWithLog().handleBadge(req("u2", ActionType.BADGE_DESTROY), context)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(game.sheriffUserId).isNull()
         assertThat(game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
         assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        verify(actionLogService).recordBadgeHandover(gameId, game.dayNumber, "u2", null)
         verify(contextLoader, never()).load(any())
     }
 

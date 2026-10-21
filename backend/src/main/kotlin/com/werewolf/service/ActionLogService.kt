@@ -128,6 +128,26 @@ class ActionLogService(
         )
     }
 
+    /** [toUserId] null = the badge was destroyed. */
+    fun recordBadgeHandover(gameId: Int, dayNumber: Int, fromUserId: String, toUserId: String?) {
+        val seats = gamePlayerRepository.findByGameId(gameId).associate { it.userId to it.seatIndex }
+        val payload = mapOf(
+            "dayNumber"     to dayNumber,
+            "fromUserId"    to fromUserId,
+            "fromSeatIndex" to seats[fromUserId],
+            "toUserId"      to toUserId,
+            "toSeatIndex"   to toUserId?.let(seats::get),
+        )
+        gameEventRepository.save(
+            GameEvent(
+                gameId       = gameId,
+                eventType    = "BADGE_HANDOVER",
+                message      = mapper.writeValueAsString(payload),
+                targetUserId = toUserId,
+            )
+        )
+    }
+
     fun recordSheriffResult(
         gameId: Int,
         dayNumber: Int,
