@@ -789,6 +789,7 @@ class NightOrchestrator(
         game.subPhase = null
         game.dayNumber = newDayNumber
         game.daySkipVoting = false
+        game.pendingShooterUserId = null // an unused day shot is lost
         game.selfDestructUserId = null
         game.selfDestructTakenUserId = null
         game.pkCandidateUserIds = null

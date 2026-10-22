@@ -2,12 +2,12 @@
  * Hunter night-death shoot — real-backend evidence.
  *
  * When the werewolves kill a HUNTER at night (and the witch does NOT poison
- * them), the day-reveal flow enters DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH: the
- * deaths are reported, the wolf-killed hunter fires one shot through their own
- * browser, then the day lands on RESULT_REVEALED for the host to start the vote.
+ * them), the hunter gets a private shot at the reveal: the day lands on the
+ * ordinary RESULT_REVEALED for everyone, only the hunter's own browser shows
+ * the shoot prompt, and the shot is open until the host starts the vote.
  *
- * The full decision matrix (poison disables the shot, badge-first ordering when
- * a sheriff also dies, hunter-is-sheriff cascade, win on the shot) is covered by
+ * The full decision matrix (poison disables the shot, the shot during a sheriff
+ * handover, hunter-is-sheriff cascade, win on the shot, the host ending it) is covered by
  * the backend suites (HunterNightDeathShootIntegrationTest + DayRevealAdvancerTest).
  * This spec proves the end-to-end DOM + STOMP wiring for the happy shoot path.
  *
@@ -118,27 +118,26 @@ test.describe('Hunter night-death shoot (real backend)', () => {
     // hunter dies by wolf only → eligible to shoot).
     await driveMinimalNight1ViaDom(ctx, { wolfTargetSeat: hunterSeat, guardTargetSeat: wolfSeat })
 
-    // Host reveals the night result → backend applies the kill and the advancer
-    // routes to HUNTER_SHOOT_NIGHT_DEATH (no sheriff, hunter wolf-killed, not poisoned).
+    // Host reveals the night result → backend applies the kill and opens the
+    // hunter's private shot (no sheriff, hunter wolf-killed, not poisoned).
     const revealBtn = ctx.hostPage.getByTestId('day-reveal-result')
     await expect(revealBtn).toBeVisible({ timeout: scale(15_000) })
     await revealBtn.click()
 
     expect(
-      await waitForDaySubPhase(ctx.hostPage, ctx.gameId, 'HUNTER_SHOOT_NIGHT_DEATH', 15_000),
-      'reveal must enter HUNTER_SHOOT_NIGHT_DEATH',
+      await waitForDaySubPhase(ctx.hostPage, ctx.gameId, 'RESULT_REVEALED', 15_000),
+      'the reveal lands on the ordinary day',
     ).toBe(true)
 
-    // Cross-browser delivery: the hunter's own page reflects the sub-phase.
-    await expect(hunterPage.locator('.game-wrap')).toHaveAttribute(
-      'data-phase-sub',
-      'HUNTER_SHOOT_NIGHT_DEATH',
-      { timeout: scale(15_000) },
-    )
-    // The acting hunter sees the shoot prompt + buttons.
+    // Cross-browser delivery: the hunter's own page shows the prompt + buttons …
     await expect(hunterPage.getByTestId('day-hunter-night-banner')).toBeVisible({
-      timeout: scale(10_000),
+      timeout: scale(15_000),
     })
+    // … and no other browser shows any shot.
+    for (const [role, page] of ctx.pages) {
+      if (page === hunterPage) continue
+      await expect(page.getByTestId('day-hunter-night-banner'), `${role} sees no shot`).toHaveCount(0)
+    }
 
     // Shoot a living villager (keeps wolves alive → no game-over, lands on RESULT_REVEALED).
     const target = (ctx.roleMap.VILLAGER ?? []).find(

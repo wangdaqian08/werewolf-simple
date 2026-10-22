@@ -873,7 +873,6 @@ export function makeVotingScenario(
     eliminatedNickname: 'Tom',
     eliminatedSeatIndex: 6,
     eliminatedAvatar: '🐯',
-    eliminatedRole: 'HUNTER' as const,
   }
   const commonTiming = {
     dayNumber: 2,
@@ -926,13 +925,16 @@ export function makeVotingScenario(
         } satisfies VotingState,
       }
     case 'HUNTER_SHOOT':
+      // A voted-out shooter's shot is private: the mock viewer (not the
+      // shooter) sees the ordinary vote result.
       return {
         ...base,
         votingPhase: {
-          subPhase: 'HUNTER_SHOOT',
+          subPhase: 'VOTE_RESULT',
           ...commonTiming,
           ...eliminated,
-          hunterUserId: eliminated.eliminatedPlayerId,
+          tallyRevealed: true,
+          canShoot: false,
         } satisfies VotingState,
       }
     case 'BADGE_HANDOVER':
@@ -1167,7 +1169,6 @@ export const MOCK_ACTION_LOG: ActionLogEntry[] = [
       eliminatedUserId: 'u5',
       eliminatedNickname: 'Eve',
       eliminatedSeatIndex: 5,
-      eliminatedRole: 'VILLAGER',
       abstainCount: 2,
       abstainVoters: [
         { userId: 'u6', nickname: 'Frank', seatIndex: 6 },

@@ -329,8 +329,9 @@ class SelfDestructServiceTest {
     }
 
     @Test
-    fun `self-destruct waits while a voted-out hunter is about to shoot`() {
-        val ctx = context(game = game(phase = GamePhase.DAY_VOTING, subPhase = VotingSubPhase.HUNTER_SHOOT.name))
+    fun `self-destruct is closed after the tally, even with a voted-out shooter's shot pending`() {
+        val ctx = context(game = game(phase = GamePhase.DAY_VOTING, subPhase = VotingSubPhase.VOTE_RESULT.name))
+        ctx.game.pendingShooterUserId = "hunter"
         stubCanSucceed(ctx)
         assertThat(selfDestructService.selfDestruct(req(), ctx)).isInstanceOf(GameActionResult.Rejected::class.java)
     }
@@ -437,10 +438,12 @@ class SelfDestructServiceTest {
     }
 
     @Test
-    fun `self-destruct is rejected while the night-killed hunter is shooting`() {
-        val ctx = context(game = game(subPhase = DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name))
+    fun `self-destruct is allowed while a night-killed shooter's private shot is pending`() {
+        // Rejecting it would tell the wolf that a shot is pending.
+        val ctx = context(game = game(subPhase = DaySubPhase.RESULT_REVEALED.name))
+        ctx.game.pendingShooterUserId = "hunter"
         stubCanSucceed(ctx)
-        assertThat(selfDestructService.selfDestruct(req(), ctx)).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(selfDestructService.selfDestruct(req(), ctx)).isInstanceOf(GameActionResult.Success::class.java)
     }
 
     // ── Case 6: Dead wolf attempts → Rejected ──────────────────────────────────

@@ -56,10 +56,12 @@ class Game(
     @Column(name = "self_destruct_taken_user_id", length = 128)
     var selfDestructTakenUserId: String? = null,
 
-    // A shooter (hunter / black wolf king) killed by another shot, now due to fire.
-    // Set only while that chained shot is pending; the shot or pass clears it.
-    @Column(name = "chain_shooter_user_id", length = 128)
-    var chainShooterUserId: String? = null,
+    // The dead shooter (hunter / black wolf king) who may fire now. Private: only
+    // that player's state shows it. Set at the night reveal, a vote-out or a
+    // chained shot; cleared by the shot or pass, or when the host moves on
+    // (start of the vote, start of the night) — the unused shot is lost.
+    @Column(name = "pending_shooter_user_id", length = 128)
+    var pendingShooterUserId: String? = null,
 
     // PK re-vote (平票PK): the players tied in the day's first round, comma-separated.
     // Only they can be voted for and they cannot vote. Reset at night-init.

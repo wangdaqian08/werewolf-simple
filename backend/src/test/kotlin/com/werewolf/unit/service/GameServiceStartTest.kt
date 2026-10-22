@@ -3,7 +3,6 @@ package com.werewolf.unit.service
 import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
-import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.*
@@ -35,7 +34,6 @@ class GameServiceStartTest {
     @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
     @Mock lateinit var audioReplayCache: AudioReplayCache
     @Mock lateinit var hostTimerService: HostTimerService
-    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
     @Mock lateinit var creditTransactionRepository: CreditTransactionRepository
     @Mock lateinit var walletService: com.werewolf.service.WalletService
     @Mock lateinit var perkService: com.werewolf.service.PerkService

@@ -932,7 +932,9 @@ async function handleHunterShoot(userId: string) {
   await action({ actionType: 'HUNTER_SHOOT', targetId: userId })
 }
 async function handleHunterPass() {
-  await action({ actionType: 'HUNTER_PASS' })
+  // A pass is private (nothing is broadcast), so re-read our own state to close the shot screen.
+  const res = await action({ actionType: 'HUNTER_PASS' })
+  if (res?.success) gameStore.setState(await gameService.getState(String(route.params.gameId)))
 }
 async function handlePassBadge(userId: string) {
   await action({ actionType: 'BADGE_PASS', targetId: userId })
@@ -1075,7 +1077,7 @@ onMounted(async () => {
           // Retry once if the fetched state doesn't match the event yet (slow-runner
           // commit race). Compare BOTH the phase AND the effective sub-phase, so a
           // sub-phase change *within* a phase (e.g. DAY_DISCUSSION RESULT_HIDDEN →
-          // HUNTER_SHOOT_NIGHT_DEATH / BADGE_HANDOVER) also re-fetches.
+          // RESULT_REVEALED / BADGE_HANDOVER) also re-fetches.
           const fetchedSub =
             state.nightPhase?.subPhase ??
             state.votingPhase?.subPhase ??

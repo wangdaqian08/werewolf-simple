@@ -146,9 +146,6 @@ test.describe('Win rules — 屠边 and "the game ends before the hunter shoots"
       const phase = await waitForTopPhaseIn(ctx.hostPage, ctx.gameId, ['GAME_OVER'], 15_000)
       const state = await readState(ctx.hostPage, ctx.gameId)
       await captureSnapshot(ctx.pages, testInfo, 'hunter-last-god-game-over')
-      expect(state?.votingPhase?.subPhase ?? state?.subPhase, 'no HUNTER_SHOOT step').not.toBe(
-        'HUNTER_SHOOT',
-      )
       expect(phase, 'the vote wiped the god side').toBe('GAME_OVER')
       expect(state?.winner).toBe('WEREWOLF')
     } finally {

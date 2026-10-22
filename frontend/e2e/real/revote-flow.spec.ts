@@ -67,9 +67,9 @@ test.describe('Voting tie → revote → game proceeds', () => {
       totalPlayers: 9,
       guardSkipAllowed: true,
       hasSheriff: false,
-      // Explicit roles: deliberately exclude HUNTER so HUNTER_SHOOT sub-phase
-      // can't fire between day-vote and the next night — that sub-phase makes
-      // the outer round loop's DAY/NIGHT/VOTING state probes ambiguous. Also
+      // Explicit roles: deliberately exclude HUNTER so no hunter shot can add
+      // a death between day-vote and the next night — that makes the outer
+      // round loop's DAY/NIGHT/VOTING state probes ambiguous. Also
       // keeps the roleMap aligned with browserRoles below (setup's default
       // optional roles don't include GUARD, which this test needs).
       roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GUARD'] as RoleName[],

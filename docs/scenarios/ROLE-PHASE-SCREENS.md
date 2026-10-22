@@ -308,39 +308,34 @@ spec for each role's view at each phase/subphase.
 
 ---
 
-### Screen: VOTING / HUNTER_SHOOT (active — when eliminated by vote)
+### Screen: private shot after a vote-out (only on the shooter's screen)
 
-- **Component:** `VotingPhase` (hunter shoot overlay)
-- **Background:** parchment with red accent border
+- **When:** the hunter is voted out (or shot by the 黑狼王). The day stays on `VOTE_RESULT` /
+  `BADGE_HANDOVER` for everyone; only the shooter's state has `votingPhase.canShoot = true`.
+- **Component:** `VotingPhase` (shot screen, shown before the badge handover)
 - **Shows:**
     - `voting-shoot-banner` "你可以开枪 · Your Shot" (no role named — shared with the 黑狼王)
-    - "选择带走一名玩家，或放弃"
+    - "选择带走一名玩家，或放弃；主持人进入下一阶段后失效"
     - List of all alive players
 - **Actions:**
     - Tap player → `voting-hunter-shoot` → `HUNTER_SHOOT(targetUserId)`
-    - `voting-hunter-pass` → `HUNTER_PASS`
-- **Shooter:** `votingPhase.hunterUserId` (the voted-out player, or a chained shooter)
+    - `voting-hunter-pass` → `HUNTER_PASS` (private: nothing is broadcast)
+- **Everyone else:** the ordinary vote result; the host keeps `voting-continue`, and continuing
+  ends an unused shot.
 - **Constraint:** Cannot shoot self (already eliminated); backend rejects self-target
 
 ---
 
-### Screen: VOTING / HUNTER_SHOOT (waiting — for all other players)
+### Screen: private shot after a night death (only on the shooter's screen)
 
-- **Component:** `VotingPhase`
-- **Shows:** the normal vote result with "等待中" — no shot wording, so the shooter's role stays
-  private (the screen is shared with the 黑狼王)
-- **Actions:** None
-
----
-
-### Screen: DAY_DISCUSSION / HUNTER_SHOOT_NIGHT_DEATH — hunter killed by wolves at night
-
-- Entered at the host's reveal when the hunter was wolf-killed and NOT poisoned (poison disables
-  the gun). Also entered for a chained shot (the hunter was shot by the 黑狼王).
-- **Shooter** (`dayPhase.hunterUserId`): banner `day-hunter-night-banner` "你可以开枪 · Your Shot",
-  tap a player → `day-hunter-night-shoot` (`HUNTER_SHOOT`) or `day-hunter-night-pass` (`HUNTER_PASS`)
-- **Everyone else:** `day-hunter-night-wait-banner` "有玩家正在开枪" — the role is never named
-- Then: a dead sheriff hands over the badge (`BADGE_HANDOVER`), else `RESULT_REVEALED`
+- **When:** the host's reveal, the hunter was wolf-killed and NOT poisoned (poison disables the
+  gun), or a chained shot (the hunter was shot by the 黑狼王). The day stays on `RESULT_REVEALED` /
+  `BADGE_HANDOVER`; only the shooter's state has `dayPhase.canShoot = true`.
+- **Shooter:** banner `day-hunter-night-banner` "你可以开枪 · Your Shot", tap a player →
+  `day-hunter-night-shoot` (`HUNTER_SHOOT`) or `day-hunter-night-pass` (`HUNTER_PASS`). Shown
+  before the shooter's own badge handover.
+- **Everyone else:** the ordinary revealed day; the host keeps `day-start-vote`, and starting the
+  vote ends an unused shot.
 
 ---
 
@@ -349,9 +344,8 @@ spec for each role's view at each phase/subphase.
 Wolf camp: wakes with the wolves (`WEREWOLF_PICK`), the seer sees a wolf. Rules: `docs/black-wolf-king.md`.
 
 - **ROLE_REVEAL / role card:** "黑狼王", wolf styling, rule text "夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。"
-- **VOTING / HUNTER_SHOOT** (voted out, or shot by the hunter) and
-  **DAY_DISCUSSION / HUNTER_SHOOT_NIGHT_DEATH** (knifed by the wolves, or shot by the hunter):
-  the same shot screens as the hunter, with the same role-neutral text.
+- **Private shot** (voted out, knifed by the wolves, or shot by the hunter): the same shooter-only
+  screens as the hunter, with the same role-neutral text.
 - **Action chip:** plain 自爆 (no take); a self-destructed 黑狼王 cannot shoot.
 
 ---

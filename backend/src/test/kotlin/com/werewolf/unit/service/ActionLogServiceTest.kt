@@ -123,7 +123,7 @@ class ActionLogServiceTest {
         service.recordVoteResult(
             gameId = gameId, dayNumber = 1,
             votes = votes, tally = mapOf("u1" to 1.0),
-            sheriffUserId = null, eliminatedUserId = "u1", eliminatedRole = PlayerRole.VILLAGER,
+            sheriffUserId = null, eliminatedUserId = "u1",
         )
 
         val captor = argumentCaptor<GameEvent>()
@@ -134,7 +134,7 @@ class ActionLogServiceTest {
         @Suppress("UNCHECKED_CAST")
         val payload = mapper.readValue(event.message, Map::class.java) as Map<String, Any>
         assertThat(payload["eliminatedUserId"]).isEqualTo("u1")
-        assertThat(payload["eliminatedRole"]).isEqualTo("VILLAGER")
+        assertThat(payload).doesNotContainKey("eliminatedRole") // the log is readable mid-game
     }
 
     @Test
@@ -157,7 +157,7 @@ class ActionLogServiceTest {
         service.recordVoteResult(
             gameId = gameId, dayNumber = 1,
             votes = votes, tally = mapOf("u3" to 1.0),
-            sheriffUserId = null, eliminatedUserId = "u3", eliminatedRole = PlayerRole.VILLAGER,
+            sheriffUserId = null, eliminatedUserId = "u3",
         )
 
         val captor = argumentCaptor<GameEvent>()
@@ -179,7 +179,7 @@ class ActionLogServiceTest {
         service.recordVoteResult(
             gameId = gameId, dayNumber = 1,
             votes = emptyList(), tally = emptyMap(),
-            sheriffUserId = null, eliminatedUserId = null, eliminatedRole = null,
+            sheriffUserId = null, eliminatedUserId = null,
         )
 
         val captor = argumentCaptor<GameEvent>()

@@ -466,9 +466,10 @@ class SelfDestructFlowIntegrationTest {
     fun `rule - a king shot by the hunter cannot take anyone (被猎人带走无法发动)`() {
         val g = kingGame("WR8", listOf("WEREWOLF", "WHITE_WOLF_KING", "SEER", "HUNTER", "VILLAGER"))
         val hunter = gamePlayerRepository.findByGameId(g.gameId).single { it.role == PlayerRole.HUNTER }
-        arrange(g.gameId, GamePhase.DAY_VOTING, VotingSubPhase.HUNTER_SHOOT.name)
+        arrange(g.gameId, GamePhase.DAY_VOTING, VotingSubPhase.VOTE_RESULT.name)
         hunter.alive = false // voted out, now shooting
         gamePlayerRepository.save(hunter)
+        gameRepository.save(gameRepository.findById(g.gameId).orElseThrow().also { it.pendingShooterUserId = hunter.userId })
         eliminationHistoryRepository.save(
             EliminationHistory(gameId = g.gameId, dayNumber = 2, eliminatedUserId = hunter.userId, eliminatedRole = PlayerRole.HUNTER)
         )

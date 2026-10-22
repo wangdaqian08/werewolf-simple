@@ -68,13 +68,14 @@ class VotingPipelineTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun game(subPhase: String = VotingSubPhase.VOTING.name, sheriff: String? = null) =
+    private fun game(subPhase: String = VotingSubPhase.VOTING.name, sheriff: String? = null, shooter: String? = null) =
         Game(roomId = 1, hostUserId = hostId).also {
             val f = Game::class.java.getDeclaredField("gameId"); f.isAccessible = true; f.set(it, gameId)
             it.phase = GamePhase.DAY_VOTING
             it.subPhase = subPhase
             it.dayNumber = 1
             it.sheriffUserId = sheriff
+            it.pendingShooterUserId = shooter
         }
 
     private fun room(mode: WinConditionMode = WinConditionMode.CLASSIC) =
@@ -215,7 +216,7 @@ class VotingPipelineTest {
     }
 
     @Test
-    fun `revealTally - hunter eliminated transitions to HUNTER_SHOOT sub-phase`() {
+    fun `revealTally - a voted-out hunter gets a private shot and the day stays on VOTE_RESULT`() {
         val host = player(hostId, 0)
         val hunter = player("u1", 1, PlayerRole.HUNTER)
         val context = ctx(game(), host, hunter)
@@ -229,9 +230,26 @@ class VotingPipelineTest {
 
         votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
-        val captor = argumentCaptor<Game>()
-        verify(gameRepository, atLeastOnce()).save(captor.capture())
-        assertThat(captor.allValues).anyMatch { it.subPhase == VotingSubPhase.HUNTER_SHOOT.name }
+        assertThat(context.game.pendingShooterUserId).isEqualTo("u1")
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+    }
+
+    @Test
+    fun `revealTally - a voted-out hunter-sheriff gets the private shot and the public badge handover`() {
+        val host = player(hostId, 0)
+        val hunter = player("u1", 1, PlayerRole.HUNTER)
+        val context = ctx(game(sheriff = "u1"), host, hunter)
+
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(listOf(vote("u2", "u1"), vote("u3", "u1")))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(hunter))
+        stubLoader(host, hunter)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        assertThat(context.game.pendingShooterUserId).isEqualTo("u1")
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
     }
 
     @Test
@@ -255,7 +273,7 @@ class VotingPipelineTest {
     }
 
     @Test
-    fun `revealTally - voted-out hunter whose death ends the game - GAME_OVER with no HUNTER_SHOOT`() {
+    fun `revealTally - voted-out hunter whose death ends the game - GAME_OVER with no shot`() {
         val host = player(hostId, 0)
         val hunter = player("u1", 1, PlayerRole.HUNTER)
         val context = ctx(game(), host, hunter)
@@ -272,7 +290,7 @@ class VotingPipelineTest {
         val captor = argumentCaptor<Game>()
         verify(gameRepository, atLeastOnce()).save(captor.capture())
         assertThat(captor.allValues).anyMatch { it.phase == GamePhase.GAME_OVER }
-        assertThat(captor.allValues).noneMatch { it.subPhase == VotingSubPhase.HUNTER_SHOOT.name }
+        assertThat(context.game.pendingShooterUserId).isNull()
     }
 
     @Test
@@ -302,7 +320,7 @@ class VotingPipelineTest {
     fun `handleHunterShoot - a shot at the sheriff that ends the game kills at once with no BADGE_HANDOVER`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
         val wolfSheriff = player("u2", 2, PlayerRole.WEREWOLF).also { it.sheriff = true }
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = "u2"), hunter, wolfSheriff)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, sheriff = "u2", shooter = hostId), hunter, wolfSheriff)
 
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(wolfSheriff))
         votedOut(hostId)
@@ -323,7 +341,7 @@ class VotingPipelineTest {
     fun `handleHunterShoot - hunter shoots non-sheriff, pauses on VOTE_RESULT for the victim's last words (no auto-night)`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
         val target = player("u2", 2)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter, target)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = hostId), hunter, target)
 
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(target))
         votedOut(hostId)
@@ -350,7 +368,7 @@ class VotingPipelineTest {
         // heir is chosen (see BADGE_PASS / BADGE_DESTROY tests below).
         val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
         val sheriff = player("u2", 2).also { it.sheriff = true }
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = "u2"), hunter, sheriff)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, sheriff = "u2", shooter = hostId), hunter, sheriff)
 
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(sheriff))
         votedOut(hostId)
@@ -376,16 +394,16 @@ class VotingPipelineTest {
     }
 
     @Test
-    fun `handleHunterShoot - a voted-out hunter who holds the badge hands it over after firing`() {
+    fun `handleHunterShoot - a voted-out hunter-sheriff fires during the handover, the handover stays open`() {
         val hunterSheriff = player(hostId, 0, PlayerRole.HUNTER, alive = false).also { it.sheriff = true }
         val target = player("u2", 2)
         val survivor = player("u3", 3)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = hostId), hunterSheriff, target, survivor)
+        val context = ctx(game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = hostId, shooter = hostId), hunterSheriff, target, survivor)
 
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(target))
         votedOut(hostId)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        whenever(contextLoader.load(gameId)).thenReturn(ctx(game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = hostId), hunterSheriff, target, survivor))
+        whenever(contextLoader.load(gameId)).thenReturn(ctx(game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = hostId), hunterSheriff, target, survivor))
 
         votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SHOOT, "u2"), context)
 
@@ -538,11 +556,11 @@ class VotingPipelineTest {
         val hunter = player("h", 1, PlayerRole.HUNTER, alive = false)
         val target = player("u2", 2)
         val g = nightRevealGame(sheriff = "x").also {
-            it.subPhase = DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
             it.sheriffUserId = null
+            it.pendingShooterUserId = "h"
         }
         val context = GameContext(g, room(), listOf(hunter, target))
-        whenever(dayRevealAdvancer.pendingShooterUserId(gameId)).thenReturn("h")
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(target))
         whenever(contextLoader.load(gameId)).thenReturn(GameContext(g, room(), listOf(hunter, target)))
         whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
@@ -624,7 +642,7 @@ class VotingPipelineTest {
     fun `handleHunterShoot - hunter shoots last wolf, game ends with VILLAGER win`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
         val wolf = player("wolf", 1, PlayerRole.WEREWOLF)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter, wolf)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = hostId), hunter, wolf)
 
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wolf")).thenReturn(Optional.of(wolf))
         votedOut(hostId)
@@ -698,45 +716,49 @@ class VotingPipelineTest {
     }
 
     @Test
-    fun `handleHunterShoot - hunter skips (not sheriff), pauses on VOTE_RESULT for host to advance (no auto-night)`() {
+    fun `handleHunterShoot - a pass is private - nothing is broadcast and the day stays on VOTE_RESULT`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter)
-        votedOut(hostId)
-
-        stubLoader(hunter)
-        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = hostId), hunter)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
         val result = votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        // A voted-out hunter who passes is still a day-death: pause on VOTE_RESULT
-        // so the host controls the night transition (no silent auto-night).
+        assertThat(context.game.pendingShooterUserId).isNull()
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+        verify(stompPublisher, never()).broadcastGameAfterCommit(any(), any())
+        verify(stompPublisher, never()).broadcastGame(any(), any())
         verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
-        val captor = argumentCaptor<Game>()
-        verify(gameRepository, atLeastOnce()).save(captor.capture())
-        assertThat(captor.allValues).anyMatch { it.subPhase == VotingSubPhase.VOTE_RESULT.name }
+        // A second action is rejected: the shot is used up.
+        assertThat(votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context))
+            .isInstanceOf(GameActionResult.Rejected::class.java)
     }
 
     @Test
-    fun `handleHunterShoot - hunter skips and is sheriff, transitions to BADGE_HANDOVER`() {
+    fun `handleHunterShoot - a hunter-sheriff passes during the handover, the handover stays open`() {
         val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = hostId), hunter)
-        votedOut(hostId)
+        val context = ctx(game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = hostId, shooter = hostId), hunter)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        stubLoader(hunter)
 
         votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_PASS), context)
 
-        val captor = argumentCaptor<Game>()
-        verify(gameRepository).save(captor.capture())
-        assertThat(captor.firstValue.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
-        verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+        assertThat(context.game.pendingShooterUserId).isNull()
+    }
+
+    @Test
+    fun `handleHunterShoot - no shot outside the post-death sub-phases, even for the pending shooter`() {
+        val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
+        val context = ctx(game(VotingSubPhase.VOTING.name, shooter = hostId), hunter, player("u2", 2))
+
+        assertThat(votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SHOOT, "u2"), context))
+            .isInstanceOf(GameActionResult.Rejected::class.java)
     }
 
     // ── BLACK_WOLF_KING + chained shots ───────────────────────────────────────
 
     @Test
-    fun `revealTally - BLACK_WOLF_KING voted out transitions to HUNTER_SHOOT sub-phase`() {
+    fun `revealTally - a voted-out BLACK_WOLF_KING gets a private shot`() {
         val host = player(hostId, 0)
         val king = player("k", 1, PlayerRole.BLACK_WOLF_KING)
         val context = ctx(game(), host, king)
@@ -749,15 +771,15 @@ class VotingPipelineTest {
 
         votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
-        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.HUNTER_SHOOT.name)
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+        assertThat(context.game.pendingShooterUserId).isEqualTo("k")
     }
 
     @Test
     fun `handleHunterShoot - a living BLACK_WOLF_KING cannot fire during the hunter's shot`() {
         val hunter = player("h", 1, PlayerRole.HUNTER, alive = false)
         val king = player("k", 2, PlayerRole.BLACK_WOLF_KING)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter, king, player("v", 3))
-        votedOut("h")
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = "h"), hunter, king, player("v", 3))
 
         val result = votingPipeline.handleHunterShoot(req("k", ActionType.HUNTER_SHOOT, "v"), context)
 
@@ -768,8 +790,7 @@ class VotingPipelineTest {
     fun `handleHunterShoot - a hunter dead since an earlier day cannot fire during the BLACK_WOLF_KING's shot`() {
         val hunter = player("h", 1, PlayerRole.HUNTER, alive = false)
         val king = player("k", 2, PlayerRole.BLACK_WOLF_KING, alive = false)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), hunter, king, player("v", 3))
-        votedOut("k", PlayerRole.BLACK_WOLF_KING)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = "k"), hunter, king, player("v", 3))
 
         val result = votingPipeline.handleHunterShoot(req("h", ActionType.HUNTER_SHOOT, "v"), context)
 
@@ -780,7 +801,7 @@ class VotingPipelineTest {
     fun `handleHunterShoot - BLACK_WOLF_KING shoots the hunter - hunter dies at once and becomes the chain shooter`() {
         val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)
         val hunter = player("h", 2, PlayerRole.HUNTER)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), king, hunter, player("v", 3))
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = "k"), king, hunter, player("v", 3))
         votedOut("k", PlayerRole.BLACK_WOLF_KING)
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "h")).thenReturn(Optional.of(hunter))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
@@ -791,8 +812,8 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(hunter.alive).isFalse()
-        assertThat(context.game.chainShooterUserId).isEqualTo("h")
-        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.HUNTER_SHOOT.name)
+        assertThat(context.game.pendingShooterUserId).isEqualTo("h")
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
         verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
     }
 
@@ -801,7 +822,7 @@ class VotingPipelineTest {
         val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)
         val hunter = player("h", 2, PlayerRole.HUNTER, alive = false)
         val villager = player("v", 3)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name).also { it.chainShooterUserId = "h" }, king, hunter, villager)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = "h"), king, hunter, villager)
         votedOut("k", PlayerRole.BLACK_WOLF_KING)
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "v")).thenReturn(Optional.of(villager))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
@@ -816,15 +837,15 @@ class VotingPipelineTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(villager.alive).isFalse()
-        assertThat(context.game.chainShooterUserId).isNull()
+        assertThat(context.game.pendingShooterUserId).isNull()
         assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
     }
 
     @Test
-    fun `handleHunterShoot - a shooter-role sheriff target dies at once (no deferral) and fires before the badge`() {
+    fun `handleHunterShoot - a shooter-role sheriff target dies at once (no deferral) - its shot and the handover are open`() {
         val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)
         val hunterSheriff = player("h", 2, PlayerRole.HUNTER).also { it.sheriff = true }
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = "h"), king, hunterSheriff, player("v", 3))
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, sheriff = "h", shooter = "k"), king, hunterSheriff, player("v", 3))
         votedOut("k", PlayerRole.BLACK_WOLF_KING)
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "h")).thenReturn(Optional.of(hunterSheriff))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
@@ -834,8 +855,8 @@ class VotingPipelineTest {
         votingPipeline.handleHunterShoot(req("k", ActionType.HUNTER_SHOOT, "h"), context)
 
         assertThat(hunterSheriff.alive).isFalse()
-        assertThat(context.game.chainShooterUserId).isEqualTo("h")
-        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.HUNTER_SHOOT.name)
+        assertThat(context.game.pendingShooterUserId).isEqualTo("h")
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
     }
 
     @Test
@@ -844,7 +865,7 @@ class VotingPipelineTest {
         val hunter = player("h", 2, PlayerRole.HUNTER, alive = false)
         val sheriff = player("s", 3).also { it.sheriff = true }
         val context = ctx(
-            game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = "s").also { it.chainShooterUserId = "h" },
+            game(VotingSubPhase.VOTE_RESULT.name, sheriff = "s", shooter = "h"),
             king, hunter, sheriff, player("v", 4),
         )
         val history = votedOut("k", PlayerRole.BLACK_WOLF_KING).also { it.hunterShotUserId = "h" }
@@ -855,18 +876,18 @@ class VotingPipelineTest {
 
         assertThat(sheriff.alive).isTrue()
         assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
-        assertThat(context.game.chainShooterUserId).isNull()
+        assertThat(context.game.pendingShooterUserId).isNull()
         // Latest shot overwrites the day's row: it is the deferred-kill marker handleBadge reads.
         assertThat(history.hunterShotUserId).isEqualTo("s")
     }
 
     @Test
-    fun `handleHunterShoot - a voted-out sheriff BLACK_WOLF_KING hands over the badge after the chain shot`() {
+    fun `handleHunterShoot - a voted-out sheriff BLACK_WOLF_KING's handover stays open after the chain shot`() {
         val kingSheriff = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false).also { it.sheriff = true }
         val hunter = player("h", 2, PlayerRole.HUNTER, alive = false)
         val villager = player("v", 3)
         val context = ctx(
-            game(VotingSubPhase.HUNTER_SHOOT.name, sheriff = "k").also { it.chainShooterUserId = "h" },
+            game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = "k", shooter = "h"),
             kingSheriff, hunter, villager, player("v2", 4),
         )
         votedOut("k", PlayerRole.BLACK_WOLF_KING)
@@ -884,15 +905,12 @@ class VotingPipelineTest {
     fun `handleHunterShoot - the chain shooter passes, the chain clears and the day pauses on VOTE_RESULT`() {
         val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)
         val hunter = player("h", 2, PlayerRole.HUNTER, alive = false)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name).also { it.chainShooterUserId = "h" }, king, hunter, player("v", 3))
-        votedOut("k", PlayerRole.BLACK_WOLF_KING)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = "h"), king, hunter, player("v", 3))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        stubLoader(king, hunter, player("v", 3))
-        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
 
         votingPipeline.handleHunterShoot(req("h", ActionType.HUNTER_PASS), context)
 
-        assertThat(context.game.chainShooterUserId).isNull()
+        assertThat(context.game.pendingShooterUserId).isNull()
         assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
     }
 
@@ -900,7 +918,7 @@ class VotingPipelineTest {
     fun `handleHunterShoot - a shot that decides the game ends it with no chain shot`() {
         val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)
         val hunter = player("h", 2, PlayerRole.HUNTER)
-        val context = ctx(game(VotingSubPhase.HUNTER_SHOOT.name), king, hunter)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = "k"), king, hunter)
         votedOut("k", PlayerRole.BLACK_WOLF_KING)
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "h")).thenReturn(Optional.of(hunter))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
@@ -909,11 +927,10 @@ class VotingPipelineTest {
 
         votingPipeline.handleHunterShoot(req("k", ActionType.HUNTER_SHOOT, "h"), context)
 
-        assertThat(context.game.chainShooterUserId).isNull()
+        assertThat(context.game.pendingShooterUserId).isNull()
         val captor = argumentCaptor<Game>()
         verify(gameRepository, atLeastOnce()).save(captor.capture())
         assertThat(captor.allValues).anyMatch { it.phase == GamePhase.GAME_OVER }
-        assertThat(captor.allValues).noneMatch { it.subPhase == VotingSubPhase.HUNTER_SHOOT.name && it.chainShooterUserId != null }
     }
 
     @Test
@@ -921,23 +938,22 @@ class VotingPipelineTest {
         val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)
         val hunter = player("h", 2, PlayerRole.HUNTER)
         val g = nightRevealGame(sheriff = "x").also {
-            it.subPhase = DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
             it.sheriffUserId = null
+            it.pendingShooterUserId = "k"
         }
         val context = GameContext(g, room(), listOf(king, hunter, player("v", 3)))
-        whenever(dayRevealAdvancer.pendingShooterUserId(gameId)).thenReturn("k")
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "h")).thenReturn(Optional.of(hunter))
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
 
         votingPipeline.handleHunterShoot(req("k", ActionType.HUNTER_SHOOT, "h"), context)
 
         assertThat(hunter.alive).isFalse()
-        assertThat(g.chainShooterUserId).isEqualTo("h")
-        assertThat(g.subPhase).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
-        verify(dayRevealAdvancer).markHunterShootResolved(gameId)
+        assertThat(g.pendingShooterUserId).isEqualTo("h")
+        assertThat(g.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
     }
 
     @Test
@@ -945,12 +961,11 @@ class VotingPipelineTest {
         val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)
         val hunter = player("h", 2, PlayerRole.HUNTER, alive = false)
         val g = nightRevealGame(sheriff = "x").also {
-            it.subPhase = DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
             it.sheriffUserId = null
-            it.chainShooterUserId = "h"
+            it.pendingShooterUserId = "h"
         }
         val context = GameContext(g, room(), listOf(king, hunter, player("v", 3)))
-        whenever(dayRevealAdvancer.pendingShooterUserId(gameId)).thenReturn("h")
 
         val result = votingPipeline.handleHunterShoot(req("k", ActionType.HUNTER_SHOOT, "v"), context)
 
@@ -1540,7 +1555,7 @@ class VotingPipelineTest {
         makeVotingPipelineWithLog().revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
         verify(actionLogService).recordVoteResult(
-            eq(gameId), eq(1), any(), any(), isNull(), eq("u1"), eq(PlayerRole.VILLAGER)
+            eq(gameId), eq(1), any(), any(), isNull(), eq("u1")
         )
     }
 
@@ -1549,7 +1564,7 @@ class VotingPipelineTest {
         val hunter = player("hunter1", 1, PlayerRole.HUNTER).also { it.alive = false }
         val target = player("u1", 2, PlayerRole.VILLAGER)
         val context = GameContext(
-            game(VotingSubPhase.HUNTER_SHOOT.name), room(), listOf(player(hostId, 0), hunter, target)
+            game(VotingSubPhase.VOTE_RESULT.name, shooter = "hunter1"), room(), listOf(player(hostId, 0), hunter, target)
         )
         whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(target))
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }

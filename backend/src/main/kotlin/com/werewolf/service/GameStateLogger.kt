@@ -139,8 +139,7 @@ class GameStateLogger(
                 ).map { it.voterUserId }.toSet()
                 alivePlayers.filter { it.canVote && it.userId !in voted }.map { it.userId }
             }
-            "VOTE_RESULT" -> listOf("host:${game.hostUserId}")
-            "HUNTER_SHOOT" -> alivePlayers.filter { it.role == PlayerRole.HUNTER }.map { it.userId }
+            "VOTE_RESULT" -> listOfNotNull("host:${game.hostUserId}", game.pendingShooterUserId?.let { "shooter:$it" })
             "BADGE_HANDOVER" -> alivePlayers.filter { it.sheriff }.map { it.userId }
             else -> emptyList()
         }

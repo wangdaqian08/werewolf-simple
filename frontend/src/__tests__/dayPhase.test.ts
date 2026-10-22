@@ -348,76 +348,123 @@ describe('DayPhase — sheriff night-death badge handover', () => {
   })
 })
 
-describe('DayPhase — hunter night-death shoot', () => {
+describe('DayPhase — private night-death shot', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  // The wolf-killed hunter is alive=false (kills applied at reveal) but is still
-  // the eligible shooter, identified by dayPhase.hunterUserId.
-  const HUNTER_PLAYERS: GamePlayer[] = [
+  // The wolf-killed shooter is alive=false (kills applied at reveal). Only its
+  // own state says canShoot; every other player gets canShoot=false and sees
+  // the ordinary revealed day.
+  const SHOOT_PLAYERS: GamePlayer[] = [
     { userId: 'hunter', nickname: 'Hunter', seatIndex: 1, isAlive: false, isSheriff: false },
     { userId: 'alice', nickname: 'Alice', seatIndex: 2, isAlive: true, isSheriff: false },
     { userId: 'bob', nickname: 'Bob', seatIndex: 3, isAlive: false, isSheriff: false },
   ]
 
-  function hunterDay(): DayPhaseState {
+  function shotDay(
+    canShoot: boolean,
+    subPhase: DayPhaseState['subPhase'] = 'RESULT_REVEALED',
+  ): DayPhaseState {
     return {
-      subPhase: 'HUNTER_SHOOT_NIGHT_DEATH',
+      subPhase,
       dayNumber: 2,
       phaseDeadline: Date.now() + 60000,
       phaseStarted: Date.now() - 5000,
       canVote: false,
-      hunterUserId: 'hunter',
+      canShoot,
       nightResult: {
         killedPlayers: [{ killedPlayerId: 'hunter', killedSeatIndex: 1, killedNickname: 'Hunter' }],
       },
     }
   }
 
-  function mountAs(myUserId: string) {
+  function mountAs(myUserId: string, extra: Record<string, unknown> = {}) {
     return mount(DayPhase, {
-      props: { ...BASE_PROPS, myUserId, players: HUNTER_PLAYERS, dayPhase: hunterDay() },
+      props: {
+        ...BASE_PROPS,
+        myUserId,
+        players: SHOOT_PLAYERS,
+        dayPhase: shotDay(myUserId === 'hunter'),
+        ...extra,
+      },
     })
   }
 
-  it('acting hunter sees the shoot prompt + shoot/pass buttons + kill banner', () => {
+  it('the shooter sees the shoot prompt + shoot/pass buttons + kill banner', () => {
     const wrapper = mountAs('hunter')
     expect(wrapper.find('[data-testid="day-hunter-night-banner"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="day-hunter-night-wait-banner"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="day-hunter-night-pass"]').exists()).toBe(true)
-    // Deaths stay visible while the hunter acts.
+    // Deaths stay visible while the shooter acts.
     expect(wrapper.find('[data-testid="day-banner-kill"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="day-killed-seat-1"]').exists()).toBe(true)
   })
 
   // The hunter and the 黑狼王 share this screen: it must not tell which one fires,
   // nor claim the wolves killed the shooter (a chained shooter was shot instead).
-  it('shooter and waiting texts name no role and no cause of death', () => {
-    const roleWords = ['猎人', 'Hunter', '狼王', 'Wolf King', '狼人杀害']
+  it('the shot prompt names no role and no cause of death, and warns the chance ends', () => {
     const shooter = mountAs('hunter').get('[data-testid="day-hunter-night-banner"]').text()
-    const waiting = mountAs('alice')
-    const waitText =
-      waiting.get('[data-testid="day-hunter-night-wait-banner"]').text() +
-      waiting.get('.footer-hint').text()
-    for (const word of roleWords) {
+    for (const word of ['猎人', 'Hunter', '狼王', 'Wolf King', '狼人杀害']) {
       expect(shooter).not.toContain(word)
-      expect(waitText).not.toContain(word)
     }
     expect(shooter).toContain('开枪')
-    expect(waitText).toContain('开枪')
+    expect(shooter).toContain('主持人')
   })
 
-  it('non-hunter players see the waiting hint — no shoot/pass buttons', () => {
+  it('other players see the ordinary revealed day - no hint that anyone may shoot', () => {
     const wrapper = mountAs('alice')
-    expect(wrapper.find('[data-testid="day-hunter-night-wait-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="day-banner-kill"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="day-hunter-night-banner"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="day-hunter-night-wait-banner"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="day-hunter-night-pass"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('开枪')
   })
 
-  it('shoot button is disabled until the hunter taps a live target', async () => {
+  it('the host can start the vote at once (it ends any unused shot)', () => {
+    const wrapper = mountAs('alice', { isHost: true })
+    expect(wrapper.find('[data-testid="day-start-vote"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('开枪')
+  })
+
+  it('a host who can shoot sees the shot first, then the host controls', () => {
+    const shooting = mountAs('hunter', { isHost: true })
+    expect(shooting.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(true)
+    expect(shooting.find('[data-testid="day-start-vote"]').exists()).toBe(false)
+
+    const after = mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        myUserId: 'hunter',
+        isHost: true,
+        players: SHOOT_PLAYERS,
+        dayPhase: shotDay(false),
+      },
+    })
+    expect(after.find('[data-testid="day-start-vote"]').exists()).toBe(true)
+  })
+
+  it('a dead sheriff who can also shoot sees the shot first, then the badge handover', () => {
+    const props = {
+      ...BASE_PROPS,
+      myUserId: 'hunter',
+      sheriffUserId: 'hunter',
+      players: SHOOT_PLAYERS,
+    }
+    const shooting = mount(DayPhase, {
+      props: { ...props, dayPhase: shotDay(true, 'BADGE_HANDOVER') },
+    })
+    expect(shooting.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(true)
+    expect(shooting.find('[data-testid="day-badge-pass"]').exists()).toBe(false)
+
+    const handing = mount(DayPhase, {
+      props: { ...props, dayPhase: shotDay(false, 'BADGE_HANDOVER') },
+    })
+    expect(handing.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(false)
+    expect(handing.find('[data-testid="day-badge-pass"]').exists()).toBe(true)
+  })
+
+  it('shoot button is disabled until the shooter taps a live target', async () => {
     const wrapper = mountAs('hunter')
     const shootBtn = wrapper.get('[data-testid="day-hunter-night-shoot"]')
     expect(shootBtn.attributes('disabled')).toBeDefined()

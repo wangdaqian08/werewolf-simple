@@ -26,8 +26,8 @@ import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 
 /**
- * Integration coverage for the Black Wolf King (黑狼王) shot — the HUNTER_SHOOT flow
- * shared with the hunter — and the hunter ↔ king chain (docs/black-wolf-king.md).
+ * Integration coverage for the Black Wolf King (黑狼王) shot — the private on-death
+ * shot shared with the hunter — and the hunter ↔ king chain (docs/black-wolf-king.md).
  *
  * Setup mirrors HunterNightDeathShootIntegrationTest: park the game at "Day 2
  * morning, ready to reveal" with forced roles, then drive the real HTTP endpoints
@@ -216,7 +216,8 @@ class BlackWolfKingShootIntegrationTest {
         val room = setupRoom("BK1")
         val gameId = openDay2(room)
         voteOut(room, gameId, room.king)
-        assertThat(subPhase(gameId)).isEqualTo(VotingSubPhase.HUNTER_SHOOT.name)
+        assertThat(subPhase(gameId)).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+        assertThat(game(gameId).pendingShooterUserId).isEqualTo(room.king.userId)
 
         ok(room.king.token, gameId, "HUNTER_SHOOT", room.g4.userId)
 
@@ -232,7 +233,7 @@ class BlackWolfKingShootIntegrationTest {
         saveNight(gameId, wolfTarget = room.king.userId)
 
         reveal(room, gameId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
 
         ok(room.king.token, gameId, "HUNTER_SHOOT", room.g4.userId)
 
@@ -283,8 +284,8 @@ class BlackWolfKingShootIntegrationTest {
         ok(room.king.token, gameId, "HUNTER_SHOOT", room.hunter.userId)
 
         assertThat(alive(gameId, room.hunter.userId)).isFalse()
-        assertThat(subPhase(gameId)).isEqualTo(VotingSubPhase.HUNTER_SHOOT.name)
-        assertThat(game(gameId).chainShooterUserId).isEqualTo(room.hunter.userId)
+        assertThat(subPhase(gameId)).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+        assertThat(game(gameId).pendingShooterUserId).isEqualTo(room.hunter.userId)
         // The king already fired: a second shot from it is rejected.
         assertThat(action(room.king.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
             .isEqualTo(HttpStatus.BAD_REQUEST)
@@ -294,7 +295,7 @@ class BlackWolfKingShootIntegrationTest {
         assertThat(alive(gameId, room.g4.userId)).isFalse()
         assertThat(alive(gameId, room.g5.userId)).isTrue()
         assertThat(subPhase(gameId)).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
-        assertThat(game(gameId).chainShooterUserId).isNull()
+        assertThat(game(gameId).pendingShooterUserId).isNull()
     }
 
     @Test
@@ -304,7 +305,7 @@ class BlackWolfKingShootIntegrationTest {
         voteOut(room, gameId, room.hunter)
 
         ok(room.hunter.token, gameId, "HUNTER_SHOOT", room.king.userId)
-        assertThat(subPhase(gameId)).isEqualTo(VotingSubPhase.HUNTER_SHOOT.name)
+        assertThat(subPhase(gameId)).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
 
         ok(room.king.token, gameId, "HUNTER_SHOOT", room.g4.userId)
 
@@ -321,7 +322,7 @@ class BlackWolfKingShootIntegrationTest {
         reveal(room, gameId)
 
         ok(room.king.token, gameId, "HUNTER_SHOOT", room.hunter.userId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
         assertThat(action(room.king.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
             .isEqualTo(HttpStatus.BAD_REQUEST)
 
@@ -330,7 +331,7 @@ class BlackWolfKingShootIntegrationTest {
         assertThat(alive(gameId, room.hunter.userId)).isFalse()
         assertThat(alive(gameId, room.g4.userId)).isFalse()
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
-        assertThat(game(gameId).chainShooterUserId).isNull()
+        assertThat(game(gameId).pendingShooterUserId).isNull()
     }
 
     @Test
@@ -341,8 +342,8 @@ class BlackWolfKingShootIntegrationTest {
         reveal(room, gameId)
 
         ok(room.hunter.token, gameId, "HUNTER_SHOOT", room.king.userId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
-        assertThat(game(gameId).chainShooterUserId).isEqualTo(room.king.userId)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(game(gameId).pendingShooterUserId).isEqualTo(room.king.userId)
         assertThat(action(room.hunter.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
             .isEqualTo(HttpStatus.BAD_REQUEST)
 
@@ -351,7 +352,7 @@ class BlackWolfKingShootIntegrationTest {
         assertThat(alive(gameId, room.king.userId)).isFalse()
         assertThat(alive(gameId, room.g4.userId)).isFalse()
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
-        assertThat(game(gameId).chainShooterUserId).isNull()
+        assertThat(game(gameId).pendingShooterUserId).isNull()
     }
 
     @Test

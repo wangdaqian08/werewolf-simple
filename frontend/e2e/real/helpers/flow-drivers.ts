@@ -51,7 +51,7 @@ export interface DayPlan {
   /** Page of the player wearing the badge (needed when the vote executes the sheriff). */
   sheriffPage?: Page
   badgeRecipientSeat?: number
-  /** Resolves a VOTING/HUNTER_SHOOT sub-phase (vote executed the hunter). */
+  /** The voted-out HUNTER's private shot (none → the host continuing ends it). */
   hunterShootTargetSeat?: number
   /**
    * Engineered FIRST round: only these voters vote (their own targets; null =
@@ -771,7 +771,7 @@ export async function completeDay(
   //      tokens.
   //   4. Reveal tally via the host browser button. Break out once the backend
   //      leaves VOTING/RE_VOTING (i.e. landed on VOTE_RESULT / BADGE_HANDOVER
-  //      / HUNTER_SHOOT / post-elimination GAME_OVER).
+  //      / post-elimination GAME_OVER).
   for (let attempt = 0; attempt < 3; attempt++) {
     const expected = attempt === 0 ? 'VOTING' : 'RE_VOTING'
     const reached = await waitForVotingSubPhase(hostPage, gameId, expected, 15_000)
@@ -839,8 +839,8 @@ export async function completeDay(
       return topPhase
     }
 
-    // If the backend has left voting (VOTE_RESULT / BADGE_HANDOVER /
-    // HUNTER_SHOOT) or the top-level phase changed (e.g. GAME_OVER), stop.
+    // If the backend has left voting (VOTE_RESULT / BADGE_HANDOVER) or the
+    // top-level phase changed (e.g. GAME_OVER), stop.
     const leftVoting = await waitForVotingSubPhase(hostPage, gameId, 'VOTE_RESULT', 5_000)
     if (leftVoting) break
   }
@@ -857,27 +857,17 @@ export async function completeDay(
     return (await res.json())?.votingPhase?.subPhase ?? null
   }, gameId)
 
-  if (subPhaseAfterReveal === 'HUNTER_SHOOT') {
-    // The vote executed the HUNTER — the freshly eliminated hunter takes the
-    // revenge shot (alive-filter deliberately not applied: the actor is dead
-    // by definition of this sub-phase).
-    const hunterBot = (ctx.roleMap.HUNTER ?? [])[0]
-    if (!hunterBot) {
-      // eslint-disable-next-line no-console
-      console.warn('[completeDay] HUNTER_SHOOT fired but roleMap has no HUNTER — cannot resolve')
-    } else {
-      assertActorRole(ctx, hunterBot, 'HUNTER', 'HUNTER_SHOOT')
-      if (plan.hunterShootTargetSeat != null) {
-        tryAct('HUNTER_SHOOT', actName(hunterBot), {
-          target: String(plan.hunterShootTargetSeat),
-          room: ctx.roomCode,
-        })
-      } else {
-        tryAct('HUNTER_PASS', actName(hunterBot), { room: ctx.roomCode })
-      }
-      await waitForVotingSubPhase(hostPage, gameId, 'VOTE_RESULT', 10_000)
-      await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-hunter-shot-resolved`)
-    }
+  // The vote executed the HUNTER: its shot is private (the sub-phase stays
+  // VOTE_RESULT / BADGE_HANDOVER). Fire it when the plan says so; otherwise
+  // the host continuing ends it.
+  const hunterBot = (ctx.roleMap.HUNTER ?? [])[0]
+  if (plan.hunterShootTargetSeat != null && hunterBot && hunterBot.userId === targetUserId) {
+    assertActorRole(ctx, hunterBot, 'HUNTER', 'HUNTER_SHOOT')
+    tryAct('HUNTER_SHOOT', actName(hunterBot), {
+      target: String(plan.hunterShootTargetSeat),
+      room: ctx.roomCode,
+    })
+    await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-hunter-shot-resolved`)
   }
 
   if (subPhaseAfterReveal === 'BADGE_HANDOVER') {

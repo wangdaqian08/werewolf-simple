@@ -903,7 +903,7 @@ describe('VotingPhase — PK re-vote and badge heir rules', () => {
   })
 })
 
-describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
+describe('VotingPhase — private shot of the voted-out shooter', () => {
   const players: GamePlayer[] = [1, 2, 3].map((seat) => ({
     userId: `p${seat}`,
     nickname: `P${seat}`,
@@ -916,12 +916,11 @@ describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
     idiotRevealed: false,
   }))
 
-  // hunterUserId = who may fire now: the voted-out p2, or a chained shooter.
-  const mountHunterShoot = (
+  // canShoot is private: the backend sets it only on the shooter's own state
+  // (the voted-out p2, or a chained shooter).
+  const mountShot = (
     myUserId: string,
-    isHost = false,
-    tallyRevealed = true,
-    hunterUserId = 'p2',
+    { isHost = false, tallyRevealed = true, shooter = 'p2', subPhase = 'VOTE_RESULT' } = {},
   ) => {
     const pinia = createPinia()
     setActivePinia(pinia)
@@ -936,8 +935,9 @@ describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
         players,
         myUserId,
         isHost,
+        sheriffUserId: subPhase === 'BADGE_HANDOVER' ? 'p2' : null,
         votingPhase: {
-          subPhase: 'HUNTER_SHOOT',
+          subPhase,
           dayNumber: 2,
           phaseDeadline: 0,
           phaseStarted: 0,
@@ -958,63 +958,67 @@ describe('VotingPhase — voted-out hunter is exclusive to the hunter', () => {
           eliminatedPlayerId: 'p2',
           eliminatedNickname: 'P2',
           eliminatedSeatIndex: 2,
-          hunterUserId,
+          canShoot: myUserId === shooter,
         } as VotingState,
       },
     })
   }
 
   it('the shooter sees the shot banner and the shoot buttons', () => {
-    const wrapper = mountHunterShoot('p2')
+    const wrapper = mountShot('p2')
     expect(wrapper.find('[data-testid="voting-shoot-banner"]').text()).toContain('开枪')
     expect(wrapper.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="voting-hunter-pass"]').exists()).toBe(true)
   })
 
   // The hunter and the 黑狼王 share this screen: it must not tell which one fires.
-  it('the shoot screen names no role', () => {
-    const text = mountHunterShoot('p2').text()
+  it('the shoot screen names no role and warns the chance ends', () => {
+    const text = mountShot('p2').text()
     for (const word of ['猎人', 'Hunter', '狼王', 'Wolf King']) expect(text).not.toContain(word)
+    expect(text).toContain('主持人')
   })
 
   it('the chain shooter (not the voted-out player) gets the shoot buttons', async () => {
-    const shooter = mountHunterShoot('p3', false, true, 'p3')
+    const shooter = mountShot('p3', { shooter: 'p3' })
     expect(shooter.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(true)
     await shooter.find('.player-grid [data-seat="1"]').trigger('click')
     expect(shooter.emitted('selectPlayer')?.[0]).toEqual(['p1'])
 
-    const votedOut = mountHunterShoot('p2', false, true, 'p3')
+    const votedOut = mountShot('p2', { shooter: 'p3' })
     expect(votedOut.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(false)
   })
 
-  it('other players see no hunter wording at all', () => {
-    const wrapper = mountHunterShoot('p1')
-    expect(wrapper.text()).not.toContain('猎人')
-    expect(wrapper.text()).not.toContain('Hunter')
-    expect(wrapper.text()).not.toContain('开枪')
+  it('other players see no shot wording at all', () => {
+    const text = mountShot('p1').text()
+    for (const word of ['猎人', 'Hunter', '开枪']) expect(text).not.toContain(word)
   })
 
   it('other players keep seeing the normal vote result with the eliminated player', () => {
-    const wrapper = mountHunterShoot('p3')
+    const wrapper = mountShot('p3')
     expect(wrapper.find('.elim-banner-name').text()).toContain('P2')
     expect(wrapper.find('.vote-columns').exists()).toBe(true)
   })
 
-  it('the host sees no continue button and no hunter wording while the shot is pending', () => {
-    const wrapper = mountHunterShoot('p1', true)
-    expect(wrapper.find('[data-testid="voting-continue"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('猎人')
+  it('the host can continue at once (it ends an unused shot)', () => {
+    const wrapper = mountShot('p1', { isHost: true })
+    expect(wrapper.find('[data-testid="voting-continue"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('开枪')
   })
 
-  it('other players get no vote buttons even if the payload lacks tallyRevealed', () => {
-    const wrapper = mountHunterShoot('p3', false, false)
+  it('other players get no vote buttons on VOTE_RESULT even if the payload lacks tallyRevealed', () => {
+    const wrapper = mountShot('p3', { tallyRevealed: false })
     expect(wrapper.find('[data-testid="voting-vote"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="voting-skip"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('等待中')
   })
 
-  it('the hunter header shows only the day', () => {
-    const wrapper = mountHunterShoot('p2')
+  it('a voted-out sheriff who can shoot sees the shot before the badge handover', () => {
+    const wrapper = mountShot('p2', { subPhase: 'BADGE_HANDOVER' })
+    expect(wrapper.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="badge-handover-screen"]').exists()).toBe(false)
+  })
+
+  it('the shot header shows only the day', () => {
+    const wrapper = mountShot('p2')
     expect(wrapper.find('.day-pill').text().replace(/\s+/g, ' ').trim()).toBe('第 2 天')
   })
 })

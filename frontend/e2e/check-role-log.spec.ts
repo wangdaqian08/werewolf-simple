@@ -163,7 +163,7 @@ test('history panel closes when clicking overlay backdrop', async ({ page }) => 
   await expect(page.locator('.history-sheet')).not.toBeVisible()
 })
 
-test('non-hunter keeps the vote screen (with role-history row) during HUNTER_SHOOT', async ({
+test('non-shooter keeps the vote screen (with role-history row) while a voted-out shooter may shoot', async ({
                                                                                               page,
                                                                                             }) => {
   await goToVotingScenario(page, 'Hunter')

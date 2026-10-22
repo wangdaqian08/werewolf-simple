@@ -24,6 +24,8 @@ frontend/*.tsbuildinfo
 /console_log.md
 /simple-game-flow.md
 /minor-changes/
+/graphify-out/
+/tmp/
 /.claude/*
 !/.claude/skills/
 !/.claude/skills/**

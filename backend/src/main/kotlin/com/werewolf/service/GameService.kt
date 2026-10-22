@@ -4,7 +4,6 @@ import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
-import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.voting.TallyCalculator
 import com.werewolf.model.*
@@ -29,7 +28,6 @@ class GameService(
     private val eliminationHistoryRepository: EliminationHistoryRepository,
     private val audioReplayCache: AudioReplayCache,
     private val hostTimerService: HostTimerService,
-    private val dayRevealAdvancer: DayRevealAdvancer,
     private val creditTransactionRepository: CreditTransactionRepository,
     private val walletService: WalletService,
     private val perkService: PerkService,
@@ -206,13 +204,11 @@ class GameService(
 
         val dayPhase = if (game.phase == GamePhase.DAY_DISCUSSION) {
             val playerMap = players.associateBy { it.userId }
-            // Show the night deaths once the host reveals them and through every
-            // post-reveal sub-phase — the badge handover and the wolf-killed
-            // hunter's shot — so the death announcement stays visible until the
+            // Show the night deaths once the host reveals them and through the
+            // badge handover, so the death announcement stays visible until the
             // vote begins.
             val showNightResult = game.subPhase in setOf(
                 DaySubPhase.RESULT_REVEALED.name,
-                DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name,
                 DaySubPhase.BADGE_HANDOVER.name,
             )
             // Night kills come from NightPhase (EliminationHistory only tracks voting eliminations).
@@ -259,9 +255,8 @@ class GameService(
                 "nightResult"   to nightResult,
                 "selfDestruct"  to selfDestruct,
                 "canVote"       to (myPlayer != null && myPlayer.alive && myPlayer.canVote),
-                // The player who may fire during the day-reveal shot (wolf-killed or chained shooter).
-                "hunterUserId"  to (if (game.subPhase == DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
-                    dayRevealAdvancer.pendingShooterUserId(gameId) else null),
+                // Private: true only on the pending shooter's own state.
+                "canShoot"      to (game.pendingShooterUserId == requestingUserId),
             )
         } else null
 
@@ -276,7 +271,6 @@ class GameService(
 
             val tallyRevealed = game.subPhase in setOf(
                 VotingSubPhase.VOTE_RESULT.name,
-                VotingSubPhase.HUNTER_SHOOT.name,
                 VotingSubPhase.BADGE_HANDOVER.name,
             )
 
@@ -338,10 +332,8 @@ class GameService(
                 "eliminatedPlayerId" to elimHistory?.eliminatedUserId,
                 "eliminatedNickname" to eliminatedUser?.nickname,
                 "eliminatedSeatIndex" to eliminatedPlayer?.seatIndex,
-                "eliminatedRole" to elimHistory?.eliminatedRole?.name,
-                // The player who may fire now: a chained shooter, else the voted-out one.
-                "hunterUserId" to (if (game.subPhase == VotingSubPhase.HUNTER_SHOOT.name)
-                    game.chainShooterUserId ?: elimHistory?.eliminatedUserId else null),
+                // Private: true only on the pending shooter's own state.
+                "canShoot" to (game.pendingShooterUserId == requestingUserId),
                 "idiotRevealedId" to idiotRevealedPlayer?.userId,
                 "idiotRevealedNickname" to idiotRevealedUser?.nickname,
                 "idiotRevealedSeatIndex" to idiotRevealedPlayer?.seatIndex,

@@ -2,7 +2,6 @@ package com.werewolf.service
 
 import com.werewolf.dto.ActionLogEntryDto
 import com.werewolf.model.GameEvent
-import com.werewolf.model.PlayerRole
 import com.werewolf.model.Vote
 import com.werewolf.repository.GameEventRepository
 import com.werewolf.repository.GamePlayerRepository
@@ -47,7 +46,6 @@ class ActionLogService(
         tally: Map<String, Double>,
         sheriffUserId: String?,
         eliminatedUserId: String?,
-        eliminatedRole: PlayerRole?,
     ) {
         val allUserIds = (votes.map { it.voterUserId } +
                 votes.mapNotNull { it.targetUserId } +
@@ -92,7 +90,6 @@ class ActionLogService(
             "eliminatedUserId"    to eliminatedUserId,
             "eliminatedNickname"  to eliminatedUserId?.let { users[it]?.nickname ?: it },
             "eliminatedSeatIndex" to eliminatedUserId?.let { players[it]?.seatIndex },
-            "eliminatedRole"      to eliminatedRole?.name,
             "abstainCount"        to abstainVoters.size,
             "abstainVoters"       to abstainVoters,
         )

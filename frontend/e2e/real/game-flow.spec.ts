@@ -510,8 +510,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     await revealTallyBtn.click()
 
     // The reveal click should advance the voting sub-phase to VOTE_RESULT
-    // (or HUNTER_SHOOT / BADGE_HANDOVER if the eliminated player triggers
-    // those). Either way, the sub-phase changes from VOTING.
+    // (or BADGE_HANDOVER if the eliminated player was the sheriff). Either
+    // way, the sub-phase changes from VOTING.
     await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, 'VOTE_RESULT', 6_000)
 
     await captureSnapshot(ctx.pages, testInfo, '07-vote-tally')
@@ -642,8 +642,8 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     if (wolfPage && (await isVisibleSoon(wolfPage, 'wolf-confirm-kill'))) {
       // Target a known-safe seat, NOT just the first alive slot. `allTargets`
       // already excludes wolves and the host, and the HUNTER is its own role so
-      // it is never in that list — killing the hunter at night would trip #133's
-      // HUNTER_SHOOT_NIGHT_DEATH at reveal and stall this sequential flow-test
+      // it is never in that list — killing the hunter at night would open its
+      // private shot and change this sequential flow-test's deaths
       // (the night-death hunter path has its own spec). Fall back to first-alive
       // only if every safe target is already dead.
       const safeSeat = allTargets[0]?.seat
@@ -1056,9 +1056,9 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
     // where the wolf page's bot is dead but another wolf bot is alive.
     const wolfPage = ctx.pages.get('WEREWOLF')
     let wolfDone = false
-    // Never target the hunter at night (would trip #133's HUNTER_SHOOT_NIGHT_DEATH
-    // at reveal and stall this flow-test). Pick an alive non-wolf, non-host,
-    // non-hunter victim for both the DOM click and the API fallback below.
+    // Never target the hunter at night (its private shot would change this
+    // flow-test's deaths). Pick an alive non-wolf, non-host, non-hunter victim
+    // for both the DOM click and the API fallback below.
     const wolfIds = new Set((ctx.roleMap.WEREWOLF ?? []).map((w) => w.userId))
     const hunterIds = new Set((ctx.roleMap.HUNTER ?? []).map((h) => h.userId))
     const safeVictim = ctx.allBots.find(
