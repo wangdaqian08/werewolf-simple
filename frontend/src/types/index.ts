@@ -265,6 +265,8 @@ export type ReviewDayEvent =
   | { type: 'HUNTER_SHOT'; hunter: ReviewPlayer; target: ReviewPlayer }
   | { type: 'SELF_DESTRUCT'; player: ReviewPlayer; taken: ReviewPlayer | null }
   | { type: 'IDIOT_REVEAL'; player: ReviewPlayer }
+  /** to = null: the badge was destroyed */
+  | { type: 'BADGE_HANDOVER'; from: ReviewPlayer; to: ReviewPlayer | null }
 
 export interface ReviewRound {
   day: number
@@ -307,6 +309,7 @@ export type PlayerRole =
   | 'GUARD'
   | 'IDIOT'
   | 'WHITE_WOLF_KING'
+  | 'BLACK_WOLF_KING'
 
 export interface GamePlayer {
   userId: string
@@ -588,7 +591,9 @@ export interface VotingState {
   idiotRevealedId?: string
   idiotRevealedNickname?: string
   idiotRevealedSeatIndex?: number
-  // HUNTER_SHOOT — hunter's selected target
+  // HUNTER_SHOOT — who may fire now (HUNTER or BLACK_WOLF_KING: the voted-out
+  // player, or a chained shooter they shot) and their selected target
+  hunterUserId?: string
   hunterSelectedId?: string
   // BADGE_HANDOVER + BADGE_RECEIVED
   badgeTargetId?: string
@@ -651,6 +656,7 @@ export interface ActionLogEntry {
     | 'IDIOT_REVEAL'
     | 'SHERIFF_RESULT'
     | 'SELF_DESTRUCT'
+    | 'BADGE_HANDOVER'
   message: string // raw JSON — parse per eventType
   targetUserId: string | null
   createdAt: string | null

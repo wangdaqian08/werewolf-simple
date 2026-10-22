@@ -38,15 +38,14 @@ const chips = computed(() => {
 
   const out: Array<{ id: string; nameZh: string; emoji: string; count: number }> = []
 
-  // 白狼王 takes one of the wolfCount seats.
-  const king = props.roles.includes('WHITE_WOLF_KING')
-    ? roleDefinition('WHITE_WOLF_KING')
-    : undefined
+  // A wolf king (白狼王 / 黑狼王) takes one of the wolfCount seats.
+  const kings = ROLE_DEFINITIONS.filter((d) => !d.required && d.wolf && props.roles.includes(d.id))
   const wolf = roleDefinition('WEREWOLF')
-  const plainWolves = props.wolfCount - (king ? 1 : 0)
+  const plainWolves = props.wolfCount - kings.length
   if (wolf && plainWolves > 0)
     out.push({ id: wolf.id, nameZh: wolf.nameZh, emoji: wolf.emoji, count: plainWolves })
-  if (king) out.push({ id: king.id, nameZh: king.nameZh, emoji: king.emoji, count: 1 })
+  for (const king of kings)
+    out.push({ id: king.id, nameZh: king.nameZh, emoji: king.emoji, count: 1 })
 
   for (const def of ROLE_DEFINITIONS) {
     if (GOD_IDS.has(def.id) && enabledGods.includes(def.id)) {

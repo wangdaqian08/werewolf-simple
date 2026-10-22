@@ -20,7 +20,7 @@
       <div class="role-emoji">{{ meta.emoji }}</div>
       <div class="role-name-zh">{{ meta.nameZh }}</div>
       <div :class="`role-label-${meta.team}`" class="role-label">{{ meta.nameEn }}</div>
-      <p class="role-desc">{{ meta.description }}</p>
+      <p class="role-desc" data-testid="role-reveal-desc">{{ meta.description }}</p>
 
       <!-- Werewolf teammates -->
       <div v-if="teammates.length > 0" class="role-teammates">
@@ -131,6 +131,14 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
     emoji: '👑',
     team: 'wolf',
     description: '夜晚与狼队一起袭击。白天自爆时，可选择带走一名玩家。',
+  },
+  BLACK_WOLF_KING: {
+    nameZh: '黑狼王',
+    nameEn: 'BLACK WOLF KING',
+    emoji: '🖤',
+    team: 'wolf',
+    description:
+      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
   },
 }
 

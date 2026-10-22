@@ -137,6 +137,7 @@ export function buildVotingPhaseState(
     tally,
     eliminatedPlayerId:
       subPhase === 'VOTE_RESULT' || subPhase === 'HUNTER_SHOOT' ? 'u3' : undefined,
+    hunterUserId: subPhase === 'HUNTER_SHOOT' ? 'u3' : undefined,
     eliminatedNickname: 'Carol',
     eliminatedSeatIndex: 3,
     eliminatedAvatar: '🐰',

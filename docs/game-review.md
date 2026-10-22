@@ -17,7 +17,7 @@ They also make the AI layer cheaper and more accurate later.
     - every night: wolf target, seer check and result, witch save and poison,
       guard target (`NightPhase` rows)
     - every vote: who voted for whom, on which day, including sheriff votes
-    - eliminations, hunter shots, self-destructs, sheriff results (action log)
+    - eliminations, hunter shots, self-destructs, sheriff results, badge handovers (action log)
     - each player's real role, shown at game end
 - What the game does **not** know:
     - what anyone **said**

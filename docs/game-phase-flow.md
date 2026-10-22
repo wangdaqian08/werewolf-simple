@@ -16,9 +16,13 @@ full game across **Night 1 → Day 1 (with sheriff election) → Night 2 → Day
    alive in DB so they can sign up / speak / vote / 上警.
 2. **Deferred kills**: Night 1 kills are *computed* at end of N1 but only
    *applied* when the host clicks REVEAL_NIGHT_RESULT.
-3. **Night-killed players have no last action**: sheriff killed at night
-   → badge silently disappears (no BADGE_HANDOVER); hunter killed at
-   night → just dies (no HUNTER_SHOOT). Last actions only on **vote-out**.
+3. **Night-killed players keep their last action** (reversed 2026-05-22,
+   see `DayRevealAdvancer`): at the host's reveal, a wolf-killed (not
+   poisoned) shooter — HUNTER or BLACK_WOLF_KING — fires first via
+   `DAY_DISCUSSION / HUNTER_SHOOT_NIGHT_DEATH`, then a dead sheriff hands the
+   badge over via `DAY_DISCUSSION / BADGE_HANDOVER`. A shooter killed by a
+   shot fires next in the same sub-phase (hunter ↔ 黑狼王 chain,
+   `games.chain_shooter_user_id`); see `docs/black-wolf-king.md`.
 4. **Sheriff election is once-per-game**, only on Day 1. Subsequent days
    skip it and go straight to DAY_DISCUSSION/RESULT_HIDDEN.
 
@@ -35,10 +39,10 @@ full game across **Night 1 → Day 1 (with sheriff election) → Night 2 → Day
      N1 -->|"Day 1 + hasSheriff<br/>kills DEFERRED"| SE["SHERIFF_ELECTION<br/>SIGNUP → SPEECH → VOTING → RESULT"]
  
      SE -->|"host clicks 显示结果 (SHERIFF_END_RESULT)"| DH1["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 1"]
-     DH1 -->|"host REVEAL_NIGHT_RESULT<br/>kills APPLIED"| DR1["DAY_DISCUSSION / RESULT_REVEALED<br/>Day 1"]
+     DH1 -->|"host REVEAL_NIGHT_RESULT<br/>kills APPLIED"| DR1["DAY_DISCUSSION / RESULT_REVEALED<br/>Day 1<br/>(after HUNTER_SHOOT_NIGHT_DEATH /<br/>BADGE_HANDOVER if pending)"]
      DR1 -->|"host dayAdvance"| DV1["DAY_VOTING<br/>VOTING → VOTE_RESULT"]
  
-     DV1 -->|"voted-out HUNTER"| HS1["DAY_VOTING / HUNTER_SHOOT<br/>vote-out path only"]
+     DV1 -->|"voted-out HUNTER / 黑狼王"| HS1["DAY_VOTING / HUNTER_SHOOT<br/>(+ chained shooter)"]
      DV1 -->|"voted-out sheriff"| BH1["DAY_VOTING / BADGE_HANDOVER<br/>vote-out path only"]
      HS1 -->|"hunter shot sheriff"| BH1
      HS1 -->|"shot/pass → VOTE_RESULT → host 进入夜晚"| N2["NIGHT D2+"]
@@ -50,7 +54,7 @@ full game across **Night 1 → Day 1 (with sheriff election) → Night 2 → Day
     N2 -->|"Day 2+ — no sheriff election"| DH2["DAY_DISCUSSION / RESULT_HIDDEN<br/>Day 2+"]
     DH2 -->|"host REVEAL_NIGHT_RESULT"| DR2["DAY_DISCUSSION / RESULT_REVEALED<br/>Day 2+"]
     DR2 -->|"host dayAdvance"| DV2["DAY_VOTING D2+"]
-    DV2 -->|"voted-out HUNTER"| HS2["DAY_VOTING / HUNTER_SHOOT"]
+    DV2 -->|"voted-out HUNTER / 黑狼王"| HS2["DAY_VOTING / HUNTER_SHOOT"]
     DV2 -->|"voted-out sheriff"| BH2["DAY_VOTING / BADGE_HANDOVER"]
     HS2 -->|"hunter shot sheriff"| BH2
     HS2 -->|"shot/pass → VOTE_RESULT → host 进入夜晚"| N2
@@ -76,11 +80,11 @@ full game across **Night 1 → Day 1 (with sheriff election) → Night 2 → Day
 | `DAY_DISCUSSION/RESULT_HIDDEN → /RESULT_REVEALED` | `GamePhasePipeline.kt:39-85` | Host clicks reveal; kills applied here |
 | `NIGHT → DAY_DISCUSSION/RESULT_HIDDEN` (Day 2+) | `NightOrchestrator.kt:355-408` | Day 2+, no sheriff election |
 | `NIGHT → GAME_OVER` | `NightOrchestrator.kt:286-321` | Win check (CLASSIC 屠边 / HARD_MODE) on projected alive |
-| **`NIGHT-kill sheriff` does NOT go through BADGE_HANDOVER** | `GamePhasePipeline.kt:69` | Post-revert: always `RESULT_REVEALED` regardless of who died |
-| **`NIGHT-kill hunter` does NOT go through HUNTER_SHOOT** | `GamePhasePipeline.kt:69` | Same |
-| `Vote-out sheriff` → `DAY_VOTING/BADGE_HANDOVER` | `VotingPipeline.kt:handleBadge` | Vote-out path only |
-| `Vote-out hunter` → `DAY_VOTING/HUNTER_SHOOT` | `VotingPipeline.kt:handleHunterShoot` | Vote-out path only |
-| `HUNTER_SHOOT` (non-sheriff shot/pass) → `DAY_VOTING/VOTE_RESULT` | `VotingPipeline.kt:afterHunterAct` | Pause for the victim's last words; host `VOTING_CONTINUE` → night (never auto-night) |
+| `NIGHT-kill shooter` → `DAY_DISCUSSION/HUNTER_SHOOT_NIGHT_DEATH` | `DayRevealAdvancer.nextSubPhase` | Wolf-killed, not poisoned HUNTER / BLACK_WOLF_KING; shot first |
+| `NIGHT-kill sheriff` → `DAY_DISCUSSION/BADGE_HANDOVER` | `DayRevealAdvancer.nextSubPhase` | After any pending shot; then `RESULT_REVEALED` |
+| `Vote-out sheriff` → `DAY_VOTING/BADGE_HANDOVER` | `VotingPipeline.kt:handleBadge` | |
+| `Vote-out shooter` → `DAY_VOTING/HUNTER_SHOOT` | `VotingPipeline.kt:handleHunterShoot` | HUNTER or BLACK_WOLF_KING; a shot shooter fires next (chain) |
+| `HUNTER_SHOOT` (shot/pass, chain done) → `DAY_VOTING/VOTE_RESULT` | `VotingPipeline.kt:afterHunterAct` | A dead sheriff hands over first; then pause for last words; host `VOTING_CONTINUE` → night (never auto-night) |
 
 ---
 
@@ -181,5 +185,5 @@ opening a PR that updates this file.
 1. **Day-1 morning audio plays after a small silence pause**, not back-to-back with `guard_close_eyes`. The pause separates "night ended" from "campaign begins" semantically. Implemented as a server-side `delay(sheriffMorningCueDelayMs)` between the `PhaseChanged` and `AudioSequence` broadcasts (see `NightOrchestrator.resolveNightKills` SHERIFF_ELECTION branch).
 2. **A night-1 wolf-win GAME_OVER plays no morning audio.** Game ends in the dark; the night-init / role-loop audio remains the only night audio that played.
 3. **`SHERIFF_ELECTION → DAY_DISCUSSION` is silent.** No "campaign closed" jingle. The morning cue already played at SHERIFF_ELECTION entry, and DAY_DISCUSSION on Day 1 is just the host walking players through the result-reveal click.
-4. **`DAY_VOTING/*` is the only place BADGE_HANDOVER and HUNTER_SHOOT fire.** Night kills go straight to `DAY_DISCUSSION/RESULT_REVEALED`; the badge silently disappears, the hunter just dies. Last actions only on **vote-out**, when the player still has agency at the moment of elimination.
+4. ~~`DAY_VOTING/*` is the only place BADGE_HANDOVER and HUNTER_SHOOT fire.~~ **Superseded (2026-05-22):** night kills also get their last action at the reveal — `DAY_DISCUSSION/HUNTER_SHOOT_NIGHT_DEATH` (shot first), then `DAY_DISCUSSION/BADGE_HANDOVER`. See rule 3 above.
 5. **Sheriff election is one-shot per game (Day 1 only).** If the sheriff is voted out / killed and the badge is destroyed, no re-election happens.

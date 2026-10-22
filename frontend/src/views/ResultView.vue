@@ -104,6 +104,7 @@ const ROLE_ZH: Record<string, string> = {
   GUARD: '守卫',
   IDIOT: '白痴',
   WHITE_WOLF_KING: '白狼王',
+  BLACK_WOLF_KING: '黑狼王',
 }
 
 function displayName(player: { userId: string; nickname: string }): string {

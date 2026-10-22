@@ -141,7 +141,7 @@ test('history panel shows hunter-shot banner for day 1', async ({ page }) => {
   await page.locator('.history-btn').click()
   const sheet = page.locator('.history-sheet')
   // Hunter shot Alice
-  await expect(sheet).toContainText('猎人开枪')
+  await expect(sheet).toContainText('开枪 · 座位')
   await expect(sheet).toContainText('Alice')
   await expect(sheet).toContainText('狼人')
 })
@@ -170,7 +170,7 @@ test('non-hunter keeps the vote screen (with role-history row) during HUNTER_SHO
   // Only the voted-out hunter gets the shoot screen; everyone else (the mock
   // viewer u1 here) stays on the vote screen so the hunter's role stays private.
   await expect(page.locator('.role-history-row')).toBeVisible()
-  await expect(page.getByText('猎人出局')).toHaveCount(0)
+  await expect(page.getByTestId('voting-shoot-banner')).toHaveCount(0)
   await expect(page.getByTestId('voting-vote')).toHaveCount(0)
 })
 
@@ -217,7 +217,7 @@ test('hunter-shot banner absent for Day 3 (no hunter shot in that round)', async
   // Rounds are reversed — Day 3 is first in the DOM
   const day3 = page.locator('.history-round').first()
   await expect(day3).toContainText('第 3 天')
-  await expect(day3).not.toContainText('猎人开枪')
+  await expect(day3).not.toContainText('开枪 · 座位')
 })
 
 // ── HIGH: History button hidden / row absent when data is missing ─────────────
@@ -359,7 +359,7 @@ test('hunter-shot banner shows 村民 for Day 2 (Grace is VILLAGER)', async ({ p
   // Reversed order: Day3 first, Day2 second
   const day2 = page.locator('.history-round').nth(1)
   await expect(day2).toContainText('第 2 天')
-  await expect(day2).toContainText('猎人开枪')
+  await expect(day2).toContainText('开枪 · 座位')
   await expect(day2).toContainText('Grace')
   await expect(day2).toContainText('村民') // VILLAGER role translated
 })

@@ -24,9 +24,10 @@ type GameStateMinimal = {
   votingPhase?: { subPhase?: string } | null
   dayPhase?: { subPhase?: string } | null
   sheriffElection?: { subPhase?: string } | null
+  players?: { seatIndex?: number; isAlive?: boolean }[]
 }
 
-async function fetchGameState(hostPage: Page, gameId: string): Promise<GameStateMinimal | null> {
+export async function fetchGameState(hostPage: Page, gameId: string): Promise<GameStateMinimal | null> {
   return hostPage.evaluate(async (id: string) => {
     const token = localStorage.getItem('jwt')
     if (!token) return null

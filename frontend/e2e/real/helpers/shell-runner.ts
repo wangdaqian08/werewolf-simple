@@ -51,6 +51,7 @@ export type RoleName =
   | 'IDIOT'
   | 'VILLAGER'
   | 'WHITE_WOLF_KING'
+  | 'BLACK_WOLF_KING'
 
 export type RoleMap = Partial<Record<RoleName, BotInfo[]>>
 
@@ -297,7 +298,7 @@ export function getRoles(roomCode: string): RoleMap {
 
   // Parse each "seat  N  NICK  ROLE" line
   for (const line of output.split('\n')) {
-    const m = line.match(/seat\s+(\d+)\s+(\S+)\s+\b(WEREWOLF|SEER|WITCH|GUARD|HUNTER|IDIOT|VILLAGER|WHITE_WOLF_KING)\b/)
+    const m = line.match(/seat\s+(\d+)\s+(\S+)\s+\b(WEREWOLF|SEER|WITCH|GUARD|HUNTER|IDIOT|VILLAGER|WHITE_WOLF_KING|BLACK_WOLF_KING)\b/)
     if (!m) continue
     const [, seatStr, nick, role] = m
     const seat = parseInt(seatStr, 10)

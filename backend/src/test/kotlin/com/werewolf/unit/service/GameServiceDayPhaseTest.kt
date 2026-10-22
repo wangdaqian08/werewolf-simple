@@ -7,7 +7,6 @@ import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.timer.TimerSnapshot
 import com.werewolf.model.*
 import com.werewolf.repository.*
-import com.werewolf.service.AudioService
 import com.werewolf.service.GameService
 import com.werewolf.service.SheriffService
 import com.werewolf.service.StompPublisher
@@ -195,7 +194,7 @@ class GameServiceDayPhaseTest {
         val players = listOf(player(hostId, 0), player("u2", 1))
         val users = listOf(user(hostId, "Host"), user("u2", "Hunter"))
         setupGameAndPlayers(game(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name), players, users)
-        whenever(dayRevealAdvancer.pendingHunterUserId(gameId)).thenReturn("u2")
+        whenever(dayRevealAdvancer.pendingShooterUserId(gameId)).thenReturn("u2")
 
         val dayPhase = dayResult(gameService.getGameState(gameId, hostId))
 

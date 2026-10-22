@@ -10,12 +10,20 @@ export interface RoleDefinition {
 export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   { id: 'WEREWOLF', nameZh: '狼人', nameEn: 'Werewolf', emoji: '🐺', required: true, wolf: true },
   { id: 'VILLAGER', nameZh: '村民', nameEn: 'Villager', emoji: '🧑‍🌾', required: true },
-  // Takes one of the wolf seats (not a god seat).
+  // Kings take one of the wolf seats (not a god seat); at most one king per room.
   {
     id: 'WHITE_WOLF_KING',
     nameZh: '白狼王',
     nameEn: 'White Wolf King',
     emoji: '👑',
+    required: false,
+    wolf: true,
+  },
+  {
+    id: 'BLACK_WOLF_KING',
+    nameZh: '黑狼王',
+    nameEn: 'Black Wolf King',
+    emoji: '🖤',
     required: false,
     wolf: true,
   },

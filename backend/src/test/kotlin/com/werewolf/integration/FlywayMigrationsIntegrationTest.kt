@@ -167,5 +167,31 @@ class FlywayMigrationsIntegrationTest {
         }
     }
 
+    @Test
+    fun `V26 stores BLACK_WOLF_KING roles, the room flag and the chain shooter`() {
+        flyway().migrate()
 
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('host', 'host'), ('k', 'k'), ('h', 'h')")
+            exec("INSERT INTO rooms (room_id, room_code, host_user_id, total_players, has_black_wolf_king) VALUES (1, '101', 'host', 9, TRUE)")
+            exec(
+                "INSERT INTO games (game_id, room_id, host_user_id, phase, day_number, chain_shooter_user_id) " +
+                        "VALUES (1, 1, 'host', 'DAY_VOTING', 1, 'h')"
+            )
+            exec("INSERT INTO game_players (game_id, user_id, seat_index, role) VALUES (1, 'k', 1, 'BLACK_WOLF_KING'), (1, 'h', 2, 'HUNTER')")
+            exec(
+                "INSERT INTO elimination_history (game_id, day_number, eliminated_user_id, eliminated_role, hunter_shot_user_id, hunter_shot_role) " +
+                        "VALUES (1, 1, 'k', 'BLACK_WOLF_KING', 'h', 'BLACK_WOLF_KING')"
+            )
+            // Old rooms keep working: the flag defaults to FALSE.
+            exec("INSERT INTO rooms (room_id, room_code, host_user_id, total_players) VALUES (2, '102', 'host', 9)")
+            val flag = createStatement().use { st ->
+                st.executeQuery("SELECT has_black_wolf_king FROM rooms WHERE room_id = 2").use { rs -> rs.next(); rs.getBoolean(1) }
+            }
+            assertThat(flag).isFalse()
+        }
+        // The role CHECK still rejects unknown roles.
+        assertThatThrownBy { sql { exec("INSERT INTO game_players (game_id, user_id, seat_index, role) VALUES (1, 'host', 3, 'NOT_A_ROLE')") } }
+            .hasMessageContaining("game_players_role_check")
+    }
 }

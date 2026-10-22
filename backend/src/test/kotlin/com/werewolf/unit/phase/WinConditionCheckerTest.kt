@@ -260,4 +260,18 @@ class WinConditionCheckerTest {
         )
         assertThat(result).isNull()
     }
+
+    // A hunter only shoots once dead, so a living hunter always holds the bullet —
+    // whatever other shots (e.g. a BLACK_WOLF_KING's) the game has seen.
+    @Test
+    fun `HardModeCounterplay of - a living hunter always holds the bullet`() {
+        val counterplay = HardModeCounterplay.of(listOf(player("h", 1, PlayerRole.HUNTER), wolf(2)), emptyList())
+        assertThat(counterplay.hasHunterWithBullet).isTrue()
+    }
+
+    @Test
+    fun `HardModeCounterplay of - a living BLACK_WOLF_KING is no good-side counterplay`() {
+        val counterplay = HardModeCounterplay.of(listOf(player("k", 1, PlayerRole.BLACK_WOLF_KING), villager(2)), emptyList())
+        assertThat(counterplay.any).isFalse()
+    }
 }

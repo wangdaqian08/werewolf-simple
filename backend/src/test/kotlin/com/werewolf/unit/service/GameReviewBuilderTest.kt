@@ -222,6 +222,8 @@ class GameReviewBuilderTest {
         event("SELF_DESTRUCT", mapOf("dayNumber" to day, "userId" to userId) + (taken?.let { mapOf("takenUserId" to it) } ?: emptyMap()))
 
     private fun idiotReveal(day: Int, userId: String) = event("IDIOT_REVEAL", mapOf("dayNumber" to day, "userId" to userId))
+    private fun badgeHandover(day: Int, from: String, to: String?) =
+        event("BADGE_HANDOVER", mapOf("dayNumber" to day, "fromUserId" to from, "toUserId" to to))
 
     private fun votes(review: GameReview, day: Int) =
         review.rounds.first { it.day == day }.events.filterIsInstance<ReviewDayEvent.Vote>()
@@ -329,6 +331,20 @@ class GameReviewBuilderTest {
             ReviewDayEvent.SelfDestruct(ref("king"), taken = ref("seer")),
             ReviewDayEvent.SelfDestruct(ref("w2"), taken = null),
         )
+    }
+
+    @Test
+    fun `a badge handover names the old and new sheriff, a destroyed badge has none`() {
+        val review = build(board(), listOf(night(1), night(2)), listOf(
+            voteResult(1, mapOf("seer" to listOf("w1", "w2")), eliminated = "seer"),
+            badgeHandover(1, "seer", "witch"),
+            badgeHandover(2, "witch", null),
+        ))
+
+        assertThat(review.rounds.first { it.day == 1 }.events[1])
+            .isEqualTo(ReviewDayEvent.BadgeHandover(ref("seer"), ref("witch")))
+        assertThat(review.rounds.first { it.day == 2 }.events)
+            .containsExactly(ReviewDayEvent.BadgeHandover(ref("witch"), to = null))
     }
 
     @Test

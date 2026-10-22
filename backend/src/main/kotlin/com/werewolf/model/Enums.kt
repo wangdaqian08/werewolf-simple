@@ -18,11 +18,13 @@ enum class GamePhase {
 
 // isWolf = wolf camp: wakes with the wolves, seer sees "wolf", counts as a wolf for win checks.
 // isGod = 神职: every good-camp role except the plain villager (the 屠边 "gods" side).
+// shootsOnDeath = fires one shot when killed (not poisoned) — the shared HUNTER_SHOOT flow.
 enum class PlayerRole(val isWolf: Boolean = false) {
     WEREWOLF(isWolf = true), VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT,
-    WHITE_WOLF_KING(isWolf = true);
+    WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true);
 
     val isGod: Boolean get() = !isWolf && this != VILLAGER
+    val shootsOnDeath: Boolean get() = this == HUNTER || this == BLACK_WOLF_KING
 }
 
 

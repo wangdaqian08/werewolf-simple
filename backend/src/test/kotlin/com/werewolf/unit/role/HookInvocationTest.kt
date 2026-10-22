@@ -97,7 +97,6 @@ class HookInvocationTest {
         gamePlayerRepository = gamePlayerRepository,
         nightPhaseRepository = nightPhaseRepository,
         sheriffElectionRepository = mock(),
-        eliminationHistoryRepository = eliminationHistoryRepository,
         winConditionChecker = winConditionChecker,
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,

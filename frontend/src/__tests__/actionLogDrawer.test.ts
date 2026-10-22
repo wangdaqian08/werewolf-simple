@@ -131,3 +131,44 @@ describe('ActionLogDrawer — 白狼王 take', () => {
     wrapper.unmount()
   })
 })
+
+describe('ActionLogDrawer — shots (hunter / 黑狼王)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  const shot = (shooterSeat: number, shooter: string, targetSeat: number, target: string) =>
+    makeEntry('HUNTER_SHOT', {
+      dayNumber: 2,
+      hunterUserId: `u-${shooter}`,
+      hunterNickname: shooter,
+      hunterSeatIndex: shooterSeat,
+      targetUserId: `u-${target}`,
+      targetNickname: target,
+      targetSeatIndex: targetSeat,
+    })
+
+  it('a chain renders both shots of the day, without naming the shooter role', async () => {
+    vi.mocked(gameService.getActionLog).mockResolvedValue([
+      shot(2, 'King', 1, 'Hank'),
+      shot(1, 'Hank', 4, 'Dora'),
+    ])
+    const wrapper = mount(ActionLogDrawer, {
+      props: { gameId: 42, open: false },
+      attachTo: document.body,
+    })
+    await wrapper.setProps({ open: true })
+    await new Promise((r) => setTimeout(r, 0))
+    await wrapper.vm.$nextTick()
+
+    // Spans render without spaces in happy-dom; compare with whitespace stripped.
+    const rows = [...document.body.querySelectorAll('[data-testid="log-shot-row"]')].map((el) =>
+      el.textContent?.replace(/\s+/g, ''),
+    )
+    expect(rows).toEqual(['2号King→击中1号Hank', '1号Hank→击中4号Dora'])
+    expect(document.body.textContent).toContain('🔫 开枪')
+    expect(document.body.textContent).not.toContain('猎人')
+    wrapper.unmount()
+  })
+})

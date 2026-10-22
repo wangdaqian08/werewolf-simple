@@ -30,6 +30,26 @@ describe('RoleComposition', () => {
     expect(wrapper.find('[data-role="WHITE_WOLF_KING"]').classes()).toContain('chip-wolf')
   })
 
+  it('shows 黑狼王 as one of the wolf seats, not a god', () => {
+    const wrapper = mount(RoleComposition, {
+      props: {
+        totalPlayers: 12,
+        wolfCount: 4,
+        roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER', 'GUARD', 'BLACK_WOLF_KING'],
+      },
+    })
+    expect(chipMap(wrapper)).toEqual({
+      WEREWOLF: 3,
+      BLACK_WOLF_KING: 1,
+      SEER: 1,
+      WITCH: 1,
+      HUNTER: 1,
+      GUARD: 1,
+      VILLAGER: 4,
+    })
+    expect(wrapper.find('[data-role="BLACK_WOLF_KING"]').classes()).toContain('chip-wolf')
+  })
+
   it('renders 6p Classic-ish: 2 wolves + Seer + Witch + 2 villagers', () => {
     const wrapper = mount(RoleComposition, {
       props: {

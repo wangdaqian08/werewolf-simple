@@ -1,0 +1,606 @@
+/**
+ * Black Wolf King (黑狼王) — every seat in its own browser, five real games.
+ *
+ *  0. Create room: one wolf king per room, 9+ players only.
+ *  1. Happy: wolves knife the king → the king shoots the hunter → the hunter
+ *     shoots a villager → the day vote ends the game → result + review.
+ *  2. The king is voted out and shoots the seer (a god) → night 2 still plays
+ *     the dead seer's cues → the wolves win at night → review.
+ *  3. The hunter is voted out and shoots the king → the king fires back and
+ *     its shot decides the game → review shows both shots.
+ *  4. Edge: the witch poisons the king → no shot at the reveal.
+ *  5. Edge: the king self-destructs (自爆) → no shot, no take.
+ *
+ * Every action is a DOM click in the acting player's own browser. Each
+ * milestone writes a 9-seat composite to test-results/bwk/<test>/.
+ */
+import {
+  type Browser,
+  type BrowserContext,
+  expect,
+  type Page,
+  test,
+  type TestInfo,
+} from '@playwright/test'
+import { mkdirSync } from 'fs'
+import path from 'path'
+import { type GameContext, setupGame } from './helpers/multi-browser'
+import { getConsoleLogin, type RoleName } from './helpers/shell-runner'
+import { driveMinimalNight1ViaDom } from './helpers/night-driver'
+import { takeCompositeScreenshot } from './helpers/composite-screenshot'
+import {
+  fetchGameState,
+  waitForCondition,
+  waitForDaySkipVoting,
+  waitForDaySubPhase,
+  waitForNightSubPhase,
+  waitForPhase,
+  waitForVotingSubPhase,
+} from './helpers/state-polling'
+import {
+  type AudioCapture,
+  attachAudioCapture,
+  countStompAudioFiles,
+  extractPerNightRoleAudio,
+  NIGHT_ROLE_ORDER,
+} from './helpers/audio-manifest'
+import { readBackendLogLineCount, readBackendLogSince } from './helpers/backend-log'
+
+const BASE_URL = 'http://localhost:5174'
+// Set BWK_SHOTS_DIR to keep shots: Playwright wipes test-results/ on every run.
+const SHOTS = process.env.BWK_SHOTS_DIR ?? path.join('test-results', 'bwk')
+const scale = (ms: number): number => (process.env.CI ? ms * 2 : ms)
+const ROLES: RoleName[] = [
+  'WEREWOLF',
+  'VILLAGER',
+  'BLACK_WOLF_KING',
+  'SEER',
+  'WITCH',
+  'GUARD',
+  'HUNTER',
+]
+// Words that would tell a non-shooter who is shooting.
+const ROLE_WORDS = ['猎人', 'Hunter', 'HUNTER', '黑狼王', 'Wolf King', 'WOLF KING']
+const KING_RULE = '被女巫毒死或自爆时无法开枪'
+
+interface Table {
+  ctx: GameContext
+  seatPage: Map<number, Page>
+  seatRole: Map<number, RoleName>
+  /** `S<seat>-<ROLE>` → page, for composites. */
+  labeled: Map<string, Page>
+  extra: BrowserContext[]
+  /** STOMP audio receipts on one villager's browser. */
+  audio: AudioCapture
+  dir: string
+  logStart: number
+}
+
+let table: Table | undefined
+
+test.afterEach(async () => {
+  for (const c of table?.extra ?? []) await c.close().catch(() => {})
+  await table?.ctx.cleanup()
+  table = undefined
+})
+
+/** setupGame, then one browser per remaining seat. ctx.pages gets one page per role. */
+async function setupTable(browser: Browser, testInfo: TestInfo): Promise<Table> {
+  const logStart = readBackendLogLineCount()
+  const ctx = await setupGame(browser, {
+    totalPlayers: 9,
+    hasSheriff: false,
+    roles: ROLES,
+    browserRoles: [],
+  })
+  const seatPage = new Map<number, Page>()
+  const seatRole = new Map<number, RoleName>()
+  const extra: BrowserContext[] = []
+  for (const [role, bots] of Object.entries(ctx.roleMap) as [
+    RoleName,
+    { nick: string; seat: number }[],
+  ][]) {
+    for (const bot of bots) {
+      seatRole.set(bot.seat, role)
+      if (bot.nick === 'Host') {
+        seatPage.set(bot.seat, ctx.hostPage)
+        continue
+      }
+      const creds = getConsoleLogin(bot.nick, ctx.roomCode)
+      const c = await browser.newContext({ viewport: { width: 417, height: 800 } })
+      extra.push(c)
+      const page = await c.newPage()
+      await page.goto(`${BASE_URL}/`)
+      await page.evaluate((cr) => {
+        localStorage.setItem('jwt', cr.jwt)
+        localStorage.setItem('nickname', cr.nickname)
+        localStorage.setItem('userId', cr.userId)
+      }, creds)
+      await page.goto(`${BASE_URL}/game/${ctx.gameId}`)
+      await page.locator('.game-wrap').waitFor({ state: 'visible', timeout: 15_000 })
+      seatPage.set(bot.seat, page)
+    }
+  }
+  expect(seatPage.size, 'every seat has a browser').toBe(9)
+  const labeled = new Map<string, Page>()
+  for (const seat of [...seatPage.keys()].sort((a, b) => a - b)) {
+    labeled.set(`S${seat}-${seatRole.get(seat)}`, seatPage.get(seat)!)
+  }
+  for (const role of ROLES) {
+    const seat = seatsOf({ seatRole } as Table, role)[0]
+    if (seat != null) ctx.pages.set(role, seatPage.get(seat)!)
+  }
+  const villager = seatsOf({ seatRole } as Table, 'VILLAGER').find(
+    (s) => seatPage.get(s) !== ctx.hostPage,
+  )
+  const audio = attachAudioCapture(seatPage.get(villager!)!)
+  const dir = path.join(SHOTS, testInfo.title.replace(/[^\w]+/g, '-').slice(0, 40))
+  mkdirSync(dir, { recursive: true })
+  console.warn(`[bwk] game=${ctx.gameId} seats=${[...labeled.keys()].join(' ')}`)
+  return { ctx, seatPage, seatRole, labeled, extra, audio, dir, logStart }
+}
+
+function seatsOf(t: Pick<Table, 'seatRole'>, role: RoleName): number[] {
+  return [...t.seatRole]
+    .filter(([, r]) => r === role)
+    .map(([s]) => s)
+    .sort((a, b) => a - b)
+}
+const one = (t: Table, role: RoleName): number => {
+  const s = seatsOf(t, role)[0]
+  if (s == null) throw new Error(`no seat for ${role}`)
+  return s
+}
+const pageOf = (t: Table, seat: number): Page => t.seatPage.get(seat)!
+
+async function snap(t: Table, label: string, testInfo: TestInfo) {
+  const file = path.join(t.dir, `${label}.png`)
+  await takeCompositeScreenshot(t.labeled, file)
+  await testInfo.attach(label, { path: file, contentType: 'image/png' })
+}
+async function snapOne(t: Table, page: Page, label: string, testInfo: TestInfo) {
+  const file = path.join(t.dir, `${label}.png`)
+  await page.screenshot({ path: file, fullPage: true, animations: 'disabled' })
+  await testInfo.attach(label, { path: file, contentType: 'image/png' })
+}
+
+async function aliveSeats(t: Table): Promise<number[]> {
+  const s = await fetchGameState(t.ctx.hostPage, t.ctx.gameId)
+  return (s?.players ?? [])
+    .filter((p) => p.isAlive)
+    .map((p) => p.seatIndex!)
+    .sort((a, b) => a - b)
+}
+
+/** Non-wolf, non-shooter pages must not learn the shooter's role. */
+async function assertAnonymous(t: Table, shooterSeat: number) {
+  for (const [seat, page] of t.seatPage) {
+    const role = t.seatRole.get(seat)!
+    if (seat === shooterSeat || role === 'WEREWOLF' || role === 'BLACK_WOLF_KING') continue
+    const text = await page.locator('.game-wrap').innerText()
+    for (const w of ROLE_WORDS) {
+      // A player may see its own role name (e.g. the hunter's own page); nobody else's.
+      if (role === 'HUNTER' && (w === '猎人' || /hunter/i.test(w))) continue
+      expect(
+        text,
+        `seat ${seat} (${role}) must not see "${w}" while seat ${shooterSeat} shoots`,
+      ).not.toContain(w)
+    }
+  }
+}
+
+/** Night-death shot from the shooter's own browser. */
+async function nightShoot(t: Table, shooter: number, target: number) {
+  const page = pageOf(t, shooter)
+  const banner = page.getByTestId('day-hunter-night-banner')
+  await expect(banner).toBeVisible({ timeout: scale(15_000) })
+  for (const w of ROLE_WORDS) await expect(banner).not.toContainText(w)
+  await page.locator(`.player-grid [data-seat="${target}"]`).click()
+  await page.getByTestId('day-hunter-night-shoot').click()
+}
+
+/** Vote-out shot from the shooter's own browser. */
+async function voteShoot(t: Table, shooter: number, target: number) {
+  const page = pageOf(t, shooter)
+  const banner = page.getByTestId('voting-shoot-banner')
+  await expect(banner).toBeVisible({ timeout: scale(15_000) })
+  for (const w of ROLE_WORDS) await expect(banner).not.toContainText(w)
+  await page.locator(`.player-grid [data-seat="${target}"]`).click()
+  await page.getByTestId('voting-hunter-shoot').click()
+}
+
+const seatDead = (t: Table, seat: number) =>
+  waitForCondition(async () => !(await aliveSeats(t)).includes(seat), `seat ${seat} dead`, 10_000)
+
+/** Host opens the vote; every alive player votes `target` in its own browser; host reveals. */
+async function voteOut(t: Table, target: number) {
+  const host = t.ctx.hostPage
+  await host.getByTestId('day-start-vote').click()
+  expect(await waitForVotingSubPhase(host, t.ctx.gameId, 'VOTING', 10_000)).toBe(true)
+  for (const seat of await aliveSeats(t)) {
+    const page = pageOf(t, seat)
+    // Wait for this browser's voting screen: a tap that lands on the day screen is lost.
+    await expect(page.getByTestId('voting-skip')).toBeVisible({ timeout: scale(10_000) })
+    if (seat === target) {
+      await page.getByTestId('voting-skip').click()
+    } else {
+      await page.locator(`.player-grid [data-seat="${target}"]`).click()
+      await expect(page.getByTestId('voting-vote')).toBeEnabled()
+      await page.getByTestId('voting-vote').click()
+    }
+    await expect(page.getByTestId('voting-unvote')).toBeVisible({ timeout: scale(10_000) })
+  }
+  const reveal = host.getByTestId('voting-reveal')
+  await expect(reveal).toBeEnabled({ timeout: scale(10_000) })
+  await reveal.click()
+}
+
+async function revealNight(t: Table) {
+  const btn = t.ctx.hostPage.getByTestId('day-reveal-result')
+  await expect(btn).toBeVisible({ timeout: scale(20_000) })
+  await btn.click()
+}
+
+/** Result page + review page on the host. Returns the review text. */
+async function checkResultAndReview(t: Table, testInfo: TestInfo, label: string): Promise<string> {
+  const host = t.ctx.hostPage
+  expect(await waitForPhase(host, t.ctx.gameId, 'GAME_OVER', 15_000), 'game over').toBe(true)
+  await host.waitForURL(/\/result\//, { timeout: scale(15_000) })
+  const king = one(t, 'BLACK_WOLF_KING')
+  await expect(host.getByTestId(`role-reveal-${king}`)).toContainText('黑狼王')
+  await snap(t, `${label}-result`, testInfo)
+  await host.getByTestId('open-review').click()
+  await host.waitForURL(/\/review\//)
+  const review = host.getByTestId('game-review')
+  await expect(review).toBeVisible({ timeout: scale(10_000) })
+  await host.setViewportSize({ width: 417, height: 900 })
+  await snapOne(t, host, `${label}-review`, testInfo)
+  return review.innerText()
+}
+
+/** Backend role audio per night: every role's cues, in order, dead or alive. */
+function assertNightAudio(t: Table, nights: number) {
+  const perNight = extractPerNightRoleAudio(readBackendLogSince(t.logStart), t.ctx.gameId)
+  console.warn(`[bwk] game=${t.ctx.gameId} night audio=${JSON.stringify(perNight)}`)
+  expect(perNight.length, 'role-loop nights in the backend log').toBe(nights)
+  for (const night of perNight) expect(night).toEqual([...NIGHT_ROLE_ORDER])
+  const received = countStompAudioFiles(t.audio.stompFrames)
+  console.warn(`[bwk] game=${t.ctx.gameId} villager received=${JSON.stringify(received)}`)
+  for (const f of NIGHT_ROLE_ORDER)
+    expect(received[f] ?? 0, `villager browser got ${f}`).toBe(nights)
+}
+
+// ── 0. Create room ──────────────────────────────────────────────────────────
+
+test('create room: one wolf king per room, 9+ players', async ({ browser }) => {
+  const c = await browser.newContext({ viewport: { width: 417, height: 1400 } })
+  const page = await c.newPage()
+  const dir = path.join(SHOTS, 'create-room')
+  mkdirSync(dir, { recursive: true })
+  try {
+    await page.goto(`${BASE_URL}/`)
+    await page.evaluate(() => localStorage.clear())
+    await page.goto(`${BASE_URL}/`)
+    const guest = page.getByRole('button', { name: /Continue as guest|继续以访客/i })
+    if (await guest.count()) await guest.first().click()
+    await page.getByPlaceholder('Enter your nickname').fill('KingUi')
+    await page
+      .getByRole('button', { name: /Create Room/i })
+      .first()
+      .click()
+    await page.waitForURL(/\/create-room/)
+
+    const black = page.getByTestId('role-toggle-BLACK_WOLF_KING')
+    const white = page.getByTestId('role-toggle-WHITE_WOLF_KING')
+    await expect(page.getByTestId('player-count-value')).toHaveText('9')
+    await expect(page.getByTestId('role-hint-BLACK_WOLF_KING')).toBeVisible()
+    await black.click()
+    await expect(black).toHaveClass(/toggle-on/)
+    await expect(white, '白狼王 locked while 黑狼王 is on').toBeDisabled()
+    await expect(white).toHaveAttribute('title', /一局只能选一个狼王/)
+    await page.screenshot({
+      path: path.join(dir, '9p-black-on.png'),
+      fullPage: true,
+      animations: 'disabled',
+    })
+
+    await page.getByTestId('player-count-decrement').click()
+    await expect(page.getByTestId('player-count-value')).toHaveText('8')
+    await expect(black, '8 players switches the king off').toHaveClass(/toggle-off/)
+    await expect(black).toBeDisabled()
+    await expect(black).toHaveAttribute('title', /9 人及以上才能开启/)
+    await page.screenshot({
+      path: path.join(dir, '8p-king-locked.png'),
+      fullPage: true,
+      animations: 'disabled',
+    })
+  } finally {
+    await c.close()
+  }
+})
+
+// ── 1. Happy path ───────────────────────────────────────────────────────────
+
+test('happy: knifed king shoots the hunter, the hunter shoots back, wolves win', async ({
+  browser,
+}, testInfo) => {
+  testInfo.setTimeout(scale(300_000))
+  const t = (table = await setupTable(browser, testInfo))
+  const king = one(t, 'BLACK_WOLF_KING')
+  const hunter = one(t, 'HUNTER')
+  const [wolf] = seatsOf(t, 'WEREWOLF')
+  const [v1, v2] = seatsOf(t, 'VILLAGER')
+  const kingPage = pageOf(t, king)
+
+  // The rules show on the reveal card (if this page is still on it) …
+  const revealBtn = kingPage.getByTestId('reveal-role-btn')
+  if (await revealBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await revealBtn.click()
+    await expect(kingPage.getByTestId('role-reveal-desc')).toContainText(KING_RULE)
+    await snapOne(t, kingPage, '01-king-reveal-card', testInfo)
+    await kingPage.getByTestId('confirm-role-btn').click()
+  }
+
+  await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: king, guardTargetSeat: wolf })
+  await snap(t, '02-night1-done', testInfo)
+  await revealNight(t)
+  expect(
+    await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT_NIGHT_DEATH', 15_000),
+  ).toBe(true)
+
+  // … and on the role chip during the day.
+  await kingPage.getByTestId('my-role-chip').click()
+  await expect(kingPage.getByTestId('role-card-desc')).toContainText(KING_RULE)
+  await snapOne(t, kingPage, '03-king-role-chip-rules', testInfo)
+  await kingPage.mouse.click(10, 10) // tap the overlay to close the sheet
+  await expect(kingPage.getByTestId('role-card-desc')).toHaveCount(0)
+
+  await expect(pageOf(t, v1).getByTestId('day-hunter-night-wait-banner')).toBeVisible()
+  await assertAnonymous(t, king)
+  await snap(t, '04-king-shooting', testInfo)
+  await snapOne(t, kingPage, '04a-king-shot-screen', testInfo)
+  await snapOne(t, pageOf(t, v1), '04b-villager-wait-screen', testInfo)
+
+  await nightShoot(t, king, hunter)
+  await seatDead(t, hunter)
+  expect(
+    await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT_NIGHT_DEATH', 10_000),
+  ).toBe(true)
+  await expect(kingPage.getByTestId('day-hunter-night-banner'), 'the king fired once').toHaveCount(
+    0,
+  )
+  await assertAnonymous(t, hunter)
+  await snap(t, '05-chain-hunter-shooting', testInfo)
+  await snapOne(t, pageOf(t, hunter), '05a-hunter-chain-shot-screen', testInfo)
+
+  await nightShoot(t, hunter, v1)
+  await seatDead(t, v1)
+  expect(await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 10_000)).toBe(
+    true,
+  )
+  await snap(t, '06-after-chain', testInfo)
+
+  // 游戏记录 on a villager: two anonymous shots.
+  const vPage = pageOf(t, v2)
+  await vPage.getByTestId('log-fab').click()
+  const drawer = vPage.locator('.action-log-drawer')
+  await expect(drawer).toBeVisible()
+  await expect(vPage.getByTestId('log-shot-row')).toHaveCount(2)
+  const log = await drawer.innerText()
+  for (const w of ROLE_WORDS) expect(log, `log must not name "${w}"`).not.toContain(w)
+  await snapOne(t, vPage, '07-villager-log', testInfo)
+  await vPage.getByTestId('action-log-close').click()
+
+  // Day vote: the last villager goes → 屠边.
+  await voteOut(t, v2)
+  const review = await checkResultAndReview(t, testInfo, '08')
+  expect(review).toContain('自刀')
+  expect(review.match(/开枪带走/g)?.length, 'review shows both shots').toBe(2)
+  expect(review).toContain('黑狼王')
+  assertNightAudio(t, 1)
+})
+
+// ── 2. Vote-out shot at a god; the dead god's audio keeps playing ──────────
+
+test('vote-out: king shoots the seer, night 2 still plays seer cues', async ({
+  browser,
+}, testInfo) => {
+  testInfo.setTimeout(scale(360_000))
+  const t = (table = await setupTable(browser, testInfo))
+  const king = one(t, 'BLACK_WOLF_KING')
+  const seer = one(t, 'SEER')
+  const [wolf] = seatsOf(t, 'WEREWOLF')
+  const [v1, v2] = seatsOf(t, 'VILLAGER')
+  const guard = one(t, 'GUARD')
+
+  await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: v1, guardTargetSeat: wolf })
+  await revealNight(t)
+  expect(await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 15_000)).toBe(
+    true,
+  )
+
+  await voteOut(t, king)
+  expect(await waitForVotingSubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT', 10_000)).toBe(
+    true,
+  )
+  await expect(
+    t.ctx.hostPage.getByTestId('voting-continue'),
+    'host held back during the shot',
+  ).toHaveCount(0)
+  await assertAnonymous(t, king)
+  await snap(t, '01-king-voted-out-shooting', testInfo)
+  await snapOne(t, pageOf(t, king), '01a-king-vote-shot-screen', testInfo)
+  await snapOne(t, pageOf(t, v2), '01b-villager-during-shot', testInfo)
+
+  await voteShoot(t, king, seer)
+  await seatDead(t, seer)
+  expect(await waitForVotingSubPhase(t.ctx.hostPage, t.ctx.gameId, 'VOTE_RESULT', 10_000)).toBe(
+    true,
+  )
+  await snap(t, '02-seer-shot', testInfo)
+  await t.ctx.hostPage.getByTestId('voting-continue').click()
+
+  // Night 2: wolves take the last villager; the dead seer's turn still runs.
+  const host = t.ctx.hostPage
+  expect(await waitForNightSubPhase(host, t.ctx.gameId, 'WEREWOLF_PICK', 25_000)).toBe(true)
+  const wolfPage = pageOf(t, wolf)
+  await expect(wolfPage.getByTestId('wolf-confirm-kill')).toBeVisible({ timeout: scale(10_000) })
+  await wolfPage.locator(`.player-grid [data-seat="${v2}"]`).click()
+  await wolfPage.getByTestId('wolf-confirm-kill').click()
+  expect(await waitForNightSubPhase(host, t.ctx.gameId, 'WITCH_ACT', 15_000)).toBe(true)
+  const witchPage = pageOf(t, one(t, 'WITCH'))
+  for (const id of ['switch-pass-antidote', 'switch-pass-poison']) {
+    const b = witchPage.getByTestId(id)
+    if (await b.isVisible({ timeout: 5_000 }).catch(() => false)) await b.click()
+  }
+  expect(
+    await waitForNightSubPhase(host, t.ctx.gameId, 'GUARD_PICK', 30_000),
+    'dead seer turn passes',
+  ).toBe(true)
+  const guardPage = pageOf(t, guard)
+  await expect(guardPage.getByTestId('guard-confirm-protect')).toBeVisible({
+    timeout: scale(10_000),
+  })
+  await guardPage.locator(`.player-grid [data-seat="${guard}"]`).click()
+  await guardPage.getByTestId('guard-confirm-protect').click()
+
+  const review = await checkResultAndReview(t, testInfo, '03')
+  expect(review.match(/开枪带走/g)?.length).toBe(1)
+  assertNightAudio(t, 2)
+})
+
+// ── 3. Hunter voted out → shoots the king → the king's shot decides it ─────
+
+test('vote-out chain: hunter shoots the king, the king fires the deciding shot', async ({
+  browser,
+}, testInfo) => {
+  testInfo.setTimeout(scale(300_000))
+  const t = (table = await setupTable(browser, testInfo))
+  const king = one(t, 'BLACK_WOLF_KING')
+  const hunter = one(t, 'HUNTER')
+  const [wolf] = seatsOf(t, 'WEREWOLF')
+  const [v1, v2] = seatsOf(t, 'VILLAGER')
+
+  await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: v1, guardTargetSeat: wolf })
+  await revealNight(t)
+  expect(await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 15_000)).toBe(
+    true,
+  )
+
+  await voteOut(t, hunter)
+  await voteShoot(t, hunter, king)
+  await seatDead(t, king)
+  expect(await waitForVotingSubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT', 10_000)).toBe(
+    true,
+  )
+  await expect(
+    pageOf(t, hunter).getByTestId('voting-shoot-banner'),
+    'the hunter fired once',
+  ).toHaveCount(0)
+  await assertAnonymous(t, king)
+  await snap(t, '01-chain-king-shooting', testInfo)
+  await snapOne(t, pageOf(t, king), '01a-king-chain-shot-screen', testInfo)
+
+  await voteShoot(t, king, v2)
+  const review = await checkResultAndReview(t, testInfo, '02')
+  expect(review.match(/开枪带走/g)?.length, 'review shows both shots').toBe(2)
+  assertNightAudio(t, 1)
+})
+
+// ── 3b. Night chain, reverse: knifed hunter shoots the king; the king reloads ──
+
+test('night chain: knifed hunter shoots the king, the king reloads and fires back', async ({
+  browser,
+}, testInfo) => {
+  testInfo.setTimeout(scale(300_000))
+  const t = (table = await setupTable(browser, testInfo))
+  const king = one(t, 'BLACK_WOLF_KING')
+  const hunter = one(t, 'HUNTER')
+  const [wolf] = seatsOf(t, 'WEREWOLF')
+  const [v1] = seatsOf(t, 'VILLAGER')
+
+  await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: hunter, guardTargetSeat: wolf })
+  await revealNight(t)
+  expect(
+    await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT_NIGHT_DEATH', 15_000),
+  ).toBe(true)
+  await assertAnonymous(t, hunter)
+  await nightShoot(t, hunter, king)
+  await seatDead(t, king)
+
+  // The chained shooter drops and comes back: the shot screen is server state, not page state.
+  const kingPage = pageOf(t, king)
+  await kingPage.reload()
+  await kingPage.locator('.game-wrap').waitFor({ state: 'visible', timeout: scale(15_000) })
+  await assertAnonymous(t, king)
+  await snapOne(t, kingPage, '01-king-after-reload-shot-screen', testInfo)
+  await nightShoot(t, king, v1)
+  await seatDead(t, v1)
+  expect(await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 10_000)).toBe(
+    true,
+  )
+  await snap(t, '02-after-reverse-chain', testInfo)
+})
+
+// ── 4. Poisoned king: no shot ───────────────────────────────────────────────
+
+test('edge: a poisoned king gets no shot', async ({ browser }, testInfo) => {
+  testInfo.setTimeout(scale(240_000))
+  const t = (table = await setupTable(browser, testInfo))
+  const king = one(t, 'BLACK_WOLF_KING')
+  const [wolf] = seatsOf(t, 'WEREWOLF')
+  const [v1] = seatsOf(t, 'VILLAGER')
+
+  await driveMinimalNight1ViaDom(t.ctx, {
+    wolfTargetSeat: v1,
+    guardTargetSeat: wolf,
+    witch: { mode: 'poison', targetSeat: king },
+  })
+  await revealNight(t)
+  expect(
+    await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 15_000),
+    'no shot sub-phase',
+  ).toBe(true)
+  expect(await aliveSeats(t)).not.toContain(king)
+  const kingPage = pageOf(t, king)
+  await expect(kingPage.getByTestId('day-hunter-night-banner')).toHaveCount(0)
+  await expect(kingPage.getByTestId('day-hunter-night-shoot')).toHaveCount(0)
+  await expect(t.ctx.hostPage.getByTestId('day-start-vote')).toBeVisible()
+  await snap(t, '01-poisoned-king-no-shot', testInfo)
+  await snapOne(t, kingPage, '01a-poisoned-king-screen', testInfo)
+})
+
+// ── 5. Self-destructing king: no shot, no take ──────────────────────────────
+
+test('edge: a self-destructing king gets no shot and takes no one', async ({
+  browser,
+}, testInfo) => {
+  testInfo.setTimeout(scale(240_000))
+  const t = (table = await setupTable(browser, testInfo))
+  const king = one(t, 'BLACK_WOLF_KING')
+  const [wolf] = seatsOf(t, 'WEREWOLF')
+  const [v1] = seatsOf(t, 'VILLAGER')
+
+  await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: v1, guardTargetSeat: wolf })
+  await revealNight(t)
+  expect(await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 15_000)).toBe(
+    true,
+  )
+  const before = await aliveSeats(t)
+
+  const kingPage = pageOf(t, king)
+  await kingPage.getByTestId('action-menu-btn').click()
+  await kingPage.getByTestId('action-menu-self-destruct').click()
+  await snapOne(t, kingPage, '01-king-self-destruct-confirm', testInfo)
+  await kingPage.getByTestId('action-menu-confirm').click()
+
+  expect(await waitForDaySkipVoting(t.ctx.hostPage, t.ctx.gameId, 10_000)).toBe(true)
+  const after = await aliveSeats(t)
+  expect(after, 'only the king died').toEqual(before.filter((s) => s !== king))
+  const state = await fetchGameState(t.ctx.hostPage, t.ctx.gameId)
+  expect(state?.dayPhase?.subPhase).toBe('RESULT_REVEALED')
+  await expect(kingPage.getByTestId('day-hunter-night-banner')).toHaveCount(0)
+  await expect(t.ctx.hostPage.getByTestId('day-enter-night')).toBeVisible()
+  await snap(t, '02-after-self-destruct', testInfo)
+  await snapOne(t, t.ctx.hostPage, '02a-host-after-self-destruct', testInfo)
+})

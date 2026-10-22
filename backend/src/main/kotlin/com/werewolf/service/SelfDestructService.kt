@@ -36,7 +36,6 @@ class SelfDestructService(
     private val winConditionChecker: WinConditionChecker,
     private val rewardSettlementService: RewardSettlementService,
     private val dayRevealAdvancer: DayRevealAdvancer,
-    private val eliminationHistoryRepository: EliminationHistoryRepository,
 ) {
     private val log = LoggerFactory.getLogger(SelfDestructService::class.java)
 
@@ -174,10 +173,7 @@ class SelfDestructService(
             alivePlayers = freshAlivePlayers,
             mode = context.room.winCondition,
             trigger = WinCheckTrigger.POST_VOTE,
-            counterplay = com.werewolf.game.phase.HardModeCounterplay.of(
-                freshAlivePlayers, context.allNightPhases,
-                hunterHasShot = eliminationHistoryRepository.findByGameId(context.gameId).any { it.hunterShotUserId != null },
-            ),
+            counterplay = com.werewolf.game.phase.HardModeCounterplay.of(freshAlivePlayers, context.allNightPhases),
             roster = context.players,
         )
         if (winner != null) {

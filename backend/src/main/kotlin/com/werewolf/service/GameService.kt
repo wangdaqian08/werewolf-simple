@@ -259,9 +259,9 @@ class GameService(
                 "nightResult"   to nightResult,
                 "selfDestruct"  to selfDestruct,
                 "canVote"       to (myPlayer != null && myPlayer.alive && myPlayer.canVote),
-                // The wolf-killed hunter eligible to fire during the day-reveal shot.
+                // The player who may fire during the day-reveal shot (wolf-killed or chained shooter).
                 "hunterUserId"  to (if (game.subPhase == DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
-                    dayRevealAdvancer.pendingHunterUserId(gameId) else null),
+                    dayRevealAdvancer.pendingShooterUserId(gameId) else null),
             )
         } else null
 
@@ -339,6 +339,9 @@ class GameService(
                 "eliminatedNickname" to eliminatedUser?.nickname,
                 "eliminatedSeatIndex" to eliminatedPlayer?.seatIndex,
                 "eliminatedRole" to elimHistory?.eliminatedRole?.name,
+                // The player who may fire now: a chained shooter, else the voted-out one.
+                "hunterUserId" to (if (game.subPhase == VotingSubPhase.HUNTER_SHOOT.name)
+                    game.chainShooterUserId ?: elimHistory?.eliminatedUserId else null),
                 "idiotRevealedId" to idiotRevealedPlayer?.userId,
                 "idiotRevealedNickname" to idiotRevealedUser?.nickname,
                 "idiotRevealedSeatIndex" to idiotRevealedPlayer?.seatIndex,
@@ -448,6 +451,7 @@ class GameService(
     private fun buildRoleList(room: Room, playerCount: Int): MutableList<PlayerRole> {
         val roles = mutableListOf<PlayerRole>()
         if (room.hasWhiteWolfKing) roles.add(PlayerRole.WHITE_WOLF_KING)
+        if (room.hasBlackWolfKing) roles.add(PlayerRole.BLACK_WOLF_KING)
         while (roles.size < room.wolfCount) roles.add(PlayerRole.WEREWOLF)
         if (room.hasSeer) roles.add(PlayerRole.SEER)
         if (room.hasWitch) roles.add(PlayerRole.WITCH)

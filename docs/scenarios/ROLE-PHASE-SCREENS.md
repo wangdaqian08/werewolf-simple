@@ -313,12 +313,13 @@ spec for each role's view at each phase/subphase.
 - **Component:** `VotingPhase` (hunter shoot overlay)
 - **Background:** parchment with red accent border
 - **Shows:**
-    - "你被投票出局，猎人技能触发！"
-    - "选择带走一名玩家，或放弃技能"
+    - `voting-shoot-banner` "你可以开枪 · Your Shot" (no role named — shared with the 黑狼王)
+    - "选择带走一名玩家，或放弃"
     - List of all alive players
 - **Actions:**
-    - Tap player → `HUNTER_SHOOT(targetUserId)`
-    - `[放弃技能]` → `HUNTER_PASS`
+    - Tap player → `voting-hunter-shoot` → `HUNTER_SHOOT(targetUserId)`
+    - `voting-hunter-pass` → `HUNTER_PASS`
+- **Shooter:** `votingPhase.hunterUserId` (the voted-out player, or a chained shooter)
 - **Constraint:** Cannot shoot self (already eliminated); backend rejects self-target
 
 ---
@@ -326,16 +327,32 @@ spec for each role's view at each phase/subphase.
 ### Screen: VOTING / HUNTER_SHOOT (waiting — for all other players)
 
 - **Component:** `VotingPhase`
-- **Shows:** "猎人正在选择目标…" spinner
+- **Shows:** the normal vote result with "等待中" — no shot wording, so the shooter's role stays
+  private (the screen is shared with the 黑狼王)
 - **Actions:** None
 
 ---
 
-### Screen: NIGHT (eliminated) — hunter eliminated at night
+### Screen: DAY_DISCUSSION / HUNTER_SHOOT_NIGHT_DEATH — hunter killed by wolves at night
 
-- If hunter is wolf kill target:
-    - Hunter shoot does NOT trigger on night elimination — only triggers on vote elimination
-    - Hunter sees eliminated overlay
+- Entered at the host's reveal when the hunter was wolf-killed and NOT poisoned (poison disables
+  the gun). Also entered for a chained shot (the hunter was shot by the 黑狼王).
+- **Shooter** (`dayPhase.hunterUserId`): banner `day-hunter-night-banner` "你可以开枪 · Your Shot",
+  tap a player → `day-hunter-night-shoot` (`HUNTER_SHOOT`) or `day-hunter-night-pass` (`HUNTER_PASS`)
+- **Everyone else:** `day-hunter-night-wait-banner` "有玩家正在开枪" — the role is never named
+- Then: a dead sheriff hands over the badge (`BADGE_HANDOVER`), else `RESULT_REVEALED`
+
+---
+
+## ROLE: BLACK_WOLF_KING (黑狼王)
+
+Wolf camp: wakes with the wolves (`WEREWOLF_PICK`), the seer sees a wolf. Rules: `docs/black-wolf-king.md`.
+
+- **ROLE_REVEAL / role card:** "黑狼王", wolf styling, rule text "夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。"
+- **VOTING / HUNTER_SHOOT** (voted out, or shot by the hunter) and
+  **DAY_DISCUSSION / HUNTER_SHOOT_NIGHT_DEATH** (knifed by the wolves, or shot by the hunter):
+  the same shot screens as the hunter, with the same role-neutral text.
+- **Action chip:** plain 自爆 (no take); a self-destructed 黑狼王 cannot shoot.
 
 ---
 

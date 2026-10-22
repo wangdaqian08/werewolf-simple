@@ -36,7 +36,6 @@ class NightOrchestratorTest {
     @Mock lateinit var gameRepository: GameRepository
     @Mock lateinit var gamePlayerRepository: GamePlayerRepository
     @Mock lateinit var nightPhaseRepository: NightPhaseRepository
-    @Mock lateinit var eliminationHistoryRepository: com.werewolf.repository.EliminationHistoryRepository
     @Mock lateinit var winConditionChecker: WinConditionChecker
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
@@ -73,7 +72,6 @@ class NightOrchestratorTest {
         gamePlayerRepository = gamePlayerRepository,
         nightPhaseRepository = nightPhaseRepository,
         sheriffElectionRepository = mock(),
-        eliminationHistoryRepository = eliminationHistoryRepository,
         winConditionChecker = winConditionChecker,
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,

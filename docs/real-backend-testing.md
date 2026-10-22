@@ -615,7 +615,7 @@ curl -s -X POST http://localhost:8080/api/game/action \
 
 ```bash
 cd frontend
-npm run test:e2e:real
+npm run test:e2e:integration
 ```
 
 Config: `frontend/playwright.real.config.ts`

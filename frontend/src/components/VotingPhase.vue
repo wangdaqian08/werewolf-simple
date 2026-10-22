@@ -31,7 +31,12 @@
 
       <!-- Below-arch row: my-role-chip on left, right-stack (history / log-fab / Action) on right -->
       <div v-if="myRole || voteHistory?.length" class="role-history-row">
-        <button v-if="myRole" class="my-role-chip my-role-locked" @click="showRoleCard = true">
+        <button
+          v-if="myRole"
+          class="my-role-chip my-role-locked"
+          data-testid="my-role-chip"
+          @click="showRoleCard = true"
+        >
           🔒 身份 · Tap to reveal
         </button>
         <div v-else />
@@ -349,7 +354,9 @@
               <div v-if="myPlayer" class="rc-identity" data-testid="rc-identity">
                 {{ myPlayer.seatIndex }}号 · {{ myPlayer.nickname }}
               </div>
-              <p class="rc-desc">{{ ROLE_META[myRole]?.description }}</p>
+              <p class="rc-desc" data-testid="role-card-desc">
+                {{ ROLE_META[myRole]?.description }}
+              </p>
               <RoleHistory :history="roleHistory" />
             </div>
           </div>
@@ -392,12 +399,12 @@
                     </div>
                   </div>
                 </div>
-                <!-- Hunter-shot banner -->
+                <!-- Shot banner (hunter or 黑狼王 — the role is not named) -->
                 <div v-if="round.hunterShotPlayerId" class="banner banner-kill history-banner">
-                  <span class="banner-avatar">🏹</span>
+                  <span class="banner-avatar">🔫</span>
                   <div>
                     <div class="banner-title">
-                      猎人开枪 · 座位{{ round.hunterShotSeatIndex }} {{ round.hunterShotNickname }}
+                      开枪 · 座位{{ round.hunterShotSeatIndex }} {{ round.hunterShotNickname }}
                     </div>
                     <div v-if="round.hunterShotRole" class="banner-sub">
                       {{ ROLE_ZH[round.hunterShotRole] }}
@@ -456,11 +463,11 @@
       <div class="sun-arc-placeholder" />
 
       <div class="banner-area">
-        <div class="banner banner-kill">
+        <div class="banner banner-kill" data-testid="voting-shoot-banner">
           <span class="banner-avatar">🔫</span>
           <div>
-            <div class="banner-title">猎人出局 · Hunter Eliminated</div>
-            <div class="banner-sub">你可以选择射杀一名玩家 — may fire one shot</div>
+            <div class="banner-title">你可以开枪 · Your Shot</div>
+            <div class="banner-sub">选择带走一名玩家，或放弃 — may fire one shot</div>
           </div>
         </div>
       </div>
@@ -489,10 +496,11 @@
       </section>
 
       <footer class="voting-footer">
-        <template v-if="myUserId === votingPhase.eliminatedPlayerId">
+        <template v-if="isShooter">
           <div class="vote-actions">
             <button
               class="btn btn-danger vote-btn"
+              data-testid="voting-hunter-shoot"
               :class="{ 'is-loading': actionPending }"
               :disabled="!effectiveSelected || actionPending"
               @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
@@ -501,6 +509,7 @@
             </button>
             <button
               class="btn btn-secondary skip-btn"
+              data-testid="voting-hunter-pass"
               :class="{ 'is-loading': actionPending }"
               :disabled="actionPending"
               @click="emit('hunterPass')"
@@ -689,15 +698,16 @@ const emit = defineEmits<{
 
 // ── Screen grouping ───────────────────────────────────────────────────────────
 // VOTE_RESULT is merged into the VOTING screen (shown when tallyRevealed).
-// During HUNTER_SHOOT only the voted-out hunter gets the shoot screen; everyone
-// else keeps the vote result so the hunter's identity is not exposed.
+// During HUNTER_SHOOT only the shooter (the voted-out player, or a chained
+// shooter) gets the shoot screen; everyone else keeps the vote result so the
+// shooter's identity is not exposed.
+const isShooter = computed(() => props.myUserId === props.votingPhase.hunterUserId)
 const isVotingScreen = computed(
   () =>
     props.votingPhase.subPhase === 'VOTING' ||
     props.votingPhase.subPhase === 'RE_VOTING' ||
     props.votingPhase.subPhase === 'VOTE_RESULT' ||
-    (props.votingPhase.subPhase === 'HUNTER_SHOOT' &&
-      props.myUserId !== props.votingPhase.eliminatedPlayerId),
+    (props.votingPhase.subPhase === 'HUNTER_SHOOT' && !isShooter.value),
 )
 // BADGE_RECEIVED is merged into the BADGE_HANDOVER screen
 const isBadgeScreen = computed(
@@ -871,6 +881,7 @@ const ROLE_ZH: Record<string, string> = {
   GUARD: '守卫',
   IDIOT: '白痴',
   WHITE_WOLF_KING: '白狼王',
+  BLACK_WOLF_KING: '黑狼王',
 }
 
 // ── Vote History panel ────────────────────────────────────────────────────────
@@ -949,6 +960,14 @@ const ROLE_META: Record<string, RoleMeta> = {
     team: 'wolf',
     description: '夜晚与狼队一起袭击。白天自爆时，可选择带走一名玩家。',
   },
+  BLACK_WOLF_KING: {
+    nameZh: '黑狼王',
+    nameEn: 'BLACK WOLF KING',
+    emoji: '🖤',
+    team: 'wolf',
+    description:
+      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
+  },
 }
 
 // ── Slot variants ─────────────────────────────────────────────────────────────
@@ -1003,8 +1022,8 @@ function onVotingTap(player: GamePlayer) {
 }
 
 function onHunterTap(player: GamePlayer) {
-  // Only the hunter (eliminated player) can select a target
-  if (props.myUserId !== props.votingPhase.eliminatedPlayerId) return
+  // Only the shooter can select a target
+  if (!isShooter.value) return
   if (!player.isAlive) return
   if (player.userId === props.votingPhase.eliminatedPlayerId) return
   selectPlayer(player.userId)

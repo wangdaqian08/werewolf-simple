@@ -7,7 +7,6 @@ import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.model.*
-import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.UserRepository
@@ -38,7 +37,6 @@ class SelfDestructServiceTest {
     @Mock lateinit var winConditionChecker: WinConditionChecker
     @Mock lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
     @Mock lateinit var dayRevealAdvancer: com.werewolf.game.phase.DayRevealAdvancer
-    @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
 
     private lateinit var selfDestructService: SelfDestructService
 
@@ -54,7 +52,6 @@ class SelfDestructServiceTest {
             winConditionChecker,
             rewardSettlementService,
             dayRevealAdvancer,
-            eliminationHistoryRepository,
         )
     }
 

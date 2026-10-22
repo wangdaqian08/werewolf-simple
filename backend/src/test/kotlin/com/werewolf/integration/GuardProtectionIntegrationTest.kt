@@ -31,7 +31,6 @@ class GuardProtectionIntegrationTest {
     @Mock lateinit var gameRepository: GameRepository
     @Mock lateinit var gamePlayerRepository: GamePlayerRepository
     @Mock lateinit var nightPhaseRepository: NightPhaseRepository
-    @Mock lateinit var eliminationHistoryRepository: com.werewolf.repository.EliminationHistoryRepository
     @Mock lateinit var winConditionChecker: com.werewolf.game.phase.WinConditionChecker
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var contextLoader: GameContextLoader
@@ -57,7 +56,6 @@ class GuardProtectionIntegrationTest {
             gamePlayerRepository = gamePlayerRepository,
             nightPhaseRepository = nightPhaseRepository,
             sheriffElectionRepository = mock(),
-            eliminationHistoryRepository = eliminationHistoryRepository,
             winConditionChecker = winConditionChecker,
             stompPublisher = stompPublisher,
             contextLoader = contextLoader,
