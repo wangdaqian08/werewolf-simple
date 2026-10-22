@@ -10,7 +10,7 @@
  *     its shot decides the game → review shows both shots.
  *  4. Edge: the witch poisons the king → no shot at the reveal.
  *  5. Edge: the king self-destructs (自爆) → no shot, no take.
- *  6. Edge: the host starts the vote before the knifed king acts → shot lost.
+ *  6. Edge: the host starts the vote before the knifed shooter acts → shot lost.
  *  7. Edge: a voted-out hunter passes → nothing reaches the other browsers.
  *
  * The shot is private: only the shooter's browser shows it, the day looks the
@@ -228,6 +228,21 @@ async function assertShotPrivate(t: Table, shooterSeat: number) {
   await assertAnonymous(t, shooterSeat)
 }
 
+/**
+ * The host's [control] stays usable while a shot is pending — unless the host
+ * IS the shooter: its own shot screen comes first (roles are dealt at random).
+ */
+async function assertHostNotHeldBack(t: Table, shooterSeat: number, control: string) {
+  const host = t.ctx.hostPage
+  if (pageOf(t, shooterSeat) === host) {
+    await expect(host.getByTestId(control), 'the host-shooter sees its own shot first').toHaveCount(
+      0,
+    )
+  } else {
+    await expect(host.getByTestId(control), 'the host is not held back').toBeVisible()
+  }
+}
+
 /** A villager reads the action log mid-game (the recorder keeps the response). */
 async function readEventsAsVillager(t: Table) {
   const seat = seatsOf(t, 'VILLAGER').find((s) => t.payloads.has(s))!
@@ -441,10 +456,7 @@ test('happy: knifed king shoots the hunter, the hunter shoots back, wolves win',
 
   await expect(kingPage.getByTestId('day-hunter-night-banner')).toBeVisible()
   await assertShotPrivate(t, king)
-  await expect(
-    t.ctx.hostPage.getByTestId('day-start-vote'),
-    'the host is not held back',
-  ).toBeVisible()
+  await assertHostNotHeldBack(t, king, 'day-start-vote')
   await readEventsAsVillager(t)
   await snap(t, '04-king-shooting', testInfo)
   await snapOne(t, kingPage, '04a-king-shot-screen', testInfo)
@@ -515,10 +527,7 @@ test('vote-out: king shoots the seer, night 2 still plays seer cues', async ({
     true,
   )
   await expect(pageOf(t, king).getByTestId('voting-shoot-banner')).toBeVisible()
-  await expect(
-    t.ctx.hostPage.getByTestId('voting-continue'),
-    'the host is not held back (continuing would end the shot)',
-  ).toBeVisible()
+  await assertHostNotHeldBack(t, king, 'voting-continue')
   await assertShotPrivate(t, king)
   await readEventsAsVillager(t)
   await snap(t, '01-king-voted-out-shooting', testInfo)
@@ -535,6 +544,9 @@ test('vote-out: king shoots the seer, night 2 still plays seer cues', async ({
 
   // Night 2: wolves take the last villager; the dead seer's turn still runs.
   const host = t.ctx.hostPage
+  // waitForNightSubPhase gives up on any non-NIGHT phase, so first wait for
+  // the continue click to commit the night.
+  expect(await waitForPhase(host, t.ctx.gameId, 'NIGHT', 15_000)).toBe(true)
   expect(await waitForNightSubPhase(host, t.ctx.gameId, 'WEREWOLF_PICK', 25_000)).toBe(true)
   const wolfPage = pageOf(t, wolf)
   await expect(wolfPage.getByTestId('wolf-confirm-kill')).toBeVisible({ timeout: scale(10_000) })
@@ -708,7 +720,7 @@ test('edge: a self-destructing king gets no shot and takes no one', async ({
 
 // ── 6. The host moves on before the shooter acts: the shot is lost ──────────
 
-test('edge: the host starts the vote before the knifed king acts - the shot is lost', async ({
+test('edge: the host starts the vote before the knifed shooter acts - the shot is lost', async ({
   browser,
 }, testInfo) => {
   testInfo.setTimeout(scale(240_000))
@@ -716,24 +728,29 @@ test('edge: the host starts the vote before the knifed king acts - the shot is l
   const king = one(t, 'BLACK_WOLF_KING')
   const hunter = one(t, 'HUNTER')
   const [wolf] = seatsOf(t, 'WEREWOLF')
+  // The host must not be the shooter, or it cannot skip its own shot: knife
+  // the king, or the hunter when the host was dealt the king.
+  const shooter = pageOf(t, king) === t.ctx.hostPage ? hunter : king
+  const other = shooter === king ? hunter : king
+  console.warn(`[bwk] game=${t.ctx.gameId} host-skip shooter=S${shooter}`)
 
-  await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: king, guardTargetSeat: wolf })
+  await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: shooter, guardTargetSeat: wolf })
   await revealNight(t)
-  const kingPage = pageOf(t, king)
-  await expect(kingPage.getByTestId('day-hunter-night-banner')).toBeVisible({
+  const shooterPage = pageOf(t, shooter)
+  await expect(shooterPage.getByTestId('day-hunter-night-banner')).toBeVisible({
     timeout: scale(15_000),
   })
-  await assertShotPrivate(t, king)
-  await snap(t, '01-king-may-shoot', testInfo)
+  await assertShotPrivate(t, shooter)
+  await snap(t, '01-shooter-may-shoot', testInfo)
 
   // The host cannot tell a shot is open, and starts the vote at once.
   await t.ctx.hostPage.getByTestId('day-start-vote').click()
   expect(await waitForVotingSubPhase(t.ctx.hostPage, t.ctx.gameId, 'VOTING', 10_000)).toBe(true)
-  await expect(kingPage.getByTestId('day-hunter-night-banner')).toHaveCount(0)
-  await expect(kingPage.getByTestId('voting-shoot-banner')).toHaveCount(0)
+  await expect(shooterPage.getByTestId('day-hunter-night-banner')).toHaveCount(0)
+  await expect(shooterPage.getByTestId('voting-shoot-banner')).toHaveCount(0)
 
-  // The server refuses a late shot sent straight from the king's browser.
-  const late = await kingPage.evaluate(
+  // The server refuses a late shot sent straight from the shooter's browser.
+  const late = await shooterPage.evaluate(
     async ({ gameId, target }) => {
       const res = await fetch('/api/game/action', {
         method: 'POST',
@@ -745,12 +762,12 @@ test('edge: the host starts the vote before the knifed king acts - the shot is l
       })
       return { status: res.status, body: await res.text() }
     },
-    { gameId: Number(t.ctx.gameId), target: t.seatUser.get(hunter)! },
+    { gameId: Number(t.ctx.gameId), target: t.seatUser.get(other)! },
   )
   expect(late.status, `late shot rejected: ${late.body}`).toBe(400)
-  expect(await aliveSeats(t)).toContain(hunter)
+  expect(await aliveSeats(t)).toContain(other)
   await snap(t, '02-vote-started-shot-lost', testInfo)
-  await snapOne(t, kingPage, '02a-king-screen-after-vote-start', testInfo)
+  await snapOne(t, shooterPage, '02a-shooter-screen-after-vote-start', testInfo)
   assertNoRoleLeak(t)
 })
 

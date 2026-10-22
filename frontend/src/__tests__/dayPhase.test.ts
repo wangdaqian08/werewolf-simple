@@ -427,6 +427,23 @@ describe('DayPhase — private night-death shot', () => {
     expect(wrapper.text()).not.toContain('开枪')
   })
 
+  it('a host who can shoot sees the shot first, then the host controls', () => {
+    const shooting = mountAs('hunter', { isHost: true })
+    expect(shooting.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(true)
+    expect(shooting.find('[data-testid="day-start-vote"]').exists()).toBe(false)
+
+    const after = mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        myUserId: 'hunter',
+        isHost: true,
+        players: SHOOT_PLAYERS,
+        dayPhase: shotDay(false),
+      },
+    })
+    expect(after.find('[data-testid="day-start-vote"]').exists()).toBe(true)
+  })
+
   it('a dead sheriff who can also shoot sees the shot first, then the badge handover', () => {
     const props = {
       ...BASE_PROPS,
