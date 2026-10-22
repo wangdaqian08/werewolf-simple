@@ -498,11 +498,7 @@ export interface SheriffElectionState {
 
 // ── Day Phase ─────────────────────────────────────────────────────────────────
 
-export type DaySubPhase =
-  | 'RESULT_HIDDEN'
-  | 'RESULT_REVEALED'
-  | 'HUNTER_SHOOT_NIGHT_DEATH'
-  | 'BADGE_HANDOVER'
+export type DaySubPhase = 'RESULT_HIDDEN' | 'RESULT_REVEALED' | 'BADGE_HANDOVER'
 
 export interface KilledPlayer {
   killedPlayerId: string
@@ -535,7 +531,7 @@ export interface DayPhaseState {
   canVote: boolean
   myVote?: string
   selectedPlayerId?: string
-  hunterUserId?: string // the wolf-killed hunter eligible to fire during HUNTER_SHOOT_NIGHT_DEATH
+  canShoot?: boolean // private: true only for the dead shooter whose shot is open now
 }
 
 // ── Voting Phase ──────────────────────────────────────────────────────────────
@@ -544,7 +540,6 @@ export type VotingSubPhase =
   | 'VOTING'
   | 'RE_VOTING'
   | 'VOTE_RESULT'
-  | 'HUNTER_SHOOT'
   | 'BADGE_HANDOVER'
   | 'BADGE_RECEIVED'
 
@@ -581,19 +576,18 @@ export interface VotingState {
   abstainVoters?: VoteVoter[]
   tallyRevealed?: boolean // host has publicly revealed the tally
   revealDeadline?: number // epoch ms — 30s countdown after tally revealed
-  // VOTE_RESULT / HUNTER_SHOOT / BADGE_HANDOVER
+  // VOTE_RESULT / BADGE_HANDOVER
   eliminatedPlayerId?: string
   eliminatedNickname?: string
   eliminatedSeatIndex?: number
   eliminatedAvatar?: string
-  eliminatedRole?: PlayerRole
   // VOTE_RESULT — idiot survives (no elimination)
   idiotRevealedId?: string
   idiotRevealedNickname?: string
   idiotRevealedSeatIndex?: number
-  // HUNTER_SHOOT — who may fire now (HUNTER or BLACK_WOLF_KING: the voted-out
-  // player, or a chained shooter they shot) and their selected target
-  hunterUserId?: string
+  // Private: true only for the dead shooter (HUNTER or BLACK_WOLF_KING: the
+  // voted-out player, or a chained shooter they shot) whose shot is open now
+  canShoot?: boolean
   hunterSelectedId?: string
   // BADGE_HANDOVER + BADGE_RECEIVED
   badgeTargetId?: string
@@ -695,7 +689,6 @@ export interface VoteResultPayload {
   eliminatedUserId: string | null
   eliminatedNickname: string | null
   eliminatedSeatIndex: number | null
-  eliminatedRole: string | null
   abstainCount?: number
   abstainVoters?: AbstainVoter[]
 }

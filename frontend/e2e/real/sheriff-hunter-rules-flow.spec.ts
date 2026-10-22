@@ -92,7 +92,8 @@ test.describe('Sheriff + hunter rules — badge after the shot, no self-pass, no
             expect((await readState(ctx.hostPage, ctx.gameId))?.sheriffUserId).toBe(hunter.userId)
 
             await revealAndVoteOut(ctx, hunter.seat)
-            expect(await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, 'HUNTER_SHOOT', 15_000)).toBe(
+            // Public: the dead sheriff's handover. Private: the hunter's shot, open in parallel.
+            expect(await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, 'BADGE_HANDOVER', 15_000)).toBe(
                 true,
             )
             expect(
@@ -137,7 +138,7 @@ test.describe('Sheriff + hunter rules — badge after the shot, no self-pass, no
             await waitForDayDiscussionAfterSheriff(ctx)
 
             await revealAndVoteOut(ctx, hunter.seat)
-            expect(await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, 'HUNTER_SHOOT', 15_000)).toBe(
+            expect(await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, 'VOTE_RESULT', 15_000)).toBe(
                 true,
             )
             expect(
@@ -169,7 +170,7 @@ test.describe('Sheriff + hunter rules — badge after the shot, no self-pass, no
         }
     })
 
-    test('a wolf cannot self-destruct while the voted-out hunter is about to shoot', async ({
+    test('a wolf cannot self-destruct after the tally, while the voted-out hunter may shoot', async ({
                                                                                                 browser,
                                                                                             }, testInfo) => {
         const ctx = await setupGame(browser, {
@@ -187,13 +188,13 @@ test.describe('Sheriff + hunter rules — badge after the shot, no self-pass, no
             await playNightOne(ctx, v1.seat)
             expect(await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_DISCUSSION', 30_000)).toBe(true)
             await revealAndVoteOut(ctx, hunter.seat)
-            expect(await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, 'HUNTER_SHOOT', 15_000)).toBe(
+            expect(await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, 'VOTE_RESULT', 15_000)).toBe(
                 true,
             )
 
             expect(
                 tryAct('WOLF_SELF_DESTRUCT', actName(wolf), { room: ctx.roomCode }),
-                'the hunter shot resolves before a self-destruct',
+                'self-destruct is closed after the tally',
             ).toBe(false)
             expect(
                 tryAct('HUNTER_SHOOT', actName(hunter), { target: String(v2.seat), room: ctx.roomCode }),
@@ -212,7 +213,7 @@ test.describe('Sheriff + hunter rules — badge after the shot, no self-pass, no
         }
     })
 
-    test('a hunter-sheriff killed at night shoots first, then hands over the badge', async ({
+    test('a hunter-sheriff killed at night shoots during the handover, then hands over the badge', async ({
                                                                                                 browser,
                                                                                             }, testInfo) => {
         const ctx = await setupGame(browser, {
@@ -243,10 +244,10 @@ test.describe('Sheriff + hunter rules — badge after the shot, no self-pass, no
             const revealBtn = ctx.hostPage.getByTestId('day-reveal-result')
             await revealBtn.waitFor({ state: 'visible', timeout: 30_000 })
             await revealBtn.click()
-            expect(
-                await waitForDaySubPhase(ctx.hostPage, ctx.gameId, 'HUNTER_SHOOT_NIGHT_DEATH', 10_000),
-                'the hunter shoots before the badge is handed over',
-            ).toBe(true)
+            // Public: the dead sheriff's handover. Private: the hunter's shot, open in parallel.
+            expect(await waitForDaySubPhase(ctx.hostPage, ctx.gameId, 'BADGE_HANDOVER', 10_000)).toBe(
+                true,
+            )
             expect(
                 tryAct('HUNTER_SHOOT', actName(hunter), { target: String(v2.seat), room: ctx.roomCode }),
             ).toBe(true)

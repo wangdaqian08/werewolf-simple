@@ -317,18 +317,19 @@ class GamePipelineSheriffTest {
     }
 
     @Test
-    fun `revealNightResult with a wolf-killed hunter lands on HUNTER_SHOOT_NIGHT_DEATH`() {
-        // A hunter killed by the wolves (not poisoned) now gets a day-reveal
-        // shot. revealNightResult delegates the decision to DayRevealAdvancer,
-        // which returns HUNTER_SHOOT_NIGHT_DEATH. The decision matrix itself
-        // (wolf vs poison vs sheriff priority) is covered by DayRevealAdvancerTest.
+    fun `revealNightResult with a wolf-killed hunter opens a private shot on RESULT_REVEALED`() {
+        // A hunter killed by the wolves (not poisoned) gets a private day-reveal
+        // shot: the public sub-phase is unchanged. revealNightResult delegates
+        // both decisions to DayRevealAdvancer; the matrix itself (wolf vs poison
+        // vs sheriff) is covered by DayRevealAdvancerTest.
         val np = NightPhase(gameId = gameId, dayNumber = 1).also {
             it.subPhase = NightSubPhase.COMPLETE
             it.wolfTargetUserId = "hunter_victim"
         }
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
         whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("hunter_victim"))
-        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH)
+        whenever(dayRevealAdvancer.nightShooterUserId(gameId)).thenReturn("hunter_victim")
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
 
         val ctx = GameContext(
             game(phase = GamePhase.DAY_DISCUSSION, dayNumber = 1, subPhase = DaySubPhase.RESULT_HIDDEN.name),
@@ -340,15 +341,14 @@ class GamePipelineSheriffTest {
         val result = pipeline.revealNightResult(req, ctx)
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(ctx.game.pendingShooterUserId).isEqualTo("hunter_victim")
     }
 
     @Test
-    fun `revealNightResult with sheriff AND hunter killed lands on BADGE_HANDOVER but skips HUNTER_SHOOT`() {
-        // Asymmetric mixed case: sheriff gets a last action (badge handover);
-        // hunter night-death still does NOT trigger HUNTER_SHOOT — that
-        // privilege remains a day-voting exclusive. Sheriff-handover takes
-        // precedence and is the only last-action that fires at reveal.
+    fun `revealNightResult with sheriff AND a poisoned hunter killed lands on BADGE_HANDOVER with no shot`() {
+        // The sheriff gets a last action (badge handover); the poisoned hunter
+        // gets no shot.
         val np = NightPhase(gameId = gameId, dayNumber = 2).also {
             it.subPhase = NightSubPhase.COMPLETE
             it.wolfTargetUserId = "sheriff_victim"
@@ -368,6 +368,6 @@ class GamePipelineSheriffTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
-        assertThat(ctx.game.subPhase).isNotEqualTo("HUNTER_SHOOT")
+        assertThat(ctx.game.pendingShooterUserId).isNull()
     }
 }

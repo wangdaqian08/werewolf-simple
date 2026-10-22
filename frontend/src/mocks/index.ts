@@ -999,18 +999,9 @@ export function setupMocks() {
             }
           }
         } else {
-          // VOTING (tallyRevealed) → HUNTER_SHOOT or BADGE_HANDOVER or NIGHT (skip VOTE_RESULT)
-          if (vp.eliminatedRole === 'HUNTER' || vp.eliminatedRole === 'BLACK_WOLF_KING') {
-            mockGameState = {
-              ...mockGameState,
-              votingPhase: {
-                ...vp,
-                subPhase: 'HUNTER_SHOOT',
-                hunterUserId: vp.eliminatedPlayerId,
-                selectedPlayerId: undefined,
-              },
-            }
-          } else if (vp.eliminatedPlayerId && vp.eliminatedPlayerId === mockGameState.sheriff) {
+          // VOTING (tallyRevealed) → BADGE_HANDOVER or NIGHT (skip VOTE_RESULT).
+          // A voted-out shooter's shot is private and the mock viewer is never it.
+          if (vp.eliminatedPlayerId && vp.eliminatedPlayerId === mockGameState.sheriff) {
             mockGameState = {
               ...mockGameState,
               votingPhase: { ...vp, subPhase: 'BADGE_HANDOVER', selectedPlayerId: undefined },

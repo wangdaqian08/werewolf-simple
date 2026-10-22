@@ -10,6 +10,12 @@
  *     its shot decides the game → review shows both shots.
  *  4. Edge: the witch poisons the king → no shot at the reveal.
  *  5. Edge: the king self-destructs (自爆) → no shot, no take.
+ *  6. Edge: the host starts the vote before the knifed king acts → shot lost.
+ *  7. Edge: a voted-out hunter passes → nothing reaches the other browsers.
+ *
+ * The shot is private: only the shooter's browser shows it, the day looks the
+ * same for everyone else, and no browser receives another player's role
+ * (every STOMP frame and /api/game JSON is scanned, see helpers/role-leak.ts).
  *
  * Every action is a DOM click in the acting player's own browser. Each
  * milestone writes a 9-seat composite to test-results/bwk/<test>/.
@@ -22,7 +28,7 @@ import {
   test,
   type TestInfo,
 } from '@playwright/test'
-import { mkdirSync } from 'fs'
+import { mkdirSync, writeFileSync } from 'fs'
 import path from 'path'
 import { type GameContext, setupGame } from './helpers/multi-browser'
 import { getConsoleLogin, type RoleName } from './helpers/shell-runner'
@@ -45,6 +51,7 @@ import {
   NIGHT_ROLE_ORDER,
 } from './helpers/audio-manifest'
 import { readBackendLogLineCount, readBackendLogSince } from './helpers/backend-log'
+import { findRoleLeaks, type PayloadLog, recordPayloads } from './helpers/role-leak'
 
 const BASE_URL = 'http://localhost:5174'
 // Set BWK_SHOTS_DIR to keep shots: Playwright wipes test-results/ on every run.
@@ -72,13 +79,23 @@ interface Table {
   extra: BrowserContext[]
   /** STOMP audio receipts on one villager's browser. */
   audio: AudioCapture
+  /** Server payloads per non-host seat (role-leak scan). */
+  payloads: Map<number, PayloadLog>
+  seatUser: Map<number, string>
   dir: string
   logStart: number
 }
 
 let table: Table | undefined
 
-test.afterEach(async () => {
+// eslint-disable-next-line no-empty-pattern -- Playwright needs the fixtures argument to reach testInfo
+test.afterEach(async ({}, testInfo) => {
+  // Keep what each seat received when a test fails: the evidence for a leak.
+  if (testInfo.status !== testInfo.expectedStatus) {
+    for (const [seat, log] of table?.payloads ?? []) {
+      writeFileSync(path.join(table!.dir, `payloads-S${seat}.json`), JSON.stringify(log.bodies))
+    }
+  }
   for (const c of table?.extra ?? []) await c.close().catch(() => {})
   await table?.ctx.cleanup()
   table = undefined
@@ -96,6 +113,8 @@ async function setupTable(browser: Browser, testInfo: TestInfo): Promise<Table> 
   const seatPage = new Map<number, Page>()
   const seatRole = new Map<number, RoleName>()
   const extra: BrowserContext[] = []
+  const payloads = new Map<number, PayloadLog>()
+  const seatUser = new Map<number, string>()
   for (const [role, bots] of Object.entries(ctx.roleMap) as [
     RoleName,
     { nick: string; seat: number }[],
@@ -104,12 +123,15 @@ async function setupTable(browser: Browser, testInfo: TestInfo): Promise<Table> 
       seatRole.set(bot.seat, role)
       if (bot.nick === 'Host') {
         seatPage.set(bot.seat, ctx.hostPage)
+        seatUser.set(bot.seat, await ctx.hostPage.evaluate(() => localStorage.getItem('userId')!))
         continue
       }
       const creds = getConsoleLogin(bot.nick, ctx.roomCode)
+      seatUser.set(bot.seat, creds.userId)
       const c = await browser.newContext({ viewport: { width: 417, height: 800 } })
       extra.push(c)
       const page = await c.newPage()
+      payloads.set(bot.seat, recordPayloads(page))
       await page.goto(`${BASE_URL}/`)
       await page.evaluate((cr) => {
         localStorage.setItem('jwt', cr.jwt)
@@ -137,7 +159,7 @@ async function setupTable(browser: Browser, testInfo: TestInfo): Promise<Table> 
   const dir = path.join(SHOTS, testInfo.title.replace(/[^\w]+/g, '-').slice(0, 40))
   mkdirSync(dir, { recursive: true })
   console.warn(`[bwk] game=${ctx.gameId} seats=${[...labeled.keys()].join(' ')}`)
-  return { ctx, seatPage, seatRole, labeled, extra, audio, dir, logStart }
+  return { ctx, seatPage, seatRole, labeled, extra, audio, payloads, seatUser, dir, logStart }
 }
 
 function seatsOf(t: Pick<Table, 'seatRole'>, role: RoleName): number[] {
@@ -186,6 +208,67 @@ async function assertAnonymous(t: Table, shooterSeat: number) {
         `seat ${seat} (${role}) must not see "${w}" while seat ${shooterSeat} shoots`,
       ).not.toContain(w)
     }
+  }
+}
+
+/** Only the shooter's browser shows the shot; every other screen is the ordinary day. */
+async function assertShotPrivate(t: Table, shooterSeat: number) {
+  const shotIds = [
+    'day-hunter-night-banner',
+    'day-hunter-night-shoot',
+    'voting-shoot-banner',
+    'voting-hunter-shoot',
+  ]
+  for (const [seat, page] of t.seatPage) {
+    if (seat === shooterSeat) continue
+    for (const id of shotIds) {
+      await expect(page.getByTestId(id), `seat ${seat} must not see ${id}`).toHaveCount(0)
+    }
+  }
+  await assertAnonymous(t, shooterSeat)
+}
+
+/** A villager reads the action log mid-game (the recorder keeps the response). */
+async function readEventsAsVillager(t: Table) {
+  const seat = seatsOf(t, 'VILLAGER').find((s) => t.payloads.has(s))!
+  await pageOf(t, seat).evaluate(async (id) => {
+    await fetch(`/api/game/${id}/events`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('jwt')}` },
+    })
+  }, t.ctx.gameId)
+}
+
+/**
+ * No non-wolf browser received another player's role, a shooter flag that is
+ * not its own, or a sub-phase naming a shot — up to game over, where roles
+ * are public. Wolves are skipped: they see their pack by design.
+ */
+function assertNoRoleLeak(t: Table) {
+  for (const [seat, log] of t.payloads) {
+    const role = t.seatRole.get(seat)!
+    if (role === 'WEREWOLF' || role === 'BLACK_WOLF_KING') continue
+    const over = log.bodies.findIndex((b) => /"GameOver"|"GAME_OVER"/.test(b.body))
+    const live = log.bodies.slice(0, over < 0 ? undefined : over)
+    expect(live.length, `seat ${seat} recorded payloads`).toBeGreaterThan(0)
+    expect(
+      findRoleLeaks(log, t.seatUser.get(seat)!, 0, over < 0 ? undefined : over),
+      `seat ${seat} (${role}) got a role`,
+    ).toEqual([])
+    for (const { src, body } of live) {
+      expect(body, `seat ${seat} ${src}: no shot sub-phase`).not.toMatch(
+        /HUNTER_SHOOT_NIGHT_DEATH|"subPhase":"HUNTER_SHOOT"/,
+      )
+      if (src.endsWith('/state'))
+        expect(body, `seat ${seat}: no shooter id in state`).not.toContain('"hunterUserId"')
+      if (role !== 'HUNTER' && src.endsWith('/state')) {
+        expect(body, `seat ${seat} (${role}) must never be told it can shoot`).not.toContain(
+          '"canShoot":true',
+        )
+      }
+    }
+    console.warn(
+      `[bwk] game=${t.ctx.gameId} seat=${seat} role=${role} scanned=${live.length} leaks=0`,
+    )
   }
 }
 
@@ -344,9 +427,10 @@ test('happy: knifed king shoots the hunter, the hunter shoots back, wolves win',
   await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: king, guardTargetSeat: wolf })
   await snap(t, '02-night1-done', testInfo)
   await revealNight(t)
-  expect(
-    await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT_NIGHT_DEATH', 15_000),
-  ).toBe(true)
+  // The shot is private: the public day is the ordinary revealed result.
+  expect(await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 15_000)).toBe(
+    true,
+  )
 
   // … and on the role chip during the day.
   await kingPage.getByTestId('my-role-chip').click()
@@ -355,21 +439,27 @@ test('happy: knifed king shoots the hunter, the hunter shoots back, wolves win',
   await kingPage.mouse.click(10, 10) // tap the overlay to close the sheet
   await expect(kingPage.getByTestId('role-card-desc')).toHaveCount(0)
 
-  await expect(pageOf(t, v1).getByTestId('day-hunter-night-wait-banner')).toBeVisible()
-  await assertAnonymous(t, king)
+  await expect(kingPage.getByTestId('day-hunter-night-banner')).toBeVisible()
+  await assertShotPrivate(t, king)
+  await expect(
+    t.ctx.hostPage.getByTestId('day-start-vote'),
+    'the host is not held back',
+  ).toBeVisible()
+  await readEventsAsVillager(t)
   await snap(t, '04-king-shooting', testInfo)
   await snapOne(t, kingPage, '04a-king-shot-screen', testInfo)
-  await snapOne(t, pageOf(t, v1), '04b-villager-wait-screen', testInfo)
+  await snapOne(t, pageOf(t, v1), '04b-villager-screen', testInfo)
 
   await nightShoot(t, king, hunter)
   await seatDead(t, hunter)
-  expect(
-    await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT_NIGHT_DEATH', 10_000),
-  ).toBe(true)
+  expect(await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 10_000)).toBe(
+    true,
+  )
   await expect(kingPage.getByTestId('day-hunter-night-banner'), 'the king fired once').toHaveCount(
     0,
   )
-  await assertAnonymous(t, hunter)
+  await expect(pageOf(t, hunter).getByTestId('day-hunter-night-banner')).toBeVisible()
+  await assertShotPrivate(t, hunter)
   await snap(t, '05-chain-hunter-shooting', testInfo)
   await snapOne(t, pageOf(t, hunter), '05a-hunter-chain-shot-screen', testInfo)
 
@@ -398,6 +488,7 @@ test('happy: knifed king shoots the hunter, the hunter shoots back, wolves win',
   expect(review.match(/开枪带走/g)?.length, 'review shows both shots').toBe(2)
   expect(review).toContain('黑狼王')
   assertNightAudio(t, 1)
+  assertNoRoleLeak(t)
 })
 
 // ── 2. Vote-out shot at a god; the dead god's audio keeps playing ──────────
@@ -420,14 +511,16 @@ test('vote-out: king shoots the seer, night 2 still plays seer cues', async ({
   )
 
   await voteOut(t, king)
-  expect(await waitForVotingSubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT', 10_000)).toBe(
+  expect(await waitForVotingSubPhase(t.ctx.hostPage, t.ctx.gameId, 'VOTE_RESULT', 10_000)).toBe(
     true,
   )
+  await expect(pageOf(t, king).getByTestId('voting-shoot-banner')).toBeVisible()
   await expect(
     t.ctx.hostPage.getByTestId('voting-continue'),
-    'host held back during the shot',
-  ).toHaveCount(0)
-  await assertAnonymous(t, king)
+    'the host is not held back (continuing would end the shot)',
+  ).toBeVisible()
+  await assertShotPrivate(t, king)
+  await readEventsAsVillager(t)
   await snap(t, '01-king-voted-out-shooting', testInfo)
   await snapOne(t, pageOf(t, king), '01a-king-vote-shot-screen', testInfo)
   await snapOne(t, pageOf(t, v2), '01b-villager-during-shot', testInfo)
@@ -467,6 +560,7 @@ test('vote-out: king shoots the seer, night 2 still plays seer cues', async ({
   const review = await checkResultAndReview(t, testInfo, '03')
   expect(review.match(/开枪带走/g)?.length).toBe(1)
   assertNightAudio(t, 2)
+  assertNoRoleLeak(t)
 })
 
 // ── 3. Hunter voted out → shoots the king → the king's shot decides it ─────
@@ -488,16 +582,18 @@ test('vote-out chain: hunter shoots the king, the king fires the deciding shot',
   )
 
   await voteOut(t, hunter)
+  await assertShotPrivate(t, hunter)
   await voteShoot(t, hunter, king)
   await seatDead(t, king)
-  expect(await waitForVotingSubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT', 10_000)).toBe(
+  expect(await waitForVotingSubPhase(t.ctx.hostPage, t.ctx.gameId, 'VOTE_RESULT', 10_000)).toBe(
     true,
   )
   await expect(
     pageOf(t, hunter).getByTestId('voting-shoot-banner'),
     'the hunter fired once',
   ).toHaveCount(0)
-  await assertAnonymous(t, king)
+  await expect(pageOf(t, king).getByTestId('voting-shoot-banner')).toBeVisible()
+  await assertShotPrivate(t, king)
   await snap(t, '01-chain-king-shooting', testInfo)
   await snapOne(t, pageOf(t, king), '01a-king-chain-shot-screen', testInfo)
 
@@ -505,6 +601,7 @@ test('vote-out chain: hunter shoots the king, the king fires the deciding shot',
   const review = await checkResultAndReview(t, testInfo, '02')
   expect(review.match(/开枪带走/g)?.length, 'review shows both shots').toBe(2)
   assertNightAudio(t, 1)
+  assertNoRoleLeak(t)
 })
 
 // ── 3b. Night chain, reverse: knifed hunter shoots the king; the king reloads ──
@@ -521,10 +618,10 @@ test('night chain: knifed hunter shoots the king, the king reloads and fires bac
 
   await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: hunter, guardTargetSeat: wolf })
   await revealNight(t)
-  expect(
-    await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'HUNTER_SHOOT_NIGHT_DEATH', 15_000),
-  ).toBe(true)
-  await assertAnonymous(t, hunter)
+  expect(await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 15_000)).toBe(
+    true,
+  )
+  await assertShotPrivate(t, hunter)
   await nightShoot(t, hunter, king)
   await seatDead(t, king)
 
@@ -532,7 +629,8 @@ test('night chain: knifed hunter shoots the king, the king reloads and fires bac
   const kingPage = pageOf(t, king)
   await kingPage.reload()
   await kingPage.locator('.game-wrap').waitFor({ state: 'visible', timeout: scale(15_000) })
-  await assertAnonymous(t, king)
+  await expect(kingPage.getByTestId('day-hunter-night-banner')).toBeVisible()
+  await assertShotPrivate(t, king)
   await snapOne(t, kingPage, '01-king-after-reload-shot-screen', testInfo)
   await nightShoot(t, king, v1)
   await seatDead(t, v1)
@@ -540,6 +638,7 @@ test('night chain: knifed hunter shoots the king, the king reloads and fires bac
     true,
   )
   await snap(t, '02-after-reverse-chain', testInfo)
+  assertNoRoleLeak(t)
 })
 
 // ── 4. Poisoned king: no shot ───────────────────────────────────────────────
@@ -559,7 +658,7 @@ test('edge: a poisoned king gets no shot', async ({ browser }, testInfo) => {
   await revealNight(t)
   expect(
     await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 15_000),
-    'no shot sub-phase',
+    'the reveal lands on the ordinary day',
   ).toBe(true)
   expect(await aliveSeats(t)).not.toContain(king)
   const kingPage = pageOf(t, king)
@@ -568,6 +667,7 @@ test('edge: a poisoned king gets no shot', async ({ browser }, testInfo) => {
   await expect(t.ctx.hostPage.getByTestId('day-start-vote')).toBeVisible()
   await snap(t, '01-poisoned-king-no-shot', testInfo)
   await snapOne(t, kingPage, '01a-poisoned-king-screen', testInfo)
+  assertNoRoleLeak(t)
 })
 
 // ── 5. Self-destructing king: no shot, no take ──────────────────────────────
@@ -603,4 +703,104 @@ test('edge: a self-destructing king gets no shot and takes no one', async ({
   await expect(t.ctx.hostPage.getByTestId('day-enter-night')).toBeVisible()
   await snap(t, '02-after-self-destruct', testInfo)
   await snapOne(t, t.ctx.hostPage, '02a-host-after-self-destruct', testInfo)
+  assertNoRoleLeak(t)
+})
+
+// ── 6. The host moves on before the shooter acts: the shot is lost ──────────
+
+test('edge: the host starts the vote before the knifed king acts - the shot is lost', async ({
+  browser,
+}, testInfo) => {
+  testInfo.setTimeout(scale(240_000))
+  const t = (table = await setupTable(browser, testInfo))
+  const king = one(t, 'BLACK_WOLF_KING')
+  const hunter = one(t, 'HUNTER')
+  const [wolf] = seatsOf(t, 'WEREWOLF')
+
+  await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: king, guardTargetSeat: wolf })
+  await revealNight(t)
+  const kingPage = pageOf(t, king)
+  await expect(kingPage.getByTestId('day-hunter-night-banner')).toBeVisible({
+    timeout: scale(15_000),
+  })
+  await assertShotPrivate(t, king)
+  await snap(t, '01-king-may-shoot', testInfo)
+
+  // The host cannot tell a shot is open, and starts the vote at once.
+  await t.ctx.hostPage.getByTestId('day-start-vote').click()
+  expect(await waitForVotingSubPhase(t.ctx.hostPage, t.ctx.gameId, 'VOTING', 10_000)).toBe(true)
+  await expect(kingPage.getByTestId('day-hunter-night-banner')).toHaveCount(0)
+  await expect(kingPage.getByTestId('voting-shoot-banner')).toHaveCount(0)
+
+  // The server refuses a late shot sent straight from the king's browser.
+  const late = await kingPage.evaluate(
+    async ({ gameId, target }) => {
+      const res = await fetch('/api/game/action', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('jwt')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ gameId, actionType: 'HUNTER_SHOOT', targetUserId: target }),
+      })
+      return { status: res.status, body: await res.text() }
+    },
+    { gameId: Number(t.ctx.gameId), target: t.seatUser.get(hunter)! },
+  )
+  expect(late.status, `late shot rejected: ${late.body}`).toBe(400)
+  expect(await aliveSeats(t)).toContain(hunter)
+  await snap(t, '02-vote-started-shot-lost', testInfo)
+  await snapOne(t, kingPage, '02a-king-screen-after-vote-start', testInfo)
+  assertNoRoleLeak(t)
+})
+
+// ── 7. A pass is private: nothing reaches the other browsers ────────────────
+
+test('edge: a voted-out hunter passes - no other browser receives anything', async ({
+  browser,
+}, testInfo) => {
+  testInfo.setTimeout(scale(240_000))
+  const t = (table = await setupTable(browser, testInfo))
+  const hunter = one(t, 'HUNTER')
+  const [wolf] = seatsOf(t, 'WEREWOLF')
+  const [v1] = seatsOf(t, 'VILLAGER')
+
+  await driveMinimalNight1ViaDom(t.ctx, { wolfTargetSeat: v1, guardTargetSeat: wolf })
+  await revealNight(t)
+  expect(await waitForDaySubPhase(t.ctx.hostPage, t.ctx.gameId, 'RESULT_REVEALED', 15_000)).toBe(
+    true,
+  )
+  await voteOut(t, hunter)
+  const hunterPage = pageOf(t, hunter)
+  await expect(hunterPage.getByTestId('voting-shoot-banner')).toBeVisible({
+    timeout: scale(10_000),
+  })
+  await assertShotPrivate(t, hunter)
+  await snapOne(t, hunterPage, '01-hunter-shot-screen', testInfo)
+
+  // Any recorded browser other than the shooter's (the host's page is not recorded).
+  const watcher = [...t.payloads].find(([seat]) => seat !== hunter)![1]
+  const before = watcher.bodies.length // index into everything this browser recorded
+  await hunterPage.getByTestId('voting-hunter-pass').click()
+  // The hunter's own screen closes the shot (it re-reads its own state).
+  await expect(hunterPage.getByTestId('voting-shoot-banner')).toHaveCount(0, {
+    timeout: scale(10_000),
+  })
+  await expect(hunterPage.locator('.elim-banner-name')).toBeVisible()
+  await snap(t, '02-after-private-pass', testInfo)
+
+  // Ordering fence: the host's next public step reaches the watcher after
+  // anything the pass might have broadcast (STOMP is FIFO per subscription).
+  await t.ctx.hostPage.getByTestId('voting-continue').click()
+  const newStomp = () => watcher.bodies.slice(before).filter((b) => b.src === 'stomp')
+  await expect
+    .poll(() => newStomp().some((b) => b.body.includes('"NIGHT"')), { timeout: scale(15_000) })
+    .toBe(true)
+  const frames = newStomp()
+  const firstNight = frames.findIndex((b) => b.body.includes('"NIGHT"'))
+  expect(
+    frames.slice(0, firstNight).map((b) => b.body.slice(0, 80)),
+    'the pass broadcast nothing before the host went to night',
+  ).toEqual([])
+  assertNoRoleLeak(t)
 })

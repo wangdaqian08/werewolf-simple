@@ -22,6 +22,7 @@ import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRe
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
 import org.springframework.http.HttpEntity
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -29,7 +30,9 @@ import org.springframework.test.context.ActiveProfiles
 
 /**
  * Integration coverage for the "hunter killed by wolves at night shoots during
- * the day-reveal flow" contract (DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH).
+ * the day-reveal flow" contract. The shot is private: the day stays on its
+ * normal sub-phase, only the shooter's state says `canShoot`, and the chance
+ * ends when the host starts the vote.
  *
  * Setup mirrors SheriffNightDeathHandoverIntegrationTest: the night flow isn't
  * under test, so we park the game at "Day 2 morning, ready to reveal", force the
@@ -216,6 +219,15 @@ class HunterNightDeathShootIntegrationTest {
             assertThat(it.statusCode).isEqualTo(HttpStatus.OK)
         }
 
+    /** The day state as [token]'s player sees it. */
+    @Suppress("UNCHECKED_CAST")
+    private fun dayState(token: String, gameId: Int): Map<String, Any?> =
+        restTemplate.exchange(
+            "/api/game/$gameId/state", HttpMethod.GET, HttpEntity<Void>(headers(token)), Map::class.java
+        ).body!!["dayPhase"] as Map<String, Any?>
+
+    private fun canShoot(player: TestPlayer, gameId: Int) = dayState(player.token, gameId)["canShoot"] == true
+
     private fun subPhase(gameId: Int) = gameRepository.findById(gameId).orElseThrow().subPhase
     private fun phase(gameId: Int) = gameRepository.findById(gameId).orElseThrow().phase
     private fun alive(gameId: Int, userId: String) =
@@ -224,7 +236,7 @@ class HunterNightDeathShootIntegrationTest {
     // ── Tests ──────────────────────────────────────────────────────────────────
 
     @Test
-    fun `wolf-killed hunter lands on HUNTER_SHOOT_NIGHT_DEATH at reveal`() {
+    fun `wolf-killed hunter - the day looks normal and only the hunter can shoot`() {
         val room = setupRoom("HNS1")
         val gameId = openDay2(room)
         saveNight(gameId, wolfTarget = room.g1.userId) // g1 = hunter
@@ -232,8 +244,30 @@ class HunterNightDeathShootIntegrationTest {
         reveal(room, gameId)
 
         assertThat(phase(gameId)).isEqualTo(GamePhase.DAY_DISCUSSION)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
         assertThat(alive(gameId, room.g1.userId)).isFalse() // dead from the wolf attack
+        assertThat(canShoot(room.g1, gameId)).isTrue()
+        for (other in listOf(room.host, room.g2, room.g4)) {
+            val day = dayState(other.token, gameId)
+            assertThat(day["canShoot"]).isEqualTo(false)
+            assertThat(day).doesNotContainKey("hunterUserId")
+        }
+    }
+
+    @Test
+    fun `the host starting the vote ends an unused shot`() {
+        val room = setupRoom("HNW3")
+        val gameId = openDay2(room)
+        saveNight(gameId, wolfTarget = room.g1.userId)
+        reveal(room, gameId)
+
+        // The host does not know a shot is pending, so the vote can start at once.
+        assertThat(action(room.host.token, gameId, "DAY_ADVANCE").statusCode).isEqualTo(HttpStatus.OK)
+
+        assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId).statusCode)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(alive(gameId, room.g4.userId)).isTrue()
+        assertThat(gameRepository.findById(gameId).orElseThrow().pendingShooterUserId).isNull()
     }
     @Test
     fun `wolf-killed hunter cannot shoot before the host reveals the night result`() {
@@ -292,6 +326,7 @@ class HunterNightDeathShootIntegrationTest {
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
         // Everyone except the wolf-killed hunter is still alive.
         assertThat(alive(gameId, room.g4.userId)).isTrue()
+        assertThat(canShoot(room.g1, gameId)).isFalse()
     }
 
     @Test
@@ -317,7 +352,7 @@ class HunterNightDeathShootIntegrationTest {
         reveal(room, gameId)
 
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
-        // And a HUNTER_SHOOT attempt is rejected (not in the shoot sub-phase).
+        // And a HUNTER_SHOOT attempt is rejected (no shot pending).
         val resp = action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId)
         assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
     }
@@ -352,7 +387,7 @@ class HunterNightDeathShootIntegrationTest {
     }
 
     @Test
-    fun `sheriff and a different hunter both die - hunter shoot first then badge handover`() {
+    fun `sheriff and a different hunter both die - the hunter can shoot during the badge handover`() {
         val room = setupRoom("HNS6")
         val gameId = openDay2(room)
         setSheriff(gameId, room.g3.userId) // g3 (SEER) holds the badge
@@ -360,10 +395,11 @@ class HunterNightDeathShootIntegrationTest {
         saveNight(gameId, wolfTarget = room.g1.userId, poisonTarget = room.g3.userId)
 
         reveal(room, gameId)
-        // The hunter shoots first (网易 order: skill at death, badge afterwards).
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        // The public sub-phase is the handover; the shot is open in parallel.
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(canShoot(room.g1, gameId)).isTrue()
 
-        // Hunter fires at g5 (villager) → chains into the dead sheriff's handover.
+        // Hunter fires at g5 (villager); the handover is still pending.
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
             .isEqualTo(HttpStatus.OK)
         assertThat(alive(gameId, room.g5.userId)).isFalse()
@@ -383,7 +419,7 @@ class HunterNightDeathShootIntegrationTest {
         saveNight(gameId, wolfTarget = room.g1.userId)
 
         reveal(room, gameId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
 
         // Shoots g5 (villager) → now hands over the badge.
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
@@ -399,6 +435,25 @@ class HunterNightDeathShootIntegrationTest {
     }
 
     @Test
+    fun `hunter is the sheriff - may hand over the badge first and still shoot`() {
+        val room = setupRoom("HNS15")
+        val gameId = openDay2(room)
+        setSheriff(gameId, room.g1.userId)
+        saveNight(gameId, wolfTarget = room.g1.userId)
+        reveal(room, gameId)
+
+        assertThat(action(room.g1.token, gameId, "BADGE_PASS", room.g4.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(canShoot(room.g1, gameId)).isTrue()
+
+        assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
+            .isEqualTo(HttpStatus.OK)
+        assertThat(alive(gameId, room.g5.userId)).isFalse()
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+    }
+
+    @Test
     fun `night-death hunter shooting the alive sheriff triggers badge handover`() {
         val room = setupRoom("HNS8")
         val gameId = openDay2(room)
@@ -406,7 +461,7 @@ class HunterNightDeathShootIntegrationTest {
         saveNight(gameId, wolfTarget = room.g1.userId) // only the hunter dies at night
 
         reveal(room, gameId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
 
         // Hunter shoots the living sheriff (g3) → kill, then badge handover.
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g3.userId).statusCode)
@@ -427,7 +482,6 @@ class HunterNightDeathShootIntegrationTest {
         saveNight(gameId, wolfTarget = room.g1.userId) // hunter dies
 
         reveal(room, gameId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
 
         // Hunter shoots the only werewolf (g2) → villagers win.
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g2.userId).statusCode)
@@ -447,7 +501,7 @@ class HunterNightDeathShootIntegrationTest {
 
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId).statusCode)
             .isEqualTo(HttpStatus.OK)
-        // Sub-phase has advanced; the resolved flag is set → second shot rejected.
+        // The pending shot is used up → second shot rejected.
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g5.userId).statusCode)
             .isEqualTo(HttpStatus.BAD_REQUEST)
         assertThat(alive(gameId, room.g5.userId)).isTrue()
@@ -478,12 +532,11 @@ class HunterNightDeathShootIntegrationTest {
         // Wolves kill the hunter (g1); witch poisons g4 — both are dead at reveal.
         saveNight(gameId, wolfTarget = room.g1.userId, poisonTarget = room.g4.userId)
         reveal(room, gameId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
 
-        // g4 is already dead (poison) → the shot is rejected; sub-phase unchanged.
+        // g4 is already dead (poison) → the shot is rejected; the shot stays open.
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId).statusCode)
             .isEqualTo(HttpStatus.BAD_REQUEST)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        assertThat(canShoot(room.g1, gameId)).isTrue()
     }
 
     @Test
@@ -495,11 +548,11 @@ class HunterNightDeathShootIntegrationTest {
 
         assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", null).statusCode)
             .isEqualTo(HttpStatus.BAD_REQUEST)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        assertThat(canShoot(room.g1, gameId)).isTrue()
     }
 
     @Test
-    fun `hunter pass at reveal still chains into the sheriff BADGE_DESTROY`() {
+    fun `hunter pass during the sheriff handover changes nothing public`() {
         val room = setupRoom("HNS14")
         val gameId = openDay2(room)
         setSheriff(gameId, room.g3.userId)
@@ -507,11 +560,11 @@ class HunterNightDeathShootIntegrationTest {
         saveNight(gameId, wolfTarget = room.g1.userId, poisonTarget = room.g3.userId)
 
         reveal(room, gameId)
-        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.HUNTER_SHOOT_NIGHT_DEATH.name)
+        assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
 
-        // Hunter passes → chains into the dead sheriff's handover (hunter first).
         assertThat(action(room.g1.token, gameId, "HUNTER_PASS").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(subPhase(gameId)).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(canShoot(room.g1, gameId)).isFalse()
 
         // Sheriff destroys the badge → RESULT_REVEALED.
         assertThat(action(room.g3.token, gameId, "BADGE_DESTROY").statusCode).isEqualTo(HttpStatus.OK)

@@ -2,7 +2,6 @@ package com.werewolf.unit.service
 
 import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.night.NightOrchestrator
-import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.timer.TimerSnapshot
 import com.werewolf.model.*
@@ -38,7 +37,6 @@ class GameServiceVotingPhaseTest {
     @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
     @Mock lateinit var audioReplayCache: AudioReplayCache
     @Mock lateinit var hostTimerService: HostTimerService
-    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
     @Mock lateinit var creditTransactionRepository: CreditTransactionRepository
     @Mock lateinit var walletService: com.werewolf.service.WalletService
     @Mock lateinit var perkService: com.werewolf.service.PerkService
@@ -293,13 +291,13 @@ class GameServiceVotingPhaseTest {
         assertThat(voting["eliminatedPlayerId"]).isEqualTo("u2")
         assertThat(voting["eliminatedNickname"]).isEqualTo("Bob")
         assertThat(voting["eliminatedSeatIndex"]).isEqualTo(1)
-        assertThat(voting["eliminatedRole"]).isEqualTo("WEREWOLF")
+        assertThat(voting).doesNotContainKey("eliminatedRole") // hidden until game over
     }
 
     @Test
-    fun `getGameState VOTING - hunterUserId is the voted-out shooter during HUNTER_SHOOT`() {
+    fun `getGameState VOTING - canShoot is true only on the pending shooter's own state`() {
         setupGameAndPlayers(
-            game(VotingSubPhase.HUNTER_SHOOT.name),
+            game(VotingSubPhase.VOTE_RESULT.name).also { it.pendingShooterUserId = "k" },
             listOf(player(hostId, 0), player("k", 1, PlayerRole.BLACK_WOLF_KING)),
             listOf(user(hostId, "Host"), user("k", "King")),
         )
@@ -307,35 +305,10 @@ class GameServiceVotingPhaseTest {
             Optional.of(EliminationHistory(gameId = gameId, dayNumber = day, eliminatedUserId = "k", eliminatedRole = PlayerRole.BLACK_WOLF_KING))
         )
 
-        assertThat(votingResult(gameService.getGameState(gameId, hostId))["hunterUserId"]).isEqualTo("k")
-    }
-
-    @Test
-    fun `getGameState VOTING - hunterUserId is the chain shooter after the first shot`() {
-        setupGameAndPlayers(
-            game(VotingSubPhase.HUNTER_SHOOT.name).also { it.chainShooterUserId = "h" },
-            listOf(player(hostId, 0), player("k", 1, PlayerRole.BLACK_WOLF_KING), player("h", 2, PlayerRole.HUNTER)),
-            listOf(user(hostId, "Host"), user("k", "King"), user("h", "Hunter")),
-        )
-        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(
-            Optional.of(EliminationHistory(gameId = gameId, dayNumber = day, eliminatedUserId = "k", eliminatedRole = PlayerRole.BLACK_WOLF_KING))
-        )
-
-        assertThat(votingResult(gameService.getGameState(gameId, hostId))["hunterUserId"]).isEqualTo("h")
-    }
-
-    @Test
-    fun `getGameState VOTING - hunterUserId is null outside HUNTER_SHOOT`() {
-        setupGameAndPlayers(
-            game(VotingSubPhase.VOTE_RESULT.name),
-            listOf(player(hostId, 0), player("k", 1, PlayerRole.BLACK_WOLF_KING)),
-            listOf(user(hostId, "Host"), user("k", "King")),
-        )
-        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(
-            Optional.of(EliminationHistory(gameId = gameId, dayNumber = day, eliminatedUserId = "k", eliminatedRole = PlayerRole.BLACK_WOLF_KING))
-        )
-
-        assertThat(votingResult(gameService.getGameState(gameId, hostId))["hunterUserId"]).isNull()
+        assertThat(votingResult(gameService.getGameState(gameId, "k"))["canShoot"]).isEqualTo(true)
+        val others = votingResult(gameService.getGameState(gameId, hostId))
+        assertThat(others["canShoot"]).isEqualTo(false)
+        assertThat(others).doesNotContainKeys("hunterUserId", "eliminatedRole")
     }
 
     // ── Idiot revealed ───────────────────────────────────────────────────────

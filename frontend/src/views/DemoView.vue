@@ -564,7 +564,7 @@ const ROLE_LABELS: Record<PlayerRole, string> = {
 }
 const SHERIFF_SUBPHASES: SheriffSubPhase[] = ['SIGNUP', 'SPEECH', 'VOTING', 'RESULT']
 const DAY_SUBPHASES: DaySubPhase[] = ['RESULT_HIDDEN', 'RESULT_REVEALED']
-const VOTING_SUBPHASES: VotingSubPhase[] = ['VOTING', 'VOTE_RESULT', 'HUNTER_SHOOT']
+const VOTING_SUBPHASES: VotingSubPhase[] = ['VOTING', 'VOTE_RESULT']
 
 // ── Shared mock players ───────────────────────────────────────────────────
 

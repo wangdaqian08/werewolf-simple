@@ -204,16 +204,10 @@
       <!-- Footer -->
       <footer class="voting-footer">
         <!-- After reveal: host must click Continue; others wait. No auto-advance
-             on the frontend — the server is authoritative, and an invisible
-             client-side timer previously fired VOTING_CONTINUE against
-             HUNTER_SHOOT sub-phases and produced 400s. -->
+             on the frontend — the server is authoritative. A pending private
+             shot does not hold the host back: continuing ends it. -->
         <template v-if="isRevealed">
-          <!-- A voted-out hunter is still deciding: keep the screen neutral so
-               the hunter's identity stays private, and hold the host back. -->
-          <template v-if="votingPhase.subPhase === 'HUNTER_SHOOT'">
-            <p class="footer-hint">等待中 · Waiting…</p>
-          </template>
-          <template v-else-if="isHost">
+          <template v-if="isHost">
             <div class="vote-actions">
               <button
                 class="btn btn-primary vote-btn"
@@ -453,8 +447,8 @@
       </Teleport>
     </template>
 
-    <!-- ── HUNTER_SHOOT screen ── -->
-    <template v-else-if="votingPhase.subPhase === 'HUNTER_SHOOT'">
+    <!-- ── Private shot screen (hunter / 黑狼王): only the shooter's own state says canShoot ── -->
+    <template v-else-if="isShooter">
       <header class="day-header">
         <div class="day-pill">第 {{ votingPhase.dayNumber }} 天</div>
         <div class="day-timer">{{ formattedTime }}</div>
@@ -467,7 +461,7 @@
           <span class="banner-avatar">🔫</span>
           <div>
             <div class="banner-title">你可以开枪 · Your Shot</div>
-            <div class="banner-sub">选择带走一名玩家，或放弃 — may fire one shot</div>
+            <div class="banner-sub">选择带走一名玩家，或放弃；主持人进入下一阶段后失效</div>
           </div>
         </div>
       </div>
@@ -496,28 +490,26 @@
       </section>
 
       <footer class="voting-footer">
-        <template v-if="isShooter">
-          <div class="vote-actions">
-            <button
-              class="btn btn-danger vote-btn"
-              data-testid="voting-hunter-shoot"
-              :class="{ 'is-loading': actionPending }"
-              :disabled="!effectiveSelected || actionPending"
-              @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
-            >
-              开枪 · Shoot
-            </button>
-            <button
-              class="btn btn-secondary skip-btn"
-              data-testid="voting-hunter-pass"
-              :class="{ 'is-loading': actionPending }"
-              :disabled="actionPending"
-              @click="emit('hunterPass')"
-            >
-              放弃 · Pass
-            </button>
-          </div>
-        </template>
+        <div class="vote-actions">
+          <button
+            class="btn btn-danger vote-btn"
+            data-testid="voting-hunter-shoot"
+            :class="{ 'is-loading': actionPending }"
+            :disabled="!effectiveSelected || actionPending"
+            @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
+          >
+            开枪 · Shoot
+          </button>
+          <button
+            class="btn btn-secondary skip-btn"
+            data-testid="voting-hunter-pass"
+            :class="{ 'is-loading': actionPending }"
+            :disabled="actionPending"
+            @click="emit('hunterPass')"
+          >
+            放弃 · Pass
+          </button>
+        </div>
       </footer>
     </template>
 
@@ -698,16 +690,16 @@ const emit = defineEmits<{
 
 // ── Screen grouping ───────────────────────────────────────────────────────────
 // VOTE_RESULT is merged into the VOTING screen (shown when tallyRevealed).
-// During HUNTER_SHOOT only the shooter (the voted-out player, or a chained
-// shooter) gets the shoot screen; everyone else keeps the vote result so the
-// shooter's identity is not exposed.
-const isShooter = computed(() => props.myUserId === props.votingPhase.hunterUserId)
+// A dead shooter (the voted-out player, or a chained shooter) with an open shot
+// gets the shoot screen, before the badge handover; everyone else keeps the
+// ordinary screens — canShoot is only ever true on the shooter's own state.
+const isShooter = computed(() => !!props.votingPhase.canShoot)
 const isVotingScreen = computed(
   () =>
-    props.votingPhase.subPhase === 'VOTING' ||
-    props.votingPhase.subPhase === 'RE_VOTING' ||
-    props.votingPhase.subPhase === 'VOTE_RESULT' ||
-    (props.votingPhase.subPhase === 'HUNTER_SHOOT' && !isShooter.value),
+    !isShooter.value &&
+    (props.votingPhase.subPhase === 'VOTING' ||
+      props.votingPhase.subPhase === 'RE_VOTING' ||
+      props.votingPhase.subPhase === 'VOTE_RESULT'),
 )
 // BADGE_RECEIVED is merged into the BADGE_HANDOVER screen
 const isBadgeScreen = computed(
@@ -717,12 +709,8 @@ const isBadgeScreen = computed(
 )
 
 // Tally/result is revealed when tallyRevealed flag is set or we're on VOTE_RESULT
-// (or HUNTER_SHOOT, which only follows a revealed vote) sub-phase
 const isRevealed = computed(
-  () =>
-    props.votingPhase.tallyRevealed ||
-    props.votingPhase.subPhase === 'VOTE_RESULT' ||
-    props.votingPhase.subPhase === 'HUNTER_SHOOT',
+  () => props.votingPhase.tallyRevealed || props.votingPhase.subPhase === 'VOTE_RESULT',
 )
 
 // Debug: watch votingPhase changes
@@ -1015,8 +1003,6 @@ function onVotingTap(player: GamePlayer) {
   if (!props.votingPhase.canVote) return
   // Prevent selection after player has already voted or skipped
   if (props.votingPhase.myVote || props.votingPhase.myVoteSkipped) return
-  // During HUNTER_SHOOT, only the hunter can select targets
-  if (props.votingPhase.subPhase === 'HUNTER_SHOOT') return
   if (pkStage.value.length && !pkStage.value.includes(player.userId)) return
   selectPlayer(player.userId)
 }

@@ -66,23 +66,12 @@ const NIGHT_SUBS = new Set([
   'COMPLETE',
 ])
 
-// All DaySubPhase values (Enums.kt). HUNTER_SHOOT_NIGHT_DEATH and BADGE_HANDOVER
-// are reached during DAY_DISCUSSION when a wolf-killed hunter/sheriff resolves at
-// reveal (#133 / sheriff night-death handover) — the invariant must recognize them.
-const DAY_SUBS = new Set([
-  'RESULT_HIDDEN',
-  'RESULT_REVEALED',
-  'HUNTER_SHOOT_NIGHT_DEATH',
-  'BADGE_HANDOVER',
-])
+// All DaySubPhase values (Enums.kt). BADGE_HANDOVER is reached during
+// DAY_DISCUSSION when a night-killed sheriff hands over at reveal. A shooter's
+// shot is private and has no sub-phase.
+const DAY_SUBS = new Set(['RESULT_HIDDEN', 'RESULT_REVEALED', 'BADGE_HANDOVER'])
 
-const VOTING_SUBS = new Set([
-  'VOTING',
-  'RE_VOTING',
-  'VOTE_RESULT',
-  'HUNTER_SHOOT',
-  'BADGE_HANDOVER',
-])
+const VOTING_SUBS = new Set(['VOTING', 'RE_VOTING', 'VOTE_RESULT', 'BADGE_HANDOVER'])
 
 const SHERIFF_SUBS = new Set(['SIGNUP', 'SPEECH', 'VOTING', 'RESULT', 'TIED'])
 

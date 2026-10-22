@@ -67,10 +67,10 @@ migration) to match the typical acting time of a live role.
   Can't use both the same night. State persists in `night_phases` columns.
 - **Guard consecutive rule.** Guard cannot protect the same player two nights in a row; prior
   target is stored in `night_phases.prev_guard_target_user_id`. Self-protect is allowed.
-- **On-death shot (HUNTER, BLACK_WOLF_KING) — not a night step.** A voted-out shooter fires in
-  `DAY_VOTING / HUNTER_SHOOT`; a wolf-killed (not poisoned) shooter fires at the day reveal in
-  `DAY_DISCUSSION / HUNTER_SHOOT_NIGHT_DEATH` (`DayRevealAdvancer`). A shooter killed by a shot
-  fires next (chain). See `docs/black-wolf-king.md`.
+- **On-death shot (HUNTER, BLACK_WOLF_KING) — not a night step.** A voted-out shooter, or a
+  wolf-killed (not poisoned) one from the day reveal (`DayRevealAdvancer.nightShooterId`), gets a
+  private shot (`games.pending_shooter_user_id`) with no sub-phase of its own; the host moving on
+  ends it. A shooter killed by a shot gets the next one (chain). See `docs/black-wolf-king.md`.
 - **Idiot — day-vote reveal.** On first vote-elimination the idiot is revealed, stays alive, and
   loses their vote right (`game_players.idiot_revealed = true`, `can_vote = false`). Second
   vote-elimination kills normally.

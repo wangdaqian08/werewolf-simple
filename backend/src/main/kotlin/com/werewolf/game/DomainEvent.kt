@@ -25,7 +25,7 @@ sealed class DomainEvent {
     @JsonTypeName("VoteTally")
     data class VoteTally(val gameId: Int, val eliminatedUserId: String?, val tally: Map<String, Double>) : DomainEvent()
     @JsonTypeName("PlayerEliminated")
-    data class PlayerEliminated(val gameId: Int, val userId: String, val role: PlayerRole) : DomainEvent()
+    data class PlayerEliminated(val gameId: Int, val userId: String) : DomainEvent()
     @JsonTypeName("HunterShot")
     data class HunterShot(val gameId: Int, val hunterUserId: String, val targetUserId: String) : DomainEvent()
     @JsonTypeName("BadgeHandover")

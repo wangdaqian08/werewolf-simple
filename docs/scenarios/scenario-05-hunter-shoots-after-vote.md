@@ -4,6 +4,11 @@
 **Complexity:** Medium
 **Outcome:** VILLAGER wins Day 2; tests hunter mechanic
 
+> **Superseded (2026-10-22):** there is no `HUNTER_SHOOT` sub-phase any more. The voted-out
+> hunter's shot is private: the day stays on `VOTE_RESULT`, only the hunter's screen shows the
+> shot, `PlayerEliminated` carries no role, and the host's `VOTING_CONTINUE` ends an unused shot.
+> See `docs/black-wolf-king.md`. The steps below keep the old sub-phase names.
+
 ---
 
 ## Cast

@@ -14,7 +14,9 @@ import { setupGame } from './helpers/multi-browser'
 import { act, actName, type RoleName } from './helpers/shell-runner'
 import { captureSnapshot } from './helpers/composite-screenshot'
 import {
+  fetchGameState,
   readUnvotedAlivePlayerIds,
+  waitForCondition,
   waitForNightSubPhase,
   waitForPhase,
   waitForVotingSubPhase,
@@ -28,7 +30,7 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
     testInfo.setTimeout(240_000)
     // 6p kit: GameService.kt:316 → 2 wolves. Plus SEER + WITCH + 2 villagers
     // (HUNTER and GUARD intentionally off so D1's elimination cleanly
-    // resolves to a win check, no HUNTER_SHOOT detour).
+    // resolves to a win check, no hunter-shot detour).
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
       hasSheriff: false,
@@ -248,8 +250,8 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
     }
   })
 
-  // ── Row 4: HUNTER_SHOOT subPhase fires when hunter is voted out at D1 ──
-  test('row 4 — HUNTER_SHOOT subPhase when D1 votes the hunter', async ({ browser }, testInfo) => {
+  // ── Row 4: a hunter voted out at D1 gets a private shot ──
+  test('row 4 — the voted-out hunter gets a private shot on VOTE_RESULT', async ({ browser }, testInfo) => {
     testInfo.setTimeout(240_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 9,
@@ -333,16 +335,18 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       }
       await hostPage.getByTestId('voting-reveal').click()
 
-      // Backend transitions to HUNTER_SHOOT (not VOTE_RESULT or GAME_OVER yet).
-      const reachedHunterShoot = await waitForVotingSubPhase(
-          hostPage,
-          localCtx.gameId,
-          'HUNTER_SHOOT',
-          15_000,
-      )
-      expect(reachedHunterShoot, 'expected DAY_VOTING/HUNTER_SHOOT after voting hunter out').toBe(
-          true,
-      )
+      // Everyone lands on VOTE_RESULT (no GAME_OVER); only the hunter's own
+      // browser shows the shot.
+      expect(
+          await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTE_RESULT', 15_000),
+          'expected DAY_VOTING/VOTE_RESULT after voting the hunter out',
+      ).toBe(true)
+      const hunterPage = localCtx.pages.get('HUNTER')!
+      await expect(hunterPage.getByTestId('voting-shoot-banner')).toBeVisible({ timeout: 15_000 })
+      for (const [role, page] of localCtx.pages) {
+        if (page === hunterPage) continue
+        await expect(page.getByTestId('voting-shoot-banner'), `${role} sees no shot`).toHaveCount(0)
+      }
       await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-entered')
 
       // The user-reported flow: the hunter SHOOTS a villager. The killed player
@@ -357,16 +361,20 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
         room: localCtx.roomCode,
       })
 
-      // Fix: the day pauses on DAY_VOTING/VOTE_RESULT (NOT night) so the victim
-      // can speak. Before the fix this auto-jumped straight to NIGHT, which is
-      // why the loose "left HUNTER_SHOOT" assertion here never caught the gap.
-      const reachedVoteResult = await waitForVotingSubPhase(
-          hostPage,
-          localCtx.gameId,
-          'VOTE_RESULT',
+      // The shot kills the target and the day stays on DAY_VOTING/VOTE_RESULT
+      // (NOT night) so the victim can speak.
+      await waitForCondition(
+          async () =>
+              (await fetchGameState(hostPage, localCtx.gameId))?.players?.find(
+                  (p) => p.seatIndex === shootTarget!.seat,
+              )?.isAlive === false,
+          `hunter's target (seat ${shootTarget!.seat}) dead`,
           15_000,
       )
-      expect(reachedVoteResult, 'expected DAY_VOTING/VOTE_RESULT after the hunter shot').toBe(true)
+      expect(
+          await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTE_RESULT', 15_000),
+          'expected DAY_VOTING/VOTE_RESULT after the hunter shot',
+      ).toBe(true)
       await captureSnapshot(localCtx.pages, testInfo, 'row4-hunter-shoot-vote-result')
 
       // The host sees the continue control and drives the night transition —

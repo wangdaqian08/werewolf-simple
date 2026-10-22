@@ -67,12 +67,12 @@ class GamePhasePipeline(
             actionLogService.recordNightDeaths(context.gameId, context.game.dayNumber, pendingKills)
         }
 
-        // Decide the next sub-phase now that the night deaths are applied: a
-        // wolf-killed shooter (hunter / black wolf king) fires first, then a
-        // dead sheriff hands over the badge, otherwise the result is simply
-        // revealed. The advancer
-        // reads fresh state from the DB (applyNightKills already flushed the
-        // alive flags). See DayRevealAdvancer.
+        // Now that the night deaths are applied: a wolf-killed shooter (hunter /
+        // black wolf king) gets a private shot, open until the host starts the
+        // vote; a dead sheriff hands over the badge, otherwise the result is
+        // simply revealed. The advancer reads fresh state from the DB
+        // (applyNightKills already flushed the alive flags). See DayRevealAdvancer.
+        context.game.pendingShooterUserId = dayRevealAdvancer.nightShooterUserId(context.gameId)
         val nextSubPhase = dayRevealAdvancer.nextSubPhase(context.gameId)
         context.game.subPhase = nextSubPhase.name
         gameRepository.save(context.game)
@@ -114,6 +114,7 @@ class GamePhasePipeline(
 
 
         hostTimerService.cancel(context.gameId)
+        context.game.pendingShooterUserId = null // an unused night-death shot is lost
         context.game.phase = GamePhase.DAY_VOTING
         context.game.subPhase = VotingSubPhase.VOTING.name
         gameRepository.save(context.game)

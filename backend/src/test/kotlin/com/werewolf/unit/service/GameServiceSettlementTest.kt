@@ -2,7 +2,6 @@ package com.werewolf.unit.service
 
 import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.night.NightOrchestrator
-import com.werewolf.game.phase.DayRevealAdvancer
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.timer.TimerSnapshot
 import com.werewolf.model.*
@@ -48,7 +47,6 @@ class GameServiceSettlementTest {
     @Mock lateinit var eliminationHistoryRepository: EliminationHistoryRepository
     @Mock lateinit var audioReplayCache: AudioReplayCache
     @Mock lateinit var hostTimerService: HostTimerService
-    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
     @Mock lateinit var creditTransactionRepository: CreditTransactionRepository
     @Mock lateinit var walletService: WalletService
     @Mock lateinit var perkService: com.werewolf.service.PerkService

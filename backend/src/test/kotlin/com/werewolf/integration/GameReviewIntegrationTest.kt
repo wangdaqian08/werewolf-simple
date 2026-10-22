@@ -74,7 +74,7 @@ class GameReviewIntegrationTest {
         actionLogService.recordNightDeaths(gameId, 1, listOf(seer.userId))
         actionLogService.recordVoteResult(
             gameId, 1, listOf(Vote(gameId = gameId, voteContext = VoteContext.ELIMINATION, dayNumber = 1, voterUserId = wolf.userId)),
-            emptyMap(), null, null, null,
+            emptyMap(), null, null,
         )
         return gameId
     }

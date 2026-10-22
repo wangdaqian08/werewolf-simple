@@ -8,8 +8,10 @@ status: accepted
 
 The `games` table tracks a sub-phase within the current phase. Two phases use sub-phases:
 
-- `DAY` → `DaySubPhase` (`RESULT_HIDDEN`, `RESULT_REVEALED`)
-- `VOTING` → `VotingSubPhase` (`VOTING`, `VOTE_RESULT`, `HUNTER_SHOOT`, `BADGE_HANDOVER`)
+- `DAY` → `DaySubPhase` (`RESULT_HIDDEN`, `RESULT_REVEALED`, `BADGE_HANDOVER`)
+- `VOTING` → `VotingSubPhase` (`VOTING`, `RE_VOTING`, `VOTE_RESULT`, `BADGE_HANDOVER`). The old
+  `HUNTER_SHOOT` / `HUNTER_SHOOT_NIGHT_DEATH` sub-phases were removed on 2026-10-22: the shot is
+  private (`games.pending_shooter_user_id`). The DB CHECK still allows the old strings.
 
 `NIGHT` and `SHERIFF_ELECTION` own their sub-phase in separate tables (`night_phases.sub_phase`,
 `sheriff_elections.sub_phase`) — those already use proper enums.

@@ -8,11 +8,9 @@ import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
-import com.werewolf.model.EliminationHistory
 import com.werewolf.model.GamePhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.VotingSubPhase
-import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import org.assertj.core.api.Assertions.assertThat
@@ -23,6 +21,7 @@ import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRe
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
 import org.springframework.http.HttpEntity
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -49,7 +48,6 @@ class HunterVotingShootIntegrationTest {
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var gameRepository: GameRepository
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
-    @Autowired lateinit var eliminationHistoryRepository: EliminationHistoryRepository
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -160,9 +158,8 @@ class HunterVotingShootIntegrationTest {
 
     /**
      * Start the game, confirm roles, force a fixed layout (host=VILLAGER,
-     * g1=HUNTER, g2=WEREWOLF, g3=SEER, g4/g5=VILLAGER), then park it at
-     * "Day 1 — hunter g1 just voted out, awaiting the shot": DAY_VOTING /
-     * HUNTER_SHOOT with g1 dead. Returns the gameId.
+     * g1=HUNTER, g2=WEREWOLF, g3=SEER, g4/g5=VILLAGER), open the Day-1 vote and
+     * vote the hunter g1 out for real. Returns the gameId.
      */
     private fun openDay1HunterShoot(room: Room6): Int {
         val startResp = restTemplate.postForEntity(
@@ -184,22 +181,26 @@ class HunterVotingShootIntegrationTest {
         forceRole(gameId, room.g4.userId, PlayerRole.VILLAGER)
         forceRole(gameId, room.g5.userId, PlayerRole.VILLAGER)
 
-        // Hunter voted out → mirrors collectEliminationEvents: dead player, the
-        // day's elimination row (names the shooter), sub-phase parked at HUNTER_SHOOT.
-        gamePlayerRepository.findByGameIdAndUserId(gameId, room.g1.userId).orElseThrow().also {
-            it.alive = false
-            gamePlayerRepository.save(it)
-        }
-        eliminationHistoryRepository.save(
-            EliminationHistory(gameId = gameId, dayNumber = 1, eliminatedUserId = room.g1.userId, eliminatedRole = PlayerRole.HUNTER)
-        )
         game.phase = GamePhase.DAY_VOTING
-        game.subPhase = VotingSubPhase.HUNTER_SHOOT.name
+        game.subPhase = VotingSubPhase.VOTING.name
         game.dayNumber = 1
         gameRepository.save(game)
 
+        listOf(room.host, room.g2, room.g3, room.g4, room.g5).forEach {
+            assertThat(action(it.token, gameId, "SUBMIT_VOTE", room.g1.userId).statusCode).isEqualTo(HttpStatus.OK)
+        }
+        assertThat(action(room.host.token, gameId, "VOTING_REVEAL_TALLY").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(alive(gameId, room.g1.userId)).isFalse()
+
         return gameId
     }
+
+    /** The voting state as [player] sees it. */
+    @Suppress("UNCHECKED_CAST")
+    private fun votingState(player: TestPlayer, gameId: Int): Map<String, Any?> =
+        restTemplate.exchange(
+            "/api/game/$gameId/state", HttpMethod.GET, HttpEntity<Void>(headers(player.token)), Map::class.java
+        ).body!!["votingPhase"] as Map<String, Any?>
 
     private fun subPhase(gameId: Int) = gameRepository.findById(gameId).orElseThrow().subPhase
     private fun phase(gameId: Int) = gameRepository.findById(gameId).orElseThrow().phase
@@ -208,6 +209,34 @@ class HunterVotingShootIntegrationTest {
         gamePlayerRepository.findByGameIdAndUserId(gameId, userId).orElseThrow().alive
 
     // ── Tests ──────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `voted-out hunter - everyone sees VOTE_RESULT, only the hunter can shoot`() {
+        val room = setupRoom("HVS0")
+        val gameId = openDay1HunterShoot(room)
+
+        assertThat(subPhase(gameId)).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+        assertThat(votingState(room.g1, gameId)["canShoot"]).isEqualTo(true)
+        for (other in listOf(room.host, room.g2, room.g3)) {
+            val voting = votingState(other, gameId)
+            assertThat(voting["canShoot"]).isEqualTo(false)
+            assertThat(voting).doesNotContainKeys("hunterUserId", "eliminatedRole")
+        }
+    }
+
+    @Test
+    fun `the host going to night ends an unused shot`() {
+        val room = setupRoom("HVS4")
+        val gameId = openDay1HunterShoot(room)
+
+        assertThat(action(room.host.token, gameId, "VOTING_CONTINUE").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(phase(gameId)).isEqualTo(GamePhase.NIGHT)
+
+        assertThat(action(room.g1.token, gameId, "HUNTER_SHOOT", room.g4.userId).statusCode)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(alive(gameId, room.g4.userId)).isTrue()
+        assertThat(gameRepository.findById(gameId).orElseThrow().pendingShooterUserId).isNull()
+    }
 
     @Test
     fun `voted-out hunter shoots a villager - day pauses on VOTE_RESULT, no auto-night`() {

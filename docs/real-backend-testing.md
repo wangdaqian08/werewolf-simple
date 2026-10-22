@@ -335,7 +335,8 @@ curl -s -X POST http://localhost:8080/api/game/action \
   -d "{\"gameId\":$GAME_ID,\"actionType\":\"VOTING_CONTINUE\"}"
 
 # ────────────────────────────────────────────────────────────────────
-# CASE B: Hunter was eliminated → subPhase = HUNTER_SHOOT
+# CASE B: Hunter was eliminated → subPhase stays VOTE_RESULT; the hunter
+#   has a private shot until the host sends VOTING_CONTINUE
 # ────────────────────────────────────────────────────────────────────
 ./scripts/act.sh HUNTER_SHOOT $HUNTER_NICK --target <seat>
 # OR hunter passes:
@@ -392,7 +393,7 @@ curl -s -X POST http://localhost:8080/api/game/action \
 
 ```bash
 # Scenario: hunter (seat 2) voted out, sheriff at seat 4
-# After VOTING_REVEAL_TALLY: subPhase = HUNTER_SHOOT
+# After VOTING_REVEAL_TALLY: subPhase = VOTE_RESULT, the hunter's private shot is open
 ./scripts/act.sh HUNTER_SHOOT $HUNTER_NICK --target 4   # hunter shoots the sheriff
 
 # subPhase automatically becomes BADGE_HANDOVER (seat 4 is now dead)

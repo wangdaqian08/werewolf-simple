@@ -96,8 +96,9 @@ class JsonWireFormatTest {
                 """{"type":"VoteSubmitted","gameId":1,"voterUserId":"u1"}""",
         DomainEvent.VoteTally(1, null, mapOf("u2" to 1.5, "u3" to 2.0)) to
                 """{"type":"VoteTally","gameId":1,"eliminatedUserId":null,"tally":{"u2":1.5,"u3":2.0}}""",
-        DomainEvent.PlayerEliminated(1, "u2", PlayerRole.WEREWOLF) to
-                """{"type":"PlayerEliminated","gameId":1,"userId":"u2","role":"WEREWOLF"}""",
+        // No role: every player receives this, and the role is hidden until game over.
+        DomainEvent.PlayerEliminated(1, "u2") to
+                """{"type":"PlayerEliminated","gameId":1,"userId":"u2"}""",
         DomainEvent.HunterShot(1, "u4", "u5") to
                 """{"type":"HunterShot","gameId":1,"hunterUserId":"u4","targetUserId":"u5"}""",
         DomainEvent.BadgeHandover(1, "u1", null) to

@@ -168,14 +168,14 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
-    fun `V26 stores BLACK_WOLF_KING roles, the room flag and the chain shooter`() {
+    fun `V26 stores BLACK_WOLF_KING roles, the room flag and the pending shooter`() {
         flyway().migrate()
 
         sql {
             exec("INSERT INTO users (user_id, nickname) VALUES ('host', 'host'), ('k', 'k'), ('h', 'h')")
             exec("INSERT INTO rooms (room_id, room_code, host_user_id, total_players, has_black_wolf_king) VALUES (1, '101', 'host', 9, TRUE)")
             exec(
-                "INSERT INTO games (game_id, room_id, host_user_id, phase, day_number, chain_shooter_user_id) " +
+                "INSERT INTO games (game_id, room_id, host_user_id, phase, day_number, pending_shooter_user_id) " +
                         "VALUES (1, 1, 'host', 'DAY_VOTING', 1, 'h')"
             )
             exec("INSERT INTO game_players (game_id, user_id, seat_index, role) VALUES (1, 'k', 1, 'BLACK_WOLF_KING'), (1, 'h', 2, 'HUNTER')")

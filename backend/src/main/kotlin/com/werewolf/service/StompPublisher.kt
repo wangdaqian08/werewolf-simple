@@ -90,7 +90,7 @@ class StompPublisher(
         is DomainEvent.NightResult -> "NIGHT_RESULT kills=${event.kills.size}"
         is DomainEvent.SheriffElected -> "SHERIFF_ELECTED=${event.sheriffUserId ?: "null"}"
         is DomainEvent.BadgeHandover -> "BADGE=${event.fromUserId}->${event.toUserId ?: "destroyed"}"
-        is DomainEvent.PlayerEliminated -> "ELIMINATED=${event.userId}(${event.role})"
+        is DomainEvent.PlayerEliminated -> "ELIMINATED=${event.userId}"
         is DomainEvent.HunterShot -> "HUNTER_SHOT=${event.hunterUserId}->${event.targetUserId}"
         is DomainEvent.VoteTally -> "VOTE_TALLY eliminated=${event.eliminatedUserId ?: "null"}"
         is DomainEvent.IdiotRevealed -> "IDIOT_REVEALED=${event.userId}"

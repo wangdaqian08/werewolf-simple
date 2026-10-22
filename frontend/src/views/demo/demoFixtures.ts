@@ -95,7 +95,7 @@ export function buildVotingPhaseState(
 ): VotingState {
   const phaseStarted = Date.now()
   const tally =
-    subPhase === 'VOTE_RESULT' || subPhase === 'HUNTER_SHOOT'
+    subPhase === 'VOTE_RESULT'
       ? [
           {
             playerId: 'u3',
@@ -133,15 +133,12 @@ export function buildVotingPhaseState(
     canVote: subPhase === 'VOTING' || subPhase === 'RE_VOTING',
     totalVoters: 11,
     votesSubmitted: subPhase === 'VOTING' ? 4 : 11,
-    tallyRevealed: subPhase === 'VOTE_RESULT' || subPhase === 'HUNTER_SHOOT',
+    tallyRevealed: subPhase === 'VOTE_RESULT',
     tally,
-    eliminatedPlayerId:
-      subPhase === 'VOTE_RESULT' || subPhase === 'HUNTER_SHOOT' ? 'u3' : undefined,
-    hunterUserId: subPhase === 'HUNTER_SHOOT' ? 'u3' : undefined,
+    eliminatedPlayerId: subPhase === 'VOTE_RESULT' ? 'u3' : undefined,
     eliminatedNickname: 'Carol',
     eliminatedSeatIndex: 3,
     eliminatedAvatar: '🐰',
-    eliminatedRole: 'WEREWOLF',
     ...overrides,
   }
 }
