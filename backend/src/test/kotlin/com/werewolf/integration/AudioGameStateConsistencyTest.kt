@@ -83,9 +83,7 @@ class AudioGameStateConsistencyTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
-            room = room,
         )
 
         // Verify: Audio sequence phase matches new game state phase
@@ -104,16 +102,14 @@ class AudioGameStateConsistencyTest {
         // Setup: Create game in NIGHT phase
         val room = createRoom()
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
-        createNightPhase(game.gameId!!, 1, NightSubPhase.GUARD_PICK)
+        createNightPhase(game.gameId!!, NightSubPhase.GUARD_PICK)
 
         // Execute: Generate audio sequence for NIGHT to DAY transition
         val audioSequence = audioService.calculatePhaseTransition(
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room,
         )
 
         // Verify: Audio sequence phase matches new game state phase
@@ -129,7 +125,7 @@ class AudioGameStateConsistencyTest {
         // Setup: Create game in NIGHT phase with WEREWOLF_PICK
         val room = createRoom(hasWitch = true)
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
-        createNightPhase(game.gameId!!, 1, NightSubPhase.WEREWOLF_PICK)
+        createNightPhase(game.gameId!!, NightSubPhase.WEREWOLF_PICK)
 
         // Execute: Generate audio sequence for WEREWOLF_PICK to WITCH_ACT transition
         val audioSequence = audioService.calculateNightSubPhaseTransition(
@@ -154,7 +150,7 @@ class AudioGameStateConsistencyTest {
         // Setup: Create game in NIGHT phase with SEER_RESULT
         val room = createRoom(hasSeer = true, hasGuard = true)
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
-        createNightPhase(game.gameId!!, 1, NightSubPhase.SEER_RESULT)
+        createNightPhase(game.gameId!!, NightSubPhase.SEER_RESULT)
 
         // Execute: Generate audio sequence for SEER_RESULT to GUARD_PICK transition
         val audioSequence = audioService.calculateNightSubPhaseTransition(
@@ -188,9 +184,7 @@ class AudioGameStateConsistencyTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
-            room = room,
         )
         
         // Verify: phase-level ambience only; wolf_open_eyes comes separately
@@ -273,9 +267,7 @@ class AudioGameStateConsistencyTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room,
         )
         
         // Verify: Audio sequence matches new game state
@@ -299,9 +291,7 @@ class AudioGameStateConsistencyTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
-            room = room,
         )
         
         val afterTime = System.currentTimeMillis()
@@ -329,7 +319,7 @@ class AudioGameStateConsistencyTest {
             hasSeer = hasSeer,
             hasWitch = hasWitch,
             hasGuard = hasGuard,
-            config = GameConfig.createDefault(),
+            config = GameConfig(),
         )
         return roomRepository.save(room)
     }
@@ -350,12 +340,11 @@ class AudioGameStateConsistencyTest {
 
     private fun createNightPhase(
         gameId: Int,
-        dayNumber: Int,
         subPhase: NightSubPhase,
     ): NightPhase {
         val nightPhase = NightPhase(
             gameId = gameId,
-            dayNumber = dayNumber,
+            dayNumber = 1,
             subPhase = subPhase,
         )
         return nightPhaseRepository.save(nightPhase)
@@ -372,30 +361,4 @@ class AudioGameStateConsistencyTest {
         }
         return gamePlayerRepository.saveAll(players)
     }
-    
-    private fun createPlayersWithRoles(gameId: Int, roles: List<PlayerRole>): List<GamePlayer> {
-        val players = roles.mapIndexed { seatIndex, role ->
-            GamePlayer(
-                gameId = gameId,
-                userId = "user:$seatIndex",
-                seatIndex = seatIndex,
-                role = role,
-            )
-        }
-        return gamePlayerRepository.saveAll(players)
-    }
-
-    private fun createPlayerWithRole(
-        gameId: Int,
-        userId: String,
-        seatIndex: Int,
-        role: PlayerRole,
-        alive: Boolean = true,
-    ): GamePlayer {
-        val player = GamePlayer(gameId = gameId, userId = userId, seatIndex = seatIndex, role = role)
-        player.alive = alive
-        return gamePlayerRepository.save(player)
-    }
 }
-
-

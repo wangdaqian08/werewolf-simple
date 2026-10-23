@@ -46,7 +46,7 @@
 import { expect, type Page, test } from '@playwright/test'
 import { setupGame } from './helpers/multi-browser'
 import { act, actName, type BotInfo, type RoleName } from './helpers/shell-runner'
-import { readBackendLogLineCount, readBackendLogSince } from './helpers/backend-log'
+import { readBackendLogSince } from './helpers/backend-log'
 import {
   readUnvotedAlivePlayerIds,
   waitForAllVotesRegistered,
@@ -100,7 +100,6 @@ async function readBgmState(page: Page): Promise<BgmSnapshot> {
   })
 }
 
-const NIGHT_ENTRY_FILES = ['goes_dark_close_eyes.mp3', 'wolf_howl.mp3'] as const
 const NIGHT_ROLE_FILES = [
   'wolf_open_eyes.mp3',
   'wolf_close_eyes.mp3',
@@ -111,7 +110,6 @@ const NIGHT_ROLE_FILES = [
   'guard_open_eyes.mp3',
   'guard_close_eyes.mp3',
 ] as const
-const DAY_ENTRY_FILES = ['rooster_crowing.mp3', 'day_time.mp3'] as const
 
 // ── Helpers (test-local) ────────────────────────────────────────────────────
 
@@ -147,7 +145,7 @@ function countStompAudioFiles(stompFrames: string[]): Record<string, number> {
   for (const frame of stompFrames) {
     if (!frame.includes('AudioSequence')) continue
     // Format: "[stomp] received AudioSequence [a.mp3, b.mp3]"
-    const bracket = frame.match(/AudioSequence \[([^\]]+)\]/)
+    const bracket = frame.match(/AudioSequence \[([^\]]+)]/)
     if (!bracket) continue
     for (const f of bracket[1].split(',').map((s) => s.trim())) {
       if (f.endsWith('.mp3')) {
@@ -172,7 +170,7 @@ function countBackendNightInits(lines: string[]): Record<string, number> {
   const perFile: Record<string, number> = {}
   for (const line of lines) {
     if (!line.includes('[broadcastNightInit]')) continue
-    const m = line.match(/audioFiles=\[([^\]]+)\]/)
+    const m = line.match(/audioFiles=\[([^\]]+)]/)
     if (!m) continue
     for (const f of m[1].split(',').map((s) => s.trim())) {
       if (f.endsWith('.mp3')) {
@@ -181,22 +179,6 @@ function countBackendNightInits(lines: string[]): Record<string, number> {
     }
   }
   return perFile
-}
-
-async function waitForAudioFile(
-  audioEvents: string[],
-  filename: string,
-  hostPage: Page,
-  budgetMs: number,
-): Promise<boolean> {
-  const seen = (): boolean =>
-    audioEvents.some((e) => e.includes('Starting playback') && e.includes(filename))
-  const deadline = Date.now() + budgetMs
-  while (Date.now() < deadline) {
-    if (seen()) return true
-    await hostPage.waitForTimeout(250)
-  }
-  return false
 }
 
 // Drive a single night through all four role sub-phases. Returns nothing —
@@ -289,7 +271,6 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
         }
       }
       hostPage.on('console', trackAll)
-      const logStartLine = readBackendLogLineCount()
 
       // Resolve the bot for each special role. setupGame guarantees one bot
       // per role unless the host happens to roll into that slot — assert

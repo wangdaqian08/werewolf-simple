@@ -84,7 +84,7 @@ class NightOrchestratorTest {
         nightTurnLedger = NightTurnLedger(),
     )
 
-    private fun mockAudioServiceForDayTransition(r: Room) {
+    private fun mockAudioServiceForDayTransition() {
         val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-DAY",
             phase = GamePhase.DAY_DISCUSSION,
@@ -97,33 +97,11 @@ class NightOrchestratorTest {
             eq(gameId),
             eq(GamePhase.NIGHT),
             eq(GamePhase.DAY_DISCUSSION),
-            eq(null),
-            eq(DaySubPhase.RESULT_HIDDEN.name),
-            eq(r)
+            eq(DaySubPhase.RESULT_HIDDEN.name)
         )).thenReturn(audioSequence)
     }
 
-    private fun mockAudioServiceForNightSubPhaseTransition(oldSubPhase: NightSubPhase?, newSubPhase: NightSubPhase) {
-        val audioSequence = AudioSequence(
-            id = "$gameId-${System.currentTimeMillis()}-NIGHT-TRANSITION",
-            phase = GamePhase.NIGHT,
-            subPhase = newSubPhase.name,
-            audioFiles = if (oldSubPhase != null) {
-                listOf("wolf_close_eyes.mp3", "seer_open_eyes.mp3")
-            } else {
-                listOf("seer_open_eyes.mp3")
-            },
-            priority = 5,
-            timestamp = System.currentTimeMillis()
-        )
-        whenever(audioService.calculateNightSubPhaseTransition(
-            eq(gameId),
-            eq(oldSubPhase),
-            eq(newSubPhase)
-        )).thenReturn(audioSequence)
-    }
-
-    private fun mockAudioServiceForNightTransition(r: Room, initialSubPhase: NightSubPhase) {
+    private fun mockAudioServiceForNightTransition(initialSubPhase: NightSubPhase) {
         val audioSequence = AudioSequence(
             id = "$gameId-${System.currentTimeMillis()}-NIGHT",
             phase = GamePhase.NIGHT,
@@ -136,9 +114,7 @@ class NightOrchestratorTest {
             eq(gameId),
             eq(GamePhase.DAY_DISCUSSION),
             eq(GamePhase.NIGHT),
-            eq(null),
-            eq(initialSubPhase.name),
-            eq(r)
+            eq(initialSubPhase.name)
         )).thenReturn(audioSequence)
     }
 
@@ -202,7 +178,7 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
 
         runBlocking {
             nightOrchestrator.startNightPhase(gameId, newDayNumber = 2, previousGuardTarget = "u1").join()
@@ -222,7 +198,7 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
 
         runBlocking {
             nightOrchestrator.startNightPhase(gameId, newDayNumber = 2).join()
@@ -242,7 +218,7 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
 
         runBlocking {
             nightOrchestrator.startNightPhase(gameId, newDayNumber = 1).join()
@@ -265,7 +241,7 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
 
         runBlocking {
             orchestrator.startNightPhase(gameId, newDayNumber = 1, withWaiting = false).join()
@@ -284,7 +260,7 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WAITING)
+        mockAudioServiceForNightTransition(NightSubPhase.WAITING)
 
         nightOrchestrator.startNightPhase(gameId, newDayNumber = 1, withWaiting = true)
         Thread.sleep(500) // Allow coroutine to complete initNightInternal
@@ -305,7 +281,7 @@ class NightOrchestratorTest {
         val initialCtx = ctx(wolf, victim, roomOverride = r)
 
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForDayTransition()
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
 
@@ -330,7 +306,7 @@ class NightOrchestratorTest {
 
         whenever(contextLoader.load(gameId)).thenReturn(ctx(wolf, victim, roomOverride = r))
         whenever(winConditionChecker.check(any(),any(), any(), any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForDayTransition()
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
 
@@ -348,7 +324,7 @@ class NightOrchestratorTest {
 
         whenever(contextLoader.load(gameId)).thenReturn(ctx(wolf, victim, roomOverride = r))
         whenever(winConditionChecker.check(any(), any(),any(), any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForDayTransition()
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
 
@@ -371,7 +347,7 @@ class NightOrchestratorTest {
             ctx(wolf, wolfVictim.also { it.alive = false }, poisonVictim.also { it.alive = false }, roomOverride = r)
         )
         whenever(winConditionChecker.check(any(), any(),any(), any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForDayTransition()
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
 
@@ -390,7 +366,7 @@ class NightOrchestratorTest {
 
         whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForDayTransition()
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
 
@@ -439,95 +415,6 @@ class NightOrchestratorTest {
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.phase).isEqualTo(GamePhase.GAME_OVER)
         assertThat(captor.firstValue.winner).isEqualTo(WinnerSide.VILLAGER)
-    }
-
-    // ── advanceFromWaiting ───────────────────────────────────────────────────
-
-    @Test
-    fun `advanceFromWaiting - transitions from WAITING to first sub-phase`() {
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WAITING
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val ctx = GameContext(game(), room(), listOf(wolf), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightSubPhaseTransition(NightSubPhase.WAITING, NightSubPhase.WEREWOLF_PICK)
-
-        orchestrator.advanceFromWaiting(gameId)
-
-        assertThat(np.subPhase).isEqualTo(NightSubPhase.WEREWOLF_PICK)
-        verify(nightPhaseRepository).save(np)
-        verify(stompPublisher).broadcastGameAfterCommit(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
-    }
-
-    @Test
-    fun `advanceFromWaiting - idempotent when already past WAITING`() {
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK // already advanced
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val ctx = GameContext(game(), room(), listOf(wolf), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-
-        nightOrchestrator.advanceFromWaiting(gameId)
-
-        verify(nightPhaseRepository, never()).save(any())
-        verify(stompPublisher, never()).broadcastGameAfterCommit(any(), any())
-    }
-
-    @Test
-    fun `advanceFromWaiting - does nothing when no night phase exists`() {
-        val ctx = GameContext(game(), room(), emptyList(), nightPhase = null)
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-
-        nightOrchestrator.advanceFromWaiting(gameId)
-
-        verify(nightPhaseRepository, never()).save(any())
-    }
-
-    // ── advanceToSubPhase ────────────────────────────────────────────────────
-
-    @Test
-    fun `advanceToSubPhase - updates sub-phase and broadcasts`() {
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val ctx = GameContext(game(), room(), listOf(wolf), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightSubPhaseTransition(NightSubPhase.WEREWOLF_PICK, NightSubPhase.SEER_PICK)
-
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_PICK)
-
-        assertThat(np.subPhase).isEqualTo(NightSubPhase.SEER_PICK)
-        verify(nightPhaseRepository).save(np)
-        verify(stompPublisher).broadcastGameAfterCommit(eq(gameId), any<DomainEvent.NightSubPhaseChanged>())
-    }
-
-    @Test
-    fun `advanceToSubPhase - does nothing when targetSubPhase is null`() {
-        nightOrchestrator.advanceToSubPhase(gameId, null)
-
-        verify(contextLoader, never()).load(any())
-        verify(nightPhaseRepository, never()).save(any())
-    }
-
-    @Test
-    fun `advanceToSubPhase - does nothing when no night phase exists`() {
-        val ctx = GameContext(game(), room(), emptyList(), nightPhase = null)
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_PICK)
-
-        verify(nightPhaseRepository, never()).save(any())
     }
 
     // ── nightSequence / firstSubPhase ────────────────────────────────────────
@@ -582,7 +469,7 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
 
         runBlocking {
             nightOrchestrator.startNightPhase(gameId, newDayNumber = 1).join()
@@ -607,7 +494,7 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WAITING)
+        mockAudioServiceForNightTransition(NightSubPhase.WAITING)
 
         runBlocking {
             nightOrchestrator.startNightPhase(gameId, newDayNumber = 1, withWaiting = true).join()
@@ -634,7 +521,7 @@ class NightOrchestratorTest {
 
         whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForDayTransition()
 
         nightOrchestrator.resolveNightKills(initialCtx, np)
 
@@ -647,89 +534,6 @@ class NightOrchestratorTest {
         assertThat(audioEvent).isNotNull()
         assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
             .containsExactly("day_time.mp3")
-    }
-
-    @Test
-    fun `advanceFromWaiting - broadcasts AudioSequence with wolf_open_eyes mp3`() {
-        val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
-        val orchestrator = makeOrchestrator(listOf(wolfHandler))
-
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WAITING
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val r = room()
-        val ctx = GameContext(game(), r, listOf(wolf), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-
-        // Setup correct audio files for WAITING to WEREWOLF_PICK transition
-        val audioSequence = AudioSequence(
-            id = "$gameId-${System.currentTimeMillis()}-NIGHT-TRANSITION",
-            phase = GamePhase.NIGHT,
-            subPhase = NightSubPhase.WEREWOLF_PICK.name,
-            audioFiles = listOf("wolf_open_eyes.mp3"), // Only open eyes audio
-            priority = 5,
-            timestamp = System.currentTimeMillis()
-        )
-        whenever(audioService.calculateNightSubPhaseTransition(
-            eq(gameId),
-            eq(NightSubPhase.WAITING),
-            eq(NightSubPhase.WEREWOLF_PICK)
-        )).thenReturn(audioSequence)
-
-        orchestrator.advanceFromWaiting(gameId)
-
-        // Verify AudioSequence event was broadcast
-        val audioEventCaptor = argumentCaptor<DomainEvent>()
-        verify(stompPublisher, times(2)).broadcastGameAfterCommit(eq(gameId), audioEventCaptor.capture())
-
-        val events = audioEventCaptor.allValues
-        val audioEvent = events.find { it is DomainEvent.AudioSequence }
-        assertThat(audioEvent).isNotNull()
-        assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
-            .containsExactly("wolf_open_eyes.mp3")
-    }
-
-    @Test
-    fun `advanceToSubPhase - broadcasts AudioSequence when advancing to WITCH_ACT`() {
-        val np = NightPhase(gameId = gameId, dayNumber = 1).also {
-            it.subPhase = NightSubPhase.WEREWOLF_PICK
-        }
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val r = room(hasSeer = true, hasWitch = true)
-        val ctx = GameContext(game(), r, listOf(wolf), nightPhase = np)
-
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-
-        // Setup correct audio files for WEREWOLF_PICK to WITCH_ACT transition
-        val audioSequence = AudioSequence(
-            id = "$gameId-${System.currentTimeMillis()}-NIGHT-TRANSITION",
-            phase = GamePhase.NIGHT,
-            subPhase = NightSubPhase.WITCH_ACT.name,
-            audioFiles = listOf("wolf_close_eyes.mp3", "witch_open_eyes.mp3"),
-            priority = 5,
-            timestamp = System.currentTimeMillis()
-        )
-        whenever(audioService.calculateNightSubPhaseTransition(
-            eq(gameId),
-            eq(NightSubPhase.WEREWOLF_PICK),
-            eq(NightSubPhase.WITCH_ACT)
-        )).thenReturn(audioSequence)
-
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.WITCH_ACT)
-
-        // Verify AudioSequence event was broadcast
-        val audioEventCaptor = argumentCaptor<DomainEvent>()
-        verify(stompPublisher, times(2)).broadcastGameAfterCommit(eq(gameId), audioEventCaptor.capture())
-
-        val events = audioEventCaptor.allValues
-        val audioEvent = events.find { it is DomainEvent.AudioSequence }
-        assertThat(audioEvent).isNotNull()
-        assertThat((audioEvent as DomainEvent.AudioSequence).audioSequence.audioFiles)
-            .containsExactly("wolf_close_eyes.mp3", "witch_open_eyes.mp3")
     }
 
     // ── Action log recording ─────────────────────────────────────────────────
@@ -790,27 +594,6 @@ class NightOrchestratorTest {
         verify(stompPublisher, never()).broadcastGame(any(), any())
     }
 
-    @Test
-    fun `initNight - does NOT broadcast OpenEyes or CloseEyes events`() {
-        // Regression test: the coroutine path (startNightPhase) used to broadcast OpenEyes/CloseEyes
-        // domain events which the frontend mapped to audio, duplicating the AudioSequence events.
-        // initNight must never broadcast these events.
-        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
-        val r = room().also { it.config = GameConfig.createDefault() }
-        val context = GameContext(game(), r, listOf(wolf))
-        whenever(contextLoader.load(gameId)).thenReturn(context)
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
-        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
-
-        nightOrchestrator.initNight(gameId, newDayNumber = 1)
-
-        val captor = argumentCaptor<DomainEvent>()
-        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
-        assertThat(captor.allValues).noneMatch { it is DomainEvent.OpenEyes }
-        assertThat(captor.allValues).noneMatch { it is DomainEvent.CloseEyes }
-    }
-
     // ── nightRoleLoop coroutine tests ────────────────────────────────────────
 
     /**
@@ -851,8 +634,8 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition()
 
         runBlocking {
             val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
@@ -892,8 +675,8 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition()
 
         runBlocking {
             val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
@@ -960,8 +743,8 @@ class NightOrchestratorTest {
         whenever(contextLoader.load(gameId)).thenReturn(context)
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition()
 
         // Track NightPhase saves to simulate handler mutation between sub-phases.
         // The real NightPhase entity returned by findByGameIdAndDayNumber is shared across calls,
@@ -1044,14 +827,14 @@ class NightOrchestratorTest {
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         whenever(audioService.calculatePhaseTransition(
-            eq(gameId), anyOrNull(), eq(GamePhase.NIGHT), anyOrNull(), anyOrNull(), eq(r),
+            eq(gameId), anyOrNull(), eq(GamePhase.NIGHT), anyOrNull(),
         )).thenReturn(AudioSequence(
             id = "night", phase = GamePhase.NIGHT, subPhase = NightSubPhase.WEREWOLF_PICK.name,
             audioFiles = listOf("goes_dark_close_eyes.mp3", "wolf_howl.mp3"),
             priority = 10, timestamp = System.currentTimeMillis(),
         ))
         whenever(audioService.calculatePhaseTransition(
-            eq(gameId), anyOrNull(), eq(GamePhase.DAY_DISCUSSION), anyOrNull(), anyOrNull(), eq(r),
+            eq(gameId), anyOrNull(), eq(GamePhase.DAY_DISCUSSION), anyOrNull(),
         )).thenReturn(AudioSequence(
             id = "day", phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_HIDDEN.name,
             audioFiles = listOf("rooster_crowing.mp3", "day_time.mp3"),
@@ -1274,8 +1057,8 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(np))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition()
 
         val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
 
@@ -1308,8 +1091,8 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(Optional.of(np))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
-        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
-        mockAudioServiceForDayTransition(r)
+        mockAudioServiceForNightTransition(NightSubPhase.WEREWOLF_PICK)
+        mockAudioServiceForDayTransition()
 
         // A late duplicate from the previous night's last turn queues a signal.
         orchestrator.submitAction(gameId)
@@ -1338,7 +1121,7 @@ class NightOrchestratorTest {
     fun `REGRESSION - init audio plays before role audio in production path`() {
         val wolfHandler = stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK)
         val orchestrator = makeOrchestrator(listOf(wolfHandler))
-        val r = room().also { it.config = GameConfig.createDefault() }
+        val r = room().also { it.config = GameConfig() }
         val wolf = player("u1", 1, PlayerRole.WEREWOLF)
         val context = GameContext(game(), r, listOf(wolf))
 
@@ -1348,7 +1131,7 @@ class NightOrchestratorTest {
             .thenReturn(Optional.of(NightPhase(gameId = gameId, dayNumber = 1)))
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
         whenever(audioService.calculatePhaseTransition(
-            eq(gameId), anyOrNull(), eq(GamePhase.NIGHT), anyOrNull(), anyOrNull(), eq(r),
+            eq(gameId), anyOrNull(), eq(GamePhase.NIGHT), anyOrNull(),
         )).thenReturn(AudioSequence(
             id = "night-init", phase = GamePhase.NIGHT, subPhase = NightSubPhase.WEREWOLF_PICK.name,
             audioFiles = listOf("goes_dark_close_eyes.mp3", "wolf_howl.mp3"),

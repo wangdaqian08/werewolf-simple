@@ -72,7 +72,6 @@
                   <span class="seat-badge">{{ d.seatIndex }}号</span>
                   <span class="log-name">{{ d.nickname }}</span>
                 </div>
-                <div v-if="round.deaths.length === 0" class="log-row muted">平安夜</div>
               </div>
               <div v-else class="log-section">
                 <div class="section-title">☽ 昨夜出局</div>

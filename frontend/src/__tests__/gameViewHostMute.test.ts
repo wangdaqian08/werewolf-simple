@@ -38,8 +38,6 @@ vi.mock('@/services/audioService', () => ({
     setBgmLevel: vi.fn(),
     setBgmVolume: vi.fn(),
     getBgmVolume: vi.fn().mockReturnValue(0.5),
-    setGlobalVolume: vi.fn(),
-    getGlobalVolume: vi.fn().mockReturnValue(1),
   },
 }))
 

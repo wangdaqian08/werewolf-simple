@@ -14,8 +14,6 @@ import { useAudioService } from '@/composables/useAudioService'
 const mockPlaySequential = vi.fn()
 const mockClearQueue = vi.fn()
 const mockStopAll = vi.fn()
-const mockIsMuted = vi.fn().mockReturnValue(false)
-const mockToggleMute = vi.fn()
 const mockSetMuted = vi.fn()
 const mockIsQueueActive = vi.fn().mockReturnValue(false)
 const mockStartBgm = vi.fn()
@@ -29,18 +27,13 @@ vi.mock('@/services/audioService', () => ({
     playSequential: (...args: unknown[]) => mockPlaySequential(...args),
     clearQueue: () => mockClearQueue(),
     stopAll: () => mockStopAll(),
-    isMuted: () => mockIsMuted(),
-    toggleMute: () => mockToggleMute(),
     setMuted: (...args: unknown[]) => mockSetMuted(...args),
     isQueueActive: () => mockIsQueueActive(),
-    setGlobalVolume: vi.fn(),
-    getGlobalVolume: vi.fn().mockReturnValue(1),
     startBgm: (...args: unknown[]) => mockStartBgm(...args),
     stopBgm: () => mockStopBgm(),
     setBgmLevel: (...args: unknown[]) => mockSetBgmLevel(...args),
     setBgmVolume: (...args: unknown[]) => mockSetBgmVolume(...args),
     getBgmVolume: () => mockGetBgmVolume(),
-    onMuteChange: () => () => {},
   },
 }))
 
@@ -483,19 +476,6 @@ describe('useAudioService', () => {
 
     // Total: 7 sequence plays
     expect(mockPlaySequential).toHaveBeenCalledTimes(7)
-  })
-
-  // ── Mute controls ──────────────────────────────────────────────────────
-
-  it('toggleMute delegates to audioService', () => {
-    setupComposable().toggleMute()
-    expect(mockToggleMute).toHaveBeenCalled()
-  })
-
-  it('isMuted reflects audioService state', () => {
-    mockIsMuted.mockReturnValue(false)
-    const { isMuted } = setupComposable()
-    expect(isMuted.value).toBe(false)
   })
 
   // ── Guard Close Eyes Bug Regression Tests ───────────────────────────────

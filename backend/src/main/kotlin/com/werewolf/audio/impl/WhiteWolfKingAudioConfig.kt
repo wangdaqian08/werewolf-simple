@@ -7,6 +7,5 @@ import com.werewolf.model.PlayerRole
 data class WhiteWolfKingAudioConfig(
     override val role: PlayerRole = PlayerRole.WHITE_WOLF_KING,
     override val openEyesAudio: String = "wolf_open_eyes.mp3",
-    override val closeEyesAudio: String = "wolf_close_eyes.mp3",
-    override val defaultDelayMs: Long = 5000L
+    override val closeEyesAudio: String = "wolf_close_eyes.mp3"
 ) : RoleAudioConfig

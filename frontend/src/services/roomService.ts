@@ -33,11 +33,6 @@ export const roomService = {
     return status === 204 ? null : data
   },
 
-  async getRoomList(): Promise<Room[]> {
-    const { data } = await http.get<Room[]>('/room/list')
-    return data
-  },
-
   async setReady(ready: boolean, roomId: string): Promise<void> {
     await http.post('/room/ready', { ready, roomId: Number(roomId) })
   },

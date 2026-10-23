@@ -154,9 +154,7 @@ class HookInvocationTest {
             eq(gameId),
             eq(GamePhase.NIGHT),
             eq(GamePhase.DAY_DISCUSSION),
-            eq(null),
-            eq(DaySubPhase.RESULT_HIDDEN.name),
-            eq(initialCtx.room)
+            eq(DaySubPhase.RESULT_HIDDEN.name)
         )).thenReturn(mockAudioSequence)
 
         orchestrator.resolveNightKills(initialCtx, np)

@@ -244,8 +244,8 @@ Spot-check nights:
 - **N1** witch uses poison (full witch flow, alive)
 - **N2** witch uses antidote (full witch flow, alive)
 - **N3** witch alive but no potion → skips
-- **N4** seer **dead-sim** branch exercised via
-  `calculateDeadRoleAudioSequence`; witch alive last time (skips)
+- **N4** seer **dead-sim** branch exercised by the night role loop
+  (dead role still plays open → close eyes); witch alive last time (skips)
 
 ## Index Entry (README.md)
 

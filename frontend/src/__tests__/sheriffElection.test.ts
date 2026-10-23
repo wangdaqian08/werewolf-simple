@@ -278,8 +278,11 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
     const selfRow = wrapper.find('.vote-row-self')
     expect(selfRow.exists()).toBe(true)
     await selfRow.trigger('click')
-    // Confirm Vote button should NOT appear (self-select blocked)
-    expect(wrapper.find('[data-testid="sheriff-confirm-vote"]').exists()).toBe(false)
+    // Self-select blocked: the always-rendered Confirm Vote button stays disabled
+    expect(wrapper.get('[data-testid="sheriff-vote"]').attributes('disabled')).toBeDefined()
+    // Control: picking another candidate does enable it
+    await wrapper.find('.vote-row:not(.vote-row-self)').trigger('click')
+    expect(wrapper.get('[data-testid="sheriff-vote"]').attributes('disabled')).toBeUndefined()
   })
 
   it('VOTING: RUNNING candidate sees "候选人不参与投票" banner (not speech-quitter copy)', () => {

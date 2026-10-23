@@ -858,11 +858,6 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   pointer-events: none;
 }
 
-/* Avatar circle on dark background */
-:deep(.av) {
-  background: rgba(245, 240, 232, 0.08);
-}
-
 /* Seat index + name on dark background */
 :deep(.slot-index) {
   color: rgba(245, 240, 232, 0.4);

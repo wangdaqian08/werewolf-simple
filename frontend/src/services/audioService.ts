@@ -59,7 +59,6 @@ export const KNOWN_NARRATION_FILES: readonly string[] = [
 
 class AudioService {
   private audioCache = new Map<string, HTMLAudioElement>()
-  private globalVolume = 1.0
   private muted = false
   private userInteracted = false
   private audioContext: AudioContext | null = null
@@ -216,18 +215,6 @@ class AudioService {
   }
 
   /**
-   * Play an audio file (uses queue system to prevent overlap)
-   * @param filename - The audio filename (e.g., 'goes_dark_close_eyes.mp3')
-   * @param options - Optional playback settings
-   */
-  play(filename: string, options: AudioOptions = {}): void {
-    if (this.muted) return
-
-    // Add to queue and play (queue will prevent overlap)
-    this.playSequential([filename], options)
-  }
-
-  /**
    * Play multiple audio files sequentially
    * @param filenames - Array of audio filenames to play in order
    * @param options - Optional playback settings
@@ -309,11 +296,7 @@ class AudioService {
         audio.loop = false
       }
 
-      if (options.volume !== undefined) {
-        audio.volume = options.volume * this.globalVolume
-      } else {
-        audio.volume = this.globalVolume
-      }
+      audio.volume = options.volume ?? 1
 
       // Play next audio when current finishes
       audio.onended = () => {
@@ -428,37 +411,6 @@ class AudioService {
   }
 
   /**
-   * Pause an audio file
-   * @param filename - The audio filename
-   */
-  pause(filename: string): void {
-    try {
-      const audio = this.audioCache.get(filename)
-      if (audio) {
-        audio.pause()
-      }
-    } catch (error) {
-      console.warn(`[AudioService] Error pausing ${filename}:`, error)
-    }
-  }
-
-  /**
-   * Stop an audio file (pause and reset)
-   * @param filename - The audio filename
-   */
-  stop(filename: string): void {
-    try {
-      const audio = this.audioCache.get(filename)
-      if (audio) {
-        audio.pause()
-        audio.currentTime = 0
-      }
-    } catch (error) {
-      console.warn(`[AudioService] Error stopping ${filename}:`, error)
-    }
-  }
-
-  /**
    * Stop all playing audio AND drain the queue / reset queue state.
    *
    * Pausing a mid-narration HTMLAudioElement does NOT fire its `onended`
@@ -489,41 +441,6 @@ class AudioService {
   }
 
   /**
-   * Set global volume (0-1)
-   * @param volume - Volume level (0 to 1)
-   */
-  setGlobalVolume(volume: number): void {
-    try {
-      this.globalVolume = Math.max(0, Math.min(1, volume))
-      // Update all cached audio instances
-      for (const audio of this.audioCache.values()) {
-        audio.volume = this.globalVolume
-      }
-    } catch (error) {
-      console.warn('[AudioService] Error setting global volume:', error)
-    }
-  }
-
-  /**
-   * Get current global volume
-   */
-  getGlobalVolume(): number {
-    return this.globalVolume
-  }
-
-  /**
-   * Preload an audio file
-   * @param filename - The audio filename to preload
-   */
-  preload(filename: string): void {
-    try {
-      this.getAudio(filename)
-    } catch (error) {
-      console.warn(`[AudioService] Error preloading ${filename}:`, error)
-    }
-  }
-
-  /**
    * Get or create an audio instance for the given filename
    * @private
    */
@@ -539,9 +456,6 @@ class AudioService {
 
     // Preload
     audio.preload = 'auto'
-
-    // Set initial volume
-    audio.volume = this.globalVolume
 
     // Cache the instance
     this.audioCache.set(filename, audio)
@@ -641,27 +555,12 @@ class AudioService {
     for (const fn of this.blockedListeners) fn(blocked)
   }
 
-  /**
-   * Check if audio playback is enabled (user has interacted with the page)
-   */
-  isAudioEnabled(): boolean {
-    return this.userInteracted
-  }
-
   private persistMute(): void {
     try {
       localStorage.setItem(MUTE_STORAGE_KEY, String(this.muted))
     } catch {
       // localStorage unavailable
     }
-  }
-
-  /**
-   * Clear all cached audio instances (useful for cleanup)
-   */
-  clearCache(): void {
-    this.stopAll()
-    this.audioCache.clear()
   }
 
   /**
@@ -836,10 +735,6 @@ class AudioService {
 
   getBgmVolume(): number {
     return this.bgmBaseVolume
-  }
-
-  isBgmPlaying(): boolean {
-    return !!this.bgmAudioEl && !this.bgmAudioEl.paused
   }
 
   /**

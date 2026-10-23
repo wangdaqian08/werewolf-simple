@@ -25,8 +25,6 @@ vi.mock('@/services/audioService', () => ({
     stopAll: () => mockStopAll(),
     isMuted: () => mockIsMuted(),
     toggleMute: () => mockToggleMute(),
-    setGlobalVolume: vi.fn(),
-    getGlobalVolume: vi.fn().mockReturnValue(1),
     startBgm: vi.fn(),
     stopBgm: vi.fn(),
     setBgmLevel: vi.fn(),

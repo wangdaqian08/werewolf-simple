@@ -143,9 +143,3 @@ h3,
   color: var(--muted);
   border: 1px solid var(--border);
 }
-
-/* Night phase */
-.night-mode {
-  background: var(--ink);
-  color: #f5f0e8;
-}

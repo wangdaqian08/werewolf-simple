@@ -9,8 +9,3 @@ export function wolfBounds(totalPlayers: number): WolfBounds {
   const min = Math.max(1, max - 1)
   return { min, max, default: max }
 }
-
-export function clampWolfCount(totalPlayers: number, wolfCount: number): number {
-  const { min, max } = wolfBounds(totalPlayers)
-  return Math.min(Math.max(wolfCount, min), max)
-}

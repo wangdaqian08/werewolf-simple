@@ -675,7 +675,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  selectPlayer: [userId: string]
   vote: [targetId: string]
   skip: []
   unvote: []
@@ -821,7 +820,6 @@ const effectiveSelected = computed(() => localSelected.value)
 
 function selectPlayer(userId: string) {
   localSelected.value = userId
-  emit('selectPlayer', userId)
 }
 
 // ── Timer ─────────────────────────────────────────────────────────────────────

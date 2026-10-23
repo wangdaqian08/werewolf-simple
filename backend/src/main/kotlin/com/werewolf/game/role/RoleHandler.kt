@@ -11,7 +11,6 @@ import com.werewolf.model.PlayerRole
 
 data class EliminationModifier(
     val cancelled: Boolean = false,
-    val additionalKills: List<String> = emptyList(),
     val extraEvents: List<DomainEvent> = emptyList(),
 )
 

@@ -340,7 +340,6 @@ export interface VoteRoundHistory {
   hunterShotPlayerId?: string
   hunterShotNickname?: string
   hunterShotSeatIndex?: number
-  hunterShotAvatar?: string
   hunterShotRole?: PlayerRole
 }
 
@@ -397,35 +396,6 @@ export interface GameEvent {
   message: string
   timestamp: number
   targetId?: string
-}
-
-// ── New event-driven night phase events ──────────────────────────────────────
-export interface OpenEyesEvent {
-  type: 'OpenEyes'
-  gameId: number
-  role: string
-  phase: string
-  nightNumber: number
-}
-
-export interface CloseEyesEvent {
-  type: 'CloseEyes'
-  gameId: number
-  role: string
-  phase: string
-  nightNumber: number
-}
-
-export interface RoleActionEvent {
-  type: 'RoleAction'
-  gameId: number
-  userId: string
-  role: string
-  actionType: string
-  targets: string[]
-  canHeal?: boolean
-  canPoison?: boolean
-  timeoutMs: number
 }
 
 export interface GameActionRequest {
@@ -530,7 +500,6 @@ export interface DayPhaseState {
   selfDestruct?: SelfDestructResult | null // the wolf who self-destructed this day, if any
   canVote: boolean
   myVote?: string
-  selectedPlayerId?: string
   canShoot?: boolean // private: true only for the dead shooter whose shot is open now
 }
 
@@ -575,7 +544,6 @@ export interface VotingState {
   tally?: VoteTally[] // per-player vote counts — hidden until tallyRevealed
   abstainVoters?: VoteVoter[]
   tallyRevealed?: boolean // host has publicly revealed the tally
-  revealDeadline?: number // epoch ms — 30s countdown after tally revealed
   // VOTE_RESULT / BADGE_HANDOVER
   eliminatedPlayerId?: string
   eliminatedNickname?: string
@@ -588,9 +556,7 @@ export interface VotingState {
   // Private: true only for the dead shooter (HUNTER or BLACK_WOLF_KING: the
   // voted-out player, or a chained shooter they shot) whose shot is open now
   canShoot?: boolean
-  hunterSelectedId?: string
   // BADGE_HANDOVER + BADGE_RECEIVED
-  badgeTargetId?: string
   badgeDestroyed?: boolean // badge was destroyed instead of passed
 }
 
@@ -632,9 +598,7 @@ export interface NightPhaseState {
   hasPoison?: boolean
   selfSaveBlocked?: boolean // backend: the witch is the victim and may not save herself
   antidoteDecided?: boolean // true once witch made any antidote decision
-  antidoteUsed?: boolean // true if she actually used it
   poisonDecided?: boolean // true once witch made any poison decision
-  poisonUsed?: boolean // true if she actually used it
   // Guard
   previousGuardTargetId?: string // cannot protect the same player two nights in a row
 }
@@ -728,12 +692,4 @@ export interface SelfDestructPayload {
   takenUserId?: string
   takenNickname?: string
   takenSeatIndex?: number
-}
-
-// ── WebSocket STOMP ───────────────────────────────────────────────────────────
-
-export interface StompMessage<T = unknown> {
-  type: string
-  payload: T
-  timestamp: number
 }

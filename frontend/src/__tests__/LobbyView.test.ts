@@ -36,7 +36,6 @@ vi.mock('@/services/roomService', () => ({
     joinRoom: (...args: unknown[]) => joinRoomMock(...args),
     leaveRoom: vi.fn(),
     getRoom: vi.fn(),
-    getRoomList: vi.fn(),
     setReady: vi.fn(),
     claimSeat: vi.fn(),
     kickPlayer: vi.fn(),

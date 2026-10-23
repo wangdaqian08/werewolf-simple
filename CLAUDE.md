@@ -130,15 +130,15 @@ Pure presentation:
  ```
  // User APIs
  POST   /api/user/login           // nickname → returns JWT
- GET    /api/user/profile         // get current user info
- POST   /api/user/logout          // invalidate session
+ GET    /api/user/profile         // get current user info  (NOTE: planned, not implemented — no backend endpoint, no frontend caller)
+ POST   /api/user/logout          // invalidate session  (NOTE: not implemented in the backend; userService.logout still calls it)
  
  // Room APIs
  POST   /api/room/create          // create new room → returns roomCode
  POST   /api/room/join            // join by roomCode → returns room info
  POST   /api/room/leave           // leave current room
  GET    /api/room/{roomId}        // get room details
- GET    /api/room/list            // list available rooms
+ GET    /api/room/list            // list available rooms  (NOTE: planned, not implemented — no backend endpoint, no frontend caller)
  
  // Game APIs
  POST   /api/game/action          // perform game action (vote, skill, etc.)

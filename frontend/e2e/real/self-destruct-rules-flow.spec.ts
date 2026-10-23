@@ -18,20 +18,6 @@ async function readState(page: Page, gameId: string) {
     }, gameId)
 }
 
-async function postAction(page: Page, body: Record<string, unknown>) {
-    return page.evaluate(async (b) => {
-        const res = await fetch('/api/game/action', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('jwt')}`,
-            },
-            body: JSON.stringify(b),
-        })
-        return res.ok
-    }, body)
-}
-
 function wolves(ctx: GameContext): BotInfo[] {
     const w = ctx.roleMap.WEREWOLF ?? []
     expect(w.length, 'kit must have 2 wolves').toBe(2)

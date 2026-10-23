@@ -135,7 +135,6 @@
         :vote-history="gameStore.state?.voteHistory"
         :action-pending="actionPending"
         :game-settings="gameStore.state?.gameSettings ?? null"
-        @select-player="handleVotingSelect"
         @vote="handleVotingVote"
         @skip="handleVotingSkip"
         @unvote="handleVotingUnvote"
@@ -171,9 +170,6 @@
         :game-settings="gameStore.state?.gameSettings ?? null"
         @reveal-result="handleRevealResult"
         @start-vote="handleStartVote"
-        @vote="handleDayVote"
-        @skip="handleDaySkip"
-        @select-player="handleDaySelectPlayer"
         @self-destruct="handleSelfDestruct"
         @continue-to-night="handleVotingContinue"
         @pass-badge="handlePassBadge"
@@ -787,15 +783,6 @@ async function handleStartVote() {
 
   await action({ actionType: 'DAY_ADVANCE' })
 }
-async function handleDayVote(targetId: string) {
-  await action({ actionType: 'DAY_VOTE', targetId })
-}
-async function handleDaySkip() {
-  await action({ actionType: 'DAY_SKIP' })
-}
-async function handleDaySelectPlayer(userId: string) {
-  await action({ actionType: 'SELECT_PLAYER', targetId: userId })
-}
 
 async function handleTimerStart(gameId: number, durationSeconds: number) {
   try {
@@ -838,11 +825,6 @@ async function handleNightConfirm(targetId?: string) {
       break
     case 'SEER_RESULT':
       await action({ actionType: 'SEER_CONFIRM' })
-      break
-    case 'WITCH_ACT':
-      // Witch confirm - submit all decisions to advance phase
-      //console.log('[GameView] handleNightConfirm calling trySubmitWitchAct')
-      await trySubmitWitchAct()
       break
     case 'GUARD_PICK':
       if (targetId) await action({ actionType: 'GUARD_PROTECT', targetId })
@@ -910,9 +892,6 @@ async function trySubmitWitchAct() {
   witchPoisonTargetId.value = undefined
 }
 
-async function handleVotingSelect(_userId: string) {
-  // Selection is local UI state only — no backend call needed
-}
 async function handleVotingVote(targetId: string) {
   await action({ actionType: 'SUBMIT_VOTE', targetId })
 }
@@ -1068,9 +1047,6 @@ onMounted(async () => {
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {
-          // Normalize phase name for backward compatibility
-          const normalizedPhase = normalizePhaseName(data.phase)
-
           // Small delay to ensure backend transaction has committed before we read state
           await new Promise((r) => setTimeout(r, 100))
           let state = await gameService.getState(gameId)
@@ -1085,15 +1061,11 @@ onMounted(async () => {
             state.sheriffElection?.subPhase ??
             null
           if (
-            (normalizedPhase && state.phase !== normalizedPhase) ||
+            (data.phase && state.phase !== data.phase) ||
             (data.subPhase && fetchedSub !== data.subPhase)
           ) {
             await new Promise((r) => setTimeout(r, 300))
             state = await gameService.getState(gameId)
-          }
-          // Normalize state phase for consistency
-          if (state) {
-            state.phase = normalizePhaseName(state.phase) as any
           }
           // Audio is managed by AudioSequence events - don't touch audioSequence here
           gameStore.setState(state)
@@ -1120,18 +1092,6 @@ onMounted(async () => {
               audioSequence: data.audioSequence,
             })
           }
-        }
-        // OpenEyes / CloseEyes are informational events from the night orchestrator.
-        // Audio is driven exclusively by AudioSequence events (backend-calculated).
-        // Handling audio here would duplicate what AudioSequence already plays.
-        if (data.type === 'OpenEyes' || data.type === 'CloseEyes') {
-          console.log(`[night] ${data.type} for role ${data.role}`)
-        }
-        // New event-driven approach: RoleAction event
-        if (data.type === 'RoleAction') {
-          // Handle role action prompt (for future UI enhancements)
-          console.log('RoleAction received:', data)
-          // This can be used to show action prompts for the current player
         }
         // Real backend: night result (kills) → re-fetch state
         if (data.type === 'NightResult') {
@@ -1201,19 +1161,6 @@ onMounted(async () => {
 onUnmounted(() => {
   disconnectStomp()
 })
-
-// ── Backward compatibility helpers ────────────────────────────────────────────────
-/**
- * Map old phase names to new ones for backward compatibility
- */
-function normalizePhaseName(phase: string | undefined): string {
-  if (!phase) return phase || ''
-  const phaseMap: Record<string, string> = {
-    DAY_DISCUSSION: 'DAY_DISCUSSION',
-    DAY_VOTING: 'DAY_VOTING',
-  }
-  return phaseMap[phase] || phase
-}
 </script>
 
 <style scoped>

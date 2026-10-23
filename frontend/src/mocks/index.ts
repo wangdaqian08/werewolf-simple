@@ -156,7 +156,6 @@ export function setupMocks() {
 
   // ── User ──────────────────────────────────────────────────────────────────────
   mock.onPost('/user/login').reply(200, MOCK_LOGIN)
-  mock.onGet('/user/profile').reply(200, MOCK_LOGIN.user)
   mock.onPost('/user/logout').reply(200)
 
   // ── Wallet / Perks / Payments (account page) ──────────────────────────────────
@@ -202,7 +201,6 @@ export function setupMocks() {
   })
   mock.onGet(`/room/${MOCK_ROOM_AS_HOST.roomId}`).reply(200, MOCK_ROOM_AS_HOST)
   mock.onGet(`/room/${MOCK_ROOM_AS_GUEST.roomId}`).reply(200, MOCK_ROOM_AS_GUEST)
-  mock.onGet('/room/list').reply(200, [MOCK_ROOM_AS_HOST])
 
   // ── Debug: start game (fires GAME_STARTED on room topic, then ROLE_REVEAL) ───
   mock.onPost('/debug/game/start').reply(async (config) => {
@@ -506,11 +504,10 @@ export function setupMocks() {
 
   // ── Game ──────────────────────────────────────────────────────────────────────
   mock.onGet(/\/game\/[^/]+\/state/).reply(() => [200, mockGameState])
-  mock.onGet(/\/game\/result/).reply((_config) => [200, MOCK_GAME_RESULT])
   mock.onGet(/\/game\/[^/]+\/events/).reply(() => [200, MOCK_ACTION_LOG])
   mock.onGet(/\/game\/[^/]+\/review/).reply(() => [200, MOCK_GAME_REVIEW])
   mock.onPost('/game/action').reply((config) => {
-    const { actionType, targetId, payload } = JSON.parse(config.data ?? '{}')
+    const { actionType, targetId } = JSON.parse(config.data ?? '{}')
     if (mockGameState.phase === 'ROLE_REVEAL') {
       if (actionType === 'START_NIGHT') {
         mockGameState = {
@@ -833,16 +830,12 @@ export function setupMocks() {
         pushGameStateUpdate()
       } else if (actionType === 'WITCH_ACT') {
         // Unified witch action — each action submits immediately (one action per round)
-        const useAntidote = payload?.useAntidote ?? false
-        const poisonTargetUserId = payload?.poisonTargetUserId ?? null
         mockGameState = {
           ...mockGameState,
           nightPhase: {
             ...np,
             antidoteDecided: true,
-            antidoteUsed: useAntidote,
             poisonDecided: true,
-            poisonUsed: !!poisonTargetUserId,
             selectedTargetId: undefined,
             subPhase: 'WAITING',
           },
@@ -856,7 +849,6 @@ export function setupMocks() {
           nightPhase: {
             ...np,
             antidoteDecided: true,
-            antidoteUsed: true,
             poisonDecided: true,
             subPhase: 'WAITING',
           },
@@ -864,7 +856,7 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'NIGHT_WITCH_PASS_ANTIDOTE') {
-        const updated = { ...np, antidoteDecided: true, antidoteUsed: false }
+        const updated = { ...np, antidoteDecided: true }
         const goToWaiting = updated.poisonDecided
         mockGameState = {
           ...mockGameState,
@@ -878,7 +870,6 @@ export function setupMocks() {
           nightPhase: {
             ...np,
             poisonDecided: true,
-            poisonUsed: true,
             antidoteDecided: true,
             selectedTargetId: undefined,
             subPhase: 'WAITING',
@@ -887,7 +878,7 @@ export function setupMocks() {
         }
         pushGameStateUpdate()
       } else if (actionType === 'NIGHT_WITCH_PASS_POISON') {
-        const updated = { ...np, poisonDecided: true, poisonUsed: false }
+        const updated = { ...np, poisonDecided: true }
         const goToWaiting = updated.antidoteDecided
         mockGameState = {
           ...mockGameState,
@@ -901,14 +892,6 @@ export function setupMocks() {
         mockGameState = {
           ...mockGameState,
           dayPhase: makeDayRevealed(),
-        }
-        pushGameStateUpdate()
-      } else if (actionType === 'SELECT_PLAYER') {
-        mockGameState = {
-          ...mockGameState,
-          dayPhase: mockGameState.dayPhase
-            ? { ...mockGameState.dayPhase, selectedPlayerId: targetId }
-            : undefined,
         }
         pushGameStateUpdate()
       } else if (actionType === 'DAY_ADVANCE') {
@@ -962,7 +945,6 @@ export function setupMocks() {
           votingPhase: {
             ...vp,
             tallyRevealed: true,
-            revealDeadline: Date.now() + 30_000,
           },
         }
         pushGameStateUpdate()
@@ -1119,5 +1101,3 @@ export function setupMocks() {
   console.warn('[mock] active — set VITE_MOCK=false in .env.development to use real backend')
   console.warn('[mock] __debug helper available — type __debug in the console to see all commands')
 }
-
-export { mockStompClient }

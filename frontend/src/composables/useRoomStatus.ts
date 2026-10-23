@@ -68,14 +68,11 @@ export function useRoomStatus(room: Ref<Room | null>, userId: Ref<string | null>
 
   return {
     isHost,
-    myPlayer,
     iAmReady,
     totalSeats,
-    guests,
     displayReadyCount,
     notReadyGuestCount,
     canStart,
-    mySeat,
     hasPickedSeat,
     canSelectSeat,
     playerAtSeat,

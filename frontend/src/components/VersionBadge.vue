@@ -20,8 +20,4 @@ const version = __APP_VERSION__
   user-select: none;
   font-variant-numeric: tabular-nums;
 }
-
-:global(.night-mode) .version-badge {
-  color: rgba(245, 240, 232, 0.45);
-}
 </style>

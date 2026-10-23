@@ -44,8 +44,6 @@ test('SIGNUP shows only decision progress and hides candidate identities', async
 
   // No per-candidate rows leak through during SIGNUP — identities are hidden
   await expect(page.locator('.cand-row-running')).toHaveCount(0)
-  // No aggregate candidate count is rendered either — only progress
-  await expect(page.getByTestId('sheriff-candidate-count')).toHaveCount(0)
   // The host "Start Campaign" button is gone — auto-transition handles it
   await expect(page.getByTestId('sheriff-start-campaign')).toHaveCount(0)
 

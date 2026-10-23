@@ -595,7 +595,6 @@ export const MOCK_VOTE_HISTORY: VoteRoundHistory[] = [
     hunterShotPlayerId: 'u2',
     hunterShotNickname: 'Alice',
     hunterShotSeatIndex: 2,
-    hunterShotAvatar: '😊',
     hunterShotRole: 'WEREWOLF',
     tally: [
       {
@@ -678,7 +677,6 @@ export const MOCK_VOTE_HISTORY: VoteRoundHistory[] = [
     hunterShotPlayerId: 'u8',
     hunterShotNickname: 'Grace',
     hunterShotSeatIndex: 8,
-    hunterShotAvatar: '🌺',
     hunterShotRole: 'VILLAGER',
     tally: [
       {
@@ -920,7 +918,6 @@ export function makeVotingScenario(
           totalVoters: 8,
           tally: MOCK_VOTE_TALLY,
           tallyRevealed: true,
-          revealDeadline: now + 30_000,
           ...eliminated,
         } satisfies VotingState,
       }

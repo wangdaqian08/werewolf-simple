@@ -124,9 +124,7 @@ class GuardProtectionIntegrationTest {
             eq(gameId),
             eq(GamePhase.NIGHT),
             eq(GamePhase.DAY_DISCUSSION),
-            isNull(),
-            eq(DaySubPhase.RESULT_HIDDEN.name),
-            any()
+            eq(DaySubPhase.RESULT_HIDDEN.name)
         )).thenReturn(audioSequence)
     }
 

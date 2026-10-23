@@ -416,7 +416,6 @@ describe('DayPhase — private night-death shot', () => {
     const wrapper = mountAs('alice')
     expect(wrapper.find('[data-testid="day-banner-kill"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="day-hunter-night-banner"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="day-hunter-night-wait-banner"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('开枪')
   })

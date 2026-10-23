@@ -119,15 +119,8 @@ class JsonWireFormatTest {
             1, AudioSequence("seq-1", GamePhase.NIGHT, null, listOf("wolf_open.mp3"), 2, 1_700_000_000_000L),
         ) to """{"type":"AudioSequence","gameId":1,"audioSequence":{"id":"seq-1","phase":"NIGHT","subPhase":null,""" +
                 """"audioFiles":["wolf_open.mp3"],"priority":2,"timestamp":1700000000000}}""",
-        DomainEvent.OpenEyes(1, PlayerRole.WITCH, GamePhase.NIGHT, 2) to
-                """{"type":"OpenEyes","gameId":1,"role":"WITCH","phase":"NIGHT","nightNumber":2}""",
-        DomainEvent.CloseEyes(1, PlayerRole.WITCH, GamePhase.NIGHT, 2) to
-                """{"type":"CloseEyes","gameId":1,"role":"WITCH","phase":"NIGHT","nightNumber":2}""",
         DomainEvent.WolfSelfDestructed(1, "u3", 4, "Wolfie") to
                 """{"type":"WolfSelfDestructed","gameId":1,"userId":"u3","seatIndex":4,"nickname":"Wolfie"}""",
-        DomainEvent.RoleAction(1, "u7", PlayerRole.WITCH, "WITCH_ACT", listOf("u2"), canHeal = true, timeoutMs = 30_000L) to
-                """{"type":"RoleAction","gameId":1,"userId":"u7","role":"WITCH","actionType":"WITCH_ACT",""" +
-                """"targets":["u2"],"canHeal":true,"canPoison":null,"timeoutMs":30000}""",
         DomainEvent.TimerUpdated(1, 12_000L, 60_000L, true) to
                 """{"type":"TimerUpdated","gameId":1,"remainingMs":12000,"durationMs":60000,"running":true}""",
     )

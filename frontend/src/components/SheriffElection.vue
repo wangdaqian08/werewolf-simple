@@ -812,13 +812,6 @@ function speakerLabel(uid: string, idx: number) {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
-.timer {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--gold);
-}
-
 /* Info banner */
 .info-banner {
   background: rgba(160, 120, 48, 0.08);
@@ -850,23 +843,6 @@ function speakerLabel(uid: string, idx: number) {
 }
 
 /* Candidates */
-.candidate-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.cand-row-running {
-  background: rgba(160, 120, 48, 0.06);
-  border: 1px solid rgba(160, 120, 48, 0.25);
-  border-radius: 0.375rem;
-  display: flex;
-  align-items: center;
-  padding: 0 0.75rem;
-  gap: 0.5rem;
-  height: 3.125rem;
-}
-
 .cand-avatar {
   font-size: 1.125rem;
 }

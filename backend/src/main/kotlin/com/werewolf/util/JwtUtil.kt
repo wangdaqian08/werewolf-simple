@@ -11,7 +11,7 @@ import java.util.*
 @Component
 class JwtUtil(
     @Value("\${app.jwt.secret}") secret: String,
-    @Value("\${app.jwt.expiration-hours:2}") private val expirationHours: Long,
+    @param:Value("\${app.jwt.expiration-hours:2}") private val expirationHours: Long,
 ) {
     private val signingKey = run {
         val keyBytes = secret.toByteArray(StandardCharsets.UTF_8)
@@ -41,12 +41,4 @@ class JwtUtil(
             .build()
             .parseSignedClaims(token)
             .payload
-
-    fun extractUserId(token: String): String? = runCatching { parseToken(token).subject }.getOrNull()
-
-    fun extractNickname(token: String): String? =
-        runCatching { parseToken(token).get("nickname", String::class.java) }.getOrNull()
-
-    fun extractAvatarUrl(token: String): String? =
-        runCatching { parseToken(token).get("avatarUrl", String::class.java) }.getOrNull()
 }

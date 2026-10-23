@@ -9,5 +9,4 @@ interface RoleAudioConfig {
     val role: PlayerRole
     val openEyesAudio: String
     val closeEyesAudio: String
-    val defaultDelayMs: Long
 }

@@ -13,7 +13,6 @@ data class GameContext(
 ) {
     val gameId: Int get() = game.gameId ?: error("Game has no ID — was it persisted?")
     val alivePlayers: List<GamePlayer> get() = players.filter { it.alive }
-    val alivePlayerIds: Set<String> get() = alivePlayers.map { it.userId }.toSet()
 
     fun playerById(userId: String): GamePlayer? = players.find { it.userId == userId }
     fun alivePlayerById(userId: String): GamePlayer? = alivePlayers.find { it.userId == userId }

@@ -180,21 +180,6 @@ describe('audioService', () => {
     unsub()
   })
 
-  // ── Volume ──────────────────────────────────────────────────────────────
-
-  it('setGlobalVolume clamps to 0-1', () => {
-    audioService.setGlobalVolume(2)
-    expect(audioService.getGlobalVolume()).toBe(1)
-    audioService.setGlobalVolume(-1)
-    expect(audioService.getGlobalVolume()).toBe(0)
-  })
-
-  it('setGlobalVolume updates cached instances', () => {
-    audioService.playSequential(['a.mp3'])
-    audioService.setGlobalVolume(0.3)
-    expect(mockAudioInstances[0]?.volume).toBeCloseTo(0.3)
-  })
-
   // ── Error resilience ────────────────────────────────────────────────────
 
   it('continues queue when play() rejects', async () => {

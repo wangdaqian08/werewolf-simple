@@ -59,7 +59,7 @@ watch(
     if (isRunning) startTicking()
     else {
       stopTicking()
-      localRemaining.value = props.running ? snapshotRemainingMs.value : 0
+      localRemaining.value = 0
     }
   },
   { immediate: true },
@@ -223,7 +223,6 @@ const displayLabel = computed(() => (visuallyIdle.value ? '—' : fmt(localRemai
   background: var(--ink, #2a1f14);
   color: var(--paper, #f5f0e8);
   border: none;
-  font-family: inherit;
   transition: background 0.12s;
 }
 

@@ -69,7 +69,7 @@ class NightImmunityIntegrationTest {
         whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
         whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
         whenever(
-            audioService.calculatePhaseTransition(eq(gameId), eq(GamePhase.NIGHT), eq(GamePhase.DAY_DISCUSSION), isNull(), any(), any()),
+            audioService.calculatePhaseTransition(eq(gameId), eq(GamePhase.NIGHT), eq(GamePhase.DAY_DISCUSSION), any()),
         ).thenReturn(
             AudioSequence(
                 id = "$gameId-day", phase = GamePhase.DAY_DISCUSSION, subPhase = DaySubPhase.RESULT_HIDDEN.name,

@@ -47,9 +47,6 @@ discriminator and is itself a hard contract with the frontend.
 | `SheriffElected`        | `gameId, sheriffUserId?`                            | game topic |
 | `GameOver`              | `gameId, winner: WinnerSide?`                       | game topic |
 | `AudioSequence`         | `gameId, audioSequence: AudioSequence`              | game topic |
-| `OpenEyes`              | `gameId, role, phase, nightNumber`                  | game topic |
-| `CloseEyes`             | `gameId, role, phase, nightNumber`                  | game topic |
-| `RoleAction`            | `gameId, userId, role, actionType, targets, canHeal?, canPoison?, timeoutMs` | game topic |
 
 `AudioSequence` is the audio contract — see `docs/adr/audio.md` for the
 server-authoritative model (cache, replay buffer, dedup gate). `tally` is

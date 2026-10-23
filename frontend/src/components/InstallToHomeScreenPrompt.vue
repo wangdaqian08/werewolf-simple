@@ -37,8 +37,7 @@ const DISMISSED_KEY = 'pwa-install-dismissed'
 function shouldShow(): boolean {
   if (!isIosSafari()) return false
   if (isStandalonePwa()) return false
-  if (localStorage.getItem(DISMISSED_KEY) === 'true') return false
-  return true
+  return localStorage.getItem(DISMISSED_KEY) !== 'true'
 }
 
 const visible = ref(shouldShow())

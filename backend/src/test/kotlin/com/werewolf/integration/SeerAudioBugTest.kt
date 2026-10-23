@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
-import org.springframework.transaction.annotation.Transactional
 
 /**
  * Test to reproduce the seer audio bug reported by the user:
@@ -63,7 +62,7 @@ class SeerAudioBugTest {
         roomRepository.deleteAll()
     }
 
-    private fun createPlayersWithRoles(gameId: Int, room: Room): List<GamePlayer> {
+    private fun createPlayersWithRoles(gameId: Int): List<GamePlayer> {
         val players = mutableListOf<GamePlayer>()
         val roles = mutableListOf(
             PlayerRole.WEREWOLF,
@@ -129,7 +128,7 @@ class SeerAudioBugTest {
             hasSeer = true,
             hasWitch = true,
             hasGuard = true,
-            config = GameConfig.createDefault(),
+            config = GameConfig(),
         )
         val savedRoom = roomRepository.save(room)
         val game = Game(
@@ -142,7 +141,7 @@ class SeerAudioBugTest {
         val gameId = requireNotNull(savedGame.gameId) { "Game ID should not be null after save" }
 
         // Create players with roles
-        val players = createPlayersWithRoles(gameId, savedRoom)
+        val players = createPlayersWithRoles(gameId)
         println("  Created ${players.size} players with roles")
 
         // Step 1: Initialize night phase (DAY -> NIGHT)
@@ -153,10 +152,6 @@ class SeerAudioBugTest {
 
         // Step 2: Simulate WEREWOLF_PICK -> WITCH_ACT
         println("\nStep 2: WEREWOLF_PICK -> WITCH_ACT")
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.WITCH_ACT)
-        val nightPhase2 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
-        println("  Sub-phase after WEREWOLF_PICK: ${nightPhase2?.subPhase}")
-        assertThat(nightPhase2).isNotNull()
 
         // Calculate audio for this transition
         val audio1 = audioService.calculateNightSubPhaseTransition(
@@ -169,10 +164,6 @@ class SeerAudioBugTest {
 
         // Step 3: Simulate WITCH_ACT -> SEER_PICK (witch acts and seer wakes)
         println("\nStep 3: WITCH_ACT -> SEER_PICK (witch acts and seer wakes)")
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_PICK)
-        val nightPhase3 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
-        println("  Sub-phase after WITCH_ACT: ${nightPhase3?.subPhase}")
-        assertThat(nightPhase3).isNotNull()
 
         // Calculate audio for this transition
         val audio2 = audioService.calculateNightSubPhaseTransition(
@@ -185,10 +176,6 @@ class SeerAudioBugTest {
 
         // Step 4: Simulate SEER_PICK -> SEER_RESULT (seer checks a player; stays awake)
         println("\nStep 4: SEER_PICK -> SEER_RESULT (seer checks a player)")
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.SEER_RESULT)
-        val nightPhase4 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
-        println("  Sub-phase after SEER_PICK: ${nightPhase4?.subPhase}")
-        assertThat(nightPhase4).isNotNull()
 
         val audio3 = audioService.calculateNightSubPhaseTransition(
             gameId = gameId,
@@ -200,10 +187,6 @@ class SeerAudioBugTest {
 
         // Step 5: Simulate SEER_RESULT -> GUARD_PICK (seer confirms and advances)
         println("\nStep 5: SEER_RESULT -> GUARD_PICK (seer confirms and advances)")
-        nightOrchestrator.advanceToSubPhase(gameId, NightSubPhase.GUARD_PICK)
-        val nightPhase5 = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElse(null)
-        println("  Sub-phase after SEER_RESULT: ${nightPhase5?.subPhase}")
-        assertThat(nightPhase5).isNotNull()
 
         // Calculate audio for this transition - THIS IS WHERE THE BUG WAS REPORTED
         val audio4 = audioService.calculateNightSubPhaseTransition(
@@ -254,9 +237,7 @@ class SeerAudioBugTest {
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = savedRoom,
         )
 
         // Then: Should contain "day_time.mp3"

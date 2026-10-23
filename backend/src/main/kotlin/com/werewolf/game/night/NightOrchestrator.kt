@@ -250,57 +250,10 @@ class NightOrchestrator(
     }
 
     /**
-     * Advance from WAITING sub-phase to the first real sub-phase (WEREWOLF_PICK).
-     * Called by the debug endpoint or NightWaitingScheduler as a fallback.
-     * In normal flow the night coroutine handles the WAITING delay automatically.
-     */
-    @Transactional
-    fun advanceFromWaiting(gameId: Int) {
-        val context = contextLoader.load(gameId)
-        val nightPhase = context.nightPhase ?: return
-        if (nightPhase.subPhase != NightSubPhase.WAITING) return // idempotent guard
-        val firstRealSubPhase = firstSubPhase(context)
-        nightPhase.subPhase = firstRealSubPhase
-        nightPhaseRepository.save(nightPhase)
-
-        val audioSequence = audioService.calculateNightSubPhaseTransition(
-            gameId = gameId,
-            oldSubPhase = NightSubPhase.WAITING,
-            newSubPhase = firstRealSubPhase,
-        )
-
-        stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.NightSubPhaseChanged(gameId, firstRealSubPhase))
-        stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
-    }
-
-    /**
-     * Advance to a specific sub-phase after a scheduled delay.
-     * Kept for NightWaitingScheduler.scheduleAdvance compatibility.
-     */
-    @Transactional
-    fun advanceToSubPhase(gameId: Int, targetSubPhase: NightSubPhase?) {
-        if (targetSubPhase == null) return
-        val context = contextLoader.load(gameId)
-        val nightPhase = context.nightPhase ?: return
-        val oldSubPhase = nightPhase.subPhase
-        nightPhase.subPhase = targetSubPhase
-        nightPhaseRepository.save(nightPhase)
-
-        val audioSequence = audioService.calculateNightSubPhaseTransition(
-            gameId = gameId,
-            oldSubPhase = oldSubPhase,
-            newSubPhase = targetSubPhase,
-        )
-
-        stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.NightSubPhaseChanged(gameId, targetSubPhase))
-        stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.AudioSequence(gameId, audioSequence))
-    }
-
-    /**
      * End-of-night handler. Computes pending kills (wolf target unless saved
      * by witch antidote or guard, plus witch poison) but does NOT apply them
      * to `player.alive` yet — kills are deferred until the host clicks
-     * REVEAL_NIGHT_RESULT (via [GamePhasePipeline.revealNightResult] →
+     * REVEAL_NIGHT_RESULT (via [com.werewolf.game.phase.GamePhasePipeline.revealNightResult] →
      * [applyNightKills]).
      *
      * Why deferred: traditional 狼人杀 with sheriff requires the Day 1 sheriff
@@ -407,9 +360,7 @@ class NightOrchestrator(
                 gameId = gameId,
                 oldPhase = GamePhase.NIGHT,
                 newPhase = GamePhase.SHERIFF_ELECTION,
-                oldSubPhase = null,
                 newSubPhase = ElectionSubPhase.SIGNUP.name,
-                room = context.room,
             )
 
             if (TransactionSynchronizationManager.isActualTransactionActive()) {
@@ -463,9 +414,7 @@ class NightOrchestrator(
                 gameId = gameId,
                 oldPhase = GamePhase.NIGHT,
                 newPhase = GamePhase.DAY_DISCUSSION,
-                oldSubPhase = null,
                 newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-                room = context.room,
             )
 
             if (TransactionSynchronizationManager.isActualTransactionActive()) {
@@ -538,7 +487,7 @@ class NightOrchestrator(
 
     /**
      * Compute the set of pending kills from a NightPhase row. Pure function —
-     * does not touch DB. Public so [GamePhasePipeline.revealNightResult] can
+     * does not touch DB. Public so [com.werewolf.game.phase.GamePhasePipeline.revealNightResult] can
      * call it to figure out which players to flip alive=false on the reveal
      * click.
      *
@@ -809,9 +758,7 @@ class NightOrchestrator(
             gameId = gameId,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = null,
             newSubPhase = initialSubPhase.name,
-            room = context.room,
         )
 
         // Diagnostic: full visibility into the night-entry cue path. Pairs
@@ -831,7 +778,7 @@ class NightOrchestrator(
      * Broadcast a single audio file as an AudioSequence event.
      */
     /**
-     * [race] Dump every role-action field on a NightPhase at a critical point in the
+     * `[race]` Dump every role-action field on a NightPhase at a critical point in the
      * role loop (immediately after a read, and immediately before the merge/save).
      *
      * How to read these logs to diagnose the wipe-on-merge race:

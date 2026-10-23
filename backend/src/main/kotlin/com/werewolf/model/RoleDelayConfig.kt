@@ -115,13 +115,4 @@ data class GameConfig(
     fun getDelayForRole(role: PlayerRole): RoleDelayConfig {
         return roleDelays[role] ?: RoleDelayConfig.getDefaultForRole(role)
     }
-
-    companion object {
-        /**
-         * 创建默认的游戏配置
-         */
-        fun createDefault(): GameConfig {
-            return GameConfig()
-        }
-    }
 }

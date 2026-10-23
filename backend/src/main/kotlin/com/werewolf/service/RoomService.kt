@@ -364,7 +364,7 @@ class RoomService(
      *      King alone it is always the last wolf and could never take anyone;
      *      the Black Wolf King shares the gate (owner's call: one rule for both)
      *
-     * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
+     * The canonical ±1 wolf-count bounds (frontend `utils/wolfBounds.ts`) are a *frontend UX policy*
      * for the host-facing stepper — they intentionally do NOT gate the API,
      * so headless tests and future tooling can construct edge configurations
      * (e.g. small 4-player rooms with 2 wolves) without bypassing security.

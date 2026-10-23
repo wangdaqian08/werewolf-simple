@@ -36,7 +36,6 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     votesSubmitted: 0,
     totalVoters: 0,
     tallyRevealed: false,
-    revealDeadline: undefined,
     tally: [],
     eliminatedPlayerId,
     eliminatedNickname: eliminatedPlayerId ? 'Sheriff' : undefined,
@@ -881,9 +880,11 @@ describe('VotingPhase — PK re-vote and badge heir rules', () => {
     expect(wrapper.find('[data-testid="pk-banner"]').text()).toContain('3号')
 
     await wrapper.find('.player-grid [data-seat="4"]').trigger('click')
-    expect(wrapper.emitted('selectPlayer')).toBeUndefined()
+    await wrapper.find('[data-testid="voting-vote"]').trigger('click')
+    expect(wrapper.emitted('vote')).toBeUndefined()
     await wrapper.find('.player-grid [data-seat="2"]').trigger('click')
-    expect(wrapper.emitted('selectPlayer')?.[0]).toEqual(['p2'])
+    await wrapper.find('[data-testid="voting-vote"]').trigger('click')
+    expect(wrapper.emitted('vote')?.[0]).toEqual(['p2'])
   })
 
   it('a PK candidate is told they cannot vote this round', () => {
@@ -897,9 +898,11 @@ describe('VotingPhase — PK re-vote and badge heir rules', () => {
       voting({ subPhase: 'BADGE_HANDOVER', eliminatedPlayerId: 'p4', canVote: false }),
     )
     await wrapper.find('.player-grid [data-seat="3"]').trigger('click')
-    expect(wrapper.emitted('selectPlayer')).toBeUndefined()
+    await wrapper.find('[data-testid="badge-pass"]').trigger('click')
+    expect(wrapper.emitted('passBadge')).toBeUndefined()
     await wrapper.find('.player-grid [data-seat="1"]').trigger('click')
-    expect(wrapper.emitted('selectPlayer')?.[0]).toEqual(['p1'])
+    await wrapper.find('[data-testid="badge-pass"]').trigger('click')
+    expect(wrapper.emitted('passBadge')?.[0]).toEqual(['p1'])
   })
 })
 
@@ -982,7 +985,8 @@ describe('VotingPhase — private shot of the voted-out shooter', () => {
     const shooter = mountShot('p3', { shooter: 'p3' })
     expect(shooter.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(true)
     await shooter.find('.player-grid [data-seat="1"]').trigger('click')
-    expect(shooter.emitted('selectPlayer')?.[0]).toEqual(['p1'])
+    await shooter.find('[data-testid="voting-hunter-shoot"]').trigger('click')
+    expect(shooter.emitted('hunterShoot')?.[0]).toEqual(['p1'])
 
     const votedOut = mountShot('p2', { shooter: 'p3' })
     expect(votedOut.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(false)

@@ -41,11 +41,6 @@
  * before each role's audio. We assert that line for the dead role at N2 —
  * that proves the role-loop entered the dead-role path, which means open +
  * close audio was broadcast for that role.
- *
- * NOTE: `audioService.calculateDeadRoleAudioSequence(...)` exists as a
- * standalone function (and AudioServiceTest covers it heavily) but is NOT
- * invoked by the production NightOrchestrator. Don't grep the backend log
- * for "calculated dead-role audio sequence" — it never fires.
  */
 import { expect, test } from '@playwright/test'
 import { setupGame } from './helpers/multi-browser'
@@ -237,7 +232,7 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
         logTail = readBackendLogSince(logLineBeforeN2)
         if (
           logTail.some((line) =>
-            /\[nightRoleLoop\].+game=\d+:.+role=SEER alive=false/.test(line),
+            /\[nightRoleLoop].+game=\d+:.+role=SEER alive=false/.test(line),
           )
         ) {
           break
@@ -246,7 +241,7 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
       }
 
       const deadSeerLine = logTail.find((line) =>
-        /\[nightRoleLoop\].+game=\d+:.+role=SEER alive=false/.test(line),
+        /\[nightRoleLoop].+game=\d+:.+role=SEER alive=false/.test(line),
       )
       expect(
         deadSeerLine,
@@ -440,10 +435,10 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
       while (Date.now() < deadline) {
         logTail = readBackendLogSince(logLineBeforeN2)
         deadSeer = logTail.some((line) =>
-          /\[nightRoleLoop\].+game=\d+:.+role=SEER alive=false/.test(line),
+          /\[nightRoleLoop].+game=\d+:.+role=SEER alive=false/.test(line),
         )
         deadGuard = logTail.some((line) =>
-          /\[nightRoleLoop\].+game=\d+:.+role=GUARD alive=false/.test(line),
+          /\[nightRoleLoop].+game=\d+:.+role=GUARD alive=false/.test(line),
         )
         if (deadSeer && deadGuard) break
         await hostPage.waitForTimeout(500)

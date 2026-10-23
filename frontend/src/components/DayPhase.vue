@@ -538,9 +538,6 @@ const ROLE_META: Record<string, RoleMeta> = {
 const emit = defineEmits<{
   revealResult: []
   startVote: []
-  vote: [targetId: string]
-  skip: []
-  selectPlayer: [userId: string]
   'self-destruct': [targetUserId?: string]
   continueToNight: []
   passBadge: [userId: string]
@@ -561,14 +558,10 @@ const viewRole = computed<ViewRole>(() => {
   return 'ALIVE'
 })
 
-// Selection is local UI state — server is notified but not authoritative for display
-const localSelected = ref<string | undefined>(props.dayPhase.selectedPlayerId)
-
 // Reset when a new action phase begins
 watch(
   () => props.dayPhase.subPhase,
   () => {
-    localSelected.value = undefined
     hunterSelectedId.value = null
   },
 )
@@ -604,32 +597,12 @@ function slotVariant(player: GamePlayer) {
     // In RESULT_REVEALED phase, no player should be selected (waiting for host to start vote)
     return 'alive' as const
   }
-  if (props.dayPhase.subPhase === 'RESULT_HIDDEN') {
-    // In RESULT_HIDDEN phase, no player should be selected (waiting for host to reveal result)
-    return 'alive' as const
-  }
-  if (player.userId === localSelected.value) return 'selected' as const
   return 'alive' as const
 }
 
 function onTap(player: GamePlayer) {
-  if (isHunterNightShoot.value) {
-    onHunterTap(player)
-    return
-  }
-  if (isBadgeHandover.value) {
-    onBadgeTap(player)
-    return
-  }
-  if (viewRole.value !== 'ALIVE') return
-  if (!props.dayPhase.canVote) return
-  if (!player.isAlive) return
-  // Prevent selection in both RESULT_HIDDEN and RESULT_REVEALED phases
-  // Players can only select after host starts the voting phase
-  if (props.dayPhase.subPhase === 'RESULT_HIDDEN' || props.dayPhase.subPhase === 'RESULT_REVEALED')
-    return
-  localSelected.value = player.userId
-  emit('selectPlayer', player.userId)
+  if (isHunterNightShoot.value) onHunterTap(player)
+  else if (isBadgeHandover.value) onBadgeTap(player)
 }
 </script>
 

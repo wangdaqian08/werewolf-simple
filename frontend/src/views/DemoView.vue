@@ -350,7 +350,6 @@
           :players="players"
           :my-user-id="DEMO_ME_ID"
           my-role="WITCH"
-          @confirm="onWitchConfirm"
           @witch-antidote="onWitchAct"
           @witch-pass-antidote="onWitchAct"
           @witch-poison="onWitchAct"
@@ -634,9 +633,6 @@ const witchActed = ref(false)
 const witchState = ref(buildNightPhaseState('WITCH', 'WITCH_ACT'))
 
 function onWitchAct() {
-  witchActed.value = true
-}
-function onWitchConfirm() {
   witchActed.value = true
 }
 function resetWitch() {

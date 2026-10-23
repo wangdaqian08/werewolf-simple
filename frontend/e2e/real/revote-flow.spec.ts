@@ -127,7 +127,6 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const seerBots = ctx.roleMap.SEER ?? []
     const witchBots = ctx.roleMap.WITCH ?? []
     const guardBots = ctx.roleMap.GUARD ?? []
-    const villagerBots = ctx.roleMap.VILLAGER ?? []
     const wolfPage = ctx.pages.get('WEREWOLF')
     const seerPage = ctx.pages.get('SEER')
     const witchPage = ctx.pages.get('WITCH')

@@ -6,7 +6,6 @@ import com.werewolf.model.DaySubPhase
 import com.werewolf.model.GamePhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
-import com.werewolf.model.Room
 import com.werewolf.service.AudioService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -36,17 +35,13 @@ class AudioPhaseMappingTest {
 
     @Test
     fun `Audio file mapping - goes_dark_close_eyes mp3 must only be used for NIGHT phase initialization`() {
-        val room = room()
-        
         // Test: goes_dark_close_eyes.mp3 should appear in DAY -> NIGHT transition
         // When transitioning directly to WEREWOLF_PICK, it also includes role audio
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
-            room = room,
         )
 
         // wolf_open_eyes is now broadcast by the night coroutine, not by calculatePhaseTransition
@@ -56,16 +51,12 @@ class AudioPhaseMappingTest {
 
     @Test
     fun `Audio file mapping - day_time mp3 must only be used for NIGHT to DAY transition`() {
-        val room = room()
-        
         // Test: day_time.mp3 should only appear in NIGHT -> DAY transition
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room,
         )
 
         assertThat(sequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
@@ -171,14 +162,11 @@ class AudioPhaseMappingTest {
     @Test
     fun `Audio file mapping - guard_close_eyes mp3 must only be used when leaving GUARD_PICK phase`() {
         // Test: guard_close_eyes.mp3 should only appear when transitioning FROM GUARD_PICK
-        val room = room(hasGuard = true)
         val sequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room,
         )
 
         // guard_close_eyes.mp3 is NOT in the sequence for NIGHT -> DAY transition
@@ -238,9 +226,7 @@ class AudioPhaseMappingTest {
             gameId = 1,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
-            room = room(),
         )
 
         val subPhaseSequence = audioService.calculateNightSubPhaseTransition(
@@ -261,9 +247,7 @@ class AudioPhaseMappingTest {
             gameId = 1,
             oldPhase = GamePhase.ROLE_REVEAL,
             newPhase = GamePhase.SHERIFF_ELECTION,
-            oldSubPhase = null,
             newSubPhase = null,
-            room = room(),
         )
 
         assertThat(sequence.priority).isEqualTo(0)
@@ -274,16 +258,12 @@ class AudioPhaseMappingTest {
 
     @Test
     fun `Audio sequence state consistency - phase field must always match game phase`() {
-        val room = room()
-        
         // Test NIGHT phase
         val nightSequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
-            room = room,
         )
         assertThat(nightSequence.phase).isEqualTo(GamePhase.NIGHT)
 
@@ -292,9 +272,7 @@ class AudioPhaseMappingTest {
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room,
         )
         assertThat(daySequence.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
 
@@ -303,9 +281,7 @@ class AudioPhaseMappingTest {
             gameId = 1,
             oldPhase = GamePhase.ROLE_REVEAL,
             newPhase = GamePhase.SHERIFF_ELECTION,
-            oldSubPhase = null,
             newSubPhase = null,
-            room = room(),
         )
         assertThat(nonAudioSequence.phase).isEqualTo(GamePhase.SHERIFF_ELECTION)
     }
@@ -335,16 +311,12 @@ class AudioPhaseMappingTest {
 
     @Test
     fun `Audio sequence state consistency - subPhase field must be null for non-NIGHT phases`() {
-        val room = room()
-        
         // Test DAY phase
         val daySequence = audioService.calculatePhaseTransition(
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room,
         )
         assertThat(daySequence.subPhase).isEqualTo(DaySubPhase.RESULT_HIDDEN.name)
 
@@ -353,9 +325,7 @@ class AudioPhaseMappingTest {
             gameId = 1,
             oldPhase = GamePhase.ROLE_REVEAL,
             newPhase = GamePhase.SHERIFF_ELECTION,
-            oldSubPhase = null,
             newSubPhase = null,
-            room = room(),
         )
         assertThat(nonAudioSequence.subPhase).isNull()
     }
@@ -367,12 +337,10 @@ class AudioPhaseMappingTest {
         val allSequences = listOf(
             // Main phase transitions
             audioService.calculatePhaseTransition(
-                gameId = 1, oldPhase = GamePhase.DAY_DISCUSSION, newPhase = GamePhase.NIGHT,
-                oldSubPhase = null, newSubPhase = NightSubPhase.WEREWOLF_PICK.name, room = room(),
+                gameId = 1, oldPhase = GamePhase.DAY_DISCUSSION, newPhase = GamePhase.NIGHT, newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
             ),
             audioService.calculatePhaseTransition(
-                gameId = 1, oldPhase = GamePhase.NIGHT, newPhase = GamePhase.DAY_DISCUSSION,
-                oldSubPhase = NightSubPhase.GUARD_PICK.name, newSubPhase = DaySubPhase.RESULT_HIDDEN.name, room = room(),
+                gameId = 1, oldPhase = GamePhase.NIGHT, newPhase = GamePhase.DAY_DISCUSSION, newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             ),
             // Night sub-phase transitions
             audioService.calculateNightSubPhaseTransition(
@@ -424,9 +392,7 @@ class AudioPhaseMappingTest {
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.SHERIFF_ELECTION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = "SIGNUP",
-            room = room(),
         )
 
         assertThat(sequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
@@ -444,9 +410,7 @@ class AudioPhaseMappingTest {
             gameId = 1,
             oldPhase = GamePhase.SHERIFF_ELECTION,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = "RESULT",
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room(),
         )
 
         assertThat(sequence.audioFiles).isEmpty()
@@ -463,9 +427,7 @@ class AudioPhaseMappingTest {
             gameId = 1,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room(),
         )
 
         assertThat(sequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
@@ -481,27 +443,10 @@ class AudioPhaseMappingTest {
             gameId = 1,
             oldPhase = GamePhase.ROLE_REVEAL,
             newPhase = GamePhase.SHERIFF_ELECTION,
-            oldSubPhase = null,
             newSubPhase = "SIGNUP",
-            room = room(),
         )
 
         assertThat(sequence.audioFiles).isEmpty()
         assertThat(sequence.priority).isEqualTo(0)
     }
-
-    // ── Helper Functions ──────────────────────────────────────────────────────
-
-    private fun room(
-        hasSeer: Boolean = false,
-        hasWitch: Boolean = false,
-        hasGuard: Boolean = false,
-    ) = Room(
-        roomCode = "ABCD",
-        hostUserId = "host:001",
-        totalPlayers = 6,
-        hasSeer = hasSeer,
-        hasWitch = hasWitch,
-        hasGuard = hasGuard,
-    )
 }

@@ -76,9 +76,7 @@ class AudioSequenceIntegrationTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = DaySubPhase.RESULT_HIDDEN.name,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
-            room = room,
         )
 
         assertThat(audioSequence.phase).isEqualTo(GamePhase.NIGHT)
@@ -108,9 +106,7 @@ class AudioSequenceIntegrationTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room,
         )
 
         // Verify: Audio sequence contains day_time.mp3
@@ -145,54 +141,11 @@ class AudioSequenceIntegrationTest {
     }
 
     @Test
-    fun `Night orchestration - broadcasts AudioSequence events during sub-phase advances`() {
-        // Setup: Create room and game with players
-        val room = createRoom(hasSeer = true, hasWitch = true, hasGuard = true)
-        assertThat(roomRepository.findById(room.roomId!!)).isPresent
-
-        val game = createGame(roomId = room.roomId!!, phase = GamePhase.NIGHT, dayNumber = 1)
-        assertThat(gameRepository.findById(game.gameId!!)).isPresent
-
-        createPlayers(game.gameId!!, room.totalPlayers)
-
-        // Verify the game has correct roomId
-        val loadedGame = gameRepository.findById(game.gameId!!).orElseThrow()
-        assertThat(loadedGame.roomId).isEqualTo(room.roomId!!)
-
-        // Initialize night phase
-        nightOrchestrator.startNightPhase(game.gameId!!, newDayNumber = game.dayNumber, withWaiting = false)
-
-        // Get the created night phase
-        val nightPhase = nightPhaseRepository.findByGameIdAndDayNumber(game.gameId!!, game.dayNumber)
-        assertThat(nightPhase).isNotNull()
-
-        // Execute: Advance from WEREWOLF_PICK to WITCH_ACT
-        val context = gameContextLoader.load(game.gameId!!)
-        nightOrchestrator.advanceToSubPhase(game.gameId!!, NightSubPhase.WITCH_ACT)
-
-        // Verify: Night phase was advanced
-        val updatedNightPhase = nightPhaseRepository.findByGameIdAndDayNumber(game.gameId!!, game.dayNumber).orElse(null)
-        assertThat(updatedNightPhase?.subPhase).isNotEqualTo(NightSubPhase.WEREWOLF_PICK)
-
-        // Verify: Audio sequence can be calculated for the transition
-        val audioSequence = audioService.calculateNightSubPhaseTransition(
-            gameId = game.gameId!!,
-            oldSubPhase = NightSubPhase.WEREWOLF_PICK,
-            newSubPhase = NightSubPhase.WITCH_ACT,
-        )
-
-        assertThat(audioSequence.audioFiles).containsExactly("wolf_close_eyes.mp3", "witch_open_eyes.mp3")
-    }
-
-    @Test
     fun `Complete night cycle - generates correct audio sequences for all transitions`() {
         // Setup: Create a complete game setup with all roles
         val room = createRoom(hasSeer = true, hasWitch = true, hasGuard = true)
         val game = createGame(roomId = room.roomId!!, phase = GamePhase.DAY_DISCUSSION, dayNumber = 0)
-        val players = createPlayers(game.gameId!!, room.totalPlayers)
-
-        // Simulate a complete night cycle
-        val dayNumber = 1
+        createPlayers(game.gameId!!, room.totalPlayers)
 
         // DAY -> NIGHT transition: phase ambience only (wolf_open_eyes is owned
         // by WerewolfAudioConfig and broadcast by the role loop — decoupled design).
@@ -200,9 +153,7 @@ class AudioSequenceIntegrationTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
-            room = room,
         )
         assertThat(dayToNightSequence.audioFiles).containsExactly("goes_dark_close_eyes.mp3", "wolf_howl.mp3")
 
@@ -251,9 +202,7 @@ class AudioSequenceIntegrationTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room,
         )
         assertThat(nightToDaySequence.audioFiles).containsExactly("rooster_crowing.mp3", "day_time.mp3")
     }
@@ -268,9 +217,7 @@ class AudioSequenceIntegrationTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.DAY_DISCUSSION,
             newPhase = GamePhase.NIGHT,
-            oldSubPhase = null,
             newSubPhase = NightSubPhase.WEREWOLF_PICK.name,
-            room = room,
         )
 
         val sequence2 = audioService.calculateNightSubPhaseTransition(
@@ -283,9 +230,7 @@ class AudioSequenceIntegrationTest {
             gameId = game.gameId!!,
             oldPhase = GamePhase.NIGHT,
             newPhase = GamePhase.DAY_DISCUSSION,
-            oldSubPhase = NightSubPhase.GUARD_PICK.name,
             newSubPhase = DaySubPhase.RESULT_HIDDEN.name,
-            room = room,
         )
 
         // Verify all IDs are unique

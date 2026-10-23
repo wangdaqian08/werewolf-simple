@@ -5,7 +5,6 @@ import com.werewolf.dto.StartGameRequest
 import com.werewolf.game.action.GameActionDispatcher
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
-import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameNotFoundException
@@ -25,7 +24,6 @@ data class TimerStartRequest(val durationSeconds: Long)
 class GameController(
     private val gameService: GameService,
     private val gameActionDispatcher: GameActionDispatcher,
-    private val nightOrchestrator: NightOrchestrator,
     private val actionLogService: ActionLogService,
     private val hostTimerService: HostTimerService,
     private val gameReviewService: GameReviewService,
@@ -136,17 +134,5 @@ class GameController(
             is GameActionResult.Rejected ->
                 ResponseEntity.badRequest().body(mapOf("success" to false, "error" to result.reason))
         }
-    }
-
-    // DEBUG ONLY: Manually advance night from WAITING to WEREWOLF_PICK
-    @PostMapping("/{gameId}/debug/advance-night")
-    fun debugAdvanceNight(
-        @PathVariable gameId: Int,
-        authentication: Authentication,
-    ): ResponseEntity<Map<String, Any?>> {
-        val userId = authentication.principal as String
-        log.info("[DEBUG] Manual night advance requested by $userId for game $gameId")
-        nightOrchestrator.advanceFromWaiting(gameId)
-        return ResponseEntity.ok(mapOf("success" to true, "message" to "Night advanced manually"))
     }
 }

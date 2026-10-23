@@ -95,6 +95,6 @@ class StompPublisher(
         is DomainEvent.VoteTally -> "VOTE_TALLY eliminated=${event.eliminatedUserId ?: "null"}"
         is DomainEvent.IdiotRevealed -> "IDIOT_REVEALED=${event.userId}"
         is DomainEvent.GameOver -> "GAME_OVER winner=${event.winner}"
-        else -> null  // RoleConfirmed, AudioSequence, OpenEyes, CloseEyes, RoleAction, VoteSubmitted, etc.
+        else -> null  // RoleConfirmed, AudioSequence, VoteSubmitted, etc.
     }
 }
