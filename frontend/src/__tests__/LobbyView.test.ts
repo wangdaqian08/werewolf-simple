@@ -290,6 +290,8 @@ describe('LobbyView OAuth UI', () => {
   it.each([
     ['Room is full', 'Room is full'],
     ['Room is not open', 'Room is not open'],
+    // A genuinely missing room keeps the "check the code" hint.
+    ['Room not found', 'Room not found. Check the code.'],
     [undefined, 'Room not found. Check the code.'],
   ])('shows the backend join reason (%s)', async (reason, shown) => {
     localStorage.setItem('jwt', VALID_JWT())
