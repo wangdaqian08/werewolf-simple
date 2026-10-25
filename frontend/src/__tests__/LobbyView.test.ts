@@ -140,6 +140,34 @@ describe('LobbyView OAuth UI', () => {
     expect(wrapper.find('[data-testid="nickname-input"]').exists()).toBe(true)
   })
 
+  // The backend rejects nicknames that are empty after removing invisible chars
+  // (or overflow once normalised); the player must see why, not a room error.
+  const nicknameRejected = () =>
+    Object.assign(new Error('Request failed with status code 400'), {
+      isAxiosError: true,
+      response: { status: 400, data: { error: 'Nickname must contain visible characters' } },
+    })
+
+  it.each([
+    ['join-room-btn', true],
+    ['create-room-btn', false],
+  ])('shows the backend reason when guest login is rejected (%s)', async (button, needsCode) => {
+    getProvidersMock.mockRejectedValue(new Error('no oauth'))
+    loginMock.mockRejectedValue(nicknameRejected())
+    const { wrapper, router } = await mountLobby()
+
+    await wrapper.find('[data-testid="nickname-input"]').setValue('​')
+    if (needsCode) await wrapper.find('[data-testid="room-code-input"]').setValue('123')
+    await wrapper.find(`[data-testid="${button}"]`).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="lobby-error"]').text()).toBe(
+      'Nickname must contain visible characters',
+    )
+    expect(joinRoomMock).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.name).toBe('lobby')
+  })
+
   it('guest section is collapsed by default and expands on toggle click', async () => {
     getProvidersMock.mockResolvedValue({
       google: { clientId: 'test-google.apps.googleusercontent.com' },

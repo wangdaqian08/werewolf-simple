@@ -168,4 +168,78 @@ class UserLoginControllerTest {
         assertThat(user[FIELD_USER_ID]).isEqualTo("guest:player-one")
         assertThat(user[FIELD_NICKNAME]).isEqualTo("Player One")
     }
+
+    // ── Look-alike nicknames must map to one identity ─────────────────────────
+    // A returning guest who retypes "the same" nickname on another keyboard
+    // (Chinese IME full-width space, double space, paste with a zero-width char)
+    // used to get a different userId and could not rejoin a running game.
+
+    @Suppress("UNCHECKED_CAST")
+    private fun loginUser(nickname: String): Map<String, Any?> {
+        val resp = restTemplate.postForEntity(LOGIN_URL, mapOf(FIELD_NICKNAME to nickname), Map::class.java)
+        assertThat(resp.statusCode).`as`("login %s", nickname).isEqualTo(HttpStatus.OK)
+        return resp.body!![FIELD_USER] as Map<String, Any?>
+    }
+
+    private fun userIdOf(nickname: String) = loginUser(nickname)[FIELD_USER_ID] as String
+
+    @Test
+    fun `any run of unicode whitespace between words maps to one hyphen`() {
+        val variants = listOf(
+            "Ray Two", "Ray  Two", "Ray\tTwo", "Ray　Two", "Ray Two", "Ray Two", "　Ray Two　",
+        )
+        assertThat(variants.map(::userIdOf).toSet()).containsExactly("guest:ray-two")
+        assertThat(loginUser("Ray　　Two")[FIELD_NICKNAME]).isEqualTo("Ray Two")
+    }
+
+    @Test
+    fun `full-width letters and punctuation match their ascii form`() {
+        assertThat(userIdOf("Ｆ！")).isEqualTo(userIdOf("F!")).isEqualTo("guest:f!")
+        assertThat(userIdOf("Ｒay")).isEqualTo("guest:ray")
+    }
+
+    @Test
+    fun `composed and decomposed accents map to one identity`() {
+        assertThat(userIdOf("José")).isEqualTo(userIdOf("José"))
+    }
+
+    @Test
+    fun `zero-width and control characters are dropped from the id and the display name`() {
+        val user = loginUser("Bob​‍﻿")
+        assertThat(user[FIELD_USER_ID]).isEqualTo("guest:bob")
+        assertThat(user[FIELD_NICKNAME]).isEqualTo("Bob")
+    }
+
+    @Test
+    fun `joiners inside emoji and scripts stay in the display name, but not in the id`() {
+        val family = "👨‍👩‍👧"
+        val user = loginUser(family)
+        assertThat(user[FIELD_NICKNAME]).isEqualTo(family)
+        assertThat(user[FIELD_USER_ID]).isEqualTo("guest:👨👩👧")
+    }
+
+    @Test
+    fun `emoji with and without a variation selector map to one identity`() {
+        assertThat(userIdOf("❤️")).isEqualTo(userIdOf("❤")).isEqualTo("guest:❤")
+    }
+
+    @Test
+    fun `chinese and emoji nicknames are kept as they are`() {
+        assertThat(userIdOf("小花")).isEqualTo("guest:小花")
+        assertThat(userIdOf("🐺 狼人")).isEqualTo("guest:🐺-狼人")
+    }
+
+    @Test
+    fun `a nickname whose normalised id would overflow user_id is rejected, not a 500`() {
+        // NFKC expands U+FDFA to 18 chars: 10 of them = 180 > VARCHAR(128).
+        val resp = restTemplate.postForEntity(LOGIN_URL, mapOf(FIELD_NICKNAME to "ﷺ".repeat(10)), Map::class.java)
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+    }
+
+    @Test
+    fun `a nickname of only invisible characters is rejected`() {
+        val resp = restTemplate.postForEntity(LOGIN_URL, mapOf(FIELD_NICKNAME to "​​"), Map::class.java)
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(userRepository.findById("guest:​​")).isEmpty
+    }
 }
