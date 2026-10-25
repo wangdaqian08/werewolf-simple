@@ -113,10 +113,12 @@ class GameStartControllerTest {
         val roomId = (room[FIELD_ROOM_ID] as String).toInt()
         val roomCode = room[FIELD_ROOM_CODE] as String
 
-        // Join guests but don't ready them
+        // Seat everyone but don't ready the guests
+        restTemplate.postForEntity(SEAT_URL, HttpEntity(mapOf("seatIndex" to 0, "roomId" to roomId), authHeaders(hostToken)), Map::class.java)
         repeat(3) { i ->
             val guestToken = login("Start2Guest$i")
             restTemplate.postForEntity(JOIN_ROOM_URL, HttpEntity(mapOf("roomCode" to roomCode), authHeaders(guestToken)), Map::class.java)
+            restTemplate.postForEntity(SEAT_URL, HttpEntity(mapOf("seatIndex" to i + 1, "roomId" to roomId), authHeaders(guestToken)), Map::class.java)
         }
 
         val response = restTemplate.postForEntity(

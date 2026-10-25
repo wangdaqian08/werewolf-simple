@@ -2,6 +2,7 @@ package com.werewolf.unit.service
 
 import com.werewolf.auth.AuthService
 import com.werewolf.dto.RoomConfigRequest
+import com.werewolf.dto.RoomPlayerDto
 import com.werewolf.model.*
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomPlayerRepository
@@ -396,6 +397,41 @@ class RoomServiceTest {
         verify(roomPlayerRepository).save(captor.capture())
         assertThat(captor.firstValue.userId).isEqualTo(userId)
         assertThat(captor.firstValue.roomId).isEqualTo(1)
+    }
+
+    @Test
+    fun `joinRoom - a new member is broadcast at once, before they pick a seat`() {
+        // Otherwise the host never sees (or can kick) a joiner who leaves before sitting.
+        val room = room()
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId)).thenReturn(Optional.empty())
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(
+            listOf(RoomPlayer(roomId = 1, userId = hostId), RoomPlayer(roomId = 1, userId = userId))
+        )
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.joinRoom(userId, "Nick", null, "ABCD")
+
+        verify(stompPublisher).broadcastRoomAfterCommit(eq(1), argThat<Map<String, Any>> {
+            this["type"] == "ROOM_UPDATE" &&
+                ((this["payload"] as? Map<*, *>)?.get("players") as? List<*>)
+                    ?.any { (it as RoomPlayerDto).userId == userId && it.seatIndex == null } == true
+        })
+    }
+
+    @Test
+    fun `joinRoom - a rejoining member is not re-broadcast`() {
+        val room = room()
+        whenever(roomRepository.findActiveByRoomCode("ABCD")).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomIdAndUserId(1, userId))
+            .thenReturn(Optional.of(RoomPlayer(roomId = 1, userId = userId)))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(listOf(RoomPlayer(roomId = 1, userId = userId)))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.joinRoom(userId, "Nick", null, "ABCD")
+
+        verifyNoInteractions(stompPublisher)
     }
 
     // ── getRoom ──────────────────────────────────────────────────────────────

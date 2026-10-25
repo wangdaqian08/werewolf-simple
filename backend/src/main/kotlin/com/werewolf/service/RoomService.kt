@@ -127,7 +127,16 @@ class RoomService(
             )
         )
 
-        return buildRoomDto(room)
+        // Broadcast before a seat is picked, so the host sees (and can kick) a
+        // joiner who closes the app without sitting down.
+        val dto = buildRoomDto(room)
+        stompPublisher.broadcastRoomAfterCommit(
+            roomId, mapOf(
+                "type" to "ROOM_UPDATE",
+                "payload" to mapOf("players" to dto.players)
+            )
+        )
+        return dto
     }
 
     /**

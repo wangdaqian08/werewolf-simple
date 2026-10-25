@@ -207,6 +207,77 @@ describe('RoomView — STOMP reconnect recovers missed ROOM_UPDATEs', () => {
   })
 })
 
+describe('RoomView — members without a seat', () => {
+  // A joiner who closes the app before sitting used to be invisible: they held
+  // a place (the last player got "Room is full") and nobody could kick them.
+  function roomWithGhost(): Room {
+    const room = allReadyRoom()
+    return {
+      ...room,
+      config: { ...room.config, totalPlayers: 5 },
+      players: [...room.players, rp('u-ghost', 0, { nickname: 'Kevin', seatIndex: null })],
+    }
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+    h.fakeClient.onConnect = null
+    h.subscribeToTopicMock.mockReset()
+    vi.mocked(roomService.kickPlayer).mockReset()
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it.each(['u-host', 'u2'])('lists the unseated member to everyone (%s)', async (me) => {
+    const { wrapper } = await mountRoom(me, roomWithGhost())
+
+    const rows = wrapper.findAll('[data-testid="unseated-player"]')
+    expect(rows.map((r) => r.text())).toEqual([expect.stringContaining('Kevin')])
+  })
+
+  it('host can kick an unseated member', async () => {
+    const { wrapper } = await mountRoom('u-host', roomWithGhost())
+    vi.mocked(roomService.kickPlayer).mockResolvedValueOnce(undefined)
+
+    await wrapper.find('[data-testid="kick-unseated-u-ghost"]').trigger('click')
+    await flushPromises()
+
+    expect(roomService.kickPlayer).toHaveBeenCalledWith('1', 'u-ghost')
+  })
+
+  it('a guest gets no kick button for an unseated member', async () => {
+    const { wrapper } = await mountRoom('u2', roomWithGhost())
+    expect(wrapper.find('[data-testid="kick-unseated-u-ghost"]').exists()).toBe(false)
+  })
+
+  it('the unseated host is listed but never offered a kick of themselves', async () => {
+    const room = roomWithGhost()
+    room.players = room.players.map((p) => (p.isHost ? { ...p, seatIndex: null } : p))
+    const { wrapper } = await mountRoom('u-host', room)
+
+    expect(wrapper.findAll('[data-testid="unseated-player"]')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="kick-unseated-u-host"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="kick-unseated-u-ghost"]').exists()).toBe(true)
+  })
+
+  it('a member who just joined shows up at once from the ROOM_UPDATE', async () => {
+    const { wrapper } = await mountRoom('u-host', {
+      ...allReadyRoom(),
+      config: { ...allReadyRoom().config, totalPlayers: 5 },
+    })
+    expect(wrapper.find('[data-testid="unseated-player"]').exists()).toBe(false)
+
+    await fireConnect()
+    const onRoomMsg = h.subscribeToTopicMock.mock.calls[0]![1] as (m: { body: string }) => void
+    onRoomMsg({
+      body: JSON.stringify({ type: 'ROOM_UPDATE', payload: { players: roomWithGhost().players } }),
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="unseated-player"]').text()).toContain('Kevin')
+    expect(wrapper.find('[data-testid="kick-unseated-u-ghost"]').exists()).toBe(true)
+  })
+})
+
 describe('RoomView — leaving the room', () => {
   beforeEach(() => {
     localStorage.clear()
