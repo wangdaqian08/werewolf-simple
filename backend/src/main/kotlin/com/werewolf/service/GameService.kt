@@ -45,6 +45,9 @@ class GameService(
         if (roomPlayers.size < 4)
             return GameActionResult.Rejected("Need at least 4 players to start")
 
+        if (roomPlayers.any { it.seatIndex == null })
+            return GameActionResult.Rejected("Not all players have a seat")
+
         val notReady = roomPlayers.filter { !it.host && it.status != ReadyStatus.READY }
         if (notReady.isNotEmpty())
             return GameActionResult.Rejected("Not all players are ready")

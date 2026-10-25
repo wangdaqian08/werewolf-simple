@@ -285,6 +285,33 @@ describe('LobbyView OAuth UI', () => {
     expect(joinRoomMock).toHaveBeenCalledWith({ roomCode: 'ABCD', nickname: 'DW' })
   })
 
+  // "Room is full" used to read as "Room not found", so the last player blocked
+  // by an unseated member thought they had the wrong code.
+  it.each([
+    ['Room is full', 'Room is full'],
+    ['Room is not open', 'Room is not open'],
+    [undefined, 'Room not found. Check the code.'],
+  ])('shows the backend join reason (%s)', async (reason, shown) => {
+    localStorage.setItem('jwt', VALID_JWT())
+    localStorage.setItem('userId', 'google:abc')
+    localStorage.setItem('nickname', 'Daniel Wang')
+    getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
+    joinRoomMock.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 400'), {
+        isAxiosError: true,
+        response: { status: 400, data: reason ? { error: reason } : {} },
+      }),
+    )
+
+    const { wrapper, router } = await mountLobby()
+    await wrapper.find('[data-testid="room-code-input"]').setValue('123')
+    await wrapper.find('[data-testid="join-room-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="lobby-error"]').text()).toBe(shown)
+    expect(router.currentRoute.value.name).toBe('lobby')
+  })
+
   it('Join Room omits nickname when display-name was not changed (sends just roomCode)', async () => {
     localStorage.setItem('jwt', VALID_JWT())
     localStorage.setItem('userId', 'google:abc')

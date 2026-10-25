@@ -44,6 +44,7 @@
           v-for="seat in totalSeats"
           :key="seat"
           :seat="seat"
+          :data-testid="`room-seat-${seat}`"
           :nickname="playerAtSeat(seat)?.nickname"
           :avatar="playerAtSeat(seat)?.avatar"
           :variant="slotVariant(seat)"
@@ -63,7 +64,7 @@
               class="kick-btn"
               :data-testid="`kick-player-${seat}`"
               :aria-label="`Kick ${playerAtSeat(seat)?.nickname}`"
-              @click.stop="handleKickPlayer(seat)"
+              @click.stop="handleKickPlayer(playerAtSeat(seat)?.userId)"
             >
               ×
             </button>
@@ -77,6 +78,29 @@
             >
           </template>
         </PlayerSlot>
+      </section>
+
+      <!-- Joined but no seat yet: listed so a player who closed the app before
+           sitting is visible, and the host can kick them to free the place. -->
+      <section v-if="unseatedPlayers.length" class="unseated" data-testid="unseated-list">
+        <div class="unseated-title">未入座 / Not seated</div>
+        <div
+          v-for="p in unseatedPlayers"
+          :key="p.userId"
+          class="unseated-row"
+          data-testid="unseated-player"
+        >
+          <span class="unseated-name">{{ p.nickname }}</span>
+          <button
+            v-if="canKickPlayer(p)"
+            class="unseated-kick"
+            :data-testid="`kick-unseated-${p.userId}`"
+            :aria-label="`Kick ${p.nickname}`"
+            @click="handleKickPlayer(p.userId)"
+          >
+            ×
+          </button>
+        </div>
       </section>
 
       <!-- Perk panel: catalog + activation (visible pre-game when host allows perks) -->
@@ -168,6 +192,7 @@
           v-if="isHost"
           :disabled="!canStart"
           class="btn btn-primary"
+          data-testid="start-game-btn"
           @click="handleStartGame"
         >
           开始游戏 / Start Game
@@ -179,6 +204,7 @@
           <button
             v-if="!iAmReady"
             class="btn btn-gold"
+            data-testid="ready-btn"
             :disabled="!hasPickedSeat || perkBusy"
             @click="handleReady(true)"
           >
@@ -197,7 +223,7 @@
 import axios from 'axios'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import http from '@/services/http'
-import type { Perk, PerkActivation } from '@/types'
+import type { Perk, PerkActivation, RoomPlayer } from '@/types'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/userStore'
@@ -343,22 +369,26 @@ async function handleSeatClick(seat: number) {
   }
 }
 
-// Host can kick: occupied seat, not the host themselves. Backend also
+// Host can kick anyone but themselves, seated or not. Backend also
 // validates this server-side; the predicate just controls whether the
 // × button renders so the host doesn't see the option on themselves.
-function canKick(seat: number): boolean {
-  if (!isHost.value) return false
-  const player = playerAtSeat(seat)
-  if (!player) return false
-  return player.userId !== userStore.userId && !player.isHost
+function canKickPlayer(player: RoomPlayer): boolean {
+  return isHost.value && player.userId !== userStore.userId && !player.isHost
 }
 
-async function handleKickPlayer(seat: number) {
-  if (!roomStore.room) return
+function canKick(seat: number): boolean {
   const player = playerAtSeat(seat)
-  if (!player) return
+  return !!player && canKickPlayer(player)
+}
+
+const unseatedPlayers = computed(
+  () => roomStore.room?.players.filter((p) => p.seatIndex == null) ?? [],
+)
+
+async function handleKickPlayer(targetUserId: string | undefined) {
+  if (!roomStore.room || !targetUserId) return
   try {
-    await roomService.kickPlayer(roomStore.room.roomId, player.userId)
+    await roomService.kickPlayer(roomStore.room.roomId, targetUserId)
     // STOMP PLAYER_KICKED + ROOM_UPDATE will land via the topic subscription;
     // local store updates from there. No optimistic update — keeps the
     // single source of truth on the server.
@@ -827,6 +857,44 @@ onUnmounted(() => {
 }
 
 /* Host-only kick button overlaid on a player's seat card. */
+.unseated {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
+}
+.unseated-title {
+  width: 100%;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.unseated-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.625rem;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: var(--card);
+}
+.unseated-name {
+  font-size: 0.8125rem;
+  color: var(--text);
+}
+.unseated-kick {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--red);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 .kick-btn {
   position: absolute;
   top: 0.125rem;

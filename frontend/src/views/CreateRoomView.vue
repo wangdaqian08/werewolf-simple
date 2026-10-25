@@ -291,7 +291,12 @@
         :roles="compositionRoles"
       />
 
-      <button :disabled="loading" class="btn btn-primary" @click="handleCreate">
+      <button
+        :disabled="loading"
+        class="btn btn-primary"
+        data-testid="create-room-submit"
+        @click="handleCreate"
+      >
         {{ loading ? '创建中…' : '创建房间 / Create Room' }}
       </button>
 

@@ -406,7 +406,9 @@ async function handleJoinRoom() {
     router.push({ name: 'room', params: { roomId: room.roomId } })
   } catch (e: unknown) {
     if (axios.isAxiosError(e) && (e.response?.status === 404 || e.response?.status === 400)) {
-      error.value = 'Room not found. Check the code.'
+      error.value =
+        (e.response.data as { error?: string } | undefined)?.error ??
+        'Room not found. Check the code.'
     } else {
       error.value = e instanceof Error ? e.message : 'Failed to join. Try again.'
     }
