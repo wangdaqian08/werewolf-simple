@@ -23,6 +23,7 @@ class BgmTrackRegistryTest {
     fun `display names come from the tracks json sidecar`() {
         assertThat(registry.refresh()).containsExactly(
             AudioTrackDto(null, null, "无 (None)"),
+            AudioTrackDto("Werewolves.mp3", "Werewolves.mp3", "天黑请闭眼 / Werewolves"),
             AudioTrackDto("suspicion.mp3", "suspicion.mp3", "柯南-怀疑 / Detective Conan"),
             AudioTrackDto("心愿便利贴.mp3", "心愿便利贴.mp3", "心愿便利贴 / Wishful Sticker"),
         )
