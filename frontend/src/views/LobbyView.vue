@@ -241,7 +241,7 @@
         </div>
       </div>
 
-      <p v-if="error" class="error-msg">{{ error }}</p>
+      <p v-if="error" class="error-msg" data-testid="lobby-error">{{ error }}</p>
     </div>
   </div>
 </template>
@@ -368,7 +368,16 @@ function handleRejoin() {
 async function ensureGuestSession() {
   if (userStore.isLoggedIn) return
   if (!nickname.value.trim()) throw new Error('Nickname required')
-  await userStore.login(nickname.value.trim())
+  try {
+    await userStore.login(nickname.value.trim())
+  } catch (e: unknown) {
+    // Surface the backend's nickname reason as a plain Error so the join
+    // handler doesn't relabel this 400 as "Room not found".
+    const reason = axios.isAxiosError(e)
+      ? (e.response?.data as { error?: string } | undefined)?.error
+      : undefined
+    throw reason ? new Error(reason) : e
+  }
 }
 
 async function handleCreateRoom() {

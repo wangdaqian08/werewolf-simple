@@ -8,7 +8,8 @@ function isTokenExpired(token: string): boolean {
   try {
     const [, part] = token.split('.')
     if (!part) return true
-    const payload = JSON.parse(atob(part))
+    // JWT segments are base64url; atob only accepts the standard alphabet.
+    const payload = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')))
     return payload.exp * 1000 < Date.now()
   } catch {
     return true

@@ -256,6 +256,47 @@ describe('userStore', () => {
     expect(localStorage.getItem('avatarUrl')).toBeNull()
   })
 
+  // Real backend tokens are base64url (RFC 7519). For some UTF-8 nicknames the
+  // payload contains '-' or '_', which plain atob() rejects — the store then
+  // read a fresh token as expired and the router bounced the player to lobby.
+  function makeUtf8Jwt(nick: string, expSecondsFromNow: number): string {
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: `guest:${nick}`,
+        nickname: nick,
+        exp: Math.floor(Date.now() / 1000) + expSecondsFromNow,
+      }),
+    ).toString('base64url')
+    expect(payload).toMatch(/[-_]/) // the fixture must exercise the base64url-only alphabet
+    return `eyJhbGciOiJIUzI1NiJ9.${payload}.sig`
+  }
+
+  it('a guest whose nickname makes a base64url payload with - or _ is logged in', async () => {
+    vi.mocked(userService.login).mockResolvedValue({
+      token: makeUtf8Jwt('小明', FUTURE),
+      user: { userId: 'guest:小明', nickname: '小明' },
+    })
+    const store = useUserStore()
+    await store.login('小明')
+    expect(store.isLoggedIn).toBe(true)
+  })
+
+  it('keeps a persisted base64url session on reload', () => {
+    localStorage.setItem('jwt', makeUtf8Jwt('小明', FUTURE))
+    localStorage.setItem('userId', 'guest:小明')
+    localStorage.setItem('nickname', '小明')
+    const store = useUserStore()
+    expect(store.isLoggedIn).toBe(true)
+    expect(localStorage.getItem('jwt')).not.toBeNull()
+  })
+
+  it('still treats an expired base64url token as expired', () => {
+    localStorage.setItem('jwt', makeUtf8Jwt('小明', PAST))
+    localStorage.setItem('userId', 'guest:小明')
+    const store = useUserStore()
+    expect(store.isLoggedIn).toBe(false)
+  })
+
   it('clearSession() empties refs and localStorage without hitting the network', async () => {
     vi.mocked(userService.logout).mockClear()
     const store = useUserStore()

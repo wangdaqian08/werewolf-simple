@@ -67,8 +67,12 @@ logging:
     org.springframework.security: WARN
     org.apache.tomcat: WARN
     org.apache.catalina: WARN
+  # Containers run in UTC and the DB stores UTC wall-clock times, so only the log
+  # timestamps are shown in Sydney time — never set TZ on the JVM (it would shift
+  # LocalDateTime.now() writes). The offset keeps DST and old UTC lines unambiguous.
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSSXXX, Australia/Sydney} %-5level [%thread] %logger{36} - %msg%n"
+    dateformat: "yyyy-MM-dd HH:mm:ss.SSSXXX, Australia/Sydney"
   file:
     name: ${LOG_FILE:/var/log/werewolf/backend.log}
   logback:
