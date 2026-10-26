@@ -19,6 +19,7 @@ async function goToGameViewNoSheriff(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: /Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
   // Start game with sheriff disabled
@@ -139,6 +140,7 @@ test('sheriff-enabled: skip to sheriff shows sheriff election', async ({ page })
   await page.getByRole('button', { name: /Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
   await page.evaluate(() => (window as any).__debug.gameStart())

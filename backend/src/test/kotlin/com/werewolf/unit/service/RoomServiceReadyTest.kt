@@ -116,7 +116,7 @@ class RoomServiceReadyTest {
     @Test
     fun `claimSeat calls updateSeatIndex and broadcasts ROOM_UPDATE`() {
         val room = waitingRoom()
-        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.updateSeatIndex(roomId, userId, 2)).thenReturn(1)
         whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(listOf(unseatedPlayer()))
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
@@ -130,7 +130,7 @@ class RoomServiceReadyTest {
     @Test
     fun `claimSeat throws RoomNotOpenException when room is not WAITING`() {
         val room = waitingRoom().also { it.status = RoomStatus.IN_GAME }
-        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
 
         assertThatThrownBy { roomService.claimSeat(userId, roomId, 2) }
             .isInstanceOf(RoomNotOpenException::class.java)
@@ -141,7 +141,7 @@ class RoomServiceReadyTest {
     @Test
     fun `claimSeat throws PlayerNotInRoomException when player not in room`() {
         val room = waitingRoom()
-        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.updateSeatIndex(roomId, userId, 2)).thenReturn(0)
 
         assertThatThrownBy { roomService.claimSeat(userId, roomId, 2) }

@@ -15,6 +15,12 @@ export const useRoomStore = defineStore('room', () => {
     }
   }
 
+  function updateConfig(config: Room['config']) {
+    if (room.value) {
+      room.value = { ...toRaw(room.value), config }
+    }
+  }
+
   function setHostId(hostId: string) {
     if (room.value) {
       room.value.hostId = hostId
@@ -51,6 +57,7 @@ export const useRoomStore = defineStore('room', () => {
     room,
     setRoom,
     updatePlayers,
+    updateConfig,
     setHostId,
     updateMyStatus,
     updateSeatIndex,

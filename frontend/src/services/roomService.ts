@@ -46,6 +46,15 @@ export const roomService = {
     await http.post('/room/seat', { seatIndex, roomId: Number(roomId) })
   },
 
+  /** Host changes seats / wolves / roles of a WAITING room; returns the updated room. */
+  async updateBoard(
+    roomId: string,
+    board: { totalPlayers: number; wolfCount: number; roles: string[] },
+  ): Promise<Room> {
+    const { data } = await http.post<Room>('/room/board', { roomId: Number(roomId), ...board })
+    return data
+  },
+
   async kickPlayer(roomId: string, targetUserId: string): Promise<void> {
     await http.post('/room/kick', { roomId: Number(roomId), targetUserId })
   },

@@ -8,6 +8,7 @@ test('__debug helper is exposed on window in mock mode', async ({ page }) => {
   await page.getByRole('button', { name: /Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)
 
@@ -34,6 +35,7 @@ test('__debug.gameStart() navigates to game view', async ({ page }) => {
   await page.getByRole('button', { name: /Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)
 
@@ -54,6 +56,7 @@ test('__debug.roleSkip() advances to Sheriff Election', async ({ page }) => {
   await page.getByRole('button', { name: /Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)
 
@@ -77,6 +80,7 @@ test('__debug.dayScenario() loads day phase', async ({ page }) => {
   await page.getByRole('button', { name: /Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)
 

@@ -27,33 +27,34 @@ class Room(
     @Column(nullable = false, length = 10)
     var status: RoomStatus = RoomStatus.WAITING,
 
+    // The board (seats, wolves, role flags) stays editable while WAITING — RoomService.updateBoard.
     @Column(name = "total_players", nullable = false)
-    val totalPlayers: Int,
+    var totalPlayers: Int,
 
     @Column(name = "wolf_count", nullable = false)
-    val wolfCount: Int = 2,
+    var wolfCount: Int = 2,
 
     @Column(name = "has_seer", nullable = false)
-    val hasSeer: Boolean = false,
+    var hasSeer: Boolean = false,
 
     @Column(name = "has_witch", nullable = false)
-    val hasWitch: Boolean = false,
+    var hasWitch: Boolean = false,
 
     @Column(name = "has_hunter", nullable = false)
-    val hasHunter: Boolean = false,
+    var hasHunter: Boolean = false,
 
     @Column(name = "has_guard", nullable = false)
-    val hasGuard: Boolean = false,
+    var hasGuard: Boolean = false,
 
     @Column(name = "has_idiot", nullable = false)
-    val hasIdiot: Boolean = false,
+    var hasIdiot: Boolean = false,
 
     // Each king takes one of the wolfCount seats; it is not an extra seat.
     @Column(name = "has_white_wolf_king", nullable = false)
-    val hasWhiteWolfKing: Boolean = false,
+    var hasWhiteWolfKing: Boolean = false,
 
     @Column(name = "has_black_wolf_king", nullable = false)
-    val hasBlackWolfKing: Boolean = false,
+    var hasBlackWolfKing: Boolean = false,
 
     @Column(name = "has_sheriff", nullable = false)
     val hasSheriff: Boolean = true,

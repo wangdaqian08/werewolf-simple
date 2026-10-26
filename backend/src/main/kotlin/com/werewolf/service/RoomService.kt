@@ -54,6 +54,7 @@ class RoomService(
         }
 
         validateRoleComposition(cfg.totalPlayers, cfg.wolfCount, cfg.roles)
+        leaveOtherWaitingRooms(userId)
 
         val room = roomRepository.save(
             Room(
@@ -117,8 +118,11 @@ class RoomService(
         // New player: must be in WAITING and room not full.
         if (room.status != RoomStatus.WAITING)
             throw RoomNotOpenException("Room is not open")
+        // shortcut: no row lock — a join racing a shrink can overfill by one; the host sees the extra
+        // member and startGame refuses until they're kicked. Lock here if that ever shows up in prod.
         val count = roomPlayerRepository.findByRoomId(roomId).size
         if (count >= room.totalPlayers) throw RoomFullException("Room is full")
+        leaveOtherWaitingRooms(userId)
         roomPlayerRepository.save(
             RoomPlayer(
                 roomId = roomId,
@@ -138,6 +142,18 @@ class RoomService(
         )
         return dto
     }
+
+    /**
+     * A player waits in one room at a time: creating or joining a room leaves
+     * any other WAITING room (host handover / close-if-empty via [leaveRoom]),
+     * so the lobby's Rejoin points at the right room and abandoned rooms close.
+     * Rooms with a game in progress are not WAITING and are never touched.
+     */
+    private fun leaveOtherWaitingRooms(userId: String) =
+        roomRepository.findActiveRoomsForUser(userId)
+            .filter { it.status == RoomStatus.WAITING }
+            .mapNotNull { it.roomId }
+            .forEach { leaveRoom(userId, it) }
 
     /**
      * Trim, then null out blanks. Bean Validation already caps the length at
@@ -190,6 +206,48 @@ class RoomService(
                 "payload" to mapOf("players" to buildRoomDto(room).players)
             )
         )
+    }
+
+    /**
+     * Host changes the seat count and roles of a WAITING room, so a room that
+     * filled up (or emptied out) keeps its code. Game settings (BGM, perks,
+     * sheriff, …) are fixed at creation. Guests are un-readied: READY meant
+     * "I accept this board". Broadcasts ROOM_UPDATE with the new config.
+     */
+    @Transactional
+    fun updateBoard(hostUserId: String, roomId: Int, totalPlayers: Int, wolfCount: Int, roles: List<PlayerRole>): RoomDto {
+        val room = roomRepository.findByIdForUpdate(roomId).orElse(null)
+            ?: throw RoomNotFoundException("Room not found")
+        if (room.hostUserId != hostUserId) throw NotHostException("Only the host can change the board")
+        if (room.status != RoomStatus.WAITING) throw RoomNotOpenException("Room is not open")
+        validateRoleComposition(totalPlayers, wolfCount, roles)
+
+        val members = roomPlayerRepository.findByRoomId(roomId)
+        if (members.size > totalPlayers) throw RoomTooSmallException("${members.size} players have joined")
+        members.mapNotNull { it.seatIndex }.filter { it > totalPlayers }.minOrNull()
+            ?.let { throw RoomTooSmallException("Seat $it is taken") }
+
+        room.totalPlayers = totalPlayers
+        room.wolfCount = wolfCount
+        room.hasSeer = PlayerRole.SEER in roles
+        room.hasWitch = PlayerRole.WITCH in roles
+        room.hasHunter = PlayerRole.HUNTER in roles
+        room.hasGuard = PlayerRole.GUARD in roles
+        room.hasIdiot = PlayerRole.IDIOT in roles
+        room.hasWhiteWolfKing = PlayerRole.WHITE_WOLF_KING in roles
+        room.hasBlackWolfKing = PlayerRole.BLACK_WOLF_KING in roles
+        roomRepository.save(room)
+        members.filter { !it.host }.forEach { it.status = ReadyStatus.NOT_READY }
+        roomPlayerRepository.saveAll(members)
+
+        val dto = buildRoomDto(room)
+        stompPublisher.broadcastRoomAfterCommit(
+            roomId, mapOf(
+                "type" to "ROOM_UPDATE",
+                "payload" to mapOf("players" to dto.players, "config" to dto.config)
+            )
+        )
+        return dto
     }
 
     @Transactional
@@ -248,8 +306,11 @@ class RoomService(
 
     @Transactional
     fun claimSeat(userId: String, roomId: Int, seatIndex: Int) {
-        val room = roomRepository.findById(roomId).orElse(null) ?: throw RoomNotFoundException("Room not found")
+        // Locked so a concurrent updateBoard can't remove this seat under us.
+        val room = roomRepository.findByIdForUpdate(roomId).orElse(null) ?: throw RoomNotFoundException("Room not found")
         if (room.status != RoomStatus.WAITING) throw RoomNotOpenException("Room is not open")
+        // The UI numbers seats 1..N; 0 is tolerated because test fixtures seat the host there.
+        if (seatIndex !in 0..room.totalPlayers) throw SeatTakenException("Seat $seatIndex does not exist")
 
         if (roomPlayerRepository.existsByRoomIdAndSeatIndex(roomId, seatIndex))
             throw SeatTakenException("Seat $seatIndex is already taken")
@@ -440,3 +501,4 @@ class NotHostException(message: String) : RuntimeException(message)
 class CannotKickHostException(message: String) : RuntimeException(message)
 class InvalidBgmTrackException(message: String) : RuntimeException(message)
 class InvalidRoleCompositionException(message: String) : RuntimeException(message)
+class RoomTooSmallException(message: String) : RuntimeException(message)

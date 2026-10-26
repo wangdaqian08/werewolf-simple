@@ -387,6 +387,8 @@ test('create room: one wolf king per room, 9+ players', async ({ browser }) => {
       .first()
       .click()
     await page.waitForURL(/\/create-room/)
+    await page.getByTestId('create-room-submit').click() // the board is on players & roles
+    await page.getByTestId('room-setup-panel').waitFor({ state: 'visible' })
 
     const black = page.getByTestId('role-toggle-BLACK_WOLF_KING')
     const white = page.getByTestId('role-toggle-WHITE_WOLF_KING')
@@ -554,10 +556,15 @@ test('vote-out: king shoots the seer, night 2 still plays seer cues', async ({
   await wolfPage.getByTestId('wolf-confirm-kill').click()
   expect(await waitForNightSubPhase(host, t.ctx.gameId, 'WITCH_ACT', 15_000)).toBe(true)
   const witchPage = pageOf(t, one(t, 'WITCH'))
-  for (const id of ['switch-pass-antidote', 'switch-pass-poison']) {
-    const b = witchPage.getByTestId(id)
-    if (await b.isVisible({ timeout: 5_000 }).catch(() => false)) await b.click()
-  }
+  // The witch's controls render ~150 ms after WITCH_ACT (GameView waits, then
+  // refetches); isVisible() does not wait, so it raced that on CI. Wait, then
+  // one pass ends her turn (each witch click submits the whole WITCH_ACT).
+  const pass = witchPage
+    .getByTestId('switch-pass-antidote')
+    .or(witchPage.getByTestId('switch-pass-poison'))
+    .first()
+  await expect(pass).toBeVisible({ timeout: scale(10_000) })
+  await pass.click()
   expect(
     await waitForNightSubPhase(host, t.ctx.gameId, 'GUARD_PICK', 30_000),
     'dead seer turn passes',

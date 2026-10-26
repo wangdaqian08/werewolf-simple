@@ -87,7 +87,7 @@ class GameStartControllerTest {
 
     @Test
     fun `host starts game when all guests ready - roles assigned`() {
-        val (hostToken, roomId, _) = setupReadyRoom("Start1", guestCount = 3)
+        val (hostToken, roomId, _) = setupReadyRoom("Start1", guestCount = DEFAULT_TOTAL_PLAYERS - 1)
 
         val response = restTemplate.postForEntity(
             START_URL,
@@ -115,7 +115,7 @@ class GameStartControllerTest {
 
         // Seat everyone but don't ready the guests
         restTemplate.postForEntity(SEAT_URL, HttpEntity(mapOf("seatIndex" to 0, "roomId" to roomId), authHeaders(hostToken)), Map::class.java)
-        repeat(3) { i ->
+        repeat(DEFAULT_TOTAL_PLAYERS - 1) { i ->
             val guestToken = login("Start2Guest$i")
             restTemplate.postForEntity(JOIN_ROOM_URL, HttpEntity(mapOf("roomCode" to roomCode), authHeaders(guestToken)), Map::class.java)
             restTemplate.postForEntity(SEAT_URL, HttpEntity(mapOf("seatIndex" to i + 1, "roomId" to roomId), authHeaders(guestToken)), Map::class.java)

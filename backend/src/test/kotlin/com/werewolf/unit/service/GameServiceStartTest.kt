@@ -46,7 +46,7 @@ class GameServiceStartTest {
         roomId = roomId,
         roomCode = "XYZW",
         hostUserId = hostId,
-        totalPlayers = 6,
+        totalPlayers = 4, // = fourReadyGuests(); startGame needs every seat filled
     ).also { it.status = RoomStatus.WAITING }
 
     private fun hostPlayer() = RoomPlayer(roomId = roomId, userId = hostId, host = true, status = ReadyStatus.NOT_READY)

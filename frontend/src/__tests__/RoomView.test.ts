@@ -85,6 +85,7 @@ function allReadyRoom(): Room {
 async function mountRoom(
   myUserId: string,
   room: Room = allReadyRoom(),
+  path = '/room/1',
 ): Promise<{ wrapper: ReturnType<typeof mount>; router: Router }> {
   localStorage.setItem('jwt', makeJwt(3600))
   localStorage.setItem('userId', myUserId)
@@ -103,7 +104,7 @@ async function mountRoom(
       { path: '/game/:gameId', name: 'game', component: { template: '<div />' } },
     ],
   })
-  await router.push('/room/1')
+  await router.push(path)
   await router.isReady()
   const wrapper = mount(RoomView, { global: { plugins: [pinia, router] } })
   await flushPromises()
@@ -312,5 +313,82 @@ describe('RoomView — leaving the room', () => {
     expect(roomService.leaveRoom).toHaveBeenCalledTimes(1)
     expect(router.currentRoute.value.name).toBe('lobby')
     expect(useRoomStore().room).toBeNull()
+  })
+})
+
+describe('RoomView — changing players & roles', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    h.fakeClient.onConnect = null
+    h.fakeClient.active = true
+    h.getRoomMock.mockReset()
+    h.subscribeToTopicMock.mockReset()
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  const roomMsg = async (payload: unknown) => {
+    await fireConnect()
+    const onRoomMsg = h.subscribeToTopicMock.mock.calls[0]![1] as (m: { body: string }) => void
+    onRoomMsg({ body: JSON.stringify({ type: 'ROOM_UPDATE', payload }) })
+    await flushPromises()
+  }
+
+  it('the host opens players & roles from the room', async () => {
+    const { wrapper, router } = await mountRoom('u-host')
+
+    await wrapper.find('[data-testid="edit-board-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.query.setup).toBe('1')
+    expect(wrapper.find('[data-testid="room-setup-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="room-seat-1"]').exists()).toBe(false)
+  })
+
+  it('closing players & roles returns to the seat grid', async () => {
+    const { wrapper, router } = await mountRoom('u-host', allReadyRoom(), '/room/1?setup=1')
+
+    wrapper.findComponent({ name: 'RoomSetupPanel' }).vm.$emit('done')
+    await flushPromises()
+
+    expect(router.currentRoute.value.query.setup).toBeUndefined()
+    expect(wrapper.find('[data-testid="room-seat-1"]').exists()).toBe(true)
+  })
+
+  it('a guest has no edit button and never sees the panel', async () => {
+    const { wrapper } = await mountRoom('u2', allReadyRoom(), '/room/1?setup=1')
+
+    expect(wrapper.find('[data-testid="edit-board-btn"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="room-setup-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="room-seat-1"]').exists()).toBe(true)
+  })
+
+  it('everyone gets a share button', async () => {
+    const { wrapper } = await mountRoom('u2')
+    expect(wrapper.find('[data-testid="share-room-btn"]').exists()).toBe(true)
+  })
+
+  it('a board change from the host redraws every seat grid', async () => {
+    const { wrapper } = await mountRoom('u2')
+    expect(wrapper.find('[data-testid="room-seat-5"]').exists()).toBe(false)
+
+    await roomMsg({
+      players: allReadyRoom().players,
+      config: { totalPlayers: 5, wolfCount: 2, roles: ['WEREWOLF', 'VILLAGER'] },
+    })
+
+    expect(wrapper.find('[data-testid="room-seat-5"]').exists()).toBe(true)
+  })
+
+  it('a board change missed during a disconnect is picked up on reconnect', async () => {
+    const { wrapper } = await mountRoom('u2')
+    h.getRoomMock.mockResolvedValue({
+      ...allReadyRoom(),
+      config: { totalPlayers: 5, wolfCount: 2, roles: ['WEREWOLF', 'VILLAGER'] },
+    })
+
+    await fireConnect()
+    await fireConnect() // reconnect → re-sync
+
+    expect(wrapper.find('[data-testid="room-seat-5"]').exists()).toBe(true)
   })
 })

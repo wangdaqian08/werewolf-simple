@@ -39,11 +39,6 @@ async function createWaitingRoom(browser: Browser): Promise<{
   await host.getByRole('button', { name: /Create Room/i }).first().click()
   await host.waitForURL(/\/create-room/, { timeout: ci ? 60_000 : 30_000 })
 
-  // Use the minimum (6) players: decrement from the default until the value is 6.
-  for (let i = 0; i < 10; i++) {
-    if ((await host.getByTestId('player-count-value').textContent())?.trim() === '6') break
-    await host.getByTestId('player-count-decrement').click()
-  }
   // Turn sheriff off to keep setup minimal.
   const sheriffRow = host.locator('.role-row').filter({ hasText: /Sheriff|警长竞选/ })
   const sToggle = sheriffRow.locator('.toggle-on')
@@ -51,6 +46,13 @@ async function createWaitingRoom(browser: Browser): Promise<{
 
   await host.getByRole('button', { name: /Create Room/i }).click()
   await host.waitForURL(/\/room\//, { timeout: ci ? 30_000 : 15_000 })
+  // Players & roles: use the minimum (6) players.
+  for (let i = 0; i < 10; i++) {
+    if ((await host.getByTestId('player-count-value').textContent())?.trim() === '6') break
+    await host.getByTestId('player-count-decrement').click()
+  }
+  await host.getByTestId('room-setup-done').click()
+  await host.getByTestId('room-code').waitFor({ state: 'visible' })
   const roomId = host.url().match(/\/room\/(\d+)/)![1]
   const roomCode = (await host.locator('[data-testid="room-code"]').textContent())!.trim()
 

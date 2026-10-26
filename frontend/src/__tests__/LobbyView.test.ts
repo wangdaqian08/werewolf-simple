@@ -52,7 +52,7 @@ vi.mock('@/utils/oauth', async () => {
   }
 })
 
-async function mountLobby() {
+async function mountLobby(path = '/') {
   const pinia = createPinia()
   setActivePinia(pinia)
 
@@ -64,7 +64,7 @@ async function mountLobby() {
       { path: '/room/:roomId', name: 'room', component: { template: '<div />' } },
     ],
   })
-  await router.push('/')
+  await router.push(path)
   await router.isReady()
 
   const wrapper = mount(LobbyView, { global: { plugins: [pinia, router] } })
@@ -356,6 +356,23 @@ describe('LobbyView OAuth UI', () => {
     await flushPromises()
 
     expect(store.displayName).toBe('DW')
+  })
+})
+
+describe('LobbyView invite link', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    getProvidersMock.mockReset()
+    getProvidersMock.mockResolvedValue({ google: null, wechat: null, guest: true })
+    getActiveRoomMock.mockReset()
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('a shared link /?room=123 fills in the room code', async () => {
+    const { wrapper } = await mountLobby('/?room=123')
+    expect(
+      (wrapper.find('[data-testid="room-code-input"]').element as HTMLInputElement).value,
+    ).toBe('123')
   })
 })
 

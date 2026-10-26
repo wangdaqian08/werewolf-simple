@@ -45,6 +45,10 @@ class GameService(
         if (roomPlayers.size < 4)
             return GameActionResult.Rejected("Need at least 4 players to start")
 
+        // The client gates Start on a full room too, but buildRoleList would silently drop roles if short.
+        if (roomPlayers.size != room.totalPlayers)
+            return GameActionResult.Rejected("Need ${room.totalPlayers} players, have ${roomPlayers.size}")
+
         if (roomPlayers.any { it.seatIndex == null })
             return GameActionResult.Rejected("Not all players have a seat")
 

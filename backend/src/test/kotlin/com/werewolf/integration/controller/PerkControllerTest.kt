@@ -194,8 +194,7 @@ class PerkControllerTest {
         val (tokenA, userIdA) = login("PerkMyA")
         val (tokenB, userIdB) = login("PerkMyB")
         val (roomIdA, _) = createRoom(tokenA)
-        val (roomIdB, codeB) = createRoom(tokenB)
-        join(tokenA, codeB)
+        val (roomIdB, _) = createRoom(tokenB)
         walletService.credit(userIdA, 100, com.werewolf.model.CreditTxType.GAME_REWARD)
         walletService.credit(userIdB, 100, com.werewolf.model.CreditTxType.GAME_REWARD)
 

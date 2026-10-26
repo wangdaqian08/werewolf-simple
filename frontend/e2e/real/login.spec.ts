@@ -70,6 +70,7 @@ test('host creates room, guest joins with the room code', async ({ browser }) =>
   await expect(hostPage).toHaveURL(/\/create-room/)
   await hostPage.getByRole('button', { name: /Create/i }).click()
   await expect(hostPage).toHaveURL(/\/room\//)
+  await hostPage.getByTestId('room-setup-done').click() // players & roles: keep the default board
 
   const roomCode = await hostPage.locator('[data-testid="room-code"]').textContent()
   expect(roomCode).toMatch(/^[0-9]{3}$/)

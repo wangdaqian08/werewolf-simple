@@ -128,7 +128,7 @@ class GhostMemberIntegrationTest {
 
     @Test
     fun `start with an unseated host is refused, not a server error`() {
-        val room = roomWithSeatedGuests("GhHost", hostSits = false)
+        val room = roomWithSeatedGuests("GhHost", seatedGuestsUpTo = SEATS, hostSits = false) // full, host unseated
 
         val start = post(START_URL, mapOf("roomId" to room.id), room.hostToken)
 

@@ -1,10 +1,17 @@
 <template>
   <div class="room-wrap">
     <!-- Back -->
-    <button class="back-btn" @click="handleLeave">← 离开</button>
+    <button v-if="!showSetup" class="back-btn" @click="handleLeave">← 离开</button>
 
     <!-- Loading -->
     <div v-if="loading" class="loading">Loading room...</div>
+
+    <!-- Host: players & roles (page 2 of creation, or "edit" from the room) -->
+    <RoomSetupPanel
+      v-else-if="showSetup && roomStore.room"
+      :room="roomStore.room"
+      @done="closeSetup"
+    />
 
     <div v-else-if="roomStore.room" class="room-card">
       <!-- Title -->
@@ -16,6 +23,7 @@
       <div class="code-card">
         <div class="code-lbl">Room Code</div>
         <div class="code-num" data-testid="room-code">{{ roomStore.room.roomCode }}</div>
+        <ShareButton :room-code="roomStore.room.roomCode" />
       </div>
 
       <!-- Player count + ready breakdown -->
@@ -37,6 +45,14 @@
         :wolf-count="resolvedWolfCount"
         :roles="roomStore.room.config.roles"
       />
+      <button
+        v-if="isHost"
+        class="btn btn-gold"
+        data-testid="edit-board-btn"
+        @click="router.push({ query: { setup: '1' } })"
+      >
+        ✏️ 调整人数 / 角色 · Edit players &amp; roles
+      </button>
 
       <!-- Player grid (4/3/2 columns based on nickname length) -->
       <section :class="gridClass">
@@ -238,6 +254,8 @@ import {
 } from '@/services/stompClient'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleComposition from '@/components/RoleComposition.vue'
+import RoomSetupPanel from '@/components/RoomSetupPanel.vue'
+import ShareButton from '@/components/ShareButton.vue'
 import { wolfBounds } from '@/utils/wolfBounds'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import { useRoomStatus } from '@/composables/useRoomStatus'
@@ -287,6 +305,10 @@ const {
   playerAtSeat,
   slotVariant,
 } = useRoomStatus(room, userId)
+
+// ?setup=1 opens the players & roles panel (host only); replace so Back doesn't reopen it.
+const showSetup = computed(() => isHost.value && route.query.setup === '1')
+const closeSetup = () => router.replace({ query: {} })
 
 // ── Perks ───────────────────────────────────────────────────────────────────
 const perks = ref<Perk[]>([])
@@ -449,6 +471,7 @@ async function checkActiveGame() {
       router.push({ name: 'game', params: { gameId: room.activeGameId } })
     } else if (room.status === 'WAITING') {
       roomStore.updatePlayers(room.players)
+      roomStore.updateConfig(room.config)
       roomStore.updatePerkActivations(room.perkActivations ?? [])
     }
   } catch {
@@ -516,6 +539,7 @@ onMounted(async () => {
         const data = JSON.parse(msg.body)
         if (data.type === 'ROOM_UPDATE') {
           roomStore.updatePlayers(data.payload.players)
+          if (data.payload.config) roomStore.updateConfig(data.payload.config)
           if (data.payload.hostId) roomStore.setHostId(data.payload.hostId)
         }
         if (data.type === 'PERK_UPDATE') {
