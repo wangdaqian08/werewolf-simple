@@ -7,6 +7,7 @@ import com.werewolf.dto.JoinRoomRequest
 import com.werewolf.dto.KickPlayerRequest
 import com.werewolf.dto.LeaveRoomRequest
 import com.werewolf.dto.SetReadyRequest
+import com.werewolf.dto.UpdateBoardRequest
 import com.werewolf.service.*
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
@@ -133,6 +134,27 @@ class RoomController(private val roomService: RoomService) {
         } catch (e: CannotKickHostException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         } catch (e: PlayerNotInRoomException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        }
+    }
+
+    @PostMapping("/board")
+    fun updateBoard(
+        @RequestBody body: UpdateBoardRequest,
+        authentication: Authentication,
+    ): ResponseEntity<Any> {
+        val (userId, _, _) = authentication.userClaims()
+        return try {
+            ResponseEntity.ok(roomService.updateBoard(userId, body.roomId, body.totalPlayers, body.wolfCount, body.roles))
+        } catch (e: RoomNotFoundException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: NotHostException) {
+            ResponseEntity.status(403).body(mapOf("error" to e.message))
+        } catch (e: RoomNotOpenException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: InvalidRoleCompositionException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: RoomTooSmallException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         }
     }

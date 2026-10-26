@@ -20,6 +20,7 @@ async function goToSheriffSignup(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: /Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page
     .getByRole('button', { name: /Debug: Launch Game/i })

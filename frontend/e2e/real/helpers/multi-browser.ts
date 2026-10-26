@@ -162,74 +162,6 @@ export async function setupGame(
   // the warm-up-sensitive one, so give it the most slack.
   await hostPage.waitForURL(/\/create-room/, { timeout: 30_000 })
 
-  // Configure room: set player count
-  // The stepper shows the current total. Default is 9. Use the player-count
-  // testids — there is now a second stepper for wolf count, so raw
-  // .stepper-num / .stepper-btn would match both.
-  const currentCount = await hostPage.getByTestId('player-count-value').textContent()
-  const current = parseInt(currentCount ?? '9', 10)
-  if (totalPlayers > current) {
-    for (let i = 0; i < totalPlayers - current; i++) {
-      await hostPage.getByTestId('player-count-increment').click()
-    }
-  } else if (totalPlayers < current) {
-    for (let i = 0; i < current - totalPlayers; i++) {
-      await hostPage.getByTestId('player-count-decrement').click()
-    }
-  }
-
-  // Configure custom roles if provided
-  if (opts.roles && opts.roles.length > 0) {
-    const allOptionalRoles = [
-      'SEER',
-      'WITCH',
-      'HUNTER',
-      'GUARD',
-      'IDIOT',
-      'WHITE_WOLF_KING',
-      'BLACK_WOLF_KING',
-    ]
-
-    // For each optional role, toggle to match desired state. Retry up to
-    // 3 times if the click didn't register — on slow CI the first click
-    // is occasionally swallowed and the role ends up in the wrong state,
-    // which then causes the backend to skip that role during game-start
-    // assignment (observed failure: "IDIOT bots not found" across all
-    // idiot-flow tests when the IDIOT toggle stayed off).
-    //
-    // The screen enforces board limits (gods within wolves ± 1), so a toggle
-    // can be disabled until another one moves first — e.g. 猎人 off only after
-    // 守卫 on. Make passes, skipping disabled toggles, until nothing changes.
-    for (let pass = 0; pass < allOptionalRoles.length; pass++) {
-      let changed = false
-      for (const role of allOptionalRoles) {
-        const shouldBeEnabled = opts.roles.includes(role as RoleName)
-
-        // Rows read "白狼王 White Wolf King": match WHITE_WOLF_KING as words, anchored
-        // at the end of the name so "女巫自救 Witch Self-Save" is not the WITCH row.
-        // (The two kings are mutually exclusive: the multi-pass loop handles it.)
-        const roleRow = hostPage.locator('.role-row').filter({
-          has: hostPage.locator('.role-name', {
-            hasText: new RegExp(`${role.replace(/_/g, ' ')}\\s*$`, 'i'),
-          }),
-        })
-
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const isEnabled = (await roleRow.locator('.toggle-on').count()) > 0
-          if (isEnabled === shouldBeEnabled) break
-
-          const toggle = isEnabled ? roleRow.locator('.toggle-on') : roleRow.locator('.toggle-off')
-          if ((await toggle.count()) === 0 || (await toggle.isDisabled())) break
-
-          await toggle.click()
-          changed = true
-          await hostPage.waitForTimeout(300)
-        }
-      }
-      if (!changed) break
-    }
-  }
-
   // Toggle sheriff if needed (default is on, we may want to turn it off)
   if (!hasSheriff) {
     // Find the row containing "Sheriff Election" and click its toggle button
@@ -313,12 +245,86 @@ export async function setupGame(
     await expect(trigger).toHaveAttribute('data-value', opts.bgmTrack, { timeout: 2_000 })
   }
 
-  // Create the room
+  // Create the room (page 1 = game settings above). It opens the players &
+  // roles panel in the room (/room/:id?setup=1), where the board is set.
   await hostPage.getByRole('button', { name: /Create Room/i }).click()
   // Bump from 10s → 15s: matches the other setup navigation waits in this
   // helper (game-view redirect is 15s on line 209). POST /api/room/create
   // hits the DB; under heavy CI load the initial insert can block briefly.
   await hostPage.waitForURL(/\/room\//, { timeout: 15_000 })
+  await hostPage.getByTestId('room-setup-panel').waitFor({ state: 'visible', timeout: 15_000 })
+
+  // Configure room: set player count
+  // The stepper shows the current total. Default is 9. Use the player-count
+  // testids — there is now a second stepper for wolf count, so raw
+  // .stepper-num / .stepper-btn would match both.
+  const currentCount = await hostPage.getByTestId('player-count-value').textContent()
+  const current = parseInt(currentCount ?? '9', 10)
+  if (totalPlayers > current) {
+    for (let i = 0; i < totalPlayers - current; i++) {
+      await hostPage.getByTestId('player-count-increment').click()
+    }
+  } else if (totalPlayers < current) {
+    for (let i = 0; i < current - totalPlayers; i++) {
+      await hostPage.getByTestId('player-count-decrement').click()
+    }
+  }
+
+  // Configure custom roles if provided
+  if (opts.roles && opts.roles.length > 0) {
+    const allOptionalRoles = [
+      'SEER',
+      'WITCH',
+      'HUNTER',
+      'GUARD',
+      'IDIOT',
+      'WHITE_WOLF_KING',
+      'BLACK_WOLF_KING',
+    ]
+
+    // For each optional role, toggle to match desired state. Retry up to
+    // 3 times if the click didn't register — on slow CI the first click
+    // is occasionally swallowed and the role ends up in the wrong state,
+    // which then causes the backend to skip that role during game-start
+    // assignment (observed failure: "IDIOT bots not found" across all
+    // idiot-flow tests when the IDIOT toggle stayed off).
+    //
+    // The screen enforces board limits (gods within wolves ± 1), so a toggle
+    // can be disabled until another one moves first — e.g. 猎人 off only after
+    // 守卫 on. Make passes, skipping disabled toggles, until nothing changes.
+    for (let pass = 0; pass < allOptionalRoles.length; pass++) {
+      let changed = false
+      for (const role of allOptionalRoles) {
+        const shouldBeEnabled = opts.roles.includes(role as RoleName)
+
+        // Rows read "白狼王 White Wolf King": match WHITE_WOLF_KING as words, anchored
+        // at the end of the name so "女巫自救 Witch Self-Save" is not the WITCH row.
+        // (The two kings are mutually exclusive: the multi-pass loop handles it.)
+        const roleRow = hostPage.locator('.role-row').filter({
+          has: hostPage.locator('.role-name', {
+            hasText: new RegExp(`${role.replace(/_/g, ' ')}\\s*$`, 'i'),
+          }),
+        })
+
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const isEnabled = (await roleRow.locator('.toggle-on').count()) > 0
+          if (isEnabled === shouldBeEnabled) break
+
+          const toggle = isEnabled ? roleRow.locator('.toggle-on') : roleRow.locator('.toggle-off')
+          if ((await toggle.count()) === 0 || (await toggle.isDisabled())) break
+
+          await toggle.click()
+          changed = true
+          await hostPage.waitForTimeout(300)
+        }
+      }
+      if (!changed) break
+    }
+  }
+
+  // Save the board; the panel closes onto the seat grid.
+  await hostPage.getByTestId('room-setup-done').click()
+  await hostPage.getByTestId('room-code').waitFor({ state: 'visible', timeout: 15_000 })
 
   // Get room code
   const roomCode = (await hostPage.locator('[data-testid="room-code"]').textContent()) ?? ''

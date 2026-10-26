@@ -434,6 +434,23 @@ class RoomServiceTest {
         verifyNoInteractions(stompPublisher)
     }
 
+    // ── updateBoard ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `updateBoard - broadcasts the new config so every seat grid redraws`() {
+        val room = room()
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(listOf(RoomPlayer(roomId = 1, userId = hostId, host = true)))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.updateBoard(hostId, 1, 9, 3, listOf(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER))
+
+        verify(stompPublisher).broadcastRoomAfterCommit(eq(1), argThat<Map<String, Any>> {
+            this["type"] == "ROOM_UPDATE" &&
+                ((this["payload"] as? Map<*, *>)?.get("config") as? com.werewolf.dto.RoomConfigDto)?.totalPlayers == 9
+        })
+    }
+
     // ── getRoom ──────────────────────────────────────────────────────────────
 
     @Test

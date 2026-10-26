@@ -387,6 +387,8 @@ test('create room: one wolf king per room, 9+ players', async ({ browser }) => {
       .first()
       .click()
     await page.waitForURL(/\/create-room/)
+    await page.getByTestId('create-room-submit').click() // the board is on players & roles
+    await page.getByTestId('room-setup-panel').waitFor({ state: 'visible' })
 
     const black = page.getByTestId('role-toggle-BLACK_WOLF_KING')
     const white = page.getByTestId('role-toggle-WHITE_WOLF_KING')

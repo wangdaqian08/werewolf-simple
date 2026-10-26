@@ -111,6 +111,7 @@ let mockRoomId = MOCK_ROOM_AS_HOST.roomId
 let mockHostId = MOCK_ROOM_AS_HOST.hostId
 let mockPlayers: RoomPlayer[] = [...MOCK_ROOM_AS_HOST.players]
 let mockTotalPlayers = MOCK_ROOM_AS_HOST.config.totalPlayers
+let mockRoomConfig = MOCK_ROOM_AS_HOST.config
 
 const EXTRA_PLAYERS: { userId: string; nickname: string; avatar: string }[] = [
   { userId: 'x1', nickname: '小龙', avatar: '🐉' },
@@ -165,9 +166,7 @@ export function setupMocks() {
   mock.onGet('/payment/orders').reply(200, MOCK_PAYMENT_ORDERS)
 
   // ── Room ──────────────────────────────────────────────────────────────────────
-  mock.onPost('/room/create').reply((config) => {
-    const body = JSON.parse(config.data ?? '{}')
-    const roomConfig = body.config ?? MOCK_ROOM_AS_HOST.config
+  const hostRoomWith = (roomConfig: typeof MOCK_ROOM_AS_HOST.config) => {
     // Host occupies 1 seat, so guests fill at most totalPlayers - 1 seats.
     const players = MOCK_ROOM_AS_HOST.players.filter(
       (p) => p.isHost || (p.seatIndex !== null && p.seatIndex <= roomConfig.totalPlayers - 1),
@@ -177,7 +176,17 @@ export function setupMocks() {
     mockHostId = room.hostId
     mockPlayers = [...players]
     mockTotalPlayers = roomConfig.totalPlayers
-    return [200, room]
+    mockRoomConfig = roomConfig
+    return room
+  }
+  mock.onPost('/room/create').reply((config) => {
+    const body = JSON.parse(config.data ?? '{}')
+    return [200, hostRoomWith(body.config ?? MOCK_ROOM_AS_HOST.config)]
+  })
+  // Players & roles page: keep the game settings, swap in the new board.
+  mock.onPost('/room/board').reply((config) => {
+    const { totalPlayers, wolfCount, roles } = JSON.parse(config.data ?? '{}')
+    return [200, hostRoomWith({ ...mockRoomConfig, totalPlayers, wolfCount, roles })]
   })
   mock.onPost('/room/join').reply((config) => {
     const body = JSON.parse(config.data ?? '{}')

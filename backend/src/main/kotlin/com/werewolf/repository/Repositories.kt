@@ -51,6 +51,22 @@ interface RoomRepository : JpaRepository<Room, Int> {
     fun findActiveRoomsForUser(userId: String): List<Room>
 
     /**
+     * WAITING rooms idle since before [cutoff]: created before it, and no game
+     * still running or ended after it (a restart-cancelled game puts its room
+     * back to WAITING — that room waits from the cancel, not from creation).
+     */
+    @Query(
+        """
+        SELECT r FROM Room r
+        WHERE r.status = com.werewolf.model.RoomStatus.WAITING
+          AND r.createdAt < :cutoff
+          AND NOT EXISTS (SELECT g FROM Game g WHERE g.roomId = r.roomId
+                          AND (g.endedAt IS NULL OR g.endedAt >= :cutoff))
+        """,
+    )
+    fun findWaitingIdleSince(cutoff: java.time.LocalDateTime): List<Room>
+
+    /**
      * Pessimistic lock on the room row — serializes perk activations per room
      * so the FCFS "one activation per perk per room" rule holds under
      * concurrency on both Postgres and H2 (tests have no partial unique index).

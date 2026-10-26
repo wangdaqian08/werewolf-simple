@@ -12,6 +12,7 @@ async function createRoom(page: import('@playwright/test').Page) {
     await page.getByRole('button', {name: /Create Room/i}).first().click()
     await expect(page).toHaveURL(/\/create-room/)
     await page.getByRole('button', {name: /Create Room/i}).click()
+    await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
     await expect(page).toHaveURL(/\/room\//)
 }
 

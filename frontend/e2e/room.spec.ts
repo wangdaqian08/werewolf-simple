@@ -13,18 +13,26 @@ async function createRoom(page: import('@playwright/test').Page) {
     await page.getByRole('button', {name: /Create Room/i}).first().click()
     await expect(page).toHaveURL(/\/create-room/)
     await page.getByRole('button', {name: /Create Room/i}).click()
-    await expect(page).toHaveURL(/\/room\//)
+    await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
+    await expect(page.getByTestId('room-code')).toBeVisible() // panel closed, ?setup dropped
 }
 
-// Lobby → nickname → "Create Room" → config → increment to 12 → "Create Room" → room
-async function createRoomWith12Players(page: import('@playwright/test').Page) {
+// Lobby → nickname → "Create Room" → game settings → "Create Room" → players & roles panel
+async function openSetup(page: import('@playwright/test').Page) {
     await goToLobby(page)
     await page.getByPlaceholder('Enter your nickname').fill('TestHost')
     await page.getByRole('button', {name: /Create Room/i}).first().click()
     await expect(page).toHaveURL(/\/create-room/)
-    for (let i = 0; i < 3; i++) await page.getByTestId('player-count-increment').click()
     await page.getByRole('button', {name: /Create Room/i}).click()
-    await expect(page).toHaveURL(/\/room\//)
+    await expect(page.getByTestId('room-setup-panel')).toBeVisible()
+}
+
+// … → players & roles: increment to 12 → Done → room
+async function createRoomWith12Players(page: import('@playwright/test').Page) {
+    await openSetup(page)
+    for (let i = 0; i < 3; i++) await page.getByTestId('player-count-increment').click()
+    await page.getByTestId('room-setup-done').click()
+    await expect(page.getByTestId('room-code')).toBeVisible()
 }
 
 async function joinRoom(page: import('@playwright/test').Page) {
@@ -49,51 +57,44 @@ test('Create Room navigates to config screen', async ({page}) => {
     await expect(page).toHaveURL(/\/create-room/)
 })
 
-test('config screen shows player count stepper defaulting to 9', async ({page}) => {
-    await goToLobby(page)
-    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
-    await page.getByRole('button', {name: /Create Room/i}).first().click()
+test('players & roles shows the player count stepper defaulting to 9', async ({page}) => {
+    await openSetup(page)
     await expect(page.getByTestId('player-count-value')).toHaveText('9')
 })
 
 test('increment button increases player count', async ({page}) => {
-    await goToLobby(page)
-    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
-    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    await openSetup(page)
     await page.getByTestId('player-count-increment').click()
     await expect(page.getByTestId('player-count-value')).toHaveText('10')
 })
 
-test('decrement button decreases player count', async ({page}) => {
-    await goToLobby(page)
-    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
-    await page.getByRole('button', {name: /Create Room/i}).first().click()
-    await page.getByTestId('player-count-decrement').click()
-    await expect(page.getByTestId('player-count-value')).toHaveText('8')
-})
-
-test('decrement is disabled at minimum (6)', async ({page}) => {
-    await goToLobby(page)
-    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
-    await page.getByRole('button', {name: /Create Room/i}).first().click()
-    for (let i = 0; i < 3; i++) await page.getByTestId('player-count-decrement').click()
+// The mock room already has 9 members (host + 8 guests), so 9 is the floor.
+test('cannot go below the players who already joined', async ({page}) => {
+    await openSetup(page)
+    await expect(page.getByTestId('setup-joined-count')).toContainText('9')
     await expect(page.getByTestId('player-count-decrement')).toBeDisabled()
+    await page.getByTestId('player-count-increment').click()
+    await page.getByTestId('player-count-decrement').click()
+    await expect(page.getByTestId('player-count-value')).toHaveText('9')
 })
 
 test('increment is disabled at maximum (15)', async ({page}) => {
-    await goToLobby(page)
-    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
-    await page.getByRole('button', {name: /Create Room/i}).first().click()
+    await openSetup(page)
     for (let i = 0; i < 6; i++) await page.getByTestId('player-count-increment').click()
     await expect(page.getByTestId('player-count-value')).toHaveText('15')
     await expect(page.getByTestId('player-count-increment')).toBeDisabled()
 })
 
-test('config screen shows Werewolf and Villager as REQUIRED', async ({page}) => {
-    await goToLobby(page)
-    await page.getByPlaceholder('Enter your nickname').fill('TestHost')
-    await page.getByRole('button', {name: /Create Room/i}).first().click()
+test('players & roles shows Werewolf and Villager as REQUIRED', async ({page}) => {
+    await openSetup(page)
     await expect(page.getByText('REQUIRED').first()).toBeVisible()
+})
+
+test('the host reopens players & roles from the room', async ({page}) => {
+    await openSetup(page)
+    await page.getByTestId('room-setup-done').click()
+    await page.getByTestId('edit-board-btn').click()
+    await expect(page.getByTestId('room-setup-panel')).toBeVisible()
 })
 
 // ── Host waiting room ─────────────────────────────────────────────────────────

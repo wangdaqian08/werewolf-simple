@@ -50,12 +50,13 @@ async function roomWithOneFreeSeat(
   await enterNickname(host, hostNick)
   await host.getByTestId('create-room-btn').click()
   await host.waitForURL(/\/create-room/, { timeout: NAV_TIMEOUT })
+  await host.getByTestId('create-room-submit').click()
+  await host.waitForURL(/\/room\//, { timeout: NAV_TIMEOUT })
   for (let i = 0; i < 10; i++) {
     if ((await host.getByTestId('player-count-value').textContent())?.trim() === `${SEATS}`) break
     await host.getByTestId('player-count-decrement').click()
   }
-  await host.getByTestId('create-room-submit').click()
-  await host.waitForURL(/\/room\//, { timeout: NAV_TIMEOUT })
+  await host.getByTestId('room-setup-done').click()
   const roomId = host.url().match(/\/room\/(\d+)/)![1]!
   const code = (await host.getByTestId('room-code').textContent())!.trim()
   await host.getByTestId('room-seat-1').click()

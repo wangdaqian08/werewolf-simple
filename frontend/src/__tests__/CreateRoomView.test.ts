@@ -1,6 +1,8 @@
 /**
- * CreateRoomView "Perks" host toggle: defaults on, flips off on click, and the
- * chosen value is sent in the createRoom request config.
+ * CreateRoomView — page 1 of room creation: game settings only. It creates the
+ * room with the default board and opens page 2 (players & roles) in the room,
+ * so the code can be shared while the host is still deciding the headcount.
+ * Also the host toggles: perks, 空刀, 空守 are sent in the createRoom config.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
@@ -33,6 +35,46 @@ async function mountCreateRoom() {
   await flushPromises()
   return wrapper
 }
+
+describe('CreateRoomView — game settings page', () => {
+  beforeEach(() => {
+    h.createRoomMock.mockReset().mockResolvedValue({
+      roomId: '7',
+      roomCode: '123',
+      hostId: 'u1',
+      status: 'WAITING',
+      config: { totalPlayers: 9, roles: [] },
+      players: [],
+    })
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('has no player-count or role controls — those are on the next page', async () => {
+    const wrapper = await mountCreateRoom()
+    expect(wrapper.find('[data-testid="player-count-value"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="role-toggle-GUARD"]').exists()).toBe(false)
+  })
+
+  it('creates the room with the default 9-player board, then opens players & roles', async () => {
+    const wrapper = await mountCreateRoom()
+    await wrapper.find('[data-testid="create-room-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(h.createRoomMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          totalPlayers: 9,
+          wolfCount: 3,
+          roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER'],
+        }),
+      }),
+    )
+    const route = wrapper.vm.$router.currentRoute.value
+    expect(route.name).toBe('room')
+    expect(route.params.roomId).toBe('7')
+    expect(route.query.setup).toBe('1')
+  })
+})
 
 describe('CreateRoomView perks toggle', () => {
   beforeEach(() => {

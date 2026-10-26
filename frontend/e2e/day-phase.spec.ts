@@ -12,6 +12,7 @@ async function loadScenario(
   await page.getByRole('button', { name: /Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
 
   // Wait for room view and STOMP subscription to be ready
   await page.waitForURL(/\/room\//, { timeout: 5000 })

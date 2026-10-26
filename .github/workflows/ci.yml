@@ -262,7 +262,7 @@ jobs:
             specs: e2e/real/game-flow.spec.ts e2e/real/sheriff-flow.spec.ts e2e/real/white-wolf-king-flow.spec.ts e2e/real/black-wolf-king-scenarios.spec.ts
             grep: ''
           - id: 4
-            specs: e2e/real/revote-flow.spec.ts e2e/real/idiot-flow.spec.ts e2e/real/game-flow-d1-outcomes.spec.ts e2e/real/ghost-member.spec.ts
+            specs: e2e/real/revote-flow.spec.ts e2e/real/idiot-flow.spec.ts e2e/real/game-flow-d1-outcomes.spec.ts e2e/real/ghost-member.spec.ts e2e/real/room-board.spec.ts
             grep: ''
           - id: 5
             specs: e2e/real/dead-role-audio.spec.ts e2e/real/werewolf-win.spec.ts e2e/real/full-game-audio.spec.ts

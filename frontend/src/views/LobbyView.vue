@@ -249,7 +249,7 @@
 <script lang="ts" setup>
 import axios from 'axios'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
@@ -264,7 +264,9 @@ const userStore = useUserStore()
 const roomStore = useRoomStore()
 
 const nickname = ref(userStore.nickname ?? '')
-const roomCode = ref('')
+// An invite link (/?room=123, from ShareButton) fills in the code.
+const room = useRoute().query.room
+const roomCode = ref(typeof room === 'string' ? room : '')
 const loading = ref(false)
 const error = ref('')
 const showGuest = ref(false)
