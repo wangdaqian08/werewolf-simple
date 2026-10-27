@@ -126,6 +126,8 @@ interface SheriffCandidateRepository : JpaRepository<SheriffCandidate, Int> {
 }
 
 interface VoteRepository : JpaRepository<Vote, Int> {
+    fun findByGameIdAndVoteContext(gameId: Int, voteContext: VoteContext): List<Vote>
+
     fun findByGameIdAndVoteContextAndDayNumber(
         gameId: Int,
         voteContext: VoteContext,
@@ -149,7 +151,7 @@ interface EliminationHistoryRepository : JpaRepository<EliminationHistory, Int> 
 }
 
 interface GameEventRepository : JpaRepository<GameEvent, Int> {
-    fun findByGameIdOrderByCreatedAtAsc(gameId: Int): List<GameEvent>
+    fun findByGameIdOrderByCreatedAtAscIdAsc(gameId: Int): List<GameEvent>
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }
 

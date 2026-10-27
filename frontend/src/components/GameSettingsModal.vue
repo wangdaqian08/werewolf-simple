@@ -81,6 +81,31 @@
                 </span>
               </div>
             </div>
+
+            <!-- Scoring: the same rules settlement actually pays on -->
+            <div v-if="rules.length" class="settings-section" data-testid="settings-rewards">
+              <div class="section-title">积分规则 · Scoring</div>
+              <template v-for="g in ruleGroups" :key="g.key">
+                <div class="rule-group" :data-testid="`settings-reward-group-${g.key}`">
+                  {{ g.title }}
+                </div>
+                <div
+                  v-for="r in g.rules"
+                  :key="r.reason"
+                  class="rule-row"
+                  :data-testid="`settings-reward-${r.reason}`"
+                >
+                  <span class="rule-label">
+                    {{ r.label }}
+                    <span class="rule-detail">{{ r.detail }}</span>
+                  </span>
+                  <span class="rule-value" :class="r.amount < 0 ? 'rule-penalty' : 'rule-gain'">
+                    {{ ruleAmount(r) }}
+                  </span>
+                </div>
+              </template>
+              <p v-if="hasPenalty" class="rule-note">本局积分最低 0 分，不会扣除已有积分</p>
+            </div>
           </template>
 
           <div v-else class="settings-empty" data-testid="settings-empty">暂无数据</div>
@@ -91,12 +116,49 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
-import type { GameSettings } from '@/types'
+import { computed, ref, watch } from 'vue'
+import type { GameSettings, RewardRule } from '@/types'
 import { ROLE_DEFINITIONS } from '@/utils/roleDefinitions'
+import { walletService } from '@/services/walletService'
 
 const props = defineProps<{ settings: GameSettings | null | undefined; open: boolean }>()
 defineEmits<{ close: [] }>()
+
+// The scoring table is fixed per deployment, so it is fetched once, the first time
+// someone looks at it, and the section simply stays hidden if that call fails.
+const rules = ref<RewardRule[]>([])
+watch(
+  () => props.open,
+  async (open) => {
+    if (!open || rules.value.length) return
+    try {
+      rules.value = (await walletService.getRewardRules()) ?? []
+    } catch {
+      rules.value = []
+    }
+  },
+  { immediate: true },
+)
+const hasPenalty = computed(() => rules.value.some((r) => r.amount < 0))
+
+// A player gets exactly one BASE rule, so listing all five flat read as though a
+// winning wolf collected both the win bonus and the survival score. An empty group
+// renders nothing, so 扣分项 stays hidden until a penalty exists.
+// NOTE: 三者取其一 names the three BASE rules; update it if a fourth is ever added.
+const RULE_GROUPS = [
+  { key: 'BASE', title: '基础分（三者取其一）' },
+  { key: 'BONUS', title: '加分项（可叠加）' },
+  { key: 'PENALTY', title: '扣分项（可叠加）' },
+] as const
+const ruleGroups = computed(() =>
+  RULE_GROUPS.map((g) => ({ ...g, rules: rules.value.filter((r) => r.group === g.key) })).filter(
+    (g) => g.rules.length > 0,
+  ),
+)
+/** A penalty reads as a real minus sign, not a hyphen. */
+function ruleAmount(r: RewardRule): string {
+  return `${r.amount < 0 ? '−' : '+'}${Math.abs(r.amount)}${r.unit ? ` / ${r.unit}` : ''}`
+}
 
 interface RoleCount {
   id: string
@@ -145,6 +207,31 @@ const roleCounts = computed<RoleCount[]>(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.rule-group {
+  margin: 0.625rem 0 0.125rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.rule-detail {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.rule-gain {
+  color: var(--gold);
+  font-weight: 600;
+}
+.rule-penalty {
+  color: var(--red);
+  font-weight: 600;
+}
+.rule-note {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .modal-handle {

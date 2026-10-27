@@ -12,11 +12,15 @@ import type {
   DayPhaseState,
   GameReview,
   GameState,
+  KnownCamp,
   LoginResponse,
   MyPerkActivation,
   NightPhaseState,
   PaymentOrderSummary,
+  PlayerReview,
   PlayerRole,
+  PlayerSeat,
+  RewardRule,
   ReviewPlayer,
   RoleRevealState,
   Room,
@@ -1310,6 +1314,22 @@ const R12 = RP(12, 'Lia', 'IDIOT')
 export const MOCK_GAME_REVIEW: GameReview = {
   winner: 'VILLAGER',
   players: [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12],
+  // 好人胜: every surviving villager-side player takes the win bonus, and each losing
+  // wolf 4 per day they lasted — Ivy exiled day 1, Kim poisoned night 2.
+  rewards: [
+    { player: R1, amount: 12 },
+    { player: R2, amount: 20 },
+    { player: R3, amount: 20 },
+    { player: R4, amount: 12 },
+    { player: R5, amount: 20 },
+    { player: R6, amount: 20 },
+    { player: R7, amount: 20 },
+    { player: R8, amount: 20 },
+    { player: R9, amount: 4 },
+    { player: R10, amount: 20 },
+    { player: R11, amount: 8 },
+    { player: R12, amount: 20 },
+  ],
   rounds: [
     {
       day: 1,
@@ -1412,3 +1432,150 @@ export const MOCK_GAME_REVIEW: GameReview = {
     },
   ],
 }
+
+// ── Player review (玩家视角复盘) ───────────────────────────────────────────────
+
+// The same 12-player game as MOCK_GAME_REVIEW, seen from seat 2 (Bob, 预言家):
+// his own checks, dawns that name the dead without the cause, and a replay that
+// stops at the night-2 dawn he died in — day 2 was never his to hear.
+const PS = (
+  seatIndex: number,
+  nickname: string,
+  role: PlayerRole | null = null,
+  camp: KnownCamp | null = null,
+): PlayerSeat => ({ userId: `u${seatIndex}`, nickname, seatIndex, role, camp })
+const P1 = PS(1, 'Alice')
+const P2 = PS(2, 'Bob', 'SEER')
+const P3 = PS(3, 'Cat')
+const P4 = PS(4, 'Dan')
+const P5 = PS(5, 'Eve')
+const P6 = PS(6, 'Fay')
+const P7 = PS(7, 'Gus')
+const P8 = PS(8, 'Hal')
+const P9 = PS(9, 'Ivy', null, 'WOLF')
+const P10 = PS(10, 'Jay')
+const P11 = PS(11, 'Kim')
+const P12 = PS(12, 'Lia', null, 'GOOD')
+
+export const MOCK_PLAYER_REVIEW: PlayerReview = {
+  winner: 'VILLAGER',
+  me: P2,
+  // Bob won with the village, wore the badge, and his day-1 PK vote found a wolf.
+  reward: {
+    total: 28,
+    items: [
+      { reason: 'WIN', amount: 20, count: null, each: null, days: null, perDay: null },
+      { reason: 'SHERIFF', amount: 5, count: 1, each: 5, days: null, perDay: null },
+      { reason: 'WOLF_VOTE', amount: 3, count: 1, each: 3, days: null, perDay: null },
+    ],
+  },
+  seats: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12],
+  rounds: [
+    {
+      day: 1,
+      night: {
+        action: { type: 'SEER', target: P9, isWerewolf: true },
+        // A quiet night: the witch made the save, and Bob was never told of the attack.
+        dawn: { deaths: [], saved: null },
+      },
+      events: [
+        {
+          type: 'VOTE',
+          kind: 'SHERIFF',
+          round: 1,
+          tally: [
+            { target: P2, votes: 6, voters: [P3, P5, P6, P7, P8, P10] },
+            { target: P9, votes: 3, voters: [P1, P4, P11] },
+          ],
+          abstain: [P12],
+          result: P2,
+          appointed: false,
+          points: 5,
+        },
+        {
+          type: 'VOTE',
+          kind: 'EXILE',
+          round: 1,
+          tally: [
+            { target: P9, votes: 4, voters: [P5, P6, P7, P10] },
+            { target: P3, votes: 4, voters: [P1, P4, P11, P12] },
+          ],
+          abstain: [P2, P3, P8, P9],
+          result: null,
+          appointed: false,
+          points: null,
+        },
+        {
+          type: 'VOTE',
+          kind: 'EXILE',
+          round: 2,
+          tally: [
+            { target: P9, votes: 6.5, voters: [P2, P5, P6, P7, P8, P10] },
+            { target: P3, votes: 4, voters: [P1, P4, P11, P12] },
+          ],
+          abstain: [],
+          result: P9,
+          appointed: false,
+          points: 3,
+        },
+      ],
+    },
+    {
+      day: 2,
+      night: {
+        action: { type: 'SEER', target: P12, isWerewolf: false },
+        dawn: { deaths: [P2, P11], saved: null },
+      },
+      // Bob died at this dawn, so day 2's badge handover, vote and idiot reveal are absent.
+      events: [],
+    },
+  ],
+  diedOnDay: 2,
+}
+
+// ── Scoring table (积分规则) ───────────────────────────────────────────────────
+
+// Mirrors RewardBreakdown.catalog at its configured defaults. A penalty would be
+// one more entry here with a negative amount.
+export const MOCK_REWARD_RULES: RewardRule[] = [
+  {
+    reason: 'WIN',
+    group: 'BASE',
+    label: '胜利方奖励',
+    detail: '本局获胜的阵营',
+    amount: 20,
+    unit: null,
+  },
+  {
+    reason: 'PARTICIPATION',
+    group: 'BASE',
+    label: '参与奖励',
+    detail: '失利的好人阵营',
+    amount: 5,
+    unit: null,
+  },
+  {
+    reason: 'WOLF_SURVIVAL',
+    group: 'BASE',
+    label: '狼人存活',
+    detail: '狼人失利时，活到第几天就算几天',
+    amount: 4,
+    unit: '天',
+  },
+  {
+    reason: 'SHERIFF',
+    group: 'BONUS',
+    label: '当选／持有警徽',
+    detail: '当选警长，或之后接过警徽',
+    amount: 5,
+    unit: null,
+  },
+  {
+    reason: 'WOLF_VOTE',
+    group: 'BONUS',
+    label: '投出狼人',
+    detail: '白天投票投中狼人，每天最多一次',
+    amount: 3,
+    unit: '次',
+  },
+]

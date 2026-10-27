@@ -171,7 +171,7 @@ class TestSupportCleanupIntegrationTest {
         assertThat(
             voteRepository.findByGameIdAndVoteContextAndDayNumber(s.gameId, VoteContext.ELIMINATION, 1),
         ).isEmpty()
-        assertThat(gameEventRepository.findByGameIdOrderByCreatedAtAsc(s.gameId)).isEmpty()
+        assertThat(gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(s.gameId)).isEmpty()
         assertThat(eliminationHistoryRepository.findByGameId(s.gameId)).isEmpty()
         assertThat(perkActivationRepository.findById(s.activationId)).isEmpty
         assertThat(gameSettlementRepository.findById(s.gameId)).isEmpty

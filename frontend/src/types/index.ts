@@ -274,10 +274,134 @@ export interface ReviewRound {
   events: ReviewDayEvent[]
 }
 
+/** Credits a player earned from this game, read back from the ledger. */
+export interface ReviewReward {
+  player: ReviewPlayer
+  amount: number
+}
+
 export interface GameReview {
   winner: 'WEREWOLF' | 'VILLAGER' | null
   players: ReviewPlayer[]
   rounds: ReviewRound[]
+  /** Empty when the game was never settled. */
+  rewards: ReviewReward[]
+}
+
+// ── Player review (玩家视角复盘) ───────────────────────────────────────────────
+
+/** WOLF covers every wolf-camp role: a seer check cannot tell them apart. */
+export type KnownCamp = 'WOLF' | 'GOOD'
+
+/**
+ * One seat as the viewer came to know it. `role` is the exact role, set only where
+ * they knew it; `camp` is the side alone, which is what a seer check gives. Both
+ * null means the seat stayed a mystery to them.
+ */
+export interface PlayerSeat {
+  userId: string
+  nickname: string
+  seatIndex: number
+  role: PlayerRole | null
+  camp: KnownCamp | null
+}
+
+/** The viewer's own night turn — only the variant matching their role is ever sent. */
+export type MyNightAction =
+  | { type: 'WOLF'; teammates: PlayerSeat[]; target: PlayerSeat | null; selfKill: boolean }
+  | { type: 'SEER'; target: PlayerSeat | null; isWerewolf: boolean }
+  | {
+      type: 'WITCH'
+      attacked: PlayerSeat | null
+      antidote: PlayerSeat | null
+      poison: PlayerSeat | null
+    }
+  | { type: 'GUARD'; target: PlayerSeat | null }
+
+export interface PlayerNight {
+  /** null for the roles that sleep through the night */
+  action: MyNightAction | null
+  dawn: {
+    /** who died — never why: a death is announced, its cause is not */
+    deaths: PlayerSeat[]
+    /** only set for the wolves and the witch, who alone were told an attack happened */
+    saved: PlayerSeat | null
+  }
+}
+
+export interface PlayerVote {
+  type: 'VOTE'
+  kind: 'SHERIFF' | 'EXILE'
+  /** 2 = PK re-vote */
+  round: number
+  tally: { target: PlayerSeat; votes: number; voters: PlayerSeat[] }[]
+  abstain: PlayerSeat[]
+  result: PlayerSeat | null
+  appointed: boolean
+  /** credits this very vote earned the viewer */
+  points: number | null
+}
+
+export type PlayerDayEvent =
+  | PlayerVote
+  | { type: 'HUNTER_SHOT'; hunter: PlayerSeat; target: PlayerSeat }
+  | { type: 'SELF_DESTRUCT'; player: PlayerSeat; taken: PlayerSeat | null }
+  | { type: 'IDIOT_REVEAL'; player: PlayerSeat }
+  /** to = null: the badge was destroyed; points is set when the viewer receives it */
+  | { type: 'BADGE_HANDOVER'; from: PlayerSeat; to: PlayerSeat | null; points: number | null }
+
+export interface PlayerRound {
+  day: number
+  night: PlayerNight | null
+  events: PlayerDayEvent[]
+}
+
+export interface PlayerReview {
+  winner: 'WEREWOLF' | 'VILLAGER' | null
+  me: PlayerSeat
+  seats: PlayerSeat[]
+  rounds: PlayerRound[]
+  /** null = the viewer was still alive at the end, so the replay runs the whole game */
+  diedOnDay: number | null
+  /** null when the game was never settled */
+  reward: MyReward | null
+}
+
+/** Why the viewer earned what they did. */
+export type RewardReason = 'WIN' | 'WOLF_SURVIVAL' | 'PARTICIPATION' | 'SHERIFF' | 'WOLF_VOTE'
+
+/** BASE rules are one-of — a player gets exactly one; BONUS and PENALTY stack on top. */
+export type RewardGroup = 'BASE' | 'BONUS' | 'PENALTY'
+
+/**
+ * One line of the scoring table players can read. A negative `amount` is a penalty.
+ * `unit` is what `amount` is paid per — 天 for a rate per day, 次 per occurrence —
+ * and null for the lines paid once a game.
+ */
+export interface RewardRule {
+  reason: RewardReason
+  group: RewardGroup
+  label: string
+  detail: string
+  amount: number
+  unit: string | null
+}
+
+/** One line of the total. `count`/`each` and `days`/`perDay` show the working where there is any. */
+export interface RewardItem {
+  reason: RewardReason
+  amount: number
+  count: number | null
+  each: number | null
+  days: number | null
+  perDay: number | null
+}
+
+export interface MyReward {
+  /** the settled amount from the ledger — always the truth */
+  total: number
+  /** the working; empty when it no longer adds up to `total` */
+  items: RewardItem[]
 }
 
 // ── Timer ─────────────────────────────────────────────────────────────────────

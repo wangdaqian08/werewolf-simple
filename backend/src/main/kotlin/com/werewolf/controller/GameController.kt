@@ -109,6 +109,21 @@ class GameController(
         }
     }
 
+    @GetMapping("/{gameId}/review/me")
+    fun getPlayerReview(
+        @PathVariable gameId: Int,
+        authentication: Authentication,
+    ): ResponseEntity<Any> {
+        val userId = authentication.principal as String
+        return try {
+            ResponseEntity.ok(gameReviewService.getPlayerReview(gameId, userId))
+        } catch (e: GameNotFoundException) {
+            ResponseEntity.status(404).body(mapOf("error" to e.message))
+        } catch (e: ReviewForbiddenException) {
+            ResponseEntity.status(403).body(mapOf("error" to e.message))
+        }
+    }
+
     @PostMapping("/{gameId}/timer/start")
     fun startTimer(
         @PathVariable gameId: Int,

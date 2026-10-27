@@ -10,6 +10,7 @@ import type {
   PlayerRole,
   ReviewNight,
   ReviewPlayer,
+  ReviewReward,
   ReviewRound,
   ReviewVote,
 } from '@/types'
@@ -55,8 +56,9 @@ function render(
   rounds: ReviewRound[],
   winner: GameReviewData['winner'] = 'WEREWOLF',
   roster: ReviewPlayer[] = players,
+  rewards: ReviewReward[] = [],
 ) {
-  return mount(GameReview, { props: { review: { winner, players: roster, rounds } } })
+  return mount(GameReview, { props: { review: { winner, players: roster, rounds, rewards } } })
 }
 const lines = (wrapper: ReturnType<typeof render>) =>
   wrapper.findAll('.rv-line').map((l) => l.text())
@@ -72,6 +74,22 @@ const tally = (wrapper: ReturnType<typeof render>) =>
   })
 
 describe('GameReview', () => {
+  it('points: every player who earned is listed with their amount', () => {
+    const w = render([], 'VILLAGER', players, [
+      { player: w1, amount: 12 },
+      { player: seer, amount: 20 },
+    ])
+
+    const block = w.find('[data-testid="review-rewards"]')
+    expect(w.findAll('.rv-reward-row')).toHaveLength(2)
+    expect(block.text()).toContain('+12')
+    expect(block.text()).toContain('+20')
+  })
+
+  it('points: no block at all when the game was never settled', () => {
+    expect(render([]).find('[data-testid="review-rewards"]').exists()).toBe(false)
+  })
+
   it('header: the outcome and the wolf team', () => {
     const wrapper = render([])
     expect(wrapper.find('.rv-outcome').text()).toBe('狼人胜')

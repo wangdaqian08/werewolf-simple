@@ -27,14 +27,18 @@
         </div>
       </section>
 
-      <button
-        v-if="sortedPlayers.length"
-        class="btn btn-outline review-btn"
-        data-testid="open-review"
-        @click="openReview"
-      >
-        📜 上帝视角复盘
-      </button>
+      <div v-if="sortedPlayers.length" class="review-btns">
+        <button class="btn btn-outline review-btn" data-testid="open-review" @click="openReview">
+          📜 上帝视角复盘
+        </button>
+        <button
+          class="btn btn-outline review-btn"
+          data-testid="open-player-review"
+          @click="openPlayerReview"
+        >
+          👤 玩家视角复盘
+        </button>
+      </div>
 
       <template v-if="settlement">
         <div class="divider-label">
@@ -132,6 +136,9 @@ const outcomeSub = computed(() => {
 
 function openReview() {
   router.push({ name: 'review', params: { gameId: String(route.params.gameId) } })
+}
+function openPlayerReview() {
+  router.push({ name: 'player-review', params: { gameId: String(route.params.gameId) } })
 }
 function goLobby() {
   gameStore.clearGame()
@@ -360,9 +367,15 @@ function goLobby() {
   font-weight: 600;
 }
 
-.review-btn {
-  width: 100%;
+.review-btns {
+  display: flex;
+  gap: 0.5rem;
   margin: 0 0 1.25rem;
+}
+
+.review-btn {
+  flex: 1;
+  min-width: 0;
 }
 
 .result-wolves .review-btn {

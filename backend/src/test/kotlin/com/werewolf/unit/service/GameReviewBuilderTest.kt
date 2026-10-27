@@ -50,10 +50,19 @@ class GameReviewBuilderTest {
         events: List<GameEvent> = emptyList(),
         perkSaved: Set<String> = emptySet(),
         winner: WinnerSide? = WinnerSide.WEREWOLF,
+        rewards: Map<String, Int> = emptyMap(),
     ) = GameReviewBuilder.build(
         Game(roomId = 1, hostUserId = "w1").also { it.phase = GamePhase.GAME_OVER; it.winner = winner },
-        players, nights, events, perkSaved,
+        players, nights, events, perkSaved, rewards,
     ) { "N-$it" }
+
+    @Test
+    fun `the review lists what each player earned, by seat, and is empty when the game was never settled`() {
+        val settled = build(board(), emptyList(), rewards = mapOf("v" to 5, "w1" to 20))
+
+        assertThat(settled.rewards).containsExactly(ReviewReward(ref("w1"), 20), ReviewReward(ref("v"), 5))
+        assertThat(build(board(), emptyList()).rewards).isEmpty()
+    }
 
     @Test
     fun `the review lists every player by seat with their true role, and the winner`() {

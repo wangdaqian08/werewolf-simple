@@ -67,3 +67,5 @@ werewolf:
     win-bonus: 20
     participation: 5
     wolf-per-day-survived: 4
+    sheriff-bonus: 5
+    wolf-vote-bonus: 3
