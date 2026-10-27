@@ -274,10 +274,18 @@ export interface ReviewRound {
   events: ReviewDayEvent[]
 }
 
+/** Credits a player earned from this game, read back from the ledger. */
+export interface ReviewReward {
+  player: ReviewPlayer
+  amount: number
+}
+
 export interface GameReview {
   winner: 'WEREWOLF' | 'VILLAGER' | null
   players: ReviewPlayer[]
   rounds: ReviewRound[]
+  /** Empty when the game was never settled. */
+  rewards: ReviewReward[]
 }
 
 // ── Player review (玩家视角复盘) ───────────────────────────────────────────────
@@ -353,6 +361,20 @@ export interface PlayerReview {
   rounds: PlayerRound[]
   /** null = the viewer was still alive at the end, so the replay runs the whole game */
   diedOnDay: number | null
+  /** null when the game was never settled */
+  reward: MyReward | null
+}
+
+/** Why the viewer earned what they did. */
+export type RewardReason = 'WIN' | 'WOLF_SURVIVAL' | 'PARTICIPATION'
+
+export interface MyReward {
+  amount: number
+  reason: RewardReason
+  /** WOLF_SURVIVAL only: days the wolf stayed alive */
+  days: number | null
+  /** WOLF_SURVIVAL only, and only while it still multiplies out to `amount` */
+  perDay: number | null
 }
 
 // ── Timer ─────────────────────────────────────────────────────────────────────

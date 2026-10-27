@@ -20,7 +20,19 @@ data class PlayerReview(
     val seats: List<PlayerSeat>,
     val rounds: List<PlayerRound>,
     val diedOnDay: Int?,
+    val reward: MyReward?,
 )
+
+/** Why the viewer earned what they did — the three branches of RewardSettlementService.rewardFor. */
+enum class RewardReason { WIN, WOLF_SURVIVAL, PARTICIPATION }
+
+/**
+ * What the viewer earned from this game, taken from the ledger rather than recomputed,
+ * with the reason behind it. [days] and [perDay] are set only for WOLF_SURVIVAL, and
+ * [perDay] only while it still multiplies out to [amount]: the configured rate can be
+ * changed after a game has been settled, and the settled amount is the truth.
+ */
+data class MyReward(val amount: Int, val reason: RewardReason, val days: Int?, val perDay: Int?)
 
 /** WOLF covers every wolf-camp role: a seer check cannot tell them apart. */
 enum class KnownCamp { WOLF, GOOD }

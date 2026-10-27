@@ -12,6 +12,7 @@ import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.PerkActivationRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.service.ActionLogService
+import com.werewolf.service.WalletService
 import com.werewolf.service.PERK_NIGHT1_IMMUNITY
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -44,6 +45,7 @@ class GameReviewIntegrationTest {
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
     @Autowired lateinit var actionLogService: ActionLogService
     @Autowired lateinit var perkActivationRepository: PerkActivationRepository
+    @Autowired lateinit var walletService: WalletService
 
     private class Login(val token: String, val userId: String, val nickname: String)
 
@@ -234,5 +236,25 @@ class GameReviewIntegrationTest {
         assertThat(getPlayerReview(running, wolf.token).statusCode).isEqualTo(HttpStatus.FORBIDDEN)
         assertThat(getPlayerReview(over, login("MyReviewShutStranger").token).statusCode).isEqualTo(HttpStatus.FORBIDDEN)
         assertThat(getPlayerReview(99_999, wolf.token).statusCode).isEqualTo(HttpStatus.NOT_FOUND)
+    }
+
+    @Test
+    fun `both replays report the same points, the god's-eye one for everybody and the player's own for themselves`() {
+        val wolf = login("MyReviewPointsWolf")
+        val seer = login("MyReviewPointsSeer")
+        val gameId = seedGame(wolf, seer, GamePhase.GAME_OVER)
+        // The wolves won this seeded game: the wolf takes the win bonus, the dead seer the
+        // participation credit. Both replays read these same ledger rows.
+        walletService.credit(wolf.userId, 20, CreditTxType.GAME_REWARD, gameId = gameId)
+        walletService.credit(seer.userId, 5, CreditTxType.GAME_REWARD, gameId = gameId)
+
+        val everyone = (getReview(gameId, seer.token).body!!["rewards"] as List<Map<String, Any?>>)
+            .associate { ((it["player"] as Map<*, *>)["userId"] as String) to it["amount"] }
+        assertThat(everyone).isEqualTo(mapOf(wolf.userId to 20, seer.userId to 5))
+
+        // The seer lost as a villager-side player, so their own replay explains it as participation.
+        val mine = getPlayerReview(gameId, seer.token).body!!["reward"] as Map<*, *>
+        assertThat(listOf(mine["amount"], mine["reason"], mine["days"])).containsExactly(5, "PARTICIPATION", null)
+        assertThat(mine["amount"]).isEqualTo(everyone[seer.userId])
     }
 }

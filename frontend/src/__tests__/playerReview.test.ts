@@ -31,6 +31,7 @@ function review(over: Partial<PlayerReviewData> = {}): PlayerReviewData {
       },
     ],
     diedOnDay: null,
+    reward: null,
     ...over,
   }
 }
@@ -66,5 +67,35 @@ describe('PlayerReview', () => {
   it('a player who survived to the end gets no stop line', () => {
     const text = mount(PlayerReview, { props: { review: review() } }).text()
     expect(text).not.toContain('复盘到此结束')
+  })
+
+  it('points: a win bonus is named as such', () => {
+    const r = review({ reward: { amount: 20, reason: 'WIN', days: null, perDay: null } })
+    const text = mount(PlayerReview, { props: { review: r } }).text()
+    expect(text).toContain('+20')
+    expect(text).toContain('胜利方奖励')
+  })
+
+  it('points: a losing wolf score is explained by the days survived and the rate', () => {
+    const r = review({ reward: { amount: 12, reason: 'WOLF_SURVIVAL', days: 3, perDay: 4 } })
+    const text = mount(PlayerReview, { props: { review: r } }).text()
+    expect(text).toContain('+12')
+    expect(text).toContain('狼人失利，存活 3 天 × 4 分/天')
+  })
+
+  it('points: the rate is left out when it no longer multiplies out to the amount', () => {
+    const r = review({ reward: { amount: 99, reason: 'WOLF_SURVIVAL', days: 3, perDay: null } })
+    const text = mount(PlayerReview, { props: { review: r } }).text()
+    expect(text).toContain('狼人失利，存活 3 天')
+    expect(text).not.toContain('分/天')
+  })
+
+  it('points: a losing villager gets the participation wording', () => {
+    const r = review({ reward: { amount: 5, reason: 'PARTICIPATION', days: null, perDay: null } })
+    expect(mount(PlayerReview, { props: { review: r } }).text()).toContain('参与奖励（本局失利）')
+  })
+
+  it('points: no block at all when the game was never settled', () => {
+    expect(mount(PlayerReview, { props: { review: review() } }).text()).not.toContain('本局积分')
   })
 })

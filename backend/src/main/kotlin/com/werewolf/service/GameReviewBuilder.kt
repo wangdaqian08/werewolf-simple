@@ -28,6 +28,7 @@ object GameReviewBuilder {
         nights: List<NightPhase>,
         events: List<GameEvent>,
         night1PerkSaved: Set<String>,
+        rewards: Map<String, Int>,
         displayNameFor: (String) -> String,
     ): GameReview {
         val refs = players.associate { it.userId to ReviewPlayer(it.userId, displayNameFor(it.userId), it.seatIndex, it.role) }
@@ -53,7 +54,13 @@ object GameReviewBuilder {
                 events = dayEvents(eventsByDay[day].orEmpty(), refs),
             )
         }
-        return GameReview(game.winner, players.sortedBy { it.seatIndex }.map { refs.getValue(it.userId) }, rounds)
+        val bySeat = players.sortedBy { it.seatIndex }
+        return GameReview(
+            game.winner,
+            bySeat.map { refs.getValue(it.userId) },
+            rounds,
+            bySeat.mapNotNull { p -> rewards[p.userId]?.let { ReviewReward(refs.getValue(p.userId), it) } },
+        )
     }
 
     private fun night(

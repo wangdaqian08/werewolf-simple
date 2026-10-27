@@ -40,6 +40,17 @@
         >
       </div>
     </template>
+    <template v-if="review.rewards.length">
+      <div class="rv-line rv-title">本局积分</div>
+      <div class="rv-rewards" data-testid="review-rewards">
+        <div v-for="r in review.rewards" :key="r.player.userId" class="rv-reward-row">
+          <span :class="{ 'rv-wolf': isWolfRole(r.player.role) }">
+            {{ r.player.seatIndex }}号 {{ r.player.nickname }}
+          </span>
+          <span class="rv-reward-amount">+{{ r.amount }}</span>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -339,5 +350,21 @@ const hasTally = computed(() => lines.value.some((l) => l.kind === 'tally'))
   color: var(--muted);
   text-align: center;
   padding: 1rem 0;
+}
+
+.rv-rewards {
+  padding: 0.25rem 0 0 1.25rem;
+  font-size: 0.8125rem;
+}
+.rv-reward-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+.rv-reward-amount {
+  color: var(--gold);
+  font-weight: 600;
+  white-space: nowrap;
 }
 </style>

@@ -40,6 +40,13 @@
         >
       </div>
     </template>
+    <template v-if="review.reward">
+      <div class="rv-line rv-title">本局积分</div>
+      <div class="rv-my-reward" data-testid="my-reward">
+        <span class="rv-reward-amount">+{{ review.reward.amount }}</span>
+        <span class="rv-reward-why">{{ rewardWhy }}</span>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -221,6 +228,17 @@ const lines = computed<Line[]>(() => {
 const showLegend = computed(
   () => lines.value.some((l) => l.kind === 'tally') && props.review.seats.some(isKnownWolf),
 )
+
+/** Spells out where the number came from, so the score is not just asserted at the player. */
+const rewardWhy = computed(() => {
+  const r = props.review.reward
+  if (!r) return ''
+  if (r.reason === 'WIN') return '胜利方奖励'
+  if (r.reason === 'PARTICIPATION') return '参与奖励（本局失利）'
+  const days = `存活 ${r.days} 天`
+  // The per-day rate is dropped when it no longer multiplies out to the settled amount.
+  return r.perDay != null ? `狼人失利，${days} × ${r.perDay} 分/天` : `狼人失利，${days}`
+})
 </script>
 
 <style scoped>
@@ -336,5 +354,22 @@ const showLegend = computed(
   color: var(--muted);
   text-align: center;
   padding: 1rem 0;
+}
+
+.rv-my-reward {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.375rem 0 0 1.25rem;
+  font-size: 0.8125rem;
+}
+.rv-reward-amount {
+  color: var(--gold);
+  font-weight: 600;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+.rv-reward-why {
+  color: var(--muted);
 }
 </style>

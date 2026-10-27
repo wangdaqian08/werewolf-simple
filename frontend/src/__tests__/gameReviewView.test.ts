@@ -11,7 +11,7 @@ import type { GameReview } from '@/types'
 
 vi.mock('@/services/gameService', () => ({ gameService: { getReview: vi.fn() } }))
 
-const REVIEW: GameReview = { winner: 'VILLAGER', players: [], rounds: [] }
+const REVIEW: GameReview = { winner: 'VILLAGER', players: [], rounds: [], rewards: [] }
 
 async function mountView() {
   const router = createRouter({

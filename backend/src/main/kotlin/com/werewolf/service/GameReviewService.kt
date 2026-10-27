@@ -1,7 +1,9 @@
 package com.werewolf.service
 
+import com.werewolf.config.RewardProperties
 import com.werewolf.dto.GameReview
 import com.werewolf.dto.PlayerReview
+import com.werewolf.model.CreditTxType
 import com.werewolf.model.Game
 import com.werewolf.model.GameEvent
 import com.werewolf.model.GamePhase
@@ -22,6 +24,8 @@ class GameReviewService(
     private val nightPhaseRepository: NightPhaseRepository,
     private val gameEventRepository: GameEventRepository,
     private val perkActivationRepository: PerkActivationRepository,
+    private val creditTransactionRepository: CreditTransactionRepository,
+    private val rewardProperties: RewardProperties,
 ) {
     /** The rows both replays are built from, loaded once the caller has been let in. */
     private class ReviewData(
@@ -30,6 +34,7 @@ class GameReviewService(
         val nights: List<NightPhase>,
         val events: List<GameEvent>,
         val night1PerkSaved: Set<String>,
+        val rewards: Map<String, Int>,
         val displayNameFor: (String) -> String,
     )
 
@@ -52,18 +57,24 @@ class GameReviewService(
             nightPhaseRepository.findByGameId(gameId),
             gameEventRepository.findByGameIdOrderByCreatedAtAsc(gameId),
             night1PerkSaved,
+            // Rewards come from the ledger, the durable record, so both replays show the same numbers.
+            creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD)
+                .associate { it.userId to it.amount },
         ) { id -> roomNames[id]?.displayName ?: users[id]?.nickname ?: id }
     }
 
     /** Every role and night action, with every player's true role. */
     @Transactional(readOnly = true)
     fun getReview(gameId: Int, userId: String): GameReview = with(load(gameId, userId)) {
-        GameReviewBuilder.build(game, players, nights, events, night1PerkSaved, displayNameFor)
+        GameReviewBuilder.build(game, players, nights, events, night1PerkSaved, rewards, displayNameFor)
     }
 
     /** Only what [userId] themselves knew, and only up to the moment they left the game. */
     @Transactional(readOnly = true)
     fun getPlayerReview(gameId: Int, userId: String): PlayerReview = with(load(gameId, userId)) {
-        PlayerReviewBuilder.build(game, players, nights, events, night1PerkSaved, userId, displayNameFor)
+        PlayerReviewBuilder.build(
+            game, players, nights, events, night1PerkSaved, userId,
+            rewards, rewardProperties.wolfPerDaySurvived, displayNameFor,
+        )
     }
 }

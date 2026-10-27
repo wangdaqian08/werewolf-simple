@@ -72,10 +72,48 @@ class PlayerReviewBuilderTest {
         events: List<GameEvent> = emptyList(),
         perkSaved: Set<String> = emptySet(),
         winner: WinnerSide? = WinnerSide.WEREWOLF,
+        rewards: Map<String, Int> = emptyMap(),
+        wolfPerDay: Int = 4,
     ) = PlayerReviewBuilder.build(
         Game(roomId = 1, hostUserId = "w1").also { it.phase = GamePhase.GAME_OVER; it.winner = winner },
-        players, nights, events, perkSaved, viewer,
+        players, nights, events, perkSaved, viewer, rewards, wolfPerDay,
     ) { "N-$it" }
+
+    @Test
+    fun `the winning side's points are explained as the win bonus`() {
+        val review = build("w1", board(), listOf(night(1)), rewards = mapOf("w1" to 20))
+
+        assertThat(review.reward).isEqualTo(MyReward(20, RewardReason.WIN, days = null, perDay = null))
+    }
+
+    @Test
+    fun `a losing wolf's points are explained by the days they survived`() {
+        val review = build(
+            "w1", board(mapOf("w1" to 3)), listOf(night(1)),
+            rewards = mapOf("w1" to 12), winner = WinnerSide.VILLAGER,
+        )
+
+        assertThat(review.reward).isEqualTo(MyReward(12, RewardReason.WOLF_SURVIVAL, days = 3, perDay = 4))
+    }
+
+    @Test
+    fun `the per-day rate is dropped when it no longer multiplies out to the settled amount`() {
+        // The configured rate was changed after this game was settled; the settled amount still wins.
+        val review = build(
+            "w1", board(mapOf("w1" to 3)), listOf(night(1)),
+            rewards = mapOf("w1" to 99), winner = WinnerSide.VILLAGER,
+        )
+
+        assertThat(review.reward).isEqualTo(MyReward(99, RewardReason.WOLF_SURVIVAL, days = 3, perDay = null))
+    }
+
+    @Test
+    fun `a losing villager gets the participation reason, and an unsettled game carries no reward`() {
+        val settled = build("v", board(), listOf(night(1)), rewards = mapOf("v" to 5))
+
+        assertThat(settled.reward).isEqualTo(MyReward(5, RewardReason.PARTICIPATION, days = null, perDay = null))
+        assertThat(build("v", board(), listOf(night(1))).reward).isNull()
+    }
 
     @Test
     fun `a villager knows their own role and nobody else's`() {

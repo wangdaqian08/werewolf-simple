@@ -29,6 +29,8 @@ object PlayerReviewBuilder {
         events: List<GameEvent>,
         night1PerkSaved: Set<String>,
         viewerId: String,
+        rewards: Map<String, Int>,
+        wolfPerDaySurvived: Int,
         displayNameFor: (String) -> String,
     ): PlayerReview {
         val me = players.firstOrNull { it.userId == viewerId }
@@ -104,7 +106,23 @@ object PlayerReviewBuilder {
             seats = players.sortedBy { it.seatIndex }.mapNotNull { seat(it.userId) },
             rounds = rounds,
             diedOnDay = diedOnDay,
+            reward = reward(game, me, rewards[viewerId], wolfPerDaySurvived),
         )
+    }
+
+    /** The settled amount with the branch of RewardSettlementService.rewardFor that produced it. */
+    private fun reward(game: Game, me: GamePlayer, amount: Int?, wolfPerDaySurvived: Int): MyReward? {
+        if (amount == null) return null
+        val winner = game.winner
+        val won = winner != null && (if (winner == WinnerSide.WEREWOLF) me.role.isWolf else !me.role.isWolf)
+        return when {
+            won -> MyReward(amount, RewardReason.WIN, null, null)
+            me.role.isWolf -> {
+                val days = (me.diedDay ?: game.dayNumber).coerceAtLeast(1)
+                MyReward(amount, RewardReason.WOLF_SURVIVAL, days, wolfPerDaySurvived.takeIf { it * days == amount })
+            }
+            else -> MyReward(amount, RewardReason.PARTICIPATION, null, null)
+        }
     }
 
     private fun night(

@@ -1313,6 +1313,22 @@ const R12 = RP(12, 'Lia', 'IDIOT')
 export const MOCK_GAME_REVIEW: GameReview = {
   winner: 'VILLAGER',
   players: [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12],
+  // 好人胜: every surviving villager-side player takes the win bonus, and each losing
+  // wolf 4 per day they lasted — Ivy exiled day 1, Kim poisoned night 2.
+  rewards: [
+    { player: R1, amount: 12 },
+    { player: R2, amount: 20 },
+    { player: R3, amount: 20 },
+    { player: R4, amount: 12 },
+    { player: R5, amount: 20 },
+    { player: R6, amount: 20 },
+    { player: R7, amount: 20 },
+    { player: R8, amount: 20 },
+    { player: R9, amount: 4 },
+    { player: R10, amount: 20 },
+    { player: R11, amount: 8 },
+    { player: R12, amount: 20 },
+  ],
   rounds: [
     {
       day: 1,
@@ -1443,6 +1459,8 @@ const P12 = PS(12, 'Lia', null, 'GOOD')
 export const MOCK_PLAYER_REVIEW: PlayerReview = {
   winner: 'VILLAGER',
   me: P2,
+  // Bob is village-side and the village won, so his 20 is the win bonus.
+  reward: { amount: 20, reason: 'WIN', days: null, perDay: null },
   seats: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12],
   rounds: [
     {

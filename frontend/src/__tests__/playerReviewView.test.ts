@@ -17,6 +17,7 @@ const REVIEW: PlayerReview = {
   seats: [],
   rounds: [],
   diedOnDay: null,
+  reward: null,
 }
 
 async function mountView() {

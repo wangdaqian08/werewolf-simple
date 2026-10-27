@@ -6,7 +6,15 @@ import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinnerSide
 
 /** God's-eye replay (上帝视角复盘) of a finished game, every player's true role shown. */
-data class GameReview(val winner: WinnerSide?, val players: List<ReviewPlayer>, val rounds: List<ReviewRound>)
+data class GameReview(
+    val winner: WinnerSide?,
+    val players: List<ReviewPlayer>,
+    val rounds: List<ReviewRound>,
+    val rewards: List<ReviewReward>,
+)
+
+/** Credits a player earned from this game, read back from the ledger. Empty when the game was never settled. */
+data class ReviewReward(val player: ReviewPlayer, val amount: Int)
 
 data class ReviewPlayer(val userId: String, val nickname: String, val seatIndex: Int, val role: PlayerRole)
 
