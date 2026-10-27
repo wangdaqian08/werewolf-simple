@@ -2,6 +2,7 @@
 backend/build/
 backend/.gradle/
 backend/out/
+backend/.kotlin/
 *.class
 *.jar
 !backend/gradle/wrapper/gradle-wrapper.jar
