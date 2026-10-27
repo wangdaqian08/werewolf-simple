@@ -5,6 +5,7 @@ import type {
   GameActionResponse,
   GameReview,
   GameState,
+  PlayerReview,
 } from '@/types'
 
 export const gameService = {
@@ -43,6 +44,12 @@ export const gameService = {
 
   async getReview(gameId: string): Promise<GameReview> {
     const { data } = await http.get<GameReview>(`/game/${gameId}/review`)
+    return data
+  },
+
+  /** The same game as `getReview`, cut down to what the caller themselves knew. */
+  async getPlayerReview(gameId: string): Promise<PlayerReview> {
+    const { data } = await http.get<PlayerReview>(`/game/${gameId}/review/me`)
     return data
   },
 

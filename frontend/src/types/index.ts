@@ -280,6 +280,81 @@ export interface GameReview {
   rounds: ReviewRound[]
 }
 
+// ── Player review (玩家视角复盘) ───────────────────────────────────────────────
+
+/** WOLF covers every wolf-camp role: a seer check cannot tell them apart. */
+export type KnownCamp = 'WOLF' | 'GOOD'
+
+/**
+ * One seat as the viewer came to know it. `role` is the exact role, set only where
+ * they knew it; `camp` is the side alone, which is what a seer check gives. Both
+ * null means the seat stayed a mystery to them.
+ */
+export interface PlayerSeat {
+  userId: string
+  nickname: string
+  seatIndex: number
+  role: PlayerRole | null
+  camp: KnownCamp | null
+}
+
+/** The viewer's own night turn — only the variant matching their role is ever sent. */
+export type MyNightAction =
+  | { type: 'WOLF'; teammates: PlayerSeat[]; target: PlayerSeat | null; selfKill: boolean }
+  | { type: 'SEER'; target: PlayerSeat | null; isWerewolf: boolean }
+  | {
+      type: 'WITCH'
+      attacked: PlayerSeat | null
+      antidote: PlayerSeat | null
+      poison: PlayerSeat | null
+    }
+  | { type: 'GUARD'; target: PlayerSeat | null }
+
+export interface PlayerNight {
+  /** null for the roles that sleep through the night */
+  action: MyNightAction | null
+  dawn: {
+    /** who died — never why: a death is announced, its cause is not */
+    deaths: PlayerSeat[]
+    /** only set for the wolves and the witch, who alone were told an attack happened */
+    saved: PlayerSeat | null
+  }
+}
+
+export interface PlayerVote {
+  type: 'VOTE'
+  kind: 'SHERIFF' | 'EXILE'
+  /** 2 = PK re-vote */
+  round: number
+  tally: { target: PlayerSeat; votes: number; voters: PlayerSeat[] }[]
+  abstain: PlayerSeat[]
+  result: PlayerSeat | null
+  appointed: boolean
+}
+
+export type PlayerDayEvent =
+  | PlayerVote
+  | { type: 'HUNTER_SHOT'; hunter: PlayerSeat; target: PlayerSeat }
+  | { type: 'SELF_DESTRUCT'; player: PlayerSeat; taken: PlayerSeat | null }
+  | { type: 'IDIOT_REVEAL'; player: PlayerSeat }
+  /** to = null: the badge was destroyed */
+  | { type: 'BADGE_HANDOVER'; from: PlayerSeat; to: PlayerSeat | null }
+
+export interface PlayerRound {
+  day: number
+  night: PlayerNight | null
+  events: PlayerDayEvent[]
+}
+
+export interface PlayerReview {
+  winner: 'WEREWOLF' | 'VILLAGER' | null
+  me: PlayerSeat
+  seats: PlayerSeat[]
+  rounds: PlayerRound[]
+  /** null = the viewer was still alive at the end, so the replay runs the whole game */
+  diedOnDay: number | null
+}
+
 // ── Timer ─────────────────────────────────────────────────────────────────────
 
 export interface TimerState {

@@ -12,11 +12,14 @@ import type {
   DayPhaseState,
   GameReview,
   GameState,
+  KnownCamp,
   LoginResponse,
   MyPerkActivation,
   NightPhaseState,
   PaymentOrderSummary,
+  PlayerReview,
   PlayerRole,
+  PlayerSeat,
   ReviewPlayer,
   RoleRevealState,
   Room,
@@ -1411,4 +1414,92 @@ export const MOCK_GAME_REVIEW: GameReview = {
       ],
     },
   ],
+}
+
+// ── Player review (玩家视角复盘) ───────────────────────────────────────────────
+
+// The same 12-player game as MOCK_GAME_REVIEW, seen from seat 2 (Bob, 预言家):
+// his own checks, dawns that name the dead without the cause, and a replay that
+// stops at the night-2 dawn he died in — day 2 was never his to hear.
+const PS = (
+  seatIndex: number,
+  nickname: string,
+  role: PlayerRole | null = null,
+  camp: KnownCamp | null = null,
+): PlayerSeat => ({ userId: `u${seatIndex}`, nickname, seatIndex, role, camp })
+const P1 = PS(1, 'Alice')
+const P2 = PS(2, 'Bob', 'SEER')
+const P3 = PS(3, 'Cat')
+const P4 = PS(4, 'Dan')
+const P5 = PS(5, 'Eve')
+const P6 = PS(6, 'Fay')
+const P7 = PS(7, 'Gus')
+const P8 = PS(8, 'Hal')
+const P9 = PS(9, 'Ivy', null, 'WOLF')
+const P10 = PS(10, 'Jay')
+const P11 = PS(11, 'Kim')
+const P12 = PS(12, 'Lia', null, 'GOOD')
+
+export const MOCK_PLAYER_REVIEW: PlayerReview = {
+  winner: 'VILLAGER',
+  me: P2,
+  seats: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12],
+  rounds: [
+    {
+      day: 1,
+      night: {
+        action: { type: 'SEER', target: P9, isWerewolf: true },
+        // A quiet night: the witch made the save, and Bob was never told of the attack.
+        dawn: { deaths: [], saved: null },
+      },
+      events: [
+        {
+          type: 'VOTE',
+          kind: 'SHERIFF',
+          round: 1,
+          tally: [
+            { target: P2, votes: 6, voters: [P3, P5, P6, P7, P8, P10] },
+            { target: P9, votes: 3, voters: [P1, P4, P11] },
+          ],
+          abstain: [P12],
+          result: P2,
+          appointed: false,
+        },
+        {
+          type: 'VOTE',
+          kind: 'EXILE',
+          round: 1,
+          tally: [
+            { target: P9, votes: 4, voters: [P5, P6, P7, P10] },
+            { target: P3, votes: 4, voters: [P1, P4, P11, P12] },
+          ],
+          abstain: [P2, P3, P8, P9],
+          result: null,
+          appointed: false,
+        },
+        {
+          type: 'VOTE',
+          kind: 'EXILE',
+          round: 2,
+          tally: [
+            { target: P9, votes: 6.5, voters: [P2, P5, P6, P7, P8, P10] },
+            { target: P3, votes: 4, voters: [P1, P4, P11, P12] },
+          ],
+          abstain: [],
+          result: P9,
+          appointed: false,
+        },
+      ],
+    },
+    {
+      day: 2,
+      night: {
+        action: { type: 'SEER', target: P12, isWerewolf: false },
+        dawn: { deaths: [P2, P11], saved: null },
+      },
+      // Bob died at this dawn, so day 2's badge handover, vote and idiot reveal are absent.
+      events: [],
+    },
+  ],
+  diedOnDay: 2,
 }
