@@ -16,10 +16,10 @@ async function goToSheriffSignup(page: import('@playwright/test').Page) {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
-  await page.getByPlaceholder('Enter your nickname').fill('TestHost')
-  await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('TestHost')
+  await page.getByRole('button', { name: /建立房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByRole('button', { name: /建立房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page
@@ -28,9 +28,9 @@ async function goToSheriffSignup(page: import('@playwright/test').Page) {
   await page.evaluate(() => (window as { __debug?: { gameStart: () => unknown } }).__debug?.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
   await page
-    .getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i })
+    .getByRole('button', { name: /揭示我的身份|Reveal Role/i })
     .waitFor({ state: 'visible', timeout: 3000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
   await page.getByRole('button', { name: 'Skip → Sheriff' }).click()
   await page.getByTestId('sheriff-decision-progress').waitFor({ state: 'visible' })
 }
@@ -57,7 +57,7 @@ test('SIGNUP shows only decision progress and hides candidate identities', async
   })
 
   // After clicking "Run for Sheriff", decision progress advances 5/8 → 6/8.
-  await page.getByRole('button', { name: /参选 \/ Run for Sheriff/i }).click()
+  await page.getByRole('button', { name: /參選 \/ Run for Sheriff/i }).click()
   await expect(page.getByRole('button', { name: /撤回 \/ Withdraw/i })).toBeVisible()
   await expect(progressLocator).toHaveText(/6\s*\/\s*8/)
   // Still no per-candidate rows visible: even my own decision doesn't expose

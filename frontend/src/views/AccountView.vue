@@ -2,26 +2,25 @@
   <div class="account-wrap">
     <div class="account-card">
       <button class="back-btn" data-testid="account-back-btn" @click="router.push('/')">
-        ← 返回 / Back
+        {{ $t('common.back') }}
       </button>
 
-      <h1 class="title">我的账户</h1>
-      <p class="subtitle">Account</p>
+      <h1 class="title">{{ $t('account.title') }}</h1>
 
       <p v-if="!userStore.isLoggedIn" class="login-prompt" data-testid="account-login-prompt">
-        请先登录 / Please sign in
+        {{ $t('account.signIn') }}
       </p>
 
       <template v-else>
-        <p v-if="loading" class="loading-note">加载中… / Loading…</p>
+        <p v-if="loading" class="loading-note">{{ $t('common.loadingShort') }}</p>
 
         <!-- ── Section 1: credits + ledger ─────────────────────────────── -->
         <section class="section" data-testid="account-wallet">
-          <h2 class="section-title">积分 / Credits</h2>
+          <h2 class="section-title">{{ $t('account.credits') }}</h2>
           <p v-if="!walletError" class="balance" data-testid="account-balance">
             ◈ {{ balanceText }}
           </p>
-          <p v-if="walletError" class="error-msg">无法加载积分记录 / Failed to load credits</p>
+          <p v-if="walletError" class="error-msg">{{ $t('account.creditsFail') }}</p>
           <ul v-else-if="wallet && wallet.recent.length > 0" class="rows">
             <li
               v-for="tx in wallet.recent"
@@ -30,24 +29,26 @@
               data-testid="ledger-row"
             >
               <div class="row-main">
-                <span class="row-name">{{ TX_LABELS[tx.type] ?? tx.type }}</span>
+                <span class="row-name">{{
+                  TX_LABELS[tx.type] ? $t(TX_LABELS[tx.type]) : tx.type
+                }}</span>
                 <span class="row-amount" :class="tx.amount >= 0 ? 'amount-pos' : 'amount-neg'">
                   {{ signed(tx.amount) }}
                 </span>
               </div>
               <div class="row-sub">
-                <span>余额 {{ tx.balanceAfter }}</span>
+                <span>{{ $t('account.balanceAfter', { n: tx.balanceAfter }) }}</span>
                 <span>{{ fmtDate(tx.createdAt) }}</span>
               </div>
             </li>
           </ul>
-          <p v-else-if="!loading" class="empty">暂无积分记录 / No transactions yet</p>
+          <p v-else-if="!loading" class="empty">{{ $t('account.noTx') }}</p>
         </section>
 
         <!-- ── Section 2: perk history ─────────────────────────────────── -->
         <section class="section" data-testid="account-perks">
-          <h2 class="section-title">道具 / Perks</h2>
-          <p v-if="perksError" class="error-msg">无法加载道具记录 / Failed to load perks</p>
+          <h2 class="section-title">{{ $t('account.perks') }}</h2>
+          <p v-if="perksError" class="error-msg">{{ $t('account.perksFail') }}</p>
           <ul v-else-if="perks.length > 0" class="rows">
             <li
               v-for="perk in perks"
@@ -62,7 +63,11 @@
                   :class="`status-${perk.status.toLowerCase()}`"
                   data-testid="perk-status"
                 >
-                  {{ PERK_STATUS_LABELS[perk.status] ?? perk.status }}
+                  {{
+                    PERK_STATUS_LABELS[perk.status]
+                      ? $t(PERK_STATUS_LABELS[perk.status])
+                      : perk.status
+                  }}
                 </span>
               </div>
               <div class="row-sub">
@@ -70,24 +75,23 @@
                 <span
                   >{{ fmtDate(perk.createdAt)
                   }}<template v-if="perk.settledAt">
-                    · 结算 {{ fmtDate(perk.settledAt) }}</template
+                    · {{ $t('account.settled', { date: fmtDate(perk.settledAt) }) }}</template
                   ></span
                 >
               </div>
             </li>
           </ul>
-          <p v-else-if="!loading" class="empty">暂无道具记录 / No perks yet</p>
+          <p v-else-if="!loading" class="empty">{{ $t('account.noPerks') }}</p>
         </section>
 
         <!-- ── Section 3: payment history ──────────────────────────────── -->
         <section class="section" data-testid="account-payments">
-          <h2 class="section-title">充值记录 / Payments</h2>
+          <h2 class="section-title">{{ $t('account.payments') }}</h2>
           <p v-if="userStore.isGuest" class="guest-note" data-testid="payments-guest-note">
-            访客账号无法充值，请使用 Google 登录。 / Purchases require a signed-in account — sign in
-            with Google to buy credits.
+            {{ $t('lobby.guestBuy') }}
           </p>
           <template v-else>
-            <p v-if="ordersError" class="error-msg">无法加载充值记录 / Failed to load payments</p>
+            <p v-if="ordersError" class="error-msg">{{ $t('account.paymentsFail') }}</p>
             <ul v-else-if="orders.length > 0" class="rows">
               <li v-for="order in orders" :key="order.orderNo" class="row" data-testid="order-row">
                 <div class="row-main">
@@ -97,13 +101,17 @@
                 <div class="row-sub">
                   <span>
                     {{ fmtMoney(order) }} ·
-                    {{ ORDER_STATUS_LABELS[order.status] ?? order.status }}
+                    {{
+                      ORDER_STATUS_LABELS[order.status]
+                        ? $t(ORDER_STATUS_LABELS[order.status])
+                        : order.status
+                    }}
                   </span>
                   <span>{{ fmtDate(order.createdAt) }}</span>
                 </div>
               </li>
             </ul>
-            <p v-else-if="!loading" class="empty">暂无充值记录 / No payments yet</p>
+            <p v-else-if="!loading" class="empty">{{ $t('account.noPayments') }}</p>
           </template>
         </section>
       </template>
@@ -114,6 +122,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { getLocale } from '@/i18n'
 import { useUserStore } from '@/stores/userStore'
 import { walletService } from '@/services/walletService'
 import { paymentService } from '@/services/paymentService'
@@ -138,24 +147,24 @@ const perksError = ref(false)
 const ordersError = ref(false)
 
 const TX_LABELS: Record<CreditTxType, string> = {
-  PURCHASE: '充值',
-  GAME_REWARD: '对局奖励',
-  PERK_SPEND: '道具购买',
-  REFUND: '退款',
+  PURCHASE: 'account.tx.PURCHASE',
+  GAME_REWARD: 'account.tx.GAME_REWARD',
+  PERK_SPEND: 'account.tx.PERK_SPEND',
+  REFUND: 'account.tx.REFUND',
 }
 
 const PERK_STATUS_LABELS: Record<PerkActivationStatus, string> = {
-  ACTIVE: '启用中',
-  CONSUMED: '已使用',
-  REFUNDED: '已退还',
-  VOID: '未生效（结算后退还）',
+  ACTIVE: 'account.perk.ACTIVE',
+  CONSUMED: 'account.perk.CONSUMED',
+  REFUNDED: 'account.perk.REFUNDED',
+  VOID: 'account.perk.VOID',
 }
 
 const ORDER_STATUS_LABELS: Record<PaymentOrderSummary['status'], string> = {
-  COMPLETED: '已完成',
-  CREATED: '处理中',
-  EXPIRED: '已过期',
-  FAILED: '失败',
+  COMPLETED: 'account.order.COMPLETED',
+  CREATED: 'account.order.CREATED',
+  EXPIRED: 'account.order.EXPIRED',
+  FAILED: 'account.order.FAILED',
 }
 
 const balanceText = computed(() => wallet.value?.balance ?? userStore.credits ?? '—')
@@ -203,7 +212,7 @@ function fmtDate(iso: string): string {
   const hasZone = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(iso)
   const d = new Date(hasZone ? iso : `${iso}Z`)
   if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-CN', {
+  return d.toLocaleString(getLocale() === 'zh' ? 'zh-CN' : 'en-GB', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

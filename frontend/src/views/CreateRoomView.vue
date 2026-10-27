@@ -2,20 +2,22 @@
   <div class="create-wrap">
     <div class="create-card">
       <!-- Back button -->
-      <button class="back-btn" @click="router.push({ name: 'lobby' })">← 返回</button>
+      <button class="back-btn" @click="router.push({ name: 'lobby' })">
+        {{ $t('common.back') }}
+      </button>
       <!-- Header -->
       <div class="create-header">
-        <div class="section-lbl">Host</div>
-        <h2 class="create-title">创建房间 / Create Room</h2>
+        <div class="section-lbl">{{ $t('common.host') }}</div>
+        <h2 class="create-title">{{ $t('create.title') }}</h2>
       </div>
 
       <!-- Game settings -->
-      <div class="field-lbl">游戏设置 / Game Settings</div>
+      <div class="field-lbl">{{ $t('create.settings') }}</div>
       <div class="role-list">
         <div class="role-row row-on">
           <span class="role-emoji">⭐</span>
           <div class="role-names">
-            <span class="role-name">警长竞选 Sheriff Election</span>
+            <span class="role-name">{{ $t('game.phase.sheriff') }}</span>
           </div>
           <button
             :class="hasSheriff ? 'toggle-on' : 'toggle-off'"
@@ -28,12 +30,10 @@
         <div class="role-row" :class="witchSelfSaveAllowed ? 'row-on' : 'row-off'">
           <span class="role-emoji">🧙‍♀️</span>
           <div class="role-names">
-            <span class="role-name">女巫自救 Witch Self-Save</span>
+            <span class="role-name">{{ $t('create.witchSelfSave') }}</span>
             <span class="win-cond-desc">
               {{
-                witchSelfSaveAllowed
-                  ? '女巫仅首夜可用解药救自己 (Night 1 only)'
-                  : '禁止女巫使用解药救自己 (Disallowed)'
+                witchSelfSaveAllowed ? t('create.witchSelfSaveOn') : t('create.witchSelfSaveOff')
               }}
             </span>
           </div>
@@ -50,13 +50,9 @@
         <div class="role-row" :class="noKillAllowed ? 'row-on' : 'row-off'">
           <span class="role-emoji">🔪</span>
           <div class="role-names">
-            <span class="role-name">空刀 No Kill</span>
+            <span class="role-name">{{ $t('create.noKill') }}</span>
             <span class="win-cond-desc">
-              {{
-                noKillAllowed
-                  ? '狼人夜晚可选择不杀人 (Allowed)'
-                  : '狼人每晚必须选择袭击目标 (Disallowed)'
-              }}
+              {{ noKillAllowed ? t('create.noKillOn') : t('create.noKillOff') }}
             </span>
           </div>
           <button
@@ -72,13 +68,9 @@
         <div class="role-row" :class="guardSkipAllowed ? 'row-on' : 'row-off'">
           <span class="role-emoji">🛡️</span>
           <div class="role-names">
-            <span class="role-name">空守 No Protect</span>
+            <span class="role-name">{{ $t('create.noProtect') }}</span>
             <span class="win-cond-desc">
-              {{
-                guardSkipAllowed
-                  ? '守卫夜晚可选择不守护任何人 (Allowed)'
-                  : '守卫每晚必须选择守护目标 (Disallowed)'
-              }}
+              {{ guardSkipAllowed ? t('create.noProtectOn') : t('create.noProtectOff') }}
             </span>
           </div>
           <button
@@ -94,13 +86,9 @@
         <div class="role-row" :class="perksAllowed ? 'row-on' : 'row-off'">
           <span class="role-emoji">🛡</span>
           <div class="role-names">
-            <span class="role-name">道具 Perks</span>
+            <span class="role-name">{{ $t('account.perks') }}</span>
             <span class="win-cond-desc">
-              {{
-                perksAllowed
-                  ? '允许玩家使用积分道具 (Allowed)'
-                  : '禁止玩家使用积分道具 (Disallowed)'
-              }}
+              {{ perksAllowed ? t('create.perksOn') : t('create.perksOff') }}
             </span>
           </div>
           <button
@@ -116,13 +104,9 @@
         <div class="role-row" :class="winCondition === 'HARD_MODE' ? 'row-wolf' : 'row-on'">
           <span class="role-emoji">⚔️</span>
           <div class="role-names">
-            <span class="role-name">胜利条件 Win Condition</span>
+            <span class="role-name">{{ $t('create.winCondition') }}</span>
             <span class="win-cond-desc">
-              {{
-                winCondition === 'CLASSIC'
-                  ? '经典：狼人人数 ≥ 好人（Classic: wolves ≥ others）'
-                  : '困难：全灭好人（Hard: eliminate all villagers）'
-              }}
+              {{ winCondition === 'CLASSIC' ? t('create.winClassic') : t('create.winHard') }}
             </span>
           </div>
           <button
@@ -138,8 +122,8 @@
         <div class="role-row row-on">
           <span class="role-emoji">🎵</span>
           <div class="role-names">
-            <span class="role-name">夜晚配乐 Night BGM</span>
-            <span class="win-cond-desc">每夜循环播放，旁白时自动降低音量</span>
+            <span class="role-name">{{ $t('create.bgm') }}</span>
+            <span class="win-cond-desc">{{ $t('create.bgmDesc') }}</span>
           </div>
           <div ref="bgmSelectRef" class="bgm-select-wrap">
             <button
@@ -161,15 +145,15 @@
             -->
             <ul v-if="bgmOpen" class="bgm-select-menu" role="listbox">
               <li
-                v-for="t in bgmTracks"
-                :key="t.id ?? '__none__'"
+                v-for="track in bgmTracks"
+                :key="track.id ?? '__none__'"
                 role="option"
-                :data-filename="t.filename ?? ''"
-                :aria-selected="bgmTrack === (t.filename ?? null)"
-                :class="['bgm-select-option', { selected: bgmTrack === (t.filename ?? null) }]"
-                @click="onSelectBgm(t.filename ?? null)"
+                :data-filename="track.filename ?? ''"
+                :aria-selected="bgmTrack === (track.filename ?? null)"
+                :class="['bgm-select-option', { selected: bgmTrack === (track.filename ?? null) }]"
+                @click="onSelectBgm(track.filename ?? null)"
               >
-                {{ t.displayName }}
+                {{ track.filename ? track.displayName : $t('create.bgmNone') }}
               </li>
             </ul>
           </div>
@@ -182,7 +166,7 @@
         data-testid="create-room-submit"
         @click="handleCreate"
       >
-        {{ loading ? '创建中…' : '创建房间 / Create Room' }}
+        {{ loading ? $t('create.creating') : $t('create.title') }}
       </button>
 
       <p v-if="error" class="error-msg">{{ error }}</p>
@@ -191,6 +175,7 @@
 </template>
 
 <script lang="ts" setup>
+import { t } from '@/i18n'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'
@@ -218,15 +203,15 @@ const noKillAllowed = ref(false)
 const guardSkipAllowed = ref(false)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
-const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: '无 (None)' }])
+const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: 'None' }])
 const bgmTrack = ref<string | null>(null)
 const bgmLoading = ref(false)
 const bgmOpen = ref(false)
 const bgmSelectRef = ref<HTMLElement | null>(null)
 
 const bgmDisplayName = computed(() => {
-  const match = bgmTracks.value.find((t) => (t.filename ?? null) === bgmTrack.value)
-  return match?.displayName ?? '无 (None)'
+  const match = bgmTracks.value.find((track) => (track.filename ?? null) === bgmTrack.value)
+  return match?.filename ? match.displayName : t('create.bgmNone')
 })
 
 function onSelectBgm(filename: string | null) {
@@ -284,7 +269,7 @@ async function handleCreate() {
     roomStore.setRoom(room)
     router.push({ name: 'room', params: { roomId: room.roomId }, query: { setup: '1' } })
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to create room. Try again.'
+    error.value = e instanceof Error ? e.message : t('create.failed')
   } finally {
     loading.value = false
   }

@@ -52,7 +52,7 @@
         min="0"
         max="100"
         :value="fill"
-        aria-label="Volume"
+        :aria-label="$t('volume.aria')"
         data-testid="volume-slider"
         @input="onVolumeInput"
       />

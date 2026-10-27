@@ -3,7 +3,7 @@
  *
  * A player who closes/backgrounds the app and lands back on the lobby must be
  * able to jump straight back into their active game. This drives the real
- * GET /api/room/active membership lookup + the lobby's 继续游戏 / Rejoin button:
+ * GET /api/room/active membership lookup + the lobby's 繼續遊戲 / Rejoin button:
  *
  *   1. Host is in an in-progress game (ctx.gameId).
  *   2. Host navigates back to the lobby '/' (simulates reopening the app).

@@ -39,7 +39,7 @@
     -->
     <template v-if="election.subPhase === 'SIGNUP'">
       <div class="info-banner">
-        <div class="info-title">警长竞选开始 · Sheriff Election</div>
+        <div class="info-title">{{ $t('sheriff.sheriffElection') }}</div>
         <p class="info-body">
           Candidates sign up now. Sheriff gets <b class="gold">1.5×</b> voting power at elimination.
         </p>
@@ -47,7 +47,7 @@
 
       <div class="signup-stats">
         <div class="stat-row">
-          <span class="stat-label">已选择 / Decided</span>
+          <span class="stat-label">{{ $t('sheriff.decided') }}</span>
           <span class="stat-value gold" data-testid="sheriff-decision-progress"
             >{{ election.decisionProgress?.decided ?? 0 }} /
             {{ election.decisionProgress?.total ?? 0 }}</span
@@ -65,7 +65,7 @@
             :disabled="actionPending"
             @click="emit('withdraw')"
           >
-            撤回 / Withdraw
+            {{ $t('sheriff.withdraw') }}
           </button>
         </template>
         <template v-else>
@@ -76,7 +76,7 @@
             :disabled="actionPending"
             @click="emit('run')"
           >
-            参选 / Run for Sheriff
+            {{ $t('sheriff.runForSheriff') }}
           </button>
           <button
             v-if="!election.hasPassed"
@@ -86,7 +86,7 @@
             :disabled="actionPending"
             @click="emit('pass')"
           >
-            放弃 / Pass
+            {{ $t('sheriff.pass') }}
           </button>
         </template>
       </div>
@@ -95,12 +95,12 @@
     <!-- ── SPEECH - My Turn ── -->
     <template v-else-if="election.subPhase === 'SPEECH' && election.currentSpeakerId === myUserId">
       <div class="your-turn-box">
-        <div class="yt-tag">Your Turn</div>
-        <div class="yt-title">发表你的竞选宣言</div>
-        <div class="yt-sub">Make your case to the village</div>
+        <div class="yt-tag">{{ $t('sheriff.yourTurn') }}</div>
+        <div class="yt-title">{{ $t('sheriff.speechPrompt') }}</div>
+        <div v-if="$i18n.locale === 'zh'" class="yt-sub">Make your case to the village</div>
       </div>
 
-      <div class="section-label">Speaking order</div>
+      <div class="section-label">{{ $t('sheriff.speakingOrder') }}</div>
       <div class="speaking-list">
         <div
           v-for="(uid, idx) in election.speakingOrder"
@@ -120,7 +120,7 @@
 
       <div class="spacer" />
       <template v-if="iAmCandidate">
-        <div class="quit-warning">⚠ Quitting forfeits your right to vote for sheriff.</div>
+        <div class="quit-warning">{{ $t('sheriff.quitWarning') }}</div>
         <div class="action-footer">
           <button
             class="btn btn-danger-outline"
@@ -129,7 +129,7 @@
             :disabled="actionPending"
             @click="emit('quit')"
           >
-            退出竞选 / Quit Campaign
+            {{ $t('sheriff.quitCampaign') }}
           </button>
           <template v-if="isHost">
             <div class="host-divider" />
@@ -140,7 +140,7 @@
               :disabled="actionPending"
               @click="emit('advanceSpeech')"
             >
-              下一位 / Next Speaker
+              {{ $t('sheriff.nextSpeaker') }}
             </button>
           </template>
         </div>
@@ -154,7 +154,7 @@
             :disabled="actionPending"
             @click="emit('advanceSpeech')"
           >
-            下一位 / Next Speaker
+            {{ $t('sheriff.nextSpeaker') }}
           </button>
         </div>
       </template>
@@ -171,10 +171,10 @@
           size="lg"
         />
         <div class="speaker-name-big">{{ currentSpeaker.nickname }}</div>
-        <div class="speaker-now-label">SPEAKING NOW</div>
+        <div class="speaker-now-label">{{ $t('sheriff.speakingNowLabel') }}</div>
       </div>
 
-      <div class="section-label">Speaking order</div>
+      <div class="section-label">{{ $t('sheriff.speakingOrder') }}</div>
       <div class="speaking-list">
         <div
           v-for="(uid, idx) in election.speakingOrder"
@@ -195,7 +195,7 @@
       <div class="spacer" />
       <div class="action-footer">
         <template v-if="iAmCandidate">
-          <div class="quit-warning">⚠ Quitting forfeits your right to vote for sheriff.</div>
+          <div class="quit-warning">{{ $t('sheriff.quitWarning') }}</div>
           <button
             class="btn btn-danger-outline"
             data-testid="sheriff-quit"
@@ -203,10 +203,12 @@
             :disabled="actionPending"
             @click="emit('quit')"
           >
-            退出竞选 / Quit Campaign
+            {{ $t('sheriff.quitCampaign') }}
           </button>
         </template>
-        <button v-else class="btn btn-secondary" disabled>等待投票 / Waiting for vote…</button>
+        <button v-else class="btn btn-secondary" disabled>
+          {{ $t('sheriff.waitingForVote') }}
+        </button>
         <template v-if="isHost">
           <div class="host-divider" />
           <button
@@ -216,7 +218,7 @@
             :disabled="actionPending"
             @click="emit('advanceSpeech')"
           >
-            下一位 / Next Speaker
+            {{ $t('sheriff.nextSpeaker') }}
           </button>
         </template>
       </div>
@@ -225,11 +227,15 @@
     <!-- ── VOTING ── -->
     <template v-else-if="election.subPhase === 'VOTING'">
       <div class="info-banner-sm">
-        <div class="muted sm">演讲结束，选出你心中的警长。</div>
-        <div class="gold bold sm">Speeches done — vote for sheriff</div>
+        <div class="muted sm">{{ $t('sheriff.pickPrompt') }}</div>
+        <div v-if="$i18n.locale === 'zh'" class="gold bold sm">
+          Speeches done — vote for sheriff
+        </div>
       </div>
 
-      <div class="section-label">候选人 / Candidates ({{ runningCandidates.length }})</div>
+      <div class="section-label">
+        {{ $t('sheriff.candidates', { n: runningCandidates.length }) }}
+      </div>
       <div class="vote-list">
         <div
           v-for="c in runningCandidates"
@@ -252,17 +258,17 @@
           <div class="cand-info-col">
             <span class="cand-name">
               <span v-if="seatByUserId.get(c.userId) != null" class="cand-seat"
-                >{{ seatByUserId.get(c.userId) }}号 · </span
+                >{{ $t('common.seat', { n: seatByUserId.get(c.userId) }) }} · </span
               >{{ c.nickname }}
             </span>
             <span class="cand-sub-status">{{
               election.myVote === c.userId
-                ? 'VOTED ✓'
+                ? $t('sheriff.votedMark')
                 : !election.abstained && selectedId === c.userId
-                  ? 'SELECTED ✓'
+                  ? $t('sheriff.selectedMark')
                   : c.userId === myUserId
-                    ? '（自己）'
-                    : '候选人'
+                    ? $t('sheriff.self')
+                    : $t('sheriff.candidate')
             }}</span>
           </div>
           <div
@@ -284,9 +290,13 @@
         <template v-if="election.myVote || election.abstained">
           <div class="voted-badge">
             <span v-if="election.myVote">
-              ✓ 已投票 — {{ runningCandidates.find((c) => c.userId === election.myVote)?.nickname }}
+              {{
+                $t('sheriff.voted', {
+                  name: runningCandidates.find((c) => c.userId === election.myVote)?.nickname,
+                })
+              }}
             </span>
-            <span v-else>✓ 已弃票 / Abstained</span>
+            <span v-else>{{ $t('sheriff.abstained') }}</span>
           </div>
         </template>
         <!-- Can still vote -->
@@ -298,7 +308,7 @@
             :disabled="!selectedId || actionPending"
             @click="selectedId && emit('vote', selectedId)"
           >
-            确认投票 / Confirm Vote
+            {{ $t('sheriff.confirmVote') }}
           </button>
           <button
             class="btn btn-outline"
@@ -307,7 +317,7 @@
             :disabled="actionPending"
             @click="emit('abstain')"
           >
-            放弃投票 / Give Up Vote
+            {{ $t('sheriff.giveUpVote') }}
           </button>
         </template>
         <!-- Cannot vote: RUNNING candidate or speech-quitter -->
@@ -317,10 +327,10 @@
           data-testid="sheriff-candidate-no-vote"
           disabled
         >
-          候选人不参与投票 / Candidates can't vote
+          {{ $t('sheriff.candidatesCanTVote') }}
         </button>
         <button v-else class="btn btn-secondary" data-testid="sheriff-vote-forfeited" disabled>
-          已放弃投票 / Vote forfeited
+          {{ $t('sheriff.voteForfeited') }}
         </button>
 
         <template v-if="isHost">
@@ -335,7 +345,7 @@
             :disabled="!election.allVoted || actionPending"
             @click="emit('revealResult')"
           >
-            揭晓结果 / Reveal Result
+            {{ $t('sheriff.revealResult') }}
           </button>
         </template>
       </div>
@@ -344,8 +354,8 @@
     <!-- ── TIED ── -->
     <template v-else-if="election.subPhase === 'TIED' && election.result">
       <div class="info-banner-sm">
-        <div class="gold bold sm">平票 — 主持人指定警长</div>
-        <div class="muted sm">Tie vote — host appoints sheriff</div>
+        <div class="gold bold sm">{{ $t('sheriff.tiedAppoint') }}</div>
+        <div v-if="$i18n.locale === 'zh'" class="muted sm">Tie vote — host appoints sheriff</div>
       </div>
 
       <!-- Vote tally, sorted high→low -->
@@ -389,11 +399,13 @@
         <div class="vote-col vote-col-abstain">
           <div class="vote-col-head">
             <div class="vote-col-avatar">—</div>
-            <div class="vote-col-cname">弃票</div>
+            <div class="vote-col-cname">{{ $t('vote.abstainCol') }}</div>
             <div class="vote-col-count tally-abstain">{{ election.result.abstainCount }}</div>
           </div>
           <div class="vote-col-body">
-            <div v-if="!election.result.abstainVoters.length" class="vcol-row vcol-empty">无</div>
+            <div v-if="!election.result.abstainVoters.length" class="vcol-row vcol-empty">
+              {{ $t('vote.none') }}
+            </div>
             <div v-for="v in election.result.abstainVoters" :key="v.userId" class="vcol-row">
               <Avatar
                 class="vcol-avatar"
@@ -411,7 +423,7 @@
         <div v-if="quitCandidates.length" class="vote-col vote-col-quit">
           <div class="vote-col-head">
             <div class="vote-col-avatar">❌</div>
-            <div class="vote-col-cname">退出竞选</div>
+            <div class="vote-col-cname">{{ $t('sheriff.quitCol') }}</div>
             <div class="vote-col-count tally-muted">—</div>
           </div>
           <div class="vote-col-body">
@@ -431,7 +443,7 @@
 
       <div class="spacer" />
       <template v-if="isHost">
-        <div class="section-label">指定警长 / Appoint Sheriff</div>
+        <div class="section-label">{{ $t('sheriff.appointSheriff') }}</div>
         <div class="vote-list">
           <div
             v-for="c in tiedCandidates"
@@ -460,12 +472,12 @@
             :disabled="!appointTarget || actionPending"
             @click="emit('appoint', appointTarget!)"
           >
-            确认任命 / Appoint Sheriff
+            {{ $t('sheriff.appointSheriff2') }}
           </button>
         </div>
       </template>
       <div v-else class="action-footer">
-        <button class="btn btn-secondary" disabled>等待主持人指定 / Waiting for host…</button>
+        <button class="btn btn-secondary" disabled>{{ $t('sheriff.waitingForHost') }}</button>
       </div>
     </template>
 
@@ -473,8 +485,8 @@
     <template v-else-if="election.subPhase === 'RESULT' && election.result">
       <div class="result-content">
         <div class="result-medal">🏅</div>
-        <div class="result-title-cn">警长当选</div>
-        <div class="result-title-en">Sheriff Elected</div>
+        <div class="result-title-cn">{{ $t('sheriff.elected') }}</div>
+        <div v-if="$i18n.locale === 'zh'" class="result-title-en">Sheriff Elected</div>
         <div class="winner-card">
           <Avatar
             class="winner-avatar"
@@ -485,7 +497,7 @@
           />
           <div class="winner-info">
             <div class="winner-name">{{ election.result.sheriffNickname }}</div>
-            <div class="winner-badge-label">⭐ SHERIFF</div>
+            <div class="winner-badge-label">{{ $t('sheriff.badgeLabel') }}</div>
           </div>
         </div>
         <div class="power-note">
@@ -533,11 +545,13 @@
           <div class="vote-col vote-col-abstain">
             <div class="vote-col-head">
               <div class="vote-col-avatar">—</div>
-              <div class="vote-col-cname">弃票</div>
+              <div class="vote-col-cname">{{ $t('vote.abstainCol') }}</div>
               <div class="vote-col-count tally-abstain">{{ election.result.abstainCount }}</div>
             </div>
             <div class="vote-col-body">
-              <div v-if="!election.result.abstainVoters.length" class="vcol-row vcol-empty">无</div>
+              <div v-if="!election.result.abstainVoters.length" class="vcol-row vcol-empty">
+                {{ $t('vote.none') }}
+              </div>
               <div v-for="v in election.result.abstainVoters" :key="v.userId" class="vcol-row">
                 <Avatar
                   class="vcol-avatar"
@@ -555,7 +569,7 @@
           <div v-if="quitCandidates.length" class="vote-col vote-col-quit">
             <div class="vote-col-head">
               <div class="vote-col-avatar">❌</div>
-              <div class="vote-col-cname">退出竞选</div>
+              <div class="vote-col-cname">{{ $t('sheriff.quitCol') }}</div>
               <div class="vote-col-count tally-muted">—</div>
             </div>
             <div class="vote-col-body">
@@ -588,17 +602,18 @@
           :disabled="actionPending"
           @click="emit('endResult')"
         >
-          显示结果 / Show Result
+          {{ $t('sheriff.showResult') }}
         </button>
       </div>
       <div v-else class="action-footer">
-        <button class="btn btn-secondary" disabled>等待主持人继续 / Waiting for host…</button>
+        <button class="btn btn-secondary" disabled>{{ $t('sheriff.waitingForHost2') }}</button>
       </div>
     </template>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { t as tr } from '@/i18n'
 import { computed, ref } from 'vue'
 import Avatar from '@/components/Avatar.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
@@ -711,17 +726,17 @@ const currentSpeaker = computed(() =>
 const phaseChipLabel = computed(() => {
   switch (props.election.subPhase) {
     case 'SIGNUP':
-      return '👮‍♂️ 竞选警长'
+      return tr('sheriff.chip.signup')
     case 'SPEECH':
-      return '👮‍♂️ 竞选演讲'
+      return tr('sheriff.chip.speech')
     case 'VOTING':
-      return '👮‍ 投票选警长'
+      return tr('sheriff.chip.voting')
     case 'RESULT':
-      return '👮‍ 警长产生'
+      return tr('sheriff.chip.result')
     case 'TIED':
-      return '👮‍ 平票 — 主持人指定'
+      return tr('sheriff.chip.tied')
     default:
-      return '👮‍ 警长竞选'
+      return tr('sheriff.chip.default')
   }
 })
 
@@ -757,19 +772,19 @@ function speakingIcon(uid: string) {
 
 function speakerLabel(uid: string, idx: number) {
   const c = candidateMap.value.get(uid)
-  const name = uid === props.myUserId ? '我' : (c?.nickname ?? uid)
+  const name = uid === props.myUserId ? tr('common.me') : (c?.nickname ?? uid)
   const seat = seatByUserId.value.get(uid)
-  const seatPrefix = seat != null ? `${seat}号 ` : ''
+  const seatPrefix = seat != null ? `${tr('common.seat', { n: seat })} ` : ''
   const isCurrent = uid === props.election.currentSpeakerId
   const isQuit = candidateStatus(uid) === 'QUIT'
   const currentIdx = props.election.speakingOrder.indexOf(props.election.currentSpeakerId ?? '')
 
   if (isCurrent)
     return uid === props.myUserId
-      ? `${seatPrefix}我 · speaking now`
-      : `${seatPrefix}${name} · speaking`
-  if (isQuit) return `${seatPrefix}${name} · Quit`
-  if (idx === currentIdx + 1) return `${seatPrefix}${name} · next`
+      ? `${seatPrefix}${name} · ${tr('sheriff.speakingNow')}`
+      : `${seatPrefix}${name} · ${tr('sheriff.speaking')}`
+  if (isQuit) return `${seatPrefix}${name} · ${tr('sheriff.quit')}`
+  if (idx === currentIdx + 1) return `${seatPrefix}${name} · ${tr('sheriff.next')}`
   return `${seatPrefix}${name}`
 }
 </script>

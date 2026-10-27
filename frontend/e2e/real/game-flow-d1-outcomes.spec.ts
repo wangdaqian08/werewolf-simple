@@ -154,8 +154,8 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
     }
   })
 
-  // ── Row 3: wolf-win by 屠边 when D1 vote eliminates the last villager ──
-  test('row 3 — wolf-win by 屠边 after D1 mis-vote', async ({ browser }, testInfo) => {
+  // ── Row 3: wolf-win by 屠邊 when D1 vote eliminates the last villager ──
+  test('row 3 — wolf-win by 屠邊 after D1 mis-vote', async ({ browser }, testInfo) => {
     testInfo.setTimeout(240_000)
     const localCtx = await setupGame(browser, {
       totalPlayers: 6,
@@ -216,7 +216,7 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
       // After N1: 2 wolves + 3 humans (host + seer + witch + villagers[1] minus villagers[0]).
       await waitForPhase(hostPage, localCtx.gameId, 'DAY_DISCUSSION', 20_000)
 
-      // ── D1 ── vote villagers[1] (NOT a wolf). After D1 both villagers are dead → 屠边.
+      // ── D1 ── vote villagers[1] (NOT a wolf). After D1 both villagers are dead → 屠邊.
       await hostPage.getByTestId('day-reveal-result').click()
       await hostPage.getByTestId('day-start-vote').click()
       await waitForVotingSubPhase(hostPage, localCtx.gameId, 'VOTING', 10_000)
@@ -243,7 +243,7 @@ test.describe('Day 1 outcome scenarios — explicit end-state coverage', () => {
         return res.ok ? res.json() : null
       }, localCtx.gameId)
       expect(finalState?.phase, 'phase=GAME_OVER expected').toBe('GAME_OVER')
-      expect(finalState?.winner, 'winner=WEREWOLF expected (屠边)').toBe('WEREWOLF')
+      expect(finalState?.winner, 'winner=WEREWOLF expected (屠邊)').toBe('WEREWOLF')
       await captureSnapshot(localCtx.pages, testInfo, 'row3-wolf-win')
     } finally {
       await localCtx.cleanup()

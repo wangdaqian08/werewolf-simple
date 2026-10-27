@@ -56,8 +56,8 @@ describe('GameSettingsModal — content', () => {
     expect(bodyEl('settings-modal')).not.toBeNull()
     expect(bodyEl('settings-room-code')?.textContent).toContain('358')
     expect(bodyEl('settings-player-count')?.textContent).toContain('9')
-    expect(bodyEl('settings-sheriff')?.textContent).toContain('无')
-    expect(bodyEl('settings-witch-self-save')?.textContent).toContain('仅首夜')
+    expect(bodyEl('settings-sheriff')?.textContent).toContain('無')
+    expect(bodyEl('settings-witch-self-save')?.textContent).toContain('僅首夜')
     expect(bodyEl('settings-win-condition')?.textContent).toContain('屠城')
     expect(bodyEl('settings-no-kill')?.textContent).toContain('空刀')
     expect(bodyEl('settings-no-kill')?.textContent).toContain('禁止')
@@ -79,13 +79,13 @@ describe('GameSettingsModal — content', () => {
     wrapper.unmount()
   })
 
-  it('renders CLASSIC win condition as 屠边 and sheriff-enabled as 有', () => {
+  it('renders CLASSIC win condition as 屠邊 and sheriff-enabled as 有', () => {
     const wrapper = mountModal({
       settings: { ...SETTINGS, hasSheriff: true, winCondition: 'CLASSIC' },
     })
 
     expect(bodyEl('settings-sheriff')?.textContent).toContain('有')
-    expect(bodyEl('settings-win-condition')?.textContent).toContain('屠边')
+    expect(bodyEl('settings-win-condition')?.textContent).toContain('屠邊')
 
     wrapper.unmount()
   })
@@ -126,36 +126,36 @@ describe('GameSettingsModal — close behaviour', () => {
 })
 
 describe('GameSettingsModal — 空刀 rule', () => {
-  it('shows 允许 when the room enables 空刀', () => {
+  it('shows 允許 when the room enables 空刀', () => {
     const wrapper = mountModal({ settings: { ...SETTINGS, noKillAllowed: true } })
-    expect(bodyEl('settings-no-kill')?.textContent).toContain('允许')
+    expect(bodyEl('settings-no-kill')?.textContent).toContain('允許')
     wrapper.unmount()
   })
 })
 
 describe('GameSettingsModal — 空守 rule', () => {
-  it('shows 禁止 by default and 允许 when the room enables 空守', () => {
+  it('shows 禁止 by default and 允許 when the room enables 空守', () => {
     const off = mountModal()
     expect(bodyEl('settings-guard-skip')?.textContent).toContain('禁止')
     off.unmount()
     const on = mountModal({ settings: { ...SETTINGS, guardSkipAllowed: true } })
-    expect(bodyEl('settings-guard-skip')?.textContent).toContain('允许')
+    expect(bodyEl('settings-guard-skip')?.textContent).toContain('允許')
     on.unmount()
   })
 })
 
-describe('GameSettingsModal — 积分规则', () => {
+describe('GameSettingsModal — 積分規則', () => {
   const rule = (
     reason: RewardRule['reason'],
     group: RewardRule['group'],
     label: string,
     amount: number,
     unit: string | null = null,
-  ): RewardRule => ({ reason, group, label, detail: `${label}的说明`, amount, unit })
+  ): RewardRule => ({ reason, group, label, detail: `${label}的說明`, amount, unit })
 
   it('lists the scoring table, marking a per-day rate, a per-occurrence one and a penalty', async () => {
     vi.mocked(walletService.getRewardRules).mockResolvedValue([
-      rule('WIN', 'BASE', '胜利方奖励', 20),
+      rule('WIN', 'BASE', '勝利方獎勵', 20),
       rule('WOLF_SURVIVAL', 'BASE', '狼人存活', 4, '天'),
       rule('WOLF_VOTE', 'BONUS', '投出狼人', 3, '次'),
       // A future penalty is just another row, in the group that says it costs you.
@@ -170,20 +170,20 @@ describe('GameSettingsModal — 积分规则', () => {
     expect(text).toContain('+4 / 天')
     expect(text).toContain('+3 / 次')
     expect(text).toContain('−4')
-    expect(text).toContain('本局积分最低 0 分')
+    expect(text).toContain('本局積分最低 0 分')
     wrapper.unmount()
   })
 
   it('groups the one-of base rules apart from what stacks on them', async () => {
     vi.mocked(walletService.getRewardRules).mockResolvedValue([
-      rule('WIN', 'BASE', '胜利方奖励', 20),
-      rule('SHERIFF', 'BONUS', '当选／持有警徽', 5),
+      rule('WIN', 'BASE', '勝利方獎勵', 20),
+      rule('SHERIFF', 'BONUS', '當選／持有警徽', 5),
     ])
     const wrapper = mountModal()
     await flushPromises()
 
-    expect(bodyEl('settings-reward-group-BASE')!.textContent).toContain('基础分')
-    expect(bodyEl('settings-reward-group-BONUS')!.textContent).toContain('加分项')
+    expect(bodyEl('settings-reward-group-BASE')!.textContent).toContain('基礎分')
+    expect(bodyEl('settings-reward-group-BONUS')!.textContent).toContain('加分項')
     // Nothing costs points yet, so the penalty heading never appears.
     expect(bodyEl('settings-reward-group-PENALTY')).toBeNull()
     wrapper.unmount()
@@ -191,12 +191,12 @@ describe('GameSettingsModal — 积分规则', () => {
 
   it('shows no floor note while nothing can cost you points', async () => {
     vi.mocked(walletService.getRewardRules).mockResolvedValue([
-      rule('WIN', 'BASE', '胜利方奖励', 20),
+      rule('WIN', 'BASE', '勝利方獎勵', 20),
     ])
     const wrapper = mountModal()
     await flushPromises()
 
-    expect(bodyEl('settings-rewards')!.textContent).not.toContain('本局积分最低')
+    expect(bodyEl('settings-rewards')!.textContent).not.toContain('本局積分最低')
     wrapper.unmount()
   })
 

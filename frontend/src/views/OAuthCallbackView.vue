@@ -1,20 +1,21 @@
 <template>
   <div class="callback-wrap">
     <div class="callback-card">
-      <h1 class="title">登录中…</h1>
-      <p class="subtitle">Signing you in</p>
+      <h1 class="title">{{ $t('oauth.title') }}</h1>
+      <p v-if="$i18n.locale === 'zh'" class="subtitle">Signing you in</p>
 
-      <p v-if="loading" class="status" data-testid="oauth-loading">正在验证 / Verifying…</p>
+      <p v-if="loading" class="status" data-testid="oauth-loading">{{ $t('oauth.verifying') }}</p>
 
       <div v-else-if="error" class="error" data-testid="oauth-error">
         <p class="error-msg">{{ error }}</p>
-        <router-link class="back-link" to="/">← 返回 / Back</router-link>
+        <router-link class="back-link" to="/">{{ $t('oauth.back') }}</router-link>
       </div>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { t } from '@/i18n'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
@@ -41,7 +42,7 @@ onMounted(async () => {
   const errorQuery = route.query.error as string | undefined
 
   if (!isOAuthProvider(provider)) {
-    error.value = '未知登录提供方 / Unknown provider'
+    error.value = t('oauth.unknownProvider')
     loading.value = false
     return
   }
@@ -50,14 +51,14 @@ onMounted(async () => {
   if (errorQuery || !code) {
     // Always consume state to avoid leaving stale storage behind.
     consumeOAuthState(state)
-    error.value = '登录已取消 / Login canceled'
+    error.value = t('oauth.canceled')
     loading.value = false
     return
   }
 
   // CSRF: state must match the value we wrote before redirecting.
   if (!consumeOAuthState(state)) {
-    error.value = '登录状态已过期 / Login state expired or invalid'
+    error.value = t('oauth.expired')
     loading.value = false
     return
   }
@@ -68,7 +69,7 @@ onMounted(async () => {
   } catch {
     // Don't surface server-side details to the user; backend logs already
     // capture the precise failure.
-    error.value = '登录失败 / Login failed. Please try again.'
+    error.value = t('oauth.failed')
   } finally {
     loading.value = false
   }

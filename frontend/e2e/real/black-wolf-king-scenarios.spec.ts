@@ -67,8 +67,8 @@ const ROLES: RoleName[] = [
   'HUNTER',
 ]
 // Words that would tell a non-shooter who is shooting.
-const ROLE_WORDS = ['猎人', 'Hunter', 'HUNTER', '黑狼王', 'Wolf King', 'WOLF KING']
-const KING_RULE = '被女巫毒死或自爆时无法开枪'
+const ROLE_WORDS = ['獵人', 'Hunter', 'HUNTER', '黑狼王', 'Wolf King', 'WOLF KING']
+const KING_RULE = '被女巫毒死或自爆時無法開槍'
 
 interface Table {
   ctx: GameContext
@@ -202,7 +202,7 @@ async function assertAnonymous(t: Table, shooterSeat: number) {
     const text = await page.locator('.game-wrap').innerText()
     for (const w of ROLE_WORDS) {
       // A player may see its own role name (e.g. the hunter's own page); nobody else's.
-      if (role === 'HUNTER' && (w === '猎人' || /hunter/i.test(w))) continue
+      if (role === 'HUNTER' && (w === '獵人' || /hunter/i.test(w))) continue
       expect(
         text,
         `seat ${seat} (${role}) must not see "${w}" while seat ${shooterSeat} shoots`,
@@ -379,7 +379,7 @@ test('create room: one wolf king per room, 9+ players', async ({ browser }) => {
     await page.goto(`${BASE_URL}/`)
     await page.evaluate(() => localStorage.clear())
     await page.goto(`${BASE_URL}/`)
-    const guest = page.getByRole('button', { name: /Continue as guest|继续以访客/i })
+    const guest = page.getByRole('button', { name: /Continue as guest|繼續以訪客/i })
     if (await guest.count()) await guest.first().click()
     await page.getByPlaceholder('Enter your nickname').fill('KingUi')
     await page
@@ -397,7 +397,7 @@ test('create room: one wolf king per room, 9+ players', async ({ browser }) => {
     await black.click()
     await expect(black).toHaveClass(/toggle-on/)
     await expect(white, '白狼王 locked while 黑狼王 is on').toBeDisabled()
-    await expect(white).toHaveAttribute('title', /一局只能选一个狼王/)
+    await expect(white).toHaveAttribute('title', /一局只能選一個狼王/)
     await page.screenshot({
       path: path.join(dir, '9p-black-on.png'),
       fullPage: true,
@@ -408,7 +408,7 @@ test('create room: one wolf king per room, 9+ players', async ({ browser }) => {
     await expect(page.getByTestId('player-count-value')).toHaveText('8')
     await expect(black, '8 players switches the king off').toHaveClass(/toggle-off/)
     await expect(black).toBeDisabled()
-    await expect(black).toHaveAttribute('title', /9 人及以上才能开启/)
+    await expect(black).toHaveAttribute('title', /9 人及以上才能開啟/)
     await page.screenshot({
       path: path.join(dir, '8p-king-locked.png'),
       fullPage: true,
@@ -484,7 +484,7 @@ test('happy: knifed king shoots the hunter, the hunter shoots back, wolves win',
   )
   await snap(t, '06-after-chain', testInfo)
 
-  // 游戏记录 on a villager: two anonymous shots.
+  // 遊戲記錄 on a villager: two anonymous shots.
   const vPage = pageOf(t, v2)
   await vPage.getByTestId('log-fab').click()
   const drawer = vPage.locator('.action-log-drawer')
@@ -495,11 +495,11 @@ test('happy: knifed king shoots the hunter, the hunter shoots back, wolves win',
   await snapOne(t, vPage, '07-villager-log', testInfo)
   await vPage.getByTestId('action-log-close').click()
 
-  // Day vote: the last villager goes → 屠边.
+  // Day vote: the last villager goes → 屠邊.
   await voteOut(t, v2)
   const review = await checkResultAndReview(t, testInfo, '08')
   expect(review).toContain('自刀')
-  expect(review.match(/开枪带走/g)?.length, 'review shows both shots').toBe(2)
+  expect(review.match(/開槍帶走/g)?.length, 'review shows both shots').toBe(2)
   expect(review).toContain('黑狼王')
   assertNightAudio(t, 1)
   assertNoRoleLeak(t)
@@ -577,7 +577,7 @@ test('vote-out: king shoots the seer, night 2 still plays seer cues', async ({
   await guardPage.getByTestId('guard-confirm-protect').click()
 
   const review = await checkResultAndReview(t, testInfo, '03')
-  expect(review.match(/开枪带走/g)?.length).toBe(1)
+  expect(review.match(/開槍帶走/g)?.length).toBe(1)
   assertNightAudio(t, 2)
   assertNoRoleLeak(t)
 })
@@ -618,7 +618,7 @@ test('vote-out chain: hunter shoots the king, the king fires the deciding shot',
 
   await voteShoot(t, king, v2)
   const review = await checkResultAndReview(t, testInfo, '02')
-  expect(review.match(/开枪带走/g)?.length, 'review shows both shots').toBe(2)
+  expect(review.match(/開槍帶走/g)?.length, 'review shows both shots').toBe(2)
   assertNightAudio(t, 1)
   assertNoRoleLeak(t)
 })

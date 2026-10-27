@@ -69,7 +69,7 @@ describe('RoomSetupPanel — role limits', () => {
   })
 
   it('gods cannot exceed wolves + 1', async () => {
-    const w = await mountSetup() // 3 wolves + 预言家/女巫/猎人
+    const w = await mountSetup() // 3 wolves + 預言家/女巫/獵人
     await click(w, 'role-toggle-GUARD')
     expect(gods(w)).toBe(4)
     expect(disabled(w, 'role-toggle-IDIOT')).toBe(true)
@@ -127,7 +127,7 @@ describe('RoomSetupPanel — role limits', () => {
     const w = await mountSetup()
     await click(w, 'player-count-decrement') // 8 players: the toggle is disabled
     expect(w.find('[data-testid="role-hint-WHITE_WOLF_KING"]').text()).toContain(
-      '9 人及以上才能开启',
+      '9 人及以上才能開啟',
     )
   })
 
@@ -147,7 +147,7 @@ describe('RoomSetupPanel — role limits', () => {
     expect(chip(w, 'BLACK_WOLF_KING')).toBe(0)
     expect(disabled(w, 'role-toggle-BLACK_WOLF_KING')).toBe(true)
     expect(w.find('[data-testid="role-hint-BLACK_WOLF_KING"]').text()).toContain(
-      '9 人及以上才能开启',
+      '9 人及以上才能開啟',
     )
   })
 
@@ -156,7 +156,7 @@ describe('RoomSetupPanel — role limits', () => {
     await click(w, 'role-toggle-BLACK_WOLF_KING')
     expect(disabled(w, 'role-toggle-WHITE_WOLF_KING')).toBe(true)
     expect(w.find('[data-testid="role-toggle-WHITE_WOLF_KING"]').attributes('title')).toContain(
-      '只能选一个狼王',
+      '只能選一個狼王',
     )
     await click(w, 'role-toggle-BLACK_WOLF_KING') // off again
     expect(disabled(w, 'role-toggle-WHITE_WOLF_KING')).toBe(false)

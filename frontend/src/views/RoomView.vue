@@ -1,10 +1,10 @@
 <template>
   <div class="room-wrap">
     <!-- Back -->
-    <button v-if="!showSetup" class="back-btn" @click="handleLeave">← 离开</button>
+    <button v-if="!showSetup" class="back-btn" @click="handleLeave">{{ $t('room.leave') }}</button>
 
     <!-- Loading -->
-    <div v-if="loading" class="loading">Loading room...</div>
+    <div v-if="loading" class="loading">{{ $t('room.loading') }}</div>
 
     <!-- Host: players & roles (page 2 of creation, or "edit" from the room) -->
     <RoomSetupPanel
@@ -16,12 +16,12 @@
     <div v-else-if="roomStore.room" class="room-card">
       <!-- Title -->
       <div :class="canStart ? 'room-title-ready' : ''" class="room-title">
-        {{ canStart ? '准备就绪 / Ready to Start' : '等待中 / Waiting' }}
+        {{ canStart ? $t('room.titleReady') : $t('room.titleWaiting') }}
       </div>
 
       <!-- Room code -->
       <div class="code-card">
-        <div class="code-lbl">Room Code</div>
+        <div class="code-lbl">{{ $t('setup.roomCode') }}</div>
         <div class="code-num" data-testid="room-code">{{ roomStore.room.roomCode }}</div>
         <ShareButton :room-code="roomStore.room.roomCode" />
       </div>
@@ -29,7 +29,7 @@
       <!-- Player count + ready breakdown -->
       <div class="player-count">
         <span class="count-ready">{{ displayReadyCount }}</span>
-        <span>/ {{ roomStore.room.config.totalPlayers }} 玩家</span>
+        <span>{{ $t('room.ofPlayers', { n: roomStore.room.config.totalPlayers }) }}</span>
         <template v-if="notReadyGuestCount > 0">
           <span class="count-sep">·</span>
           <span class="count-wait"
@@ -51,7 +51,7 @@
         data-testid="edit-board-btn"
         @click="router.push({ query: { setup: '1' } })"
       >
-        ✏️ 调整人数 / 角色 · Edit players &amp; roles
+        ✏️ {{ $t('room.editBoard') }}
       </button>
 
       <!-- Player grid (4/3/2 columns based on nickname length) -->
@@ -99,7 +99,7 @@
       <!-- Joined but no seat yet: listed so a player who closed the app before
            sitting is visible, and the host can kick them to free the place. -->
       <section v-if="unseatedPlayers.length" class="unseated" data-testid="unseated-list">
-        <div class="unseated-title">未入座 / Not seated</div>
+        <div class="unseated-title">{{ $t('room.notSeated') }}</div>
         <div
           v-for="p in unseatedPlayers"
           :key="p.userId"
@@ -122,7 +122,7 @@
       <!-- Perk panel: catalog + activation (visible pre-game when host allows perks) -->
       <section v-if="perksEnabled && perks.length" class="perk-panel" data-testid="perk-panel">
         <div class="perk-panel-title">
-          道具 / Perks
+          {{ $t('account.perks') }}
           <span v-if="userStore.credits !== null" class="perk-balance"
             >◈ {{ userStore.credits }}</span
           >
@@ -132,7 +132,7 @@
             <div class="perk-name">{{ perk.name }} · ◈{{ perk.priceCredits }}</div>
             <div class="perk-desc">{{ perk.description }}</div>
             <div v-if="holderOf(perk.perkCode)" class="perk-holder">
-              已被 {{ holderNickname(perk.perkCode) }} 启用 / Taken
+              {{ $t('room.perkTaken', { name: holderNickname(perk.perkCode) }) }}
             </div>
           </div>
           <button
@@ -142,7 +142,7 @@
             :disabled="perkBusy"
             @click="handleWithdrawPerk(perk.perkCode)"
           >
-            退还 / Withdraw
+            {{ $t('room.withdraw') }}
           </button>
           <button
             v-else
@@ -151,7 +151,7 @@
             :disabled="perkBusy || !!holderOf(perk.perkCode)"
             @click="handleActivatePerk(perk.perkCode)"
           >
-            启用 / Activate
+            {{ $t('room.activate') }}
           </button>
         </div>
         <p v-if="perkError" class="perk-error" data-testid="perk-error">{{ perkError }}</p>
@@ -184,21 +184,27 @@
 
       <!-- Status bar -->
       <div v-if="isHost" :class="canStart ? 'status-ok' : 'status-wait'" class="status-bar">
-        <template v-if="canStart">✓ All ready! 开始游戏</template>
-        <template v-else
-          >✓ {{ displayReadyCount }} / {{ roomStore.room.config.totalPlayers }} ready · Waiting for
-          players to be ready</template
-        >
+        <template v-if="canStart">{{ $t('room.allReady') }}</template>
+        <template v-else>{{
+          $t('room.hostWaiting', {
+            ready: displayReadyCount,
+            total: roomStore.room.config.totalPlayers,
+          })
+        }}</template>
       </div>
       <div v-else class="status-bar" :class="iAmReady ? 'status-ok' : 'status-neutral'">
-        <template v-if="iAmReady"
-          >✓ 你已准备 · You are ready — {{ displayReadyCount }} /
-          {{ roomStore.room.config.totalPlayers }} ready</template
-        >
-        <template v-else
-          >{{ displayReadyCount }} / {{ roomStore.room.config.totalPlayers }} players
-          ready</template
-        >
+        <template v-if="iAmReady">{{
+          $t('room.youReady', {
+            ready: displayReadyCount,
+            total: roomStore.room.config.totalPlayers,
+          })
+        }}</template>
+        <template v-else>{{
+          $t('room.playersReady', {
+            ready: displayReadyCount,
+            total: roomStore.room.config.totalPlayers,
+          })
+        }}</template>
       </div>
 
       <!-- Action button -->
@@ -211,7 +217,7 @@
           data-testid="start-game-btn"
           @click="handleStartGame"
         >
-          开始游戏 / Start Game
+          {{ $t('room.startGame') }}
         </button>
         <!-- Guest: ready toggle (disabled until a seat number is picked;
              also while a perk request is unresolved — decision 5: you can't
@@ -224,10 +230,10 @@
             :disabled="!hasPickedSeat || perkBusy"
             @click="handleReady(true)"
           >
-            准备 / Ready
+            {{ $t('room.ready') }}
           </button>
           <button v-else class="btn btn-outline" @click="handleReady(false)">
-            取消准备 / Undo Ready
+            {{ $t('room.undoReady') }}
           </button>
         </template>
       </div>
@@ -236,6 +242,7 @@
 </template>
 
 <script lang="ts" setup>
+import { t } from '@/i18n'
 import axios from 'axios'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import http from '@/services/http'
@@ -331,7 +338,7 @@ function iHold(perkCode: string): boolean {
 function holderNickname(perkCode: string): string {
   const holder = holderOf(perkCode)
   if (!holder) return ''
-  if (holder.userId === userStore.userId) return '我'
+  if (holder.userId === userStore.userId) return t('common.me')
   return roomStore.room?.players.find((p) => p.userId === holder.userId)?.nickname ?? holder.userId
 }
 
@@ -350,7 +357,7 @@ function perkErrorMessage(err: unknown): string {
     const msg = (err.response?.data as { error?: string } | undefined)?.error
     if (msg) return msg
   }
-  return '操作失败 / Action failed'
+  return t('room.actionFailed')
 }
 
 async function handleActivatePerk(perkCode: string) {

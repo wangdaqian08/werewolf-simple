@@ -13,8 +13,8 @@ describe('truncateNickname', () => {
   })
 
   it('handles CJK without splitting characters', () => {
-    expect(truncateNickname('王大谦', 16)).toBe('王大谦')
-    expect(truncateNickname('狼人杀玩家一二三四五六七八九十一二三', 8)).toBe('狼人杀玩家一二三…')
+    expect(truncateNickname('王大謙', 16)).toBe('王大謙')
+    expect(truncateNickname('狼人殺玩家一二三四五六七八九十一二三', 8)).toBe('狼人殺玩家一二三…')
   })
 
   it('handles surrogate-pair emojis without splitting', () => {

@@ -116,7 +116,7 @@ const displayLabel = computed(() => (visuallyIdle.value ? '—' : fmt(localRemai
         data-testid="phase-countdown-stop"
         @click="emit('stop-timer')"
       >
-        停止 Stop
+        {{ $t('countdown.stop') }}
       </button>
       <template v-else>
         <button

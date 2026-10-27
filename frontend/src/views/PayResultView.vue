@@ -2,33 +2,32 @@
   <div class="pay-wrap">
     <div class="pay-card">
       <template v-if="phase === 'cancel'">
-        <h1 class="pay-title serif">已取消 / Cancelled</h1>
-        <p class="pay-sub">未产生扣款 / You have not been charged.</p>
+        <h1 class="pay-title serif">{{ $t('pay.cancelled') }}</h1>
+        <p class="pay-sub">{{ $t('pay.notCharged') }}</p>
       </template>
 
       <template v-else-if="phase === 'pending'">
-        <h1 class="pay-title serif">确认中…</h1>
-        <p class="pay-sub">正在等待支付确认 / Confirming your payment…</p>
+        <h1 class="pay-title serif">{{ $t('pay.confirming') }}</h1>
+        <p class="pay-sub">{{ $t('pay.waiting') }}</p>
       </template>
 
       <template v-else-if="phase === 'success'">
-        <h1 class="pay-title pay-success serif">支付成功</h1>
-        <p class="pay-earned" data-testid="pay-credits">+{{ credits }} 积分 / Credits</p>
+        <h1 class="pay-title pay-success serif">{{ $t('pay.success') }}</h1>
+        <p class="pay-earned" data-testid="pay-credits">{{ $t('pay.earned', { n: credits }) }}</p>
         <p v-if="userStore.credits !== null" class="pay-sub">
-          余额 / Balance: ◈ {{ userStore.credits }}
+          {{ $t('pay.balance', { n: userStore.credits }) }}
         </p>
       </template>
 
       <template v-else>
-        <h1 class="pay-title serif">未能确认</h1>
+        <h1 class="pay-title serif">{{ $t('pay.unconfirmed') }}</h1>
         <p class="pay-sub">
-          支付确认超时。如已扣款，积分稍后会自动到账。 / Confirmation timed out — if you were
-          charged, credits will arrive automatically.
+          {{ $t('pay.timeout') }}
         </p>
       </template>
 
       <button class="btn btn-primary back-lobby-btn" data-testid="pay-back" @click="goLobby">
-        返回大厅 / Back to Lobby
+        {{ $t('pay.backLobby') }}
       </button>
     </div>
   </div>

@@ -9,7 +9,7 @@
   -->
   <button v-if="blocked" type="button" class="aub-root" data-testid="audio-unlock-banner">
     <span class="aub-icon" aria-hidden="true">🔇</span>
-    <span class="aub-text">点击任意处开启声音 / Tap anywhere to enable sound</span>
+    <span class="aub-text">{{ $t('audio.unlock') }}</span>
   </button>
 </template>
 

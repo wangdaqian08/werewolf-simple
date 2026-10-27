@@ -102,7 +102,7 @@ describe('DayPhase — observability testids (action-observability sentinel)', (
     })
     const banner = wrapper.find('[data-testid="day-banner-self-destruct"]')
     expect(banner.exists()).toBe(true)
-    expect(banner.text()).toContain('3号')
+    expect(banner.text()).toContain('3號')
     expect(banner.text()).toContain('WolfBob')
     expect(banner.text()).toContain('自爆')
   })
@@ -147,7 +147,7 @@ describe('DayPhase — daySkipVoting host footer', () => {
 
   const hostProps = { ...BASE_PROPS, isHost: true }
 
-  it('RESULT_REVEALED + daySkipVoting=false → host sees "开始投票" button', () => {
+  it('RESULT_REVEALED + daySkipVoting=false → host sees "開始投票" button', () => {
     const wrapper = mount(DayPhase, {
       props: { ...hostProps, dayPhase: makeDay('RESULT_REVEALED'), daySkipVoting: false },
     })
@@ -155,7 +155,7 @@ describe('DayPhase — daySkipVoting host footer', () => {
     expect(wrapper.find('[data-testid="day-enter-night"]').exists()).toBe(false)
   })
 
-  it('RESULT_REVEALED + daySkipVoting=true → host sees "进入夜晚" button, not "开始投票"', () => {
+  it('RESULT_REVEALED + daySkipVoting=true → host sees "進入夜晚" button, not "開始投票"', () => {
     const wrapper = mount(DayPhase, {
       props: { ...hostProps, dayPhase: makeDay('RESULT_REVEALED'), daySkipVoting: true },
     })
@@ -171,7 +171,7 @@ describe('DayPhase — daySkipVoting host footer', () => {
     expect(wrapper.find('[data-testid="phase-countdown-start-120"]').exists()).toBe(false)
   })
 
-  it('RESULT_REVEALED + daySkipVoting=true → clicking "进入夜晚" emits continueToNight', async () => {
+  it('RESULT_REVEALED + daySkipVoting=true → clicking "進入夜晚" emits continueToNight', async () => {
     const wrapper = mount(DayPhase, {
       props: { ...hostProps, dayPhase: makeDay('RESULT_REVEALED'), daySkipVoting: true },
     })
@@ -405,10 +405,10 @@ describe('DayPhase — private night-death shot', () => {
   // nor claim the wolves killed the shooter (a chained shooter was shot instead).
   it('the shot prompt names no role and no cause of death, and warns the chance ends', () => {
     const shooter = mountAs('hunter').get('[data-testid="day-hunter-night-banner"]').text()
-    for (const word of ['猎人', 'Hunter', '狼王', 'Wolf King', '狼人杀害']) {
+    for (const word of ['獵人', 'Hunter', '狼王', 'Wolf King', '狼人殺害']) {
       expect(shooter).not.toContain(word)
     }
-    expect(shooter).toContain('开枪')
+    expect(shooter).toContain('開槍')
     expect(shooter).toContain('主持人')
   })
 
@@ -418,13 +418,13 @@ describe('DayPhase — private night-death shot', () => {
     expect(wrapper.find('[data-testid="day-hunter-night-banner"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="day-hunter-night-wait-banner"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="day-hunter-night-shoot"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('开枪')
+    expect(wrapper.text()).not.toContain('開槍')
   })
 
   it('the host can start the vote at once (it ends any unused shot)', () => {
     const wrapper = mountAs('alice', { isHost: true })
     expect(wrapper.find('[data-testid="day-start-vote"]').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('开枪')
+    expect(wrapper.text()).not.toContain('開槍')
   })
 
   it('a host who can shoot sees the shot first, then the host controls', () => {
@@ -564,7 +564,7 @@ describe('DayPhase — hunter role card', () => {
     await wrapper.find('.my-role-chip').trigger('click')
     // Exact text, matching VotingPhase / RoleRevealCard — catches punctuation typos.
     expect(document.body.querySelector('.rc-desc')?.textContent).toBe(
-      '死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。',
+      '死亡時可開槍帶走一名玩家（被女巫毒死時無法開槍）。',
     )
     wrapper.unmount()
   })
@@ -583,8 +583,8 @@ describe('DayPhase — 白狼王', () => {
     const banner = mount(DayPhase, { props: { ...BASE_PROPS, dayPhase: day } }).find(
       '[data-testid="day-banner-self-destruct"]',
     )
-    expect(banner.text()).toContain('3号')
-    expect(banner.text()).toContain('带走了')
+    expect(banner.text()).toContain('3號')
+    expect(banner.text()).toContain('帶走了')
     expect(banner.find('[data-testid="day-self-destruct-taken-seat-5"]').text()).toContain('Eve')
   })
 
@@ -596,7 +596,7 @@ describe('DayPhase — 白狼王', () => {
     const banner = mount(DayPhase, { props: { ...BASE_PROPS, dayPhase: day } }).find(
       '[data-testid="day-banner-self-destruct"]',
     )
-    expect(banner.text()).not.toContain('带走了')
+    expect(banner.text()).not.toContain('帶走了')
   })
 
   it('passes the ActionMenu take target up with self-destruct', () => {
@@ -636,7 +636,7 @@ describe('DayPhase — 黑狼王', () => {
     await wrapper.find('.my-role-chip').trigger('click')
     expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('黑狼王')
     expect(document.body.querySelector('.rc-desc')?.textContent).toBe(
-      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
+      '夜晚與狼隊一起襲擊。出局時（被投出、夜晚死亡或被獵人帶走）可開槍帶走一名玩家；被女巫毒死或自爆時無法開槍。',
     )
     wrapper.unmount()
   })
@@ -654,7 +654,7 @@ describe('DayPhase — role card shows my name and seat', () => {
     })
     await wrapper.find('.my-role-chip').trigger('click')
     expect(document.body.querySelector('[data-testid="rc-identity"]')?.textContent?.trim()).toBe(
-      '1号 · Alice',
+      '1號 · Alice',
     )
     wrapper.unmount()
   })

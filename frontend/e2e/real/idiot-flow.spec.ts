@@ -96,7 +96,7 @@ async function runNight1ToDay(localCtx: GameContext): Promise<void> {
   const witchBots = localCtx.roleMap.WITCH ?? []
 
   // Wolf attacks the seer or the witch — IDIOT must survive to D1, and the
-  // board's only villager must too (killing him ends the game by 屠边).
+  // board's only villager must too (killing him ends the game by 屠邊).
   // allBots excludes the host, so one of seer/witch is always a bot.
   expect(wolfBots.length, 'kit must have at least one wolf').toBeGreaterThan(0)
   const wolfBot = wolfBots[0]

@@ -348,7 +348,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
   test('5. Day — host reveals night result, kill shown on all browsers', async ({}, testInfo) => {
     const hostPage = ctx.hostPage
 
-    // Host should see "显示结果 · Result" button
+    // Host should see "顯示結果 · Result" button
     const revealBtn = hostPage.getByTestId('day-reveal-result')
     await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
 
@@ -427,7 +427,7 @@ test.describe('Game flow — multi-browser STOMP verification', () => {
 
     // Settings match this spec's setupGame options (9 players, no sheriff)
     await expect(villagerPage.getByTestId('settings-player-count')).toContainText('9')
-    await expect(villagerPage.getByTestId('settings-sheriff')).toContainText('无')
+    await expect(villagerPage.getByTestId('settings-sheriff')).toContainText('無')
 
     // Role composition reflects the server-reported wolf count
     await expect(villagerPage.getByTestId('settings-role-WEREWOLF')).toContainText(`×${wolfCount}`)

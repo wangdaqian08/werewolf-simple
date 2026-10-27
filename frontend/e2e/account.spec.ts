@@ -34,12 +34,12 @@ test('account page renders wallet, perk history and payment history', async ({ p
 
   // Row content assertions (testid-only, no text selectors).
   // MOCK_MY_PERKS[2] is VOID, MOCK_MY_PERKS[0] is ACTIVE.
-  await expect(page.getByTestId('perk-row').nth(0)).toContainText('启用中')
+  await expect(page.getByTestId('perk-row').nth(0)).toContainText('啟用中')
   await expect(page.getByTestId('perk-row').nth(2)).toContainText('未生效')
   // Order rows are newest-first (mirrors the API contract): the pending
   // order leads, the completed one follows.
   await expect(page.getByTestId('order-row').first()).toContainText('$4.99')
-  await expect(page.getByTestId('order-row').first()).toContainText('处理中')
+  await expect(page.getByTestId('order-row').first()).toContainText('處理中')
   await expect(page.getByTestId('order-row').nth(1)).toContainText('$9.99')
   await expect(page.getByTestId('order-row').nth(1)).toContainText('已完成')
 

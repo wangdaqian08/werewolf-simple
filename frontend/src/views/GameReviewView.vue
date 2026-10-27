@@ -2,17 +2,20 @@
   <div class="review-wrap">
     <div class="review-card">
       <header class="review-header">
-        <button class="review-back" data-testid="review-back" @click="back">‹ 返回</button>
-        <span class="review-heading serif">上帝视角复盘</span>
+        <button class="review-back" data-testid="review-back" @click="back">
+          {{ $t('common.backBtn') }}
+        </button>
+        <span class="review-heading serif">{{ $t('review.heading') }}</span>
       </header>
       <p v-if="error" class="review-msg" data-testid="review-error">{{ error }}</p>
-      <p v-else-if="!review" class="review-msg">加载中…</p>
+      <p v-else-if="!review" class="review-msg">{{ $t('common.loading') }}</p>
       <GameReview v-else :review="review" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GameReview from '@/components/GameReview.vue'
@@ -32,10 +35,10 @@ onMounted(async () => {
     const status = (err as { response?: { status?: number } }).response?.status
     error.value =
       status === 404
-        ? '找不到这局游戏'
+        ? t('review.notFound')
         : status === 403
-          ? '游戏结束后，本局玩家才能查看复盘'
-          : '复盘加载失败，请稍后再试'
+          ? t('review.notOver')
+          : t('review.loadFailed')
   }
 })
 

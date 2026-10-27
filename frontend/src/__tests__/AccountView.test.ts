@@ -152,10 +152,10 @@ describe('AccountView', () => {
     expect(wrapper.find('[data-testid="account-balance"]').text()).toContain('250')
     const ledger = wrapper.findAll('[data-testid="ledger-row"]')
     expect(ledger).toHaveLength(2)
-    expect(ledger[0]!.text()).toContain('道具购买')
+    expect(ledger[0]!.text()).toContain('道具購買')
     expect(ledger[0]!.text()).toContain('−30')
-    expect(ledger[0]!.text()).toContain('余额 220')
-    expect(ledger[1]!.text()).toContain('对局奖励')
+    expect(ledger[0]!.text()).toContain('餘額 220')
+    expect(ledger[1]!.text()).toContain('對局獎勵')
     expect(ledger[1]!.text()).toContain('+20')
     const order = wrapper.find('[data-testid="order-row"]')
     expect(order.text()).toContain('Starter Pack')
@@ -173,10 +173,10 @@ describe('AccountView', () => {
     const { wrapper } = await mountAccount()
     const badges = wrapper.findAll('[data-testid="perk-status"]')
     expect(badges.map((b) => b.text())).toEqual([
-      '启用中',
+      '啟用中',
       '已使用',
-      '未生效（结算后退还）',
-      '已退还',
+      '未生效（結算後退還）',
+      '已退還',
     ])
   })
 
@@ -198,7 +198,7 @@ describe('AccountView', () => {
     h.getWalletMock.mockRejectedValue(new Error('network'))
     const { wrapper } = await mountAccount()
     expect(wrapper.find('[data-testid="account-wallet"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="account-wallet"]').text()).toContain('无法加载积分记录')
+    expect(wrapper.find('[data-testid="account-wallet"]').text()).toContain('無法載入積分記錄')
     // Balance line is hidden on error so stale credits from userStore are not shown.
     expect(wrapper.find('[data-testid="account-balance"]').exists()).toBe(false)
     // Other sections are unaffected.
@@ -212,9 +212,9 @@ describe('AccountView', () => {
     expect(rows).toHaveLength(5)
     const texts = rows.map((r) => r.text())
     expect(texts.some((t) => t.includes('已完成'))).toBe(true)
-    expect(texts.some((t) => t.includes('处理中'))).toBe(true)
-    expect(texts.some((t) => t.includes('已过期'))).toBe(true)
-    expect(texts.some((t) => t.includes('失败'))).toBe(true)
+    expect(texts.some((t) => t.includes('處理中'))).toBe(true)
+    expect(texts.some((t) => t.includes('已過期'))).toBe(true)
+    expect(texts.some((t) => t.includes('失敗'))).toBe(true)
   })
 
   it('formats USD orders with $ prefix and non-USD orders with amount + code', async () => {
@@ -246,8 +246,8 @@ describe('AccountView', () => {
     ])
     const { wrapper } = await mountAccount()
     const rows = wrapper.findAll('[data-testid="perk-row"]')
-    expect(rows[0]!.text()).toContain('结算')
-    expect(rows[1]!.text()).not.toContain('结算')
+    expect(rows[0]!.text()).toContain('結算')
+    expect(rows[1]!.text()).not.toContain('結算')
   })
 
   it('not logged in: shows the sign-in prompt and fetches nothing', async () => {
@@ -333,22 +333,22 @@ describe('AccountView money formatting and status fallbacks', () => {
   it('still renders the page when the perks fetch fails (per-section fallback)', async () => {
     h.getMyPerksMock.mockRejectedValue(new Error('network'))
     const { wrapper } = await mountAccount()
-    expect(wrapper.find('[data-testid="account-perks"]').text()).toContain('无法加载道具记录')
+    expect(wrapper.find('[data-testid="account-perks"]').text()).toContain('無法載入道具記錄')
     expect(wrapper.find('[data-testid="perk-row"]').exists()).toBe(false)
     // Other sections are unaffected and loading cleared (no unhandled rejection).
     expect(wrapper.find('[data-testid="account-balance"]').text()).toContain('250')
     expect(wrapper.find('[data-testid="order-row"]').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('加载中')
+    expect(wrapper.text()).not.toContain('載入中')
   })
 
   it('still renders the page when the orders fetch fails (per-section fallback)', async () => {
     h.listOrdersMock.mockRejectedValue(new Error('network'))
     const { wrapper } = await mountAccount()
-    expect(wrapper.find('[data-testid="account-payments"]').text()).toContain('无法加载充值记录')
+    expect(wrapper.find('[data-testid="account-payments"]').text()).toContain('無法載入充值記錄')
     expect(wrapper.find('[data-testid="order-row"]').exists()).toBe(false)
     // Other sections are unaffected and loading cleared (no unhandled rejection).
     expect(wrapper.find('[data-testid="account-balance"]').text()).toContain('250')
     expect(wrapper.find('[data-testid="perk-row"]').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('加载中')
+    expect(wrapper.text()).not.toContain('載入中')
   })
 })

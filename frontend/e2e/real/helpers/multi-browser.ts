@@ -142,7 +142,7 @@ export async function setupGame(
   // the guest nickname directly OR collapse it behind a "Continue as guest"
   // toggle. Reveal it if present (no-op when already shown) so the fill below
   // doesn't hang.
-  const guestToggle = hostPage.getByRole('button', { name: /Continue as guest|继续以访客/i })
+  const guestToggle = hostPage.getByRole('button', { name: /Continue as guest|繼續以訪客/i })
   if (await guestToggle.count())
     await guestToggle
         .first()
@@ -165,7 +165,7 @@ export async function setupGame(
   // Toggle sheriff if needed (default is on, we may want to turn it off)
   if (!hasSheriff) {
     // Find the row containing "Sheriff Election" and click its toggle button
-    const sheriffRow = hostPage.locator('.role-row').filter({ hasText: /Sheriff|警长竞选/ })
+    const sheriffRow = hostPage.locator('.role-row').filter({ hasText: /Sheriff|警長競選/ })
     const toggle = sheriffRow.locator('.toggle-on')
     if ((await toggle.count()) > 0) {
       await toggle.click()
@@ -290,8 +290,8 @@ export async function setupGame(
     // idiot-flow tests when the IDIOT toggle stayed off).
     //
     // The screen enforces board limits (gods within wolves ± 1), so a toggle
-    // can be disabled until another one moves first — e.g. 猎人 off only after
-    // 守卫 on. Make passes, skipping disabled toggles, until nothing changes.
+    // can be disabled until another one moves first — e.g. 獵人 off only after
+    // 守衛 on. Make passes, skipping disabled toggles, until nothing changes.
     for (let pass = 0; pass < allOptionalRoles.length; pass++) {
       let changed = false
       for (const role of allOptionalRoles) {
@@ -383,7 +383,7 @@ export async function setupGame(
 
   // Host has no Ready button (only guests do). Claiming the seat auto-readies the host.
   // Wait for Start Game to become enabled.
-  const startBtn = hostPage.getByRole('button', { name: /Start Game|开始游戏/i })
+  const startBtn = hostPage.getByRole('button', { name: /Start Game|開始遊戲/i })
   await expect(startBtn).toBeEnabled({ timeout: 15_000 })
   await startBtn.click()
 

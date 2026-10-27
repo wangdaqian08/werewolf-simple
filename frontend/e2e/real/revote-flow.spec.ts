@@ -239,7 +239,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const reachedSeerPick = await waitForNightSubPhase(hostPage, gameId, 'SEER_PICK', 10_000)
     if (reachedSeerPick && seerPage) {
       await seerPage
-        .getByText(/选择查验目标|Select a player to check/i)
+        .getByText(/選擇查驗目標|Select a player to check/i)
         .first()
         .waitFor({ state: 'visible', timeout: 10_000 })
         .catch(() => {})
@@ -265,7 +265,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     if (!seerDone && seerPage) {
       if (
         await seerPage
-          .getByText(/选择查验目标|Select a player to check/i)
+          .getByText(/選擇查驗目標|Select a player to check/i)
           .first()
           .isVisible()
           .catch(() => false)
@@ -281,7 +281,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const reachedGuard = await waitForNightSubPhase(hostPage, gameId, 'GUARD_PICK', 10_000)
     if (reachedGuard && guardPage) {
       await guardPage
-        .getByText(/选择守护目标|Protect a player/i)
+        .getByText(/選擇守護目標|Protect a player/i)
         .first()
         .waitFor({ state: 'visible', timeout: 10_000 })
         .catch(() => {})
@@ -300,7 +300,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
       if (!guardDone && guardPage) {
         if (
           await guardPage
-            .getByText(/选择守护目标|Protect a player/i)
+            .getByText(/選擇守護目標|Protect a player/i)
             .first()
             .isVisible()
             .catch(() => false)

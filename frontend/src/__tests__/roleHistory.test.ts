@@ -35,10 +35,10 @@ describe('RoleHistory', () => {
       ],
     })
     expect(rows(wrapper)).toEqual([
-      '第1夜 · 2号 Amy 被狼人袭击',
-      '第2夜 · 无人被袭击',
-      '第3夜 · 解药救了 4号 Bob',
-      '第4夜 · 毒药毒了 5号 Cat',
+      '第1夜 · 2號 Amy 被狼人襲擊',
+      '第2夜 · 無人被襲擊',
+      '第3夜 · 解藥救了 4號 Bob',
+      '第4夜 · 毒藥毒了 5號 Cat',
     ])
   })
 
@@ -50,7 +50,7 @@ describe('RoleHistory', () => {
         { round: 2, action: 'CHECK', target: ref('Gina', 6), isWerewolf: false },
       ],
     })
-    expect(rows(wrapper)).toEqual(['第1夜 · 查验 3号 Wolfy → 狼人', '第2夜 · 查验 6号 Gina → 好人'])
+    expect(rows(wrapper)).toEqual(['第1夜 · 查驗 3號 Wolfy → 狼人', '第2夜 · 查驗 6號 Gina → 好人'])
   })
 
   it('guard: each protected player, skipped nights shown as 空守', async () => {
@@ -61,7 +61,7 @@ describe('RoleHistory', () => {
         { round: 2, action: 'GUARD', target: null },
       ],
     })
-    expect(rows(wrapper)).toEqual(['第1夜 · 守护 2号 Amy', '第2夜 · 空守'])
+    expect(rows(wrapper)).toEqual(['第1夜 · 守護 2號 Amy', '第2夜 · 空守'])
   })
 
   it('wolf: each wolf kill, 空刀 nights shown', async () => {
@@ -72,11 +72,11 @@ describe('RoleHistory', () => {
         { round: 2, action: 'KILL', target: null },
       ],
     })
-    expect(rows(wrapper)).toEqual(['第1夜 · 刀了 2号 Amy', '第2夜 · 空刀'])
+    expect(rows(wrapper)).toEqual(['第1夜 · 刀了 2號 Amy', '第2夜 · 空刀'])
   })
 
-  it('shows 暂无记录 when there are no entries yet', async () => {
+  it('shows 暫無記錄 when there are no entries yet', async () => {
     const wrapper = await openPanel({ role: 'SEER', entries: [] })
-    expect(wrapper.find('[data-testid="role-history"]').text()).toContain('暂无记录')
+    expect(wrapper.find('[data-testid="role-history"]').text()).toContain('暫無記錄')
   })
 })

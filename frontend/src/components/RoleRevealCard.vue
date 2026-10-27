@@ -2,29 +2,30 @@
   <div class="reveal-wrap">
     <!-- Header -->
     <div class="reveal-header">
-      <div class="reveal-phase">游戏开始 · GAME START</div>
+      <div class="reveal-phase">{{ $t('reveal.start') }}</div>
       <div class="reveal-subtitle">
-        {{ revealed ? '你的身份 / Your Role' : '身份已分配 / Role Assigned' }}
+        {{ revealed ? $t('reveal.yourRole') : $t('reveal.assigned') }}
       </div>
     </div>
 
     <!-- Unrevealed card -->
     <div v-if="!revealed" class="role-card mystery-card">
       <div class="mystery-glyph">?</div>
-      <div class="mystery-title">你的身份已分配</div>
-      <div class="mystery-hint">独自查看，注意保密 / Check privately</div>
+      <div class="mystery-title">{{ $t('reveal.mysteryTitle') }}</div>
+      <div class="mystery-hint">{{ $t('reveal.hint') }}</div>
     </div>
 
     <!-- Revealed card -->
     <div v-else class="role-card">
       <div class="role-emoji">{{ meta.emoji }}</div>
-      <div class="role-name-zh">{{ meta.nameZh }}</div>
-      <div :class="`role-label-${meta.team}`" class="role-label">{{ meta.nameEn }}</div>
-      <p class="role-desc" data-testid="role-reveal-desc">{{ meta.description }}</p>
+      <div class="role-name-zh">{{ roleName(role) }}</div>
+      <div :class="`role-label-${meta.team}`" class="role-label">{{ roleTag(role) }}</div>
+      <p class="role-desc" data-testid="role-reveal-desc">{{ roleDescription(role) }}</p>
 
       <!-- Werewolf teammates -->
       <div v-if="teammates.length > 0" class="role-teammates">
-        你的队友是：<span v-for="(name, i) in teammates" :key="name" class="teammate-name"
+        {{ $t('reveal.teammates')
+        }}<span v-for="(name, i) in teammates" :key="name" class="teammate-name"
           >{{ name }}<template v-if="i < teammates.length - 1"> · </template></span
         >
       </div>
@@ -33,19 +34,25 @@
     <!-- Buttons -->
     <template v-if="!revealed">
       <button class="btn btn-gold" data-testid="reveal-role-btn" @click="$emit('reveal')">
-        揭示我的身份 / Reveal Role
+        {{ $t('reveal.reveal') }}
       </button>
     </template>
     <template v-else>
       <button class="btn btn-primary" data-testid="confirm-role-btn" @click="$emit('confirm')">
-        知道了 / Got it
+        {{ $t('reveal.gotIt') }}
       </button>
-      <button class="btn btn-secondary hide-btn" @click="$emit('hide')">隐藏 / Hide</button>
+      <button class="btn btn-secondary hide-btn" @click="$emit('hide')">
+        {{ $t('reveal.hide') }}
+      </button>
     </template>
 
     <!-- Footer label -->
     <div class="reveal-footer-label">
-      {{ revealed ? `ROLE — ${meta.nameEn} ${meta.nameZh}` : 'ROLE — ?' }}
+      {{
+        revealed
+          ? $t('reveal.footer', { tag: roleTag(role), name: roleName(role) })
+          : $t('reveal.footerHidden')
+      }}
     </div>
   </div>
 </template>
@@ -53,6 +60,7 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
 import type { PlayerRole } from '@/types'
+import { roleDescription, roleName, roleTag } from '@/utils/roleDefinitions'
 
 const props = withDefaults(
   defineProps<{
@@ -68,77 +76,46 @@ defineEmits<{ confirm: []; reveal: []; hide: [] }>()
 const teammates = computed(() => props.teammates)
 
 interface RoleMeta {
-  nameZh: string
-  nameEn: string
   emoji: string
   team: 'wolf' | 'village' | 'special'
-  description: string
 }
 
 const ROLE_META: Record<PlayerRole, RoleMeta> = {
   WEREWOLF: {
-    nameZh: '狼人',
-    nameEn: 'WEREWOLF',
     emoji: '🐺',
     team: 'wolf',
-    description: '每晚与狼队商议，袭击一名村民。',
   },
   VILLAGER: {
-    nameZh: '村民',
-    nameEn: 'VILLAGER',
     emoji: '🌾',
     team: 'village',
-    description: '通过讨论和投票找出狼人，保护村庄。你没有特殊技能。',
   },
   SEER: {
-    nameZh: '预言家',
-    nameEn: 'SEER',
     emoji: '🔭',
     team: 'special',
-    description: '每晚可查验一名玩家，得知其是否为狼人。',
   },
   WITCH: {
-    nameZh: '女巫',
-    nameEn: 'WITCH',
     emoji: '🔮',
     team: 'special',
-    description: '拥有一瓶解药和一瓶毒药，各可使用一次。',
   },
   HUNTER: {
-    nameZh: '猎人',
-    nameEn: 'HUNTER',
     emoji: '🏹',
     team: 'special',
-    description: '死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。',
   },
   GUARD: {
-    nameZh: '守卫',
-    nameEn: 'GUARD',
     emoji: '🛡️',
     team: 'special',
-    description: '每晚保护一名玩家免受狼人袭击，不可连续守护同一人。',
   },
   IDIOT: {
-    nameZh: '白痴',
-    nameEn: 'IDIOT',
     emoji: '🃏',
     team: 'special',
-    description: '被投票驱逐时揭示出白痴身份，可免于出局（但失去投票权）。',
   },
   WHITE_WOLF_KING: {
-    nameZh: '白狼王',
-    nameEn: 'WHITE WOLF KING',
     emoji: '👑',
     team: 'wolf',
-    description: '夜晚与狼队一起袭击。白天自爆时，可选择带走一名玩家。',
   },
   BLACK_WOLF_KING: {
-    nameZh: '黑狼王',
-    nameEn: 'BLACK WOLF KING',
     emoji: '🖤',
     team: 'wolf',
-    description:
-      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
   },
 }
 

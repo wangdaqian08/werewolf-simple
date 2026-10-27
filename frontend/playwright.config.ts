@@ -8,6 +8,8 @@ export default defineConfig({
     retries: process.env.CI ? 1 : 0,
     use: {
         baseURL: 'http://localhost:5174',
+    // The UI follows the browser language; the suites assert the Chinese UI.
+    locale: 'zh-TW',
         headless: true,
     },
     reporter: process.env.CI

@@ -49,10 +49,10 @@ function nonHostVillagers(ctx: GameContext) {
   return (ctx.roleMap.VILLAGER ?? []).filter((b) => b.nick !== 'Host')
 }
 
-test.describe('Win rules — 屠边 and "the game ends before the hunter shoots"', () => {
+test.describe('Win rules — 屠邊 and "the game ends before the hunter shoots"', () => {
   test.setTimeout(process.env.CI ? 360_000 : 240_000)
 
-  test('屠边: the wolves kill the only god while outnumbered — wolves win at dawn', async ({
+  test('屠邊: the wolves kill the only god while outnumbered — wolves win at dawn', async ({
     browser,
   }, testInfo) => {
     const ctx = await setupGame(browser, {
@@ -84,7 +84,7 @@ test.describe('Win rules — 屠边 and "the game ends before the hunter shoots"
     }
   })
 
-  test('屠边: wolves reach parity while a god and a villager live — the game continues', async ({
+  test('屠邊: wolves reach parity while a god and a villager live — the game continues', async ({
     browser,
   }, testInfo) => {
     const ctx = await setupGame(browser, {
@@ -171,7 +171,7 @@ test.describe('Win rules — 屠边 and "the game ends before the hunter shoots"
       const wolves = [...(ctx.roleMap.WEREWOLF ?? [])].sort((a, b) => a.seat - b.seat)
       const wolf = wolves[0]
       assertNonNull(wolf, 'kit must have a wolf')
-      const wolfSeats = `${wolves.map((w) => w.seat).join('·')}号`
+      const wolfSeats = `${wolves.map((w) => w.seat).join('·')}號`
 
       await startNight(ctx)
       await completeNight(ctx, { wolfKillSeat: victim.seat, seerCheckSeat: wolf.seat })
@@ -190,11 +190,11 @@ test.describe('Win rules — 屠边 and "the game ends before the hunter shoots"
       const lines = ctx.hostPage.locator('.rv-line')
       await expect(lines).toContainText([
         '第1夜',
-        new RegExp(`🐺 狼人（${wolfSeats}） 刀 ${victim.seat}号 .*〔村民〕`),
-        new RegExp(`🔮 预言家 ${seer.seat}号 验 ${wolf.seat}号 .* → 狼人`),
-        new RegExp(`☀ 天亮 ${victim.seat}号 .*〔村民〕 被刀出局`),
+        new RegExp(`🐺 狼人（${wolfSeats}） 刀 ${victim.seat}號 .*〔村民〕`),
+        new RegExp(`🔮 預言家 ${seer.seat}號 驗 ${wolf.seat}號 .* → 狼人`),
+        new RegExp(`☀ 天亮 ${victim.seat}號 .*〔村民〕 被刀出局`),
         '第1天',
-        new RegExp(`放逐${seer.seat}号 .*〔预言家〕 被投出（狼人冲票）`),
+        new RegExp(`放逐${seer.seat}號 .*〔預言家〕 被投出（狼人衝票）`),
       ])
       // Every wolf voted the seer out: the seer's row shows their seats as red badges.
       await expect(

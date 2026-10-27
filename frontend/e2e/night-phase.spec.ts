@@ -8,18 +8,18 @@ async function setup(page: Page) {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
-  await page.getByPlaceholder('Enter your nickname').fill('Test')
-  await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Test')
+  await page.getByRole('button', { name: /建立房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByRole('button', { name: /建立房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
 
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 }
 
 async function loadNight(page: Page, scenario: string) {
@@ -85,14 +85,14 @@ test('night: WEREWOLF — selecting a target enables confirm button', async ({ p
   await loadNight(page, 'WEREWOLF')
 
   // Confirm button disabled initially
-  await expect(page.getByRole('button', { name: /确认袭击 Confirm/i })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /確認襲擊|Confirm attack/i })).toBeDisabled()
 
   // Click a pickable cell (Bob, seat 3, not a teammate or self)
   const pickCells = page.locator('.player-grid .slot-alive')
   await pickCells.first().click()
   await page.waitForTimeout(70)
 
-  await expect(page.getByRole('button', { name: /确认袭击 Confirm/i })).not.toBeDisabled()
+  await expect(page.getByRole('button', { name: /確認襲擊|Confirm attack/i })).not.toBeDisabled()
 })
 
 // ── Seer ──────────────────────────────────────────────────────────────────────
@@ -110,22 +110,22 @@ test('night: SEER_PICK — grid and Check button visible', async ({ page }) => {
   await setup(page)
   await loadNight(page, 'SEER_PICK')
 
-  await expect(page.getByText('夜晚降临').first()).toBeVisible()
-  await expect(page.getByText(/查验一名玩家的身份/)).toBeVisible()
-  await expect(page.getByRole('button', { name: /查验 · Check/i })).toBeDisabled()
+  await expect(page.getByText('夜晚降臨').first()).toBeVisible()
+  await expect(page.getByText(/查驗一名玩家的身份/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /查驗|Check/i })).toBeDisabled()
 })
 
 test('night: SEER_RESULT — shows result card with history', async ({ page }) => {
   await setup(page)
   await loadNight(page, 'SEER_RESULT')
 
-  // Header changed to 查验结果
-  await expect(page.getByText('查验结果').first()).toBeVisible()
+  // Header changed to 查驗結果
+  await expect(page.getByText('查驗結果').first()).toBeVisible()
   // Tom checked as werewolf
   await expect(page.getByText(/Tom/).first()).toBeVisible()
-  await expect(page.getByText(/是狼人！· Werewolf/).first()).toBeVisible()
+  await expect(page.getByText(/是狼人！|A werewolf!/).first()).toBeVisible()
   // History section always visible
-  await expect(page.getByText('历史查验记录')).toBeVisible()
+  await expect(page.getByText('歷史查驗記錄')).toBeVisible()
   // History entries from preset
   await expect(page.getByText(/Round 1/).first()).toBeVisible()
   await expect(page.getByText(/Round 2/).first()).toBeVisible()
@@ -145,11 +145,11 @@ test('night: SEER_RESULT — history shown even when empty (srh-empty message)',
   await page.waitForTimeout(200)
 
   // Click Check button
-  await page.getByRole('button', { name: /查验 · Check/i }).click()
+  await page.getByRole('button', { name: /查驗|Check/i }).click()
   await page.waitForTimeout(200)
 
   // Should be on SEER_RESULT — history section always visible
-  await expect(page.getByText('历史查验记录')).toBeVisible()
+  await expect(page.getByText('歷史查驗記錄')).toBeVisible()
   // The current check should appear in history
   await expect(page.locator('.srh-row').first()).toBeVisible()
 })
@@ -159,7 +159,7 @@ test('night: SEER_RESULT — confirm button visible and enabled (no countdown di
   await loadNight(page, 'SEER_RESULT')
 
   // Confirm button should be visible and enabled; countdown is no longer shown
-  const btn = page.getByRole('button', { name: /查验完毕/i })
+  const btn = page.getByRole('button', { name: /查驗完畢/i })
   await expect(btn).toBeVisible()
   await expect(btn).not.toBeDisabled()
 })
@@ -182,11 +182,11 @@ test('night: WITCH — BOTH antidote AND poison sections visible simultaneously'
   await loadNight(page, 'WITCH')
 
   // Both sections should be visible at the same time (no sequential reveal)
-  await expect(page.getByText(/解药 · ANTIDOTE/i).first()).toBeVisible()
-  await expect(page.getByText(/毒药 · POISON/i).first()).toBeVisible()
+  await expect(page.getByText(/解藥|Antidote/i).first()).toBeVisible()
+  await expect(page.getByText(/毒藥|Poison/i).first()).toBeVisible()
   // Both "use" buttons enabled
-  await expect(page.getByRole('button', { name: /使用解药/i })).not.toBeDisabled()
-  await expect(page.getByRole('button', { name: /使用毒药/i })).not.toBeDisabled()
+  await expect(page.getByRole('button', { name: /使用解藥/i })).not.toBeDisabled()
+  await expect(page.getByRole('button', { name: /使用毒藥/i })).not.toBeDisabled()
 })
 
 test('night: WITCH — attacked player name highlighted in antidote section', async ({ page }) => {
@@ -203,7 +203,7 @@ test('night: WITCH — using antidote immediately transitions to WAITING (only 1
   await setup(page)
   await loadNight(page, 'WITCH')
 
-  await page.getByRole('button', { name: /使用解药/i }).click()
+  await page.getByRole('button', { name: /使用解藥/i }).click()
   await page.waitForTimeout(70)
 
   // Should go straight to sleep screen — no second action allowed
@@ -215,7 +215,7 @@ test('night: WITCH — passing antidote submits immediately → transitions to W
   await loadNight(page, 'WITCH')
 
   // Pass antidote — submits immediately (one action per round)
-  await page.getByRole('button', { name: '放弃' }).click()
+  await page.getByRole('button', { name: '放棄' }).click()
   await page.waitForTimeout(70)
 
   // Should transition to WAITING subPhase — shows sleep screen
@@ -227,11 +227,11 @@ test('night: WITCH — using poison (full flow) → WAITING', async ({ page }) =
   await loadNight(page, 'WITCH')
 
   // Open poison picker
-  await page.getByRole('button', { name: /使用毒药/i }).click()
+  await page.getByRole('button', { name: /使用毒藥/i }).click()
   await page.waitForTimeout(70)
 
   // Poison picker grid visible, confirm disabled until target picked
-  const confirmPoison = page.getByRole('button', { name: /确认毒杀/i })
+  const confirmPoison = page.getByRole('button', { name: /確認毒殺/i })
   await expect(confirmPoison).toBeDisabled()
 
   // Select a target — poison grid uses player-grid-sm with slot-alive
@@ -273,7 +273,7 @@ test('night: GUARD — confirm button is RED', async ({ page }) => {
   await loadNight(page, 'GUARD')
 
   // Confirm button should use btn-danger (red)
-  const confirmBtn = page.getByRole('button', { name: /确认保护 Confirm/i })
+  const confirmBtn = page.getByRole('button', { name: /確認保護|Confirm protection/i })
   await expect(confirmBtn).toBeVisible()
   // Verify the CSS class
   await expect(confirmBtn).toHaveClass(/btn-danger/)
@@ -288,7 +288,7 @@ test('night: GUARD — previous target shown as dimmed / not selectable', async 
   await expect(prevCell).toBeVisible()
   await expect(prevCell).toHaveAttribute('aria-disabled', 'true')
   // Guard note shown
-  await expect(page.getByText(/上轮已保护/)).toBeVisible()
+  await expect(page.getByText(/上輪已保護/)).toBeVisible()
 })
 
 // ── Waiting ───────────────────────────────────────────────────────────────────
@@ -297,9 +297,9 @@ test('night: WAITING — sleep emoji and messages visible', async ({ page }) => 
   await setup(page)
   await loadNight(page, 'WAITING')
 
-  await expect(page.getByText('夜晚即将开始')).toBeVisible()
+  await expect(page.getByText('夜晚即將開始')).toBeVisible()
   await expect(page.getByText(/Night is beginning/i)).toBeVisible()
-  await expect(page.getByText(/所有人请闭眼/i)).toBeVisible()
+  await expect(page.getByText(/所有人請閉眼/i)).toBeVisible()
   // No role badge for WAITING
   await expect(page.locator('.rb')).not.toBeVisible()
 })
@@ -309,7 +309,7 @@ test('night: WAITING — header shows Night Falls and Round number', async ({ pa
   await loadNight(page, 'WAITING')
 
   // The header is always visible regardless of sub-phase
-  await expect(page.getByText(/Night Falls/i).first()).toBeVisible()
+  await expect(page.getByText(/夜晚降臨|Night Falls/i).first()).toBeVisible()
   await expect(page.getByText(/Round \d+/i).first()).toBeVisible()
 })
 
@@ -325,7 +325,7 @@ test('night: non-active role during WEREWOLF_PICK sees sleep screen and Night Fa
   // Sleep screen shown
   await expect(page.getByTestId('sleep-screen-title').first()).toBeVisible()
   // Persistent header always shows Night Falls and Round number
-  await expect(page.getByText(/Night Falls/i).first()).toBeVisible()
+  await expect(page.getByText(/夜晚降臨|Night Falls/i).first()).toBeVisible()
   await expect(page.getByText(/Round \d+/i).first()).toBeVisible()
 })
 
@@ -338,7 +338,7 @@ test('night: nightAdvance transitions to DAY phase', async ({ page }) => {
   await page.evaluate(() => (window as any).__debug.nightAdvance())
   await page.waitForTimeout(70)
 
-  await expect(page.getByText('夜晚降临')).not.toBeVisible()
+  await expect(page.getByText('夜晚降臨')).not.toBeVisible()
 })
 
 // ── Debug panel buttons ───────────────────────────────────────────────────────
@@ -361,7 +361,7 @@ test('night: debug panel Werewolf button loads werewolf screen', async ({ page }
   await page.getByRole('button', { name: 'Werewolf', exact: true }).click()
   await page.waitForTimeout(70)
 
-  await expect(page.getByText('夜晚降临').first()).toBeVisible()
+  await expect(page.getByText('夜晚降臨').first()).toBeVisible()
   await expect(page.locator('.rb-tag-wolf')).toBeVisible()
 })
 
@@ -372,8 +372,8 @@ test('night: DEAD — dead player sees elimination banner and sleep screen', asy
   await loadNight(page, 'DEAD')
 
   // Should see elimination banner
-  await expect(page.getByText(/你已经出局/i)).toBeVisible()
-  await expect(page.getByText(/You are eliminated/i)).toBeVisible()
+  await expect(page.getByText(/你已經出局/i)).toBeVisible()
+  await expect(page.getByText(/你已經出局|You are eliminated/i)).toBeVisible()
 
   // Should see sleep screen (not role badge or action interface)
   await expect(page.locator('.rb')).not.toBeVisible()
@@ -381,7 +381,7 @@ test('night: DEAD — dead player sees elimination banner and sleep screen', asy
 
   // Should NOT see any player selection grid or action buttons
   await expect(page.locator('.player-grid').first()).not.toBeVisible()
-  await expect(page.getByRole('button', { name: /确认袭击 Confirm/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /確認襲擊|Confirm attack/i })).not.toBeVisible()
 })
 
 test('night: debug panel Dead Night button loads dead player screen', async ({ page }) => {
@@ -391,8 +391,8 @@ test('night: debug panel Dead Night button loads dead player screen', async ({ p
   await page.waitForTimeout(70)
 
   // Should see elimination banner
-  await expect(page.getByText(/你已经出局/i)).toBeVisible()
-  await expect(page.getByText(/You are eliminated/i)).toBeVisible()
+  await expect(page.getByText(/你已經出局/i)).toBeVisible()
+  await expect(page.getByText(/你已經出局|You are eliminated/i)).toBeVisible()
 
   // Should NOT see role badge (dead players can't take turns)
   await expect(page.locator('.rb')).not.toBeVisible()

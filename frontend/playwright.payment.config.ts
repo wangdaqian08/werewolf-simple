@@ -20,6 +20,8 @@ export default defineConfig({
   timeout: 180_000,
   use: {
     baseURL: 'http://localhost:5174',
+    // The UI follows the browser language; the suites assert the Chinese UI.
+    locale: 'zh-TW',
     headless: true,
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

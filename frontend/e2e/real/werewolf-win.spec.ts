@@ -118,7 +118,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // Wait for seer sub-phase (or timeout if dead/skipped)
     if (seerPage) {
       await seerPage
-          .getByText(/选择查验目标|Select a player to check/i)
+          .getByText(/選擇查驗目標|Select a player to check/i)
           .first()
           .waitFor({ state: 'visible', timeout: 8_000 })
           .catch(() => {})
@@ -186,7 +186,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     if (!seerDone && seerPage) {
       if (
           await seerPage
-              .getByText(/选择查验目标|Select a player to check/i)
+              .getByText(/選擇查驗目標|Select a player to check/i)
               .first()
               .isVisible()
               .catch(() => false)
@@ -201,7 +201,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // Wait for guard sub-phase (or timeout if dead/skipped)
     if (guardPage) {
       await guardPage
-          .getByText(/选择守护目标|Protect a player/i)
+          .getByText(/選擇守護目標|Protect a player/i)
           .first()
           .waitFor({ state: 'visible', timeout: 8_000 })
           .catch(() => {})
@@ -223,7 +223,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     if (!guardDone && guardPage) {
       if (
           await guardPage
-              .getByText(/选择守护目标|Protect a player/i)
+              .getByText(/選擇守護目標|Protect a player/i)
               .first()
               .isVisible()
               .catch(() => false)
@@ -329,7 +329,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     const hunterBots = ctx.roleMap.HUNTER ?? []
 
     // Targets: kill non-wolf, non-host players each round (host must stay alive for game management).
-    // 屠边: wipe a whole side the bots cover; the hunter dies last, so the game ends at dawn (no shot).
+    // 屠邊: wipe a whole side the bots cover; the hunter dies last, so the game ends at dawn (no shot).
     const side = ctx.isHostRole('VILLAGER')
         ? [...seerBots, ...witchBots, ...hunterBots]
         : villagerBots
@@ -377,7 +377,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     expect(await wolfCards.count()).toBeGreaterThanOrEqual(1)
 
     // Village/god roles visible (everything not .reveal-wolf, filtered by Chinese role text)
-    const villageCards = hostPage.locator('.reveal-card').filter({ hasText: /村民|预言家|女巫|守卫/ })
+    const villageCards = hostPage.locator('.reveal-card').filter({ hasText: /村民|預言家|女巫|守衛/ })
     expect(await villageCards.count()).toBeGreaterThanOrEqual(1)
 
     await captureSnapshot(ctx.pages, testInfo, '02-result-roles-revealed')

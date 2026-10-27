@@ -23,7 +23,7 @@ test('PWA manifest + Apple meta tags wire up', async ({ page, request, baseURL }
   )
   await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute(
     'content',
-    '狼人杀',
+    '狼人殺',
   )
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute(
     'href',

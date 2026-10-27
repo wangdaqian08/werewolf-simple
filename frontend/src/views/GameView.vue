@@ -35,8 +35,7 @@
       />
       <div v-else class="waiting-screen">
         <div class="waiting-icon">⏳</div>
-        <div class="waiting-title">等待其他玩家确认</div>
-        <div class="waiting-subtitle">Waiting for others…</div>
+        <div class="waiting-title">{{ $t('game.waitingOthers') }}</div>
         <div class="waiting-count">
           {{ gameStore.state.roleReveal?.confirmedCount ?? 1 }} /
           {{ gameStore.state.roleReveal?.totalCount ?? '?' }}
@@ -54,7 +53,7 @@
           data-testid="start-night"
           @click="handleStartNight"
         >
-          开始夜晚 / Start Night
+          {{ $t('game.startNight') }}
         </button>
       </div>
     </template>
@@ -502,6 +501,7 @@
 </template>
 
 <script lang="ts" setup>
+import { t } from '@/i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -645,15 +645,15 @@ const isNight = computed(() => gameStore.state?.phase === 'NIGHT')
 const phaseLabel = computed(() => {
   switch (gameStore.state?.phase) {
     case 'SHERIFF_ELECTION':
-      return '警长竞选 Sheriff Election'
+      return t('game.phase.sheriff')
     case 'DAY_DISCUSSION':
-      return '白天 Day Phase'
+      return t('game.phase.day')
     case 'DAY_VOTING':
-      return '投票 Voting'
+      return t('game.phase.voting')
     case 'NIGHT':
-      return '黑夜 Night Phase'
+      return t('game.phase.night')
     case 'GAME_OVER':
-      return '游戏结束 Game Over'
+      return t('game.phase.over')
     default:
       return ''
   }
@@ -765,7 +765,7 @@ async function handleStartVote() {
 
   if (currentPhase !== 'DAY_DISCUSSION') {
     ElMessage({
-      message: `当前游戏阶段不正确，无法开始投票。当前阶段: ${currentPhase}`,
+      message: t('game.badPhase', { phase: currentPhase }),
       type: 'error',
       duration: 5000,
     })
@@ -778,7 +778,7 @@ async function handleStartVote() {
 
   if (currentSubPhase !== 'RESULT_REVEALED') {
     ElMessage({
-      message: `请先公布昨晚的结果`,
+      message: t('game.revealFirst'),
       type: 'error',
       duration: 5000,
     })

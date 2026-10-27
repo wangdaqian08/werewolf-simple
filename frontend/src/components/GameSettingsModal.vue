@@ -16,7 +16,7 @@
         <div class="modal-handle" />
 
         <div class="modal-header">
-          <span class="modal-title">房间信息</span>
+          <span class="modal-title">{{ $t('common.roomInfo') }}</span>
           <button class="modal-close" data-testid="settings-close" @click="$emit('close')">
             ✕
           </button>
@@ -26,7 +26,7 @@
           <template v-if="settings">
             <!-- Room code — displayed large so other players can be invited to watch -->
             <div class="room-code-block">
-              <div class="block-label">房间号 · Room Code</div>
+              <div class="block-label">{{ $t('settings.roomCode') }}</div>
               <div class="room-code-value" data-testid="settings-room-code">
                 {{ settings.roomCode }}
               </div>
@@ -34,7 +34,7 @@
 
             <!-- Role composition -->
             <div class="settings-section">
-              <div class="section-title">角色配置 · Roles</div>
+              <div class="section-title">{{ $t('settings.roles') }}</div>
               <div class="role-rows" data-testid="settings-roles">
                 <div
                   v-for="rc in roleCounts"
@@ -43,7 +43,7 @@
                   :data-testid="`settings-role-${rc.id}`"
                 >
                   <span class="role-emoji" aria-hidden="true">{{ rc.emoji }}</span>
-                  <span class="role-name">{{ rc.nameZh }}</span>
+                  <span class="role-name">{{ rc.name }}</span>
                   <span class="role-count">×{{ rc.count }}</span>
                 </div>
               </div>
@@ -51,43 +51,55 @@
 
             <!-- Rules -->
             <div class="settings-section">
-              <div class="section-title">规则 · Rules</div>
+              <div class="section-title">{{ $t('settings.rules') }}</div>
               <div class="rule-row" data-testid="settings-player-count">
-                <span class="rule-label">玩家人数</span>
+                <span class="rule-label">{{ $t('settings.playerCount') }}</span>
                 <span class="rule-value">{{ settings.totalPlayers }}</span>
               </div>
               <div class="rule-row" data-testid="settings-sheriff">
-                <span class="rule-label">警长</span>
-                <span class="rule-value">{{ settings.hasSheriff ? '有' : '无' }}</span>
+                <span class="rule-label">{{ $t('rv.sheriff') }}</span>
+                <span class="rule-value">{{
+                  settings.hasSheriff ? $t('settings.yes') : $t('settings.no')
+                }}</span>
               </div>
               <div class="rule-row" data-testid="settings-witch-self-save">
-                <span class="rule-label">女巫自救</span>
+                <span class="rule-label">{{ $t('create.witchSelfSave') }}</span>
                 <span class="rule-value">{{
-                  settings.witchSelfSaveAllowed ? '仅首夜' : '禁止'
+                  settings.witchSelfSaveAllowed
+                    ? $t('settings.firstNight')
+                    : $t('settings.disallowed')
                 }}</span>
               </div>
               <div class="rule-row" data-testid="settings-no-kill">
-                <span class="rule-label">空刀</span>
-                <span class="rule-value">{{ settings.noKillAllowed ? '允许' : '禁止' }}</span>
+                <span class="rule-label">{{ $t('create.noKill') }}</span>
+                <span class="rule-value">{{
+                  settings.noKillAllowed ? $t('settings.allowed') : $t('settings.disallowed')
+                }}</span>
               </div>
               <div class="rule-row" data-testid="settings-guard-skip">
-                <span class="rule-label">空守</span>
-                <span class="rule-value">{{ settings.guardSkipAllowed ? '允许' : '禁止' }}</span>
+                <span class="rule-label">{{ $t('create.noProtect') }}</span>
+                <span class="rule-value">{{
+                  settings.guardSkipAllowed ? $t('settings.allowed') : $t('settings.disallowed')
+                }}</span>
               </div>
               <div class="rule-row" data-testid="settings-win-condition">
-                <span class="rule-label">胜利条件</span>
+                <span class="rule-label">{{ $t('create.winCondition') }}</span>
                 <span class="rule-value">
-                  {{ settings.winCondition === 'HARD_MODE' ? '屠城' : '屠边' }}
+                  {{
+                    settings.winCondition === 'HARD_MODE'
+                      ? $t('settings.hard')
+                      : $t('settings.classic')
+                  }}
                 </span>
               </div>
             </div>
 
             <!-- Scoring: the same rules settlement actually pays on -->
             <div v-if="rules.length" class="settings-section" data-testid="settings-rewards">
-              <div class="section-title">积分规则 · Scoring</div>
+              <div class="section-title">{{ $t('settings.scoring') }}</div>
               <template v-for="g in ruleGroups" :key="g.key">
                 <div class="rule-group" :data-testid="`settings-reward-group-${g.key}`">
-                  {{ g.title }}
+                  {{ $t(g.title) }}
                 </div>
                 <div
                   v-for="r in g.rules"
@@ -96,19 +108,21 @@
                   :data-testid="`settings-reward-${r.reason}`"
                 >
                   <span class="rule-label">
-                    {{ r.label }}
-                    <span class="rule-detail">{{ r.detail }}</span>
+                    {{ ruleText(r, 'label') }}
+                    <span class="rule-detail">{{ ruleText(r, 'detail') }}</span>
                   </span>
                   <span class="rule-value" :class="r.amount < 0 ? 'rule-penalty' : 'rule-gain'">
                     {{ ruleAmount(r) }}
                   </span>
                 </div>
               </template>
-              <p v-if="hasPenalty" class="rule-note">本局积分最低 0 分，不会扣除已有积分</p>
+              <p v-if="hasPenalty" class="rule-note">{{ $t('settings.floor') }}</p>
             </div>
           </template>
 
-          <div v-else class="settings-empty" data-testid="settings-empty">暂无数据</div>
+          <div v-else class="settings-empty" data-testid="settings-empty">
+            {{ $t('settings.empty') }}
+          </div>
         </div>
       </div>
     </Transition>
@@ -116,9 +130,10 @@
 </template>
 
 <script lang="ts" setup>
+import { i18n, t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import type { GameSettings, RewardRule } from '@/types'
-import { ROLE_DEFINITIONS } from '@/utils/roleDefinitions'
+import { ROLE_DEFINITIONS, roleName } from '@/utils/roleDefinitions'
 import { walletService } from '@/services/walletService'
 
 const props = defineProps<{ settings: GameSettings | null | undefined; open: boolean }>()
@@ -139,6 +154,7 @@ watch(
   },
   { immediate: true },
 )
+const te = i18n.global.te
 const hasPenalty = computed(() => rules.value.some((r) => r.amount < 0))
 
 // A player gets exactly one BASE rule, so listing all five flat read as though a
@@ -146,23 +162,35 @@ const hasPenalty = computed(() => rules.value.some((r) => r.amount < 0))
 // renders nothing, so 扣分项 stays hidden until a penalty exists.
 // NOTE: 三者取其一 names the three BASE rules; update it if a fourth is ever added.
 const RULE_GROUPS = [
-  { key: 'BASE', title: '基础分（三者取其一）' },
-  { key: 'BONUS', title: '加分项（可叠加）' },
-  { key: 'PENALTY', title: '扣分项（可叠加）' },
+  { key: 'BASE', title: 'settings.groupBase' },
+  { key: 'BONUS', title: 'settings.groupBonus' },
+  { key: 'PENALTY', title: 'settings.groupPenalty' },
 ] as const
 const ruleGroups = computed(() =>
   RULE_GROUPS.map((g) => ({ ...g, rules: rules.value.filter((r) => r.group === g.key) })).filter(
     (g) => g.rules.length > 0,
   ),
 )
+/**
+ * The catalog comes from the server (so the amounts stay authoritative); its
+ * wording is localised here by rule code, falling back to the server's text
+ * for a rule this client does not know yet.
+ */
+function ruleText(r: RewardRule, field: 'label' | 'detail'): string {
+  const key = `rules.${field}.${r.reason}`
+  return te(key) ? t(key) : r[field]
+}
+function ruleUnit(unit: string): string {
+  return unit === '天' ? t('rules.unit.day') : unit === '次' ? t('rules.unit.time') : unit
+}
 /** A penalty reads as a real minus sign, not a hyphen. */
 function ruleAmount(r: RewardRule): string {
-  return `${r.amount < 0 ? '−' : '+'}${Math.abs(r.amount)}${r.unit ? ` / ${r.unit}` : ''}`
+  return `${r.amount < 0 ? '−' : '+'}${Math.abs(r.amount)}${r.unit ? ` / ${ruleUnit(r.unit)}` : ''}`
 }
 
 interface RoleCount {
   id: string
-  nameZh: string
+  name: string
   emoji: string
   count: number
 }
@@ -178,11 +206,11 @@ const roleCounts = computed<RoleCount[]>(() => {
   for (const def of ROLE_DEFINITIONS) {
     const count = counts.get(def.id)
     if (count) {
-      ordered.push({ id: def.id, nameZh: def.nameZh, emoji: def.emoji, count })
+      ordered.push({ id: def.id, name: roleName(def.id), emoji: def.emoji, count })
       counts.delete(def.id)
     }
   }
-  for (const [id, count] of counts) ordered.push({ id, nameZh: id, emoji: '❓', count })
+  for (const [id, count] of counts) ordered.push({ id, name: id, emoji: '❓', count })
   return ordered
 })
 </script>

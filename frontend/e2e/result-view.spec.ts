@@ -17,10 +17,10 @@ async function setup(page: Page) {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
-  await page.getByPlaceholder('Enter your nickname').fill('Test')
-  await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Test')
+  await page.getByRole('button', { name: /建立房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByRole('button', { name: /建立房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)
@@ -29,9 +29,9 @@ async function setup(page: Page) {
   )
   await page.waitForURL(/\/game\//, { timeout: 5000 })
   await page
-    .getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i })
+    .getByRole('button', { name: /揭示我的身份|Reveal Role/i })
     .waitFor({ state: 'visible', timeout: 3000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 }
 
 async function goToResult(page: Page, winner: 'VILLAGER' | 'WEREWOLF') {
@@ -52,7 +52,7 @@ test('result-view: light variant — VILLAGE WINS at 390x844', async ({ page }) 
     path: 'e2e/screenshots/result-light-390.png',
     fullPage: true,
   })
-  await expect(page.getByText('好人胜')).toBeVisible()
+  await expect(page.getByText('好人勝')).toBeVisible()
   await expect(page.getByText('VILLAGE WINS')).toBeVisible()
   await expect(page.locator('[data-testid="play-again"]')).toBeVisible()
 })
@@ -65,7 +65,7 @@ test('result-view: dark variant — WOLVES WIN at 390x844', async ({ page }) => 
     path: 'e2e/screenshots/result-dark-390.png',
     fullPage: true,
   })
-  await expect(page.getByText('狼人胜')).toBeVisible()
+  await expect(page.getByText('狼人勝')).toBeVisible()
   await expect(page.getByText('WOLVES WIN')).toBeVisible()
   await expect(page.locator('.result-wolves')).toBeVisible()
 })

@@ -11,30 +11,32 @@
         <div class="drawer-handle" />
 
         <div class="drawer-header">
-          <span class="drawer-title">游戏记录</span>
+          <span class="drawer-title">{{ $t('common.gameLog') }}</span>
           <button class="drawer-close" data-testid="action-log-close" @click="$emit('close')">
             ✕
           </button>
         </div>
 
         <div class="drawer-body">
-          <div v-if="loading" class="log-loading">加载中…</div>
+          <div v-if="loading" class="log-loading">{{ $t('common.loading') }}</div>
 
-          <div v-else-if="rounds.length === 0" class="log-empty">暂无记录</div>
+          <div v-else-if="rounds.length === 0" class="log-empty">{{ $t('roleHistory.empty') }}</div>
 
           <div v-else class="rounds">
             <div v-for="round in rounds" :key="round.day" class="round-block">
-              <div class="round-label">第 {{ round.day }} 天</div>
+              <div class="round-label">{{ $t('day.pill', { n: round.day }) }}</div>
 
               <!-- Sheriff election (only emitted on the day of the election) -->
               <div v-if="round.sheriffResult" class="log-section">
-                <div class="section-title">⭐ 警长选举</div>
+                <div class="section-title">{{ $t('log.sheriffElection') }}</div>
                 <div v-if="round.sheriffResult.winnerNickname" class="log-row">
-                  <span class="seat-badge">{{ round.sheriffResult.winnerSeatIndex }}号</span>
+                  <span class="seat-badge">{{
+                    $t('common.seat', { n: round.sheriffResult.winnerSeatIndex })
+                  }}</span>
                   <span class="log-name">{{ round.sheriffResult.winnerNickname }}</span>
-                  <span class="log-tag tag-gold">警长</span>
+                  <span class="log-tag tag-gold">{{ $t('log.sheriff') }}</span>
                 </div>
-                <div v-else class="log-row muted">无警长</div>
+                <div v-else class="log-row muted">{{ $t('log.noSheriff') }}</div>
                 <!-- Tally — same shape as vote result so players can analyse alliances -->
                 <div v-if="round.sheriffResult.tally.length > 0" class="tally">
                   <div
@@ -42,10 +44,18 @@
                     :key="entry.userId"
                     class="tally-row"
                   >
-                    <span class="tally-name">{{ entry.seatIndex }}号 {{ entry.nickname }}</span>
-                    <span class="tally-votes">{{ entry.votes }} 票</span>
+                    <span class="tally-name">{{
+                      $t('common.seatNick', { n: entry.seatIndex, name: entry.nickname })
+                    }}</span>
+                    <span class="tally-votes">{{ $t('common.votes', { n: entry.votes }) }}</span>
                     <span class="tally-voters">
-                      （{{ entry.voters.map((v) => v.seatIndex + '号').join('、') }}）
+                      {{
+                        $t('common.seatList', {
+                          list: entry.voters
+                            .map((v) => $t('common.seat', { n: v.seatIndex }))
+                            .join($t('common.listSep')),
+                        })
+                      }}
                     </span>
                   </div>
                 </div>
@@ -53,51 +63,59 @@
                   v-if="(round.sheriffResult.abstainCount ?? 0) > 0"
                   class="tally-row tally-abstain"
                 >
-                  <span class="tally-name muted">弃权</span>
-                  <span class="tally-votes">{{ round.sheriffResult.abstainCount }} 票</span>
+                  <span class="tally-name muted">{{ $t('vote.abstain') }}</span>
+                  <span class="tally-votes">{{
+                    $t('common.votes', { n: round.sheriffResult.abstainCount })
+                  }}</span>
                   <span class="tally-voters">
-                    （{{
-                      (round.sheriffResult.abstainVoters ?? [])
-                        .map((v) => v.seatIndex + '号')
-                        .join('、')
-                    }}）
+                    {{
+                      $t('common.seatList', {
+                        list: (round.sheriffResult.abstainVoters ?? [])
+                          .map((v) => $t('common.seat', { n: v.seatIndex }))
+                          .join($t('common.listSep')),
+                      })
+                    }}
                   </span>
                 </div>
               </div>
 
               <!-- Deaths at start of day -->
               <div v-if="round.deaths.length > 0" class="log-section">
-                <div class="section-title">☽ 昨夜出局</div>
+                <div class="section-title">{{ $t('log.nightDeaths') }}</div>
                 <div v-for="d in round.deaths" :key="d.userId" class="log-row">
-                  <span class="seat-badge">{{ d.seatIndex }}号</span>
+                  <span class="seat-badge">{{ $t('common.seat', { n: d.seatIndex }) }}</span>
                   <span class="log-name">{{ d.nickname }}</span>
                 </div>
-                <div v-if="round.deaths.length === 0" class="log-row muted">平安夜</div>
+                <div v-if="round.deaths.length === 0" class="log-row muted">
+                  {{ $t('log.peaceful') }}
+                </div>
               </div>
               <div v-else class="log-section">
-                <div class="section-title">☽ 昨夜出局</div>
-                <div class="log-row muted">平安夜</div>
+                <div class="section-title">{{ $t('log.nightDeaths') }}</div>
+                <div class="log-row muted">{{ $t('log.peaceful') }}</div>
               </div>
 
               <!-- Idiot reveals -->
               <div v-if="round.idiotReveals.length > 0" class="log-section">
-                <div class="section-title">🃏 白痴身份揭示</div>
+                <div class="section-title">{{ $t('log.idiotReveal') }}</div>
                 <div v-for="r in round.idiotReveals" :key="r.userId" class="log-row">
-                  <span class="seat-badge">{{ r.seatIndex }}号</span>
+                  <span class="seat-badge">{{ $t('common.seat', { n: r.seatIndex }) }}</span>
                   <span class="log-name">{{ r.nickname }}</span>
-                  <span class="log-tag tag-gold">白痴幸存</span>
+                  <span class="log-tag tag-gold">{{ $t('log.idiotSurvives') }}</span>
                 </div>
               </div>
 
               <!-- Vote result -->
               <div v-if="round.voteResult" class="log-section">
-                <div class="section-title">☀ 投票结果</div>
+                <div class="section-title">{{ $t('log.voteResult') }}</div>
                 <div v-if="round.voteResult.eliminatedNickname" class="log-row">
-                  <span class="seat-badge">{{ round.voteResult.eliminatedSeatIndex }}号</span>
+                  <span class="seat-badge">{{
+                    $t('common.seat', { n: round.voteResult.eliminatedSeatIndex })
+                  }}</span>
                   <span class="log-name">{{ round.voteResult.eliminatedNickname }}</span>
-                  <span class="log-tag tag-red">出局</span>
+                  <span class="log-tag tag-red">{{ $t('log.out') }}</span>
                 </div>
-                <div v-else class="log-row muted">无人出局</div>
+                <div v-else class="log-row muted">{{ $t('log.noOneOut') }}</div>
                 <!-- Vote breakdown -->
                 <div v-if="round.voteResult.tally.length > 0" class="tally">
                   <div
@@ -105,10 +123,18 @@
                     :key="entry.userId"
                     class="tally-row"
                   >
-                    <span class="tally-name">{{ entry.seatIndex }}号 {{ entry.nickname }}</span>
-                    <span class="tally-votes">{{ entry.votes }} 票</span>
+                    <span class="tally-name">{{
+                      $t('common.seatNick', { n: entry.seatIndex, name: entry.nickname })
+                    }}</span>
+                    <span class="tally-votes">{{ $t('common.votes', { n: entry.votes }) }}</span>
                     <span class="tally-voters">
-                      （{{ entry.voters.map((v) => v.seatIndex + '号').join('、') }}）
+                      {{
+                        $t('common.seatList', {
+                          list: entry.voters
+                            .map((v) => $t('common.seat', { n: v.seatIndex }))
+                            .join($t('common.listSep')),
+                        })
+                      }}
                     </span>
                   </div>
                 </div>
@@ -116,45 +142,49 @@
                   v-if="(round.voteResult.abstainCount ?? 0) > 0"
                   class="tally-row tally-abstain"
                 >
-                  <span class="tally-name muted">弃权</span>
-                  <span class="tally-votes">{{ round.voteResult.abstainCount }} 票</span>
+                  <span class="tally-name muted">{{ $t('vote.abstain') }}</span>
+                  <span class="tally-votes">{{
+                    $t('common.votes', { n: round.voteResult.abstainCount })
+                  }}</span>
                   <span class="tally-voters">
-                    （{{
-                      (round.voteResult.abstainVoters ?? [])
-                        .map((v) => v.seatIndex + '号')
-                        .join('、')
-                    }}）
+                    {{
+                      $t('common.seatList', {
+                        list: (round.voteResult.abstainVoters ?? [])
+                          .map((v) => $t('common.seat', { n: v.seatIndex }))
+                          .join($t('common.listSep')),
+                      })
+                    }}
                   </span>
                 </div>
               </div>
 
               <!-- Shots (hunter / 黑狼王 — the shooter's role is not named; a chain has two) -->
               <div v-if="round.hunterShots.length > 0" class="log-section">
-                <div class="section-title">🔫 开枪</div>
+                <div class="section-title">{{ $t('log.shot') }}</div>
                 <div
                   v-for="(s, i) in round.hunterShots"
                   :key="i"
                   class="log-row"
                   data-testid="log-shot-row"
                 >
-                  <span class="seat-badge">{{ s.hunterSeatIndex }}号</span>
+                  <span class="seat-badge">{{ $t('common.seat', { n: s.hunterSeatIndex }) }}</span>
                   <span class="log-name">{{ s.hunterNickname }}</span>
-                  <span class="muted">→ 击中</span>
-                  <span class="seat-badge">{{ s.targetSeatIndex }}号</span>
+                  <span class="muted">{{ $t('log.hit') }}</span>
+                  <span class="seat-badge">{{ $t('common.seat', { n: s.targetSeatIndex }) }}</span>
                   <span class="log-name">{{ s.targetNickname }}</span>
                 </div>
               </div>
 
               <!-- Self-destruct -->
               <div v-if="round.selfDestructs.length > 0" class="log-section">
-                <div class="section-title">💥 自爆</div>
+                <div class="section-title">{{ $t('log.selfDestruct') }}</div>
                 <div v-for="s in round.selfDestructs" :key="s.userId" class="log-row">
-                  <span class="seat-badge">{{ s.seatIndex }}号</span>
+                  <span class="seat-badge">{{ $t('common.seat', { n: s.seatIndex }) }}</span>
                   <span class="log-name">{{ s.nickname }}</span>
-                  <span class="log-tag tag-red">自爆</span>
+                  <span class="log-tag tag-red">{{ $t('actionMenu.selfDestruct') }}</span>
                   <template v-if="s.takenUserId">
-                    <span class="muted">→ 带走</span>
-                    <span class="seat-badge">{{ s.takenSeatIndex }}号</span>
+                    <span class="muted">{{ $t('log.tookAlong') }}</span>
+                    <span class="seat-badge">{{ $t('common.seat', { n: s.takenSeatIndex }) }}</span>
                     <span class="log-name">{{ s.takenNickname }}</span>
                   </template>
                 </div>

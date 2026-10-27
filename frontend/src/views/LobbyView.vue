@@ -4,7 +4,7 @@
       v-if="userStore.isLoggedIn"
       class="account-menu-btn"
       data-testid="account-menu-btn"
-      aria-label="我的账户 / Account"
+      :aria-label="$t('lobby.account')"
       @click="router.push('/account')"
     >
       ☰
@@ -12,8 +12,8 @@
     <div class="lobby-card">
       <InstallToHomeScreenPrompt />
 
-      <h1 class="title">狼人杀</h1>
-      <p class="subtitle">Werewolf</p>
+      <h1 class="title">{{ $t('lobby.title') }}</h1>
+      <p v-if="$i18n.locale === 'zh'" class="subtitle">{{ $t('lobby.subtitle') }}</p>
 
       <!-- Quick rejoin: shown when the player has an active room (e.g. they
            closed or backgrounded the app mid-game). #7 -->
@@ -23,7 +23,7 @@
         data-testid="rejoin-room-btn"
         @click="handleRejoin"
       >
-        继续游戏 · {{ activeRoom.roomCode }} / Rejoin
+        {{ $t('lobby.rejoin', { code: activeRoom.roomCode }) }}
       </button>
 
       <!-- Logged-in identity card ─────────────────────────────────────── -->
@@ -33,7 +33,7 @@
           <span v-else>{{ (userStore.nickname ?? '?').charAt(0) }}</span>
         </div>
         <div class="identity-text">
-          <div class="signed-as">本场昵称 / Nickname for this game</div>
+          <div class="signed-as">{{ $t('lobby.gameNickname') }}</div>
           <input
             v-model="displayNameInput"
             class="identity-name-input"
@@ -43,14 +43,14 @@
             :placeholder="userStore.nickname ?? ''"
           />
           <div v-if="userStore.credits !== null" class="credits-chip" data-testid="credits-chip">
-            ◈ {{ userStore.credits }} 积分 / Credits
+            {{ $t('lobby.credits', { n: userStore.credits }) }}
             <button class="buy-link" data-testid="buy-credits-toggle" @click="showBuy = !showBuy">
-              充值 / Buy
+              {{ $t('lobby.buy') }}
             </button>
           </div>
         </div>
         <button class="logout-link" data-testid="logout-link" @click="handleLogout">
-          登出 / Logout
+          {{ $t('lobby.logout') }}
         </button>
       </div>
 
@@ -58,8 +58,7 @@
            identity is forgeable; earned credits only. -->
       <div v-if="userStore.isLoggedIn && showBuy" class="buy-sheet" data-testid="buy-sheet">
         <p v-if="userStore.isGuest" class="buy-guest-note">
-          访客账号无法充值，请使用 Google 登录。 / Purchases require a signed-in account — sign in
-          with Google to buy credits.
+          {{ $t('lobby.guestBuy') }}
         </p>
         <template v-else>
           <button
@@ -113,7 +112,7 @@
               fill="#EA4335"
             />
           </svg>
-          使用 Google 登录 / Sign in with Google
+          {{ $t('lobby.google') }}
         </button>
 
         <button
@@ -138,7 +137,7 @@
               fill="#fff"
             />
           </svg>
-          微信登录 / Sign in with WeChat
+          {{ $t('lobby.wechat') }}
         </button>
 
         <div class="oauth-divider">or</div>
@@ -153,9 +152,9 @@
           data-testid="create-room-btn"
           @click="handleCreateRoom"
         >
-          创建房间 / Create Room
+          {{ $t('lobby.createRoom') }}
         </button>
-        <div class="divider">or</div>
+        <div class="divider">{{ $t('lobby.or') }}</div>
         <div class="join-row">
           <input
             v-model="roomCode"
@@ -163,7 +162,7 @@
             data-testid="room-code-input"
             maxlength="3"
             inputmode="numeric"
-            placeholder="Room code"
+            :placeholder="$t('lobby.roomCodePh')"
             type="text"
           />
           <button
@@ -173,7 +172,7 @@
             data-testid="join-room-btn"
             @click="handleJoinRoom"
           >
-            加入 / Join
+            {{ $t('lobby.join') }}
           </button>
         </div>
       </div>
@@ -189,18 +188,18 @@
           type="button"
           @click="showGuest = !showGuest"
         >
-          {{ showGuest ? '收起 / Hide' : '继续以访客身份 / Continue as guest' }}
+          {{ showGuest ? $t('lobby.hideGuest') : $t('lobby.continueGuest') }}
         </button>
 
         <div v-if="!hasAnyOAuth || showGuest" class="guest-form">
           <div class="field">
-            <label>昵称 / Nickname</label>
+            <label>{{ $t('lobby.nickname') }}</label>
             <input
               v-model="nickname"
               class="input"
               data-testid="nickname-input"
               maxlength="32"
-              placeholder="Enter your nickname"
+              :placeholder="$t('lobby.nicknamePh')"
               type="text"
               @keyup.enter="handleCreateRoom"
             />
@@ -214,9 +213,9 @@
               data-testid="create-room-btn"
               @click="handleCreateRoom"
             >
-              创建房间 / Create Room
+              {{ $t('lobby.createRoom') }}
             </button>
-            <div class="divider">or</div>
+            <div class="divider">{{ $t('lobby.or') }}</div>
             <div class="join-row">
               <input
                 v-model="roomCode"
@@ -224,7 +223,7 @@
                 data-testid="room-code-input"
                 maxlength="3"
                 inputmode="numeric"
-                placeholder="Room code"
+                :placeholder="$t('lobby.roomCodePh')"
                 type="text"
               />
               <button
@@ -234,7 +233,7 @@
                 data-testid="join-room-btn"
                 @click="handleJoinRoom"
               >
-                加入 / Join
+                {{ $t('lobby.join') }}
               </button>
             </div>
           </div>
@@ -247,6 +246,7 @@
 </template>
 
 <script lang="ts" setup>
+import { t } from '@/i18n'
 import axios from 'axios'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -288,7 +288,7 @@ watch(showBuy, async (open) => {
     try {
       products.value = await paymentService.getProducts()
     } catch {
-      buyError.value = '无法加载商品 / Failed to load products'
+      buyError.value = t('lobby.loadProductsFail')
     }
   }
 })
@@ -302,10 +302,9 @@ async function handleBuy(productKey: string) {
   } catch (e: unknown) {
     if (axios.isAxiosError(e)) {
       buyError.value =
-        (e.response?.data as { error?: string } | undefined)?.error ??
-        '支付暂不可用 / Payments unavailable'
+        (e.response?.data as { error?: string } | undefined)?.error ?? t('lobby.payUnavailable')
     } else {
-      buyError.value = '支付暂不可用 / Payments unavailable'
+      buyError.value = t('lobby.payUnavailable')
     }
     buying.value = false
   }
@@ -389,7 +388,7 @@ async function handleCreateRoom() {
     await ensureGuestSession()
     router.push({ name: 'create-room' })
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to connect. Try again.'
+    error.value = e instanceof Error ? e.message : t('lobby.connectFailed')
   } finally {
     loading.value = false
   }
@@ -413,7 +412,7 @@ async function handleJoinRoom() {
       error.value =
         reason && reason !== 'Room not found' ? reason : 'Room not found. Check the code.'
     } else {
-      error.value = e instanceof Error ? e.message : 'Failed to join. Try again.'
+      error.value = e instanceof Error ? e.message : t('lobby.joinFailed')
     }
   } finally {
     loading.value = false

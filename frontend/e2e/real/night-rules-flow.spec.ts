@@ -213,7 +213,7 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witc
         }
     })
 
-    test('a dead seer still shows the 查验结果 step', async ({ browser }, testInfo) => {
+    test('a dead seer still shows the 查驗結果 step', async ({ browser }, testInfo) => {
         const ctx = await setupGame(browser, BOARD)
         try {
             const seer = only(ctx, 'SEER')
@@ -419,7 +419,7 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witc
             await witchPasses(ctx)
             await guardActs(ctx, v1.seat)
             await expectWitchHistory(ctx, testInfo, 'witch-history-d1', [
-                new RegExp(`第1夜 · ${v1.seat}号 .+ 被狼人袭击`),
+                new RegExp(`第1夜 · ${v1.seat}號 .+ 被狼人襲擊`),
             ])
             expect(await completeDay(ctx, testInfo, { targetSeat: null, label: 'witch-history-d1' })).toBe('NIGHT')
 
@@ -428,9 +428,9 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witc
             await witchActs(ctx, { useAntidote: false, poisonTargetUserId: v2.userId })
             await guardActs(ctx, null)
             await expectWitchHistory(ctx, testInfo, 'witch-history-d2', [
-                new RegExp(`第1夜 · ${v1.seat}号 .+ 被狼人袭击`),
-                /第2夜 · 无人被袭击/,
-                new RegExp(`第2夜 · 毒药毒了 ${v2.seat}号 `),
+                new RegExp(`第1夜 · ${v1.seat}號 .+ 被狼人襲擊`),
+                /第2夜 · 無人被襲擊/,
+                new RegExp(`第2夜 · 毒藥毒了 ${v2.seat}號 `),
             ])
             expect(await completeDay(ctx, testInfo, { targetSeat: null, label: 'witch-history-d2' })).toBe('NIGHT')
 
@@ -438,10 +438,10 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witc
             await witchActs(ctx, { useAntidote: true })
             await guardActs(ctx, null)
             await expectWitchHistory(ctx, testInfo, 'witch-history-d3', [
-                new RegExp(`第1夜 · ${v1.seat}号 .+ 被狼人袭击`),
-                /第2夜 · 无人被袭击/,
-                new RegExp(`第2夜 · 毒药毒了 ${v2.seat}号 `),
-                new RegExp(`第3夜 · 解药救了 ${v3.seat}号 `),
+                new RegExp(`第1夜 · ${v1.seat}號 .+ 被狼人襲擊`),
+                /第2夜 · 無人被襲擊/,
+                new RegExp(`第2夜 · 毒藥毒了 ${v2.seat}號 `),
+                new RegExp(`第3夜 · 解藥救了 ${v3.seat}號 `),
             ])
             await ctx.assertNoBackendErrors(testInfo)
         } finally {

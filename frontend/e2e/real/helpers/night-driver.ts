@@ -3,7 +3,7 @@ import type { GameContext } from './multi-browser'
 import type { WitchPlan } from './flow-drivers'
 import { waitForCondition, waitForNightSubPhase, waitForPhase } from './state-polling'
 
-/** Host clicks 开始夜晚 and waits for NIGHT, healing a stale role card first. */
+/** Host clicks 開始夜晚 and waits for NIGHT, healing a stale role card first. */
 export async function hostStartsNight(ctx: GameContext): Promise<void> {
   const hostPage = ctx.hostPage
   const gameId = ctx.gameId
@@ -220,7 +220,7 @@ export async function waitForSheriffOrDayDiscussion(
 /**
  * Drive the SHERIFF_ELECTION/RESULT screen forward to DAY_DISCUSSION/RESULT_HIDDEN.
  *
- * Variant B (no auto-timer): the host clicks 显示结果 (testid
+ * Variant B (no auto-timer): the host clicks 顯示結果 (testid
  * `sheriff-end-result`) which fires SHERIFF_END_RESULT and transitions the
  * game. Kills are still deferred at this point — the host must click
  * REVEAL_NIGHT_RESULT next to apply them and flip RESULT_HIDDEN →
