@@ -67,15 +67,56 @@ object RewardBreakdown {
         }
 
     /**
-     * A vote row is unique per voter per day, so this is each player's final word that day
-     * and the bonus can be earned at most once a day. It pays for the read, not the result:
-     * the table need not have voted that wolf out.
+     * Each player's final word on a day, paid at most once a day. It pays for the read, not
+     * the result: the table need not have voted that wolf out.
+     *
+     * Only the good side is paid. A wolf voting a wolf is voting a teammate — 倒钩 is a play,
+     * not a read, and paying for it would let two wolves farm the bonus off each other.
+     *
+     * The log leads and the vote rows follow. A PK re-vote deletes the round-1 rows and bars
+     * the tied players from voting again, so the table alone would lose a PK candidate's
+     * round-1 read entirely; the tallies still hold it. Walking the tallies in order keeps
+     * each voter's last recorded vote — the re-vote for everyone who could cast one, round 1
+     * for those who could not. A day that never reached a tally has no event, and there the
+     * rows that were never cleared are all there is.
      */
-    fun wolfVoteDays(votes: List<Vote>, roleOf: (String) -> PlayerRole?): Map<String, List<Int>> =
-        votes
-            .filter { it.targetUserId?.let { id -> roleOf(id)?.isWolf } == true }
-            .groupBy({ it.voterUserId }, { it.dayNumber })
+    fun wolfVoteDays(
+        votes: List<Vote>,
+        events: List<GameEvent>,
+        roleOf: (String) -> PlayerRole?,
+    ): Map<String, List<Int>> {
+        val finalVote = mutableMapOf<Pair<String, Int>, String?>()
+        val daysTallied = mutableSetOf<Int>()
+        events.filter { it.eventType == "VOTE_RESULT" }.forEach { e ->
+            @Suppress("UNCHECKED_CAST")
+            val p = mapper.readValue(e.message, Map::class.java) as Map<String, Any?>
+            val day = (p["dayNumber"] as Number).toInt()
+            daysTallied += day
+            @Suppress("UNCHECKED_CAST")
+            (p["tally"] as? List<Map<String, Any?>>).orEmpty().forEach { t ->
+                val target = t["userId"] as? String
+                @Suppress("UNCHECKED_CAST")
+                (t["voters"] as? List<Map<String, Any?>>).orEmpty().forEach { v ->
+                    (v["userId"] as? String)?.let { finalVote[it to day] = target }
+                }
+            }
+            // Only players who actually cast an empty vote are listed here, so a PK candidate
+            // — who has no row at all in the re-vote — is never mistaken for abstaining.
+            @Suppress("UNCHECKED_CAST")
+            (p["abstainVoters"] as? List<Map<String, Any?>>).orEmpty().forEach { v ->
+                (v["userId"] as? String)?.let { finalVote[it to day] = null }
+            }
+        }
+        votes.filter { it.dayNumber !in daysTallied }
+            .forEach { finalVote[it.voterUserId to it.dayNumber] = it.targetUserId }
+
+        return finalVote.entries
+            .filter { (who, target) ->
+                roleOf(who.first)?.isWolf == false && target?.let { roleOf(it)?.isWolf } == true
+            }
+            .groupBy({ it.key.first }, { it.key.second })
             .mapValues { (_, days) -> days.sorted() }
+    }
 
     fun itemsFor(player: GamePlayer, facts: Facts, rewards: RewardProperties): List<Item> = buildList {
         val isWolf = player.role.isWolf

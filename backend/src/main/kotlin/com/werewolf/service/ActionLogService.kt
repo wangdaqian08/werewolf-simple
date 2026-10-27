@@ -259,7 +259,7 @@ class ActionLogService(
     }
 
     fun getLog(gameId: Int): List<ActionLogEntryDto> =
-        gameEventRepository.findByGameIdOrderByCreatedAtAsc(gameId).map { e ->
+        gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId).map { e ->
             ActionLogEntryDto(
                 id           = e.id ?: 0,
                 eventType    = e.eventType,

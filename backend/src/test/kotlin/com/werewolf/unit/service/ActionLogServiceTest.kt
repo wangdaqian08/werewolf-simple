@@ -371,7 +371,7 @@ class ActionLogServiceTest {
             GameEvent(gameId = gameId, eventType = "NIGHT_DEATH", message = "{}", targetUserId = "u1"),
             GameEvent(gameId = gameId, eventType = "VOTE_RESULT", message = "{}", targetUserId = null),
         )
-        whenever(gameEventRepository.findByGameIdOrderByCreatedAtAsc(gameId)).thenReturn(events)
+        whenever(gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId)).thenReturn(events)
 
         val result = service.getLog(gameId)
 

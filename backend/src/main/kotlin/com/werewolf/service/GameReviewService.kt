@@ -56,7 +56,7 @@ class GameReviewService(
             game,
             players,
             nightPhaseRepository.findByGameId(gameId),
-            gameEventRepository.findByGameIdOrderByCreatedAtAsc(gameId),
+            gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId),
             night1PerkSaved,
             // Rewards come from the ledger, the durable record, so both replays show the same numbers.
             creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD)

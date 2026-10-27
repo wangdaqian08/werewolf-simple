@@ -20,7 +20,8 @@ object PlayerReviewBuilder {
     private val mapper = jacksonObjectMapper()
     private val DAY_EVENT_TYPES = setOf("SHERIFF_RESULT", "VOTE_RESULT", "HUNTER_SHOT", "SELF_DESTRUCT", "IDIOT_REVEAL", "BADGE_HANDOVER")
 
-    private class LoggedEvent(val type: String, val day: Int, val payload: Map<String, Any?>)
+    /** [index] is the event's place in the whole game's log, which is what the cuts below compare. */
+    private class LoggedEvent(val type: String, val day: Int, val payload: Map<String, Any?>, val index: Int)
 
     fun build(
         game: Game,
@@ -37,10 +38,10 @@ object PlayerReviewBuilder {
             ?: throw IllegalArgumentException("The viewer did not play this game")
         val byId = players.associateBy { it.userId }
 
-        val logged = events.map { e ->
+        val logged = events.mapIndexed { i, e ->
             @Suppress("UNCHECKED_CAST")
             val payload = mapper.readValue(e.message, Map::class.java) as Map<String, Any?>
-            LoggedEvent(e.eventType, (payload["dayNumber"] as Number).toInt(), payload)
+            LoggedEvent(e.eventType, (payload["dayNumber"] as Number).toInt(), payload, i)
         }
         val completed = nights.filter { it.subPhase == NightSubPhase.COMPLETE }.associateBy { it.dayNumber }
         val nightDeaths = logged.filter { it.type == "NIGHT_DEATH" }.groupBy({ it.day }, { it.payload["userId"] as String })
@@ -53,21 +54,38 @@ object PlayerReviewBuilder {
                 ?.let { NightOrchestrator.computeKills(it, night1PerkSaved) }
             ?: emptyList()
 
-        // The viewer dies either at a dawn — and then hears nothing of that day — or part way
-        // through a day, and then hears it up to the event that took them out.
+        // The viewer dies either at a dawn or part way through a day; either way the replay
+        // runs to the event that took them out. Night 1 is the awkward case: with a sheriff,
+        // NightOrchestrator defers the kills and runs the election first, so a night-1 victim
+        // was alive for that campaign and its result is theirs to see.
         val diedOnDay = me.diedDay
+        val myNightDeathAt = logged
+            .firstOrNull { it.type == "NIGHT_DEATH" && it.payload["userId"] == viewerId }?.index
         fun killsViewer(e: LoggedEvent) = when (e.type) {
             "VOTE_RESULT" -> e.payload["eliminatedUserId"] == viewerId
             "HUNTER_SHOT" -> e.payload["targetUserId"] == viewerId
             "SELF_DESTRUCT" -> e.payload["userId"] == viewerId || e.payload["takenUserId"] == viewerId
             else -> false
         }
+        // A hunter's shot and a sheriff's handover land after the blow that killed them, yet
+        // they are the viewer's own doing and plainly known to them, so they outlive the cut.
+        fun myOwnAct(e: LoggedEvent) = when (e.type) {
+            "HUNTER_SHOT" -> e.payload["hunterUserId"] == viewerId
+            "BADGE_HANDOVER" -> e.payload["fromUserId"] == viewerId
+            else -> false
+        }
         fun visibleEvents(day: Int): List<LoggedEvent> {
             val all = eventsByDay[day].orEmpty()
             if (day != diedOnDay) return all
-            if (viewerId in deathsAt(day)) return emptyList()
-            val last = all.indexOfFirst(::killsViewer)
-            return if (last >= 0) all.take(last + 1) else all
+            val cut = if (viewerId in deathsAt(day)) {
+                // Everything logged before the dawn that announced their death. From day 2 on the
+                // reveal comes first, so this is empty; on day 1 it is the election they stood in.
+                // A cancelled game has no NIGHT_DEATH to place, so nothing of that day is claimed.
+                myNightDeathAt ?: return all.filter(::myOwnAct)
+            } else {
+                all.firstOrNull(::killsViewer)?.index?.plus(1) ?: return all
+            }
+            return all.filter { it.index < cut || myOwnAct(it) }
         }
 
         val days = (completed.keys + eventsByDay.keys).sorted().filter { diedOnDay == null || it <= diedOnDay }

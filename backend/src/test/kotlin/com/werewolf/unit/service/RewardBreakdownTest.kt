@@ -38,6 +38,23 @@ class RewardBreakdownTest {
         targetUserId = target,
     )
 
+    /** [tally]: target to the voters who picked them. Mirrors ActionLogService.recordVoteResult. */
+    private fun voteResult(day: Int, tally: List<Pair<String, List<String>>>, abstain: List<String> = emptyList()) =
+        event(
+            "VOTE_RESULT",
+            mapOf(
+                "dayNumber" to day,
+                "tally" to tally.map { (target, voters) ->
+                    mapOf(
+                        "userId" to target,
+                        "votes" to voters.size,
+                        "voters" to voters.map { mapOf("userId" to it) },
+                    )
+                },
+                "abstainVoters" to abstain.map { mapOf("userId" to it) },
+            ),
+        )
+
     private fun facts(
         winner: WinnerSide = WinnerSide.VILLAGER,
         finalDay: Int = 3,
@@ -66,7 +83,7 @@ class RewardBreakdownTest {
             vote(1, "seer", "king"), // the 白狼王 is still a wolf
         )
 
-        assertThat(RewardBreakdown.wolfVoteDays(votes) { roles[it] })
+        assertThat(RewardBreakdown.wolfVoteDays(votes, emptyList()) { roles[it] })
             .isEqualTo(mapOf("v" to listOf(1), "seer" to listOf(1)))
     }
 
@@ -80,6 +97,42 @@ class RewardBreakdownTest {
         assertThat(lostWolf.map { it.reason to it.amount }).containsExactly(RewardReason.WOLF_SURVIVAL to 8)
         assertThat(lostWolf.single().days).isEqualTo(2)
         assertThat(lostVillager.map { it.reason to it.amount }).containsExactly(RewardReason.PARTICIPATION to 5)
+    }
+
+    @Test
+    fun `a wolf voting a teammate is a play, not a read, and is not paid for it`() {
+        val votes = listOf(
+            vote(1, "w1", "king"), // 倒钩: a wolf bussing a teammate
+            vote(1, "v", "king"), // a villager reading the same wolf
+        )
+
+        // Otherwise two wolves could farm the bonus off each other every day.
+        assertThat(RewardBreakdown.wolfVoteDays(votes, emptyList()) { roles[it] }).isEqualTo(mapOf("v" to listOf(1)))
+    }
+
+    @Test
+    fun `a PK candidate keeps the round-1 read that the re-vote deleted`() {
+        // Round 1: v and seer both find the wolf. v is then tied onto the PK stage, barred
+        // from voting, and the re-vote deletes every round-1 row — so the table has lost v.
+        val events = listOf(
+            voteResult(1, listOf("king" to listOf("v", "seer"))),
+            voteResult(1, listOf("king" to listOf("seer"))),
+        )
+        val tableAfterRevote = listOf(vote(1, "seer", "king"))
+
+        assertThat(RewardBreakdown.wolfVoteDays(tableAfterRevote, events) { roles[it] })
+            .isEqualTo(mapOf("v" to listOf(1), "seer" to listOf(1)))
+    }
+
+    @Test
+    fun `a re-vote that moves off the wolf is the voter's final word`() {
+        val events = listOf(
+            voteResult(1, listOf("king" to listOf("v"))),
+            voteResult(1, listOf("seer" to listOf("v"))),
+        )
+
+        // v could vote again and chose a villager, so there is nothing to pay for.
+        assertThat(RewardBreakdown.wolfVoteDays(emptyList(), events) { roles[it] }).isEmpty()
     }
 
     @Test

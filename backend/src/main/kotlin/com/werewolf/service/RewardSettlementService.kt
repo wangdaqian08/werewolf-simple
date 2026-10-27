@@ -74,15 +74,17 @@ class RewardSettlementService(
     /** Everything the per-player amounts depend on, read once per settlement. */
     fun facts(gameId: Int, finalDay: Int, winner: WinnerSide, players: List<com.werewolf.model.GamePlayer>): RewardBreakdown.Facts {
         val roleOf = players.associate { it.userId to it.role }
+        val events = gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId)
         return RewardBreakdown.Facts(
             winner = winner,
             finalDay = finalDay,
             badgeHolders = RewardBreakdown.badgeHolders(
                 sheriffElectionRepository.findByGameId(gameId).orElse(null)?.electedSheriffUserId,
-                gameEventRepository.findByGameIdOrderByCreatedAtAsc(gameId),
+                events,
             ),
             wolfVoteDays = RewardBreakdown.wolfVoteDays(
                 voteRepository.findByGameIdAndVoteContext(gameId, VoteContext.ELIMINATION),
+                events,
             ) { roleOf[it] },
         )
     }

@@ -98,6 +98,11 @@ class PlayerReviewBuilderTest {
         ),
     )
 
+    private fun hunterShot(day: Int, hunter: String, target: String) = event(
+        "HUNTER_SHOT",
+        mapOf("dayNumber" to day, "hunterUserId" to hunter, "targetUserId" to target),
+    )
+
     private fun badgeHandover(day: Int, from: String, to: String?) = event(
         "BADGE_HANDOVER",
         buildMap {
@@ -256,6 +261,27 @@ class PlayerReviewBuilderTest {
     }
 
     @Test
+    fun `a night-1 victim still sees the election they stood in before the dawn revealed them`() {
+        // With a sheriff, NightOrchestrator defers the night-1 kills and runs the election
+        // first, so the victim was alive for that campaign: SHERIFF_RESULT is logged before
+        // their NIGHT_DEATH, and the exile vote after it is not theirs to hear.
+        val review = build(
+            "v", board(mapOf("v" to 1)), listOf(night(1) { wolfTargetUserId = "v" }),
+            listOf(sheriffResult(1, "v"), nightDeath(1, "v"), voteResult(1, "w1")),
+            rewards = mapOf("v" to 10),
+            myItems = listOf(
+                item(RewardReason.PARTICIPATION, 5),
+                item(RewardReason.SHERIFF, 5, count = 1, each = 5),
+            ),
+        )
+
+        val election = review.rounds.single().events.filterIsInstance<PlayerDayEvent.Vote>().single()
+        assertThat(election.kind).isEqualTo(VoteKind.SHERIFF)
+        // Winning it is credited on the election itself, which they can now actually see.
+        assertThat(election.points).isEqualTo(5)
+    }
+
+    @Test
     fun `being voted out ends the replay on that vote, keeping what came before it`() {
         val review = build(
             "v",
@@ -268,6 +294,18 @@ class PlayerReviewBuilderTest {
         assertThat(review.rounds.single().events.map { it::class.simpleName }).containsExactly("IdiotReveal", "Vote")
         assertThat(review.seats.first { it.userId == "idiot" }.role).isEqualTo(PlayerRole.IDIOT)
         assertThat(review.seats.first { it.userId == "w2" }.camp).isNull()
+    }
+
+    @Test
+    fun `my own parting shot outlives the cut, the table's business after me does not`() {
+        val review = build(
+            "hunter", board(mapOf("hunter" to 2)), listOf(night(1), night(2)),
+            listOf(voteResult(2, "hunter"), hunterShot(2, "hunter", "w1"), selfDestruct(2, "w2")),
+        )
+
+        // The shot is theirs and they fired it; the wolf's self-destruct after it is not.
+        assertThat(review.rounds.last().events.map { it::class.simpleName })
+            .containsExactly("Vote", "HunterShot")
     }
 
     @Test

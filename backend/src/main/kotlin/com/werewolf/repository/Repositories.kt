@@ -151,7 +151,7 @@ interface EliminationHistoryRepository : JpaRepository<EliminationHistory, Int> 
 }
 
 interface GameEventRepository : JpaRepository<GameEvent, Int> {
-    fun findByGameIdOrderByCreatedAtAsc(gameId: Int): List<GameEvent>
+    fun findByGameIdOrderByCreatedAtAscIdAsc(gameId: Int): List<GameEvent>
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }
 

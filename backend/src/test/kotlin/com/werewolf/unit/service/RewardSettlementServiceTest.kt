@@ -83,7 +83,7 @@ class RewardSettlementServiceTest {
                 com.werewolf.model.SheriffElection(gameId = gameId).also { e -> e.electedSheriffUserId = it }
             }),
         )
-        whenever(gameEventRepository.findByGameIdOrderByCreatedAtAsc(gameId)).thenReturn(emptyList())
+        whenever(gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId)).thenReturn(emptyList())
     }
 
     private fun exileVote(day: Int, voter: String, target: String?) = Vote(
