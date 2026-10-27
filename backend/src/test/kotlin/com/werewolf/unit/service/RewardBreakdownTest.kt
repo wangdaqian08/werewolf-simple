@@ -82,6 +82,20 @@ class RewardBreakdownTest {
     }
 
     @Test
+    fun `every reason a player can be paid for is in the table players can read`() {
+        // A rule that pays but is not listed is a rule nobody can find out about.
+        assertThat(RewardBreakdown.catalog(rewards).map { it.reason })
+            .containsExactlyInAnyOrderElementsOf(RewardReason.entries)
+    }
+
+    @Test
+    fun `a game is floored at zero, so a penalty can never reach credits already banked`() {
+        assertThat(RewardBreakdown.floor(-7)).isZero()
+        assertThat(RewardBreakdown.floor(0)).isZero()
+        assertThat(RewardBreakdown.floor(12)).isEqualTo(12)
+    }
+
+    @Test
     fun `the badge and the wolf votes stack on top of the base`() {
         val f = facts(badgeHolders = setOf("v"), wolfVoteDays = mapOf("v" to listOf(1, 3)))
         val items = RewardBreakdown.itemsFor(player("v"), f, rewards)

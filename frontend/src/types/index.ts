@@ -370,6 +370,18 @@ export interface PlayerReview {
 /** Why the viewer earned what they did. */
 export type RewardReason = 'WIN' | 'WOLF_SURVIVAL' | 'PARTICIPATION' | 'SHERIFF' | 'WOLF_VOTE'
 
+/**
+ * One line of the scoring table players can read. A negative `amount` is a penalty;
+ * `perUnit` marks the lines paid per occurrence rather than once.
+ */
+export interface RewardRule {
+  reason: RewardReason
+  label: string
+  detail: string
+  amount: number
+  perUnit: boolean
+}
+
 /** One line of the total. `count`/`each` and `days`/`perDay` show the working where there is any. */
 export interface RewardItem {
   reason: RewardReason

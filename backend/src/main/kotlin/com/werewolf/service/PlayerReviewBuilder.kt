@@ -97,7 +97,9 @@ object PlayerReviewBuilder {
         // if a rate was changed after settlement, the total stands alone and nothing is
         // pinned to individual actions.
         val total = rewards[viewerId]
-        val shown = myItems.takeIf { total != null && it.sumOf(RewardBreakdown.Item::amount) == total }.orEmpty()
+        val shown = myItems
+            .takeIf { total != null && RewardBreakdown.floor(it.sumOf(RewardBreakdown.Item::amount)) == total }
+            .orEmpty()
         val voteItem = shown.firstOrNull { it.reason == RewardReason.WOLF_VOTE }
         val sheriffLeft = intArrayOf(shown.firstOrNull { it.reason == RewardReason.SHERIFF }?.amount ?: 0)
 

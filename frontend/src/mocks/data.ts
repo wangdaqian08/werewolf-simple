@@ -20,6 +20,7 @@ import type {
   PlayerReview,
   PlayerRole,
   PlayerSeat,
+  RewardRule,
   ReviewPlayer,
   RoleRevealState,
   Room,
@@ -1531,3 +1532,39 @@ export const MOCK_PLAYER_REVIEW: PlayerReview = {
   ],
   diedOnDay: 2,
 }
+
+// ── Scoring table (积分规则) ───────────────────────────────────────────────────
+
+// Mirrors RewardBreakdown.catalog at its configured defaults. A penalty would be
+// one more entry here with a negative amount.
+export const MOCK_REWARD_RULES: RewardRule[] = [
+  { reason: 'WIN', label: '胜利方奖励', detail: '本局获胜的阵营', amount: 20, perUnit: false },
+  {
+    reason: 'PARTICIPATION',
+    label: '参与奖励',
+    detail: '失利的好人阵营',
+    amount: 5,
+    perUnit: false,
+  },
+  {
+    reason: 'WOLF_SURVIVAL',
+    label: '狼人存活',
+    detail: '失利的狼人，按存活天数计',
+    amount: 4,
+    perUnit: true,
+  },
+  {
+    reason: 'SHERIFF',
+    label: '当选／持有警徽',
+    detail: '当选警长，或之后接过警徽',
+    amount: 5,
+    perUnit: false,
+  },
+  {
+    reason: 'WOLF_VOTE',
+    label: '投出狼人',
+    detail: '白天投票投中狼人，每天最多一次',
+    amount: 3,
+    perUnit: true,
+  },
+]

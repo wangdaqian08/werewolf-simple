@@ -35,6 +35,19 @@ enum class RewardReason { WIN, WOLF_SURVIVAL, PARTICIPATION, SHERIFF, WOLF_VOTE 
  */
 data class MyReward(val total: Int, val items: List<RewardItem>)
 
+/**
+ * One line of the scoring table, as shown to players. A negative [amount] is a penalty;
+ * [perUnit] marks the lines paid per occurrence rather than once — per day survived,
+ * per day your vote found a wolf.
+ */
+data class RewardRule(
+    val reason: RewardReason,
+    val label: String,
+    val detail: String,
+    val amount: Int,
+    val perUnit: Boolean,
+)
+
 /** [count]/[each] and [days]/[perDay] show the working where a line has any. */
 data class RewardItem(
     val reason: RewardReason,

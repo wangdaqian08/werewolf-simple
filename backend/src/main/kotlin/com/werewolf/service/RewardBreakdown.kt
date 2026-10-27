@@ -2,6 +2,7 @@ package com.werewolf.service
 
 import com.werewolf.config.RewardProperties
 import com.werewolf.dto.RewardReason
+import com.werewolf.dto.RewardRule
 import com.werewolf.model.GameEvent
 import com.werewolf.model.GamePlayer
 import com.werewolf.model.PlayerRole
@@ -17,6 +18,11 @@ import tools.jackson.module.kotlin.jacksonObjectMapper
  * A player's total is their base — the side they were on and how they fared —
  * plus a bonus for every badge they held and for every day their exile vote
  * landed on a wolf.
+ *
+ * [catalog] is the same set of rules written out for players to read, so the
+ * scoring table and what actually gets paid are one thing. A penalty is a single
+ * entry with a negative amount; [totalFor] floors a game at zero, so a penalty
+ * can cancel out what this game earned but never reach credits already banked.
  */
 object RewardBreakdown {
 
@@ -89,6 +95,21 @@ object RewardBreakdown {
         }
     }
 
+    /** Floored at zero: a bad game can be worth nothing, never less than nothing. */
     fun totalFor(player: GamePlayer, facts: Facts, rewards: RewardProperties): Int =
-        itemsFor(player, facts, rewards).sumOf { it.amount }
+        floor(itemsFor(player, facts, rewards).sumOf { it.amount })
+
+    fun floor(sum: Int): Int = sum.coerceAtLeast(0)
+
+    /**
+     * The scoring table players can read. Every [RewardReason] must appear here —
+     * a rule that pays but is not listed is a rule nobody can find out about.
+     */
+    fun catalog(rewards: RewardProperties): List<RewardRule> = listOf(
+        RewardRule(RewardReason.WIN, "胜利方奖励", "本局获胜的阵营", rewards.winBonus, perUnit = false),
+        RewardRule(RewardReason.PARTICIPATION, "参与奖励", "失利的好人阵营", rewards.participation, perUnit = false),
+        RewardRule(RewardReason.WOLF_SURVIVAL, "狼人存活", "失利的狼人，按存活天数计", rewards.wolfPerDaySurvived, perUnit = true),
+        RewardRule(RewardReason.SHERIFF, "当选／持有警徽", "当选警长，或之后接过警徽", rewards.sheriffBonus, perUnit = false),
+        RewardRule(RewardReason.WOLF_VOTE, "投出狼人", "白天投票投中狼人，每天最多一次", rewards.wolfVoteBonus, perUnit = true),
+    )
 }
