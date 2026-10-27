@@ -14,8 +14,7 @@ on:
 jobs:
   payment-e2e:
     name: Stripe sandbox payment flow
-    # Pinned: Playwright 1.58 cannot install browser deps on ubuntu-latest (26.04).
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     # Fork PRs receive no secrets — skip instead of failing red on the
     # launcher's STRIPE_SANDBOX_SECRET guard.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
