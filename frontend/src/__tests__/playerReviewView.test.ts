@@ -48,7 +48,7 @@ describe('PlayerReviewView', () => {
     vi.mocked(gameService.getPlayerReview).mockRejectedValue({ response: { status: 403 } })
     const { wrapper } = await mountView()
     expect(wrapper.find('[data-testid="player-review-error"]').text()).toBe(
-      '遊戲結束後，本局玩家才能檢視覆盤',
+      '遊戲結束後，本局玩家才能查看覆盤',
     )
   })
 
@@ -62,7 +62,7 @@ describe('PlayerReviewView', () => {
     vi.mocked(gameService.getPlayerReview).mockRejectedValue(new Error('Network Error'))
     const { wrapper } = await mountView()
     expect(wrapper.find('[data-testid="player-review-error"]').text()).toBe(
-      '覆盤載入失敗，請稍後再試',
+      '覆盤加載失敗，請稍後再試',
     )
   })
 

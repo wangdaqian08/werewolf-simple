@@ -7,19 +7,19 @@ test.beforeEach(async ({page}) => {
 })
 
 test('Create Room button is disabled with no nickname', async ({page}) => {
-    const btn = page.getByRole('button', {name: /建立房間|Create Room/i})
+    const btn = page.getByRole('button', {name: /創建房間|Create Room/i})
     await expect(btn).toBeDisabled()
 })
 
 test('Create Room button is disabled with whitespace-only nickname', async ({page}) => {
     await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('   ')
-    const btn = page.getByRole('button', {name: /建立房間|Create Room/i})
+    const btn = page.getByRole('button', {name: /創建房間|Create Room/i})
     await expect(btn).toBeDisabled()
 })
 
 test('Create Room button enables once nickname is typed', async ({page}) => {
     await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Alice')
-    const btn = page.getByRole('button', {name: /建立房間|Create Room/i})
+    const btn = page.getByRole('button', {name: /創建房間|Create Room/i})
     await expect(btn).toBeEnabled()
 })
 
@@ -44,7 +44,7 @@ test('Join button enables when both nickname and room code are entered', async (
 
 test('Create Room navigates to config screen', async ({page}) => {
     await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('TestHost')
-    await page.getByRole('button', {name: /建立房間|Create Room/i}).click()
+    await page.getByRole('button', {name: /創建房間|Create Room/i}).click()
     await expect(page).toHaveURL(/\/create-room/)
 })
 

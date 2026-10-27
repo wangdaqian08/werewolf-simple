@@ -6,9 +6,9 @@ async function setup(page: Page) {
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
   await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Test')
-  await page.getByRole('button', { name: /建立房間|Create Room/i }).first().click()
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /建立房間|Create Room/i }).click()
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)

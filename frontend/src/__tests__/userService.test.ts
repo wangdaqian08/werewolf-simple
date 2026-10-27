@@ -40,7 +40,7 @@ describe('userService', () => {
   it('loginWithWechat posts the auth code to /auth/wechat and returns LoginResponse', async () => {
     const expected = {
       token: 'jwt-wechat',
-      user: { userId: 'wechat:xyz', nickname: '微信使用者', avatarUrl: 'https://w.png' },
+      user: { userId: 'wechat:xyz', nickname: '微信用戶', avatarUrl: 'https://w.png' },
     }
     mockedHttp.post.mockResolvedValueOnce({ data: expected })
 

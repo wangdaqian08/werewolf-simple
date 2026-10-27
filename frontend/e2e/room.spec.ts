@@ -10,9 +10,9 @@ async function goToLobby(page: import('@playwright/test').Page) {
 async function createRoom(page: import('@playwright/test').Page) {
     await goToLobby(page)
     await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('TestHost')
-    await page.getByRole('button', {name: /建立房間|Create Room/i}).first().click()
+    await page.getByRole('button', {name: /創建房間|Create Room/i}).first().click()
     await expect(page).toHaveURL(/\/create-room/)
-    await page.getByRole('button', {name: /建立房間|Create Room/i}).click()
+    await page.getByRole('button', {name: /創建房間|Create Room/i}).click()
     await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
     await expect(page.getByTestId('room-code')).toBeVisible() // panel closed, ?setup dropped
 }
@@ -21,9 +21,9 @@ async function createRoom(page: import('@playwright/test').Page) {
 async function openSetup(page: import('@playwright/test').Page) {
     await goToLobby(page)
     await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('TestHost')
-    await page.getByRole('button', {name: /建立房間|Create Room/i}).first().click()
+    await page.getByRole('button', {name: /創建房間|Create Room/i}).first().click()
     await expect(page).toHaveURL(/\/create-room/)
-    await page.getByRole('button', {name: /建立房間|Create Room/i}).click()
+    await page.getByRole('button', {name: /創建房間|Create Room/i}).click()
     await expect(page.getByTestId('room-setup-panel')).toBeVisible()
 }
 
@@ -53,7 +53,7 @@ async function pickFirstSeat(page: import('@playwright/test').Page) {
 test('Create Room navigates to config screen', async ({page}) => {
     await goToLobby(page)
     await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('TestHost')
-    await page.getByRole('button', {name: /建立房間|Create Room/i}).first().click()
+    await page.getByRole('button', {name: /創建房間|Create Room/i}).first().click()
     await expect(page).toHaveURL(/\/create-room/)
 })
 

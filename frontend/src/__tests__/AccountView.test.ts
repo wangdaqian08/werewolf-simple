@@ -198,7 +198,7 @@ describe('AccountView', () => {
     h.getWalletMock.mockRejectedValue(new Error('network'))
     const { wrapper } = await mountAccount()
     expect(wrapper.find('[data-testid="account-wallet"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="account-wallet"]').text()).toContain('無法載入積分記錄')
+    expect(wrapper.find('[data-testid="account-wallet"]').text()).toContain('無法加載積分記錄')
     // Balance line is hidden on error so stale credits from userStore are not shown.
     expect(wrapper.find('[data-testid="account-balance"]').exists()).toBe(false)
     // Other sections are unaffected.
@@ -333,22 +333,22 @@ describe('AccountView money formatting and status fallbacks', () => {
   it('still renders the page when the perks fetch fails (per-section fallback)', async () => {
     h.getMyPerksMock.mockRejectedValue(new Error('network'))
     const { wrapper } = await mountAccount()
-    expect(wrapper.find('[data-testid="account-perks"]').text()).toContain('無法載入道具記錄')
+    expect(wrapper.find('[data-testid="account-perks"]').text()).toContain('無法加載道具記錄')
     expect(wrapper.find('[data-testid="perk-row"]').exists()).toBe(false)
     // Other sections are unaffected and loading cleared (no unhandled rejection).
     expect(wrapper.find('[data-testid="account-balance"]').text()).toContain('250')
     expect(wrapper.find('[data-testid="order-row"]').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('載入中')
+    expect(wrapper.text()).not.toContain('加載中')
   })
 
   it('still renders the page when the orders fetch fails (per-section fallback)', async () => {
     h.listOrdersMock.mockRejectedValue(new Error('network'))
     const { wrapper } = await mountAccount()
-    expect(wrapper.find('[data-testid="account-payments"]').text()).toContain('無法載入充值記錄')
+    expect(wrapper.find('[data-testid="account-payments"]').text()).toContain('無法加載充值記錄')
     expect(wrapper.find('[data-testid="order-row"]').exists()).toBe(false)
     // Other sections are unaffected and loading cleared (no unhandled rejection).
     expect(wrapper.find('[data-testid="account-balance"]').text()).toContain('250')
     expect(wrapper.find('[data-testid="perk-row"]').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('載入中')
+    expect(wrapper.text()).not.toContain('加載中')
   })
 })

@@ -9,7 +9,7 @@ export default defineConfig({
     use: {
         baseURL: 'http://localhost:5174',
     // The UI follows the browser language; the suites assert the Chinese UI.
-    locale: 'zh-TW',
+    locale: 'zh-Hant',
         headless: true,
     },
     reporter: process.env.CI

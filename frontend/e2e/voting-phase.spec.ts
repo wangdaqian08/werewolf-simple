@@ -6,9 +6,9 @@ async function goToGame(page: Page) {
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
   await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Tester')
-  await page.getByRole('button', { name: /建立房間|Create Room/i }).first().click()
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /建立房間|Create Room/i }).click()
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
@@ -191,8 +191,8 @@ test('idiot reveal banner shows correct content', async ({ page }) => {
   await expect(page.locator('.elim-banner-body')).toBeVisible()
   
   // Verify banner title
-  await expect(page.getByText(/白痴翻牌/i)).toBeVisible()
-  await expect(page.getByText(/白痴翻牌|IDIOT REVEALED/i)).toBeVisible()
+  await expect(page.getByText(/白癡翻牌/i)).toBeVisible()
+  await expect(page.getByText(/白癡翻牌|IDIOT REVEALED/i)).toBeVisible()
   
   // Verify nickname and seat number format (use specific selector to avoid multiple matches)
   await expect(page.locator('.elim-banner-name')).toContainText('You')

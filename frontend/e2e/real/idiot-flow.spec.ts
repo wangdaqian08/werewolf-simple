@@ -260,7 +260,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       for (const [roleName, page] of localCtx.pages) {
         const idiotBanner = page
             .locator('.elim-banner-body')
-            .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
+            .filter({ hasText: /白癡翻牌|IDIOT REVEALED/i })
         await expect(
             idiotBanner,
             `[${roleName} browser] elim-banner-body must show IDIOT-reveal text`,
@@ -301,7 +301,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       const hostPage = localCtx.hostPage
       const idiotBanner = hostPage
           .locator('.elim-banner-body')
-          .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
+          .filter({ hasText: /白癡翻牌|IDIOT REVEALED/i })
       await expect(idiotBanner).toBeVisible({ timeout: 10_000 })
 
       // Host clicks voting-continue to advance D1 → N2.
