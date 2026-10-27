@@ -23,16 +23,27 @@ data class PlayerReview(
     val reward: MyReward?,
 )
 
-/** Why the viewer earned what they did — the three branches of RewardSettlementService.rewardFor. */
-enum class RewardReason { WIN, WOLF_SURVIVAL, PARTICIPATION }
+/** Why the viewer earned what they did — the lines of [RewardBreakdown]. */
+enum class RewardReason { WIN, WOLF_SURVIVAL, PARTICIPATION, SHERIFF, WOLF_VOTE }
 
 /**
- * What the viewer earned from this game, taken from the ledger rather than recomputed,
- * with the reason behind it. [days] and [perDay] are set only for WOLF_SURVIVAL, and
- * [perDay] only while it still multiplies out to [amount]: the configured rate can be
- * changed after a game has been settled, and the settled amount is the truth.
+ * What the viewer earned from this game. [total] is the settled amount read back from
+ * the ledger and is always the truth; [items] is the working, recomputed from the same
+ * rules, and is empty when it no longer adds up to [total] — the configured rates can
+ * be changed after a game has been settled, and the replay will not show arithmetic
+ * that does not hold.
  */
-data class MyReward(val amount: Int, val reason: RewardReason, val days: Int?, val perDay: Int?)
+data class MyReward(val total: Int, val items: List<RewardItem>)
+
+/** [count]/[each] and [days]/[perDay] show the working where a line has any. */
+data class RewardItem(
+    val reason: RewardReason,
+    val amount: Int,
+    val count: Int? = null,
+    val each: Int? = null,
+    val days: Int? = null,
+    val perDay: Int? = null,
+)
 
 /** WOLF covers every wolf-camp role: a seer check cannot tell them apart. */
 enum class KnownCamp { WOLF, GOOD }
@@ -95,6 +106,8 @@ sealed interface PlayerDayEvent {
         val abstain: List<PlayerSeat>,
         val result: PlayerSeat?,
         val appointed: Boolean,
+        /** Credits this very vote earned the viewer, null when it earned nothing. */
+        val points: Int? = null,
     ) : PlayerDayEvent
 
     @JsonTypeName("HUNTER_SHOT")
@@ -107,8 +120,9 @@ sealed interface PlayerDayEvent {
     data class IdiotReveal(val player: PlayerSeat) : PlayerDayEvent
 
     /** [to] null = the badge was destroyed. */
+    /** [points] is set when the viewer is the one receiving the badge. */
     @JsonTypeName("BADGE_HANDOVER")
-    data class BadgeHandover(val from: PlayerSeat, val to: PlayerSeat?) : PlayerDayEvent
+    data class BadgeHandover(val from: PlayerSeat, val to: PlayerSeat?, val points: Int? = null) : PlayerDayEvent
 }
 
 data class PlayerTally(val target: PlayerSeat, val votes: Double, val voters: List<PlayerSeat>)

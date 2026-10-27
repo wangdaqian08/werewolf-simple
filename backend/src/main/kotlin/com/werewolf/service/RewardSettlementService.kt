@@ -3,11 +3,14 @@ package com.werewolf.service
 import com.werewolf.config.RewardProperties
 import com.werewolf.game.DomainEvent
 import com.werewolf.model.CreditTxType
-import com.werewolf.model.GamePlayer
+import com.werewolf.model.VoteContext
 import com.werewolf.model.WinnerSide
+import com.werewolf.repository.GameEventRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.GameSettlementRepository
+import com.werewolf.repository.SheriffElectionRepository
+import com.werewolf.repository.VoteRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
@@ -23,10 +26,9 @@ import org.springframework.transaction.annotation.Transactional
  * activations that did not take effect) runs on EVERY call, including
  * cancellations, gated per-activation by PerkSettlementService.
  *
- * Reward formula (amounts from werewolf.rewards config):
- *   winning side          → winBonus
- *   losing villager side  → participation
- *   losing wolf           → wolfPerDaySurvived × days survived
+ * The amounts come from [RewardBreakdown], shared with 玩家视角复盘 so the replay
+ * explains exactly what was banked: a base for the side you were on and how you
+ * fared, plus a bonus per badge held and per day your exile vote found a wolf.
  */
 @Service
 class RewardSettlementService(
@@ -37,6 +39,9 @@ class RewardSettlementService(
     private val stompPublisher: StompPublisher,
     private val rewards: RewardProperties,
     private val perkSettlementService: PerkSettlementService,
+    private val voteRepository: VoteRepository,
+    private val sheriffElectionRepository: SheriffElectionRepository,
+    private val gameEventRepository: GameEventRepository,
 ) {
     private val log = LoggerFactory.getLogger(RewardSettlementService::class.java)
 
@@ -54,7 +59,8 @@ class RewardSettlementService(
 
         val game = gameRepository.findById(gameId).orElse(null) ?: return
         val players = gamePlayerRepository.findByGameId(gameId)
-        val perUser = players.associate { it.userId to rewardFor(it, winner, game.dayNumber) }
+        val facts = facts(gameId, game.dayNumber, winner, players)
+        val perUser = players.associate { it.userId to RewardBreakdown.totalFor(it, facts, rewards) }
 
         perUser.forEach { (userId, amount) ->
             if (amount > 0) {
@@ -65,13 +71,19 @@ class RewardSettlementService(
         stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.GameSettled(gameId, perUser))
     }
 
-    private fun rewardFor(player: GamePlayer, winner: WinnerSide, finalDay: Int): Int {
-        val isWolf = player.role.isWolf
-        val won = if (winner == WinnerSide.WEREWOLF) isWolf else !isWolf
-        return when {
-            won -> rewards.winBonus
-            isWolf -> rewards.wolfPerDaySurvived * (player.diedDay ?: finalDay).coerceAtLeast(1)
-            else -> rewards.participation
-        }
+    /** Everything the per-player amounts depend on, read once per settlement. */
+    fun facts(gameId: Int, finalDay: Int, winner: WinnerSide, players: List<com.werewolf.model.GamePlayer>): RewardBreakdown.Facts {
+        val roleOf = players.associate { it.userId to it.role }
+        return RewardBreakdown.Facts(
+            winner = winner,
+            finalDay = finalDay,
+            badgeHolders = RewardBreakdown.badgeHolders(
+                sheriffElectionRepository.findByGameId(gameId).orElse(null)?.electedSheriffUserId,
+                gameEventRepository.findByGameIdOrderByCreatedAtAsc(gameId),
+            ),
+            wolfVoteDays = RewardBreakdown.wolfVoteDays(
+                voteRepository.findByGameIdAndVoteContext(gameId, VoteContext.ELIMINATION),
+            ) { roleOf[it] },
+        )
     }
 }

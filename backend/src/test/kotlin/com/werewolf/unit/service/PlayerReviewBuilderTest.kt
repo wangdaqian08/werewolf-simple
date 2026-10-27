@@ -3,6 +3,7 @@ package com.werewolf.unit.service
 import com.werewolf.dto.*
 import com.werewolf.model.*
 import com.werewolf.service.PlayerReviewBuilder
+import com.werewolf.service.RewardBreakdown
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import tools.jackson.module.kotlin.jacksonObjectMapper
@@ -73,46 +74,104 @@ class PlayerReviewBuilderTest {
         perkSaved: Set<String> = emptySet(),
         winner: WinnerSide? = WinnerSide.WEREWOLF,
         rewards: Map<String, Int> = emptyMap(),
-        wolfPerDay: Int = 4,
+        myItems: List<RewardBreakdown.Item> = emptyList(),
     ) = PlayerReviewBuilder.build(
         Game(roomId = 1, hostUserId = "w1").also { it.phase = GamePhase.GAME_OVER; it.winner = winner },
-        players, nights, events, perkSaved, viewer, rewards, wolfPerDay,
+        players, nights, events, perkSaved, viewer, rewards, myItems,
     ) { "N-$it" }
 
-    @Test
-    fun `the winning side's points are explained as the win bonus`() {
-        val review = build("w1", board(), listOf(night(1)), rewards = mapOf("w1" to 20))
+    private fun item(
+        reason: RewardReason,
+        amount: Int,
+        count: Int? = null,
+        each: Int? = null,
+        onDays: List<Int> = emptyList(),
+    ) = RewardBreakdown.Item(reason, amount, count, each, onDays = onDays)
 
-        assertThat(review.reward).isEqualTo(MyReward(20, RewardReason.WIN, days = null, perDay = null))
+    private fun sheriffResult(day: Int, winner: String?) = event(
+        "SHERIFF_RESULT",
+        mapOf(
+            "dayNumber" to day,
+            "winnerUserId" to winner,
+            "tally" to emptyList<Map<String, Any?>>(),
+            "abstainVoters" to emptyList<Map<String, Any?>>(),
+        ),
+    )
+
+    private fun badgeHandover(day: Int, from: String, to: String?) = event(
+        "BADGE_HANDOVER",
+        buildMap {
+            put("dayNumber", day)
+            put("fromUserId", from)
+            if (to != null) put("toUserId", to)
+        },
+    )
+
+    @Test
+    fun `the reward is the settled total with the working beside it`() {
+        val items = listOf(item(RewardReason.WIN, 20), item(RewardReason.SHERIFF, 5, count = 1, each = 5))
+        val review = build("w1", board(), listOf(night(1)), rewards = mapOf("w1" to 25), myItems = items)
+
+        assertThat(review.reward!!.total).isEqualTo(25)
+        assertThat(review.reward!!.items.map { it.reason to it.amount })
+            .containsExactly(RewardReason.WIN to 20, RewardReason.SHERIFF to 5)
     }
 
     @Test
-    fun `a losing wolf's points are explained by the days they survived`() {
+    fun `the working is dropped when it no longer adds up to what was banked`() {
+        // A rate was changed after settlement: the banked total stands, the breakdown goes.
         val review = build(
-            "w1", board(mapOf("w1" to 3)), listOf(night(1)),
-            rewards = mapOf("w1" to 12), winner = WinnerSide.VILLAGER,
+            "w1", board(), listOf(night(1)),
+            rewards = mapOf("w1" to 99), myItems = listOf(item(RewardReason.WIN, 20)),
         )
 
-        assertThat(review.reward).isEqualTo(MyReward(12, RewardReason.WOLF_SURVIVAL, days = 3, perDay = 4))
+        assertThat(review.reward).isEqualTo(MyReward(99, emptyList()))
     }
 
     @Test
-    fun `the per-day rate is dropped when it no longer multiplies out to the settled amount`() {
-        // The configured rate was changed after this game was settled; the settled amount still wins.
-        val review = build(
-            "w1", board(mapOf("w1" to 3)), listOf(night(1)),
-            rewards = mapOf("w1" to 99), winner = WinnerSide.VILLAGER,
-        )
-
-        assertThat(review.reward).isEqualTo(MyReward(99, RewardReason.WOLF_SURVIVAL, days = 3, perDay = null))
-    }
-
-    @Test
-    fun `a losing villager gets the participation reason, and an unsettled game carries no reward`() {
-        val settled = build("v", board(), listOf(night(1)), rewards = mapOf("v" to 5))
-
-        assertThat(settled.reward).isEqualTo(MyReward(5, RewardReason.PARTICIPATION, days = null, perDay = null))
+    fun `an unsettled game carries no reward at all`() {
         assertThat(build("v", board(), listOf(night(1))).reward).isNull()
+    }
+
+    @Test
+    fun `the wolf-vote bonus rides on that day's last exile vote`() {
+        val items = listOf(
+            item(RewardReason.PARTICIPATION, 5),
+            item(RewardReason.WOLF_VOTE, 3, count = 1, each = 3, onDays = listOf(1)),
+        )
+        val review = build(
+            "v", board(), listOf(night(1)),
+            listOf(voteResult(1, null), voteResult(1, "w2")), rewards = mapOf("v" to 8), myItems = items,
+        )
+
+        // Round 1 then the PK: only the day's final word carries the credit.
+        assertThat(review.rounds.single().events.filterIsInstance<PlayerDayEvent.Vote>().map { it.points })
+            .containsExactly(null, 3)
+    }
+
+    @Test
+    fun `winning the election is credited on the election itself`() {
+        val items = listOf(item(RewardReason.PARTICIPATION, 5), item(RewardReason.SHERIFF, 5, count = 1, each = 5))
+        val review = build(
+            "v", board(), listOf(night(1)),
+            listOf(sheriffResult(1, "v")), rewards = mapOf("v" to 10), myItems = items,
+        )
+
+        val vote = review.rounds.single().events.filterIsInstance<PlayerDayEvent.Vote>().single()
+        assertThat(vote.points).isEqualTo(5)
+    }
+
+    @Test
+    fun `the badge pays once, on the event that first put it in my hands`() {
+        val items = listOf(item(RewardReason.PARTICIPATION, 5), item(RewardReason.SHERIFF, 5, count = 1, each = 5))
+        val review = build(
+            "v", board(), listOf(night(1), night(2)),
+            listOf(badgeHandover(1, "seer", "v"), badgeHandover(2, "v", "guard")),
+            rewards = mapOf("v" to 10), myItems = items,
+        )
+
+        val handovers = review.rounds.flatMap { it.events }.filterIsInstance<PlayerDayEvent.BadgeHandover>()
+        assertThat(handovers.map { it.points }).containsExactly(5, null)
     }
 
     @Test

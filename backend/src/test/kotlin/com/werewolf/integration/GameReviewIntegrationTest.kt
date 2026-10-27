@@ -252,9 +252,12 @@ class GameReviewIntegrationTest {
             .associate { ((it["player"] as Map<*, *>)["userId"] as String) to it["amount"] }
         assertThat(everyone).isEqualTo(mapOf(wolf.userId to 20, seer.userId to 5))
 
-        // The seer lost as a villager-side player, so their own replay explains it as participation.
+        // The seer lost as a villager-side player, so their own replay explains it as participation,
+        // and the working adds up to the very number the god's-eye replay reports for them.
         val mine = getPlayerReview(gameId, seer.token).body!!["reward"] as Map<*, *>
-        assertThat(listOf(mine["amount"], mine["reason"], mine["days"])).containsExactly(5, "PARTICIPATION", null)
-        assertThat(mine["amount"]).isEqualTo(everyone[seer.userId])
+        val items = mine["items"] as List<Map<String, Any?>>
+        assertThat(items.map { it["reason"] to it["amount"] }).containsExactly("PARTICIPATION" to 5)
+        assertThat(items.sumOf { it["amount"] as Int }).isEqualTo(mine["total"])
+        assertThat(mine["total"]).isEqualTo(everyone[seer.userId])
     }
 }

@@ -26,6 +26,7 @@ class GameReviewService(
     private val perkActivationRepository: PerkActivationRepository,
     private val creditTransactionRepository: CreditTransactionRepository,
     private val rewardProperties: RewardProperties,
+    private val rewardSettlementService: RewardSettlementService,
 ) {
     /** The rows both replays are built from, loaded once the caller has been let in. */
     private class ReviewData(
@@ -72,9 +73,18 @@ class GameReviewService(
     /** Only what [userId] themselves knew, and only up to the moment they left the game. */
     @Transactional(readOnly = true)
     fun getPlayerReview(gameId: Int, userId: String): PlayerReview = with(load(gameId, userId)) {
+        // Recomputed from the same rules settlement used, so the replay can say which
+        // action earned what. A cancelled game was never settled and has nothing to show.
+        val myItems = game.winner?.let { winner ->
+            val me = players.first { it.userId == userId }
+            RewardBreakdown.itemsFor(
+                me,
+                rewardSettlementService.facts(gameId, game.dayNumber, winner, players),
+                rewardProperties,
+            )
+        }.orEmpty()
         PlayerReviewBuilder.build(
-            game, players, nights, events, night1PerkSaved, userId,
-            rewards, rewardProperties.wolfPerDaySurvived, displayNameFor,
+            game, players, nights, events, night1PerkSaved, userId, rewards, myItems, displayNameFor,
         )
     }
 }

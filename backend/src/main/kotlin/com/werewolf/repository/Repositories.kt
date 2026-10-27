@@ -126,6 +126,8 @@ interface SheriffCandidateRepository : JpaRepository<SheriffCandidate, Int> {
 }
 
 interface VoteRepository : JpaRepository<Vote, Int> {
+    fun findByGameIdAndVoteContext(gameId: Int, voteContext: VoteContext): List<Vote>
+
     fun findByGameIdAndVoteContextAndDayNumber(
         gameId: Int,
         voteContext: VoteContext,

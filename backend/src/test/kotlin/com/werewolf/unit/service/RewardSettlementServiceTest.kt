@@ -6,9 +6,14 @@ import com.werewolf.model.Game
 import com.werewolf.model.GamePlayer
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinnerSide
+import com.werewolf.model.Vote
+import com.werewolf.model.VoteContext
+import com.werewolf.repository.GameEventRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.GameSettlementRepository
+import com.werewolf.repository.SheriffElectionRepository
+import com.werewolf.repository.VoteRepository
 import com.werewolf.service.PerkSettlementService
 import com.werewolf.service.RewardSettlementService
 import com.werewolf.service.StompPublisher
@@ -33,17 +38,23 @@ class RewardSettlementServiceTest {
     @Mock lateinit var walletService: WalletService
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var perkSettlementService: PerkSettlementService
+    @Mock lateinit var voteRepository: VoteRepository
+    @Mock lateinit var sheriffElectionRepository: SheriffElectionRepository
+    @Mock lateinit var gameEventRepository: GameEventRepository
 
     private lateinit var service: RewardSettlementService
 
     private val gameId = 7
-    private val rewards = RewardProperties(winBonus = 20, participation = 5, wolfPerDaySurvived = 4)
+    private val rewards = RewardProperties(
+        winBonus = 20, participation = 5, wolfPerDaySurvived = 4, sheriffBonus = 5, wolfVoteBonus = 3,
+    )
 
     @BeforeEach
     fun setUp() {
         service = RewardSettlementService(
             gameSettlementRepository, gamePlayerRepository, gameRepository,
             walletService, stompPublisher, rewards, perkSettlementService,
+            voteRepository, sheriffElectionRepository, gameEventRepository,
         )
         whenever(gameSettlementRepository.tryInsert(gameId)).thenReturn(1)
         whenever(walletService.credit(any(), any(), any(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull()))
@@ -58,9 +69,44 @@ class RewardSettlementServiceTest {
     private fun player(userId: String, role: PlayerRole, diedDay: Int? = null) =
         GamePlayer(gameId = gameId, userId = userId, seatIndex = 0, role = role).also { it.diedDay = diedDay }
 
-    private fun stub(players: List<GamePlayer>, finalDay: Int = 3) {
+    private fun stub(
+        players: List<GamePlayer>,
+        finalDay: Int = 3,
+        votes: List<Vote> = emptyList(),
+        electedSheriff: String? = null,
+    ) {
         whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(game(finalDay)))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(players)
+        whenever(voteRepository.findByGameIdAndVoteContext(gameId, VoteContext.ELIMINATION)).thenReturn(votes)
+        whenever(sheriffElectionRepository.findByGameId(gameId)).thenReturn(
+            Optional.ofNullable(electedSheriff?.let {
+                com.werewolf.model.SheriffElection(gameId = gameId).also { e -> e.electedSheriffUserId = it }
+            }),
+        )
+        whenever(gameEventRepository.findByGameIdOrderByCreatedAtAsc(gameId)).thenReturn(emptyList())
+    }
+
+    private fun exileVote(day: Int, voter: String, target: String?) = Vote(
+        gameId = gameId,
+        voteContext = VoteContext.ELIMINATION,
+        dayNumber = day,
+        voterUserId = voter,
+        targetUserId = target,
+    )
+
+    @Test
+    fun `the badge and a correct wolf vote are banked on top of the base`() {
+        stub(
+            listOf(player("v1", PlayerRole.VILLAGER), player("w1", PlayerRole.WEREWOLF, diedDay = 2)),
+            votes = listOf(exileVote(1, "v1", "w1"), exileVote(2, "v1", null)),
+            electedSheriff = "v1",
+        )
+
+        service.settle(gameId, WinnerSide.VILLAGER)
+
+        // 20 win + 5 badge + 3 for the day-1 vote that found a wolf; the abstain pays nothing.
+        verify(walletService).credit(eq("v1"), eq(28), eq(CreditTxType.GAME_REWARD), eq(gameId), anyOrNull(), anyOrNull(), anyOrNull())
+        verify(walletService).credit(eq("w1"), eq(8), eq(CreditTxType.GAME_REWARD), eq(gameId), anyOrNull(), anyOrNull(), anyOrNull())
     }
 
     @Test

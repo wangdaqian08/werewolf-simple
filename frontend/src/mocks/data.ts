@@ -1459,8 +1459,15 @@ const P12 = PS(12, 'Lia', null, 'GOOD')
 export const MOCK_PLAYER_REVIEW: PlayerReview = {
   winner: 'VILLAGER',
   me: P2,
-  // Bob is village-side and the village won, so his 20 is the win bonus.
-  reward: { amount: 20, reason: 'WIN', days: null, perDay: null },
+  // Bob won with the village, wore the badge, and his day-1 PK vote found a wolf.
+  reward: {
+    total: 28,
+    items: [
+      { reason: 'WIN', amount: 20, count: null, each: null, days: null, perDay: null },
+      { reason: 'SHERIFF', amount: 5, count: 1, each: 5, days: null, perDay: null },
+      { reason: 'WOLF_VOTE', amount: 3, count: 1, each: 3, days: null, perDay: null },
+    ],
+  },
   seats: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12],
   rounds: [
     {
@@ -1482,6 +1489,7 @@ export const MOCK_PLAYER_REVIEW: PlayerReview = {
           abstain: [P12],
           result: P2,
           appointed: false,
+          points: 5,
         },
         {
           type: 'VOTE',
@@ -1494,6 +1502,7 @@ export const MOCK_PLAYER_REVIEW: PlayerReview = {
           abstain: [P2, P3, P8, P9],
           result: null,
           appointed: false,
+          points: null,
         },
         {
           type: 'VOTE',
@@ -1506,6 +1515,7 @@ export const MOCK_PLAYER_REVIEW: PlayerReview = {
           abstain: [],
           result: P9,
           appointed: false,
+          points: 3,
         },
       ],
     },

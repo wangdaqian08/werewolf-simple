@@ -30,7 +30,7 @@ object PlayerReviewBuilder {
         night1PerkSaved: Set<String>,
         viewerId: String,
         rewards: Map<String, Int>,
-        wolfPerDaySurvived: Int,
+        myItems: List<RewardBreakdown.Item>,
         displayNameFor: (String) -> String,
     ): PlayerReview {
         val me = players.firstOrNull { it.userId == viewerId }
@@ -93,11 +93,23 @@ object PlayerReviewBuilder {
             PlayerSeat(p.userId, displayNameFor(p.userId), p.seatIndex, role, knownCamps[p.userId].takeIf { role == null })
         }
 
+        // The working is shown only while it still adds up to what was actually banked;
+        // if a rate was changed after settlement, the total stands alone and nothing is
+        // pinned to individual actions.
+        val total = rewards[viewerId]
+        val shown = myItems.takeIf { total != null && it.sumOf(RewardBreakdown.Item::amount) == total }.orEmpty()
+        val voteItem = shown.firstOrNull { it.reason == RewardReason.WOLF_VOTE }
+        val sheriffLeft = intArrayOf(shown.firstOrNull { it.reason == RewardReason.SHERIFF }?.amount ?: 0)
+
         val rounds = days.map { day ->
             PlayerRound(
                 day = day,
                 night = completed[day]?.let { night(it, me, players, byId, deathsAt(day), ::seat) },
-                events = dayEvents(visibleEvents(day), ::seat),
+                events = dayEvents(
+                    visibleEvents(day), ::seat, viewerId,
+                    voteItem?.each?.takeIf { day in voteItem.onDays },
+                    sheriffLeft,
+                ),
             )
         }
         return PlayerReview(
@@ -106,23 +118,10 @@ object PlayerReviewBuilder {
             seats = players.sortedBy { it.seatIndex }.mapNotNull { seat(it.userId) },
             rounds = rounds,
             diedOnDay = diedOnDay,
-            reward = reward(game, me, rewards[viewerId], wolfPerDaySurvived),
+            reward = total?.let { t ->
+                MyReward(t, shown.map { RewardItem(it.reason, it.amount, it.count, it.each, it.days, it.perDay) })
+            },
         )
-    }
-
-    /** The settled amount with the branch of RewardSettlementService.rewardFor that produced it. */
-    private fun reward(game: Game, me: GamePlayer, amount: Int?, wolfPerDaySurvived: Int): MyReward? {
-        if (amount == null) return null
-        val winner = game.winner
-        val won = winner != null && (if (winner == WinnerSide.WEREWOLF) me.role.isWolf else !me.role.isWolf)
-        return when {
-            won -> MyReward(amount, RewardReason.WIN, null, null)
-            me.role.isWolf -> {
-                val days = (me.diedDay ?: game.dayNumber).coerceAtLeast(1)
-                MyReward(amount, RewardReason.WOLF_SURVIVAL, days, wolfPerDaySurvived.takeIf { it * days == amount })
-            }
-            else -> MyReward(amount, RewardReason.PARTICIPATION, null, null)
-        }
     }
 
     private fun night(
@@ -159,11 +158,21 @@ object PlayerReviewBuilder {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun dayEvents(events: List<LoggedEvent>, seat: (String) -> PlayerSeat?): List<PlayerDayEvent> {
+    private fun dayEvents(
+        events: List<LoggedEvent>,
+        seat: (String) -> PlayerSeat?,
+        viewerId: String,
+        wolfVotePoints: Int?,
+        sheriffLeft: IntArray,
+    ): List<PlayerDayEvent> {
         fun ref(id: Any?) = (id as? String)?.let(seat)
         fun refsOf(list: Any?) = (list as List<Map<String, Any?>>?).orEmpty().mapNotNull { ref(it["userId"]) }
         val roundsSoFar = mutableMapOf<VoteKind, Int>()
-        fun vote(kind: VoteKind, p: Map<String, Any?>, resultId: Any?): PlayerDayEvent.Vote {
+        // The vote bonus is for the day's final word, so it rides on the last exile vote of the day.
+        val lastExile = events.indexOfLast { it.type == "VOTE_RESULT" }
+        /** The badge pays once, on the first event that put it in the viewer's hands. */
+        fun claimSheriff() = sheriffLeft[0].takeIf { it > 0 }?.also { sheriffLeft[0] = 0 }
+        fun vote(kind: VoteKind, p: Map<String, Any?>, resultId: Any?, points: Int?): PlayerDayEvent.Vote {
             val tally = (p["tally"] as List<Map<String, Any?>>).mapNotNull { t ->
                 ref(t["userId"])?.let { PlayerTally(it, (t["votes"] as Number).toDouble(), refsOf(t["voters"])) }
             }
@@ -172,17 +181,21 @@ object PlayerReviewBuilder {
             // SheriffService.appoint logs the tied (or empty) tally with the host's pick as winner.
             val top = tally.maxOfOrNull { it.votes }
             val appointed = kind == VoteKind.SHERIFF && result != null && tally.singleOrNull { it.votes == top }?.target != result
-            return PlayerDayEvent.Vote(kind, round, tally, refsOf(p["abstainVoters"]), result, appointed)
+            return PlayerDayEvent.Vote(kind, round, tally, refsOf(p["abstainVoters"]), result, appointed, points)
         }
-        return events.mapNotNull { e ->
+        return events.mapIndexedNotNull { i, e ->
             val p = e.payload
             when (e.type) {
-                "SHERIFF_RESULT" -> vote(VoteKind.SHERIFF, p, p["winnerUserId"])
-                "VOTE_RESULT" -> vote(VoteKind.EXILE, p, p["eliminatedUserId"])
+                "SHERIFF_RESULT" ->
+                    vote(VoteKind.SHERIFF, p, p["winnerUserId"], if (p["winnerUserId"] == viewerId) claimSheriff() else null)
+                "VOTE_RESULT" ->
+                    vote(VoteKind.EXILE, p, p["eliminatedUserId"], wolfVotePoints?.takeIf { i == lastExile })
                 "HUNTER_SHOT" -> ref(p["hunterUserId"])?.let { h -> ref(p["targetUserId"])?.let { PlayerDayEvent.HunterShot(h, it) } }
                 "SELF_DESTRUCT" -> ref(p["userId"])?.let { PlayerDayEvent.SelfDestruct(it, ref(p["takenUserId"])) }
                 "IDIOT_REVEAL" -> ref(p["userId"])?.let { PlayerDayEvent.IdiotReveal(it) }
-                "BADGE_HANDOVER" -> ref(p["fromUserId"])?.let { PlayerDayEvent.BadgeHandover(it, ref(p["toUserId"])) }
+                "BADGE_HANDOVER" -> ref(p["fromUserId"])?.let {
+                    PlayerDayEvent.BadgeHandover(it, ref(p["toUserId"]), if (p["toUserId"] == viewerId) claimSheriff() else null)
+                }
                 else -> null
             }
         }

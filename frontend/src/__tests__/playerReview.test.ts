@@ -69,30 +69,85 @@ describe('PlayerReview', () => {
     expect(text).not.toContain('复盘到此结束')
   })
 
-  it('points: a win bonus is named as such', () => {
-    const r = review({ reward: { amount: 20, reason: 'WIN', days: null, perDay: null } })
+  it('points: each line of the total is spelled out, with a 合计', () => {
+    const r = review({
+      reward: {
+        total: 28,
+        items: [
+          { reason: 'WIN', amount: 20, count: null, each: null, days: null, perDay: null },
+          { reason: 'SHERIFF', amount: 5, count: 1, each: 5, days: null, perDay: null },
+          { reason: 'WOLF_VOTE', amount: 3, count: 1, each: 3, days: null, perDay: null },
+        ],
+      },
+    })
     const text = mount(PlayerReview, { props: { review: r } }).text()
-    expect(text).toContain('+20')
+
     expect(text).toContain('胜利方奖励')
+    expect(text).toContain('当选／持有警徽')
+    expect(text).toContain('投出狼人')
+    expect(text).toContain('合计')
+    expect(text).toContain('+28')
+  })
+
+  it('points: a line earned more than once shows the rate', () => {
+    const r = review({
+      reward: {
+        total: 11,
+        items: [
+          { reason: 'PARTICIPATION', amount: 5, count: null, each: null, days: null, perDay: null },
+          { reason: 'WOLF_VOTE', amount: 6, count: 2, each: 3, days: null, perDay: null },
+        ],
+      },
+    })
+    expect(mount(PlayerReview, { props: { review: r } }).text()).toContain('投出狼人 2 次 × 3 分')
   })
 
   it('points: a losing wolf score is explained by the days survived and the rate', () => {
-    const r = review({ reward: { amount: 12, reason: 'WOLF_SURVIVAL', days: 3, perDay: 4 } })
-    const text = mount(PlayerReview, { props: { review: r } }).text()
-    expect(text).toContain('+12')
-    expect(text).toContain('狼人失利，存活 3 天 × 4 分/天')
+    const r = review({
+      reward: {
+        total: 12,
+        items: [
+          { reason: 'WOLF_SURVIVAL', amount: 12, count: null, each: null, days: 3, perDay: 4 },
+        ],
+      },
+    })
+    expect(mount(PlayerReview, { props: { review: r } }).text()).toContain(
+      '狼人失利，存活 3 天 × 4 分/天',
+    )
   })
 
-  it('points: the rate is left out when it no longer multiplies out to the amount', () => {
-    const r = review({ reward: { amount: 99, reason: 'WOLF_SURVIVAL', days: 3, perDay: null } })
+  it('points: only the total shows when the working no longer adds up', () => {
+    const r = review({ reward: { total: 99, items: [] } })
     const text = mount(PlayerReview, { props: { review: r } }).text()
-    expect(text).toContain('狼人失利，存活 3 天')
-    expect(text).not.toContain('分/天')
+
+    expect(text).toContain('合计')
+    expect(text).toContain('+99')
+    expect(text).not.toContain('胜利方奖励')
   })
 
-  it('points: a losing villager gets the participation wording', () => {
-    const r = review({ reward: { amount: 5, reason: 'PARTICIPATION', days: null, perDay: null } })
-    expect(mount(PlayerReview, { props: { review: r } }).text()).toContain('参与奖励（本局失利）')
+  it('points: a vote that earned credit shows it on that very line', () => {
+    const r = review({
+      rounds: [
+        {
+          day: 1,
+          night: null,
+          events: [
+            {
+              type: 'VOTE',
+              kind: 'EXILE',
+              round: 1,
+              tally: [],
+              abstain: [],
+              result: seat(1, 'Alice', null, 'WOLF'),
+              appointed: false,
+              points: 3,
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(mount(PlayerReview, { props: { review: r } }).text()).toContain('被投出 +3')
   })
 
   it('points: no block at all when the game was never settled', () => {

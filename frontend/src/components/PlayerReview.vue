@@ -35,7 +35,7 @@
         <span
           v-for="(s, j) in line.segs"
           :key="j"
-          :class="{ 'rv-wolf': s.wolf, 'rv-pill': s.pill, 'rv-muted': s.muted }"
+          :class="{ 'rv-wolf': s.wolf, 'rv-pill': s.pill, 'rv-muted': s.muted, 'rv-gain': s.gain }"
           >{{ s.text }}</span
         >
       </div>
@@ -43,9 +43,13 @@
     <template v-if="review.reward">
       <div class="rv-line rv-title">本局积分</div>
       <div class="rv-rewards" data-testid="my-reward">
-        <div class="rv-reward-row">
-          <span>{{ rewardWhy }}</span>
-          <span class="rv-reward-amount">+{{ review.reward.amount }}</span>
+        <div v-for="(it, i) in review.reward.items" :key="i" class="rv-reward-row">
+          <span>{{ itemLabel(it) }}</span>
+          <span class="rv-reward-amount">+{{ it.amount }}</span>
+        </div>
+        <div class="rv-reward-row rv-reward-total">
+          <span>合计</span>
+          <span class="rv-reward-amount">+{{ review.reward.total }}</span>
         </div>
       </div>
     </template>
@@ -62,6 +66,8 @@ import type {
   PlayerRound,
   PlayerSeat,
   PlayerVote,
+  RewardItem,
+  RewardReason,
 } from '@/types'
 import { isWolfRole, roleDefinition } from '@/utils/roleDefinitions'
 
@@ -73,6 +79,8 @@ interface Seg {
   wolf?: boolean
   pill?: boolean
   muted?: boolean
+  /** credits this line earned, rendered in gold */
+  gain?: boolean
 }
 interface TallyRow {
   target: Seg[]
@@ -106,6 +114,7 @@ const joined = (parts: Seg[][], sep: string): Seg[] =>
   parts.flatMap((part, i) => (i ? [t(sep), ...part] : part))
 const votes = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}票`
 const pill = (text: string): Seg => ({ text, pill: true })
+const gain = (n: number): Seg => ({ text: ` +${n}`, gain: true })
 
 const outcome = computed(() => {
   if (!props.review.winner) return '比赛取消'
@@ -170,6 +179,11 @@ function voteHead(v: PlayerVote): Seg[] {
   return [head, ...(v.result ? [...withTag(v.result), t(' 被投出')] : [t('平票，无人出局')])]
 }
 
+/** The credit a single action earned, shown right where it was earned. */
+function votePoints(v: PlayerVote): Seg[] {
+  return v.points != null ? [gain(v.points)] : []
+}
+
 function voteLines(v: PlayerVote): Line[] {
   const rows: TallyRow[] = v.tally.map((e) => ({
     target: [seatBadge(e.target), ...tag(e.target)],
@@ -180,7 +194,7 @@ function voteLines(v: PlayerVote): Line[] {
   }))
   if (v.abstain.length)
     rows.push({ target: [t('弃权')], votes: '', out: false, abstain: true, voters: v.abstain })
-  const lines: Line[] = [{ kind: 'row', segs: voteHead(v) }]
+  const lines: Line[] = [{ kind: 'row', segs: [...voteHead(v), ...votePoints(v)] }]
   if (rows.length) lines.push({ kind: 'tally', rows })
   return lines
 }
@@ -204,6 +218,7 @@ function eventSegs(e: Exclude<PlayerDayEvent, PlayerVote>): Seg[] {
         t('⭐ '),
         ...withTag(e.from),
         ...(e.to ? [t(' 移交警徽给 '), ...withTag(e.to)] : [t(' 撕毁警徽')]),
+        ...(e.points != null ? [gain(e.points)] : []),
       ]
   }
 }
@@ -231,16 +246,26 @@ const showLegend = computed(
   () => lines.value.some((l) => l.kind === 'tally') && props.review.seats.some(isKnownWolf),
 )
 
-/** Spells out where the number came from, so the score is not just asserted at the player. */
-const rewardWhy = computed(() => {
-  const r = props.review.reward
-  if (!r) return ''
-  if (r.reason === 'WIN') return '胜利方奖励'
-  if (r.reason === 'PARTICIPATION') return '参与奖励（本局失利）'
-  const days = `存活 ${r.days} 天`
-  // The per-day rate is dropped when it no longer multiplies out to the settled amount.
-  return r.perDay != null ? `狼人失利，${days} × ${r.perDay} 分/天` : `狼人失利，${days}`
-})
+const REASON_LABEL: Record<RewardReason, string> = {
+  WIN: '胜利方奖励',
+  PARTICIPATION: '参与奖励（本局失利）',
+  WOLF_SURVIVAL: '狼人失利',
+  SHERIFF: '当选／持有警徽',
+  WOLF_VOTE: '投出狼人',
+}
+
+/** Spells out where each number came from, so the score is not just asserted at the player. */
+function itemLabel(it: RewardItem): string {
+  if (it.reason === 'WOLF_SURVIVAL') {
+    const days = `存活 ${it.days} 天`
+    // The rate is dropped when it no longer multiplies out to the settled amount.
+    return it.perDay != null ? `狼人失利，${days} × ${it.perDay} 分/天` : `狼人失利，${days}`
+  }
+  const label = REASON_LABEL[it.reason]
+  return it.count != null && it.each != null && it.count > 1
+    ? `${label} ${it.count} 次 × ${it.each} 分`
+    : label
+}
 </script>
 
 <style scoped>
@@ -372,5 +397,15 @@ const rewardWhy = computed(() => {
   color: var(--gold);
   font-weight: 600;
   white-space: nowrap;
+}
+.rv-reward-total {
+  margin-top: 0.125rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--border-l);
+  font-weight: 600;
+}
+.rv-gain {
+  color: var(--gold);
+  font-weight: 600;
 }
 </style>

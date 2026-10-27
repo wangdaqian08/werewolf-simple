@@ -338,6 +338,8 @@ export interface PlayerVote {
   abstain: PlayerSeat[]
   result: PlayerSeat | null
   appointed: boolean
+  /** credits this very vote earned the viewer */
+  points: number | null
 }
 
 export type PlayerDayEvent =
@@ -345,8 +347,8 @@ export type PlayerDayEvent =
   | { type: 'HUNTER_SHOT'; hunter: PlayerSeat; target: PlayerSeat }
   | { type: 'SELF_DESTRUCT'; player: PlayerSeat; taken: PlayerSeat | null }
   | { type: 'IDIOT_REVEAL'; player: PlayerSeat }
-  /** to = null: the badge was destroyed */
-  | { type: 'BADGE_HANDOVER'; from: PlayerSeat; to: PlayerSeat | null }
+  /** to = null: the badge was destroyed; points is set when the viewer receives it */
+  | { type: 'BADGE_HANDOVER'; from: PlayerSeat; to: PlayerSeat | null; points: number | null }
 
 export interface PlayerRound {
   day: number
@@ -366,15 +368,23 @@ export interface PlayerReview {
 }
 
 /** Why the viewer earned what they did. */
-export type RewardReason = 'WIN' | 'WOLF_SURVIVAL' | 'PARTICIPATION'
+export type RewardReason = 'WIN' | 'WOLF_SURVIVAL' | 'PARTICIPATION' | 'SHERIFF' | 'WOLF_VOTE'
+
+/** One line of the total. `count`/`each` and `days`/`perDay` show the working where there is any. */
+export interface RewardItem {
+  reason: RewardReason
+  amount: number
+  count: number | null
+  each: number | null
+  days: number | null
+  perDay: number | null
+}
 
 export interface MyReward {
-  amount: number
-  reason: RewardReason
-  /** WOLF_SURVIVAL only: days the wolf stayed alive */
-  days: number | null
-  /** WOLF_SURVIVAL only, and only while it still multiplies out to `amount` */
-  perDay: number | null
+  /** the settled amount from the ledger — always the truth */
+  total: number
+  /** the working; empty when it no longer adds up to `total` */
+  items: RewardItem[]
 }
 
 // ── Timer ─────────────────────────────────────────────────────────────────────
