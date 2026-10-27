@@ -8,18 +8,49 @@
     :title="$t('lang.switch')"
     @click="toggle"
   >
-    <svg v-if="locale === 'en'" viewBox="0 0 60 40" aria-hidden="true" data-testid="flag-en">
-      <rect width="60" height="40" fill="#012169" />
-      <path d="M0 0 60 40M60 0 0 40" stroke="#fff" stroke-width="8" />
-      <path d="M0 0 60 40M60 0 0 40" stroke="#c8102e" stroke-width="3" />
-      <path d="M30 0v40M0 20h60" stroke="#fff" stroke-width="13" />
-      <path d="M30 0v40M0 20h60" stroke="#c8102e" stroke-width="8" />
+    <svg
+      v-if="locale === 'en'"
+      viewBox="0 0 60 30"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+      data-testid="flag-en"
+    >
+      <clipPath id="uk-s"><path d="M0,0 v30 h60 v-30 z" /></clipPath>
+      <clipPath id="uk-t"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z" /></clipPath>
+      <g clip-path="url(#uk-s)">
+        <path d="M0,0 v30 h60 v-30 z" fill="#012169" />
+        <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6" />
+        <path
+          d="M0,0 L60,30 M60,0 L0,30"
+          clip-path="url(#uk-t)"
+          stroke="#c8102e"
+          stroke-width="4"
+        />
+        <path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10" />
+        <path d="M30,0 v30 M0,15 h60" stroke="#c8102e" stroke-width="6" />
+      </g>
     </svg>
     <svg v-else viewBox="0 0 60 40" aria-hidden="true" data-testid="flag-cn">
       <rect width="60" height="40" fill="#de2910" />
       <polygon
         fill="#ffde00"
-        points="10,4 12.35,10.9 19.6,10.9 13.7,15.1 16,22 10,17.8 4,22 6.3,15.1 0.4,10.9 7.65,10.9"
+        points="10.00,4.00 11.35,8.15 15.71,8.15 12.18,10.71 13.53,14.85 10.00,12.29 6.47,14.85 7.82,10.71 4.29,8.15 8.65,8.15"
+      />
+      <polygon
+        fill="#ffde00"
+        points="18.29,5.03 19.24,3.93 18.49,2.69 19.83,3.26 20.78,2.16 20.66,3.61 21.99,4.18 20.58,4.50 20.45,5.95 19.70,4.70"
+      />
+      <polygon
+        fill="#ffde00"
+        points="22.02,8.28 23.32,7.64 23.12,6.20 24.13,7.25 25.44,6.61 24.76,7.89 25.77,8.93 24.34,8.69 23.66,9.97 23.45,8.53"
+      />
+      <polygon
+        fill="#ffde00"
+        points="22.08,13.45 23.53,13.40 23.93,12.00 24.43,13.37 25.88,13.31 24.73,14.21 25.23,15.57 24.03,14.76 22.88,15.66 23.28,14.26"
+      />
+      <polygon
+        fill="#ffde00"
+        points="18.44,16.75 19.80,17.26 20.71,16.13 20.64,17.58 22.00,18.09 20.60,18.48 20.53,19.93 19.73,18.71 18.33,19.10 19.24,17.96"
       />
     </svg>
   </button>
