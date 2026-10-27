@@ -78,7 +78,7 @@ test('clicking 開始投票 transitions all players to voting screen with 投票
   await loadScenario(page, 'HOST_REVEALED')
   await page.getByRole('button', { name: /開始投票|Start Vote/i }).click()
 
-  await expect(page.getByRole('button', { name: /投票|Vote/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^(?:投票|Vote)$/i })).toBeVisible()
   await expect(page.getByRole('button', { name: /棄權/i })).toBeVisible()
 })
 

@@ -57,8 +57,8 @@ test('SIGNUP shows only decision progress and hides candidate identities', async
   })
 
   // After clicking "Run for Sheriff", decision progress advances 5/8 → 6/8.
-  await page.getByRole('button', { name: /參選 \/ Run for Sheriff/i }).click()
-  await expect(page.getByRole('button', { name: /撤回 \/ Withdraw/i })).toBeVisible()
+  await page.getByRole('button', { name: /(?:參選|Run for Sheriff)/i }).click()
+  await expect(page.getByRole('button', { name: /(?:撤回|Withdraw)/i })).toBeVisible()
   await expect(progressLocator).toHaveText(/6\s*\/\s*8/)
   // Still no per-candidate rows visible: even my own decision doesn't expose
   // anybody else.
