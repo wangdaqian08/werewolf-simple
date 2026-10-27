@@ -1,5 +1,5 @@
 /**
- * PlayerReview.vue — the viewer's own replay (玩家視角覆盤): their night turn, a dawn
+ * PlayerReview.vue — the viewer's own replay (玩家視角復盤): their night turn, a dawn
  * that names the dead without the cause, and a stop line where their game ended.
  */
 import { describe, expect, it } from 'vitest'
@@ -61,12 +61,12 @@ describe('PlayerReview', () => {
 
   it('a replay cut short by my death says where it stopped', () => {
     const text = mount(PlayerReview, { props: { review: review({ diedOnDay: 2 }) } }).text()
-    expect(text).toContain('你於第2天出局，覆盤到此結束')
+    expect(text).toContain('你於第2天出局，復盤到此結束')
   })
 
   it('a player who survived to the end gets no stop line', () => {
     const text = mount(PlayerReview, { props: { review: review() } }).text()
-    expect(text).not.toContain('覆盤到此結束')
+    expect(text).not.toContain('復盤到此結束')
   })
 
   it('points: each line of the total is spelled out, with a 合計', () => {

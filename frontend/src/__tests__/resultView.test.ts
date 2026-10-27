@@ -357,7 +357,7 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(wrapper.findAll('.reward-row')).toHaveLength(1)
   })
 
-  it('📜 上帝視角覆盤 opens the review page of this game', async () => {
+  it('📜 上帝視角復盤 opens the review page of this game', async () => {
     const state: GameState = {
       gameId: '42',
       phase: 'GAME_OVER',
@@ -372,7 +372,7 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(router.currentRoute.value.fullPath).toBe('/review/42')
   })
 
-  it('👤 玩家視角覆盤 opens the player-perspective review of this game', async () => {
+  it('👤 玩家視角復盤 opens the player-perspective review of this game', async () => {
     const state: GameState = {
       gameId: '42',
       phase: 'GAME_OVER',

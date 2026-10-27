@@ -263,11 +263,11 @@ export default {
     waiting: '正在等待支付確認…',
   },
   playerReview: {
-    heading: '玩家視角覆盤',
+    heading: '玩家視角復盤',
   },
   pr: {
     dawnOut: ' 出局',
-    ended: '你於第{day}天出局，覆盤到此結束',
+    ended: '你於第{day}天出局，復盤到此結束',
     guard: '🛡 我守 ',
     guardNone: '🛡 我空守',
     legend: '投票中 {seat} 紅色座位為你已知的狼人',
@@ -325,10 +325,10 @@ export default {
     yourRole: '你的身份',
   },
   review: {
-    heading: '上帝視角覆盤',
-    loadFailed: '覆盤加載失敗，請稍後再試',
+    heading: '上帝視角復盤',
+    loadFailed: '復盤加載失敗，請稍後再試',
     notFound: '找不到這局遊戲',
-    notOver: '遊戲結束後，本局玩家才能查看覆盤',
+    notOver: '遊戲結束後，本局玩家才能查看復盤',
   },
   role: {
     BLACK_WOLF_KING: '黑狼王',

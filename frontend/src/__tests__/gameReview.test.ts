@@ -1,5 +1,5 @@
 /**
- * GameReview.vue — the God's-eye replay (上帝視角覆盤): one line per role each
+ * GameReview.vue — the God's-eye replay (上帝視角復盤): one line per role each
  * night, then the day's votes and events, every player's true role shown.
  */
 import { describe, expect, it } from 'vitest'

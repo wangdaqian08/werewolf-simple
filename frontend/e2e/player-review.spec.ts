@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 /**
- * 玩家視角覆盤 and the 積分規則 table, driven through the real app against the mock
+ * 玩家視角復盤 and the 積分規則 table, driven through the real app against the mock
  * backend: the route, the fetch, the rendering and the back navigation. The payloads
  * come from MOCK_PLAYER_REVIEW / MOCK_GAME_REVIEW / MOCK_REWARD_RULES in src/mocks.
  */
@@ -41,7 +41,7 @@ test('result screen offers both replays side by side', async ({ page }) => {
   await expect(page.getByTestId('open-player-review')).toBeVisible()
 })
 
-test('玩家視角覆盤 shows my own turn and stops where my game ended', async ({ page }) => {
+test('玩家視角復盤 shows my own turn and stops where my game ended', async ({ page }) => {
   await startGame(page)
   await goToResult(page)
   await page.getByTestId('open-player-review').click()
@@ -52,12 +52,12 @@ test('玩家視角覆盤 shows my own turn and stops where my game ended', async
   // The mock viewer is the seer: his own checks are shown, and the replay stops at his death.
   await expect(review).toContainText('我的身份')
   await expect(review).toContainText('我查驗')
-  await expect(review).toContainText('覆盤到此結束')
+  await expect(review).toContainText('復盤到此結束')
   // Dawn names the dead without the cause the god replay gives.
   await expect(review).not.toContainText('被刀出局')
 })
 
-test('玩家視角覆盤 itemises my points and marks the actions that earned them', async ({ page }) => {
+test('玩家視角復盤 itemises my points and marks the actions that earned them', async ({ page }) => {
   await startGame(page)
   await goToResult(page)
   await page.getByTestId('open-player-review').click()
@@ -73,7 +73,7 @@ test('玩家視角覆盤 itemises my points and marks the actions that earned th
   await expect(page.getByTestId('player-review')).toContainText('+3')
 })
 
-test('上帝視角覆盤 lists what every player earned', async ({ page }) => {
+test('上帝視角復盤 lists what every player earned', async ({ page }) => {
   await startGame(page)
   await goToResult(page)
   await page.getByTestId('open-review').click()
