@@ -102,7 +102,8 @@ jobs:
     # rebalance). Update the required checks in Settings → Branches if these
     # names ever change again.
     name: E2E · UI (${{ matrix.shard }})
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.58 cannot install browser deps on ubuntu-latest (26.04).
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -244,7 +245,8 @@ jobs:
   e2e-integration:
     # Denominator-free for the same reason as the UI shards (see above).
     name: E2E · Integration (${{ matrix.shard.id }})
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.58 cannot install browser deps on ubuntu-latest (26.04).
+    runs-on: ubuntu-24.04
     needs: backend
     strategy:
       fail-fast: false
