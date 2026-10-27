@@ -63,7 +63,7 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     // automatically opens SHERIFF_ELECTION at end-of-night when Day 1 +
     // hasSheriff + no sheriff yet — host does NOT click reveal yet
     // (kills are deferred until after the sheriff election so N1 victims
-    // can still 上警 / use 挡刀 tactics).
+    // can still 上警 / use 擋刀 tactics).
     //
     // Wolves can target any non-host villager — even the seer's would-be
     // running mate works, because deferred kills mean no one is dead in
@@ -387,11 +387,11 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     await captureSnapshot(ctx.pages, testInfo, 'sheriff-04-result')
   })
 
-  // ── Test 5: Sheriff result → host clicks 显示结果 → DAY_DISCUSSION/RESULT_HIDDEN ──
+  // ── Test 5: Sheriff result → host clicks 顯示結果 → DAY_DISCUSSION/RESULT_HIDDEN ──
 
-  test('5. Sheriff result → host clicks 显示结果 → DAY_DISCUSSION/RESULT_HIDDEN', async ({}, testInfo) => {
+  test('5. Sheriff result → host clicks 顯示結果 → DAY_DISCUSSION/RESULT_HIDDEN', async ({}, testInfo) => {
     // Variant B (correct order): after sheriff RESULT the host has the camera
-    // and decides when to dismiss the screen. The 显示结果 button (testid
+    // and decides when to dismiss the screen. The 顯示結果 button (testid
     // "sheriff-end-result") fires SHERIFF_END_RESULT, transitioning the game
     // to DAY_DISCUSSION/RESULT_HIDDEN. The host then clicks REVEAL_NIGHT_RESULT
     // separately to apply pending kills and flip to RESULT_REVEALED.

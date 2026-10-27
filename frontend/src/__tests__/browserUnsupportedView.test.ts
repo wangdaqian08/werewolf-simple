@@ -21,8 +21,7 @@ describe('BrowserUnsupportedView', () => {
     stubUa(WECHAT_ANDROID)
     const hint = mount(BrowserUnsupportedView).find('[data-testid="wechat-hint"]')
     expect(hint.exists()).toBe(true)
-    expect(hint.text()).toContain('在浏览器打开')
-    expect(hint.text()).toContain('Open in Browser')
+    expect(hint.text()).toContain('在瀏覽器打開')
   })
 
   it('shows no WeChat hint in other browsers', () => {

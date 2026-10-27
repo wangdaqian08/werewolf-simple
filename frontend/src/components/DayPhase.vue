@@ -2,7 +2,8 @@
   <div class="day-wrap">
     <!-- Header: pill badge left | countdown arc right -->
     <header class="day-header">
-      <div class="day-pill">第 {{ dayPhase.dayNumber }} 天 · Day {{ dayPhase.dayNumber }}</div>
+      <div class="day-pill">{{ $t('day.pill', { n: dayPhase.dayNumber }) }}</div>
+      <LanguageToggle inline />
       <CountdownArc
         :remaining-ms="timer?.remainingMs ?? 0"
         :duration-ms="timer?.durationMs ?? 0"
@@ -25,28 +26,28 @@
         data-testid="my-role-chip"
         @click="showRoleCard = true"
       >
-        🔒 身份 · Tap to reveal
+        {{ $t('day.tapToReveal') }}
       </button>
       <div v-else />
       <div class="right-stack">
         <button
           v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
           class="log-fab"
-          aria-label="游戏记录"
+          :aria-label="$t('common.gameLog')"
           data-testid="log-fab"
           @click="showLog = true"
         >
           <span class="log-fab-icon" aria-hidden="true">📋</span>
-          <span class="log-fab-label">游戏记录</span>
+          <span class="log-fab-label">{{ $t('common.gameLog') }}</span>
         </button>
         <button
           class="log-fab"
-          aria-label="房间信息"
+          :aria-label="$t('common.roomInfo')"
           data-testid="settings-fab"
           @click="showSettings = true"
         >
           <span class="log-fab-icon" aria-hidden="true">ℹ️</span>
-          <span class="log-fab-label">房间信息</span>
+          <span class="log-fab-label">{{ $t('common.roomInfo') }}</span>
         </button>
         <ActionMenu
           v-if="myRole"
@@ -73,15 +74,22 @@
           <span
             class="banner-kill-red"
             :data-testid="`day-self-destruct-seat-${selfDestruct.seatIndex}`"
-            >{{ selfDestruct.seatIndex }}号 · {{ selfDestruct.nickname }}</span
+            >{{
+              $t('common.seatDot', { n: selfDestruct.seatIndex, name: selfDestruct.nickname })
+            }}</span
           >
-          <span class="banner-kill-muted">自爆了</span>
+          <span class="banner-kill-muted">{{ $t('day.selfDestructed') }}</span>
           <template v-if="selfDestruct.takenSeatIndex != null">
-            <span class="banner-kill-muted">，带走了</span>
+            <span class="banner-kill-muted">{{ $t('day.tookAlong') }}</span>
             <span
               class="banner-kill-red"
               :data-testid="`day-self-destruct-taken-seat-${selfDestruct.takenSeatIndex}`"
-              >{{ selfDestruct.takenSeatIndex }}号 · {{ selfDestruct.takenNickname }}</span
+              >{{
+                $t('common.seatDot', {
+                  n: selfDestruct.takenSeatIndex,
+                  name: selfDestruct.takenNickname,
+                })
+              }}</span
             >
           </template>
         </div>
@@ -98,24 +106,26 @@
         >
           <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
-            <span class="banner-kill-muted">昨晚</span>
+            <span class="banner-kill-muted">{{ $t('day.lastNight') }}</span>
             <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
-              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span v-if="idx > 0" class="banner-kill-muted">{{ $t('common.listSep') }}</span>
               <span
                 class="banner-kill-red"
                 :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
-                >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
+                >{{
+                  $t('common.seatDot', { n: killed.killedSeatIndex, name: killed.killedNickname })
+                }}</span
               >
             </template>
-            <span class="banner-kill-muted">出局了</span>
+            <span class="banner-kill-muted">{{ $t('day.eliminated') }}</span>
           </div>
         </div>
         <!-- Shared by the hunter and the 黑狼王: never name the shooter's role. -->
         <div class="banner banner-gold" data-testid="day-hunter-night-banner">
           <span class="banner-avatar">🔫</span>
           <div>
-            <div class="banner-title">你可以开枪 · Your Shot</div>
-            <div class="banner-sub">你已出局，可开枪带走一人；主持人进入下一阶段后失效</div>
+            <div class="banner-title">{{ $t('day.yourShot') }}</div>
+            <div class="banner-sub">{{ $t('day.shotSub') }}</div>
           </div>
         </div>
       </template>
@@ -131,16 +141,18 @@
         >
           <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
-            <span class="banner-kill-muted">昨晚</span>
+            <span class="banner-kill-muted">{{ $t('day.lastNight') }}</span>
             <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
-              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span v-if="idx > 0" class="banner-kill-muted">{{ $t('common.listSep') }}</span>
               <span
                 class="banner-kill-red"
                 :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
-                >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
+                >{{
+                  $t('common.seatDot', { n: killed.killedSeatIndex, name: killed.killedNickname })
+                }}</span
               >
             </template>
-            <span class="banner-kill-muted">出局了</span>
+            <span class="banner-kill-muted">{{ $t('day.eliminated') }}</span>
           </div>
         </div>
         <div
@@ -150,15 +162,15 @@
         >
           <span class="banner-avatar">⭐</span>
           <div>
-            <div class="banner-title">你已出局 · Eliminated</div>
-            <div class="banner-sub">选择警徽继承人 / Choose badge heir</div>
+            <div class="banner-title">{{ $t('day.eliminated2') }}</div>
+            <div class="banner-sub">{{ $t('day.chooseBadgeHeir') }}</div>
           </div>
         </div>
         <div v-else class="banner banner-info" data-testid="day-badge-wait-banner">
           <span class="banner-avatar">⭐</span>
           <div>
-            <div class="banner-title">警长正在移交警徽</div>
-            <div class="banner-sub">Sheriff is choosing an heir…</div>
+            <div class="banner-title">{{ $t('day.sheriffPassing') }}</div>
+            <div v-if="$i18n.locale === 'zh'" class="banner-sub">Sheriff is choosing an heir…</div>
           </div>
         </div>
       </template>
@@ -167,8 +179,10 @@
         <div class="banner banner-info" data-testid="day-banner-self-eliminated">
           <span class="banner-icon">☑</span>
           <div>
-            <div class="banner-title">你在上一晚被淘汰</div>
-            <div class="banner-sub">You were eliminated last night</div>
+            <div class="banner-title">{{ $t('day.youEliminatedLastNight') }}</div>
+            <div v-if="$i18n.locale === 'zh'" class="banner-sub">
+              You were eliminated last night
+            </div>
           </div>
         </div>
         <div
@@ -178,16 +192,18 @@
         >
           <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
-            <span class="banner-kill-muted">昨晚</span>
+            <span class="banner-kill-muted">{{ $t('day.lastNight') }}</span>
             <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
-              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span v-if="idx > 0" class="banner-kill-muted">{{ $t('common.listSep') }}</span>
               <span
                 class="banner-kill-red"
                 :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
-                >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
+                >{{
+                  $t('common.seatDot', { n: killed.killedSeatIndex, name: killed.killedNickname })
+                }}</span
               >
             </template>
-            <span class="banner-kill-muted">出局了</span>
+            <span class="banner-kill-muted">{{ $t('day.eliminated') }}</span>
           </div>
         </div>
       </template>
@@ -204,23 +220,27 @@
         >
           <span class="banner-avatar">💀</span>
           <div class="banner-kill-text">
-            <span class="banner-kill-muted">昨晚</span>
+            <span class="banner-kill-muted">{{ $t('day.lastNight') }}</span>
             <template v-for="(killed, idx) in killedPlayers" :key="killed.killedPlayerId">
-              <span v-if="idx > 0" class="banner-kill-muted">、</span>
+              <span v-if="idx > 0" class="banner-kill-muted">{{ $t('common.listSep') }}</span>
               <span
                 class="banner-kill-red"
                 :data-testid="`day-killed-seat-${killed.killedSeatIndex}`"
-                >{{ killed.killedSeatIndex }}号 · {{ killed.killedNickname }}</span
+                >{{
+                  $t('common.seatDot', { n: killed.killedSeatIndex, name: killed.killedNickname })
+                }}</span
               >
             </template>
-            <span class="banner-kill-muted">出局了</span>
+            <span class="banner-kill-muted">{{ $t('day.eliminated') }}</span>
           </div>
         </div>
         <div v-else class="banner banner-info" data-testid="day-banner-peaceful">
           <span class="banner-icon">❤️</span>
           <div>
-            <div class="banner-title">昨晚平安夜</div>
-            <div class="banner-sub">Peaceful night — no one was eliminated</div>
+            <div class="banner-title">{{ $t('day.peacefulNight') }}</div>
+            <div v-if="$i18n.locale === 'zh'" class="banner-sub">
+              Peaceful night — no one was eliminated
+            </div>
           </div>
         </div>
       </template>
@@ -272,7 +292,7 @@
             :disabled="!hunterSelectedId || actionPending"
             @click="hunterSelectedId && emit('hunterShoot', hunterSelectedId)"
           >
-            开枪 · Shoot
+            {{ $t('day.shoot') }}
           </button>
           <button
             class="btn btn-secondary skip-btn"
@@ -281,7 +301,7 @@
             :disabled="actionPending"
             @click="emit('hunterPass')"
           >
-            放弃 · Pass
+            {{ $t('day.pass') }}
           </button>
         </div>
       </template>
@@ -300,7 +320,7 @@
               :disabled="!badgeSelectedId || actionPending"
               @click="badgeSelectedId && emit('passBadge', badgeSelectedId)"
             >
-              移交警徽 · Pass Badge
+              {{ $t('day.passBadge') }}
             </button>
             <button
               class="btn btn-secondary skip-btn"
@@ -309,12 +329,12 @@
               :disabled="actionPending"
               @click="emit('destroyBadge')"
             >
-              销毁
+              {{ $t('day.destroyBadge') }}
             </button>
           </div>
         </template>
         <template v-else>
-          <p class="footer-hint">等待警长移交警徽 · Waiting for sheriff to pass badge…</p>
+          <p class="footer-hint">{{ $t('day.waitingForSheriffTo') }}</p>
         </template>
       </template>
 
@@ -327,7 +347,7 @@
             :disabled="actionPending"
             @click="emit('revealResult')"
           >
-            显示结果 · Result
+            {{ $t('day.result') }}
           </button>
         </div>
         <div v-else-if="dayPhase.subPhase === 'RESULT_REVEALED'" class="vote-actions">
@@ -340,7 +360,7 @@
             :disabled="actionPending"
             @click="emit('continueToNight')"
           >
-            进入夜晚 · Night
+            {{ $t('day.night') }}
           </button>
           <button
             v-else
@@ -350,26 +370,26 @@
             :disabled="actionPending"
             @click="emit('startVote')"
           >
-            开始投票 · Start Vote
+            {{ $t('day.startVote') }}
           </button>
         </div>
       </template>
 
       <template v-else-if="viewRole === 'DEAD'">
-        <button class="btn btn-secondary" disabled>投票已禁用 · Voting disabled</button>
+        <button class="btn btn-secondary" disabled>{{ $t('day.votingDisabled') }}</button>
       </template>
 
       <template v-else-if="viewRole === 'ALIVE'">
         <template v-if="dayPhase.subPhase === 'RESULT_HIDDEN'">
-          <p class="footer-hint">等待房主公布结果 · Waiting for host to reveal the result</p>
+          <p class="footer-hint">{{ $t('day.waitingForHostTo') }}</p>
         </template>
         <template v-else>
-          <p class="footer-hint">等待房主开始投票 · Waiting for host to start voting</p>
+          <p class="footer-hint">{{ $t('day.waitingForHostTo2') }}</p>
         </template>
       </template>
 
       <template v-else>
-        <p class="footer-hint">等待房主公布结果 · Waiting for host to reveal the result</p>
+        <p class="footer-hint">{{ $t('day.waitingForHostTo') }}</p>
       </template>
     </footer>
 
@@ -378,19 +398,19 @@
       <div v-if="showRoleCard" class="role-card-overlay" @click.self="showRoleCard = false">
         <div class="role-card-sheet">
           <div class="role-card-header">
-            <span>你的身份 · My Role</span>
+            <span>{{ $t('roleCard.title') }}</span>
             <button class="history-close" @click="showRoleCard = false">✕</button>
           </div>
           <div v-if="myRole && ROLE_META[myRole]" class="role-card-body">
             <div class="rc-emoji">{{ ROLE_META[myRole]?.emoji }}</div>
-            <div class="rc-name-zh">{{ ROLE_META[myRole]?.nameZh }}</div>
+            <div class="rc-name-zh">{{ roleName(myRole) }}</div>
             <div class="rc-label" :class="`rc-label-${ROLE_META[myRole]?.team}`">
-              {{ ROLE_META[myRole]?.nameEn }}
+              {{ roleTag(myRole) }}
             </div>
             <div v-if="myPlayer" class="rc-identity" data-testid="rc-identity">
-              {{ myPlayer.seatIndex }}号 · {{ myPlayer.nickname }}
+              {{ $t('common.seatDot', { n: myPlayer.seatIndex, name: myPlayer.nickname }) }}
             </div>
-            <p class="rc-desc" data-testid="role-card-desc">{{ ROLE_META[myRole]?.description }}</p>
+            <p class="rc-desc" data-testid="role-card-desc">{{ roleDescription(myRole, true) }}</p>
             <RoleHistory :history="roleHistory" />
           </div>
         </div>
@@ -400,6 +420,8 @@
 </template>
 
 <script lang="ts" setup>
+import LanguageToggle from '@/components/LanguageToggle.vue'
+import { roleDescription, roleName, roleTag } from '@/utils/roleDefinitions'
 import { computed, ref, watch } from 'vue'
 import type {
   DayPhaseState,
@@ -462,76 +484,45 @@ const showRoleCard = ref(false)
 const myPlayer = computed(() => props.players.find((p) => p.userId === props.myUserId))
 
 interface RoleMeta {
-  nameZh: string
-  nameEn: string
   emoji: string
   team: string
-  description: string
 }
 const ROLE_META: Record<string, RoleMeta> = {
   WEREWOLF: {
-    nameZh: '狼人',
-    nameEn: 'WEREWOLF',
     emoji: '🐺',
     team: 'wolf',
-    description: '每晚与狼队商议，袭击一名村民。',
   },
   VILLAGER: {
-    nameZh: '村民',
-    nameEn: 'VILLAGER',
     emoji: '🌾',
     team: 'village',
-    description: '通过讨论和投票找出狼人，保护村庄。',
   },
   SEER: {
-    nameZh: '预言家',
-    nameEn: 'SEER',
     emoji: '🔭',
     team: 'special',
-    description: '每晚可查验一名玩家，得知其是否为狼人。',
   },
   WITCH: {
-    nameZh: '女巫',
-    nameEn: 'WITCH',
     emoji: '🔮',
     team: 'special',
-    description: '拥有一瓶解药和一瓶毒药，各可使用一次。',
   },
   HUNTER: {
-    nameZh: '猎人',
-    nameEn: 'HUNTER',
     emoji: '🏹',
     team: 'special',
-    description: '死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。',
   },
   GUARD: {
-    nameZh: '守卫',
-    nameEn: 'GUARD',
     emoji: '🛡️',
     team: 'special',
-    description: '每晚保护一名玩家免受狼人袭击。',
   },
   IDIOT: {
-    nameZh: '白痴',
-    nameEn: 'IDIOT',
     emoji: '🃏',
     team: 'special',
-    description: '被投票驱逐时揭示身份，免于出局但失去投票权。',
   },
   WHITE_WOLF_KING: {
-    nameZh: '白狼王',
-    nameEn: 'WHITE WOLF KING',
     emoji: '👑',
     team: 'wolf',
-    description: '夜晚与狼队一起袭击。白天自爆时，可选择带走一名玩家。',
   },
   BLACK_WOLF_KING: {
-    nameZh: '黑狼王',
-    nameEn: 'BLACK WOLF KING',
     emoji: '🖤',
     team: 'wolf',
-    description:
-      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
   },
 }
 

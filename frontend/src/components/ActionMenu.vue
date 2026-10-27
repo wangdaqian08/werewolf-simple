@@ -3,7 +3,7 @@
   <template v-if="chipVisible">
     <button class="action-menu-chip" data-testid="action-menu-btn" @click="openMenu">
       <span class="action-chip-icon" aria-hidden="true">⚡</span>
-      <span class="action-chip-label">行动</span>
+      <span class="action-chip-label">{{ $t('actionMenu.chip') }}</span>
     </button>
 
     <!-- Drop-sheet (teleported to body to escape stacking contexts) -->
@@ -17,7 +17,7 @@
       <Transition name="slide-up">
         <div v-if="menuOpen" class="action-menu-sheet">
           <div class="action-menu-handle" />
-          <div class="action-menu-title">行动菜单 · Actions</div>
+          <div class="action-menu-title">{{ $t('actionMenu.title') }}</div>
 
           <div class="action-menu-body">
             <!-- Wolf + alive + allowed phase → self-destruct option -->
@@ -28,7 +28,7 @@
                 @click="onSelfDestructClick"
               >
                 <span class="ami-icon">💥</span>
-                <span class="ami-label">自爆 / Self-destruct</span>
+                <span class="ami-label">{{ $t('actionMenu.selfDestruct') }}</span>
               </button>
             </template>
 
@@ -36,7 +36,7 @@
             <template v-else>
               <div class="action-menu-empty" data-testid="action-menu-empty">
                 <span class="ami-icon">🌙</span>
-                <span class="ami-label">暂无操作 / No actions available</span>
+                <span class="ami-label">{{ $t('actionMenu.none') }}</span>
               </div>
             </template>
           </div>
@@ -47,12 +47,12 @@
       <Transition name="fade">
         <div v-if="confirmOpen" class="action-confirm-overlay" @click.self="cancelConfirm">
           <div class="action-confirm-sheet">
-            <div class="action-confirm-title">确认自爆？</div>
-            <div class="action-confirm-body">此操作不可撤销。你将公开死亡，今天不进行投票。</div>
+            <div class="action-confirm-title">{{ $t('actionMenu.confirmTitle') }}</div>
+            <div class="action-confirm-body">{{ $t('actionMenu.confirmBody') }}</div>
             <!-- 白狼王: may take one alive player along (optional) -->
             <div v-if="canTake" class="action-take">
               <div class="action-take-hint">
-                可选择带走一名玩家（可不选）· Take a player (optional)
+                {{ $t('actionMenu.take') }}
               </div>
               <div class="action-take-list">
                 <button
@@ -63,7 +63,7 @@
                   :data-testid="`action-menu-take-${p.userId}`"
                   @click="toggleTake(p.userId)"
                 >
-                  {{ p.seatIndex }}号 · {{ p.nickname }}
+                  {{ $t('common.seatDot', { n: p.seatIndex, name: p.nickname }) }}
                 </button>
               </div>
             </div>
@@ -73,14 +73,14 @@
                 data-testid="action-menu-cancel"
                 @click="cancelConfirm"
               >
-                取消 / Cancel
+                {{ $t('common.cancel') }}
               </button>
               <button
                 class="btn btn-danger"
                 data-testid="action-menu-confirm"
                 @click="confirmSelfDestruct"
               >
-                确认 / Confirm
+                {{ $t('common.confirm') }}
               </button>
             </div>
           </div>

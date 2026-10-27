@@ -1,5 +1,5 @@
 /**
- * PlayerReview.vue — the viewer's own replay (玩家视角复盘): their night turn, a dawn
+ * PlayerReview.vue — the viewer's own replay (玩家視角復盤): their night turn, a dawn
  * that names the dead without the cause, and a stop line where their game ended.
  */
 import { describe, expect, it } from 'vitest'
@@ -39,16 +39,16 @@ function review(over: Partial<PlayerReviewData> = {}): PlayerReviewData {
 describe('PlayerReview', () => {
   it('names my own role and shows my own night turn', () => {
     const text = mount(PlayerReview, { props: { review: review() } }).text()
-    expect(text).toContain('我的身份：4号 预言家')
-    expect(text).toContain('🔮 我查验 1号 Alice → 狼人')
+    expect(text).toContain('我的身份：4號 預言家')
+    expect(text).toContain('🔮 我查驗 1號 Alice → 狼人')
   })
 
   it('dawn names the dead seat but never the role or the cause', () => {
     const text = mount(PlayerReview, { props: { review: review() } }).text()
-    expect(text).toContain('☀ 天亮 2号 Bob 出局')
+    expect(text).toContain('☀ 天亮 2號 Bob 出局')
     // The god replay would say 被刀出局 and tag the role; the table only hears that they are out.
     expect(text).not.toContain('被刀')
-    expect(text).not.toContain('2号 Bob〔')
+    expect(text).not.toContain('2號 Bob〔')
   })
 
   it('a villager sleeps through the night, so only dawn is shown', () => {
@@ -61,15 +61,15 @@ describe('PlayerReview', () => {
 
   it('a replay cut short by my death says where it stopped', () => {
     const text = mount(PlayerReview, { props: { review: review({ diedOnDay: 2 }) } }).text()
-    expect(text).toContain('你于第2天出局，复盘到此结束')
+    expect(text).toContain('你於第2天出局，復盤到此結束')
   })
 
   it('a player who survived to the end gets no stop line', () => {
     const text = mount(PlayerReview, { props: { review: review() } }).text()
-    expect(text).not.toContain('复盘到此结束')
+    expect(text).not.toContain('復盤到此結束')
   })
 
-  it('points: each line of the total is spelled out, with a 合计', () => {
+  it('points: each line of the total is spelled out, with a 合計', () => {
     const r = review({
       reward: {
         total: 28,
@@ -82,10 +82,10 @@ describe('PlayerReview', () => {
     })
     const text = mount(PlayerReview, { props: { review: r } }).text()
 
-    expect(text).toContain('胜利方奖励')
-    expect(text).toContain('当选／持有警徽')
+    expect(text).toContain('勝利方獎勵')
+    expect(text).toContain('當選／持有警徽')
     expect(text).toContain('投出狼人')
-    expect(text).toContain('合计')
+    expect(text).toContain('合計')
     expect(text).toContain('+28')
   })
 
@@ -120,9 +120,9 @@ describe('PlayerReview', () => {
     const r = review({ reward: { total: 99, items: [] } })
     const text = mount(PlayerReview, { props: { review: r } }).text()
 
-    expect(text).toContain('合计')
+    expect(text).toContain('合計')
     expect(text).toContain('+99')
-    expect(text).not.toContain('胜利方奖励')
+    expect(text).not.toContain('勝利方獎勵')
   })
 
   it('points: a vote that earned credit shows it on that very line', () => {
@@ -151,6 +151,6 @@ describe('PlayerReview', () => {
   })
 
   it('points: no block at all when the game was never settled', () => {
-    expect(mount(PlayerReview, { props: { review: review() } }).text()).not.toContain('本局积分')
+    expect(mount(PlayerReview, { props: { review: review() } }).text()).not.toContain('本局積分')
   })
 })

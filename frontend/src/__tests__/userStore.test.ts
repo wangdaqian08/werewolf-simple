@@ -56,7 +56,7 @@ describe('userStore', () => {
       token: makeJwt(FUTURE),
       user: {
         userId: 'wechat:xyz',
-        nickname: '微信用户',
+        nickname: '微信用戶',
         avatarUrl: 'https://thirdwx.qlogo.cn/x.jpg',
       },
     })
@@ -146,7 +146,7 @@ describe('userStore', () => {
     const store = useUserStore()
     await store.loginWithCode('wechat', 'wechat-code')
     expect(store.userId).toBe('wechat:xyz')
-    expect(store.nickname).toBe('微信用户')
+    expect(store.nickname).toBe('微信用戶')
     expect(store.avatarUrl).toBe('https://thirdwx.qlogo.cn/x.jpg')
   })
 

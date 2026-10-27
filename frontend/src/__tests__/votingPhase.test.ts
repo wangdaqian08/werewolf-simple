@@ -109,8 +109,8 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     // Check that badge handover buttons are visible by checking button elements
     const buttons = wrapper.findAll('button')
     const buttonLabels = buttons.map((btn) => btn.text())
-    expect(buttonLabels).toContain('移交警徽 / Pass Badge')
-    expect(buttonLabels).toContain('销毁')
+    expect(buttonLabels).toContain('移交警徽')
+    expect(buttonLabels).toContain('銷燬')
   })
 
   it('other players cannot see badge handover buttons', async () => {
@@ -138,11 +138,11 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     // Check that badge handover buttons are NOT visible
     const buttons = wrapper.findAll('button')
     const buttonLabels = buttons.map((btn) => btn.text())
-    expect(buttonLabels).not.toContain('移交警徽 / Pass Badge')
-    expect(buttonLabels).not.toContain('销毁')
+    expect(buttonLabels).not.toContain('移交警徽')
+    expect(buttonLabels).not.toContain('銷燬')
 
     // Should show waiting message
-    expect(wrapper.html()).toContain('等待警长移交警徽')
+    expect(wrapper.html()).toContain('等待警長移交警徽')
   })
 
   it('host cannot see badge handover buttons if not eliminated sheriff', async () => {
@@ -170,11 +170,11 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     // Check that badge handover buttons are NOT visible
     const buttons = wrapper.findAll('button')
     const buttonLabels = buttons.map((btn) => btn.text())
-    expect(buttonLabels).not.toContain('移交警徽 / Pass Badge')
-    expect(buttonLabels).not.toContain('销毁')
+    expect(buttonLabels).not.toContain('移交警徽')
+    expect(buttonLabels).not.toContain('銷燬')
 
     // Should show waiting message
-    expect(wrapper.html()).toContain('等待警长移交警徽')
+    expect(wrapper.html()).toContain('等待警長移交警徽')
   })
 
   // Removed: "shows badge passed message after badge is handed over".
@@ -233,18 +233,18 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     await wrapper.vm.$nextTick()
 
     // Check that badge destroyed message is visible
-    expect(wrapper.html()).toContain('警徽已销毁')
+    expect(wrapper.html()).toContain('警徽已銷燬')
 
     // Check that badge handover buttons are NOT visible
     const buttons = wrapper.findAll('button')
     const buttonLabels = buttons.map((btn) => btn.text())
-    expect(buttonLabels).not.toContain('移交警徽 / Pass Badge')
-    expect(buttonLabels).not.toContain('销毁')
+    expect(buttonLabels).not.toContain('移交警徽')
+    expect(buttonLabels).not.toContain('銷燬')
   })
 
-  // The "你已出局 · Eliminated · 选择警徽继承人" banner is addressed to "you"
+  // The "你已出局 · Eliminated · 選擇警徽繼承人" banner is addressed to "you"
   // and only the dying sheriff is in fact eliminated. It must not show to
-  // alive viewers — they already see the footer hint "等待警长移交警徽".
+  // alive viewers — they already see the footer hint "等待警長移交警徽".
   it('alive non-sheriff does NOT see "you are eliminated" banner during BADGE_HANDOVER', async () => {
     const sheriffUserId = 'sheriff-1'
     const aliveOtherId = 'player-2'
@@ -267,7 +267,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
 
     expect(wrapper.html()).not.toContain('你已出局')
     expect(wrapper.html()).not.toContain('You are eliminated')
-    expect(wrapper.html()).toContain('等待警长移交警徽')
+    expect(wrapper.html()).toContain('等待警長移交警徽')
   })
 
   it('alive host does NOT see "you are eliminated" banner during BADGE_HANDOVER', async () => {
@@ -313,7 +313,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.html()).toContain('你已出局')
-    expect(wrapper.html()).toContain('选择警徽继承人')
+    expect(wrapper.html()).toContain('選擇警徽繼承人')
   })
 
   it('hunter shoots sheriff: the dying sheriff (not the voted-out hunter) sees the pass-badge UI', async () => {
@@ -345,7 +345,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
         avatar: '⭐',
         seatIndex: 2,
         role: 'VILLAGER' as const,
-        // Deferred-kill: still alive during BADGE_HANDOVER per the 国标 cadence
+        // Deferred-kill: still alive during BADGE_HANDOVER per the 國標 cadence
         // the backend now implements.
         isAlive: true,
         isSheriff: true,
@@ -368,8 +368,8 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     })
     await sheriffWrapper.vm.$nextTick()
     const sheriffButtons = sheriffWrapper.findAll('button').map((b) => b.text())
-    expect(sheriffButtons).toContain('移交警徽 / Pass Badge')
-    expect(sheriffButtons).toContain('销毁')
+    expect(sheriffButtons).toContain('移交警徽')
+    expect(sheriffButtons).toContain('銷燬')
 
     // And the host must NOT yet see "Night" — badge handover blocks it.
     const hostWrapper = mount(VotingPhase, {
@@ -385,8 +385,8 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     })
     await hostWrapper.vm.$nextTick()
     const hostButtons = hostWrapper.findAll('button').map((b) => b.text())
-    expect(hostButtons).not.toContain('→ 进入夜晚 / Night')
-    expect(hostWrapper.html()).toContain('等待警长移交警徽')
+    expect(hostButtons).not.toContain('→ 進入夜晚 / Night')
+    expect(hostWrapper.html()).toContain('等待警長移交警徽')
   })
 
   it('host can continue to night after badge is handed over (VOTE_RESULT phase)', async () => {
@@ -452,7 +452,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     // Check that host can see the continue button
     const buttons = wrapper.findAll('button')
     const buttonLabels = buttons.map((btn) => btn.text())
-    expect(buttonLabels).toContain('继续 / Continue')
+    expect(buttonLabels).toContain('繼續')
   })
 
   it('host can continue to night after badge is destroyed (VOTE_RESULT phase)', async () => {
@@ -506,7 +506,7 @@ describe('VotingPhase - Badge Handover UI Bug', () => {
     // Check that host can see the continue button
     const buttons = wrapper.findAll('button')
     const buttonLabels = buttons.map((btn) => btn.text())
-    expect(buttonLabels).toContain('继续 / Continue')
+    expect(buttonLabels).toContain('繼續')
   })
 })
 
@@ -744,21 +744,21 @@ describe('VotingPhase — abstainers on the revealed tally', () => {
     })
   }
 
-  it('shows a 弃票 column naming every abstainer', () => {
+  it('shows a 棄票 column naming every abstainer', () => {
     const wrapper = mountResult([{ userId: 'p3', nickname: 'P3', seatIndex: 3 }])
     const col = wrapper.find('.vote-col-abstain')
     expect(col.exists()).toBe(true)
-    expect(col.text()).toContain('弃票')
+    expect(col.text()).toContain('棄票')
     expect(col.text()).toContain('P3')
     expect(col.find('.vote-col-count').text()).toBe('1')
   })
 
-  it('still shows the 弃票 column with 无 when nobody abstained', () => {
+  it('still shows the 棄票 column with 無 when nobody abstained', () => {
     const wrapper = mountResult([])
     const col = wrapper.find('.vote-col-abstain')
     expect(col.exists()).toBe(true)
     expect(col.find('.vote-col-count').text()).toBe('0')
-    expect(col.find('.vote-col-body').text()).toContain('无')
+    expect(col.find('.vote-col-body').text()).toContain('無')
   })
 })
 
@@ -788,7 +788,7 @@ describe('VotingPhase — hunter role card', () => {
       },
     })
     await wrapper.find('.my-role-chip').trigger('click')
-    expect(document.body.querySelector('.rc-desc')?.textContent).toContain('被女巫毒死时无法开枪')
+    expect(document.body.querySelector('.rc-desc')?.textContent).toContain('被女巫毒死時無法開槍')
     wrapper.unmount()
   })
 })
@@ -821,7 +821,7 @@ describe('VotingPhase — 黑狼王 role card', () => {
     await wrapper.find('.my-role-chip').trigger('click')
     expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('黑狼王')
     expect(document.body.querySelector('.rc-desc')?.textContent).toBe(
-      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
+      '夜晚與狼隊一起襲擊。出局時（被投出、夜晚死亡或被獵人帶走）可開槍帶走一名玩家；被女巫毒死或自爆時無法開槍。',
     )
     wrapper.unmount()
   })
@@ -877,8 +877,8 @@ describe('VotingPhase — PK re-vote and badge heir rules', () => {
 
   it('a PK re-vote names the tied players and only they can be picked', async () => {
     const wrapper = mountAs('p1', voting({ pkCandidates: ['p2', 'p3'] }))
-    expect(wrapper.find('[data-testid="pk-banner"]').text()).toContain('2号')
-    expect(wrapper.find('[data-testid="pk-banner"]').text()).toContain('3号')
+    expect(wrapper.find('[data-testid="pk-banner"]').text()).toContain('2號')
+    expect(wrapper.find('[data-testid="pk-banner"]').text()).toContain('3號')
 
     await wrapper.find('.player-grid [data-seat="4"]').trigger('click')
     expect(wrapper.emitted('selectPlayer')).toBeUndefined()
@@ -966,7 +966,7 @@ describe('VotingPhase — private shot of the voted-out shooter', () => {
 
   it('the shooter sees the shot banner and the shoot buttons', () => {
     const wrapper = mountShot('p2')
-    expect(wrapper.find('[data-testid="voting-shoot-banner"]').text()).toContain('开枪')
+    expect(wrapper.find('[data-testid="voting-shoot-banner"]').text()).toContain('開槍')
     expect(wrapper.find('[data-testid="voting-hunter-shoot"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="voting-hunter-pass"]').exists()).toBe(true)
   })
@@ -974,7 +974,7 @@ describe('VotingPhase — private shot of the voted-out shooter', () => {
   // The hunter and the 黑狼王 share this screen: it must not tell which one fires.
   it('the shoot screen names no role and warns the chance ends', () => {
     const text = mountShot('p2').text()
-    for (const word of ['猎人', 'Hunter', '狼王', 'Wolf King']) expect(text).not.toContain(word)
+    for (const word of ['獵人', 'Hunter', '狼王', 'Wolf King']) expect(text).not.toContain(word)
     expect(text).toContain('主持人')
   })
 
@@ -990,7 +990,7 @@ describe('VotingPhase — private shot of the voted-out shooter', () => {
 
   it('other players see no shot wording at all', () => {
     const text = mountShot('p1').text()
-    for (const word of ['猎人', 'Hunter', '开枪']) expect(text).not.toContain(word)
+    for (const word of ['獵人', 'Hunter', '開槍']) expect(text).not.toContain(word)
   })
 
   it('other players keep seeing the normal vote result with the eliminated player', () => {
@@ -1002,7 +1002,7 @@ describe('VotingPhase — private shot of the voted-out shooter', () => {
   it('the host can continue at once (it ends an unused shot)', () => {
     const wrapper = mountShot('p1', { isHost: true })
     expect(wrapper.find('[data-testid="voting-continue"]').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('开枪')
+    expect(wrapper.text()).not.toContain('開槍')
   })
 
   it('other players get no vote buttons on VOTE_RESULT even if the payload lacks tallyRevealed', () => {
@@ -1052,7 +1052,7 @@ describe('VotingPhase — role card shows my name and seat', () => {
     })
     await wrapper.find('.my-role-chip').trigger('click')
     expect(document.body.querySelector('[data-testid="rc-identity"]')?.textContent?.trim()).toBe(
-      '4号 · Zed',
+      '4號 · Zed',
     )
     wrapper.unmount()
   })

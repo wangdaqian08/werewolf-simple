@@ -33,18 +33,18 @@ async function createWaitingRoom(browser: Browser): Promise<{
   await host.goto(`${BASE}/`)
   // The real-backend lobby may show OAuth with a collapsed guest section —
   // reveal it before filling the nickname.
-  const contAsGuest = host.getByRole('button', { name: /Continue as guest|继续以访客/i })
+  const contAsGuest = host.getByRole('button', { name: /Continue as guest|繼續以訪客/i })
   if (await contAsGuest.count()) await contAsGuest.first().click().catch(() => {})
-  await host.getByPlaceholder('Enter your nickname').fill('Host')
-  await host.getByRole('button', { name: /Create Room/i }).first().click()
+  await host.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Host')
+  await host.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
   await host.waitForURL(/\/create-room/, { timeout: ci ? 60_000 : 30_000 })
 
   // Turn sheriff off to keep setup minimal.
-  const sheriffRow = host.locator('.role-row').filter({ hasText: /Sheriff|警长竞选/ })
+  const sheriffRow = host.locator('.role-row').filter({ hasText: /Sheriff|警長競選/ })
   const sToggle = sheriffRow.locator('.toggle-on')
   if ((await sToggle.count()) > 0) await sToggle.click()
 
-  await host.getByRole('button', { name: /Create Room/i }).click()
+  await host.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await host.waitForURL(/\/room\//, { timeout: ci ? 30_000 : 15_000 })
   // Players & roles: use the minimum (6) players.
   for (let i = 0; i < 10; i++) {
@@ -82,7 +82,7 @@ test.describe('Room ready-sync across a STOMP disconnect — real-backend flow',
     joinBots(roomCode, 5, true)
     const bot = readStateFile(roomCode).bots[4]
 
-    const startBtn = host.getByRole('button', { name: /Start Game|开始游戏/i })
+    const startBtn = host.getByRole('button', { name: /Start Game|開始遊戲/i })
     await expect(startBtn, 'host sees all-ready before disconnect').toBeEnabled({
       timeout: ci ? 30_000 : 15_000,
     })

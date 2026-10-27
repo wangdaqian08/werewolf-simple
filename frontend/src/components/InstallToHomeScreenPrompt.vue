@@ -6,23 +6,22 @@
   -->
   <div v-if="visible" class="install-prompt" data-testid="install-prompt">
     <div class="install-prompt-header">
-      <h3 class="install-prompt-title">获得更稳定的音频体验 / Get reliable audio</h3>
+      <h3 class="install-prompt-title">{{ $t('install.title') }}</h3>
     </div>
     <p class="install-prompt-body">
-      房主请将本应用添加到主屏幕，避免锁屏后音频中断 / Hosts: install to Home Screen so audio keeps
-      playing when the screen locks.
+      {{ $t('install.body') }}
     </p>
     <ol class="install-prompt-steps">
-      <li>Tap Safari's Share button (&#x2610;&#x2191;)</li>
-      <li>Scroll, tap "添加到主屏幕 / Add to Home Screen"</li>
-      <li>Launch from the new icon on your Home Screen</li>
+      <li>{{ $t('install.step1') }}</li>
+      <li>{{ $t('install.step2') }}</li>
+      <li>{{ $t('install.step3') }}</li>
     </ol>
     <div class="install-prompt-actions">
       <button class="btn-secondary" data-testid="install-prompt-dismiss" @click="dismiss">
-        稍后 / Later
+        {{ $t('install.later') }}
       </button>
       <button class="btn-outline" data-testid="install-prompt-never" @click="neverShow">
-        不再提示 / Don't show again
+        {{ $t('install.never') }}
       </button>
     </div>
   </div>

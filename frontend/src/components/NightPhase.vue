@@ -4,11 +4,10 @@
     <header class="nh">
       <div class="nh-moon">🌙</div>
       <div class="nh-title">
-        {{ subPhase === 'SEER_RESULT' ? '查验结果' : '夜晚降临' }}
-        <span class="nh-en">{{ subPhase === 'SEER_RESULT' ? 'Seer Result' : 'Night Falls' }}</span>
+        {{ subPhase === 'SEER_RESULT' ? $t('night.seerResult') : $t('night.falls') }}
       </div>
       <div class="nh-round">
-        第 {{ nightPhase.dayNumber }} 夜 · Round {{ nightPhase.dayNumber }}
+        {{ $t('night.round', { n: nightPhase.dayNumber }) }}
       </div>
     </header>
 
@@ -17,8 +16,10 @@
       <span class="rb-emoji">{{ meta.emoji }}</span>
       <div class="rb-body">
         <div class="rb-names">
-          {{ meta.nameZh }}
-          <span :class="`rb-tag rb-tag-${meta.team}`">{{ meta.nameEn }}</span>
+          {{ roleName(myRole) }}
+          <span v-if="roleTag(myRole)" :class="`rb-tag rb-tag-${meta.team}`">{{
+            roleTag(myRole)
+          }}</span>
         </div>
         <div class="rb-sub">{{ badgeSub }}</div>
       </div>
@@ -29,8 +30,7 @@
       <div class="banner banner-info">
         <span class="banner-icon"> 👤 </span>
         <div>
-          <div class="srh-title">你已经出局</div>
-          <div class="banner-sub">You are eliminated</div>
+          <div class="srh-title">{{ $t('night.youOut') }}</div>
         </div>
       </div>
     </div>
@@ -38,12 +38,12 @@
     <!-- ── WEREWOLF_PICK ──────────────────────────────────────────────── -->
     <template v-if="subPhase === 'WEREWOLF_PICK' && isWolfRole(myRole) && me?.isAlive && !hasActed">
       <div v-if="nightPhase.teammates?.length" class="team-row">
-        <span class="tr-label">队友：</span>
-        <span v-for="(t, i) in nightPhase.teammates" :key="t" class="tr-name">
-          {{ t }}<template v-if="i < nightPhase.teammates!.length - 1"> · </template>
+        <span class="tr-label">{{ $t('night.teammates') }}</span>
+        <span v-for="(mate, i) in nightPhase.teammates" :key="mate" class="tr-name">
+          {{ mate }}<template v-if="i < nightPhase.teammates!.length - 1"> · </template>
         </span>
       </div>
-      <div class="pick-hint">选择今晚的袭击目标：</div>
+      <div class="pick-hint">{{ $t('night.pickHint') }}</div>
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
@@ -73,7 +73,7 @@
           :disabled="actionPending"
           @click="confirmWolfSkip"
         >
-          空刀 No kill
+          {{ $t('night.noKill') }}
         </button>
         <button
           class="btn btn-danger nf-btn"
@@ -82,14 +82,14 @@
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="confirmWolfKill"
         >
-          确认袭击 Confirm
+          {{ $t('night.confirmAttack') }}
         </button>
       </footer>
     </template>
 
     <!-- ── SEER_PICK ──────────────────────────────────────────────────── -->
     <template v-else-if="subPhase === 'SEER_PICK' && myRole === 'SEER' && me?.isAlive">
-      <div class="pick-hint">选择查验目标 · Select a player to check:</div>
+      <div class="pick-hint">{{ $t('night.selectAPlayerTo') }}</div>
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
@@ -118,7 +118,7 @@
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="emit('confirm', localSelected)"
         >
-          查验 · Check
+          {{ $t('night.check') }}
         </button>
       </footer>
     </template>
@@ -141,33 +141,35 @@
           :data-checked-seat="nightPhase.seerResult.checkedSeatIndex"
         >
           <div class="sr-player">
-            {{ nightPhase.seerResult.checkedSeatIndex }}号 ·
-            {{ nightPhase.seerResult.checkedNickname }}
+            {{
+              $t('common.seatDot', {
+                n: nightPhase.seerResult.checkedSeatIndex,
+                name: nightPhase.seerResult.checkedNickname,
+              })
+            }}
           </div>
           <div class="sr-verdict">
-            {{
-              nightPhase.seerResult.isWerewolf ? '🐺 是狼人！· Werewolf' : '✅ 好人阵营 · Good Camp'
-            }}
+            {{ nightPhase.seerResult.isWerewolf ? $t('night.isWolf') : $t('night.isGood') }}
           </div>
         </div>
         <div class="sr-hist">
-          <div class="srh-title">历史查验记录</div>
+          <div class="srh-title">{{ $t('night.history') }}</div>
           <template v-if="nightPhase.seerResult.history.length">
             <div
               v-for="h in nightPhase.seerResult.history"
               :key="`${h.round}-${h.nickname}`"
               class="srh-row"
             >
-              <span class="srh-round">Round {{ h.round }}</span>
+              <span class="srh-round">{{ $t('night.round', { n: h.round }) }}</span>
               <span class="srh-sep">·</span>
               <span class="srh-name">{{ h.nickname }}</span>
               <span class="srh-arrow">→</span>
               <span :class="h.isWerewolf ? 'srh-wolf' : 'srh-ok'">
-                {{ h.isWerewolf ? '狼人 ✗' : '好人 ✓' }}
+                {{ h.isWerewolf ? $t('night.histWolf') : $t('night.histGood') }}
               </span>
             </div>
           </template>
-          <div v-else class="srh-empty">暂无历史记录</div>
+          <div v-else class="srh-empty">{{ $t('night.noHistory') }}</div>
         </div>
         <footer class="nf" style="margin-top: auto">
           <button
@@ -177,7 +179,7 @@
             :disabled="actionPending"
             @click="confirmSeerDone"
           >
-            查验完毕 · Done
+            {{ $t('night.done') }}
           </button>
         </footer>
       </div>
@@ -193,28 +195,31 @@
         :class="['w-section', nightPhase.antidoteDecided && 'ws-decided']"
       >
         <div class="ws-hdr">
-          <span class="ws-pill ws-pill-green">解药 · ANTIDOTE ×1</span>
+          <span class="ws-pill ws-pill-green">{{ $t('night.antidote1') }}</span>
         </div>
         <p v-if="nightPhase.attackedPlayerId" class="ws-desc">
-          今晚
-          <span class="ws-killed">
-            {{ nightPhase.attackedSeatIndex }}号·{{ nightPhase.attackedNickname }}
-          </span>
-          被狼人袭击，是否使用解药？
+          <i18n-t keypath="night.attackedAsk" tag="span">
+            <template #who>
+              <span class="ws-killed">
+                {{
+                  $t('common.seatTight', {
+                    n: nightPhase.attackedSeatIndex,
+                    name: nightPhase.attackedNickname,
+                  })
+                }}
+              </span>
+            </template>
+          </i18n-t>
         </p>
         <p v-else class="ws-desc" data-testid="witch-no-victim">
-          今晚无人被袭击 / No one was attacked tonight
+          {{ $t('night.noOneWasAttacked') }}
         </p>
         <p
           v-if="witchSelfSaveBlocked"
           class="ws-desc ws-blocked-note"
           data-testid="witch-self-save-blocked"
         >
-          {{
-            witchSelfSaveAllowed
-              ? '仅首夜可以自救 / Self-save on night 1 only'
-              : '本局禁止自救 / Self-save disabled this game'
-          }}
+          {{ witchSelfSaveAllowed ? $t('night.selfSaveFirst') : $t('night.selfSaveOff') }}
         </p>
         <div class="ws-row">
           <button
@@ -225,7 +230,7 @@
             :disabled="!!nightPhase.antidoteDecided || actionPending"
             @click="confirmWitchAntidote"
           >
-            使用解药
+            {{ $t('night.useAntidote') }}
           </button>
           <button
             class="btn btn-secondary ws-btn"
@@ -234,7 +239,7 @@
             :disabled="!!nightPhase.antidoteDecided || actionPending"
             @click="confirmWitchPassAntidote"
           >
-            放弃
+            {{ $t('night.pass') }}
           </button>
         </div>
       </div>
@@ -245,9 +250,9 @@
         :class="['w-section', nightPhase.poisonDecided && 'ws-decided']"
       >
         <div class="ws-hdr">
-          <span class="ws-pill ws-pill-red">毒药 · POISON ×1</span>
+          <span class="ws-pill ws-pill-red">{{ $t('night.poison1') }}</span>
         </div>
-        <p class="ws-desc">是否对某位玩家使用毒药？</p>
+        <p class="ws-desc">{{ $t('night.poisonAsk') }}</p>
         <template v-if="poisonMode && !nightPhase.poisonDecided">
           <section class="player-grid player-grid-sm">
             <PlayerSlot
@@ -277,14 +282,14 @@
               :disabled="!effectivePhase.selectedTargetId || actionPending"
               @click="confirmWitchPoison(effectivePhase.selectedTargetId!)"
             >
-              确认毒杀 Confirm
+              {{ $t('night.confirmPoison') }}
             </button>
             <button
               class="btn btn-secondary ws-btn"
               data-testid="poison-mode-cancel"
               @click="poisonMode = false"
             >
-              取消
+              {{ $t('common.cancel') }}
             </button>
           </div>
         </template>
@@ -296,7 +301,7 @@
             :disabled="!!nightPhase.poisonDecided || actionPending"
             @click="poisonMode = true"
           >
-            使用毒药
+            {{ $t('night.usePoison') }}
           </button>
           <button
             class="btn btn-secondary ws-btn"
@@ -305,7 +310,7 @@
             :disabled="!!nightPhase.poisonDecided || actionPending"
             @click="confirmWitchPassPoison"
           >
-            不用
+            {{ $t('night.dontUse') }}
           </button>
         </div>
       </div>
@@ -313,9 +318,9 @@
       <!-- No items available - show done button -->
       <div v-if="!nightPhase.hasAntidote && !nightPhase.hasPoison" class="w-section">
         <div class="ws-hdr">
-          <span class="ws-pill">女巫 · WITCH</span>
+          <span class="ws-pill">{{ $t('night.witch') }}</span>
         </div>
-        <p class="ws-desc">你没有可用的道具。</p>
+        <p class="ws-desc">{{ $t('night.noItems') }}</p>
         <div class="ws-row">
           <button
             class="btn btn-primary ws-btn"
@@ -324,7 +329,7 @@
             :disabled="actionPending"
             @click="confirmWitchSkip"
           >
-            完成操作 · Done
+            {{ $t('night.done2') }}
           </button>
         </div>
       </div>
@@ -335,10 +340,16 @@
       v-else-if="subPhase === 'GUARD_PICK' && myRole === 'GUARD' && me?.isAlive && !hasActed"
     >
       <div class="pick-hint">
-        选择守护目标 · Protect a player:
+        {{ $t('night.protectHint') }}
         <span v-if="nightPhase.previousGuardTargetId" class="guard-note">
-          上轮已保护: {{ prevGuardPlayer?.seatIndex }}号·{{ prevGuardPlayer?.nickname }}
-          （不可选择）
+          {{
+            $t('night.prevGuard', {
+              who: $t('common.seatTight', {
+                n: prevGuardPlayer?.seatIndex,
+                name: prevGuardPlayer?.nickname,
+              }),
+            })
+          }}
         </span>
       </div>
       <section class="player-grid">
@@ -371,7 +382,7 @@
           :disabled="actionPending"
           @click="confirmGuardSkip"
         >
-          空守 Not protect anyone
+          {{ $t('night.noProtect') }}
         </button>
         <!-- Guard confirm is RED per design -->
         <button
@@ -381,7 +392,7 @@
           :disabled="!effectivePhase.selectedTargetId || actionPending"
           @click="confirmGuardProtect"
         >
-          确认保护 Confirm
+          {{ $t('night.confirmProtect') }}
         </button>
       </footer>
     </template>
@@ -391,17 +402,17 @@
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
         <div class="ss-title" data-testid="sleep-screen-title">
-          {{ me && !me.isAlive ? '夜晚降临' : '请闭眼' }}
+          {{ me && !me.isAlive ? $t('night.falls') : $t('night.closeEyes') }}
         </div>
-        <div class="ss-en">
-          {{ me && !me.isAlive ? 'Night is coming...' : 'Night is in progress...' }}
-        </div>
-        <div class="ss-sub">
+        <div v-if="$i18n.locale === 'zh'" class="ss-en">
           {{
             me && !me.isAlive
-              ? '所有人请闭眼 / Everyone please close your eyes'
-              : '等待其他玩家行动 / Waiting for others'
+              ? $t('night.comingEn', {}, { locale: 'en' })
+              : $t('night.inProgressEn', {}, { locale: 'en' })
           }}
+        </div>
+        <div class="ss-sub">
+          {{ me && !me.isAlive ? $t('night.everyoneClose') : $t('night.waitingOthers') }}
         </div>
       </div>
     </template>
@@ -410,15 +421,19 @@
     <template v-else-if="subPhase === 'WAITING'">
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
-        <div class="ss-title" data-testid="sleep-screen-title">夜晚即将开始</div>
-        <div class="ss-en">Night is beginning...</div>
-        <div class="ss-sub">所有人请闭眼 / Everyone please close your eyes</div>
+        <div class="ss-title" data-testid="sleep-screen-title">{{ $t('night.beginning') }}</div>
+        <div v-if="$i18n.locale === 'zh'" class="ss-en">
+          {{ $t('night.beginningEn', {}, { locale: 'en' }) }}
+        </div>
+        <div class="ss-sub">{{ $t('night.everyoneClose') }}</div>
       </div>
     </template>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { t } from '@/i18n'
+import { roleName, roleTag } from '@/utils/roleDefinitions'
 import { computed, ref, watch } from 'vue'
 
 import { isWolfRole } from '@/utils/roleDefinitions'
@@ -587,22 +602,20 @@ function selectPlayer(userId: string) {
 // ── Role metadata ─────────────────────────────────────────────────────────────
 
 interface RoleMeta {
-  nameZh: string
-  nameEn: string
   emoji: string
   team: 'wolf' | 'village' | 'special'
 }
 
 const ROLE_META: Record<PlayerRole, RoleMeta> = {
-  WEREWOLF: { nameZh: '狼人', nameEn: 'WEREWOLF', emoji: '🐺', team: 'wolf' },
-  VILLAGER: { nameZh: '村民', nameEn: 'VILLAGER', emoji: '🌾', team: 'village' },
-  SEER: { nameZh: '预言家', nameEn: 'SEER', emoji: '🔭', team: 'special' },
-  WITCH: { nameZh: '女巫', nameEn: 'WITCH', emoji: '🔮', team: 'special' },
-  HUNTER: { nameZh: '猎人', nameEn: 'HUNTER', emoji: '🏹', team: 'special' },
-  GUARD: { nameZh: '守卫', nameEn: 'GUARD', emoji: '🛡️', team: 'special' },
-  IDIOT: { nameZh: '白痴', nameEn: 'IDIOT', emoji: '🃏', team: 'special' },
-  WHITE_WOLF_KING: { nameZh: '白狼王', nameEn: 'WHITE WOLF KING', emoji: '👑', team: 'wolf' },
-  BLACK_WOLF_KING: { nameZh: '黑狼王', nameEn: 'BLACK WOLF KING', emoji: '🖤', team: 'wolf' },
+  WEREWOLF: { emoji: '🐺', team: 'wolf' },
+  VILLAGER: { emoji: '🌾', team: 'village' },
+  SEER: { emoji: '🔭', team: 'special' },
+  WITCH: { emoji: '🔮', team: 'special' },
+  HUNTER: { emoji: '🏹', team: 'special' },
+  GUARD: { emoji: '🛡️', team: 'special' },
+  IDIOT: { emoji: '🃏', team: 'special' },
+  WHITE_WOLF_KING: { emoji: '👑', team: 'wolf' },
+  BLACK_WOLF_KING: { emoji: '🖤', team: 'wolf' },
 }
 
 const meta = computed(() => (props.myRole ? ROLE_META[props.myRole] : null))
@@ -611,15 +624,15 @@ const badgeSub = computed(() => {
   const role = props.myRole
   switch (subPhase.value) {
     case 'WEREWOLF_PICK':
-      return isWolfRole(role) ? '与队友商议攻击目标' : '请闭眼 / Eyes closed'
+      return isWolfRole(role) ? t('night.badge.wolf') : t('night.badge.closed')
     case 'SEER_PICK':
-      return role === 'SEER' ? '查验一名玩家的身份' : '请闭眼 / Eyes closed'
+      return role === 'SEER' ? t('night.badge.seer') : t('night.badge.closed')
     case 'SEER_RESULT':
-      return role === 'SEER' ? '查验完毕' : '请闭眼 / Eyes closed'
+      return role === 'SEER' ? t('night.badge.seerDone') : t('night.badge.closed')
     case 'WITCH_ACT':
-      return role === 'WITCH' ? '你的行动时间 / Your turn' : '请闭眼 / Eyes closed'
+      return role === 'WITCH' ? t('night.badge.witch') : t('night.badge.closed')
     case 'GUARD_PICK':
-      return role === 'GUARD' ? '选择守护的玩家' : '请闭眼 / Eyes closed'
+      return role === 'GUARD' ? t('night.badge.guard') : t('night.badge.closed')
     default:
       return ''
   }

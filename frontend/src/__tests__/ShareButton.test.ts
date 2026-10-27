@@ -37,7 +37,7 @@ describe('ShareButton', () => {
     await flushPromises()
 
     expect(writeText).toHaveBeenCalledWith(LINK)
-    expect(w.text()).toContain('已复制')
+    expect(w.text()).toContain('已複製')
   })
 
   it('a cancelled share sheet does not fall back to copying', async () => {

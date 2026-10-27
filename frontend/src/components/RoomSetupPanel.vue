@@ -1,27 +1,27 @@
 <template>
   <div class="create-wrap" data-testid="room-setup-panel">
     <div class="create-card">
-      <button class="back-btn" @click="emit('done')">← 返回房间</button>
+      <button class="back-btn" @click="emit('done')">{{ $t('setup.backRoom') }}</button>
       <div class="create-header">
-        <div class="section-lbl">Host</div>
-        <h2 class="create-title">人数与角色 / Players &amp; Roles</h2>
+        <div class="section-lbl">{{ $t('common.host') }}</div>
+        <h2 class="create-title">{{ $t('setup.title') }}</h2>
       </div>
 
       <!-- Invite: share while still deciding the headcount -->
       <div class="stepper-card invite-row">
         <div>
-          <div class="field-lbl">房间号 / Room Code</div>
+          <div class="field-lbl">{{ $t('setup.roomCode') }}</div>
           <div class="stepper-num" data-testid="setup-room-code">{{ room.roomCode }}</div>
         </div>
         <ShareButton :room-code="room.roomCode" />
       </div>
       <div class="balance-note" data-testid="setup-joined-count">
-        已加入 {{ joined }} 人 · {{ joined }} joined
+        {{ $t('setup.joined', { n: joined }) }}
       </div>
 
       <!-- Player count stepper -->
       <div class="stepper-card">
-        <div class="field-lbl">玩家人数（含房主）/ Players (incl. host)</div>
+        <div class="field-lbl">{{ $t('setup.players') }}</div>
         <div class="stepper-row">
           <button
             :disabled="totalPlayers <= minPlayers"
@@ -48,7 +48,7 @@
 
       <!-- Wolf-count stepper -->
       <div class="stepper-card">
-        <div class="field-lbl">狼人数量 / Number of Werewolves</div>
+        <div class="field-lbl">{{ $t('setup.wolves') }}</div>
         <div class="stepper-row">
           <button
             :disabled="!canRemoveWolf"
@@ -74,12 +74,12 @@
       </div>
 
       <!-- Role configuration -->
-      <div class="field-lbl">角色配置 / Role Configuration</div>
+      <div class="field-lbl">{{ $t('setup.roleConfig') }}</div>
       <div class="balance-note">
-        剩余席位自动分配为村民 · Remaining seats filled with villagers.
+        {{ $t('setup.remaining') }}
       </div>
       <div class="balance-note" data-testid="god-range">
-        神职 {{ godRange.min }}–{{ godRange.max }} 个 · Gods {{ godRange.min }}–{{ godRange.max }}
+        {{ $t('setup.gods', { min: godRange.min, max: godRange.max }) }}
       </div>
 
       <div class="role-list">
@@ -95,14 +95,14 @@
               :class="{ 'role-name-muted': !role.required && !isEnabled(role.id) }"
               class="role-name"
             >
-              {{ role.nameZh }} {{ role.nameEn }}
+              {{ roleName(role.id) }} {{ roleTag(role.id) }}
             </span>
             <span
               v-if="KING_IDS.includes(role.id)"
               class="win-cond-desc"
               :data-testid="`role-hint-${role.id}`"
             >
-              {{ KING_MIN_PLAYERS }} 人及以上才能开启 · {{ KING_MIN_PLAYERS }}+ players
+              {{ $t('setup.kingMin', { n: KING_MIN_PLAYERS }) }}
             </span>
           </div>
           <!-- Required roles: label only -->
@@ -111,7 +111,7 @@
             :class="role.id === 'WEREWOLF' ? 'req-wolf' : 'req-village'"
             class="req-label"
           >
-            REQUIRED
+            {{ $t('setup.required') }}
           </span>
           <!-- Optional roles: toggle -->
           <button
@@ -140,7 +140,7 @@
         data-testid="room-setup-done"
         @click="save"
       >
-        {{ saving ? '保存中…' : '完成 / Done' }}
+        {{ saving ? $t('setup.saving') : $t('setup.done') }}
       </button>
 
       <p v-if="error" class="error-msg" data-testid="room-setup-error">{{ error }}</p>
@@ -149,6 +149,7 @@
 </template>
 
 <script lang="ts" setup>
+import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import axios from 'axios'
 import { useRoomStore } from '@/stores/roomStore'
@@ -159,6 +160,8 @@ import {
   type RoleDefinition,
   isWolfRole,
   roleDefinition,
+  roleName,
+  roleTag,
 } from '@/utils/roleDefinitions'
 import { wolfBounds } from '@/utils/wolfBounds'
 import RoleComposition from '@/components/RoleComposition.vue'
@@ -270,12 +273,12 @@ function toggleHint(roleId: string): string {
   if (canToggle(roleId)) return ''
   if (KING_IDS.includes(roleId))
     return otherKingOn(roleId)
-      ? '一局只能选一个狼王 / One wolf king per room'
-      : `${KING_MIN_PLAYERS} 人及以上才能开启 / Needs ${KING_MIN_PLAYERS}+ players`
+      ? t('setup.oneKing')
+      : t('setup.needPlayers', { n: KING_MIN_PLAYERS })
   const { min, max } = godRange.value
   return enabledOptional.value.has(roleId)
-    ? `神职不能少于 ${min} 个 / At least ${min} gods`
-    : `神职最多 ${max} 个 / At most ${max} gods`
+    ? t('setup.atLeast', { n: min })
+    : t('setup.atMost', { n: max })
 }
 
 function toggleRole(roleId: string) {
@@ -313,7 +316,7 @@ async function save() {
     const reason = axios.isAxiosError(e)
       ? (e.response?.data as { error?: string } | undefined)?.error
       : undefined
-    error.value = reason ?? '保存失败，请重试 / Save failed, try again.'
+    error.value = reason ?? t('setup.saveFailed')
   } finally {
     saving.value = false
   }

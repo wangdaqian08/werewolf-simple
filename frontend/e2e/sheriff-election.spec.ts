@@ -6,18 +6,18 @@ async function goToSheriffSignup(page: import('@playwright/test').Page) {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
-  await page.getByPlaceholder('Enter your nickname').fill('TestHost')
-  await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('TestHost')
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
   // Start game with sheriff enabled (default)
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
   // Navigate to sheriff SIGNUP phase
   await page.getByRole('button', { name: 'Skip → Sheriff' }).click()
   await page.waitForTimeout(100)
@@ -32,19 +32,19 @@ test('run then withdraw toggles the action buttons', async ({ page }) => {
   await goToSheriffSignup(page)
 
   // Initial state: Run + Pass visible, Withdraw hidden
-  await expect(page.getByRole('button', { name: /参选 \/ Run for Sheriff/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /撤回 \/ Withdraw/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:參選|Run for Sheriff)/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:撤回|Withdraw)/i })).not.toBeVisible()
 
   // Run for sheriff → Withdraw appears, Run hides
-  await page.getByRole('button', { name: /参选 \/ Run for Sheriff/i }).click()
-  await expect(page.getByRole('button', { name: /撤回 \/ Withdraw/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /参选 \/ Run for Sheriff/i })).not.toBeVisible()
+  await page.getByRole('button', { name: /(?:參選|Run for Sheriff)/i }).click()
+  await expect(page.getByRole('button', { name: /(?:撤回|Withdraw)/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:參選|Run for Sheriff)/i })).not.toBeVisible()
 
   // Click Withdraw → Run reappears (treated as pass — Pass button stays hidden
   // since hasPassed=true).
-  await page.getByRole('button', { name: /撤回 \/ Withdraw/i }).click()
-  await expect(page.getByRole('button', { name: /参选 \/ Run for Sheriff/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /撤回 \/ Withdraw/i })).not.toBeVisible()
+  await page.getByRole('button', { name: /(?:撤回|Withdraw)/i }).click()
+  await expect(page.getByRole('button', { name: /(?:參選|Run for Sheriff)/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:撤回|Withdraw)/i })).not.toBeVisible()
 })
 
 // ── Test 2: pass button changes to Passed state ───────────────────────────────
@@ -53,17 +53,17 @@ test('pass button changes to Passed state', async ({ page }) => {
   await goToSheriffSignup(page)
 
   // Both Run for Sheriff and Pass should be visible initially
-  await expect(page.getByRole('button', { name: /参选 \/ Run for Sheriff/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: '放弃 / Pass', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:參選|Run for Sheriff)/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /放棄|Pass/, exact: true })).toBeVisible()
 
-  // Click "放弃 / Pass"
-  await page.getByRole('button', { name: '放弃 / Pass', exact: true }).click()
+  // Click "放棄 / Pass"
+  await page.getByRole('button', { name: /放棄|Pass/, exact: true }).click()
   await page.waitForTimeout(100)
 
   // The "Pass" button disappears after clicking it
-  await expect(page.getByRole('button', { name: '放弃 / Pass', exact: true })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /放棄|Pass/, exact: true })).not.toBeVisible()
   // "Run for Sheriff" stays visible — player can still change their mind
-  await expect(page.getByRole('button', { name: /参选 \/ Run for Sheriff/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:參選|Run for Sheriff)/i })).toBeVisible()
 })
 
 // ── Test 3: host sees Next Speaker in My Turn view ────────────────────────────
@@ -76,13 +76,13 @@ test('host sees Next Speaker in My Turn view', async ({ page }) => {
   await page.waitForTimeout(100)
 
   // Should now be in "My Turn" view (currentSpeakerId === myUserId)
-  await expect(page.getByText(/Your Turn/i)).toBeVisible()
+  await expect(page.getByText(/輪到你了|Your Turn/i)).toBeVisible()
 
-  // "退出竞选 / Quit Campaign" button should be visible
-  await expect(page.getByRole('button', { name: /退出竞选 \/ Quit Campaign/i })).toBeVisible()
+  // "退出競選 / Quit Campaign" button should be visible
+  await expect(page.getByRole('button', { name: /(?:退出競選|Quit Campaign)/i })).toBeVisible()
 
   // Host also sees "下一位 / Next Speaker" button
-  await expect(page.getByRole('button', { name: /下一位 \/ Next Speaker/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:下一位|Next Speaker)/i })).toBeVisible()
 })
 
 // ── Test 4: Reveal Result stays visible (disabled) when host quit campaign ────
@@ -99,11 +99,11 @@ test('Reveal Result stays visible disabled when host quit campaign and others no
   await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING_HOST_QUIT'))
   await page.waitForTimeout(100)
 
-  // Host sees "已放弃投票 / Vote forfeited" (can't vote)
-  await expect(page.getByRole('button', { name: /已放弃投票 \/ Vote forfeited/i })).toBeVisible()
+  // Host sees "已放棄投票 / Vote forfeited" (can't vote)
+  await expect(page.getByRole('button', { name: /(?:已放棄投票|Vote forfeited)/i })).toBeVisible()
 
   // Reveal Result must be visible (not hidden) even though allVoted=false
-  const revealBtn = page.getByRole('button', { name: /揭晓结果 \/ Reveal Result/i })
+  const revealBtn = page.getByRole('button', { name: /(?:揭曉結果|Reveal Result)/i })
   await expect(revealBtn).toBeVisible()
   // It should be disabled because not everyone has voted yet
   await expect(revealBtn).toBeDisabled()
@@ -122,17 +122,17 @@ test('vote count shows and Reveal Result enables after Give Up Vote', async ({ p
   await expect(page.getByText(/\d+\/\d+ voted/i)).toBeVisible()
 
   // Reveal Result is visible but disabled (not all voted)
-  const revealBtn = page.getByRole('button', { name: /揭晓结果 \/ Reveal Result/i })
+  const revealBtn = page.getByRole('button', { name: /(?:揭曉結果|Reveal Result)/i })
   await expect(revealBtn).toBeVisible()
   await expect(revealBtn).toBeDisabled()
 
   // Click "Give Up Vote"
-  await page.getByRole('button', { name: /放弃投票 \/ Give Up Vote/i }).click()
+  await page.getByRole('button', { name: /(?:放棄投票|Give Up Vote)/i }).click()
   await page.waitForTimeout(100)
 
-  // Locked state: "已弃票 / Abstained" shown, vote buttons gone
-  await expect(page.getByText(/已弃票 \/ Abstained/i)).toBeVisible()
-  await expect(page.getByRole('button', { name: /放弃投票 \/ Give Up Vote/i })).not.toBeVisible()
+  // Locked state: "已棄票 / Abstained" shown, vote buttons gone
+  await expect(page.getByText(/(?:已棄票|Abstained)/i)).toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:放棄投票|Give Up Vote)/i })).not.toBeVisible()
 
   // Reveal Result is now enabled
   await expect(revealBtn).toBeEnabled()
@@ -155,13 +155,13 @@ test('abstaining clears previously selected candidate highlight', async ({ page 
   await expect(page.locator('.vote-row-selected')).toBeVisible()
 
   // Click Give Up Vote
-  await page.getByRole('button', { name: /放弃投票 \/ Give Up Vote/i }).click()
+  await page.getByRole('button', { name: /(?:放棄投票|Give Up Vote)/i }).click()
   await page.waitForTimeout(100)
 
   // No row should be selected anymore
   await expect(page.locator('.vote-row-selected')).not.toBeVisible()
   // Locked abstain badge shown
-  await expect(page.getByText(/已弃票 \/ Abstained/i)).toBeVisible()
+  await expect(page.getByText(/(?:已棄票|Abstained)/i)).toBeVisible()
 })
 
 // ── Test 7: cannot select self when voting as a candidate ────────────────────
@@ -186,7 +186,7 @@ test('cannot select self when voting as a candidate', async ({ page }) => {
   // No selection state on the self row
   await expect(selfRow).not.toHaveClass(/vote-row-selected/)
   // Confirm Vote button stays disabled (nothing selected)
-  await expect(page.getByRole('button', { name: /确认投票 \/ Confirm Vote/i })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /(?:確認投票|Confirm Vote)/i })).toBeDisabled()
 })
 
 // ── Test 8: quit candidates must NOT appear in final result columns ────────────
@@ -200,7 +200,7 @@ test('quit candidate does not appear as a vote column in result', async ({ page 
   await page.waitForTimeout(100)
 
   // RESULT screen should be shown
-  await expect(page.getByText(/警长当选/i)).toBeVisible()
+  await expect(page.getByText(/警長當選/i)).toBeVisible()
 
   // Running candidates (Tom, Alice, Bob) appear as their own vote columns
   await expect(page.locator('.vote-col-cname', { hasText: 'Tom' })).toBeVisible()
@@ -208,7 +208,7 @@ test('quit candidate does not appear as a vote column in result', async ({ page 
   await expect(page.locator('.vote-col-cname', { hasText: 'Bob' })).toBeVisible()
 
   // Eve quit during SPEECH — she must NOT appear as a vote column of her own,
-  // but IS shown inside the "退出竞选" quit column
+  // but IS shown inside the "退出競選" quit column
   await expect(page.locator('.vote-col-cname', { hasText: 'Eve' })).not.toBeVisible()
   await expect(page.locator('.vote-col-quit')).toBeVisible()
   await expect(page.locator('.vote-col-quit').getByText('Eve')).toBeVisible()
@@ -230,7 +230,7 @@ test('selecting a candidate immediately highlights the row and enables Confirm V
 
   // Before any selection: no row highlighted, Confirm Vote disabled
   await expect(page.locator('.vote-row-selected')).not.toBeVisible()
-  await expect(page.getByRole('button', { name: /确认投票 \/ Confirm Vote/i })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /(?:確認投票|Confirm Vote)/i })).toBeDisabled()
 
   // Click Tom's candidate row
   await page.locator('.vote-row').filter({ hasText: 'Tom' }).click()
@@ -239,7 +239,7 @@ test('selecting a candidate immediately highlights the row and enables Confirm V
   // Row is immediately highlighted — no server roundtrip needed
   await expect(page.locator('.vote-row-selected')).toBeVisible()
   // Confirm Vote is now enabled
-  await expect(page.getByRole('button', { name: /确认投票 \/ Confirm Vote/i })).toBeEnabled()
+  await expect(page.getByRole('button', { name: /(?:確認投票|Confirm Vote)/i })).toBeEnabled()
 })
 
 // ── Test 10: Confirm Vote transitions to locked voted state ───────────────────
@@ -258,7 +258,7 @@ test('Confirm Vote shows locked voted badge with candidate name', async ({ page 
   await page.waitForTimeout(100)
 
   // Confirm the vote
-  await page.getByRole('button', { name: /确认投票 \/ Confirm Vote/i }).click()
+  await page.getByRole('button', { name: /(?:確認投票|Confirm Vote)/i }).click()
   await page.waitForTimeout(200)
 
   // Locked state: "已投票 — Tom" badge visible
@@ -267,8 +267,8 @@ test('Confirm Vote shows locked voted badge with candidate name', async ({ page 
   await expect(page.locator('.voted-badge')).toContainText('Tom')
 
   // Vote action buttons are gone
-  await expect(page.getByRole('button', { name: /确认投票 \/ Confirm Vote/i })).not.toBeVisible()
-  await expect(page.getByRole('button', { name: /放弃投票 \/ Give Up Vote/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:確認投票|Confirm Vote)/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /(?:放棄投票|Give Up Vote)/i })).not.toBeVisible()
 })
 
 // ── Test 11: result tally columns are sorted from high votes to low ───────────
@@ -281,7 +281,7 @@ test('result tally columns are sorted highest votes first', async ({ page }) => 
   await page.evaluate(() => (window as any).__debug.sheriffPhase('RESULT'))
   await page.waitForTimeout(100)
 
-  await expect(page.getByText(/警长当选/i)).toBeVisible()
+  await expect(page.getByText(/警長當選/i)).toBeVisible()
 
   // Collect vote count numbers from tally columns in DOM order.
   // The mock result has Tom(5), Alice(3), Bob(2) — winner first.

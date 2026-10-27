@@ -8,10 +8,10 @@ async function setup(page: Page) {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
-  await page.getByPlaceholder('Enter your nickname').fill('Test')
-  await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Test')
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)
@@ -24,18 +24,18 @@ test('flow: gameStart → roleSkip → Sheriff SIGNUP', async ({ page }) => {
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
 
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   // Should see Role Reveal card
-  await expect(page.getByText('知道了 / Got it')).toBeVisible()
+  await expect(page.getByText(/知道了|Got it/)).toBeVisible()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
   await page.waitForTimeout(70)
 
   // Should be on Sheriff Election SIGNUP
-  await expect(page.getByText(/竞选警长|Sign Up|Run for Sheriff|警长竞选/i).first()).toBeVisible()
+  await expect(page.getByText(/競選警長|Sign Up|Run for Sheriff|警長競選/i).first()).toBeVisible()
 })
 
 // ── Flow 2: Jump straight to a day scenario ───────────────────────────────────
@@ -45,9 +45,9 @@ test('flow: gameStart → roleSkip → sheriffExit → dayScenario HOST_REVEALED
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
 
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
   await page.waitForTimeout(70)
@@ -56,7 +56,7 @@ test('flow: gameStart → roleSkip → sheriffExit → dayScenario HOST_REVEALED
   await page.waitForTimeout(70)
 
   // After sheriffExit we're in DAY HIDDEN — confirm we're not on sheriff screen
-  await expect(page.getByText(/竞选警长|Sign Up/i)).not.toBeVisible()
+  await expect(page.getByText(/競選警長|Sign Up/i)).not.toBeVisible()
 
   await page.evaluate(() => (window as any).__debug.dayScenario('HOST_REVEALED'))
   await page.waitForTimeout(70)
@@ -75,9 +75,9 @@ test('flow: roleSkip lands on SIGNUP showing decision progress', async ({ page }
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
 
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
 
@@ -90,9 +90,9 @@ test('flow: sheriffCandidate is a no-op when candidate already exists', async ({
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
 
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
 
@@ -111,9 +111,9 @@ test('flow: correct candidate controls sequence — remove then re-add', async (
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
 
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
 
@@ -134,9 +134,9 @@ test('flow: sheriffPhase SPEECH_CANDIDATE after roleSkip works', async ({ page }
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
 
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
   await page.waitForTimeout(70)
@@ -145,5 +145,5 @@ test('flow: sheriffPhase SPEECH_CANDIDATE after roleSkip works', async ({ page }
   await page.waitForTimeout(70)
 
   // Should now be on speech phase
-  await expect(page.getByText(/发言|Speech|speaking/i).first()).toBeVisible()
+  await expect(page.getByText(/發言|Speech|speaking/i).first()).toBeVisible()
 })

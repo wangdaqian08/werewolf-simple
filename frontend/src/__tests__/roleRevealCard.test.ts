@@ -9,7 +9,7 @@ describe('RoleRevealCard — 白狼王', () => {
     })
     expect(wrapper.text()).toContain('白狼王')
     expect(wrapper.find('.role-label-wolf').exists()).toBe(true)
-    expect(wrapper.text()).toContain('带走一名玩家')
+    expect(wrapper.text()).toContain('帶走一名玩家')
     expect(wrapper.text()).toContain('Alice')
   })
 })
@@ -22,7 +22,7 @@ describe('RoleRevealCard — 黑狼王', () => {
     expect(wrapper.text()).toContain('黑狼王')
     expect(wrapper.find('.role-label-wolf').exists()).toBe(true)
     expect(wrapper.text()).toContain(
-      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
+      '夜晚與狼隊一起襲擊。出局時（被投出、夜晚死亡或被獵人帶走）可開槍帶走一名玩家；被女巫毒死或自爆時無法開槍。',
     )
     expect(wrapper.text()).toContain('Alice')
   })

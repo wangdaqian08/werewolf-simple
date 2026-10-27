@@ -1,12 +1,12 @@
 <template>
   <div class="result-wrap" :class="{ 'result-wolves': winner === 'WEREWOLF' }">
     <div class="result-card">
-      <p class="game-over-label">GAME OVER</p>
+      <p class="game-over-label">{{ $t('result.gameOver') }}</p>
       <h1 class="outcome-title serif">{{ outcomeTitle }}</h1>
       <p class="outcome-sub">{{ outcomeSub }}</p>
 
       <div v-if="sortedPlayers.length" class="divider-label">
-        <span>ROLES REVEALED</span>
+        <span>{{ $t('result.rolesRevealed') }}</span>
       </div>
 
       <section v-if="sortedPlayers.length" class="reveal-grid">
@@ -29,27 +29,27 @@
 
       <div v-if="sortedPlayers.length" class="review-btns">
         <button class="btn btn-outline review-btn" data-testid="open-review" @click="openReview">
-          📜 上帝视角复盘
+          📜 {{ $t('review.heading') }}
         </button>
         <button
           class="btn btn-outline review-btn"
           data-testid="open-player-review"
           @click="openPlayerReview"
         >
-          👤 玩家视角复盘
+          👤 {{ $t('playerReview.heading') }}
         </button>
       </div>
 
       <template v-if="settlement">
         <div class="divider-label">
-          <span>积分结算 / REWARDS</span>
+          <span>{{ $t('result.rewards') }}</span>
         </div>
         <section class="settlement" data-testid="settlement">
           <div v-if="settlement.myEarned != null" class="my-earned">
-            +{{ settlement.myEarned }} <span class="earned-label">积分 / Credits earned</span>
+            +{{ settlement.myEarned }} <span class="earned-label">{{ $t('result.earned') }}</span>
           </div>
           <div v-if="settlement.myBalance != null" class="my-balance">
-            余额 / Balance: ◈ {{ settlement.myBalance }}
+            {{ $t('pay.balance', { n: settlement.myBalance }) }}
           </div>
           <div class="reward-list">
             <div v-for="r in sortedRewards" :key="r.userId" class="reward-row">
@@ -63,20 +63,21 @@
       </template>
 
       <button class="btn btn-danger play-again-btn" data-testid="play-again" @click="goLobby">
-        Play Again
+        {{ $t('result.playAgain') }}
       </button>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { getLocale, t } from '@/i18n'
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { gameService } from '@/services/gameService'
 import type { GamePlayer } from '@/types'
-import { isWolfRole } from '@/utils/roleDefinitions.ts'
+import { isWolfRole, roleName } from '@/utils/roleDefinitions.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -99,24 +100,12 @@ const sortedRewards = computed(() =>
   [...(settlement.value?.rewards ?? [])].sort((a, b) => a.seatIndex - b.seatIndex),
 )
 
-const ROLE_ZH: Record<string, string> = {
-  WEREWOLF: '狼人',
-  VILLAGER: '村民',
-  SEER: '预言家',
-  WITCH: '女巫',
-  HUNTER: '猎人',
-  GUARD: '守卫',
-  IDIOT: '白痴',
-  WHITE_WOLF_KING: '白狼王',
-  BLACK_WOLF_KING: '黑狼王',
-}
-
 function displayName(player: { userId: string; nickname: string }): string {
-  return player.userId === userStore.userId ? '我' : player.nickname
+  return player.userId === userStore.userId ? t('common.me') : player.nickname
 }
 
 function roleZh(role?: string): string {
-  return role ? (ROLE_ZH[role] ?? role) : '?'
+  return role ? roleName(role) : '?'
 }
 
 const sortedPlayers = computed<GamePlayer[]>(() => {
@@ -125,13 +114,15 @@ const sortedPlayers = computed<GamePlayer[]>(() => {
 })
 
 const outcomeTitle = computed(() => {
-  if (!winner.value) return '比赛取消'
-  return winner.value === 'WEREWOLF' ? '狼人胜' : '好人胜'
+  if (!winner.value) return t('result.cancelled')
+  return winner.value === 'WEREWOLF' ? t('result.wolvesWin') : t('result.goodWin')
 })
 
 const outcomeSub = computed(() => {
-  if (!winner.value) return 'Game Cancelled'
-  return winner.value === 'WEREWOLF' ? 'WOLVES WIN' : 'VILLAGE WINS'
+  // English caption only in Chinese mode (in English it would repeat the title)
+  if (getLocale() !== 'zh') return ''
+  if (!winner.value) return t('result.cancelledSub')
+  return winner.value === 'WEREWOLF' ? t('result.wolvesWinSub') : t('result.goodWinSub')
 })
 
 function openReview() {

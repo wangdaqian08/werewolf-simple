@@ -4,7 +4,7 @@
  *  1. At night the king's browser makes the wolf kill (it acts with the wolves).
  *  2. By day the king opens the Action chip → 自爆 → picks a player to take → confirms.
  *  3. Every viewer's death banner names the king and the taken player; the host
- *     sees 进入夜晚 (no vote); the 游戏记录 drawer shows the take.
+ *     sees 進入夜晚 (no vote); the 遊戲記錄 drawer shows the take.
  *  4. The host ends the day and the game reaches the next night.
  *
  *  Same conventions as self-destruct-flow.spec.ts: testid locators, condition
@@ -100,7 +100,7 @@ test.describe('White Wolf King (白狼王) — real-backend flow', () => {
 
         const banner = ctx.hostPage.getByTestId('day-banner-self-destruct')
         await expect(banner).toContainText('自爆', { timeout: 10_000 })
-        await expect(banner).toContainText('带走了')
+        await expect(banner).toContainText('帶走了')
         await expect(
             ctx.hostPage.getByTestId(`day-self-destruct-taken-seat-${taken!.seat}`),
         ).toContainText(taken!.nick)
@@ -110,7 +110,7 @@ test.describe('White Wolf King (白狼王) — real-backend flow', () => {
         await expect(drawer).toBeVisible({ timeout: 5_000 })
         await expect
             .poll(async () => (await drawer.textContent()) ?? '', { timeout: 5_000 })
-            .toContain('带走')
+            .toContain('帶走')
         await captureSnapshot(ctx.pages, testInfo, 'white-wolf-king-take')
         await ctx.hostPage.getByTestId('action-log-close').click()
         await expect(drawer).toBeHidden({ timeout: 5_000 })

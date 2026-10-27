@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isWolfRole, roleDefinition } from '@/utils/roleDefinitions'
+import { isWolfRole, roleDefinition, roleName } from '@/utils/roleDefinitions'
 
 describe('roleDefinitions', () => {
   it('isWolfRole is true only for wolf-camp roles', () => {
@@ -13,14 +13,12 @@ describe('roleDefinitions', () => {
   })
 
   it('defines 白狼王 as an optional role', () => {
-    expect(roleDefinition('WHITE_WOLF_KING')).toMatchObject({ nameZh: '白狼王', required: false })
+    expect(roleDefinition('WHITE_WOLF_KING')).toMatchObject({ required: false })
+    expect(roleName('WHITE_WOLF_KING')).toBe('白狼王')
   })
 
   it('defines 黑狼王 as an optional wolf role', () => {
-    expect(roleDefinition('BLACK_WOLF_KING')).toMatchObject({
-      nameZh: '黑狼王',
-      required: false,
-      wolf: true,
-    })
+    expect(roleDefinition('BLACK_WOLF_KING')).toMatchObject({ required: false, wolf: true })
+    expect(roleName('BLACK_WOLF_KING')).toBe('黑狼王')
   })
 })

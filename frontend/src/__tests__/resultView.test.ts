@@ -63,7 +63,7 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     vi.clearAllMocks()
   })
 
-  it('renders title 好人胜 + WOLVES → 狼人胜 with sub WOLVES WIN', async () => {
+  it('renders title 好人勝 + WOLVES → 狼人勝 with sub WOLVES WIN', async () => {
     const wolvesWin: GameState = {
       gameId: 'g-wolves',
       phase: 'GAME_OVER',
@@ -73,13 +73,13 @@ describe('ResultView - new dashboard-style gameover screen', () => {
       events: [],
     }
     const { wrapper } = await mountResultView(wolvesWin)
-    expect(wrapper.text()).toContain('狼人胜')
-    expect(wrapper.text()).not.toContain('狼人胜利')
+    expect(wrapper.text()).toContain('狼人勝')
+    expect(wrapper.text()).not.toContain('狼人勝利')
     expect(wrapper.text()).toContain('WOLVES WIN')
     expect(wrapper.find('.result-wolves').exists()).toBe(true)
   })
 
-  it('renders title 好人胜 + sub VILLAGE WINS for villager win', async () => {
+  it('renders title 好人勝 + sub VILLAGE WINS for villager win', async () => {
     const villageWin: GameState = {
       gameId: 'g-village',
       phase: 'GAME_OVER',
@@ -89,8 +89,8 @@ describe('ResultView - new dashboard-style gameover screen', () => {
       events: [],
     }
     const { wrapper } = await mountResultView(villageWin)
-    expect(wrapper.text()).toContain('好人胜')
-    expect(wrapper.text()).not.toContain('村民胜利')
+    expect(wrapper.text()).toContain('好人勝')
+    expect(wrapper.text()).not.toContain('村民勝利')
     expect(wrapper.text()).toContain('VILLAGE WINS')
     expect(wrapper.find('.result-wolves').exists()).toBe(false)
   })
@@ -105,8 +105,8 @@ describe('ResultView - new dashboard-style gameover screen', () => {
       events: [],
     }
     const { wrapper } = await mountResultView(state)
-    expect(wrapper.text()).toContain('GAME OVER')
-    expect(wrapper.text()).toContain('ROLES REVEALED')
+    expect(wrapper.text()).toContain('遊戲結束')
+    expect(wrapper.text()).toContain('身份揭曉')
   })
 
   it('renders one .reveal-card per player (no .role-pill any more)', async () => {
@@ -226,9 +226,9 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     const texts = wrapper.findAll('.reveal-card').map((c) => c.text())
     expect(texts[0]).toContain('村民')
     expect(texts[1]).toContain('狼人')
-    expect(texts[2]).toContain('预言家')
+    expect(texts[2]).toContain('預言家')
     expect(texts[3]).toContain('女巫')
-    expect(texts[4]).toContain('猎人')
+    expect(texts[4]).toContain('獵人')
   })
 
   it('greys out reveal-cards for players who died during the game', async () => {
@@ -313,7 +313,7 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     const settlement = wrapper.find('[data-testid="settlement"]')
     expect(settlement.exists()).toBe(true)
     expect(settlement.text()).toContain('+50')
-    expect(settlement.text()).toContain('积分 / Credits earned')
+    expect(settlement.text()).toContain('積分')
     expect(settlement.text()).toContain('500')
     // rewards sorted by seatIndex ascending regardless of input order
     const rows = wrapper.findAll('.reward-row').map((r) => r.text())
@@ -357,7 +357,7 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(wrapper.findAll('.reward-row')).toHaveLength(1)
   })
 
-  it('📜 上帝视角复盘 opens the review page of this game', async () => {
+  it('📜 上帝視角復盤 opens the review page of this game', async () => {
     const state: GameState = {
       gameId: '42',
       phase: 'GAME_OVER',
@@ -372,7 +372,7 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(router.currentRoute.value.fullPath).toBe('/review/42')
   })
 
-  it('👤 玩家视角复盘 opens the player-perspective review of this game', async () => {
+  it('👤 玩家視角復盤 opens the player-perspective review of this game', async () => {
     const state: GameState = {
       gameId: '42',
       phase: 'GAME_OVER',

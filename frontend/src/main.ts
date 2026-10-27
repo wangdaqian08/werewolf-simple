@@ -6,6 +6,7 @@ import './style.css'
 import './assets/game.css'
 import App from './App.vue'
 import router from './router'
+import { i18n } from './i18n'
 
 // ── Mock mode ─────────────────────────────────────────────────────────────────
 // Controlled by VITE_MOCK in .env.development.
@@ -19,6 +20,7 @@ const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
+app.use(i18n)
 app.use(ElementPlus)
 
 app.mount('#app')

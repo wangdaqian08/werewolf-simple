@@ -2,7 +2,7 @@
  * Unit tests for ActionLogDrawer.vue
  *
  * Covers:
- * - SELF_DESTRUCT log entry is rendered as "X号 · nickname 自爆"
+ * - SELF_DESTRUCT log entry is rendered as "X號 · nickname 自爆"
  * - The 💥 自爆 section appears with tag-red styling
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -37,7 +37,7 @@ describe('ActionLogDrawer — SELF_DESTRUCT entry', () => {
     vi.clearAllMocks()
   })
 
-  it('renders a SELF_DESTRUCT entry as "X号 · nickname 自爆"', async () => {
+  it('renders a SELF_DESTRUCT entry as "X號 · nickname 自爆"', async () => {
     vi.mocked(gameService.getActionLog).mockResolvedValue([
       makeEntry('SELF_DESTRUCT', {
         dayNumber: 2,
@@ -63,7 +63,7 @@ describe('ActionLogDrawer — SELF_DESTRUCT entry', () => {
     expect(document.body.textContent).toContain('💥 自爆')
 
     // Seat badge
-    expect(document.body.textContent).toContain('5号')
+    expect(document.body.textContent).toContain('5號')
 
     // Nickname
     expect(document.body.textContent).toContain('Eric')
@@ -125,8 +125,8 @@ describe('ActionLogDrawer — 白狼王 take', () => {
     await new Promise((r) => setTimeout(r, 0))
     await wrapper.vm.$nextTick()
 
-    expect(document.body.textContent).toContain('带走')
-    expect(document.body.textContent).toContain('7号')
+    expect(document.body.textContent).toContain('帶走')
+    expect(document.body.textContent).toContain('7號')
     expect(document.body.textContent).toContain('Eve')
     wrapper.unmount()
   })
@@ -166,9 +166,9 @@ describe('ActionLogDrawer — shots (hunter / 黑狼王)', () => {
     const rows = [...document.body.querySelectorAll('[data-testid="log-shot-row"]')].map((el) =>
       el.textContent?.replace(/\s+/g, ''),
     )
-    expect(rows).toEqual(['2号King→击中1号Hank', '1号Hank→击中4号Dora'])
-    expect(document.body.textContent).toContain('🔫 开枪')
-    expect(document.body.textContent).not.toContain('猎人')
+    expect(rows).toEqual(['2號King→擊中1號Hank', '1號Hank→擊中4號Dora'])
+    expect(document.body.textContent).toContain('🔫 開槍')
+    expect(document.body.textContent).not.toContain('獵人')
     wrapper.unmount()
   })
 })

@@ -5,17 +5,17 @@ async function setup(page: Page) {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
-  await page.getByPlaceholder('Enter your nickname').fill('Test')
-  await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Test')
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.waitForTimeout(70)
   await page.evaluate(() => (window as unknown as { __debug: { gameStart: () => void } }).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 }
 
 async function goToResult(page: Page, winner: 'VILLAGER' | 'WEREWOLF') {
@@ -32,9 +32,9 @@ test('result: Village Wins — title and subtitle visible', async ({ page }) => 
   await setup(page)
   await goToResult(page, 'VILLAGER')
 
-  await expect(page.getByRole('heading', { name: '好人胜' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '好人勝' })).toBeVisible()
   await expect(page.getByText('VILLAGE WINS')).toBeVisible()
-  await expect(page.getByText('GAME OVER')).toBeVisible()
+  await expect(page.getByText(/遊戲結束|GAME OVER/)).toBeVisible()
 })
 
 test('result: Village Wins — reveal cards show all players', async ({ page }) => {
@@ -67,7 +67,7 @@ test('result: Wolves Win — title and subtitle visible', async ({ page }) => {
   await setup(page)
   await goToResult(page, 'WEREWOLF')
 
-  await expect(page.getByRole('heading', { name: '狼人胜' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '狼人勝' })).toBeVisible()
   await expect(page.getByText('WOLVES WIN')).toBeVisible()
 })
 

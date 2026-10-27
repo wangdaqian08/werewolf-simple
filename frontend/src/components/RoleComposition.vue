@@ -1,6 +1,6 @@
 <template>
   <div class="composition-card" data-testid="role-composition">
-    <div class="composition-label">角色组成 / Role Composition</div>
+    <div class="composition-label">{{ $t('roleComp.title') }}</div>
     <div class="composition-row">
       <div
         v-for="chip in chips"
@@ -10,19 +10,19 @@
         :data-count="chip.count"
       >
         <span class="chip-emoji">{{ chip.emoji }}</span>
-        <span class="chip-name">{{ chip.nameZh }}</span>
+        <span class="chip-name">{{ chip.name }}</span>
         <span class="chip-count">×{{ chip.count }}</span>
       </div>
     </div>
     <div class="composition-total" data-testid="composition-total">
-      共 {{ totalRoles }} / {{ totalPlayers }} 座位（含房主 · incl. host）
+      {{ $t('roleComp.total', { roles: totalRoles, players: totalPlayers }) }}
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { ROLE_DEFINITIONS, isWolfRole, roleDefinition } from '@/utils/roleDefinitions'
+import { ROLE_DEFINITIONS, isWolfRole, roleDefinition, roleName } from '@/utils/roleDefinitions'
 
 const props = defineProps<{
   totalPlayers: number
@@ -36,20 +36,20 @@ const chips = computed(() => {
   const enabledGods = props.roles.filter((r) => GOD_IDS.has(r))
   const villagerCount = props.totalPlayers - props.wolfCount - enabledGods.length
 
-  const out: Array<{ id: string; nameZh: string; emoji: string; count: number }> = []
+  const out: Array<{ id: string; name: string; emoji: string; count: number }> = []
 
   // A wolf king (白狼王 / 黑狼王) takes one of the wolfCount seats.
   const kings = ROLE_DEFINITIONS.filter((d) => !d.required && d.wolf && props.roles.includes(d.id))
   const wolf = roleDefinition('WEREWOLF')
   const plainWolves = props.wolfCount - kings.length
   if (wolf && plainWolves > 0)
-    out.push({ id: wolf.id, nameZh: wolf.nameZh, emoji: wolf.emoji, count: plainWolves })
+    out.push({ id: wolf.id, name: roleName(wolf.id), emoji: wolf.emoji, count: plainWolves })
   for (const king of kings)
-    out.push({ id: king.id, nameZh: king.nameZh, emoji: king.emoji, count: 1 })
+    out.push({ id: king.id, name: roleName(king.id), emoji: king.emoji, count: 1 })
 
   for (const def of ROLE_DEFINITIONS) {
     if (GOD_IDS.has(def.id) && enabledGods.includes(def.id)) {
-      out.push({ id: def.id, nameZh: def.nameZh, emoji: def.emoji, count: 1 })
+      out.push({ id: def.id, name: roleName(def.id), emoji: def.emoji, count: 1 })
     }
   }
 
@@ -57,7 +57,7 @@ const chips = computed(() => {
   if (villager && villagerCount > 0) {
     out.push({
       id: villager.id,
-      nameZh: villager.nameZh,
+      name: roleName(villager.id),
       emoji: villager.emoji,
       count: villagerCount,
     })

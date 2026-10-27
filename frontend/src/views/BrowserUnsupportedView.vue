@@ -2,26 +2,17 @@
   <div class="unsupported-wrap">
     <div class="unsupported-card">
       <div class="icon" aria-hidden="true">🌐</div>
-      <h1 class="title">浏览器不兼容</h1>
-      <p class="subtitle">Browser not supported</p>
+      <h1 class="title">{{ $t('unsupported.title') }}</h1>
 
-      <p class="body">
-        这个游戏需要使用 <strong>Chrome 浏览器</strong>（或其他基于 Chromium 的浏览器，例如
-        Edge、Brave）。 iPhone / iPad 用户也可以使用 Safari。
-      </p>
-      <p class="body en">
-        This game runs on <strong>Chrome</strong> or other Chromium-based browsers (Edge, Brave).
-        iOS Safari is also supported.
-      </p>
+      <!-- eslint-disable-next-line vue/no-v-html -- static, developer-authored message with only <strong> -->
+      <p class="body" v-html="$t('unsupported.body')"></p>
 
       <div v-if="inWeChat" class="hint" data-testid="wechat-hint">
-        <p class="wechat-line">点击右上角「···」，选择「在浏览器打开」或「在 Safari 中打开」</p>
-        <p class="hint-line en">Tap ··· (top right), then "Open in Browser" or "Open in Safari".</p>
+        <p class="wechat-line">{{ $t('unsupported.wechat') }}</p>
       </div>
 
       <div class="hint">
-        <p class="hint-line">在 Chrome 中打开：</p>
-        <p class="hint-line en">Open this URL in Chrome:</p>
+        <p class="hint-line">{{ $t('unsupported.openChrome') }}</p>
         <code class="url">{{ currentUrl }}</code>
       </div>
     </div>

@@ -4,10 +4,11 @@
     <template v-if="isVotingScreen">
       <header class="day-header">
         <div class="day-pill">
-          第 {{ votingPhase.dayNumber }} 天
+          {{ $t('day.pill', { n: votingPhase.dayNumber }) }}
           <span class="day-pill-sep">·</span>
-          投票阶段
+          {{ $t('vote.phase') }}
         </div>
+        <LanguageToggle inline />
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
@@ -18,15 +19,18 @@
 
       <!-- RE_VOTING banner -->
       <div v-if="votingPhase.subPhase === 'RE_VOTING'" class="revote-banner">
-        🔁 第二轮投票 · Round 2
+        {{ $t('vote.round2') }}
         <template v-if="pkStage.length">
           <span data-testid="pk-banner">
-            · PK：{{ pkSeats.map((s) => `${s}号`).join(' · ') }}
+            ·
+            {{
+              $t('vote.pk', { seats: pkSeats.map((s) => $t('common.seat', { n: s })).join(' · ') })
+            }}
           </span>
         </template>
       </div>
       <div v-if="pkStage.includes(myUserId)" class="revote-banner" data-testid="pk-stage-note">
-        你在PK台上，本轮不能投票 / You are on the PK stage and cannot vote
+        {{ $t('vote.youAreOnThe') }}
       </div>
 
       <!-- Below-arch row: my-role-chip on left, right-stack (history / log-fab / Action) on right -->
@@ -37,30 +41,30 @@
           data-testid="my-role-chip"
           @click="showRoleCard = true"
         >
-          🔒 身份 · Tap to reveal
+          {{ $t('vote.tapToReveal') }}
         </button>
         <div v-else />
         <div class="right-stack">
           <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
-            📋 历史
+            {{ $t('vote.history') }}
           </button>
           <button
             class="log-fab"
-            aria-label="游戏记录"
+            :aria-label="$t('common.gameLog')"
             data-testid="log-fab"
             @click="showLog = true"
           >
             <span class="log-fab-icon" aria-hidden="true">📋</span>
-            <span class="log-fab-label">游戏记录</span>
+            <span class="log-fab-label">{{ $t('common.gameLog') }}</span>
           </button>
           <button
             class="log-fab"
-            aria-label="房间信息"
+            :aria-label="$t('common.roomInfo')"
             data-testid="settings-fab"
             @click="showSettings = true"
           >
             <span class="log-fab-icon" aria-hidden="true">ℹ️</span>
-            <span class="log-fab-label">房间信息</span>
+            <span class="log-fab-label">{{ $t('common.roomInfo') }}</span>
           </button>
           <ActionMenu
             v-if="myRole"
@@ -81,7 +85,7 @@
           <span class="tally-votes">{{ votingPhase.votesSubmitted ?? 0 }}</span>
           <span class="tally-sep">/</span>
           <span class="tally-total">{{ votingPhase.totalVoters ?? '?' }}</span>
-          <span class="tally-label">已投票 · voted</span>
+          <span class="tally-label">{{ $t('vote.voted') }}</span>
         </div>
       </div>
 
@@ -97,9 +101,14 @@
             size="md"
           />
           <div class="elim-banner-body">
-            <span class="elim-banner-tag">出局 · ELIMINATED</span>
+            <span class="elim-banner-tag">{{ $t('vote.eliminated') }}</span>
             <span class="elim-banner-name">
-              {{ votingPhase.eliminatedNickname }} · 座位 {{ votingPhase.eliminatedSeatIndex }}
+              {{
+                $t('vote.nameSeat', {
+                  name: votingPhase.eliminatedNickname,
+                  n: votingPhase.eliminatedSeatIndex,
+                })
+              }}
             </span>
           </div>
         </div>
@@ -108,12 +117,16 @@
         <div v-else-if="votingPhase.idiotRevealedId" class="banner banner-idiot">
           <span class="elim-banner-avatar">🃏</span>
           <div class="elim-banner-body">
-            <span class="elim-banner-tag">白痴翻牌 · IDIOT REVEALED</span>
+            <span class="elim-banner-tag">{{ $t('vote.idiotRevealed') }}</span>
             <span class="elim-banner-name">
-              {{ votingPhase.idiotRevealedNickname }} · 座位
-              {{ votingPhase.idiotRevealedSeatIndex }}
+              {{
+                $t('vote.nameSeat', {
+                  name: votingPhase.idiotRevealedNickname,
+                  n: votingPhase.idiotRevealedSeatIndex,
+                })
+              }}
             </span>
-            <span class="elim-banner-role">存活，失去投票权 · Survives, loses vote</span>
+            <span class="elim-banner-role">{{ $t('vote.survivesLosesVote') }}</span>
           </div>
         </div>
 
@@ -154,13 +167,15 @@
           <div class="vote-col vote-col-abstain">
             <div class="vote-col-head">
               <div class="vote-col-avatar">—</div>
-              <div class="vote-col-cname">弃票</div>
+              <div class="vote-col-cname">{{ $t('vote.abstainCol') }}</div>
               <div class="vote-col-count tally-abstain">
                 {{ votingPhase.abstainVoters?.length ?? 0 }}
               </div>
             </div>
             <div class="vote-col-body">
-              <div v-if="!votingPhase.abstainVoters?.length" class="vcol-row vcol-empty">无</div>
+              <div v-if="!votingPhase.abstainVoters?.length" class="vcol-row vcol-empty">
+                {{ $t('vote.none') }}
+              </div>
               <div v-for="v in votingPhase.abstainVoters" :key="v.userId" class="vcol-row">
                 <Avatar
                   class="vcol-avatar"
@@ -214,12 +229,12 @@
                 data-testid="voting-continue"
                 @click="emit('continueVoting')"
               >
-                继续 / Continue
+                {{ $t('vote.continue') }}
               </button>
             </div>
           </template>
           <template v-else>
-            <p class="footer-hint">等待房主继续 · Waiting for host…</p>
+            <p class="footer-hint">{{ $t('vote.waitingForHost') }}</p>
           </template>
         </template>
 
@@ -230,7 +245,7 @@
             <template v-if="hostIsAlive">
               <!-- Idiot revealed: host lost voting right -->
               <template v-if="!myCanVote">
-                <p class="footer-hint idiot-no-vote">🃏 已揭示白痴 · 无投票权</p>
+                <p class="footer-hint idiot-no-vote">{{ $t('vote.idiotNoVote') }}</p>
               </template>
               <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
                 <button
@@ -240,7 +255,7 @@
                   :disabled="actionPending"
                   @click="emit('unvote')"
                 >
-                  取消投票 · Unvote
+                  {{ $t('vote.unvote') }}
                 </button>
               </template>
               <template v-else>
@@ -252,7 +267,7 @@
                     :disabled="!effectiveSelected || actionPending"
                     @click="effectiveSelected && emit('vote', effectiveSelected)"
                   >
-                    投票 · Vote
+                    {{ $t('vote.vote') }}
                   </button>
                   <button
                     class="btn btn-secondary skip-btn"
@@ -261,7 +276,7 @@
                     :disabled="actionPending"
                     @click="emit('skip')"
                   >
-                    弃权
+                    {{ $t('vote.abstain') }}
                   </button>
                 </div>
               </template>
@@ -275,19 +290,19 @@
               :disabled="!allVotesIn || actionPending"
               @click="emit('revealVoting')"
             >
-              公布结果 · Reveal
+              {{ $t('vote.reveal') }}
             </button>
           </template>
 
           <!-- DEAD: voting disabled -->
           <template v-else-if="viewRole === 'DEAD'">
-            <button class="btn btn-secondary" disabled>投票已禁用 · Voting disabled</button>
+            <button class="btn btn-secondary" disabled>{{ $t('vote.votingDisabled') }}</button>
           </template>
 
           <!-- ALIVE: vote/skip or unvote (or no vote right if idiot revealed) -->
           <template v-else-if="viewRole === 'ALIVE'">
             <template v-if="!myCanVote">
-              <button class="btn btn-secondary" disabled>🃏 已揭示白痴 · 无投票权</button>
+              <button class="btn btn-secondary" disabled>{{ $t('vote.idiotNoVote') }}</button>
             </template>
             <template v-else-if="votingPhase.myVote || votingPhase.myVoteSkipped">
               <button
@@ -297,7 +312,7 @@
                 :disabled="actionPending"
                 @click="emit('unvote')"
               >
-                取消投票 · Unvote
+                {{ $t('vote.unvote') }}
               </button>
             </template>
             <template v-else>
@@ -309,7 +324,7 @@
                   :disabled="!effectiveSelected || actionPending"
                   @click="effectiveSelected && emit('vote', effectiveSelected)"
                 >
-                  投票 · Vote
+                  {{ $t('vote.vote') }}
                 </button>
                 <button
                   class="btn btn-secondary skip-btn"
@@ -318,7 +333,7 @@
                   :disabled="actionPending"
                   @click="emit('skip')"
                 >
-                  弃权
+                  {{ $t('vote.abstain') }}
                 </button>
               </div>
             </template>
@@ -326,7 +341,7 @@
 
           <!-- GUEST: spectator -->
           <template v-else>
-            <p class="footer-hint">等待投票结束 · Waiting…</p>
+            <p class="footer-hint">{{ $t('vote.waiting') }}</p>
           </template>
         </template>
       </footer>
@@ -336,20 +351,20 @@
         <div v-if="showRoleCard" class="role-card-overlay" @click.self="showRoleCard = false">
           <div class="role-card-sheet">
             <div class="role-card-header">
-              <span>你的身份 · My Role</span>
+              <span>{{ $t('roleCard.title') }}</span>
               <button class="history-close" @click="showRoleCard = false">✕</button>
             </div>
             <div v-if="myRole && ROLE_META[myRole]" class="role-card-body">
               <div class="rc-emoji">{{ ROLE_META[myRole]?.emoji }}</div>
-              <div class="rc-name-zh">{{ ROLE_META[myRole]?.nameZh }}</div>
+              <div class="rc-name-zh">{{ roleName(myRole) }}</div>
               <div class="rc-label" :class="`rc-label-${ROLE_META[myRole]?.team}`">
-                {{ ROLE_META[myRole]?.nameEn }}
+                {{ roleTag(myRole) }}
               </div>
               <div v-if="myPlayer" class="rc-identity" data-testid="rc-identity">
-                {{ myPlayer.seatIndex }}号 · {{ myPlayer.nickname }}
+                {{ $t('common.seatDot', { n: myPlayer.seatIndex, name: myPlayer.nickname }) }}
               </div>
               <p class="rc-desc" data-testid="role-card-desc">
-                {{ ROLE_META[myRole]?.description }}
+                {{ roleDescription(myRole, true) }}
               </p>
               <RoleHistory :history="roleHistory" />
             </div>
@@ -362,18 +377,20 @@
         <div v-if="showHistory" class="history-overlay" @click.self="showHistory = false">
           <div class="history-sheet">
             <div class="history-header">
-              <span>投票记录 · Vote History</span>
+              <span>{{ $t('vote.voteHistory') }}</span>
               <button class="history-close" @click="showHistory = false">✕</button>
             </div>
             <div class="history-body">
-              <div v-if="!voteHistory?.length" class="history-empty">暂无历史 · No history yet</div>
+              <div v-if="!voteHistory?.length" class="history-empty">
+                {{ $t('vote.noHistoryYet') }}
+              </div>
               <div
                 v-for="round in [...(voteHistory ?? [])].reverse()"
                 :key="round.dayNumber"
                 class="history-round"
               >
                 <div class="history-round-title">
-                  第 {{ round.dayNumber }} 天 · Day {{ round.dayNumber }}
+                  {{ $t('day.pill', { n: round.dayNumber }) }}
                 </div>
                 <!-- Vote-out banner -->
                 <div v-if="round.eliminatedPlayerId" class="banner banner-kill history-banner">
@@ -386,10 +403,15 @@
                   />
                   <div>
                     <div class="banner-title">
-                      出局 · 座位{{ round.eliminatedSeatIndex }} {{ round.eliminatedNickname }}
+                      {{
+                        $t('vote.histOut', {
+                          n: round.eliminatedSeatIndex,
+                          name: round.eliminatedNickname,
+                        })
+                      }}
                     </div>
                     <div v-if="round.eliminatedRole" class="banner-sub">
-                      {{ ROLE_ZH[round.eliminatedRole] }}
+                      {{ roleName(round.eliminatedRole) }}
                     </div>
                   </div>
                 </div>
@@ -398,10 +420,15 @@
                   <span class="banner-avatar">🔫</span>
                   <div>
                     <div class="banner-title">
-                      开枪 · 座位{{ round.hunterShotSeatIndex }} {{ round.hunterShotNickname }}
+                      {{
+                        $t('vote.histShot', {
+                          n: round.hunterShotSeatIndex,
+                          name: round.hunterShotNickname,
+                        })
+                      }}
                     </div>
                     <div v-if="round.hunterShotRole" class="banner-sub">
-                      {{ ROLE_ZH[round.hunterShotRole] }}
+                      {{ roleName(round.hunterShotRole) }}
                     </div>
                   </div>
                 </div>
@@ -450,7 +477,8 @@
     <!-- ── Private shot screen (hunter / 黑狼王): only the shooter's own state says canShoot ── -->
     <template v-else-if="isShooter">
       <header class="day-header">
-        <div class="day-pill">第 {{ votingPhase.dayNumber }} 天</div>
+        <div class="day-pill">{{ $t('day.pill', { n: votingPhase.dayNumber }) }}</div>
+        <LanguageToggle inline />
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
@@ -460,8 +488,8 @@
         <div class="banner banner-kill" data-testid="voting-shoot-banner">
           <span class="banner-avatar">🔫</span>
           <div>
-            <div class="banner-title">你可以开枪 · Your Shot</div>
-            <div class="banner-sub">选择带走一名玩家，或放弃；主持人进入下一阶段后失效</div>
+            <div class="banner-title">{{ $t('vote.yourShot') }}</div>
+            <div class="banner-sub">{{ $t('vote.shotSub') }}</div>
           </div>
         </div>
       </div>
@@ -498,7 +526,7 @@
             :disabled="!effectiveSelected || actionPending"
             @click="effectiveSelected && emit('hunterShoot', effectiveSelected)"
           >
-            开枪 · Shoot
+            {{ $t('vote.shoot') }}
           </button>
           <button
             class="btn btn-secondary skip-btn"
@@ -507,7 +535,7 @@
             :disabled="actionPending"
             @click="emit('hunterPass')"
           >
-            放弃 · Pass
+            {{ $t('vote.pass') }}
           </button>
         </div>
       </footer>
@@ -517,10 +545,11 @@
     <template v-else-if="isBadgeScreen">
       <header class="day-header" data-testid="badge-handover-screen">
         <div class="day-pill">
-          第 {{ votingPhase.dayNumber }} 天
+          {{ $t('day.pill', { n: votingPhase.dayNumber }) }}
           <span class="day-pill-sep">·</span>
-          警徽 · Badge
+          {{ $t('vote.badge') }}
         </div>
+        <LanguageToggle inline />
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
@@ -531,22 +560,22 @@
         <div v-if="votingPhase.badgeDestroyed" class="banner badge-status-burned">
           <span class="banner-avatar">⚔️</span>
           <div>
-            <div class="banner-title">警徽已销毁 · Badge Destroyed</div>
+            <div class="banner-title">{{ $t('vote.badgeDestroyed') }}</div>
           </div>
         </div>
         <div v-else-if="newSheriffInfo" class="banner badge-status-passed">
           <span class="banner-avatar">⭐</span>
           <div>
             <div class="banner-title">
-              警徽已移交给 {{ newSheriffInfo.nickname }} · Badge Passed
+              {{ $t('vote.badgePassed', { name: newSheriffInfo.nickname }) }}
             </div>
           </div>
         </div>
         <div v-else-if="isEliminatedSheriff" class="banner banner-gold">
           <span class="banner-avatar">⭐</span>
           <div>
-            <div class="banner-title">你已出局 · Eliminated</div>
-            <div class="banner-sub">选择警徽继承人 / Choose badge heir</div>
+            <div class="banner-title">{{ $t('vote.eliminated2') }}</div>
+            <div class="banner-sub">{{ $t('vote.chooseBadgeHeir') }}</div>
           </div>
         </div>
       </div>
@@ -587,12 +616,12 @@
                 data-testid="badge-continue-night"
                 @click="emit('continueVoting')"
               >
-                → 进入夜晚 / Night
+                {{ $t('vote.night') }}
               </button>
             </div>
           </template>
           <template v-else>
-            <p class="footer-hint">等待继续 · Waiting…</p>
+            <p class="footer-hint">{{ $t('vote.waiting2') }}</p>
           </template>
         </template>
         <!-- Choosing heir -->
@@ -606,7 +635,7 @@
                 data-testid="badge-pass"
                 @click="effectiveSelected && emit('passBadge', effectiveSelected)"
               >
-                移交警徽 / Pass Badge
+                {{ $t('vote.passBadge') }}
               </button>
               <button
                 class="btn btn-secondary skip-btn"
@@ -615,12 +644,12 @@
                 data-testid="badge-destroy"
                 @click="emit('destroyBadge')"
               >
-                销毁
+                {{ $t('day.destroyBadge') }}
               </button>
             </div>
           </template>
           <template v-else>
-            <p class="footer-hint">等待警长移交警徽 · Waiting for sheriff to pass badge...</p>
+            <p class="footer-hint">{{ $t('vote.waitingForSheriffTo') }}</p>
           </template>
         </template>
       </footer>
@@ -637,6 +666,8 @@
 </template>
 
 <script lang="ts" setup>
+import LanguageToggle from '@/components/LanguageToggle.vue'
+import { roleDescription, roleName, roleTag } from '@/utils/roleDefinitions'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type {
   GamePlayer,
@@ -859,19 +890,6 @@ const sortedTally = computed(() =>
   [...(props.votingPhase.tally ?? [])].sort((a, b) => b.votes - a.votes),
 )
 
-// ── My Role badge ─────────────────────────────────────────────────────────────
-const ROLE_ZH: Record<string, string> = {
-  WEREWOLF: '狼人',
-  VILLAGER: '村民',
-  SEER: '预言家',
-  WITCH: '女巫',
-  HUNTER: '猎人',
-  GUARD: '守卫',
-  IDIOT: '白痴',
-  WHITE_WOLF_KING: '白狼王',
-  BLACK_WOLF_KING: '黑狼王',
-}
-
 // ── Vote History panel ────────────────────────────────────────────────────────
 const showHistory = ref(false)
 const showRoleCard = ref(false)
@@ -885,76 +903,45 @@ watch([showHistory, showRoleCard], ([h, r]) => {
 
 // ── Role card metadata ─────────────────────────────────────────────────────────
 interface RoleMeta {
-  nameZh: string
-  nameEn: string
   emoji: string
   team: string
-  description: string
 }
 const ROLE_META: Record<string, RoleMeta> = {
   WEREWOLF: {
-    nameZh: '狼人',
-    nameEn: 'WEREWOLF',
     emoji: '🐺',
     team: 'wolf',
-    description: '每晚与狼队商议，袭击一名村民。',
   },
   VILLAGER: {
-    nameZh: '村民',
-    nameEn: 'VILLAGER',
     emoji: '🌾',
     team: 'village',
-    description: '通过讨论和投票找出狼人，保护村庄。',
   },
   SEER: {
-    nameZh: '预言家',
-    nameEn: 'SEER',
     emoji: '🔭',
     team: 'special',
-    description: '每晚可查验一名玩家，得知其是否为狼人。',
   },
   WITCH: {
-    nameZh: '女巫',
-    nameEn: 'WITCH',
     emoji: '🔮',
     team: 'special',
-    description: '拥有一瓶解药和一瓶毒药，各可使用一次。',
   },
   HUNTER: {
-    nameZh: '猎人',
-    nameEn: 'HUNTER',
     emoji: '🏹',
     team: 'special',
-    description: '死亡时可开枪带走一名玩家（被女巫毒死时无法开枪）。',
   },
   GUARD: {
-    nameZh: '守卫',
-    nameEn: 'GUARD',
     emoji: '🛡️',
     team: 'special',
-    description: '每晚保护一名玩家免受狼人袭击。',
   },
   IDIOT: {
-    nameZh: '白痴',
-    nameEn: 'IDIOT',
     emoji: '🃏',
     team: 'special',
-    description: '被投票驱逐时揭示身份，免于出局但失去投票权。',
   },
   WHITE_WOLF_KING: {
-    nameZh: '白狼王',
-    nameEn: 'WHITE WOLF KING',
     emoji: '👑',
     team: 'wolf',
-    description: '夜晚与狼队一起袭击。白天自爆时，可选择带走一名玩家。',
   },
   BLACK_WOLF_KING: {
-    nameZh: '黑狼王',
-    nameEn: 'BLACK WOLF KING',
     emoji: '🖤',
     team: 'wolf',
-    description:
-      '夜晚与狼队一起袭击。出局时（被投出、夜晚死亡或被猎人带走）可开枪带走一名玩家；被女巫毒死或自爆时无法开枪。',
   },
 }
 

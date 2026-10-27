@@ -14,7 +14,7 @@
  *     dies to the poison → TWO deaths at the reveal
  *
  * 8 players (2 WEREWOLF + WITCH + GUARD + IDIOT + 3 VILLAGER): the idiot (no
- * night action) keeps a god alive after the double kill, so the CLASSIC 屠边
+ * night action) keeps a god alive after the double kill, so the CLASSIC 屠邊
  * check does not end the game — the reveal under test must happen, not GAME_OVER.
  */
 import { expect, test } from '@playwright/test'

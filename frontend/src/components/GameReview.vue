@@ -2,11 +2,13 @@
   <div class="rv" data-testid="game-review">
     <h2 class="rv-outcome serif">{{ outcome }}</h2>
     <p v-if="wolfTeam" class="rv-team">
-      狼人阵营：<span class="rv-wolf">{{ wolfTeam }}</span>
+      {{ $t('rv.wolfTeam') }}<span class="rv-wolf">{{ wolfTeam }}</span>
     </p>
-    <div v-if="!lines.length" class="rv-empty">暂无记录</div>
+    <div v-if="!lines.length" class="rv-empty">{{ $t('roleHistory.empty') }}</div>
     <p v-if="hasTally" class="rv-legend">
-      投票中 <span class="rv-seat rv-seat-wolf" aria-hidden="true">1</span> 红色座位为狼人
+      <i18n-t keypath="rv.legend" tag="span">
+        <template #seat><span class="rv-seat rv-seat-wolf" aria-hidden="true">1</span></template>
+      </i18n-t>
     </p>
     <template v-for="(line, i) in lines" :key="i">
       <div v-if="line.kind === 'tally'" class="rv-tally">
@@ -25,7 +27,7 @@
               role="listitem"
               class="rv-seat"
               :class="{ 'rv-seat-wolf': isWolfRole(p.role) }"
-              :aria-label="`${p.seatIndex}号${isWolfRole(p.role) ? ' 狼人' : ''}`"
+              :aria-label="seatAria(p)"
               >{{ p.seatIndex }}</span
             >
           </span>
@@ -41,11 +43,11 @@
       </div>
     </template>
     <template v-if="review.rewards.length">
-      <div class="rv-line rv-title">本局积分</div>
+      <div class="rv-line rv-title">{{ $t('rv.rewardsTitle') }}</div>
       <div class="rv-rewards" data-testid="review-rewards">
         <div v-for="r in review.rewards" :key="r.player.userId" class="rv-reward-row">
           <span :class="{ 'rv-wolf': isWolfRole(r.player.role) }">
-            {{ r.player.seatIndex }}号 {{ r.player.nickname }}
+            {{ $t('common.seatNick', { n: r.player.seatIndex, name: r.player.nickname }) }}
           </span>
           <span class="rv-reward-amount">+{{ r.amount }}</span>
         </div>
@@ -64,7 +66,8 @@ import type {
   ReviewRound,
   ReviewVote,
 } from '@/types'
-import { isWolfRole, roleDefinition } from '@/utils/roleDefinitions'
+import { t } from '@/i18n'
+import { isWolfRole, roleName } from '@/utils/roleDefinitions'
 
 const props = defineProps<{ review: GameReview }>()
 
@@ -85,27 +88,40 @@ interface TallyRow {
 }
 type Line = { kind: 'title' | 'row'; segs: Seg[] } | { kind: 'tally'; rows: TallyRow[] }
 
-const CAUSE = { WOLF: '被刀出局', POISON: '被毒出局', BOTH_SAVES: '同守同救出局' } as const
-const SAVED_BY = { GUARD: '被守卫守住', ANTIDOTE: '被女巫救下', PERK: '首夜免死生效' } as const
-const WOLF_PLAY = { PUSH: '冲票', BUS: '倒钩' } as const
+const CAUSE = {
+  WOLF: 'rv.cause.WOLF',
+  POISON: 'rv.cause.POISON',
+  BOTH_SAVES: 'rv.cause.BOTH_SAVES',
+} as const
+const SAVED_BY = {
+  GUARD: 'rv.saved.GUARD',
+  ANTIDOTE: 'rv.saved.ANTIDOTE',
+  PERK: 'rv.saved.PERK',
+} as const
+const WOLF_PLAY = { PUSH: 'rv.play.PUSH', BUS: 'rv.play.BUS' } as const
 
-const t = (text: string): Seg => ({ text })
-const seat = (p: ReviewPlayer): Seg => ({ text: `${p.seatIndex}号`, wolf: isWolfRole(p.role) })
-const name = (p: ReviewPlayer): Seg => ({
-  text: `${p.seatIndex}号 ${p.nickname}`,
+const seg = (text: string): Seg => ({ text })
+const seat = (p: ReviewPlayer): Seg => ({
+  text: t('common.seat', { n: p.seatIndex }),
   wolf: isWolfRole(p.role),
 })
-const roleTag = (p: ReviewPlayer): Seg => t(`〔${roleDefinition(p.role)?.nameZh ?? p.role}〕`)
+const name = (p: ReviewPlayer): Seg => ({
+  text: t('common.seatNick', { n: p.seatIndex, name: p.nickname }),
+  wolf: isWolfRole(p.role),
+})
+const roleTag = (p: ReviewPlayer): Seg => seg(t('rv.roleTag', { role: roleName(p.role) }))
 const withRole = (p: ReviewPlayer): Seg[] => [name(p), roleTag(p)]
-const seats = (ps: ReviewPlayer[]) => `${ps.map((p) => p.seatIndex).join('·')}号`
+const seatNums = (ps: ReviewPlayer[]) => ps.map((p) => p.seatIndex).join('·')
+const seatAria = (p: ReviewPlayer) =>
+  t('common.seat', { n: p.seatIndex }) + (isWolfRole(p.role) ? ` ${t('rv.wolf')}` : '')
 const joined = (parts: Seg[][], sep: string): Seg[] =>
-  parts.flatMap((part, i) => (i ? [t(sep), ...part] : part))
-const votes = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}票`
+  parts.flatMap((part, i) => (i ? [seg(sep), ...part] : part))
+const votes = (n: number) => t('rv.votes', { n: Number.isInteger(n) ? n : n.toFixed(1) }, n)
 const pill = (text: string): Seg => ({ text, pill: true })
 
 const outcome = computed(() => {
-  if (!props.review.winner) return '比赛取消'
-  return props.review.winner === 'WEREWOLF' ? '狼人胜' : '好人胜'
+  if (!props.review.winner) return t('result.cancelled')
+  return props.review.winner === 'WEREWOLF' ? t('result.wolvesWin') : t('result.goodWin')
 })
 
 const wolfTeam = computed(() =>
@@ -114,48 +130,63 @@ const wolfTeam = computed(() =>
     // Tag the special wolves (白狼王 / 黑狼王).
     .map(
       (p) =>
-        `${p.seatIndex}号 ${p.nickname}${p.role !== 'WEREWOLF' ? `（${roleDefinition(p.role)?.nameZh}）` : ''}`,
+        t('common.seatNick', { n: p.seatIndex, name: p.nickname }) +
+        (p.role !== 'WEREWOLF' ? t('common.paren', { x: roleName(p.role) }) : ''),
     )
     .join(' · '),
 )
 
 function wolfSegs(w: ReviewNight['wolf']): Seg[] {
-  const head: Seg = { text: `🐺 狼人（${seats(w.actors)}） `, wolf: true }
-  if (!w.target || w.action === 'SKIP') return [head, t('空刀')]
-  return [head, t(w.action === 'SELF_KILL' ? '自刀 ' : '刀 '), ...withRole(w.target)]
+  const head: Seg = { text: t('rv.wolfHead', { seats: seatNums(w.actors) }), wolf: true }
+  if (!w.target || w.action === 'SKIP') return [head, seg(t('rv.noKill'))]
+  return [
+    head,
+    seg(w.action === 'SELF_KILL' ? t('rv.selfKill') : t('rv.kill')),
+    ...withRole(w.target),
+  ]
 }
 
 function seerSegs(s: NonNullable<ReviewNight['seer']>): Seg[] {
-  const head = t(`🔮 预言家 ${s.actor.seatIndex}号 `)
-  if (s.dead) return [head, t('已出局')]
-  if (!s.target) return [head, t('未查验')]
-  return [head, t('验 '), name(s.target), t(s.isWerewolf ? ' → 狼人' : ' → 好人')]
+  const head = seg(t('rv.seerHead', { seat: t('common.seat', { n: s.actor.seatIndex }) }))
+  if (s.dead) return [head, seg(t('rv.dead'))]
+  if (!s.target) return [head, seg(t('rv.noCheck'))]
+  return [
+    head,
+    seg(t('rv.check')),
+    name(s.target),
+    seg(s.isWerewolf ? t('rv.toWolf') : t('rv.toGood')),
+  ]
 }
 
 function witchSegs(w: NonNullable<ReviewNight['witch']>): Seg[] {
-  const head = t(`🧪 女巫 ${w.actor.seatIndex}号 `)
-  if (w.dead) return [head, t('已出局')]
+  const head = seg(t('rv.witchHead', { seat: t('common.seat', { n: w.actor.seatIndex }) }))
+  if (w.dead) return [head, seg(t('rv.dead'))]
   // One potion per night: WitchHandler rejects antidote + poison together.
-  if (w.antidote) return [head, t('救 '), name(w.antidote)]
-  if (w.poison) return [head, t('毒 '), ...withRole(w.poison)]
-  return [head, t('未用药')]
+  if (w.antidote) return [head, seg(t('rv.save')), name(w.antidote)]
+  if (w.poison) return [head, seg(t('rv.poison')), ...withRole(w.poison)]
+  return [head, seg(t('rv.noPotion'))]
 }
 
 function guardSegs(g: NonNullable<ReviewNight['guard']>): Seg[] {
-  const head = t(`🛡 守卫 ${g.actor.seatIndex}号 `)
-  if (g.dead) return [head, t('已出局')]
-  return g.target ? [head, t('守 '), name(g.target)] : [head, t('空守')]
+  const head = seg(t('rv.guardHead', { seat: t('common.seat', { n: g.actor.seatIndex }) }))
+  if (g.dead) return [head, seg(t('rv.dead'))]
+  return g.target ? [head, seg(t('rv.guard')), name(g.target)] : [head, seg(t('rv.noGuard'))]
 }
 
 function dawnSegs(d: ReviewNight['dawn']): Seg[] {
   const segs = d.deaths.length
     ? joined(
-        d.deaths.map((x) => [...withRole(x.player), t(` ${CAUSE[x.cause]}`)]),
-        '，',
+        d.deaths.map((x) => [...withRole(x.player), seg(` ${t(CAUSE[x.cause])}`)]),
+        t('common.comma'),
       )
-    : [t('平安夜')]
-  if (d.saved) segs.push(t('（'), name(d.saved.player), t(` ${SAVED_BY[d.saved.by]}）`))
-  return [t('☀ 天亮 '), ...segs]
+    : [seg(t('rv.peaceful'))]
+  if (d.saved)
+    segs.push(
+      seg(t('common.parenOpen')),
+      name(d.saved.player),
+      seg(` ${t(SAVED_BY[d.saved.by])}${t('common.parenClose')}`),
+    )
+  return [seg(t('rv.dawn')), ...segs]
 }
 
 function nightLines(n: ReviewNight): Line[] {
@@ -173,17 +204,19 @@ function nightLines(n: ReviewNight): Line[] {
 
 function voteHead(v: ReviewVote): Seg[] {
   if (v.kind === 'SHERIFF') {
-    const head = pill('警长')
-    if (!v.result) return [head, t('无警长')]
-    if (!v.appointed) return [head, name(v.result), t(' 当选')]
-    const why = v.tally.length ? '平票，房主指定 ' : '无人投票，房主指定 '
-    return [head, t(why), name(v.result), t(' 当警长')]
+    const head = pill(t('rv.sheriff'))
+    if (!v.result) return [head, seg(t('rv.noSheriff'))]
+    if (!v.appointed) return [head, name(v.result), seg(t('rv.elected'))]
+    const why = v.tally.length ? t('rv.tiedAppoint') : t('rv.noVoteAppoint')
+    return [head, seg(why), name(v.result), seg(t('rv.asSheriff'))]
   }
-  const head = pill(v.round > 1 ? 'PK' : '放逐')
-  const play = v.wolfPlay ? [{ text: `（狼人${WOLF_PLAY[v.wolfPlay]}）`, muted: true }] : []
+  const head = pill(v.round > 1 ? t('rv.pk') : t('rv.exile'))
+  const play = v.wolfPlay
+    ? [{ text: t('rv.wolfPlay', { play: t(WOLF_PLAY[v.wolfPlay]) }), muted: true }]
+    : []
   return [
     head,
-    ...(v.result ? [...withRole(v.result), t(' 被投出')] : [t('平票，无人出局')]),
+    ...(v.result ? [...withRole(v.result), seg(t('rv.votedOut'))] : [seg(t('rv.tieNoOut'))]),
     ...play,
   ]
 }
@@ -198,7 +231,13 @@ function voteLines(v: ReviewVote): Line[] {
     voters: e.voters,
   }))
   if (v.abstain.length)
-    rows.push({ target: [t('弃权')], votes: '', out: false, abstain: true, voters: v.abstain })
+    rows.push({
+      target: [seg(t('vote.abstain'))],
+      votes: '',
+      out: false,
+      abstain: true,
+      voters: v.abstain,
+    })
   const lines: Line[] = [{ kind: 'row', segs: voteHead(v) }]
   if (rows.length) lines.push({ kind: 'tally', rows })
   return lines
@@ -208,30 +247,34 @@ function eventSegs(e: Exclude<ReviewDayEvent, ReviewVote>): Seg[] {
   switch (e.type) {
     case 'HUNTER_SHOT':
       // The shooter is a HUNTER or a BLACK_WOLF_KING; the review is post-game, so name it.
-      return [t('🔫 '), ...withRole(e.hunter), t(' 开枪带走 '), ...withRole(e.target)]
+      return [seg('🔫 '), ...withRole(e.hunter), seg(t('rv.hunterShot')), ...withRole(e.target)]
     case 'SELF_DESTRUCT':
       return [
-        t('💥 '),
+        seg('💥 '),
         ...withRole(e.player),
-        t(' 自爆'),
-        ...(e.taken ? [t('，带走 '), ...withRole(e.taken)] : []),
+        seg(t('rv.selfDestruct')),
+        ...(e.taken ? [seg(t('rv.tookAlong')), ...withRole(e.taken)] : []),
       ]
     case 'IDIOT_REVEAL':
-      return [t('🃏 '), name(e.player), t(' 白痴翻牌，免于出局')]
+      return [seg('🃏 '), name(e.player), seg(t('rv.idiotReveal'))]
     case 'BADGE_HANDOVER':
       return [
-        t('⭐ '),
+        seg('⭐ '),
         ...withRole(e.from),
-        ...(e.to ? [t(' 移交警徽给 '), ...withRole(e.to)] : [t(' 撕毁警徽')]),
+        ...(e.to ? [seg(t('rv.badgeTo')), ...withRole(e.to)] : [seg(t('rv.badgeTorn'))]),
       ]
   }
 }
 
 function roundLines(r: ReviewRound): Line[] {
   const lines: Line[] = []
-  if (r.night) lines.push({ kind: 'title', segs: [t(`第${r.day}夜`)] }, ...nightLines(r.night))
+  if (r.night)
+    lines.push(
+      { kind: 'title', segs: [seg(t('rv.nightN', { day: r.day }))] },
+      ...nightLines(r.night),
+    )
   if (r.events.length) {
-    lines.push({ kind: 'title', segs: [t(`第${r.day}天`)] })
+    lines.push({ kind: 'title', segs: [seg(t('rv.dayN', { day: r.day }))] })
     for (const e of r.events) {
       if (e.type === 'VOTE') lines.push(...voteLines(e))
       else lines.push({ kind: 'row', segs: eventSegs(e) })

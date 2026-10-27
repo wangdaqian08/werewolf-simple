@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import NightPhase from '@/components/NightPhase.vue'
 import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
 
-// Contract under test: ONLY dead players see "你已经出局 / You are eliminated"
+// Contract under test: ONLY dead players see "你已經出局"
 // during NIGHT. The user's edge case: a guard who was wolf-attacked on night 1
 // is still alive=true in DB during their own GUARD_PICK turn (kills are
 // deferred until host reveal at dawn — see NightOrchestrator.applyNightKills),
@@ -54,14 +54,13 @@ describe('NightPhase - eliminated banner gating', () => {
       myRole: 'GUARD',
     })
 
-    expect(wrapper.html()).not.toContain('你已经出局')
-    expect(wrapper.html()).not.toContain('You are eliminated')
+    expect(wrapper.html()).not.toContain('你已經出局')
     expect(wrapper.find('[data-testid="guard-confirm-protect"]').exists()).toBe(true)
   })
 
   it('dead guard on N2 sees the eliminated banner (alive=false after host revealed N1 kills)', () => {
     // After day 1 reveal, the wolf-attacked guard is now alive=false. On
-    // the next night their dashboard must show "你已经出局 / You are eliminated"
+    // the next night their dashboard must show "你已經出局"
     // and NOT show the protect UI.
     const guard = mkPlayer({ userId: 'g1', nickname: 'Guard', seatIndex: 4, isAlive: false })
     const wolf = mkPlayer({ userId: 'w1', nickname: 'Wolf', seatIndex: 2 })
@@ -73,8 +72,7 @@ describe('NightPhase - eliminated banner gating', () => {
       myRole: 'GUARD',
     })
 
-    expect(wrapper.html()).toContain('你已经出局')
-    expect(wrapper.html()).toContain('You are eliminated')
+    expect(wrapper.html()).toContain('你已經出局')
     expect(wrapper.find('[data-testid="guard-confirm-protect"]').exists()).toBe(false)
   })
 
@@ -100,11 +98,11 @@ describe('NightPhase - eliminated banner gating', () => {
       witchSelfSaveAllowed: false,
     })
 
-    // "使用解药" button must NOT render.
+    // "使用解藥" button must NOT render.
     expect(wrapper.find('[data-testid="witch-antidote"]').exists()).toBe(false)
     // Explanatory note shown in its place.
     expect(wrapper.find('[data-testid="witch-self-save-blocked"]').exists()).toBe(true)
-    // "放弃" button still available so the witch can advance.
+    // "放棄" button still available so the witch can advance.
     expect(wrapper.find('[data-testid="switch-pass-antidote"]').exists()).toBe(true)
   })
 
@@ -167,8 +165,7 @@ describe('NightPhase - eliminated banner gating', () => {
       myRole: 'VILLAGER',
     })
 
-    expect(wrapper.html()).not.toContain('你已经出局')
-    expect(wrapper.html()).not.toContain('You are eliminated')
+    expect(wrapper.html()).not.toContain('你已經出局')
   })
 
   it('alive actor on their own turn does NOT see the eliminated banner (regression guard for werewolf)', () => {
@@ -182,7 +179,7 @@ describe('NightPhase - eliminated banner gating', () => {
       myRole: 'WEREWOLF',
     })
 
-    expect(wrapper.html()).not.toContain('你已经出局')
+    expect(wrapper.html()).not.toContain('你已經出局')
   })
 
   it('dead actor sees the eliminated banner across all sub-phases', () => {
@@ -201,7 +198,7 @@ describe('NightPhase - eliminated banner gating', () => {
         myUserId: 'me',
         myRole: 'VILLAGER',
       })
-      expect(wrapper.html(), `subPhase=${subPhase}`).toContain('你已经出局')
+      expect(wrapper.html(), `subPhase=${subPhase}`).toContain('你已經出局')
     }
   })
 })
@@ -231,8 +228,8 @@ describe('NightPhase - 白狼王 acts in the wolf turn', () => {
       },
     })
     expect(wrapper.text()).toContain('白狼王')
-    expect(wrapper.text()).toContain('与队友商议攻击目标')
-    expect(wrapper.text()).toContain('选择今晚的袭击目标')
+    expect(wrapper.text()).toContain('與隊友商議攻擊目標')
+    expect(wrapper.text()).toContain('選擇今晚的襲擊目標')
     expect(wrapper.text()).toContain('3·Wolf')
   })
 })

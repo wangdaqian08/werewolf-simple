@@ -8,7 +8,7 @@
     <template v-if="mode === 'room'">
       <template v-if="nickname">
         <!-- Seat number always visible so players can identify themselves -->
-        <span class="slot-index">{{ seat }}号</span>
+        <span class="slot-index">{{ $t('common.seat', { n: seat }) }}</span>
         <Avatar
           :nickname="nickname ?? ''"
           :avatar-url="avatarAsUrl"
@@ -20,7 +20,7 @@
       </template>
       <template v-else>
         <!-- Show the seat number so players can identify which slot to pick -->
-        <span class="empty-num">{{ seat }}号</span>
+        <span class="empty-num">{{ $t('common.seat', { n: seat }) }}</span>
       </template>
       <slot name="overlay" />
     </template>

@@ -3,7 +3,7 @@
  *
  * Covers:
  * - Wolf in allowed phases sees self-destruct action
- * - Non-wolf sees "暂无操作" (no actions available)
+ * - Non-wolf sees "暫無操作" (no actions available)
  * - NIGHT phase hides the chip entirely
  * - Confirm modal flow: click self-destruct → confirm modal → click confirm emits
  * - Cancel modal flow: click cancel → no event emitted
@@ -88,7 +88,7 @@ describe('ActionMenu', () => {
     wrapper.unmount()
   })
 
-  it('villager in DAY_DISCUSSION sees "暂无操作" after opening menu', async () => {
+  it('villager in DAY_DISCUSSION sees "暫無操作" after opening menu', async () => {
     const wrapper = mount(ActionMenu, {
       props: makeProps({ phase: 'DAY_DISCUSSION', myRole: 'VILLAGER' }),
       attachTo: document.body,
@@ -100,7 +100,7 @@ describe('ActionMenu', () => {
     wrapper.unmount()
   })
 
-  it('dead wolf sees "暂无操作" instead of self-destruct', async () => {
+  it('dead wolf sees "暫無操作" instead of self-destruct', async () => {
     const wrapper = mount(ActionMenu, {
       props: makeProps({ phase: 'DAY_DISCUSSION', myRole: 'WEREWOLF', isAlive: false }),
       attachTo: document.body,

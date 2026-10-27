@@ -246,8 +246,8 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
       },
     })
     const rows = wrapper.findAll('.vote-row')
-    expect(rows[0]!.text()).toContain('4号')
-    expect(rows[1]!.text()).toContain('7号')
+    expect(rows[0]!.text()).toContain('4號')
+    expect(rows[1]!.text()).toContain('7號')
   })
 
   it('host sees Confirm Vote button when a candidate is selected', async () => {
@@ -282,9 +282,9 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
     expect(wrapper.find('[data-testid="sheriff-confirm-vote"]').exists()).toBe(false)
   })
 
-  it('VOTING: RUNNING candidate sees "候选人不参与投票" banner (not speech-quitter copy)', () => {
+  it('VOTING: RUNNING candidate sees "候選人不參與投票" banner (not speech-quitter copy)', () => {
     // Feature 1: when canVote===false AND the player is a RUNNING candidate,
-    // show the new "candidates can't vote" message instead of "已放弃投票".
+    // show the new "candidates can't vote" message instead of "已放棄投票".
     const wrapper = mount(SheriffElection, {
       props: {
         election: makeElection({
@@ -301,13 +301,13 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
       },
     })
     expect(wrapper.find('[data-testid="sheriff-candidate-no-vote"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('候选人不参与投票')
+    expect(wrapper.text()).toContain('候選人不參與投票')
     expect(wrapper.find('[data-testid="sheriff-vote-forfeited"]').exists()).toBe(false)
   })
 
-  it('VOTING: speech-quitter (QUIT in speaking order) still sees "已放弃投票"', () => {
+  it('VOTING: speech-quitter (QUIT in speaking order) still sees "已放棄投票"', () => {
     // Feature 1: when canVote===false AND the player is a speech-quitter (not RUNNING),
-    // keep the existing "已放弃投票" copy.
+    // keep the existing "已放棄投票" copy.
     const wrapper = mount(SheriffElection, {
       props: {
         election: makeElection({
@@ -325,7 +325,7 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
       },
     })
     expect(wrapper.find('[data-testid="sheriff-vote-forfeited"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('已放弃投票')
+    expect(wrapper.text()).toContain('已放棄投票')
     expect(wrapper.find('[data-testid="sheriff-candidate-no-vote"]').exists()).toBe(false)
   })
 })
@@ -376,7 +376,7 @@ describe('SheriffElection — below-header layout (Action chip on the right)', (
     expect(wrapper.emitted('self-destruct')?.[0]).toEqual(['u2'])
   })
 
-  it('non-wolf still gets the universal Action chip (with 暂无操作 inside on tap)', () => {
+  it('non-wolf still gets the universal Action chip (with 暫無操作 inside on tap)', () => {
     const wrapper = mount(SheriffElection, {
       props: {
         election: makeElection({ subPhase: 'SIGNUP' }),
@@ -446,7 +446,7 @@ describe('SheriffElection — abstain column is always shown on reveal', () => {
   }
 
   it.each(['RESULT', 'TIED'] as const)(
-    '%s: shows 弃票 with 无 when nobody abstained',
+    '%s: shows 棄票 with 無 when nobody abstained',
     (subPhase) => {
       const wrapper = mount(SheriffElection, {
         props: { election: makeElection({ subPhase, result }), ...DEFAULT_PROPS },
@@ -454,7 +454,7 @@ describe('SheriffElection — abstain column is always shown on reveal', () => {
       const col = wrapper.find('.vote-col-abstain')
       expect(col.exists()).toBe(true)
       expect(col.find('.vote-col-count').text()).toBe('0')
-      expect(col.find('.vote-col-body').text()).toContain('无')
+      expect(col.find('.vote-col-body').text()).toContain('無')
     },
   )
 })

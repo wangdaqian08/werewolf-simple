@@ -41,20 +41,20 @@ describe('GameReviewView', () => {
     vi.mocked(gameService.getReview).mockRejectedValue({ response: { status: 403 } })
     const { wrapper } = await mountView()
     expect(wrapper.find('[data-testid="review-error"]').text()).toBe(
-      '游戏结束后，本局玩家才能查看复盘',
+      '遊戲結束後，本局玩家才能查看復盤',
     )
   })
 
   it('an unknown game (404) says the game cannot be found instead of asking to retry', async () => {
     vi.mocked(gameService.getReview).mockRejectedValue({ response: { status: 404 } })
     const { wrapper } = await mountView()
-    expect(wrapper.find('[data-testid="review-error"]').text()).toBe('找不到这局游戏')
+    expect(wrapper.find('[data-testid="review-error"]').text()).toBe('找不到這局遊戲')
   })
 
   it('generic error: any other failure shows a retry message', async () => {
     vi.mocked(gameService.getReview).mockRejectedValue(new Error('Network Error'))
     const { wrapper } = await mountView()
-    expect(wrapper.find('[data-testid="review-error"]').text()).toBe('复盘加载失败，请稍后再试')
+    expect(wrapper.find('[data-testid="review-error"]').text()).toBe('復盤加載失敗，請稍後再試')
   })
 
   it('‹ 返回 goes back to the result page of the same game', async () => {

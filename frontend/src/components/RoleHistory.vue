@@ -1,7 +1,7 @@
 <template>
   <div v-if="history" class="rh">
     <button class="btn btn-outline rh-btn" data-testid="role-history-btn" @click="open = !open">
-      📜 历史记录 · History
+      {{ $t('roleHistory.title') }}
     </button>
 
     <div v-if="open" class="rh-panel" data-testid="role-history">
@@ -11,14 +11,15 @@
         class="rh-row"
         data-testid="role-history-entry"
       >
-        第{{ e.round }}夜 · {{ describe(e) }}
+        {{ $t('roleHistory.night', { n: e.round, text: describe(e) }) }}
       </div>
-      <div v-if="!history.entries.length" class="rh-empty">暂无记录</div>
+      <div v-if="!history.entries.length" class="rh-empty">{{ $t('roleHistory.empty') }}</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref } from 'vue'
 import type { RoleHistory, RoleHistoryEntry, RoleHistoryPlayer } from '@/types'
 
@@ -27,23 +28,28 @@ defineProps<{ history?: RoleHistory | null }>()
 const open = ref(false)
 
 function who(p: RoleHistoryPlayer | null): string {
-  return p ? `${p.seatIndex}号 ${p.nickname}` : '无人'
+  return p ? t('common.seatNick', { n: p.seatIndex, name: p.nickname }) : t('roleHistory.nobody')
 }
 
 function describe(e: RoleHistoryEntry): string {
   switch (e.action) {
     case 'CHECK':
-      return `查验 ${who(e.target)} → ${e.isWerewolf ? '狼人' : '好人'}`
+      return t('roleHistory.check', {
+        who: who(e.target),
+        result: e.isWerewolf ? t('roleHistory.wolf') : t('roleHistory.good'),
+      })
     case 'GUARD':
-      return e.target ? `守护 ${who(e.target)}` : '空守'
+      return e.target ? t('roleHistory.guard', { who: who(e.target) }) : t('roleHistory.guardNone')
     case 'KILL':
-      return e.target ? `刀了 ${who(e.target)}` : '空刀'
+      return e.target ? t('roleHistory.kill', { who: who(e.target) }) : t('roleHistory.killNone')
     case 'ATTACKED':
-      return e.target ? `${who(e.target)} 被狼人袭击` : '无人被袭击'
+      return e.target
+        ? t('roleHistory.attacked', { who: who(e.target) })
+        : t('roleHistory.attackedNone')
     case 'ANTIDOTE':
-      return `解药救了 ${who(e.target)}`
+      return t('roleHistory.antidote', { who: who(e.target) })
     case 'POISON':
-      return `毒药毒了 ${who(e.target)}`
+      return t('roleHistory.poison', { who: who(e.target) })
   }
 }
 </script>

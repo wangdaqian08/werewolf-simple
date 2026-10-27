@@ -69,7 +69,7 @@ test.describe('Room board — grow a full room, share the link', () => {
     await setPlayerCount(host, 6)
     await shot(host, '2-players-and-roles')
     await host.getByTestId('share-room-btn').click()
-    await expect(host.getByTestId('share-room-btn')).toContainText('已复制')
+    await expect(host.getByTestId('share-room-btn')).toContainText('已複製')
     const link = await host.evaluate(() => navigator.clipboard.readText())
     expect(link).toBe(`${BASE}/?room=${code}`)
     await host.getByTestId('room-setup-done').click()

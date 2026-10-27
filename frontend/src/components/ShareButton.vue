@@ -3,14 +3,15 @@
     class="share-btn"
     data-testid="share-room-btn"
     type="button"
-    :aria-label="`Share room ${roomCode}`"
+    :aria-label="$t('share.aria', { code: roomCode })"
     @click="share"
   >
-    {{ copied ? '✓ 已复制 / Copied' : '📤 邀请 / Share' }}
+    {{ copied ? $t('share.copied') : $t('share.share') }}
   </button>
 </template>
 
 <script lang="ts" setup>
+import { t } from '@/i18n'
 import { ref } from 'vue'
 
 const props = defineProps<{ roomCode: string }>()
@@ -21,7 +22,11 @@ async function share() {
   const url = `${window.location.origin}/?room=${props.roomCode}`
   if (navigator.share) {
     try {
-      await navigator.share({ title: '狼人杀', text: `来玩狼人杀！房间号 ${props.roomCode}`, url })
+      await navigator.share({
+        title: t('lobby.title'),
+        text: t('share.text', { code: props.roomCode }),
+        url,
+      })
       return
     } catch (e) {
       if ((e as DOMException).name === 'AbortError') return // the player closed the sheet

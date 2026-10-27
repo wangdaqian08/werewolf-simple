@@ -1,4 +1,6 @@
 import { beforeEach, vi } from 'vitest'
+import { config } from '@vue/test-utils'
+import { i18n, setLocale } from '@/i18n'
 
 // happy-dom's localStorage lacks full Storage API implementation.
 // This polyfill provides a proper in-memory localStorage for tests.
@@ -22,3 +24,7 @@ vi.stubGlobal('localStorage', makeStorage())
 beforeEach(() => {
   localStorage.clear()
 })
+
+// Every mounted component resolves $t(); tests assert the Chinese UI by default.
+config.global.plugins = [i18n]
+beforeEach(() => setLocale('zh'))

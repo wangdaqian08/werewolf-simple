@@ -11,10 +11,10 @@ async function goToRoomAsHost(page: Page) {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
-  await page.getByPlaceholder('Enter your nickname').fill('TestHost')
-  await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('TestHost')
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
@@ -24,9 +24,9 @@ async function goToGameView(page: Page) {
   await goToRoomAsHost(page)
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
 
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 }
 
 async function goToSheriffView(page: Page) {
@@ -68,9 +68,9 @@ test('POST /debug/game/start — navigates to game view and shows ROLE_REVEAL', 
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
   // Should be on game view showing role reveal card (mystery state first)
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
-  await expect(page.getByText('知道了 / Got it')).toBeVisible({ timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
+  await expect(page.getByText(/知道了|Got it/)).toBeVisible({ timeout: 3000 })
 })
 
 // ── Role Reveal endpoints ──────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ test('POST /debug/role/skip — skips role reveal to sheriff election', async ({
   // Currently in ROLE_REVEAL; click Skip → Sheriff
   await page.getByRole('button', { name: 'Skip → Sheriff' }).click()
   await page.waitForTimeout(70)
-  await expect(page.getByText(/警长竞选|Sheriff Election|竞选警长|Sign Up|Run for Sheriff/i).first()).toBeVisible()
+  await expect(page.getByText(/警長競選|Sheriff Election|競選警長|Sign Up|Run for Sheriff/i).first()).toBeVisible()
 })
 
 // ── Sheriff endpoints ──────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ test('POST /debug/sheriff/phase SIGNUP — shows signup screen', async ({ page }
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Sign-up' }).click()
   await page.waitForTimeout(70)
-  await expect(page.getByText(/Sign Up|竞选警长|SIGNUP/i).first()).toBeVisible()
+  await expect(page.getByText(/Sign Up|競選警長|SIGNUP/i).first()).toBeVisible()
 })
 
 test('POST /debug/sheriff/phase SPEECH_CANDIDATE — shows speech screen as speaker', async ({ page }) => {
@@ -97,14 +97,14 @@ test('POST /debug/sheriff/phase SPEECH_CANDIDATE — shows speech screen as spea
   await page.getByRole('button', { name: 'Speech: Me' }).click()
   await page.waitForTimeout(70)
   // User is the current speaker
-  await expect(page.getByText(/发言|Speech|speaking/i).first()).toBeVisible()
+  await expect(page.getByText(/發言|Speech|speaking/i).first()).toBeVisible()
 })
 
 test('POST /debug/sheriff/phase SPEECH_AUDIENCE — shows speech screen as audience', async ({ page }) => {
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Speech: Watch' }).click()
   await page.waitForTimeout(70)
-  await expect(page.getByText(/Tom|发言|Speech/i).first()).toBeVisible()
+  await expect(page.getByText(/Tom|發言|Speech/i).first()).toBeVisible()
 })
 
 test('POST /debug/sheriff/phase VOTING — shows voting screen', async ({ page }) => {
@@ -118,7 +118,7 @@ test('POST /debug/sheriff/phase RESULT — shows result screen', async ({ page }
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Result', exact: true }).click()
   await page.waitForTimeout(70)
-  await expect(page.getByText(/Tom|结果|Result|Sheriff/i).first()).toBeVisible()
+  await expect(page.getByText(/Tom|結果|Result|Sheriff/i).first()).toBeVisible()
 })
 
 test('POST /debug/sheriff/candidate RUN — adds a candidate', async ({ page }) => {
@@ -158,7 +158,7 @@ test('POST /debug/day/scenario HOST_HIDDEN — host, result hidden', async ({ pa
   await goToDayView(page)
   await page.getByRole('button', { name: 'Host·Hidden' }).click()
   await page.waitForTimeout(70)
-  await expect(page.getByText(/显示结果|Reveal/i).first()).toBeVisible()
+  await expect(page.getByText(/顯示結果|Reveal/i).first()).toBeVisible()
 })
 
 test('POST /debug/day/scenario HOST_REVEALED — host, result revealed', async ({ page }) => {
@@ -215,7 +215,7 @@ test('POST /debug/day/reveal — host reveals night result', async ({ page }) =>
   await page.getByRole('button', { name: 'Host·Hidden' }).click()
   await page.waitForTimeout(70)
   // Host clicks reveal button in the UI
-  await page.getByText(/显示结果|Reveal/i).first().click()
+  await page.getByText(/顯示結果|Reveal/i).first().click()
   await page.waitForTimeout(70)
   await expect(page.getByText(/Carol/i).first()).toBeVisible()
 })

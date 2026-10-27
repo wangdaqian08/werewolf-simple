@@ -96,7 +96,7 @@ async function runNight1ToDay(localCtx: GameContext): Promise<void> {
   const witchBots = localCtx.roleMap.WITCH ?? []
 
   // Wolf attacks the seer or the witch — IDIOT must survive to D1, and the
-  // board's only villager must too (killing him ends the game by 屠边).
+  // board's only villager must too (killing him ends the game by 屠邊).
   // allBots excludes the host, so one of seer/witch is always a bot.
   expect(wolfBots.length, 'kit must have at least one wolf').toBeGreaterThan(0)
   const wolfBot = wolfBots[0]
@@ -260,7 +260,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       for (const [roleName, page] of localCtx.pages) {
         const idiotBanner = page
             .locator('.elim-banner-body')
-            .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
+            .filter({ hasText: /白癡翻牌|IDIOT REVEALED/i })
         await expect(
             idiotBanner,
             `[${roleName} browser] elim-banner-body must show IDIOT-reveal text`,
@@ -301,7 +301,7 @@ test.describe('Idiot flow — multi-browser STOMP verification', () => {
       const hostPage = localCtx.hostPage
       const idiotBanner = hostPage
           .locator('.elim-banner-body')
-          .filter({ hasText: /白痴翻牌|IDIOT REVEALED/i })
+          .filter({ hasText: /白癡翻牌|IDIOT REVEALED/i })
       await expect(idiotBanner).toBeVisible({ timeout: 10_000 })
 
       // Host clicks voting-continue to advance D1 → N2.

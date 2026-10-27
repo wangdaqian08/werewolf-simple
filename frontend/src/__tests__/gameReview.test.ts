@@ -1,5 +1,5 @@
 /**
- * GameReview.vue — the God's-eye replay (上帝视角复盘): one line per role each
+ * GameReview.vue — the God's-eye replay (上帝視角復盤): one line per role each
  * night, then the day's votes and events, every player's true role shown.
  */
 import { describe, expect, it } from 'vitest'
@@ -92,11 +92,11 @@ describe('GameReview', () => {
 
   it('header: the outcome and the wolf team', () => {
     const wrapper = render([])
-    expect(wrapper.find('.rv-outcome').text()).toBe('狼人胜')
+    expect(wrapper.find('.rv-outcome').text()).toBe('狼人勝')
     expect(wrapper.find('.rv-team').text()).toBe(
-      '狼人阵营：1号 Wolf1 · 2号 Wolf2 · 3号 King（白狼王）',
+      '狼人陣營：1號 Wolf1 · 2號 Wolf2 · 3號 King（白狼王）',
     )
-    expect(render([], 'VILLAGER').find('.rv-outcome').text()).toBe('好人胜')
+    expect(render([], 'VILLAGER').find('.rv-outcome').text()).toBe('好人勝')
   })
 
   it('黑狼王: tagged in the wolf team, and a chain shows each shooter with its role', () => {
@@ -117,19 +117,19 @@ describe('GameReview', () => {
       roster,
     )
     expect(wrapper.find('.rv-team').text()).toBe(
-      '狼人阵营：1号 Wolf1 · 2号 Wolf2 · 3号 Black（黑狼王）',
+      '狼人陣營：1號 Wolf1 · 2號 Wolf2 · 3號 Black（黑狼王）',
     )
     expect(lines(wrapper)).toEqual([
       '第2天',
-      '🔫 3号 Black〔黑狼王〕 开枪带走 7号 Hal〔猎人〕',
-      '🔫 7号 Hal〔猎人〕 开枪带走 9号 Val〔村民〕',
+      '🔫 3號 Black〔黑狼王〕 開槍帶走 7號 Hal〔獵人〕',
+      '🔫 7號 Hal〔獵人〕 開槍帶走 9號 Val〔村民〕',
     ])
   })
 
-  it('empty review: a cancelled game with nothing played shows 比赛取消 and 暂无记录', () => {
+  it('empty review: a cancelled game with nothing played shows 比賽取消 and 暫無記錄', () => {
     const wrapper = render([], null)
-    expect(wrapper.find('.rv-outcome').text()).toBe('比赛取消')
-    expect(wrapper.find('.rv-empty').text()).toBe('暂无记录')
+    expect(wrapper.find('.rv-outcome').text()).toBe('比賽取消')
+    expect(wrapper.find('.rv-empty').text()).toBe('暫無記錄')
     expect(lines(wrapper)).toEqual([])
   })
 
@@ -147,11 +147,11 @@ describe('GameReview', () => {
     ])
     expect(lines(wrapper)).toEqual([
       '第1夜',
-      '🐺 狼人（1·2·3号） 刀 9号 Val〔村民〕',
-      '🔮 预言家 4号 验 1号 Wolf1 → 狼人',
-      '🧪 女巫 5号 未用药',
-      '🛡 守卫 6号 守 9号 Val',
-      '☀ 天亮 平安夜（9号 Val 被守卫守住）',
+      '🐺 狼人（1·2·3號） 刀 9號 Val〔村民〕',
+      '🔮 預言家 4號 驗 1號 Wolf1 → 狼人',
+      '🧪 女巫 5號 未用藥',
+      '🛡 守衛 6號 守 9號 Val',
+      '☀ 天亮 平安夜（9號 Val 被守衛守住）',
     ])
   })
 
@@ -180,17 +180,17 @@ describe('GameReview', () => {
     ])
     expect(lines(wrapper)).toEqual([
       '第1夜',
-      '🐺 狼人（1·2·3号） 空刀',
-      '🔮 预言家 4号 未查验',
-      '🧪 女巫 5号 毒 7号 Hal〔猎人〕',
-      '🛡 守卫 6号 空守',
-      '☀ 天亮 7号 Hal〔猎人〕 被毒出局',
+      '🐺 狼人（1·2·3號） 空刀',
+      '🔮 預言家 4號 未查驗',
+      '🧪 女巫 5號 毒 7號 Hal〔獵人〕',
+      '🛡 守衛 6號 空守',
+      '☀ 天亮 7號 Hal〔獵人〕 被毒出局',
       '第2夜',
-      '🐺 狼人（1·2·3号） 自刀 2号 Wolf2〔狼人〕',
-      '🔮 预言家 4号 已出局',
-      '🧪 女巫 5号 救 2号 Wolf2',
-      '🛡 守卫 6号 守 2号 Wolf2',
-      '☀ 天亮 2号 Wolf2〔狼人〕 同守同救出局',
+      '🐺 狼人（1·2·3號） 自刀 2號 Wolf2〔狼人〕',
+      '🔮 預言家 4號 已出局',
+      '🧪 女巫 5號 救 2號 Wolf2',
+      '🛡 守衛 6號 守 2號 Wolf2',
+      '☀ 天亮 2號 Wolf2〔狼人〕 同守同救出局',
     ])
   })
 
@@ -200,7 +200,7 @@ describe('GameReview', () => {
     ])
     expect(lines(wrapper)).toEqual([
       '第1夜',
-      '🐺 狼人（1·2·3号） 刀 9号 Val〔村民〕',
+      '🐺 狼人（1·2·3號） 刀 9號 Val〔村民〕',
       '☀ 天亮 平安夜',
     ])
   })
@@ -223,14 +223,14 @@ describe('GameReview', () => {
         ],
       },
     ])
-    expect(lines(wrapper)).toEqual(['第1天', '放逐9号 Val〔村民〕 被投出（狼人冲票）'])
+    expect(lines(wrapper)).toEqual(['第1天', '放逐9號 Val〔村民〕 被投出（狼人衝票）'])
     expect(tally(wrapper)).toEqual([
-      '9号〔村民〕 3票 ← 1🐺,2🐺,4 out',
-      '1号〔狼人〕 1票 ← 6',
-      '弃权  ← 7',
+      '9號〔村民〕 3票 ← 1🐺,2🐺,4 out',
+      '1號〔狼人〕 1票 ← 6',
+      '棄權  ← 7',
     ])
     expect(wrapper.find('.rv-pill').text()).toBe('放逐')
-    expect(wrapper.find('.rv-tally .rv-seat-wolf').attributes('aria-label')).toBe('1号 狼人')
+    expect(wrapper.find('.rv-tally .rv-seat-wolf').attributes('aria-label')).toBe('1號 狼人')
     expect(wrapper.find('.rv-legend').exists()).toBe(true)
   })
 
@@ -256,13 +256,13 @@ describe('GameReview', () => {
       { day: 1, night: null, events: [vote({ kind: 'SHERIFF', result: vil, appointed: true })] },
     ])
 
-    expect(lines(tie)).toEqual(['第1天', '警长平票，房主指定 9号 Val 当警长'])
-    expect(tally(tie)).toEqual(['4号〔预言家〕 2票 ← 1🐺,5', '9号〔村民〕 2票 ← 2🐺,6 out'])
-    expect(lines(noVotes)).toEqual(['第1天', '警长无人投票，房主指定 9号 Val 当警长'])
+    expect(lines(tie)).toEqual(['第1天', '警長平票，房主指定 9號 Val 當警長'])
+    expect(tally(tie)).toEqual(['4號〔預言家〕 2票 ← 1🐺,5', '9號〔村民〕 2票 ← 2🐺,6 out'])
+    expect(lines(noVotes)).toEqual(['第1天', '警長無人投票，房主指定 9號 Val 當警長'])
     expect(noVotes.find('.rv-legend').exists()).toBe(false)
   })
 
-  it('PK re-vote, 倒钩, tie, sheriff vote, and the 1.5 sheriff weight', () => {
+  it('PK re-vote, 倒鉤, tie, sheriff vote, and the 1.5 sheriff weight', () => {
     const wrapper = render([
       {
         day: 2,
@@ -287,16 +287,16 @@ describe('GameReview', () => {
     ])
     expect(lines(wrapper)).toEqual([
       '第2天',
-      '警长4号 Sia 当选',
-      '放逐平票，无人出局（狼人倒钩）',
-      'PK9号 Val〔村民〕 被投出',
-      '警长无警长',
+      '警長4號 Sia 當選',
+      '放逐平票，無人出局（狼人倒鉤）',
+      'PK9號 Val〔村民〕 被投出',
+      '警長無警長',
     ])
     expect(tally(wrapper)).toEqual([
-      '4号〔预言家〕 2票 ← 5,6 out',
-      '9号〔村民〕 1票 ← 1🐺',
-      '2号〔狼人〕 1票 ← 3🐺',
-      '9号〔村民〕 2.5票 ← 1🐺,4 out',
+      '4號〔預言家〕 2票 ← 5,6 out',
+      '9號〔村民〕 1票 ← 1🐺',
+      '2號〔狼人〕 1票 ← 3🐺',
+      '9號〔村民〕 2.5票 ← 1🐺,4 out',
     ])
   })
 
@@ -315,10 +315,10 @@ describe('GameReview', () => {
     ])
     expect(lines(wrapper)).toEqual([
       '第2天',
-      '🔫 7号 Hal〔猎人〕 开枪带走 1号 Wolf1〔狼人〕',
-      '💥 3号 King〔白狼王〕 自爆，带走 4号 Sia〔预言家〕',
-      '💥 2号 Wolf2〔狼人〕 自爆',
-      '🃏 8号 Ida 白痴翻牌，免于出局',
+      '🔫 7號 Hal〔獵人〕 開槍帶走 1號 Wolf1〔狼人〕',
+      '💥 3號 King〔白狼王〕 自爆，帶走 4號 Sia〔預言家〕',
+      '💥 2號 Wolf2〔狼人〕 自爆',
+      '🃏 8號 Ida 白癡翻牌，免於出局',
     ])
   })
 
@@ -335,8 +335,8 @@ describe('GameReview', () => {
     ])
     expect(lines(wrapper)).toEqual([
       '第2天',
-      '⭐ 4号 Sia〔预言家〕 移交警徽给 5号 Wen〔女巫〕',
-      '⭐ 5号 Wen〔女巫〕 撕毁警徽',
+      '⭐ 4號 Sia〔預言家〕 移交警徽給 5號 Wen〔女巫〕',
+      '⭐ 5號 Wen〔女巫〕 撕毀警徽',
     ])
   })
 
@@ -349,8 +349,8 @@ describe('GameReview', () => {
       },
     ])
     expect(wrapper.findAll('.rv-line .rv-wolf').map((s) => s.text())).toEqual([
-      '🐺 狼人（1·2·3号）',
-      '1号 Wolf1',
+      '🐺 狼人（1·2·3號）',
+      '1號 Wolf1',
     ])
   })
 })

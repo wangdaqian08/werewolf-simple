@@ -41,7 +41,7 @@ test('📋 FAB is visible in day phase', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
   const fab = page.getByTestId('log-fab')
   await expect(fab).toBeVisible()
-  await expect(fab).toHaveAttribute('aria-label', '游戏记录')
+  await expect(fab).toHaveAttribute('aria-label', '遊戲記錄')
 })
 
 test('📋 FAB is visible for non-host alive player', async ({ page }) => {
@@ -58,7 +58,7 @@ test('clicking FAB opens the drawer', async ({ page }) => {
   await expect(page.locator('.action-log-drawer')).not.toBeVisible()
   await page.getByTestId('log-fab').click()
   await expect(page.locator('.action-log-drawer')).toBeVisible()
-  await expect(page.locator('.drawer-title')).toHaveText('游戏记录')
+  await expect(page.locator('.drawer-title')).toHaveText('遊戲記錄')
 })
 
 test('✕ button closes the drawer', async ({ page }) => {
@@ -97,7 +97,7 @@ test('drawer shows 昨夜出局 section with night death data', async ({ page })
 
   // Charlie died at seat 3
   const deathRow = deathSection.locator('.log-row').first()
-  await expect(deathRow.locator('.seat-badge')).toHaveText('3号')
+  await expect(deathRow.locator('.seat-badge')).toHaveText('3號')
   await expect(deathRow.locator('.log-name')).toHaveText('Charlie')
 })
 
@@ -120,7 +120,7 @@ test('night death row has no cause or killedBy text', async ({ page }) => {
 
 // ── Content: sheriff election ─────────────────────────────────────────────────
 
-test('drawer shows ⭐ 警长选举 section at the top of day 1 when game has a sheriff', async ({ page }) => {
+test('drawer shows ⭐ 警長選舉 section at the top of day 1 when game has a sheriff', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
   await page.getByTestId('log-fab').click()
 
@@ -128,13 +128,13 @@ test('drawer shows ⭐ 警长选举 section at the top of day 1 when game has a 
   // 昨夜出局 — so players see who became sheriff before reading the round.
   const round = page.locator('.round-block').first()
   const firstSection = round.locator('.log-section').first()
-  await expect(firstSection.locator('.section-title')).toContainText('警长选举')
+  await expect(firstSection.locator('.section-title')).toContainText('警長選舉')
 
   // Bob (seat 2) won the mock sheriff election
   const winnerRow = firstSection.locator('.log-row').first()
-  await expect(winnerRow.locator('.seat-badge')).toHaveText('2号')
+  await expect(winnerRow.locator('.seat-badge')).toHaveText('2號')
   await expect(winnerRow.locator('.log-name')).toHaveText('Bob')
-  await expect(winnerRow.locator('.log-tag.tag-gold')).toHaveText('警长')
+  await expect(winnerRow.locator('.log-tag.tag-gold')).toHaveText('警長')
 })
 
 test('drawer shows sheriff election tally so players can analyse alliances', async ({ page }) => {
@@ -145,10 +145,10 @@ test('drawer shows sheriff election tally so players can analyse alliances', asy
   // Bob got 4 votes (winning row of the tally)
   const winnerTally = sheriffSection.locator('.tally-row').first()
   await expect(winnerTally.locator('.tally-votes')).toHaveText('4 票')
-  await expect(winnerTally.locator('.tally-voters')).toContainText('1号')
-  await expect(winnerTally.locator('.tally-voters')).toContainText('3号')
-  await expect(winnerTally.locator('.tally-voters')).toContainText('5号')
-  await expect(winnerTally.locator('.tally-voters')).toContainText('6号')
+  await expect(winnerTally.locator('.tally-voters')).toContainText('1號')
+  await expect(winnerTally.locator('.tally-voters')).toContainText('3號')
+  await expect(winnerTally.locator('.tally-voters')).toContainText('5號')
+  await expect(winnerTally.locator('.tally-voters')).toContainText('6號')
 })
 
 test('sheriff section surfaces abstain voters so analysts can flag silent wolves', async ({ page }) => {
@@ -158,15 +158,15 @@ test('sheriff section surfaces abstain voters so analysts can flag silent wolves
   const sheriffSection = page.locator('.round-block').first().locator('.log-section').first()
   const abstainRow = sheriffSection.locator('.tally-abstain')
   await expect(abstainRow).toBeVisible()
-  await expect(abstainRow.locator('.tally-name')).toHaveText('弃权')
+  await expect(abstainRow.locator('.tally-name')).toHaveText('棄權')
   await expect(abstainRow.locator('.tally-votes')).toHaveText('1 票')
   // Mock seeds Grace (seat 7) as the lone abstainer
-  await expect(abstainRow.locator('.tally-voters')).toContainText('7号')
+  await expect(abstainRow.locator('.tally-voters')).toContainText('7號')
 })
 
 // ── Content: vote results ─────────────────────────────────────────────────────
 
-test('drawer shows 投票结果 section with eliminated player', async ({ page }) => {
+test('drawer shows 投票結果 section with eliminated player', async ({ page }) => {
   await goToDayScenario(page, 'HOST_REVEALED')
   await page.getByTestId('log-fab').click()
 
@@ -175,12 +175,12 @@ test('drawer shows 投票结果 section with eliminated player', async ({ page }
     .locator('.round-block')
     .first()
     .locator('.log-section')
-    .filter({ hasText: '投票结果' })
-  await expect(voteSection.locator('.section-title')).toContainText('投票结果')
+    .filter({ hasText: '投票結果' })
+  await expect(voteSection.locator('.section-title')).toContainText('投票結果')
 
   // Eve (seat 5) was eliminated
   const eliminationRow = voteSection.locator('.log-row').first()
-  await expect(eliminationRow.locator('.seat-badge')).toHaveText('5号')
+  await expect(eliminationRow.locator('.seat-badge')).toHaveText('5號')
   await expect(eliminationRow.locator('.log-name')).toHaveText('Eve')
   await expect(eliminationRow.locator('.log-tag')).toHaveText('出局')
 })
@@ -193,18 +193,18 @@ test('drawer shows vote tally breakdown', async ({ page }) => {
     .locator('.round-block')
     .first()
     .locator('.log-section')
-    .filter({ hasText: '投票结果' })
+    .filter({ hasText: '投票結果' })
   // tally rows include the abstain row, so target the candidate row by class
   const tallyRow = voteSection
     .locator('.tally-row')
-    .filter({ hasNotText: '弃权' })
+    .filter({ hasNotText: '棄權' })
     .first()
 
   // Eve got 3 votes from seats 1, 2, 4
   await expect(tallyRow.locator('.tally-votes')).toHaveText('3 票')
-  await expect(tallyRow.locator('.tally-voters')).toContainText('1号')
-  await expect(tallyRow.locator('.tally-voters')).toContainText('2号')
-  await expect(tallyRow.locator('.tally-voters')).toContainText('4号')
+  await expect(tallyRow.locator('.tally-voters')).toContainText('1號')
+  await expect(tallyRow.locator('.tally-voters')).toContainText('2號')
+  await expect(tallyRow.locator('.tally-voters')).toContainText('4號')
 })
 
 test('vote-result section surfaces abstain voters', async ({ page }) => {
@@ -215,13 +215,13 @@ test('vote-result section surfaces abstain voters', async ({ page }) => {
     .locator('.round-block')
     .first()
     .locator('.log-section')
-    .filter({ hasText: '投票结果' })
+    .filter({ hasText: '投票結果' })
   const abstainRow = voteSection.locator('.tally-abstain')
   await expect(abstainRow).toBeVisible()
   await expect(abstainRow.locator('.tally-votes')).toHaveText('2 票')
   // Mock seeds Frank (seat 6) and Henry (seat 8) as abstainers
-  await expect(abstainRow.locator('.tally-voters')).toContainText('6号')
-  await expect(abstainRow.locator('.tally-voters')).toContainText('8号')
+  await expect(abstainRow.locator('.tally-voters')).toContainText('6號')
+  await expect(abstainRow.locator('.tally-voters')).toContainText('8號')
 })
 
 // ── VotingPhase coverage ──────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ test('📋 FAB is visible in voting phase', async ({ page }) => {
   await goToVotingScenario(page)
   const fab = page.getByTestId('log-fab')
   await expect(fab).toBeVisible()
-  await expect(fab).toHaveAttribute('aria-label', '游戏记录')
+  await expect(fab).toHaveAttribute('aria-label', '遊戲記錄')
 })
 
 test('clicking FAB opens the drawer in voting phase', async ({ page }) => {
@@ -246,5 +246,5 @@ test('clicking FAB opens the drawer in voting phase', async ({ page }) => {
   await expect(page.locator('.action-log-drawer')).not.toBeVisible()
   await page.getByTestId('log-fab').click()
   await expect(page.locator('.action-log-drawer')).toBeVisible()
-  await expect(page.locator('.drawer-title')).toHaveText('游戏记录')
+  await expect(page.locator('.drawer-title')).toHaveText('遊戲記錄')
 })

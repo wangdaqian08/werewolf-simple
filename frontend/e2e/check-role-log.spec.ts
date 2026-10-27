@@ -47,7 +47,7 @@ test('role chip shows locked state by default', async ({ page }) => {
   await expect(chip).toBeVisible()
   await expect(chip).toContainText('🔒')
   await expect(chip).toContainText('身份')
-  await expect(chip).toContainText('Tap to reveal')
+  await expect(chip).toContainText(/🔒 身份|🔒 Tap to reveal/)
 })
 
 test('role chip has my-role-locked class', async ({ page }) => {
@@ -61,7 +61,7 @@ test('role card opens on chip tap and shows role info', async ({ page }) => {
   const sheet = page.locator('.role-card-sheet')
   await expect(sheet).toBeVisible()
   // SEER role in mock data
-  await expect(sheet).toContainText('预言家')
+  await expect(sheet).toContainText('預言家')
   await expect(sheet).toContainText('SEER')
   await expect(sheet).toContainText('你的身份')
 })
@@ -94,15 +94,15 @@ test('role chip is visible on Revealed scenario', async ({ page }) => {
 test('history button is visible on voting screen', async ({ page }) => {
   await goToVotingScenario(page, 'Voting')
   await expect(page.locator('.history-btn')).toBeVisible()
-  await expect(page.locator('.history-btn')).toContainText('历史')
+  await expect(page.locator('.history-btn')).toContainText('歷史')
 })
 
 test('history panel opens on button click', async ({ page }) => {
   await goToVotingScenario(page, 'Voting')
   await page.locator('.history-btn').click()
   await expect(page.locator('.history-sheet')).toBeVisible()
-  await expect(page.locator('.history-sheet')).toContainText('投票记录')
-  await expect(page.locator('.history-sheet')).toContainText('Vote History')
+  await expect(page.locator('.history-sheet')).toContainText('投票記錄')
+  await expect(page.locator('.history-sheet')).toContainText(/投票記錄|Vote History/)
 })
 
 test('history panel shows day 1 round data', async ({ page }) => {
@@ -110,7 +110,7 @@ test('history panel shows day 1 round data', async ({ page }) => {
   await page.locator('.history-btn').click()
   const sheet = page.locator('.history-sheet')
   await expect(sheet).toContainText('第 1 天')
-  await expect(sheet).toContainText('Day 1')
+  await expect(sheet).toContainText(/第 1 天|Day 1/)
   // Dave was eliminated in mock history
   await expect(sheet).toContainText('Dave')
   // Dave's role was VILLAGER
@@ -141,7 +141,7 @@ test('history panel shows hunter-shot banner for day 1', async ({ page }) => {
   await page.locator('.history-btn').click()
   const sheet = page.locator('.history-sheet')
   // Hunter shot Alice
-  await expect(sheet).toContainText('开枪 · 座位')
+  await expect(sheet).toContainText('開槍 · 座位')
   await expect(sheet).toContainText('Alice')
   await expect(sheet).toContainText('狼人')
 })
@@ -217,7 +217,7 @@ test('hunter-shot banner absent for Day 3 (no hunter shot in that round)', async
   // Rounds are reversed — Day 3 is first in the DOM
   const day3 = page.locator('.history-round').first()
   await expect(day3).toContainText('第 3 天')
-  await expect(day3).not.toContainText('开枪 · 座位')
+  await expect(day3).not.toContainText('開槍 · 座位')
 })
 
 // ── HIGH: History button hidden / row absent when data is missing ─────────────
@@ -339,8 +339,8 @@ test('history vote columns can be scrolled to reveal hidden candidates', async (
 test('role card shows description text for SEER', async ({ page }) => {
   await goToVotingScenario(page, 'Voting')
   await page.locator('.my-role-chip').click()
-  // SEER description contains 查验 (check/verify)
-  await expect(page.locator('.rc-desc')).toContainText('查验')
+  // SEER description contains 查驗 (check/verify)
+  await expect(page.locator('.rc-desc')).toContainText('查驗')
 })
 
 test('role card SEER has rc-label-special class (gold colour)', async ({ page }) => {
@@ -359,7 +359,7 @@ test('hunter-shot banner shows 村民 for Day 2 (Grace is VILLAGER)', async ({ p
   // Reversed order: Day3 first, Day2 second
   const day2 = page.locator('.history-round').nth(1)
   await expect(day2).toContainText('第 2 天')
-  await expect(day2).toContainText('开枪 · 座位')
+  await expect(day2).toContainText('開槍 · 座位')
   await expect(day2).toContainText('Grace')
   await expect(day2).toContainText('村民') // VILLAGER role translated
 })

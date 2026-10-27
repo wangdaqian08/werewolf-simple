@@ -142,7 +142,7 @@ export async function setupGame(
   // the guest nickname directly OR collapse it behind a "Continue as guest"
   // toggle. Reveal it if present (no-op when already shown) so the fill below
   // doesn't hang.
-  const guestToggle = hostPage.getByRole('button', { name: /Continue as guest|继续以访客/i })
+  const guestToggle = hostPage.getByRole('button', { name: /Continue as guest|繼續以訪客/i })
   if (await guestToggle.count())
     await guestToggle
         .first()
@@ -150,9 +150,9 @@ export async function setupGame(
         .catch(() => {})
 
   // Login
-  await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
+  await hostPage.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Host')
   await hostPage
-      .getByRole('button', { name: /Create Room/i })
+      .getByRole('button', { name: /創建房間|Create Room/i })
       .first()
       .click()
   // Bump from 10s → 30s: CI-3 flaked repeatedly here on 2026-04-24 /
@@ -165,7 +165,7 @@ export async function setupGame(
   // Toggle sheriff if needed (default is on, we may want to turn it off)
   if (!hasSheriff) {
     // Find the row containing "Sheriff Election" and click its toggle button
-    const sheriffRow = hostPage.locator('.role-row').filter({ hasText: /Sheriff|警长竞选/ })
+    const sheriffRow = hostPage.locator('.role-row').filter({ hasText: /Sheriff|警長競選/ })
     const toggle = sheriffRow.locator('.toggle-on')
     if ((await toggle.count()) > 0) {
       await toggle.click()
@@ -247,7 +247,7 @@ export async function setupGame(
 
   // Create the room (page 1 = game settings above). It opens the players &
   // roles panel in the room (/room/:id?setup=1), where the board is set.
-  await hostPage.getByRole('button', { name: /Create Room/i }).click()
+  await hostPage.getByRole('button', { name: /創建房間|Create Room/i }).click()
   // Bump from 10s → 15s: matches the other setup navigation waits in this
   // helper (game-view redirect is 15s on line 209). POST /api/room/create
   // hits the DB; under heavy CI load the initial insert can block briefly.
@@ -290,8 +290,8 @@ export async function setupGame(
     // idiot-flow tests when the IDIOT toggle stayed off).
     //
     // The screen enforces board limits (gods within wolves ± 1), so a toggle
-    // can be disabled until another one moves first — e.g. 猎人 off only after
-    // 守卫 on. Make passes, skipping disabled toggles, until nothing changes.
+    // can be disabled until another one moves first — e.g. 獵人 off only after
+    // 守衛 on. Make passes, skipping disabled toggles, until nothing changes.
     for (let pass = 0; pass < allOptionalRoles.length; pass++) {
       let changed = false
       for (const role of allOptionalRoles) {
@@ -383,7 +383,7 @@ export async function setupGame(
 
   // Host has no Ready button (only guests do). Claiming the seat auto-readies the host.
   // Wait for Start Game to become enabled.
-  const startBtn = hostPage.getByRole('button', { name: /Start Game|开始游戏/i })
+  const startBtn = hostPage.getByRole('button', { name: /Start Game|開始遊戲/i })
   await expect(startBtn).toBeEnabled({ timeout: 15_000 })
   await startBtn.click()
 

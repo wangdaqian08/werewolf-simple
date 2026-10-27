@@ -39,7 +39,7 @@ describe('DemoView — public no-backend showcase', () => {
     const section = wrapper.find('[data-testid="demo-section-roles"]')
     expect(section.text()).toContain('狼人')
     await section.find('[data-testid="demo-role-cycler-SEER"]').trigger('click')
-    expect(section.text()).toContain('预言家')
+    expect(section.text()).toContain('預言家')
     await section.find('[data-testid="demo-role-cycler-WITCH"]').trigger('click')
     expect(section.text()).toContain('女巫')
   })
@@ -91,10 +91,10 @@ describe('DemoView — public no-backend showcase', () => {
   it('sheriff sub-phase tab swaps SIGNUP → VOTING content', async () => {
     const wrapper = mount(DemoView)
     const section = wrapper.find('[data-testid="demo-section-sheriff"]')
-    expect(section.text()).toContain('Sheriff Election')
+    expect(section.text()).toContain('競選警長')
     await section.find('[data-testid="demo-sheriff-tab-VOTING"]').trigger('click')
     // VOTING phase renders a different chip label and progress info
-    expect(section.text()).not.toContain('Sheriff Election')
+    expect(section.text()).not.toContain('競選警長')
   })
 
   it('day sub-phase tab swaps RESULT_HIDDEN → RESULT_REVEALED', async () => {

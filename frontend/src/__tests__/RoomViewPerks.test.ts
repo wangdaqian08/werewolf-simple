@@ -173,7 +173,7 @@ describe('RoomView perk panel', () => {
     const wrapper = await mountRoom('u-host')
     await wrapper.find('[data-testid="perk-activate-btn"]').trigger('click')
     await flushPromises()
-    expect(wrapper.find('[data-testid="perk-error"]').text()).toContain('操作失败')
+    expect(wrapper.find('[data-testid="perk-error"]').text()).toContain('操作失敗')
   })
 
   it('a held perk shows Withdraw for the holder and calls withdrawPerk', async () => {

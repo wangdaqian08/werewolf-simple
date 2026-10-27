@@ -5,18 +5,18 @@ async function goToGame(page: Page) {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
-  await page.getByPlaceholder('Enter your nickname').fill('Tester')
-  await page.getByRole('button', { name: /Create Room/i }).first().click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Tester')
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
   await page.getByRole('button', { name: /Debug: Launch Game/i }).click()
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
 
-  await page.getByRole('button', { name: /揭示我的身份 \/ Reveal Role/i }).click()
+  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 }
 
 // Scoped to the Day Scenarios debug section to avoid label collisions
@@ -53,7 +53,7 @@ test('host sees Reveal button on voting screen', async ({ page }) => {
   await loadDayScenario(page, 'Host·Hidden')
   await loadVotingScenario(page, 'Voting')
 
-  await expect(page.getByRole('button', { name: /公布结果.*Reveal/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^(?:公佈結果|Reveal)$/i })).toBeVisible()
 })
 
 test('host Reveal button is disabled while votes are still coming in', async ({ page }) => {
@@ -62,7 +62,7 @@ test('host Reveal button is disabled while votes are still coming in', async ({ 
   await loadVotingScenario(page, 'Voting')
 
   // 3/8 voted — not all in yet
-  await expect(page.getByRole('button', { name: /公布结果.*Reveal/i })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^(?:公佈結果|Reveal)$/i })).toBeDisabled()
 })
 
 test('host sees Continue button after reveal — no auto-advance countdown', async ({ page }) => {
@@ -75,7 +75,7 @@ test('host sees Continue button after reveal — no auto-advance countdown', asy
   await loadVotingScenario(page, 'Revealed')
 
   await expect(page.locator('.reveal-countdown')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /继续.*Continue/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^(?:繼續|Continue)$/i })).toBeVisible()
 })
 
 test('host does not see Reveal button after tally is revealed', async ({ page }) => {
@@ -83,7 +83,7 @@ test('host does not see Reveal button after tally is revealed', async ({ page })
   await loadDayScenario(page, 'Host·Hidden')
   await loadVotingScenario(page, 'Revealed')
 
-  await expect(page.getByRole('button', { name: /公布结果.*Reveal/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /^(?:公佈結果|Reveal)$/i })).not.toBeVisible()
 })
 
 // ── Guest / alive-player perspective ─────────────────────────────────────────
@@ -94,7 +94,7 @@ test('alive player does NOT see Reveal button', async ({ page }) => {
   await loadDayScenario(page, 'Alive·Revealed')
   await loadVotingScenario(page, 'Voting')
 
-  await expect(page.getByRole('button', { name: /公布结果.*Reveal/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /^(?:公佈結果|Reveal)$/i })).not.toBeVisible()
 })
 
 test('alive player sees vote and skip buttons', async ({ page }) => {
@@ -102,8 +102,8 @@ test('alive player sees vote and skip buttons', async ({ page }) => {
   await loadDayScenario(page, 'Alive·Revealed')
   await loadVotingScenario(page, 'Voting')
 
-  await expect(page.getByRole('button', { name: /投票.*Vote/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /弃权/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^(?:投票|Vote)$/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /棄權/i })).toBeVisible()
 })
 
 test('dead player sees voting-disabled button', async ({ page }) => {
@@ -112,8 +112,8 @@ test('dead player sees voting-disabled button', async ({ page }) => {
   await loadDayScenario(page, 'Dead')
   await loadVotingScenario(page, 'Voting')
 
-  await expect(page.getByRole('button', { name: /投票已禁用.*Voting disabled/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^投票.*Vote$/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /投票已禁用|Voting disabled/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^(?:投票|Vote)$/i })).not.toBeVisible()
 })
 
 test('alive player does NOT see countdown timer after reveal', async ({ page }) => {
@@ -122,7 +122,7 @@ test('alive player does NOT see countdown timer after reveal', async ({ page }) 
   await loadVotingScenario(page, 'Revealed')
 
   await expect(page.locator('.reveal-countdown')).not.toBeVisible()
-  await expect(page.getByText(/等待房主继续/)).toBeVisible()
+  await expect(page.getByText(/等待房主繼續/)).toBeVisible()
 })
 
 // ── Voted state ───────────────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ test('voted player sees Unvote button', async ({ page }) => {
   await loadDayScenario(page, 'Alive·Revealed')
   await loadVotingScenario(page, 'Voted')
 
-  await expect(page.getByRole('button', { name: /取消投票.*Unvote/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /取消投票|Unvote/i })).toBeVisible()
 })
 
 test('voted player does not see vote/skip buttons', async ({ page }) => {
@@ -140,8 +140,8 @@ test('voted player does not see vote/skip buttons', async ({ page }) => {
   await loadDayScenario(page, 'Alive·Revealed')
   await loadVotingScenario(page, 'Voted')
 
-  await expect(page.getByRole('button', { name: /^投票.*Vote$/i })).not.toBeVisible()
-  await expect(page.getByRole('button', { name: /^弃权$/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /^(?:投票|Vote)$/i })).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /^棄權$/i })).not.toBeVisible()
 })
 
 test('voted players show green cards', async ({ page }) => {
@@ -179,7 +179,7 @@ test('eliminated player banner shown after reveal', async ({ page }) => {
   await loadVotingScenario(page, 'Revealed')
 
   await expect(page.locator('.elim-banner-body')).toBeVisible()
-  await expect(page.getByText(/ELIMINATED/i)).toBeVisible()
+  await expect(page.getByText(/出局|ELIMINATED/i)).toBeVisible()
 })
 
 test('idiot reveal banner shows correct content', async ({ page }) => {
@@ -191,16 +191,16 @@ test('idiot reveal banner shows correct content', async ({ page }) => {
   await expect(page.locator('.elim-banner-body')).toBeVisible()
   
   // Verify banner title
-  await expect(page.getByText(/白痴翻牌/i)).toBeVisible()
-  await expect(page.getByText(/IDIOT REVEALED/i)).toBeVisible()
+  await expect(page.getByText(/白癡翻牌/i)).toBeVisible()
+  await expect(page.getByText(/白癡翻牌|IDIOT REVEALED/i)).toBeVisible()
   
   // Verify nickname and seat number format (use specific selector to avoid multiple matches)
   await expect(page.locator('.elim-banner-name')).toContainText('You')
   await expect(page.locator('.elim-banner-name')).toContainText('座位')
   
   // Verify status message
-  await expect(page.locator('.elim-banner-role')).toContainText('存活，失去投票权')
-  await expect(page.locator('.elim-banner-role')).toContainText('Survives, loses vote')
+  await expect(page.locator('.elim-banner-role')).toContainText('存活，失去投票權')
+  await expect(page.locator('.elim-banner-role')).toContainText(/存活，失去投票權|Survives, loses vote/)
 })
 
 test('idiot card shows 🃏 overlay', async ({ page }) => {
@@ -222,7 +222,7 @@ test('idiot voting button shows disabled state', async ({ page }) => {
   await loadVotingScenario(page, 'Idiot Reveal')
 
   // In VOTE_RESULT phase, host should see continue button (not voting buttons)
-  const continueButton = page.locator('.vote-actions').getByRole('button', { name: /继续/i })
+  const continueButton = page.locator('.vote-actions').getByRole('button', { name: /繼續/i })
   await expect(continueButton).toBeVisible()
   
   // Verify no voting buttons are shown (since voting phase is over)
