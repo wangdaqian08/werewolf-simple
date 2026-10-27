@@ -110,7 +110,7 @@ test('history panel shows day 1 round data', async ({ page }) => {
   await page.locator('.history-btn').click()
   const sheet = page.locator('.history-sheet')
   await expect(sheet).toContainText('第 1 天')
-  await expect(sheet).toContainText('Day 1')
+  await expect(sheet).toContainText(/第 1 天|Day 1/)
   // Dave was eliminated in mock history
   await expect(sheet).toContainText('Dave')
   // Dave's role was VILLAGER

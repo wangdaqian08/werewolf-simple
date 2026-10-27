@@ -358,6 +358,9 @@ export default {
       VILLAGER: '透過討論和投票找出狼人，保護村莊。',
     },
   },
+  roleCard: {
+    title: '你的身份',
+  },
   roleComp: {
     title: '角色組成',
     total: '共 {roles} / {players} 座位（含房主）',

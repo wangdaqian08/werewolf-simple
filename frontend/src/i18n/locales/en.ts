@@ -363,6 +363,9 @@ export default {
       VILLAGER: 'Find the wolves through discussion and voting, and protect the village.',
     },
   },
+  roleCard: {
+    title: 'My Role',
+  },
   roleComp: {
     title: 'Role Composition',
     total: '{roles} / {players} seats (incl. host)',

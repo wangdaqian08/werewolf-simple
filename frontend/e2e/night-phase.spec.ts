@@ -127,8 +127,8 @@ test('night: SEER_RESULT — shows result card with history', async ({ page }) =
   // History section always visible
   await expect(page.getByText('歷史查驗記錄')).toBeVisible()
   // History entries from preset
-  await expect(page.getByText(/Round 1/).first()).toBeVisible()
-  await expect(page.getByText(/Round 2/).first()).toBeVisible()
+  await expect(page.getByText(/第 1 夜|Night 1/).first()).toBeVisible()
+  await expect(page.getByText(/第 2 夜|Night 2/).first()).toBeVisible()
 })
 
 test('night: SEER_RESULT — history shown even when empty (srh-empty message)', async ({
@@ -310,7 +310,7 @@ test('night: WAITING — header shows Night Falls and Round number', async ({ pa
 
   // The header is always visible regardless of sub-phase
   await expect(page.getByText(/夜晚降臨|Night Falls/i).first()).toBeVisible()
-  await expect(page.getByText(/Round \d+/i).first()).toBeVisible()
+  await expect(page.getByText(/第 \d+ 夜|Night \d+/i).first()).toBeVisible()
 })
 
 test('night: non-active role during WEREWOLF_PICK sees sleep screen and Night Falls header (no role badge)', async ({
@@ -326,7 +326,7 @@ test('night: non-active role during WEREWOLF_PICK sees sleep screen and Night Fa
   await expect(page.getByTestId('sleep-screen-title').first()).toBeVisible()
   // Persistent header always shows Night Falls and Round number
   await expect(page.getByText(/夜晚降臨|Night Falls/i).first()).toBeVisible()
-  await expect(page.getByText(/Round \d+/i).first()).toBeVisible()
+  await expect(page.getByText(/第 \d+ 夜|Night \d+/i).first()).toBeVisible()
 })
 
 // ── Night → Day advance ───────────────────────────────────────────────────────

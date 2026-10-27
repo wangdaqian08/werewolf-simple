@@ -145,14 +145,14 @@ test('join room shows room code', async ({page}) => {
 
 test('join room shows Ready button', async ({page}) => {
     await joinRoom(page)
-    await expect(page.getByRole('button', {name: /^(?:準備|Ready)$/})).toBeVisible()
+    await expect(page.getByTestId('ready-btn')).toBeVisible()
 })
 
 // ── Seat selection ────────────────────────────────────────────────────────────
 
 test('Ready button is disabled until a seat number is picked', async ({page}) => {
     await joinRoom(page)
-    await expect(page.getByRole('button', {name: /^(?:準備|Ready)$/})).toBeDisabled()
+    await expect(page.getByTestId('ready-btn')).toBeDisabled()
 })
 
 test('empty seats show selectable numbers in the grid', async ({page}) => {
@@ -163,7 +163,7 @@ test('empty seats show selectable numbers in the grid', async ({page}) => {
 test('clicking an empty seat enables the Ready button', async ({page}) => {
     await joinRoom(page)
     await pickFirstSeat(page)
-    await expect(page.getByRole('button', {name: /^(?:準備|Ready)$/})).toBeEnabled()
+    await expect(page.getByTestId('ready-btn')).toBeEnabled()
 })
 
 test('picked seat shows the player nickname', async ({page}) => {
@@ -201,14 +201,14 @@ test('player can change to a different empty seat before ready', async ({page}) 
 test('after clicking Ready, empty slots are no longer selectable', async ({page}) => {
     await joinRoom(page)
     await pickFirstSeat(page)
-    await page.getByRole('button', {name: /^(?:準備|Ready)$/}).click()
+    await page.getByTestId('ready-btn').click()
     await expect(page.locator('.player-grid .slot-selectable')).toHaveCount(0)
 })
 
 test('after Undo Ready, empty slots become selectable again', async ({page}) => {
     await joinRoom(page)
     await pickFirstSeat(page)
-    await page.getByRole('button', {name: /^(?:準備|Ready)$/}).click()
+    await page.getByTestId('ready-btn').click()
     await page.getByRole('button', {name: /取消準備|Undo Ready/i}).click()
     await expect(page.locator('.player-grid .slot-selectable').first()).toBeVisible()
 })
@@ -218,16 +218,16 @@ test('after Undo Ready, empty slots become selectable again', async ({page}) => 
 test('clicking Ready shows Undo Ready button', async ({page}) => {
     await joinRoom(page)
     await pickFirstSeat(page)
-    await page.getByRole('button', {name: /^(?:準備|Ready)$/}).click()
+    await page.getByTestId('ready-btn').click()
     await expect(page.getByRole('button', {name: /取消準備|Undo Ready/i})).toBeVisible()
 })
 
 test('clicking Undo Ready switches back to Ready button', async ({page}) => {
     await joinRoom(page)
     await pickFirstSeat(page)
-    await page.getByRole('button', {name: /^(?:準備|Ready)$/}).click()
+    await page.getByTestId('ready-btn').click()
     await page.getByRole('button', {name: /取消準備|Undo Ready/i}).click()
-    await expect(page.getByRole('button', {name: /^(?:準備|Ready)$/})).toBeVisible()
+    await expect(page.getByTestId('ready-btn')).toBeVisible()
 })
 
 // ── Host seat selection ───────────────────────────────────────────────────────

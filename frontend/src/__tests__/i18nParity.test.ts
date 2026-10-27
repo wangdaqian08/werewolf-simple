@@ -48,7 +48,10 @@ describe('i18n catalogs', () => {
 
   it('every literal message key used in the source exists in the catalog', () => {
     const roots = Object.keys(en)
-    const keyLiteral = new RegExp(`['\`]((?:${roots.join('|')})\\.[A-Za-z0-9_.]+)['\`]`, 'g')
+    const keyLiteral = new RegExp(
+      `(?:\\bt\\(|\\bte\\()['\`]([A-Za-z0-9_.]+)['\`]|['\`]((?:${roots.join('|')})\\.[A-Za-z0-9_.]+)['\`]`,
+      'g',
+    )
     const missing: string[] = []
     const walk = (dir: string) => {
       for (const name of readdirSync(dir)) {
@@ -57,7 +60,7 @@ describe('i18n catalogs', () => {
           if (!['__tests__', 'i18n', 'mocks'].includes(name)) walk(path)
         } else if (/\.(vue|ts)$/.test(name)) {
           for (const m of readFileSync(path, 'utf8').matchAll(keyLiteral)) {
-            const key = m[1] as string
+            const key = (m[1] ?? m[2]) as string
             if (!(key in E)) missing.push(`${path}: ${key}`)
           }
         }
