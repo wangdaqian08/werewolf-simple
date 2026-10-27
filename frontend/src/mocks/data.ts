@@ -1538,33 +1538,44 @@ export const MOCK_PLAYER_REVIEW: PlayerReview = {
 // Mirrors RewardBreakdown.catalog at its configured defaults. A penalty would be
 // one more entry here with a negative amount.
 export const MOCK_REWARD_RULES: RewardRule[] = [
-  { reason: 'WIN', label: '胜利方奖励', detail: '本局获胜的阵营', amount: 20, perUnit: false },
+  {
+    reason: 'WIN',
+    group: 'BASE',
+    label: '胜利方奖励',
+    detail: '本局获胜的阵营',
+    amount: 20,
+    unit: null,
+  },
   {
     reason: 'PARTICIPATION',
+    group: 'BASE',
     label: '参与奖励',
     detail: '失利的好人阵营',
     amount: 5,
-    perUnit: false,
+    unit: null,
   },
   {
     reason: 'WOLF_SURVIVAL',
+    group: 'BASE',
     label: '狼人存活',
-    detail: '失利的狼人，按存活天数计',
+    detail: '狼人失利时，活到第几天就算几天',
     amount: 4,
-    perUnit: true,
+    unit: '天',
   },
   {
     reason: 'SHERIFF',
+    group: 'BONUS',
     label: '当选／持有警徽',
     detail: '当选警长，或之后接过警徽',
     amount: 5,
-    perUnit: false,
+    unit: null,
   },
   {
     reason: 'WOLF_VOTE',
+    group: 'BONUS',
     label: '投出狼人',
     detail: '白天投票投中狼人，每天最多一次',
     amount: 3,
-    perUnit: true,
+    unit: '次',
   },
 ]

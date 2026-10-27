@@ -2,6 +2,7 @@ package com.werewolf.service
 
 import com.werewolf.config.RewardProperties
 import com.werewolf.dto.RewardReason
+import com.werewolf.dto.RewardGroup
 import com.werewolf.dto.RewardRule
 import com.werewolf.model.GameEvent
 import com.werewolf.model.GamePlayer
@@ -104,12 +105,20 @@ object RewardBreakdown {
     /**
      * The scoring table players can read. Every [RewardReason] must appear here —
      * a rule that pays but is not listed is a rule nobody can find out about.
+     *
+     * The BASE three are what [itemsFor] picks exactly one of, so they are grouped
+     * apart from the bonuses that stack on top; listing all five flat read as though
+     * a winning wolf collected both the win bonus and the survival score.
      */
     fun catalog(rewards: RewardProperties): List<RewardRule> = listOf(
-        RewardRule(RewardReason.WIN, "胜利方奖励", "本局获胜的阵营", rewards.winBonus, perUnit = false),
-        RewardRule(RewardReason.PARTICIPATION, "参与奖励", "失利的好人阵营", rewards.participation, perUnit = false),
-        RewardRule(RewardReason.WOLF_SURVIVAL, "狼人存活", "失利的狼人，按存活天数计", rewards.wolfPerDaySurvived, perUnit = true),
-        RewardRule(RewardReason.SHERIFF, "当选／持有警徽", "当选警长，或之后接过警徽", rewards.sheriffBonus, perUnit = false),
-        RewardRule(RewardReason.WOLF_VOTE, "投出狼人", "白天投票投中狼人，每天最多一次", rewards.wolfVoteBonus, perUnit = true),
+        RewardRule(RewardReason.WIN, RewardGroup.BASE, "胜利方奖励", "本局获胜的阵营", rewards.winBonus, unit = null),
+        RewardRule(RewardReason.PARTICIPATION, RewardGroup.BASE, "参与奖励", "失利的好人阵营", rewards.participation, unit = null),
+        // Paid per day survived, so the rate is "/ 天": a wolf out on day 3 earns three days' worth.
+        RewardRule(
+            RewardReason.WOLF_SURVIVAL, RewardGroup.BASE, "狼人存活",
+            "狼人失利时，活到第几天就算几天", rewards.wolfPerDaySurvived, unit = "天",
+        ),
+        RewardRule(RewardReason.SHERIFF, RewardGroup.BONUS, "当选／持有警徽", "当选警长，或之后接过警徽", rewards.sheriffBonus, unit = null),
+        RewardRule(RewardReason.WOLF_VOTE, RewardGroup.BONUS, "投出狼人", "白天投票投中狼人，每天最多一次", rewards.wolfVoteBonus, unit = "次"),
     )
 }

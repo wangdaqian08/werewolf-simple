@@ -370,16 +370,21 @@ export interface PlayerReview {
 /** Why the viewer earned what they did. */
 export type RewardReason = 'WIN' | 'WOLF_SURVIVAL' | 'PARTICIPATION' | 'SHERIFF' | 'WOLF_VOTE'
 
+/** BASE rules are one-of — a player gets exactly one; BONUS and PENALTY stack on top. */
+export type RewardGroup = 'BASE' | 'BONUS' | 'PENALTY'
+
 /**
- * One line of the scoring table players can read. A negative `amount` is a penalty;
- * `perUnit` marks the lines paid per occurrence rather than once.
+ * One line of the scoring table players can read. A negative `amount` is a penalty.
+ * `unit` is what `amount` is paid per — 天 for a rate per day, 次 per occurrence —
+ * and null for the lines paid once a game.
  */
 export interface RewardRule {
   reason: RewardReason
+  group: RewardGroup
   label: string
   detail: string
   amount: number
-  perUnit: boolean
+  unit: string | null
 }
 
 /** One line of the total. `count`/`each` and `days`/`perDay` show the working where there is any. */

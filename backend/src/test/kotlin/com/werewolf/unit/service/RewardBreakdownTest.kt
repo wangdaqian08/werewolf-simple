@@ -1,6 +1,7 @@
 package com.werewolf.unit.service
 
 import com.werewolf.config.RewardProperties
+import com.werewolf.dto.RewardGroup
 import com.werewolf.dto.RewardReason
 import com.werewolf.model.*
 import com.werewolf.service.RewardBreakdown
@@ -86,6 +87,19 @@ class RewardBreakdownTest {
         // A rule that pays but is not listed is a rule nobody can find out about.
         assertThat(RewardBreakdown.catalog(rewards).map { it.reason })
             .containsExactlyInAnyOrderElementsOf(RewardReason.entries)
+    }
+
+    @Test
+    fun `the one-of base rules are grouped apart from the bonuses that stack on them`() {
+        val byGroup = RewardBreakdown.catalog(rewards).groupBy({ it.group }, { it.reason })
+
+        // Exactly the three itemsFor picks between; everything else adds on top.
+        assertThat(byGroup[RewardGroup.BASE]).containsExactlyInAnyOrder(
+            RewardReason.WIN, RewardReason.PARTICIPATION, RewardReason.WOLF_SURVIVAL,
+        )
+        assertThat(byGroup[RewardGroup.BONUS]).containsExactlyInAnyOrder(
+            RewardReason.SHERIFF, RewardReason.WOLF_VOTE,
+        )
     }
 
     @Test

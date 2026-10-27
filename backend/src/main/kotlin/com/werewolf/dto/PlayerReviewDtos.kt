@@ -36,16 +36,23 @@ enum class RewardReason { WIN, WOLF_SURVIVAL, PARTICIPATION, SHERIFF, WOLF_VOTE 
 data class MyReward(val total: Int, val items: List<RewardItem>)
 
 /**
- * One line of the scoring table, as shown to players. A negative [amount] is a penalty;
- * [perUnit] marks the lines paid per occurrence rather than once — per day survived,
- * per day your vote found a wolf.
+ * Which part of the table a rule belongs to. [BASE] rules are one-of — a player gets
+ * exactly one of them — while [BONUS] and [PENALTY] stack on top of it.
+ */
+enum class RewardGroup { BASE, BONUS, PENALTY }
+
+/**
+ * One line of the scoring table, as shown to players. A negative [amount] is a penalty.
+ * [unit] is what [amount] is paid per — "天" for a rate per day, "次" per occurrence —
+ * and null for the lines paid once a game.
  */
 data class RewardRule(
     val reason: RewardReason,
+    val group: RewardGroup,
     val label: String,
     val detail: String,
     val amount: Int,
-    val perUnit: Boolean,
+    val unit: String?,
 )
 
 /** [count]/[each] and [days]/[perDay] show the working where a line has any. */

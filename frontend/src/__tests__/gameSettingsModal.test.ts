@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import GameSettingsModal from '@/components/GameSettingsModal.vue'
 import { walletService } from '@/services/walletService'
-import type { GameSettings } from '@/types'
+import type { GameSettings, RewardRule } from '@/types'
 
 vi.mock('@/services/walletService', () => ({ walletService: { getRewardRules: vi.fn() } }))
 
@@ -145,33 +145,53 @@ describe('GameSettingsModal — 空守 rule', () => {
 })
 
 describe('GameSettingsModal — 积分规则', () => {
-  it('lists the scoring table, marking a per-occurrence line and a penalty', async () => {
+  const rule = (
+    reason: RewardRule['reason'],
+    group: RewardRule['group'],
+    label: string,
+    amount: number,
+    unit: string | null = null,
+  ): RewardRule => ({ reason, group, label, detail: `${label}的说明`, amount, unit })
+
+  it('lists the scoring table, marking a per-day rate, a per-occurrence one and a penalty', async () => {
     vi.mocked(walletService.getRewardRules).mockResolvedValue([
-      { reason: 'WIN', label: '胜利方奖励', detail: '本局获胜的阵营', amount: 20, perUnit: false },
-      { reason: 'WOLF_VOTE', label: '投出狼人', detail: '每天最多一次', amount: 3, perUnit: true },
-      // A future penalty is just another row with a negative amount.
-      {
-        reason: 'PARTICIPATION',
-        label: '投出好人',
-        detail: '把好人投出局',
-        amount: -4,
-        perUnit: false,
-      },
+      rule('WIN', 'BASE', '胜利方奖励', 20),
+      rule('WOLF_SURVIVAL', 'BASE', '狼人存活', 4, '天'),
+      rule('WOLF_VOTE', 'BONUS', '投出狼人', 3, '次'),
+      // A future penalty is just another row, in the group that says it costs you.
+      rule('PARTICIPATION', 'PENALTY', '投出好人', -4),
     ])
     const wrapper = mountModal()
     await flushPromises()
 
     const text = bodyEl('settings-rewards')!.textContent ?? ''
     expect(text).toContain('+20')
+    // Each rule names its own unit: a rate per day reads 天, a per-occurrence one 次.
+    expect(text).toContain('+4 / 天')
     expect(text).toContain('+3 / 次')
     expect(text).toContain('−4')
     expect(text).toContain('本局积分最低 0 分')
     wrapper.unmount()
   })
 
+  it('groups the one-of base rules apart from what stacks on them', async () => {
+    vi.mocked(walletService.getRewardRules).mockResolvedValue([
+      rule('WIN', 'BASE', '胜利方奖励', 20),
+      rule('SHERIFF', 'BONUS', '当选／持有警徽', 5),
+    ])
+    const wrapper = mountModal()
+    await flushPromises()
+
+    expect(bodyEl('settings-reward-group-BASE')!.textContent).toContain('基础分')
+    expect(bodyEl('settings-reward-group-BONUS')!.textContent).toContain('加分项')
+    // Nothing costs points yet, so the penalty heading never appears.
+    expect(bodyEl('settings-reward-group-PENALTY')).toBeNull()
+    wrapper.unmount()
+  })
+
   it('shows no floor note while nothing can cost you points', async () => {
     vi.mocked(walletService.getRewardRules).mockResolvedValue([
-      { reason: 'WIN', label: '胜利方奖励', detail: '本局获胜的阵营', amount: 20, perUnit: false },
+      rule('WIN', 'BASE', '胜利方奖励', 20),
     ])
     const wrapper = mountModal()
     await flushPromises()
