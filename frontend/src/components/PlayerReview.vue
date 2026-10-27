@@ -42,9 +42,11 @@
     </template>
     <template v-if="review.reward">
       <div class="rv-line rv-title">本局积分</div>
-      <div class="rv-my-reward" data-testid="my-reward">
-        <span class="rv-reward-amount">+{{ review.reward.amount }}</span>
-        <span class="rv-reward-why">{{ rewardWhy }}</span>
+      <div class="rv-rewards" data-testid="my-reward">
+        <div class="rv-reward-row">
+          <span>{{ rewardWhy }}</span>
+          <span class="rv-reward-amount">+{{ review.reward.amount }}</span>
+        </div>
       </div>
     </template>
   </div>
@@ -356,20 +358,19 @@ const rewardWhy = computed(() => {
   padding: 1rem 0;
 }
 
-.rv-my-reward {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.375rem 0 0 1.25rem;
+.rv-rewards {
+  padding: 0.25rem 0 0 1.25rem;
   font-size: 0.8125rem;
+}
+.rv-reward-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
 }
 .rv-reward-amount {
   color: var(--gold);
   font-weight: 600;
-  font-size: 1rem;
   white-space: nowrap;
-}
-.rv-reward-why {
-  color: var(--muted);
 }
 </style>
