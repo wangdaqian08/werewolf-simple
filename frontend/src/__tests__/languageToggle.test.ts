@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import LanguageToggle from '@/components/LanguageToggle.vue'
@@ -6,6 +6,9 @@ import ShareButton from '@/components/ShareButton.vue'
 import { LOCALE_STORAGE_KEY, getLocale, i18n, setLocale } from '@/i18n'
 import { useGameStore } from '@/stores/gameStore'
 import type { GameState } from '@/types'
+
+const routeName = { value: 'lobby' }
+vi.mock('vue-router', () => ({ useRoute: () => ({ name: routeName.value }) }))
 
 function stateIn(phase: GameState['phase']): GameState {
   return { gameId: 'g', phase, dayNumber: 1, players: [], events: [] } as unknown as GameState
@@ -15,6 +18,7 @@ describe('LanguageToggle', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     setLocale('zh')
+    routeName.value = 'lobby'
   })
 
   it('shows the Chinese flag in Chinese and flips to English on click', async () => {
@@ -66,5 +70,31 @@ describe('LanguageToggle', () => {
     game.setState(stateIn('NIGHT'))
     mount(LanguageToggle)
     expect(i18n.global.locale.value).toBe('en')
+  })
+
+  it('in-game day screens use the header toggle, not the floating one', async () => {
+    routeName.value = 'game'
+    const game = useGameStore()
+    game.setState(stateIn('DAY_DISCUSSION'))
+    const floating = mount(LanguageToggle)
+    const inline = mount(LanguageToggle, { props: { inline: true } })
+    expect(floating.find('[data-testid="lang-toggle"]').exists()).toBe(false)
+    expect(inline.find('.lang-toggle-inline').exists()).toBe(true)
+
+    game.setState(stateIn('DAY_VOTING'))
+    await floating.vm.$nextTick()
+    expect(floating.find('[data-testid="lang-toggle"]').exists()).toBe(false)
+
+    // Role reveal / sheriff election have no header slot: the floating one shows.
+    game.setState(stateIn('SHERIFF_ELECTION'))
+    await floating.vm.$nextTick()
+    expect(floating.find('[data-testid="lang-toggle"]').exists()).toBe(true)
+  })
+
+  it('the header toggle is hidden at night too', async () => {
+    routeName.value = 'game'
+    useGameStore().setState(stateIn('NIGHT'))
+    const inline = mount(LanguageToggle, { props: { inline: true } })
+    expect(inline.find('[data-testid="lang-toggle"]').exists()).toBe(false)
   })
 })

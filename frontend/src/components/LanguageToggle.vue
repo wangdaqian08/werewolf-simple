@@ -1,7 +1,8 @@
 <template>
   <button
-    v-if="!isNight"
+    v-if="visible"
     class="lang-toggle"
+    :class="{ 'lang-toggle-inline': inline }"
     data-testid="lang-toggle"
     :data-locale="locale"
     :aria-label="$t('lang.switch')"
@@ -58,13 +59,26 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useGameStore } from '@/stores/gameStore'
 import { i18n, setLocale, type Locale } from '@/i18n'
 
+/** `inline` renders inside a day header instead of floating over the page. */
+const props = defineProps<{ inline?: boolean }>()
+
 const gameStore = useGameStore()
+const route = useRoute()
 // No toggle during the night phase: night UI is for eyes-closed play and must
 // not offer anything that could pull a player's attention to the screen.
 const isNight = computed(() => gameStore.state?.phase === 'NIGHT')
+// The day screens carry their own inline toggle in the header; a floating one
+// there would sit on the countdown and the action buttons.
+const hasInlineToggle = computed(
+  () =>
+    route?.name === 'game' &&
+    (gameStore.state?.phase === 'DAY_DISCUSSION' || gameStore.state?.phase === 'DAY_VOTING'),
+)
+const visible = computed(() => !isNight.value && (props.inline || !hasInlineToggle.value))
 const locale = computed(() => i18n.global.locale.value as Locale)
 
 function toggle() {
@@ -87,6 +101,19 @@ function toggle() {
   background: var(--card);
   cursor: pointer;
   line-height: 0;
+}
+/* Enlarges the tap area without enlarging the flag. */
+.lang-toggle::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+.lang-toggle-inline {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: auto;
+  flex-shrink: 0;
 }
 .lang-toggle svg {
   width: 100%;

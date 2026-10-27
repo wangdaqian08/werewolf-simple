@@ -10,8 +10,8 @@ test.beforeEach(async ({ page }) => {
 // ── Login ──────────────────────────────────────────────────────────────────────
 
 test('login with valid nickname stores JWT in localStorage', async ({ page }) => {
-  await page.getByPlaceholder('Enter your nickname').fill('Alice')
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Alice')
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await expect(page).toHaveURL(/\/create-room/)
 
   const jwt = await page.evaluate(() => localStorage.getItem('jwt'))
@@ -46,9 +46,9 @@ test('repeat login with same nickname returns the same userId (idempotent rejoin
 // ── Join room ─────────────────────────────────────────────────────────────────
 
 test('joining a non-existent room shows error and stays on lobby', async ({ page }) => {
-  await page.getByPlaceholder('Enter your nickname').fill('Alice')
-  await page.getByPlaceholder('Room code').fill('000')
-  await page.getByRole('button', { name: /Join/i }).click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Alice')
+  await page.getByPlaceholder(/房間號|Room code/).fill('000')
+  await page.getByRole('button', { name: /加入|Join/i }).click()
 
   await expect(page.getByText('Room not found. Check the code.')).toBeVisible()
   await expect(page).toHaveURL('/')
@@ -65,10 +65,10 @@ test('host creates room, guest joins with the room code', async ({ browser }) =>
   await hostPage.goto('http://localhost:5174/')
   await hostPage.evaluate(() => localStorage.clear())
   await hostPage.goto('http://localhost:5174/')
-  await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
-  await hostPage.getByRole('button', { name: /Create Room/i }).click()
+  await hostPage.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Host')
+  await hostPage.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await expect(hostPage).toHaveURL(/\/create-room/)
-  await hostPage.getByRole('button', { name: /Create/i }).click()
+  await hostPage.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await expect(hostPage).toHaveURL(/\/room\//)
   await hostPage.getByTestId('room-setup-done').click() // players & roles: keep the default board
 
@@ -80,9 +80,9 @@ test('host creates room, guest joins with the room code', async ({ browser }) =>
   await guestPage.goto('http://localhost:5174/')
   await guestPage.evaluate(() => localStorage.clear())
   await guestPage.goto('http://localhost:5174/')
-  await guestPage.getByPlaceholder('Enter your nickname').fill('Guest')
-  await guestPage.getByPlaceholder('Room code').fill(roomCode!)
-  await guestPage.getByRole('button', { name: /Join/i }).click()
+  await guestPage.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Guest')
+  await guestPage.getByPlaceholder(/房間號|Room code/).fill(roomCode!)
+  await guestPage.getByRole('button', { name: /加入|Join/i }).click()
   await expect(guestPage).toHaveURL(/\/room\//)
 
   const guestJwt = await guestPage.evaluate(() => localStorage.getItem('jwt'))
@@ -99,8 +99,8 @@ async function loginAndGetUserId(ctx: BrowserContext, nickname: string): Promise
   await page.goto('http://localhost:5174/')
   await page.evaluate(() => localStorage.clear())
   await page.goto('http://localhost:5174/')
-  await page.getByPlaceholder('Enter your nickname').fill(nickname)
-  await page.getByRole('button', { name: /Create Room/i }).click()
+  await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill(nickname)
+  await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await expect(page).toHaveURL(/\/create-room/)
   const userId = await page.evaluate(() => localStorage.getItem('userId'))
   return userId!

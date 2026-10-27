@@ -365,7 +365,7 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     await expect(hostPage.locator('.outcome-title')).toBeVisible({ timeout: 5_000 })
 
     // "ROLES REVEALED" section
-    await expect(hostPage.getByText(/身份揭露|ROLES REVEALED/i)).toBeVisible({ timeout: 5_000 })
+    await expect(hostPage.getByText(/身份揭曉|身份揭露|ROLES REVEALED/i)).toBeVisible({ timeout: 5_000 })
 
     // All 9 players' roles shown
     const revealCards = hostPage.locator('.reveal-card')

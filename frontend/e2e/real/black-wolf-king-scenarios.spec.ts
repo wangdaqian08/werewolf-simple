@@ -381,9 +381,9 @@ test('create room: one wolf king per room, 9+ players', async ({ browser }) => {
     await page.goto(`${BASE_URL}/`)
     const guest = page.getByRole('button', { name: /Continue as guest|繼續以訪客/i })
     if (await guest.count()) await guest.first().click()
-    await page.getByPlaceholder('Enter your nickname').fill('KingUi')
+    await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('KingUi')
     await page
-      .getByRole('button', { name: /Create Room/i })
+      .getByRole('button', { name: /創建房間|Create Room/i })
       .first()
       .click()
     await page.waitForURL(/\/create-room/)

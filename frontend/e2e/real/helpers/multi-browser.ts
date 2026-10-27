@@ -150,9 +150,9 @@ export async function setupGame(
         .catch(() => {})
 
   // Login
-  await hostPage.getByPlaceholder('Enter your nickname').fill('Host')
+  await hostPage.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Host')
   await hostPage
-      .getByRole('button', { name: /Create Room/i })
+      .getByRole('button', { name: /創建房間|Create Room/i })
       .first()
       .click()
   // Bump from 10s → 30s: CI-3 flaked repeatedly here on 2026-04-24 /
@@ -247,7 +247,7 @@ export async function setupGame(
 
   // Create the room (page 1 = game settings above). It opens the players &
   // roles panel in the room (/room/:id?setup=1), where the board is set.
-  await hostPage.getByRole('button', { name: /Create Room/i }).click()
+  await hostPage.getByRole('button', { name: /創建房間|Create Room/i }).click()
   // Bump from 10s → 15s: matches the other setup navigation waits in this
   // helper (game-view redirect is 15s on line 209). POST /api/room/create
   // hits the DB; under heavy CI load the initial insert can block briefly.

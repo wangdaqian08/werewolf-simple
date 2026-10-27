@@ -8,6 +8,7 @@
           <span class="day-pill-sep">·</span>
           {{ $t('vote.phase') }}
         </div>
+        <LanguageToggle inline />
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
@@ -477,6 +478,7 @@
     <template v-else-if="isShooter">
       <header class="day-header">
         <div class="day-pill">{{ $t('day.pill', { n: votingPhase.dayNumber }) }}</div>
+        <LanguageToggle inline />
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
@@ -547,6 +549,7 @@
           <span class="day-pill-sep">·</span>
           {{ $t('vote.badge') }}
         </div>
+        <LanguageToggle inline />
         <div class="day-timer">{{ formattedTime }}</div>
       </header>
 
@@ -663,6 +666,7 @@
 </template>
 
 <script lang="ts" setup>
+import LanguageToggle from '@/components/LanguageToggle.vue'
 import { roleDescription, roleName, roleTag } from '@/utils/roleDefinitions'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type {

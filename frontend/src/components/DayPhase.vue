@@ -3,6 +3,7 @@
     <!-- Header: pill badge left | countdown arc right -->
     <header class="day-header">
       <div class="day-pill">{{ $t('day.pill', { n: dayPhase.dayNumber }) }}</div>
+      <LanguageToggle inline />
       <CountdownArc
         :remaining-ms="timer?.remainingMs ?? 0"
         :duration-ms="timer?.durationMs ?? 0"
@@ -419,6 +420,7 @@
 </template>
 
 <script lang="ts" setup>
+import LanguageToggle from '@/components/LanguageToggle.vue'
 import { roleDescription, roleName, roleTag } from '@/utils/roleDefinitions'
 import { computed, ref, watch } from 'vue'
 import type {

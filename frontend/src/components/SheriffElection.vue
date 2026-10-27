@@ -41,7 +41,9 @@
       <div class="info-banner">
         <div class="info-title">{{ $t('sheriff.sheriffElection') }}</div>
         <p class="info-body">
-          Candidates sign up now. Sheriff gets <b class="gold">1.5×</b> voting power at elimination.
+          <i18n-t keypath="sheriff.signupInfo" tag="span">
+            <template #weight><b class="gold">1.5×</b></template>
+          </i18n-t>
         </p>
       </div>
 
@@ -281,7 +283,11 @@
       </div>
 
       <div v-if="quitCandidates.length" class="quit-note">
-        {{ quitCandidates.map((c) => c.nickname).join(', ') }} quit campaign.
+        {{
+          $t('sheriff.quitNote', {
+            names: quitCandidates.map((c) => c.nickname).join($t('common.listSep')),
+          })
+        }}
       </div>
 
       <div class="spacer" />
@@ -501,7 +507,9 @@
           </div>
         </div>
         <div class="power-note">
-          Sheriff's vote counts as <b class="gold">1.5×</b> during eliminations
+          <i18n-t keypath="sheriff.powerNote" tag="span">
+            <template #weight><b class="gold">1.5×</b></template>
+          </i18n-t>
         </div>
         <!-- Vote columns: one per candidate + abstain, sorted high→low -->
         <div class="vote-columns">

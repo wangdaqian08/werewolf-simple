@@ -35,8 +35,8 @@ async function createWaitingRoom(browser: Browser): Promise<{
   // reveal it before filling the nickname.
   const contAsGuest = host.getByRole('button', { name: /Continue as guest|繼續以訪客/i })
   if (await contAsGuest.count()) await contAsGuest.first().click().catch(() => {})
-  await host.getByPlaceholder('Enter your nickname').fill('Host')
-  await host.getByRole('button', { name: /Create Room/i }).first().click()
+  await host.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Host')
+  await host.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
   await host.waitForURL(/\/create-room/, { timeout: ci ? 60_000 : 30_000 })
 
   // Turn sheriff off to keep setup minimal.
@@ -44,7 +44,7 @@ async function createWaitingRoom(browser: Browser): Promise<{
   const sToggle = sheriffRow.locator('.toggle-on')
   if ((await sToggle.count()) > 0) await sToggle.click()
 
-  await host.getByRole('button', { name: /Create Room/i }).click()
+  await host.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await host.waitForURL(/\/room\//, { timeout: ci ? 30_000 : 15_000 })
   // Players & roles: use the minimum (6) players.
   for (let i = 0; i < 10; i++) {
