@@ -935,20 +935,27 @@ function speakerLabel(uid: string, idx: number) {
 }
 
 /* Action footer */
-/* The footer sticks to the bottom of the screen with the volume button's lane
-   beneath it, so its buttons stay visible and uncovered however long the
-   speech order / tally above grows (that content scrolls behind it). */
+/* The footer sticks to the bottom of the screen, so its buttons stay visible
+   however long the speech order / tally above grows (that content scrolls
+   behind it). The volume button (VolumeControl: 52px, 1rem from the bottom
+   and right edges) shares the last row instead of getting a row of its own. */
 .action-footer {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.375rem;
   position: sticky;
   bottom: 0;
   z-index: 2;
   margin: 0 -1.25rem;
-  padding: 0.75rem 1.25rem var(--fab-clearance);
+  padding: 0.5rem 1.25rem max(1.25rem, env(safe-area-inset-bottom));
   background: var(--bg);
   border-top: 1px solid var(--border-l);
+}
+/* Leave the volume button's width (+ its 1rem edge offset and a 0.5rem gap,
+   less the footer's own 1.25rem padding) free beside the last row. */
+.action-footer > :last-child {
+  width: auto;
+  margin-right: calc(52px + 1rem + 0.5rem - 1.25rem);
 }
 
 .host-divider {
