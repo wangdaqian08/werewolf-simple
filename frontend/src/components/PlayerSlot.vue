@@ -1,6 +1,6 @@
 <template>
   <div
-    :class="['player-slot', variantClass, mode === 'room' && 'slot-room']"
+    :class="['player-slot', variantClass, mode === 'room' && 'slot-room', self && 'slot-self']"
     :data-seat="seat"
     @click="$emit('click')"
   >
@@ -16,6 +16,7 @@
           size="md"
         />
         <span class="av-name">{{ truncateNickname(nickname ?? '', 12) }}</span>
+        <span v-if="self" class="self-tag" data-testid="self-tag">{{ $t('common.me') }}</span>
         <slot name="badge" />
       </template>
       <template v-else>
@@ -66,6 +67,8 @@ const props = defineProps<{
   // discriminates by checking the https:// prefix, so the consumer just
   // forwards the raw value.
   avatar?: string
+  // In-game grids: marks the viewer's own seat so it is findable at a glance.
+  self?: boolean
 }>()
 
 const avatarAsUrl = computed(() =>
@@ -207,7 +210,7 @@ const variantClass = computed(() => {
 
 /* ── Room mode text ── */
 .slot-index {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: inherit;
   opacity: 0.85;
@@ -215,7 +218,7 @@ const variantClass = computed(() => {
 }
 
 .av-name {
-  font-size: 10px;
+  font-size: 11px;
   color: inherit;
   line-height: 1.2;
   width: 100%; /* fill card width so ellipsis has a boundary to clip at */
@@ -231,6 +234,22 @@ const variantClass = computed(() => {
   font-size: 0.875rem;
   font-weight: 600;
   color: inherit;
+}
+
+/* Viewer's own seat (in-game grids): a corner tag that every variant keeps,
+   so "where am I" never depends on the seat's state colour. */
+.self-tag {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  pointer-events: none;
 }
 
 /* ── Overlay slot structural base ── */

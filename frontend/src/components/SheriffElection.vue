@@ -3,6 +3,7 @@
     <!-- Header: phase chip + countdown arc (SPEECH only) -->
     <div class="sheriff-header">
       <div class="phase-chip">{{ phaseChipLabel }}</div>
+      <LanguageToggle inline />
       <CountdownArc
         v-if="election.subPhase === 'SPEECH'"
         :remaining-ms="timer?.remainingMs ?? 0"
@@ -626,6 +627,7 @@ import { computed, ref } from 'vue'
 import Avatar from '@/components/Avatar.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
 import CountdownArc from '@/components/CountdownArc.vue'
+import LanguageToggle from '@/components/LanguageToggle.vue'
 import type {
   GamePlayer,
   PlayerRole,
@@ -802,7 +804,7 @@ function speakerLabel(uid: string, idx: number) {
   display: flex;
   flex-direction: column;
   flex: 1;
-  padding: 0 1.25rem 1.5rem;
+  padding: 0 1.25rem var(--fab-clearance);
   gap: 0.75rem;
   overflow-y: auto;
 }

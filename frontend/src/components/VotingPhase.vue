@@ -197,6 +197,7 @@
         <PlayerSlot
           v-for="player in players"
           :key="player.userId"
+          :self="player.userId === myUserId"
           :seat="player.seatIndex"
           :nickname="player.nickname"
           :avatar="player.avatar"
@@ -498,6 +499,7 @@
         <PlayerSlot
           v-for="player in players"
           :key="player.userId"
+          :self="player.userId === myUserId"
           :seat="player.seatIndex"
           :nickname="player.nickname"
           :avatar="player.avatar"
@@ -584,6 +586,7 @@
         <PlayerSlot
           v-for="player in players"
           :key="player.userId"
+          :self="player.userId === myUserId"
           :seat="player.seatIndex"
           :nickname="player.nickname"
           :avatar="player.avatar"
@@ -1148,7 +1151,8 @@ function onBadgeTap(player: GamePlayer) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.25rem 1rem 0.375rem;
+  gap: 6px;
+  padding: 0.25rem 0.875rem 0.375rem;
   min-height: 2.25rem;
 }
 
@@ -1156,7 +1160,9 @@ function onBadgeTap(player: GamePlayer) {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.25rem 0.625rem;
+  min-height: 44px;
+  white-space: nowrap;
+  padding: 0 0.75rem;
   border-radius: 1rem;
   font-size: 0.75rem;
   font-weight: 600;
@@ -1174,9 +1180,10 @@ function onBadgeTap(player: GamePlayer) {
 .history-btn {
   background: var(--paper);
   border: 1px solid var(--border-l);
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
+  border-radius: 999px;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
   color: var(--muted);
   cursor: pointer;
   font-family: inherit;
@@ -1229,6 +1236,8 @@ function onBadgeTap(player: GamePlayer) {
   color: var(--muted);
   cursor: pointer;
   padding: 0.25rem;
+  min-width: 44px;
+  min-height: 44px;
   line-height: 1;
 }
 
@@ -1384,18 +1393,21 @@ function onBadgeTap(player: GamePlayer) {
 }
 
 /* Right-side stack inside role-history-row: history-btn, log-fab, ActionMenu */
+/* Toolbar buttons sit in one row (wrapping on narrow phones) so the seat
+   grid and the footer action stay above the fold. */
 .right-stack {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
 .log-fab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 10px;
   width: auto;
   border-radius: 999px;
   background: var(--paper, #f5f0e8);
@@ -1403,6 +1415,7 @@ function onBadgeTap(player: GamePlayer) {
   font-size: 14px;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
 }
 .log-fab-icon {
   font-size: 16px;

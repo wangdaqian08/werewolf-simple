@@ -293,6 +293,8 @@ const roleCounts = computed<RoleCount[]>(() => {
   color: var(--muted, #8a7a65);
   cursor: pointer;
   padding: 4px 8px;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .modal-body {

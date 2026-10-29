@@ -300,6 +300,7 @@ async function handleCreate() {
   justify-content: space-between;
   gap: 0.5rem;
   width: 100%;
+  min-height: 44px;
   padding: 0.4375rem 0.625rem;
   border-radius: 0.375rem;
   border: 1px solid var(--border);

@@ -182,8 +182,8 @@ onUnmounted(() => {
 }
 
 .vc-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: transparent;

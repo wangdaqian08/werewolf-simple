@@ -698,6 +698,8 @@ const endPlayers = computed<GamePlayer[]>(() =>
   min-height: 100vh;
   background: var(--bg);
   padding: 1rem 0.75rem 3rem;
+  width: 100%;
+  box-sizing: border-box;
   max-width: 480px;
   margin: 0 auto;
   display: flex;
@@ -732,16 +734,21 @@ const endPlayers = computed<GamePlayer[]>(() =>
   background: rgba(237, 232, 223, 0.92);
   backdrop-filter: blur(6px);
   display: flex;
-  flex-wrap: wrap;
   gap: 0.375rem;
   padding: 0.5rem;
   border: 1px solid var(--border-l);
   border-radius: 0.5rem;
+  /* One swipeable row of 44px links rather than tiny wrapped ones. */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 .demo-nav a {
   flex: 1 0 auto;
-  text-align: center;
-  font-size: 0.6875rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--muted);
   text-decoration: none;

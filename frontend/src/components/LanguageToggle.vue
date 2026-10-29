@@ -71,12 +71,14 @@ const route = useRoute()
 // No toggle during the night phase: night UI is for eyes-closed play and must
 // not offer anything that could pull a player's attention to the screen.
 const isNight = computed(() => gameStore.state?.phase === 'NIGHT')
-// The day screens carry their own inline toggle in the header; a floating one
-// there would sit on the countdown and the action buttons.
+// The day and sheriff screens carry their own inline toggle in the header; a
+// floating one there would sit on the countdown and the action buttons.
 const hasInlineToggle = computed(
   () =>
     route?.name === 'game' &&
-    (gameStore.state?.phase === 'DAY_DISCUSSION' || gameStore.state?.phase === 'DAY_VOTING'),
+    (gameStore.state?.phase === 'DAY_DISCUSSION' ||
+      gameStore.state?.phase === 'DAY_VOTING' ||
+      gameStore.state?.phase === 'SHERIFF_ELECTION'),
 )
 const visible = computed(() => !isNight.value && (props.inline || !hasInlineToggle.value))
 const locale = computed(() => i18n.global.locale.value as Locale)
@@ -87,26 +89,23 @@ function toggle() {
 </script>
 
 <style scoped>
+/* A 44px tap target around a 32x22 flag. (A ::before hit area does not work
+   here: the flag needs overflow:hidden, which also clips the pseudo-element.) */
 .lang-toggle {
   position: fixed;
-  top: max(0.5rem, env(safe-area-inset-top));
-  right: max(0.5rem, env(safe-area-inset-right));
+  top: max(0.125rem, env(safe-area-inset-top));
+  right: max(0.125rem, env(safe-area-inset-right));
   z-index: 100;
-  width: 32px;
-  height: 22px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  overflow: hidden;
-  background: var(--card);
+  border: none;
+  background: transparent;
   cursor: pointer;
   line-height: 0;
-}
-/* Enlarges the tap area without enlarging the flag. */
-.lang-toggle::before {
-  content: '';
-  position: absolute;
-  inset: -10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .lang-toggle-inline {
   position: relative;
@@ -116,8 +115,12 @@ function toggle() {
   flex-shrink: 0;
 }
 .lang-toggle svg {
-  width: 100%;
-  height: 100%;
+  width: 32px;
+  height: 22px;
   display: block;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  box-sizing: border-box;
 }
 </style>

@@ -103,6 +103,7 @@ function neverShow() {
   border: 1px solid var(--border, #ccc2b0);
   color: var(--muted, #8a7a65);
   border-radius: 6px;
+  min-height: 44px;
   padding: 6px 14px;
   font-size: 13px;
   cursor: pointer;
@@ -113,6 +114,7 @@ function neverShow() {
   border: 1px solid var(--border, #ccc2b0);
   color: var(--muted, #8a7a65);
   border-radius: 6px;
+  min-height: 44px;
   padding: 6px 14px;
   font-size: 13px;
   cursor: pointer;

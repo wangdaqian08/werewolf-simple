@@ -596,8 +596,10 @@ onUnmounted(() => {
   cursor: pointer;
   font-family: inherit;
   padding: 0;
+  min-height: 44px;
+  min-width: 44px;
   align-self: flex-start;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
   white-space: nowrap;
 }
 
@@ -930,8 +932,8 @@ onUnmounted(() => {
   position: absolute;
   top: 0.125rem;
   right: 0.125rem;
-  width: 1.125rem;
-  height: 1.125rem;
+  width: 1.5rem;
+  height: 1.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -946,6 +948,14 @@ onUnmounted(() => {
   padding: 0;
   z-index: 1;
 }
+/* Larger tap area than the visible ×; kept under 44px (and clipped by the
+   card) since a kick is immediate and the rest of the card is a seat. */
+.kick-btn::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
 .kick-btn:hover {
   border-color: var(--red);
   color: var(--red);

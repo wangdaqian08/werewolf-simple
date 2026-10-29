@@ -3,6 +3,13 @@
  * Imported globally in main.ts
  * ─────────────────────────────────────────────────────────────────────────── */
 
+/* Bottom space a game footer keeps clear of the floating volume button
+   (VolumeControl: 52px tall, 1rem from the bottom), so the button never sits
+   on top of the footer's main action. */
+:root {
+  --fab-clearance: calc(4.75rem + env(safe-area-inset-bottom));
+}
+
 /* ── Day phase header ──────────────────────────────────────────────────────── */
 
 .day-header {
@@ -117,7 +124,7 @@
 
 .day-footer,
 .voting-footer {
-  padding: 0.75rem 1rem 2.5rem;
+  padding: 0.75rem 1rem var(--fab-clearance);
   border-top: 1px solid var(--border-l);
   background: var(--paper);
   display: flex;

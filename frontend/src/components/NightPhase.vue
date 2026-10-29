@@ -47,6 +47,7 @@
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
+          :self="p.userId === myUserId"
           :key="p.userId"
           mode="room"
           :seat="p.seatIndex"
@@ -93,6 +94,7 @@
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
+          :self="p.userId === myUserId"
           :key="p.userId"
           mode="room"
           :seat="p.seatIndex"
@@ -257,6 +259,7 @@
           <section class="player-grid player-grid-sm">
             <PlayerSlot
               v-for="p in players"
+              :self="p.userId === myUserId"
               :key="p.userId"
               mode="room"
               :seat="p.seatIndex"
@@ -355,6 +358,7 @@
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
+          :self="p.userId === myUserId"
           :key="p.userId"
           mode="room"
           :seat="p.seatIndex"
@@ -895,7 +899,7 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 .nf {
-  padding: 0.625rem 0.875rem 2.5rem;
+  padding: 0.625rem 0.875rem var(--fab-clearance);
   border-top: 1px solid rgba(245, 240, 232, 0.07);
   background: rgba(255, 255, 255, 0.025);
 }

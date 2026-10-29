@@ -251,6 +251,7 @@
       <PlayerSlot
         v-for="player in players"
         :key="player.userId"
+        :self="player.userId === myUserId"
         :seat="player.seatIndex"
         :nickname="player.nickname"
         :avatar="player.avatar"
@@ -661,31 +662,28 @@ function onTap(player: GamePlayer) {
   font-weight: 600;
 }
 
-.player-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
-  gap: 0.5rem;
-  padding: 0 1rem 1rem;
-}
-
 .below-arch-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 0 1rem 0.5rem;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0.875rem 0.5rem;
 }
 
+/* Toolbar buttons sit in one row (wrapping on narrow phones) so the seat
+   grid and the footer action stay above the fold. */
 .right-stack {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
 .log-fab {
   width: auto;
-  padding: 6px 12px;
-  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  gap: 4px;
   border-radius: 999px;
   background: var(--paper, #f5f0e8);
   border: 1px solid var(--border, #ccc2b0);
@@ -695,6 +693,7 @@ function onTap(player: GamePlayer) {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
 }
 .log-fab-icon {
   font-size: 16px;
@@ -709,7 +708,9 @@ function onTap(player: GamePlayer) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 10px;
+  min-height: 44px;
+  white-space: nowrap;
+  padding: 0 12px;
   background: var(--paper, #f5f0e8);
   border: 1px solid var(--border, #ccc2b0);
   border-radius: 999px;
@@ -759,6 +760,8 @@ function onTap(player: GamePlayer) {
   color: var(--muted);
   cursor: pointer;
   padding: 0.25rem 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
 }
 .role-card-body {
   display: flex;

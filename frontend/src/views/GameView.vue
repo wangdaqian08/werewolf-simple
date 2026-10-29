@@ -1284,7 +1284,7 @@ function normalizePhaseName(phase: string | undefined): string {
 }
 
 .action-panel {
-  padding: 1rem;
+  padding: 1rem 1rem var(--fab-clearance);
   border-top: 1px solid var(--border-l);
   background: var(--paper);
   min-height: 80px;

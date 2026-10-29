@@ -198,7 +198,8 @@ function confirmSelfDestruct() {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 10px;
+  min-height: 44px;
+  padding: 0 12px;
   background: var(--paper, #f5f0e8);
   border: 1px solid var(--border, #ccc2b0);
   border-radius: 999px;
