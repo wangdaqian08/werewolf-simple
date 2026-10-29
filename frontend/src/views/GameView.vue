@@ -461,7 +461,7 @@
         <button
           class="debug-btn"
           data-testid="debug-sheriff-voting"
-          @click="debugSheriff('DAY_VOTING')"
+          @click="debugSheriff('VOTING')"
         >
           Voting
         </button>
@@ -471,6 +471,9 @@
           @click="debugSheriff('RESULT')"
         >
           Result
+        </button>
+        <button class="debug-btn" data-testid="debug-sheriff-tied" @click="debugSheriff('TIED')">
+          Tied
         </button>
         <button
           class="debug-btn debug-btn-exit"

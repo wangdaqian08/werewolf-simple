@@ -485,6 +485,19 @@ export const MOCK_SHERIFF_RESULT: SheriffElectionState = {
   },
 }
 
+// TIED: Tom and Alice both on 4 votes, so no sheriff yet — the host appoints one.
+export const MOCK_SHERIFF_TIED: SheriffElectionState = {
+  ...MOCK_SHERIFF_RESULT,
+  subPhase: 'TIED',
+  result: {
+    ...MOCK_SHERIFF_RESULT.result!,
+    sheriffId: '',
+    sheriffNickname: '',
+    sheriffAvatar: undefined,
+    tally: MOCK_SHERIFF_RESULT.result!.tally.map((t, i) => (i < 2 ? { ...t, votes: 4 } : t)),
+  },
+}
+
 // ── Night Phase mock states ───────────────────────────────────────────────────
 // All night scenarios use MOCK_GAME_STATE players; u4 (Carol, seat 4) is dead.
 

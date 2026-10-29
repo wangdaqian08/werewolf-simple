@@ -307,7 +307,8 @@
           </div>
         </template>
         <!-- Can still vote -->
-        <template v-else-if="election.canVote !== false">
+        <!-- Confirm and give-up side by side: one row keeps the sticky footer short -->
+        <div v-else-if="election.canVote !== false" class="vote-btn-row">
           <button
             class="btn btn-gold"
             data-testid="sheriff-vote"
@@ -326,7 +327,7 @@
           >
             {{ $t('sheriff.giveUpVote') }}
           </button>
-        </template>
+        </div>
         <!-- Cannot vote: RUNNING candidate or speech-quitter -->
         <button
           v-else-if="cannotVoteReason === 'CANDIDATE'"
@@ -343,7 +344,12 @@
         <template v-if="isHost">
           <div class="host-divider" />
           <div v-if="election.voteProgress" class="vote-progress-label">
-            {{ election.voteProgress.voted }}/{{ election.voteProgress.total }} voted
+            {{
+              $t('sheriff.voteProgress', {
+                voted: election.voteProgress.voted,
+                total: election.voteProgress.total,
+              })
+            }}
           </div>
           <button
             class="btn btn-primary"
@@ -956,6 +962,19 @@ function speakerLabel(uid: string, idx: number) {
 .action-footer > :last-child {
   width: auto;
   margin-right: calc(52px + 1rem + 0.5rem - 1.25rem);
+}
+.vote-btn-row {
+  display: flex;
+  gap: 0.5rem;
+}
+/* Half-width buttons: keep each label on one line (English on iPhone SE). */
+.vote-btn-row > .btn {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  white-space: nowrap;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
 }
 
 .host-divider {
