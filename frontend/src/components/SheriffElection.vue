@@ -343,7 +343,12 @@
         <template v-if="isHost">
           <div class="host-divider" />
           <div v-if="election.voteProgress" class="vote-progress-label">
-            {{ election.voteProgress.voted }}/{{ election.voteProgress.total }} voted
+            {{
+              $t('sheriff.voteProgress', {
+                voted: election.voteProgress.voted,
+                total: election.voteProgress.total,
+              })
+            }}
           </div>
           <button
             class="btn btn-primary"

@@ -572,6 +572,7 @@ export default {
     speechPrompt: '發表你的競選宣言',
     tiedAppoint: '平票 — 主持人指定警長',
     voteForfeited: '已放棄投票',
+    voteProgress: '{voted}/{total} 已投票',
     voted: '✓ 已投票 — {name}',
     votedMark: '已投票 ✓',
     waitingForHost: '等待主持人指定',

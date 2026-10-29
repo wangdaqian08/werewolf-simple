@@ -118,8 +118,8 @@ test('vote count shows and Reveal Result enables after Give Up Vote', async ({ p
   await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING'))
   await page.waitForTimeout(100)
 
-  // Vote progress label shows X/Y voted
-  await expect(page.getByText(/\d+\/\d+ voted/i)).toBeVisible()
+  // Vote progress label shows X/Y 已投票 (X/Y voted in English)
+  await expect(page.getByText(/\d+\/\d+ (?:已投票|voted)/i)).toBeVisible()
 
   // Reveal Result is visible but disabled (not all voted)
   const revealBtn = page.getByRole('button', { name: /(?:揭曉結果|Reveal Result)/i })
@@ -297,4 +297,22 @@ test('result tally columns are sorted highest votes first', async ({ page }) => 
 
   // Sanity: we got at least 2 numeric counts from the mock (Tom, Alice, Bob)
   expect(numericCounts.length).toBeGreaterThanOrEqual(2)
+})
+
+// ── Debug panel: Voting / Tied buttons reach their sub-phases ─────────────────
+// The Voting button used to send the unknown preset 'DAY_VOTING' (the mock
+// replied 400 and the screen silently stayed put), and TIED had no preset.
+
+test('debug panel Voting and Tied buttons open those sheriff sub-phases', async ({ page }) => {
+  await goToSheriffSignup(page)
+  const wrap = page.locator('.game-wrap')
+
+  await page.getByTestId('debug-sheriff-voting').click()
+  await expect(wrap).toHaveAttribute('data-phase-sub', 'VOTING')
+  await expect(page.getByTestId('sheriff-reveal-result')).toBeVisible()
+  await expect(page.getByText(/0\/8 (已投票|voted)/)).toBeVisible()
+
+  await page.getByTestId('debug-sheriff-tied').click()
+  await expect(wrap).toHaveAttribute('data-phase-sub', 'TIED')
+  await expect(page.getByTestId('sheriff-appoint')).toBeVisible()
 })

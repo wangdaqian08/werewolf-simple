@@ -577,6 +577,7 @@ export default {
     speechPrompt: 'Give your campaign speech',
     tiedAppoint: 'Tie — the host appoints the sheriff',
     voteForfeited: 'Vote forfeited',
+    voteProgress: '{voted}/{total} voted',
     voted: '✓ Voted — {name}',
     votedMark: 'VOTED ✓',
     waitingForHost: 'Waiting for host…',
