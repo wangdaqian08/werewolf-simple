@@ -1,33 +1,33 @@
 <template>
   <div class="sheriff-wrap">
-    <!-- Header: phase chip + countdown arc (SPEECH only) -->
+    <!-- Header: phase chip | flag | Action chip (wolf self-destruct) + countdown
+         arc (SPEECH only). The Action chip shares the header instead of taking a
+         row of its own, so the footer action fits above the volume button; the
+         right group wraps under the chip only when the header is too narrow. -->
     <div class="sheriff-header">
       <div class="phase-chip">{{ phaseChipLabel }}</div>
       <LanguageToggle inline />
-      <CountdownArc
-        v-if="election.subPhase === 'SPEECH'"
-        :remaining-ms="timer?.remainingMs ?? 0"
-        :duration-ms="timer?.durationMs ?? 0"
-        :running="timer?.running ?? false"
-        :is-host="isHost"
-        :presets="timerPresets"
-        @start-timer="(s) => emit('start-timer', s)"
-        @stop-timer="emit('stop-timer')"
-      />
-    </div>
-
-    <!-- Below-header row: Action chip on the right (wolf self-destruct) -->
-    <div class="below-header-row">
-      <div />
-      <ActionMenu
-        phase="SHERIFF_ELECTION"
-        :sub-phase="election.subPhase"
-        :my-role="myRole"
-        :is-alive="isAlive ?? false"
-        :players="players"
-        :my-user-id="myUserId"
-        @self-destruct="(target) => emit('self-destruct', target)"
-      />
+      <div class="header-actions">
+        <ActionMenu
+          phase="SHERIFF_ELECTION"
+          :sub-phase="election.subPhase"
+          :my-role="myRole"
+          :is-alive="isAlive ?? false"
+          :players="players"
+          :my-user-id="myUserId"
+          @self-destruct="(target) => emit('self-destruct', target)"
+        />
+        <CountdownArc
+          v-if="election.subPhase === 'SPEECH'"
+          :remaining-ms="timer?.remainingMs ?? 0"
+          :duration-ms="timer?.durationMs ?? 0"
+          :running="timer?.running ?? false"
+          :is-host="isHost"
+          :presets="timerPresets"
+          @start-timer="(s) => emit('start-timer', s)"
+          @stop-timer="emit('stop-timer')"
+        />
+      </div>
     </div>
 
     <!-- ── SIGNUP ── -->
@@ -804,9 +804,8 @@ function speakerLabel(uid: string, idx: number) {
   display: flex;
   flex-direction: column;
   flex: 1;
-  padding: 0 1.25rem var(--fab-clearance);
+  padding: 0 1.25rem;
   gap: 0.75rem;
-  overflow-y: auto;
 }
 
 .spacer {
@@ -814,17 +813,19 @@ function speakerLabel(uid: string, idx: number) {
 }
 
 /* Header */
-.below-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 0 1rem 0.5rem;
-}
 .sheriff-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.75rem 0;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
 }
 
 .phase-chip {
@@ -934,10 +935,20 @@ function speakerLabel(uid: string, idx: number) {
 }
 
 /* Action footer */
+/* The footer sticks to the bottom of the screen with the volume button's lane
+   beneath it, so its buttons stay visible and uncovered however long the
+   speech order / tally above grows (that content scrolls behind it). */
 .action-footer {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 0 -1.25rem;
+  padding: 0.75rem 1.25rem var(--fab-clearance);
+  background: var(--bg);
+  border-top: 1px solid var(--border-l);
 }
 
 .host-divider {

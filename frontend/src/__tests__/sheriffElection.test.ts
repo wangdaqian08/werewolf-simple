@@ -330,13 +330,14 @@ describe('SheriffElection — VOTING sub-phase interactions', () => {
   })
 })
 
-// ── Layout regression: Action chip lives below the header row, right-aligned ───
-describe('SheriffElection — below-header layout (Action chip on the right)', () => {
+// ── Layout regression: Action chip lives in the header, right-aligned ──────────
+// (A row of its own pushed the footer action under the volume button.)
+describe('SheriffElection — header layout (Action chip on the right)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  it('renders .below-header-row right after the .sheriff-header in SIGNUP', () => {
+  it('renders the Action chip in the .sheriff-header right group in SIGNUP', () => {
     const wrapper = mount(SheriffElection, {
       props: {
         election: makeElection({ subPhase: 'SIGNUP' }),
@@ -345,8 +346,10 @@ describe('SheriffElection — below-header layout (Action chip on the right)', (
         isAlive: true,
       },
     })
-    expect(wrapper.find('.below-header-row').exists()).toBe(true)
-    expect(wrapper.find('.below-header-row [data-testid="action-menu-btn"]').exists()).toBe(true)
+    expect(wrapper.find('.below-header-row').exists()).toBe(false)
+    expect(
+      wrapper.find('.sheriff-header .header-actions [data-testid="action-menu-btn"]').exists(),
+    ).toBe(true)
   })
 
   it('ActionMenu remains rendered in every sheriff sub-phase (SIGNUP/SPEECH/VOTING/RESULT/TIED)', () => {
