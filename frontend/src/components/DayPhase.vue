@@ -666,7 +666,7 @@ function onTap(player: GamePlayer) {
 .below-arch-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   padding: 0 0.875rem 0.5rem;
 }

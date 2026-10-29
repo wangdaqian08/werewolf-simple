@@ -395,6 +395,7 @@ export default {
     hostWaiting: '✓ {ready} / {total} ready · Waiting for players to be ready',
     leave: '← Leave',
     loading: 'Loading room…',
+    notReady: '{n} player not ready | {n} players not ready',
     notSeated: 'Not seated',
     ofPlayers: '/ {n} players',
     perkTaken: 'Taken by {name}',

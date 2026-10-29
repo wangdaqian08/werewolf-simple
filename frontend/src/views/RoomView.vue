@@ -32,10 +32,9 @@
         <span>{{ $t('room.ofPlayers', { n: roomStore.room.config.totalPlayers }) }}</span>
         <template v-if="notReadyGuestCount > 0">
           <span class="count-sep">·</span>
-          <span class="count-wait"
-            >{{ notReadyGuestCount }}
-            {{ notReadyGuestCount === 1 ? 'player not ready' : 'players not ready' }}</span
-          >
+          <span class="count-wait">{{
+            $t('room.notReady', { n: notReadyGuestCount }, notReadyGuestCount)
+          }}</span>
         </template>
       </div>
 
@@ -687,9 +686,17 @@ onUnmounted(() => {
 .player-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.375rem;
+  gap: 0.5rem;
+  /* Room for the kick × that sits on each card's top-right corner. */
+  padding: 0.5rem 0.5rem 0 0;
   margin-bottom: 0.75rem;
   flex: 1;
+}
+
+/* Let the kick × sit outside the card instead of on the seat number; the
+   name already clips itself (ellipsis), so the card need not. */
+.player-grid > .slot-room {
+  overflow: visible;
 }
 .player-grid-3 {
   grid-template-columns: repeat(3, 1fr);
@@ -930,8 +937,8 @@ onUnmounted(() => {
 
 .kick-btn {
   position: absolute;
-  top: 0.125rem;
-  right: 0.125rem;
+  top: -0.5rem;
+  right: -0.5rem;
   width: 1.5rem;
   height: 1.5rem;
   display: flex;
@@ -948,8 +955,8 @@ onUnmounted(() => {
   padding: 0;
   z-index: 1;
 }
-/* Larger tap area than the visible ×; kept under 44px (and clipped by the
-   card) since a kick is immediate and the rest of the card is a seat. */
+/* Larger tap area than the visible ×; kept under 44px since a kick is
+   immediate and the rest of the card is a seat. */
 .kick-btn::after {
   content: '';
   position: absolute;

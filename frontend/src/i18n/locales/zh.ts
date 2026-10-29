@@ -390,6 +390,7 @@ export default {
     hostWaiting: '✓ {ready} / {total} 已準備 · 等待玩家準備',
     leave: '← 離開',
     loading: '加載房間中…',
+    notReady: '{n} 位玩家未準備',
     notSeated: '未入座',
     ofPlayers: '/ {n} 玩家',
     perkTaken: '已被 {name} 啟用',
