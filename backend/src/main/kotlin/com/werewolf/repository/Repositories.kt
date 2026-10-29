@@ -8,7 +8,10 @@ import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import java.util.*
 
-interface UserRepository : JpaRepository<User, String>
+interface UserRepository : JpaRepository<User, String> {
+    /** Admin player search: nickname substring, case-insensitive. */
+    fun findTop20ByNicknameContainingIgnoreCaseOrderByNicknameAsc(nickname: String): List<User>
+}
 
 interface RoomRepository : JpaRepository<Room, Int> {
     fun findByRoomCode(roomCode: String): Optional<Room>

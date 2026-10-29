@@ -197,6 +197,21 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V28 accepts ADMIN_GRANT ledger rows and still rejects unknown types`() {
+        flyway().migrate()
+
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('p', 'p')")
+            exec("INSERT INTO credit_transactions (user_id, type, amount, balance_after) VALUES ('p', 'ADMIN_GRANT', 50, 50)")
+            // Existing types still pass.
+            exec("INSERT INTO credit_transactions (user_id, type, amount, balance_after) VALUES ('p', 'REFUND', 5, 55)")
+        }
+        assertThatThrownBy {
+            sql { exec("INSERT INTO credit_transactions (user_id, type, amount, balance_after) VALUES ('p', 'NOT_A_TYPE', 1, 56)") }
+        }.hasMessageContaining("credit_transactions_type_check")
+    }
+
+    @Test
     fun `V27 renames the shooter column and frees games stuck in the removed shot sub-phases`() {
         // A database that ran the SHIPPED V26 (#156): chain_shooter_user_id, HUNTER_SHOOT sub-phases still in use.
         flyway(targetVersion = "26").migrate()

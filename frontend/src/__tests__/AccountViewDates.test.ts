@@ -24,6 +24,9 @@ vi.mock('@/services/walletService', () => ({
 vi.mock('@/services/paymentService', () => ({
   paymentService: { listOrders: h.listOrdersMock },
 }))
+vi.mock('@/services/adminService', () => ({
+  adminService: { isAdmin: () => Promise.resolve(false) },
+}))
 
 function makeJwt(expSecondsFromNow: number): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))

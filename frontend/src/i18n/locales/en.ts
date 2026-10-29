@@ -1,6 +1,7 @@
 // English UI strings. Keep keys in sync with zh.ts (enforced by i18nParity.test.ts).
 export default {
   account: {
+    adminLink: 'Admin: grant credits',
     balanceAfter: 'Balance {n}',
     credits: 'Credits',
     creditsFail: 'Failed to load credits',
@@ -27,6 +28,7 @@ export default {
     signIn: 'Please sign in',
     title: 'My Account',
     tx: {
+      ADMIN_GRANT: 'Admin grant',
       GAME_REWARD: 'Game reward',
       PERK_SPEND: 'Perk purchase',
       PURCHASE: 'Top-up',
@@ -41,6 +43,26 @@ export default {
     selfDestruct: 'Self-destruct',
     take: 'Take a player with you (optional)',
     title: 'Actions',
+  },
+  admin: {
+    amount: 'Credits (1–100 per grant)',
+    choose: 'Pick a player',
+    error: {
+      INVALID_AMOUNT: 'Each grant must be 1–100 credits',
+      NOT_ADMIN: 'Admin only',
+      PIN_NOT_CONFIGURED: 'The admin PIN is not set on the server, so grants are off',
+      PLAYER_NOT_FOUND: 'Player not found',
+      WRONG_PIN: 'Wrong PIN',
+      generic: 'Something went wrong, please try again',
+    },
+    grant: 'Grant credits',
+    noMatch: 'No matching players',
+    notAdmin: 'Only the admin can open this page',
+    pin: 'Admin PIN (4 digits)',
+    search: 'Search',
+    searchPlaceholder: 'Player nickname',
+    success: 'Granted {n} credits to {name}; balance now {balance}',
+    title: 'Grant credits',
   },
   audio: {
     unlock: 'Tap anywhere to enable sound',

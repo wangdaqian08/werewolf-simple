@@ -14,6 +14,16 @@
       <template v-else>
         <p v-if="loading" class="loading-note">{{ $t('common.loadingShort') }}</p>
 
+        <!-- Admin only: the backend says who the admin is -->
+        <button
+          v-if="isAdmin"
+          class="btn btn-gold admin-link"
+          data-testid="account-admin-link"
+          @click="router.push('/admin')"
+        >
+          {{ $t('account.adminLink') }}
+        </button>
+
         <!-- ── Section 1: credits + ledger ─────────────────────────────── -->
         <section class="section" data-testid="account-wallet">
           <h2 class="section-title">{{ $t('account.credits') }}</h2>
@@ -126,6 +136,7 @@ import { getLocale } from '@/i18n'
 import { useUserStore } from '@/stores/userStore'
 import { walletService } from '@/services/walletService'
 import { paymentService } from '@/services/paymentService'
+import { adminService } from '@/services/adminService'
 import type {
   CreditTxType,
   MyPerkActivation,
@@ -145,8 +156,10 @@ const orders = ref<PaymentOrderSummary[]>([])
 const walletError = ref(false)
 const perksError = ref(false)
 const ordersError = ref(false)
+const isAdmin = ref(false)
 
 const TX_LABELS: Record<CreditTxType, string> = {
+  ADMIN_GRANT: 'account.tx.ADMIN_GRANT',
   PURCHASE: 'account.tx.PURCHASE',
   GAME_REWARD: 'account.tx.GAME_REWARD',
   PERK_SPEND: 'account.tx.PERK_SPEND',
@@ -243,6 +256,14 @@ onMounted(async () => {
       }),
     // Keeps the lobby chip in sync; never throws (errors swallowed in store).
     userStore.refreshWallet(),
+    adminService
+      .isAdmin()
+      .then((a) => {
+        isAdmin.value = a
+      })
+      .catch(() => {
+        isAdmin.value = false
+      }),
   ]
   // Guests can't purchase — skip the orders call entirely.
   if (!userStore.isGuest) {
@@ -326,6 +347,10 @@ onMounted(async () => {
   color: var(--muted);
   font-size: 0.8125rem;
   margin: 0 0 0.75rem;
+}
+
+.admin-link {
+  margin-bottom: 1rem;
 }
 
 /* ── sections ───────────────────────────────────────────────────────── */

@@ -69,6 +69,14 @@ const router = createRouter({
       component: () => import('@/views/AccountView.vue'),
     },
     {
+      // Admin credit grants. The view itself shows "admin only" to anyone else;
+      // the backend refuses every admin call from a non-admin regardless.
+      path: '/admin',
+      name: 'admin',
+      component: () => import('@/views/AdminView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       // Stripe Checkout success/cancel redirect target
       path: '/pay/result',
       name: 'pay-result',
