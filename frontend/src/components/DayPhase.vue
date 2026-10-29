@@ -22,32 +22,33 @@
     <div class="below-arch-row">
       <button
         v-if="myRole"
-        class="my-role-chip my-role-locked"
+        class="toolbar-btn my-role-chip my-role-locked"
         data-testid="my-role-chip"
         @click="showRoleCard = true"
       >
-        {{ $t('day.tapToReveal') }}
+        <span class="toolbar-icon" aria-hidden="true">🔒</span>
+        <span>{{ $t('day.tapToReveal') }}</span>
       </button>
       <div v-else />
       <div class="right-stack">
         <button
           v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
-          class="log-fab"
+          class="toolbar-btn log-fab"
           :aria-label="$t('common.gameLog')"
           data-testid="log-fab"
           @click="showLog = true"
         >
-          <span class="log-fab-icon" aria-hidden="true">📋</span>
-          <span class="log-fab-label">{{ $t('common.gameLog') }}</span>
+          <span class="toolbar-icon" aria-hidden="true">📋</span>
+          <span>{{ $t('common.gameLog') }}</span>
         </button>
         <button
-          class="log-fab"
+          class="toolbar-btn log-fab"
           :aria-label="$t('common.roomInfo')"
           data-testid="settings-fab"
           @click="showSettings = true"
         >
-          <span class="log-fab-icon" aria-hidden="true">ℹ️</span>
-          <span class="log-fab-label">{{ $t('common.roomInfo') }}</span>
+          <span class="toolbar-icon" aria-hidden="true">ℹ️</span>
+          <span>{{ $t('common.roomInfo') }}</span>
         </button>
         <ActionMenu
           v-if="myRole"
@@ -251,6 +252,7 @@
       <PlayerSlot
         v-for="player in players"
         :key="player.userId"
+        :self="player.userId === myUserId"
         :seat="player.seatIndex"
         :nickname="player.nickname"
         :avatar="player.avatar"
@@ -661,65 +663,21 @@ function onTap(player: GamePlayer) {
   font-weight: 600;
 }
 
-.player-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
-  gap: 0.5rem;
-  padding: 0 1rem 1rem;
-}
-
 .below-arch-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 0 1rem 0.5rem;
+  gap: 6px;
+  padding: 0 0.875rem 0.5rem;
 }
 
+/* Toolbar buttons sit in one row (wrapping on narrow phones) so the seat
+   grid and the footer action stay above the fold. */
 .right-stack {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-}
-
-.log-fab {
-  width: auto;
-  padding: 6px 12px;
-  gap: 6px;
-  border-radius: 999px;
-  background: var(--paper, #f5f0e8);
-  border: 1px solid var(--border, #ccc2b0);
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-.log-fab-icon {
-  font-size: 16px;
-}
-.log-fab-label {
-  font-size: 13px;
-  color: var(--text, #1a140c);
-  font-weight: 500;
-}
-
-.my-role-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
-  background: var(--paper, #f5f0e8);
-  border: 1px solid var(--border, #ccc2b0);
-  border-radius: 999px;
-  font-size: 12px;
-  color: var(--muted, #8a7a65);
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-.my-role-locked {
-  font-style: italic;
 }
 
 /* Role card bottom sheet — mirrors VotingPhase.vue so the my-role-chip works during DAY_DISCUSSION */
@@ -759,6 +717,8 @@ function onTap(player: GamePlayer) {
   color: var(--muted);
   cursor: pointer;
   padding: 0.25rem 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
 }
 .role-card-body {
   display: flex;

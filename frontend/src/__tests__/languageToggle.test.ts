@@ -72,7 +72,7 @@ describe('LanguageToggle', () => {
     expect(i18n.global.locale.value).toBe('en')
   })
 
-  it('in-game day screens use the header toggle, not the floating one', async () => {
+  it('in-game day and sheriff screens use the header toggle, not the floating one', async () => {
     routeName.value = 'game'
     const game = useGameStore()
     game.setState(stateIn('DAY_DISCUSSION'))
@@ -85,8 +85,14 @@ describe('LanguageToggle', () => {
     await floating.vm.$nextTick()
     expect(floating.find('[data-testid="lang-toggle"]').exists()).toBe(false)
 
-    // Role reveal / sheriff election have no header slot: the floating one shows.
+    // The sheriff election header carries the toggle too (a floating one sat
+    // on its countdown).
     game.setState(stateIn('SHERIFF_ELECTION'))
+    await floating.vm.$nextTick()
+    expect(floating.find('[data-testid="lang-toggle"]').exists()).toBe(false)
+
+    // Role reveal has no header slot: the floating one shows.
+    game.setState(stateIn('ROLE_REVEAL'))
     await floating.vm.$nextTick()
     expect(floating.find('[data-testid="lang-toggle"]').exists()).toBe(true)
   })

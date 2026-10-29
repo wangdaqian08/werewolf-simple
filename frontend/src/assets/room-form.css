@@ -48,6 +48,8 @@
   cursor: pointer;
   font-family: inherit;
   padding: 0;
+  min-height: 44px;
+  min-width: 44px;
   align-self: flex-start;
   white-space: nowrap;
 }
@@ -213,6 +215,13 @@
   transition: background 0.2s;
   flex-shrink: 0;
   padding: 0;
+}
+
+/* Enlarges the tap area to 44px tall without enlarging the switch. */
+.toggle::after {
+  content: '';
+  position: absolute;
+  inset: -12px -6px;
 }
 
 .toggle-on {

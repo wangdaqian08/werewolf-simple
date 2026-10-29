@@ -1,9 +1,9 @@
 <template>
   <!-- Chip is only shown during sheriff election, day discussion, and day voting -->
   <template v-if="chipVisible">
-    <button class="action-menu-chip" data-testid="action-menu-btn" @click="openMenu">
-      <span class="action-chip-icon" aria-hidden="true">⚡</span>
-      <span class="action-chip-label">{{ $t('actionMenu.chip') }}</span>
+    <button class="toolbar-btn action-menu-chip" data-testid="action-menu-btn" @click="openMenu">
+      <span class="toolbar-icon" aria-hidden="true">⚡</span>
+      <span>{{ $t('actionMenu.chip') }}</span>
     </button>
 
     <!-- Drop-sheet (teleported to body to escape stacking contexts) -->
@@ -193,30 +193,6 @@ function confirmSelfDestruct() {
   border-color: var(--red, #b5251a);
   background: var(--red, #b5251a);
   color: #fff;
-}
-.action-menu-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
-  background: var(--paper, #f5f0e8);
-  border: 1px solid var(--border, #ccc2b0);
-  border-radius: 999px;
-  font-size: 13px;
-  color: var(--text, #1a140c);
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  transition: background 0.15s;
-}
-.action-menu-chip:hover {
-  background: var(--bg, #ede8df);
-}
-.action-chip-icon {
-  font-size: 14px;
-}
-.action-chip-label {
-  font-size: 13px;
-  font-weight: 500;
 }
 
 /* Backdrop */

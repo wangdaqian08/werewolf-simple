@@ -37,34 +37,40 @@
       <div v-if="myRole || voteHistory?.length" class="role-history-row">
         <button
           v-if="myRole"
-          class="my-role-chip my-role-locked"
+          class="toolbar-btn my-role-chip my-role-locked"
           data-testid="my-role-chip"
           @click="showRoleCard = true"
         >
-          {{ $t('vote.tapToReveal') }}
+          <span class="toolbar-icon" aria-hidden="true">🔒</span>
+          <span>{{ $t('vote.tapToReveal') }}</span>
         </button>
         <div v-else />
         <div class="right-stack">
-          <button v-if="voteHistory?.length" class="history-btn" @click="showHistory = true">
-            {{ $t('vote.history') }}
+          <button
+            v-if="voteHistory?.length"
+            class="toolbar-btn history-btn"
+            @click="showHistory = true"
+          >
+            <span class="toolbar-icon" aria-hidden="true">📜</span>
+            <span>{{ $t('vote.history') }}</span>
           </button>
           <button
-            class="log-fab"
+            class="toolbar-btn log-fab"
             :aria-label="$t('common.gameLog')"
             data-testid="log-fab"
             @click="showLog = true"
           >
-            <span class="log-fab-icon" aria-hidden="true">📋</span>
-            <span class="log-fab-label">{{ $t('common.gameLog') }}</span>
+            <span class="toolbar-icon" aria-hidden="true">📋</span>
+            <span>{{ $t('common.gameLog') }}</span>
           </button>
           <button
-            class="log-fab"
+            class="toolbar-btn log-fab"
             :aria-label="$t('common.roomInfo')"
             data-testid="settings-fab"
             @click="showSettings = true"
           >
-            <span class="log-fab-icon" aria-hidden="true">ℹ️</span>
-            <span class="log-fab-label">{{ $t('common.roomInfo') }}</span>
+            <span class="toolbar-icon" aria-hidden="true">ℹ️</span>
+            <span>{{ $t('common.roomInfo') }}</span>
           </button>
           <ActionMenu
             v-if="myRole"
@@ -197,6 +203,7 @@
         <PlayerSlot
           v-for="player in players"
           :key="player.userId"
+          :self="player.userId === myUserId"
           :seat="player.seatIndex"
           :nickname="player.nickname"
           :avatar="player.avatar"
@@ -498,6 +505,7 @@
         <PlayerSlot
           v-for="player in players"
           :key="player.userId"
+          :self="player.userId === myUserId"
           :seat="player.seatIndex"
           :nickname="player.nickname"
           :avatar="player.avatar"
@@ -584,6 +592,7 @@
         <PlayerSlot
           v-for="player in players"
           :key="player.userId"
+          :self="player.userId === myUserId"
           :seat="player.seatIndex"
           :nickname="player.nickname"
           :avatar="player.avatar"
@@ -1146,46 +1155,11 @@ function onBadgeTap(player: GamePlayer) {
 /* Role + history row */
 .role-history-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 0.25rem 1rem 0.375rem;
+  gap: 6px;
+  padding: 0.25rem 0.875rem 0.375rem;
   min-height: 2.25rem;
-}
-
-.my-role-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.625rem;
-  border-radius: 1rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border: 1px solid currentColor;
-}
-
-.my-role-locked {
-  color: var(--muted);
-  background: var(--paper);
-  border-color: var(--border-l);
-  cursor: pointer;
-  font-size: 0.75rem;
-}
-
-.history-btn {
-  background: var(--paper);
-  border: 1px solid var(--border-l);
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-  cursor: pointer;
-  font-family: inherit;
-  white-space: nowrap;
-}
-
-.history-btn:hover {
-  border-color: var(--border);
-  color: var(--text);
 }
 
 /* History bottom sheet overlay */
@@ -1229,6 +1203,8 @@ function onBadgeTap(player: GamePlayer) {
   color: var(--muted);
   cursor: pointer;
   padding: 0.25rem;
+  min-width: 44px;
+  min-height: 44px;
   line-height: 1;
 }
 
@@ -1384,32 +1360,12 @@ function onBadgeTap(player: GamePlayer) {
 }
 
 /* Right-side stack inside role-history-row: history-btn, log-fab, ActionMenu */
+/* Toolbar buttons sit in one row (wrapping on narrow phones) so the seat
+   grid and the footer action stay above the fold. */
 .right-stack {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-}
-
-.log-fab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  width: auto;
-  border-radius: 999px;
-  background: var(--paper, #f5f0e8);
-  border: 1px solid var(--border, #ccc2b0);
-  font-size: 14px;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-.log-fab-icon {
-  font-size: 16px;
-}
-.log-fab-label {
-  font-size: 13px;
-  color: var(--text, #1a140c);
-  font-weight: 500;
 }
 </style>

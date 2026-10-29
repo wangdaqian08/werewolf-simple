@@ -575,6 +575,7 @@ function signInWithWechat() {
   border: none;
   border-bottom: 1px dashed transparent;
   padding: 0.125rem 0;
+  min-height: 44px;
   width: 100%;
   outline: none;
   transition: border-color 0.15s;
@@ -603,7 +604,9 @@ function signInWithWechat() {
   color: var(--gold);
   font-size: 0.75rem;
   cursor: pointer;
-  padding: 0 0 0 0.375rem;
+  padding: 0 0.375rem;
+  min-height: 44px;
+  min-width: 44px;
   text-decoration: underline;
   font-family: inherit;
 }
@@ -674,6 +677,8 @@ function signInWithWechat() {
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0.25rem 0.5rem;
+  min-height: 44px;
+  min-width: 44px;
   text-decoration: underline;
 }
 
