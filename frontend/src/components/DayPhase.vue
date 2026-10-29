@@ -22,32 +22,33 @@
     <div class="below-arch-row">
       <button
         v-if="myRole"
-        class="my-role-chip my-role-locked"
+        class="toolbar-btn my-role-chip my-role-locked"
         data-testid="my-role-chip"
         @click="showRoleCard = true"
       >
-        {{ $t('day.tapToReveal') }}
+        <span class="toolbar-icon" aria-hidden="true">🔒</span>
+        <span>{{ $t('day.tapToReveal') }}</span>
       </button>
       <div v-else />
       <div class="right-stack">
         <button
           v-if="dayPhase.subPhase !== 'RESULT_HIDDEN'"
-          class="log-fab"
+          class="toolbar-btn log-fab"
           :aria-label="$t('common.gameLog')"
           data-testid="log-fab"
           @click="showLog = true"
         >
-          <span class="log-fab-icon" aria-hidden="true">📋</span>
-          <span class="log-fab-label">{{ $t('common.gameLog') }}</span>
+          <span class="toolbar-icon" aria-hidden="true">📋</span>
+          <span>{{ $t('common.gameLog') }}</span>
         </button>
         <button
-          class="log-fab"
+          class="toolbar-btn log-fab"
           :aria-label="$t('common.roomInfo')"
           data-testid="settings-fab"
           @click="showSettings = true"
         >
-          <span class="log-fab-icon" aria-hidden="true">ℹ️</span>
-          <span class="log-fab-label">{{ $t('common.roomInfo') }}</span>
+          <span class="toolbar-icon" aria-hidden="true">ℹ️</span>
+          <span>{{ $t('common.roomInfo') }}</span>
         </button>
         <ActionMenu
           v-if="myRole"
@@ -677,50 +678,6 @@ function onTap(player: GamePlayer) {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
-}
-
-.log-fab {
-  width: auto;
-  min-height: 44px;
-  padding: 0 10px;
-  gap: 4px;
-  border-radius: 999px;
-  background: var(--paper, #f5f0e8);
-  border: 1px solid var(--border, #ccc2b0);
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  white-space: nowrap;
-}
-.log-fab-icon {
-  font-size: 16px;
-}
-.log-fab-label {
-  font-size: 13px;
-  color: var(--text, #1a140c);
-  font-weight: 500;
-}
-
-.my-role-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 44px;
-  white-space: nowrap;
-  padding: 0 12px;
-  background: var(--paper, #f5f0e8);
-  border: 1px solid var(--border, #ccc2b0);
-  border-radius: 999px;
-  font-size: 12px;
-  color: var(--muted, #8a7a65);
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-.my-role-locked {
-  font-style: italic;
 }
 
 /* Role card bottom sheet — mirrors VotingPhase.vue so the my-role-chip works during DAY_DISCUSSION */

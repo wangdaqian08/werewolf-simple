@@ -47,7 +47,7 @@ test('role chip shows locked state by default', async ({ page }) => {
   await expect(chip).toBeVisible()
   await expect(chip).toContainText('🔒')
   await expect(chip).toContainText('身份')
-  await expect(chip).toContainText(/🔒 身份|🔒 Tap to reveal/)
+  await expect(chip).toContainText(/🔒\s*(身份|Tap to reveal)/)
 })
 
 test('role chip has my-role-locked class', async ({ page }) => {
