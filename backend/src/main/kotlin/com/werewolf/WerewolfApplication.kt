@@ -1,5 +1,6 @@
 package com.werewolf
 
+import com.werewolf.config.AdminProperties
 import com.werewolf.config.GameTimingProperties
 import com.werewolf.config.HostTimerProperties
 import com.werewolf.config.PaymentProperties
@@ -11,6 +12,7 @@ import org.springframework.boot.runApplication
 @SpringBootApplication
 @EnableConfigurationProperties(
     GameTimingProperties::class, HostTimerProperties::class, RewardProperties::class, PaymentProperties::class,
+    AdminProperties::class,
 )
 class WerewolfApplication
 

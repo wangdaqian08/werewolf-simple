@@ -69,3 +69,6 @@ werewolf:
     wolf-per-day-survived: 4
     sheriff-bonus: 5
     wolf-vote-bonus: 3
+  # Admin credit grants: 4-digit PIN from env; unset = grants disabled (503)
+  admin:
+    pin: ${ADMIN_PIN:}

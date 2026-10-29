@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   getWalletMock: vi.fn(),
   getMyPerksMock: vi.fn(),
   listOrdersMock: vi.fn(),
+  isAdminMock: vi.fn(),
 }))
 
 vi.mock('@/services/walletService', () => ({
@@ -22,6 +23,9 @@ vi.mock('@/services/walletService', () => ({
 }))
 vi.mock('@/services/paymentService', () => ({
   paymentService: { listOrders: h.listOrdersMock },
+}))
+vi.mock('@/services/adminService', () => ({
+  adminService: { isAdmin: h.isAdminMock },
 }))
 
 function makeJwt(expSecondsFromNow: number): string {
@@ -125,6 +129,7 @@ async function mountAccount(userId = 'google:abc') {
     routes: [
       { path: '/', name: 'lobby', component: { template: '<div />' } },
       { path: '/account', name: 'account', component: AccountView },
+      { path: '/admin', name: 'admin', component: { template: '<div />' } },
     ],
   })
   await router.push('/account')
@@ -141,6 +146,7 @@ describe('AccountView', () => {
     h.getWalletMock.mockReset().mockResolvedValue(WALLET)
     h.getMyPerksMock.mockReset().mockResolvedValue([perk('ACTIVE')])
     h.listOrdersMock.mockReset().mockResolvedValue(ORDERS)
+    h.isAdminMock.mockReset().mockResolvedValue(false)
   })
   afterEach(() => vi.clearAllMocks())
 
@@ -273,6 +279,55 @@ describe('AccountView', () => {
   })
 })
 
+describe('AccountView admin entry', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    h.getWalletMock.mockReset().mockResolvedValue(WALLET)
+    h.getMyPerksMock.mockReset().mockResolvedValue([])
+    h.listOrdersMock.mockReset().mockResolvedValue([])
+    h.isAdminMock.mockReset().mockResolvedValue(false)
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('shows the grant-credits link only when the backend says the viewer is the admin', async () => {
+    h.isAdminMock.mockResolvedValue(true)
+    const { wrapper, router } = await mountAccount('guest:ray')
+    const link = wrapper.find('[data-testid="account-admin-link"]')
+    expect(link.exists()).toBe(true)
+    await link.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/admin')
+  })
+
+  it('hides the link for everyone else, and when the status call fails', async () => {
+    h.isAdminMock.mockResolvedValue(false)
+    let { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="account-admin-link"]').exists()).toBe(false)
+
+    h.isAdminMock.mockRejectedValue(new Error('network'))
+    ;({ wrapper } = await mountAccount())
+    expect(wrapper.find('[data-testid="account-admin-link"]').exists()).toBe(false)
+  })
+
+  it('labels admin grants in the ledger', async () => {
+    h.getWalletMock.mockResolvedValue({
+      balance: 50,
+      recent: [
+        {
+          type: 'ADMIN_GRANT',
+          amount: 50,
+          balanceAfter: 50,
+          note: null,
+          createdAt: '2026-06-10T20:00:00',
+        },
+      ],
+    })
+    const { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="ledger-row"]').text()).toMatch(/管理員發放|Admin grant/)
+  })
+})
+
 describe('AccountView money formatting and status fallbacks', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -280,6 +335,7 @@ describe('AccountView money formatting and status fallbacks', () => {
     h.getWalletMock.mockReset().mockResolvedValue(WALLET)
     h.getMyPerksMock.mockReset().mockResolvedValue([perk('ACTIVE')])
     h.listOrdersMock.mockReset().mockResolvedValue(ORDERS)
+    h.isAdminMock.mockReset().mockResolvedValue(false)
   })
   afterEach(() => vi.clearAllMocks())
 

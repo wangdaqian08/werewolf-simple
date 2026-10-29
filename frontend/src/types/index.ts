@@ -29,7 +29,22 @@ export type OAuthProvider = 'google' | 'wechat'
 
 // ── Wallet / Credits ──────────────────────────────────────────────────────────
 
-export type CreditTxType = 'PURCHASE' | 'GAME_REWARD' | 'PERK_SPEND' | 'REFUND'
+export type CreditTxType = 'PURCHASE' | 'GAME_REWARD' | 'PERK_SPEND' | 'REFUND' | 'ADMIN_GRANT'
+
+/** A player as the admin grant page lists them (GET /api/admin/players). */
+export interface AdminPlayer {
+  userId: string
+  nickname: string
+  balance: number
+}
+
+/** Error codes POST /api/admin/grant answers with (body `code`). */
+export type AdminErrorCode =
+  | 'NOT_ADMIN'
+  | 'PIN_NOT_CONFIGURED'
+  | 'WRONG_PIN'
+  | 'INVALID_AMOUNT'
+  | 'PLAYER_NOT_FOUND'
 
 export interface CreditTransaction {
   type: CreditTxType

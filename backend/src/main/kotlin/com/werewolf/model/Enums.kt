@@ -44,7 +44,7 @@ enum class VotingSubPhase { VOTING, RE_VOTING, VOTE_RESULT, BADGE_HANDOVER }
 
 enum class WinConditionMode { CLASSIC, HARD_MODE }
 
-enum class CreditTxType { PURCHASE, GAME_REWARD, PERK_SPEND, REFUND }
+enum class CreditTxType { PURCHASE, GAME_REWARD, PERK_SPEND, REFUND, ADMIN_GRANT }
 
 enum class PerkActivationStatus { ACTIVE, CONSUMED, VOID, REFUNDED }
 

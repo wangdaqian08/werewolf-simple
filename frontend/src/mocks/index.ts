@@ -169,6 +169,30 @@ export function setupMocks() {
   mock.onGet('/perks/my').reply(200, MOCK_MY_PERKS)
   mock.onGet('/payment/orders').reply(200, MOCK_PAYMENT_ORDERS)
 
+  // ── Admin credit grants (the mock user is the admin; mock PIN 1234) ─────────
+  const mockAdminPlayers = [
+    { userId: 'guest:alice', nickname: 'Alice', balance: 40 },
+    { userId: 'guest:alina', nickname: 'Alina', balance: 0 },
+    { userId: 'google:1093', nickname: 'Bob', balance: 125 },
+  ]
+  mock.onGet('/admin/status').reply(200, { admin: true })
+  mock.onGet('/admin/players').reply((config) => {
+    const q = String(config.params?.q ?? '')
+      .trim()
+      .toLowerCase()
+    return [200, q ? mockAdminPlayers.filter((p) => p.nickname.toLowerCase().includes(q)) : []]
+  })
+  mock.onPost('/admin/grant').reply((config) => {
+    const { userId, amount, pin } = JSON.parse(config.data ?? '{}')
+    if (pin !== '1234') return [403, { error: 'Wrong PIN', code: 'WRONG_PIN' }]
+    if (!Number.isInteger(amount) || amount < 1 || amount > 100)
+      return [400, { error: 'Bad amount', code: 'INVALID_AMOUNT' }]
+    const player = mockAdminPlayers.find((p) => p.userId === userId)
+    if (!player) return [404, { error: 'Player not found', code: 'PLAYER_NOT_FOUND' }]
+    player.balance += amount
+    return [200, { ...player }]
+  })
+
   // ── Room ──────────────────────────────────────────────────────────────────────
   const hostRoomWith = (roomConfig: typeof MOCK_ROOM_AS_HOST.config) => {
     // Host occupies 1 seat, so guests fill at most totalPlayers - 1 seats.

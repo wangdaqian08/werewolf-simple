@@ -1,6 +1,7 @@
 // Traditional Chinese (zh-Hant) UI strings. Keep keys in sync with en.ts.
 export default {
   account: {
+    adminLink: '管理員：發放積分',
     balanceAfter: '餘額 {n}',
     credits: '積分',
     creditsFail: '無法加載積分記錄',
@@ -27,6 +28,7 @@ export default {
     signIn: '請先登錄',
     title: '我的賬戶',
     tx: {
+      ADMIN_GRANT: '管理員發放',
       GAME_REWARD: '對局獎勵',
       PERK_SPEND: '道具購買',
       PURCHASE: '充值',
@@ -41,6 +43,26 @@ export default {
     selfDestruct: '自爆',
     take: '可選擇帶走一名玩家（可不選）',
     title: '行動菜單',
+  },
+  admin: {
+    amount: '積分（每次 1–100）',
+    choose: '選擇玩家',
+    error: {
+      INVALID_AMOUNT: '每次只能發放 1–100 積分',
+      NOT_ADMIN: '僅管理員可操作',
+      PIN_NOT_CONFIGURED: '服務器未設置管理員密碼，暫時無法發放',
+      PLAYER_NOT_FOUND: '找不到該玩家',
+      WRONG_PIN: '密碼錯誤',
+      generic: '操作失敗，請重試',
+    },
+    grant: '發放積分',
+    noMatch: '沒有找到匹配的玩家',
+    notAdmin: '僅管理員可訪問此頁面',
+    pin: '管理員密碼（4 位數字）',
+    search: '搜索',
+    searchPlaceholder: '輸入玩家暱稱',
+    success: '已向 {name} 發放 {n} 積分，當前餘額 {balance}',
+    title: '發放積分',
   },
   audio: {
     unlock: '點擊任意處開啟聲音',
