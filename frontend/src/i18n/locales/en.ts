@@ -384,8 +384,29 @@ export default {
       IDIOT: 'When voted out, reveal yourself: you survive but lose your right to vote.',
       VILLAGER: 'Find the wolves through discussion and voting, and protect the village.',
     },
+    rules: {
+      BLACK_WOLF_KING:
+        'Hunts with the wolves at night; the seer sees you as a wolf.\nWhen you are out (voted out, killed at night, or shot by the hunter) you may shoot one player, or hold fire.\nNo shot if the witch poisons you, you self-destruct, or the White Wolf King takes you.\nShoot before the host moves on, or the shot is lost.',
+      GUARD:
+        "Each night protect one living player (yourself included) from the wolves.\nYou cannot protect the same player two nights in a row.\nProtection does not stop the witch's poison.\nIf you and the witch's antidote save the same player, that player still dies.",
+      HUNTER:
+        'When you are out you may shoot one player, or hold fire.\nNo shot if the witch poisons you or the White Wolf King takes you.\nShoot before the host moves on, or the shot is lost.',
+      IDIOT:
+        'When voted out you reveal your card and stay in, but lose your vote.\nThis works once only; a night kill or poison still kills you.',
+      SEER: 'Each night check one living player: good or wolf (wolf kings count as wolves).\nYou cannot check yourself.',
+      VILLAGER: 'No special ability.\nTalk, reason, and vote out the players you suspect.',
+      WEREWOLF:
+        'Each night pick a target with your fellow wolves; the first confirmed pick counts.\nYou may attack any living player, a fellow wolf or yourself included.\nDuring the day or the sheriff election you may self-destruct: the day ends at once, no vote, straight to night.\nThe seer sees you as a wolf.',
+      WHITE_WOLF_KING:
+        'Hunts with the wolves at night; the seer sees you as a wolf.\nWhen you self-destruct in the day you may take one player with you; they get no shot.\nNo ability when voted out or killed at night.',
+      WITCH:
+        "One antidote and one poison, each usable once per game.\nThe antidote only saves tonight's wolf victim; you cannot use both potions in one night.\nYou may save yourself on night 1 only, and only if the room allows it.\nYou cannot poison yourself; a poisoned hunter or Black Wolf King gets no shot.\nIf you and the guard save the same player, that player still dies.",
+    },
   },
   roleCard: {
+    info: 'Role Info',
+    rules: 'Rules',
+    teammates: 'Wolf teammates',
     title: 'My Role',
   },
   roleComp: {

@@ -36,16 +36,18 @@
             <div class="settings-section">
               <div class="section-title">{{ $t('settings.roles') }}</div>
               <div class="role-rows" data-testid="settings-roles">
-                <div
+                <button
                   v-for="rc in roleCounts"
                   :key="rc.id"
+                  type="button"
                   class="role-row"
                   :data-testid="`settings-role-${rc.id}`"
+                  @click="openRole = rc.id"
                 >
                   <span class="role-emoji" aria-hidden="true">{{ rc.emoji }}</span>
                   <span class="role-name">{{ rc.name }}</span>
                   <span class="role-count">×{{ rc.count }}</span>
-                </div>
+                </button>
               </div>
             </div>
 
@@ -127,6 +129,12 @@
       </div>
     </Transition>
   </Teleport>
+  <RoleCardSheet
+    v-if="open && openRole"
+    :role="openRole"
+    :title="$t('roleCard.info')"
+    @close="openRole = null"
+  />
 </template>
 
 <script lang="ts" setup>
@@ -135,9 +143,11 @@ import { computed, ref, watch } from 'vue'
 import type { GameSettings, RewardRule } from '@/types'
 import { ROLE_DEFINITIONS, roleName } from '@/utils/roleDefinitions'
 import { walletService } from '@/services/walletService'
+import RoleCardSheet from '@/components/RoleCardSheet.vue'
 
 const props = defineProps<{ settings: GameSettings | null | undefined; open: boolean }>()
 defineEmits<{ close: [] }>()
+const openRole = ref<string | null>(null)
 
 // The scoring table is fixed per deployment, so it is fetched once, the first time
 // someone looks at it, and the section simply stays hidden if that call fails.
@@ -347,8 +357,10 @@ const roleCounts = computed<RoleCount[]>(() => {
   background: var(--card, #ffffff);
   border: 1px solid var(--border-l, #ddd6c6);
   border-radius: 999px;
+  font: inherit;
   font-size: 14px;
   color: var(--text, #1a140c);
+  cursor: pointer;
 }
 
 .role-count {

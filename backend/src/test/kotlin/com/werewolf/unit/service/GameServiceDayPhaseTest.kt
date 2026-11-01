@@ -186,6 +186,21 @@ class GameServiceDayPhaseTest {
     }
 
     @Test
+    fun `getGameState - wolves see their teammates, others see none`() {
+        val players = listOf(
+            player(hostId, 0),
+            player("w1", 1, PlayerRole.WEREWOLF),
+            player("w2", 3, PlayerRole.BLACK_WOLF_KING).also { it.alive = false },
+            player("w3", 2, PlayerRole.WHITE_WOLF_KING),
+        )
+        val users = listOf(user(hostId, "Host"), user("w1", "A"), user("w2", "B"), user("w3", "C"))
+        setupGameAndPlayers(game(), players, users)
+
+        assertThat(gameService.getGameState(gameId, "w1")["wolfTeammates"]).isEqualTo(listOf("w3", "w2"))
+        assertThat(gameService.getGameState(gameId, hostId)["wolfTeammates"]).isEqualTo(emptyList<String>())
+    }
+
+    @Test
     fun `getGameState DAY - canShoot is false when no shot is pending`() {
         val players = listOf(player(hostId, 0), player("u2", 1))
         val users = listOf(user(hostId, "Host"), user("u2", "Bob"))

@@ -411,6 +411,10 @@ class GameService(
             "winner" to game.winner?.name,
             "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
+            // Wolves know each other all game (role card); everyone else gets an empty list.
+            "wolfTeammates" to if (myPlayer?.role?.isWolf == true) {
+                players.filter { it.role.isWolf && it.userId != requestingUserId }.sortedBy { it.seatIndex }.map { it.userId }
+            } else emptyList(),
             "roleReveal" to roleReveal,
             "sheriffElection" to sheriffElection,
             "dayPhase" to dayPhase,
