@@ -4,10 +4,10 @@ export interface WolfBounds {
   default: number
 }
 
+// Canonical 狼人杀 板子 is floor(N/3) wolves; the host may go one below or one above.
 export function wolfBounds(totalPlayers: number): WolfBounds {
-  const max = Math.floor(totalPlayers / 3)
-  const min = Math.max(1, max - 1)
-  return { min, max, default: max }
+  const base = Math.floor(totalPlayers / 3)
+  return { min: Math.max(1, base - 1), max: base + 1, default: base }
 }
 
 export function clampWolfCount(totalPlayers: number, wolfCount: number): number {

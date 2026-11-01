@@ -92,6 +92,24 @@ describe('RoomSetupPanel — role limits', () => {
     expect(disabled(w, 'wolf-count-increment')).toBe(true)
   })
 
+  it('wolves can go one above the default', async () => {
+    const w = await mountSetup() // 9 players, 3 wolves, 3 gods
+    await click(w, 'wolf-count-increment')
+    expect(w.find('[data-testid="wolf-count-value"]').text()).toBe('4')
+    expect(disabled(w, 'wolf-count-increment')).toBe(true) // max = 4
+  })
+
+  it('gods always leave at least one villager seat', async () => {
+    const w = await mountSetup()
+    await click(w, 'player-count-decrement', 3) // 6 players, 2 wolves, 3 gods (1 villager)
+    expect(gods(w)).toBe(3)
+    expect(disabled(w, 'wolf-count-increment')).toBe(true) // 3 wolves + 3 gods = 6 seats
+    await click(w, 'role-toggle-HUNTER') // 2 gods
+    await click(w, 'wolf-count-increment') // 3 wolves, gods ∈ [2, 2]
+    expect(w.find('[data-testid="wolf-count-value"]').text()).toBe('3')
+    expect(disabled(w, 'role-toggle-GUARD')).toBe(true)
+  })
+
   it('cannot remove a wolf while that would leave too many gods', async () => {
     const w = await mountSetup()
     await click(w, 'role-toggle-GUARD') // 3 wolves, 4 gods
