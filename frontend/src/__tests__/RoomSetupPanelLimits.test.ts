@@ -1,7 +1,7 @@
 /**
  * RoomSetupPanel role limits, derived from the player count:
  *   gods ∈ [wolves − 1, wolves + 1] (at most 5), a wolf king (白狼王 / 黑狼王)
- *   needs 9+ players and a room has at most one king.
+ *   needs 9+ players, and both kings together need 3+ wolves.
  * The screen never shows an invalid board: blocked edits are disabled, and a
  * player-count change pulls the roles back into range.
  */
@@ -151,16 +151,24 @@ describe('RoomSetupPanel — role limits', () => {
     )
   })
 
-  it('one wolf king per room: turning one king on disables the other', async () => {
+  it('both wolf kings can be on together (needs 3+ wolves)', async () => {
+    const w = await mountSetup() // 9 players, 3 wolves
+    await click(w, 'role-toggle-BLACK_WOLF_KING')
+    await click(w, 'role-toggle-WHITE_WOLF_KING')
+    expect(chip(w, 'BLACK_WOLF_KING')).toBe(1)
+    expect(chip(w, 'WHITE_WOLF_KING')).toBe(1)
+    expect(disabled(w, 'wolf-count-decrement')).toBe(true) // 2 kings + 1 plain wolf
+  })
+
+  it('the second king is locked while there are only 2 wolves', async () => {
     const w = await mountSetup()
+    await click(w, 'role-toggle-HUNTER') // 2 gods, so wolves can drop to 2
+    await click(w, 'wolf-count-decrement')
     await click(w, 'role-toggle-BLACK_WOLF_KING')
     expect(disabled(w, 'role-toggle-WHITE_WOLF_KING')).toBe(true)
     expect(w.find('[data-testid="role-toggle-WHITE_WOLF_KING"]').attributes('title')).toContain(
-      '只能選一個狼王',
+      '兩個狼王需要至少 3 匹狼',
     )
-    await click(w, 'role-toggle-BLACK_WOLF_KING') // off again
-    expect(disabled(w, 'role-toggle-WHITE_WOLF_KING')).toBe(false)
-    await click(w, 'role-toggle-WHITE_WOLF_KING')
-    expect(disabled(w, 'role-toggle-BLACK_WOLF_KING')).toBe(true)
   })
+
 })

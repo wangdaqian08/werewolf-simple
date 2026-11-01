@@ -538,7 +538,7 @@ export default {
     joined: '{n} joined',
     kingMin: '{n}+ players required',
     needPlayers: 'Needs {n}+ players',
-    oneKing: 'One wolf king per room',
+    kingsNeedWolves: 'Both wolf kings need {n}+ wolves',
     players: 'Players (incl. host)',
     remaining: 'Remaining seats are filled with villagers.',
     required: 'REQUIRED',

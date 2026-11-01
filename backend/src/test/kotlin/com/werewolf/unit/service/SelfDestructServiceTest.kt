@@ -412,6 +412,20 @@ class SelfDestructServiceTest {
     }
 
     @Test
+    fun `a taken BLACK_WOLF_KING dies without a shot (both kings in one game)`() {
+        val king = kingPlayer()
+        val blackKing = player("bwk", 4, PlayerRole.BLACK_WOLF_KING)
+        val ctx = context(players = listOf(king, wolfPlayer(), blackKing, villagePlayer()))
+        stubKingTakes(ctx, king, blackKing)
+
+        selfDestructService.selfDestruct(req(kingId, "bwk"), ctx)
+
+        assertThat(blackKing.alive).isFalse()
+        assertThat(ctx.game.pendingShooterUserId).isNull()
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+    }
+
+    @Test
     fun `a taken sheriff hands the badge over next (day result already shown)`() {
         val king = kingPlayer()
         val sheriff = villagePlayer().also { it.sheriff = true }

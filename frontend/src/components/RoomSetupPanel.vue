@@ -205,14 +205,14 @@ function decrement() {
 }
 
 // Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (only 5 exist), and a
-// wolf king (白狼王 / 黑狼王) needs 9+ players, one king per room (the backend
-// enforces both too). Within these limits there is always ≥ 1 villager.
+// wolf king (白狼王 / 黑狼王, both may be on) needs 9+ players and each king a
+// plain fellow wolf: wolves ≥ kings + 1 (the backend enforces the king rules
+// too). Within these limits there is always ≥ 1 villager.
 const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)
 const KING_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
 const KING_MIN_PLAYERS = 9
 
-const otherKingOn = (roleId: string) =>
-  KING_IDS.some((id) => id !== roleId && enabledOptional.value.has(id))
+const enabledKingCount = computed(() => KING_IDS.filter((id) => enabledOptional.value.has(id)).length)
 
 // Optional wolf roles (the kings) take a wolf seat, so they are not gods.
 const enabledGodCount = computed(
@@ -228,7 +228,9 @@ const canAddWolf = computed(
   () => wolfCount.value < currentBounds.value.max && enabledGodCount.value >= wolfCount.value,
 )
 const canRemoveWolf = computed(
-  () => wolfCount.value > currentBounds.value.min && enabledGodCount.value <= wolfCount.value,
+  () =>
+    wolfCount.value > Math.max(currentBounds.value.min, enabledKingCount.value + 1) &&
+    enabledGodCount.value <= wolfCount.value,
 )
 
 function wolfIncrement() {
@@ -263,7 +265,10 @@ function isEnabled(roleId: string): boolean {
 function canToggle(roleId: string): boolean {
   const on = enabledOptional.value.has(roleId)
   if (KING_IDS.includes(roleId))
-    return on || (totalPlayers.value >= KING_MIN_PLAYERS && !otherKingOn(roleId))
+    return (
+      on ||
+      (totalPlayers.value >= KING_MIN_PLAYERS && wolfCount.value >= enabledKingCount.value + 2)
+    )
   return on
     ? enabledGodCount.value > godRange.value.min
     : enabledGodCount.value < godRange.value.max
@@ -272,9 +277,9 @@ function canToggle(roleId: string): boolean {
 function toggleHint(roleId: string): string {
   if (canToggle(roleId)) return ''
   if (KING_IDS.includes(roleId))
-    return otherKingOn(roleId)
-      ? t('setup.oneKing')
-      : t('setup.needPlayers', { n: KING_MIN_PLAYERS })
+    return totalPlayers.value < KING_MIN_PLAYERS
+      ? t('setup.needPlayers', { n: KING_MIN_PLAYERS })
+      : t('setup.kingsNeedWolves', { n: enabledKingCount.value + 2 })
   const { min, max } = godRange.value
   return enabledOptional.value.has(roleId)
     ? t('setup.atLeast', { n: min })

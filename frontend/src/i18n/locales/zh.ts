@@ -533,7 +533,7 @@ export default {
     joined: '已加入 {n} 人',
     kingMin: '{n} 人及以上才能開啟',
     needPlayers: '{n} 人及以上才能開啟',
-    oneKing: '一局只能選一個狼王',
+    kingsNeedWolves: '兩個狼王需要至少 {n} 匹狼',
     players: '玩家人數（含房主）',
     remaining: '剩餘席位自動分配為村民',
     required: '必選',

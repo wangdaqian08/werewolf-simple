@@ -69,7 +69,7 @@ Rule details vary between platforms. Do not pick these silently.
 
 **狼王** — ✅ settled 2026-10-21, see `docs/black-wolf-king.md`
 - Shot on: vote-out, wolf night kill, hunter shot (chain both ways). No shot: poison, 自爆.
-  白狼王 cannot coexist (one king per room). A knight duel is still open — decide it with the knight.
+  白狼王 can coexist (2026-11-01; needs ≥ 3 wolves; a 黑狼王 taken by 白狼王 does not shoot). A knight duel is still open — decide it with the knight.
 - It can self-destruct like a normal wolf (no take), and then it cannot shoot.
 - The shot is anonymous in-game ("X号 开枪"); the post-game review names the role.
 
@@ -84,7 +84,7 @@ Rule details vary between platforms. Do not pick these silently.
 Backend
 - `model/Enums.kt`: `PlayerRole` entry (set `isWolf` for wolf roles); new `ActionType` / `NightSubPhase` if needed
 - `model/Room.kt` `has<Role>` flag + Flyway `V27__<role>.sql` (V26 is the latest now) + `FlywayMigrationsIntegrationTest`
-- `service/RoomService.kt`: create mapping, room role list, `validateRoleComposition` rules (one wolf king per room)
+- `service/RoomService.kt`: create mapping, room role list, `validateRoleComposition` rules (wolves ≥ kings + 1)
 - `service/GameService.kt`: role list used for dealing
 - `game/role/<Role>Handler.kt` + `game/action/GameActionDispatcher.kt`
 - `game/night/NightOrchestrator.kt` (active roles in `nightSequence` and `nightRoleLoop`, night order) for night roles
