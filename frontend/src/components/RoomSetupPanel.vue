@@ -212,7 +212,9 @@ const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) =
 const KING_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
 const KING_MIN_PLAYERS = 9
 
-const enabledKingCount = computed(() => KING_IDS.filter((id) => enabledOptional.value.has(id)).length)
+const enabledKingCount = computed(
+  () => KING_IDS.filter((id) => enabledOptional.value.has(id)).length,
+)
 
 // Optional wolf roles (the kings) take a wolf seat, so they are not gods.
 const enabledGodCount = computed(

@@ -170,5 +170,4 @@ describe('RoomSetupPanel — role limits', () => {
       '兩個狼王需要至少 3 匹狼',
     )
   })
-
 })
