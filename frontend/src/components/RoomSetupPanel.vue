@@ -89,22 +89,29 @@
           :class="roleRowClass(role)"
           class="role-row"
         >
-          <span class="role-emoji">{{ role.emoji }}</span>
-          <div class="role-names">
-            <span
-              :class="{ 'role-name-muted': !role.required && !isEnabled(role.id) }"
-              class="role-name"
-            >
-              {{ roleName(role.id) }} {{ roleTag(role.id) }}
+          <button
+            type="button"
+            class="role-info-btn"
+            :data-testid="`role-info-${role.id}`"
+            @click="openRole = role.id"
+          >
+            <span class="role-emoji">{{ role.emoji }}</span>
+            <span class="role-names">
+              <span
+                :class="{ 'role-name-muted': !role.required && !isEnabled(role.id) }"
+                class="role-name"
+              >
+                {{ roleName(role.id) }} {{ roleTag(role.id) }}
+              </span>
+              <span
+                v-if="KING_IDS.includes(role.id)"
+                class="win-cond-desc"
+                :data-testid="`role-hint-${role.id}`"
+              >
+                {{ $t('setup.kingMin', { n: KING_MIN_PLAYERS }) }}
+              </span>
             </span>
-            <span
-              v-if="KING_IDS.includes(role.id)"
-              class="win-cond-desc"
-              :data-testid="`role-hint-${role.id}`"
-            >
-              {{ $t('setup.kingMin', { n: KING_MIN_PLAYERS }) }}
-            </span>
-          </div>
+          </button>
           <!-- Required roles: label only -->
           <span
             v-if="role.required"
@@ -127,6 +134,13 @@
           </button>
         </div>
       </div>
+
+      <RoleCardSheet
+        v-if="openRole"
+        :role="openRole"
+        :title="$t('roleCard.info')"
+        @close="openRole = null"
+      />
 
       <RoleComposition
         :total-players="totalPlayers"
@@ -166,11 +180,13 @@ import {
 import { wolfBounds } from '@/utils/wolfBounds'
 import RoleComposition from '@/components/RoleComposition.vue'
 import ShareButton from '@/components/ShareButton.vue'
+import RoleCardSheet from '@/components/RoleCardSheet.vue'
 
 // Page 2 of room creation, and the host's "edit players & roles" from the room.
 const props = defineProps<{ room: Room }>()
 const emit = defineEmits<{ done: [] }>()
 const roomStore = useRoomStore()
+const openRole = ref<string | null>(null)
 
 const MIN_PLAYERS = 6
 // 15 = 5 wolves / 5 gods / 5 villagers, the largest board the current roles balance.
@@ -333,6 +349,19 @@ async function save() {
 <style scoped src="../assets/room-form.css"></style>
 
 <style scoped>
+.role-info-btn {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .invite-row {
   display: flex;
   align-items: center;

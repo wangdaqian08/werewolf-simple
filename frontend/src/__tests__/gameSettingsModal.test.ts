@@ -209,3 +209,15 @@ describe('GameSettingsModal — 積分規則', () => {
     wrapper.unmount()
   })
 })
+
+describe('GameSettingsModal — role info', () => {
+  it('tapping a role opens its info and rules', async () => {
+    const wrapper = mountModal()
+    expect(bodyEl('role-card-sheet')).toBeNull()
+    ;(bodyEl('settings-role-SEER') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(bodyEl('role-card-sheet')!.querySelector('.rc-name-zh')!.textContent).toBe('預言家')
+    expect(bodyEl('rc-rules')!.textContent).toContain('不能查驗自己。')
+    wrapper.unmount()
+  })
+})
