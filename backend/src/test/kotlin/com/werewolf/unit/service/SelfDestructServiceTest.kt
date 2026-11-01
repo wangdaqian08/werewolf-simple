@@ -411,6 +411,34 @@ class SelfDestructServiceTest {
         assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
     }
 
+
+    @Test
+    fun `a taken IDIOT dies - only the day vote triggers the idiot reveal`() {
+        val king = kingPlayer()
+        val idiot = player("idiot", 4, PlayerRole.IDIOT)
+        val ctx = context(players = listOf(king, wolfPlayer(), idiot, villagePlayer()))
+        stubKingTakes(ctx, king, idiot)
+
+        selfDestructService.selfDestruct(req(kingId, "idiot"), ctx)
+
+        assertThat(idiot.alive).isFalse()
+        assertThat(idiot.idiotRevealed).isFalse()
+    }
+
+    @Test
+    fun `a taken BLACK_WOLF_KING dies without a shot (both kings in one game)`() {
+        val king = kingPlayer()
+        val blackKing = player("bwk", 4, PlayerRole.BLACK_WOLF_KING)
+        val ctx = context(players = listOf(king, wolfPlayer(), blackKing, villagePlayer()))
+        stubKingTakes(ctx, king, blackKing)
+
+        selfDestructService.selfDestruct(req(kingId, "bwk"), ctx)
+
+        assertThat(blackKing.alive).isFalse()
+        assertThat(ctx.game.pendingShooterUserId).isNull()
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+    }
+
     @Test
     fun `a taken sheriff hands the badge over next (day result already shown)`() {
         val king = kingPlayer()

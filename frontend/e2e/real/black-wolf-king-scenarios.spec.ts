@@ -1,7 +1,7 @@
 /**
  * Black Wolf King (黑狼王) — every seat in its own browser, five real games.
  *
- *  0. Create room: one wolf king per room, 9+ players only.
+ *  0. Create room: both wolf kings may be on together, 9+ players only.
  *  1. Happy: wolves knife the king → the king shoots the hunter → the hunter
  *     shoots a villager → the day vote ends the game → result + review.
  *  2. The king is voted out and shoots the seer (a god) → night 2 still plays
@@ -370,7 +370,7 @@ function assertNightAudio(t: Table, nights: number) {
 
 // ── 0. Create room ──────────────────────────────────────────────────────────
 
-test('create room: one wolf king per room, 9+ players', async ({ browser }) => {
+test('create room: both wolf kings allowed together, 9+ players', async ({ browser }) => {
   const c = await browser.newContext({ viewport: { width: 417, height: 1400 } })
   const page = await c.newPage()
   const dir = path.join(SHOTS, 'create-room')
@@ -396,8 +396,7 @@ test('create room: one wolf king per room, 9+ players', async ({ browser }) => {
     await expect(page.getByTestId('role-hint-BLACK_WOLF_KING')).toBeVisible()
     await black.click()
     await expect(black).toHaveClass(/toggle-on/)
-    await expect(white, '白狼王 locked while 黑狼王 is on').toBeDisabled()
-    await expect(white).toHaveAttribute('title', /一局只能選一個狼王/)
+    await expect(white, '白狼王 can join 黑狼王 (9p default = 3 wolves)').toBeEnabled()
     await page.screenshot({
       path: path.join(dir, '9p-black-on.png'),
       fullPage: true,

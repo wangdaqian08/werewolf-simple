@@ -250,16 +250,35 @@ class RoomServiceTest {
     }
 
     @Test
-    fun `createRoom - rejects WHITE_WOLF_KING and BLACK_WOLF_KING together (one king per room)`() {
+    fun `createRoom - both wolf kings need a plain wolf (at least 3 wolves)`() {
+        val cfg = RoomConfigRequest(
+            totalPlayers = 9,
+            wolfCount = 2,
+            roles = listOf(PlayerRole.WHITE_WOLF_KING, PlayerRole.BLACK_WOLF_KING, PlayerRole.SEER, PlayerRole.WITCH),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("White Wolf King + Black Wolf King needs at least 3 wolves")
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
+    @Test
+    fun `createRoom - accepts WHITE_WOLF_KING and BLACK_WOLF_KING together with 3 wolves`() {
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
         val cfg = RoomConfigRequest(
             totalPlayers = 9,
             wolfCount = 3,
             roles = listOf(PlayerRole.WHITE_WOLF_KING, PlayerRole.BLACK_WOLF_KING, PlayerRole.SEER, PlayerRole.WITCH),
         )
-        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
-            .isInstanceOf(InvalidRoleCompositionException::class.java)
-            .hasMessageContaining("one wolf king")
-        verify(roomRepository, never()).save(any<Room>())
+        roomService.createRoom(hostId, "Host", null, cfg)
+        verify(roomRepository).save(argThat<Room> { hasWhiteWolfKing && hasBlackWolfKing && wolfCount == 3 })
     }
 
     @Test

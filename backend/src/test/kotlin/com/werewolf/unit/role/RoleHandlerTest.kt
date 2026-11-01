@@ -169,6 +169,32 @@ class RoleHandlerTest {
             assertThat(captor.firstValue.wolfTargetUserId).isEqualTo("wolf2")
         }
 
+
+        @Test
+        fun `wolf kill - a plain WEREWOLF may target itself (自刀)`() {
+            val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
+            val wolf = player("wolf", 1, PlayerRole.WEREWOLF)
+            val ctx = GameContext(game(), room(), listOf(wolf), nightPhase = np)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("wolf", ActionType.WOLF_KILL, "wolf"), ctx)
+
+            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+            val captor = argumentCaptor<NightPhase>()
+            verify(nightPhaseRepository).save(captor.capture())
+            assertThat(captor.firstValue.wolfTargetUserId).isEqualTo("wolf")
+        }
+
+        @Test
+        fun `wolf kill - rejected when target is dead`() {
+            val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
+            val wolf = player("wolf", 1, PlayerRole.WEREWOLF)
+            val deadTarget = player("u2", 2, PlayerRole.VILLAGER, alive = false)
+            val ctx = GameContext(game(), room(), listOf(wolf, deadTarget), nightPhase = np)
+            val result = handler.handle(req("wolf", ActionType.WOLF_KILL, "u2"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        }
+
         @Test
         fun `wolf kill - WHITE_WOLF_KING kills with the wolves`() {
             val np = nightPhase(NightSubPhase.WEREWOLF_PICK)
@@ -390,6 +416,38 @@ class RoleHandlerTest {
 
             val seerResult = (result as GameActionResult.Success).events[0] as DomainEvent.SeerResult
             assertThat(seerResult.isWerewolf).isTrue()
+        }
+
+
+        @Test
+        fun `seer check - BLACK_WOLF_KING reads as werewolf`() {
+            val ctx = seerCtx(targetRole = PlayerRole.BLACK_WOLF_KING)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("seer", ActionType.SEER_CHECK, "u2"), ctx)
+
+            val seerResult = (result as GameActionResult.Success).events[0] as DomainEvent.SeerResult
+            assertThat(seerResult.isWerewolf).isTrue()
+        }
+
+        @Test
+        fun `seer check - rejected when target is dead`() {
+            val np = nightPhase(NightSubPhase.SEER_PICK)
+            val seer = player("seer", 1, PlayerRole.SEER)
+            val dead = player("u2", 2, PlayerRole.WEREWOLF, alive = false)
+            val ctx = GameContext(game(), room(), listOf(seer, dead), nightPhase = np)
+            val result = handler.handle(req("seer", ActionType.SEER_CHECK, "u2"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        }
+
+        @Test
+        fun `seer check - rejected when actor is a villager`() {
+            val np = nightPhase(NightSubPhase.SEER_PICK)
+            val villager = player("v1", 1, PlayerRole.VILLAGER)
+            val target = player("u2", 2, PlayerRole.WEREWOLF)
+            val ctx = GameContext(game(), room(), listOf(villager, target), nightPhase = np)
+            val result = handler.handle(req("v1", ActionType.SEER_CHECK, "u2"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
         }
 
         @Test
@@ -628,6 +686,27 @@ class RoleHandlerTest {
             val captor = argumentCaptor<NightPhase>()
             verify(nightPhaseRepository).save(captor.capture())
             assertThat(captor.firstValue.guardTargetUserId).isEqualTo("guard")
+        }
+
+
+        @Test
+        fun `guard protect - rejected when target is dead`() {
+            val np = nightPhase(NightSubPhase.GUARD_PICK)
+            val guard = player("guard", 1, PlayerRole.GUARD)
+            val dead = player("u2", 2, PlayerRole.VILLAGER, alive = false)
+            val ctx = GameContext(game(), room(), listOf(guard, dead), nightPhase = np)
+            val result = handler.handle(req("guard", ActionType.GUARD_PROTECT, "u2"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        }
+
+        @Test
+        fun `guard protect - rejected when actor is a villager`() {
+            val np = nightPhase(NightSubPhase.GUARD_PICK)
+            val villager = player("v1", 1, PlayerRole.VILLAGER)
+            val target = player("u2", 2, PlayerRole.VILLAGER)
+            val ctx = GameContext(game(), room(), listOf(villager, target), nightPhase = np)
+            val result = handler.handle(req("v1", ActionType.GUARD_PROTECT, "u2"), ctx)
+            assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
         }
 
         @Test

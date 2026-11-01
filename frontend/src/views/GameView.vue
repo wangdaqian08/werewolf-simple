@@ -121,6 +121,7 @@
       <VotingPhase
         :key="`voting-${gameStore.state.votingPhase.subPhase}-${gameStore.state.dayNumber}`"
         :role-history="gameStore.state?.roleHistory ?? null"
+        :wolf-teammates="gameStore.state?.wolfTeammates ?? []"
         :game-id="Number(route.params.gameId)"
         :voting-phase="gameStore.state.votingPhase"
         :players="gameStore.state.players"
@@ -153,6 +154,7 @@
       <DayPhase
         :key="`${gameStore.state.dayPhase.subPhase}-${gameStore.state.dayPhase.dayNumber}`"
         :role-history="gameStore.state?.roleHistory ?? null"
+        :wolf-teammates="gameStore.state?.wolfTeammates ?? []"
         :game-id="Number(route.params.gameId)"
         :day-phase="gameStore.state.dayPhase"
         :players="gameStore.state.players"

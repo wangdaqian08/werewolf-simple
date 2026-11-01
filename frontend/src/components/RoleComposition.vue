@@ -2,33 +2,44 @@
   <div class="composition-card" data-testid="role-composition">
     <div class="composition-label">{{ $t('roleComp.title') }}</div>
     <div class="composition-row">
-      <div
+      <button
         v-for="chip in chips"
         :key="chip.id"
+        type="button"
         :class="['composition-chip', isWolfRole(chip.id) ? 'chip-wolf' : 'chip-default']"
         :data-role="chip.id"
         :data-count="chip.count"
+        @click="openRole = chip.id"
       >
         <span class="chip-emoji">{{ chip.emoji }}</span>
         <span class="chip-name">{{ chip.name }}</span>
         <span class="chip-count">×{{ chip.count }}</span>
-      </div>
+      </button>
     </div>
     <div class="composition-total" data-testid="composition-total">
       {{ $t('roleComp.total', { roles: totalRoles, players: totalPlayers }) }}
     </div>
+    <RoleCardSheet
+      v-if="openRole"
+      :role="openRole"
+      :title="$t('roleCard.info')"
+      @close="openRole = null"
+    />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ROLE_DEFINITIONS, isWolfRole, roleDefinition, roleName } from '@/utils/roleDefinitions'
+import RoleCardSheet from '@/components/RoleCardSheet.vue'
 
 const props = defineProps<{
   totalPlayers: number
   wolfCount: number
   roles: string[]
 }>()
+
+const openRole = ref<string | null>(null)
 
 const GOD_IDS = new Set(['SEER', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT'])
 
@@ -102,8 +113,10 @@ const totalRoles = computed(() => chips.value.reduce((s, c) => s + c.count, 0))
   border-radius: 999px;
   border: 1px solid var(--border-l);
   background: var(--paper);
+  font: inherit;
   font-size: 0.8125rem;
   color: var(--text);
+  cursor: pointer;
 }
 
 .composition-chip.chip-wolf {

@@ -489,6 +489,8 @@ export interface GameState {
   dayNumber: number
   players: GamePlayer[]
   myRole?: PlayerRole
+  /** Other wolves' userIds — sent only to wolves (empty for everyone else). */
+  wolfTeammates?: string[]
   // The backend response key is `sheriffUserId` (see GameService.getGameState).
   // The legacy `sheriff` field below was declared but never populated by the
   // wire — keep both in sync; `sheriffUserId` is the source of truth.

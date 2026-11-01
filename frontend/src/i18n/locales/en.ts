@@ -384,8 +384,30 @@ export default {
       IDIOT: 'When voted out, reveal yourself: you survive but lose your right to vote.',
       VILLAGER: 'Find the wolves through discussion and voting, and protect the village.',
     },
+    rules: {
+      BLACK_WOLF_KING:
+        'Camp: wolves.\nHunts with the wolves at night; the seer sees you as a wolf.\nWhen you are out (voted out, killed by the wolves at night, or shot by the hunter) you may shoot one player, or hold fire.\nNo shot if the witch poisons you, you self-destruct, or the White Wolf King takes you, nor if your death already decides the game.\nShoot before the host moves on, or the shot is lost.',
+      GUARD:
+        "Camp: good (a god role).\nEach night protect one living player (yourself included) from the wolves; if the room allows it you may also protect no one.\nYou cannot protect the same player two nights in a row.\nProtection does not stop the witch's poison.\nIf you and the witch's antidote save the same player, that player still dies (unless they hold night-1 immunity).",
+      HUNTER:
+        'Camp: good (a god role).\nWhen you are out (voted out, killed by the wolves at night, or shot by the Black Wolf King) you may shoot one player, or hold fire.\nNo shot if the witch poisons you or the White Wolf King takes you, nor if your death already decides the game.\nShoot before the host moves on, or the shot is lost.',
+      IDIOT:
+        'Camp: good (a god role).\nWhen voted out you reveal your card and stay in, but lose your vote; a sheriff keeps the badge but cannot vote.\nThis works once only; any other death (night kill, poison, a shot, a White Wolf King take) still kills you.',
+      SEER: 'Camp: good (a god role).\nEach night check one living player: good or wolf (wolf kings count as wolves).\nYou cannot check yourself.',
+      VILLAGER:
+        'Camp: good (villager).\nNo special ability.\nTalk, reason, and vote out the players you suspect.',
+      WEREWOLF:
+        'Camp: wolves.\nEach night pick a target with your fellow wolves; the first confirmed pick counts.\nYou may attack any living player, a fellow wolf or yourself included.\nDuring the sheriff election, or in the day once the night result is shown, you may self-destruct: no vote that day, the host can only move to night.\nThe seer sees you as a wolf.',
+      WHITE_WOLF_KING:
+        "Camp: wolves.\nHunts with the wolves at night; the seer sees you as a wolf.\nWhen you self-destruct you may take one player with you (not yourself); they get no shot. As the last wolf you cannot take anyone.\nNo ability once voted out, shot, or killed at night; but in the day-1 sheriff election last night's deaths are not yet shown, so you can still self-destruct and take someone.",
+      WITCH:
+        "Camp: good (a god role).\nOne antidote and one poison, each usable once per game.\nThe antidote only saves tonight's wolf victim; you cannot use both potions in one night.\nYou may save yourself on night 1 only, and only if the room allows it.\nYou cannot poison yourself; a poisoned hunter or Black Wolf King gets no shot.\nIf you and the guard save the same player, that player still dies (unless they hold night-1 immunity).",
+    },
   },
   roleCard: {
+    info: 'Role Info',
+    rules: 'Rules',
+    teammates: 'Wolf teammates',
     title: 'My Role',
   },
   roleComp: {
@@ -538,7 +560,7 @@ export default {
     joined: '{n} joined',
     kingMin: '{n}+ players required',
     needPlayers: 'Needs {n}+ players',
-    oneKing: 'One wolf king per room',
+    kingsNeedWolves: 'Both wolf kings need {n}+ wolves',
     players: 'Players (incl. host)',
     remaining: 'Remaining seats are filled with villagers.',
     required: 'REQUIRED',

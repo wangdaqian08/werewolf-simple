@@ -429,10 +429,10 @@ class RoomService(
      * Backend enforces game-correctness invariants only:
      *   1. wolfCount must be > 0 (a wolfless game is not werewolf)
      *   2. wolves + gods ≤ totalPlayers (no seat overflow)
-     *   3. at most one wolf king (白狼王 / 黑狼王) per room
-     *   4. a wolf king needs a fellow wolf (wolfCount ≥ 2). For the White Wolf
-     *      King alone it is always the last wolf and could never take anyone;
-     *      the Black Wolf King shares the gate (owner's call: one rule for both)
+     *   3. each wolf king (白狼王 / 黑狼王, both may be on) needs a plain
+     *      fellow wolf: wolfCount ≥ kings + 1. For the White Wolf King alone it
+     *      is always the last wolf and could never take anyone; the Black Wolf
+     *      King shares the gate (owner's call: one rule for both)
      *
      * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
      * for the host-facing stepper — they intentionally do NOT gate the API,
@@ -458,12 +458,10 @@ class RoomService(
             )
         }
         val kings = roles.filter { it == PlayerRole.WHITE_WOLF_KING || it == PlayerRole.BLACK_WOLF_KING }.distinct()
-        if (kings.size > 1) {
-            throw InvalidRoleCompositionException("Only one wolf king per room, got $kings")
-        }
-        if (kings.isNotEmpty() && wolfCount < 2) {
+        if (kings.isNotEmpty() && wolfCount < kings.size + 1) {
+            val names = kings.joinToString(" + ") { if (it == PlayerRole.WHITE_WOLF_KING) "White Wolf King" else "Black Wolf King" }
             throw InvalidRoleCompositionException(
-                "${if (kings[0] == PlayerRole.WHITE_WOLF_KING) "White" else "Black"} Wolf King needs at least 2 wolves, got $wolfCount",
+                "$names needs at least ${kings.size + 1} wolves, got $wolfCount",
             )
         }
     }

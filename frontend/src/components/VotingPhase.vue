@@ -353,31 +353,14 @@
         </template>
       </footer>
 
-      <!-- Role card bottom sheet -->
-      <Teleport to="body">
-        <div v-if="showRoleCard" class="role-card-overlay" @click.self="showRoleCard = false">
-          <div class="role-card-sheet">
-            <div class="role-card-header">
-              <span>{{ $t('roleCard.title') }}</span>
-              <button class="history-close" @click="showRoleCard = false">✕</button>
-            </div>
-            <div v-if="myRole && ROLE_META[myRole]" class="role-card-body">
-              <div class="rc-emoji">{{ ROLE_META[myRole]?.emoji }}</div>
-              <div class="rc-name-zh">{{ roleName(myRole) }}</div>
-              <div class="rc-label" :class="`rc-label-${ROLE_META[myRole]?.team}`">
-                {{ roleTag(myRole) }}
-              </div>
-              <div v-if="myPlayer" class="rc-identity" data-testid="rc-identity">
-                {{ $t('common.seatDot', { n: myPlayer.seatIndex, name: myPlayer.nickname }) }}
-              </div>
-              <p class="rc-desc" data-testid="role-card-desc">
-                {{ roleDescription(myRole, true) }}
-              </p>
-              <RoleHistory :history="roleHistory" />
-            </div>
-          </div>
-        </div>
-      </Teleport>
+      <RoleCardSheet
+        v-if="showRoleCard && myRole"
+        :role="myRole"
+        :player="myPlayer"
+        :teammates="teammatePlayers"
+        :history="roleHistory ?? null"
+        @close="showRoleCard = false"
+      />
 
       <!-- History bottom sheet — Teleport here so it stays inside isVotingScreen block -->
       <Teleport to="body">
@@ -676,7 +659,7 @@
 
 <script lang="ts" setup>
 import LanguageToggle from '@/components/LanguageToggle.vue'
-import { roleDescription, roleName, roleTag } from '@/utils/roleDefinitions'
+import { roleName } from '@/utils/roleDefinitions'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type {
   GamePlayer,
@@ -687,7 +670,7 @@ import type {
   RoleHistory as RoleHistoryData,
 } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
-import RoleHistory from '@/components/RoleHistory.vue'
+import RoleCardSheet from '@/components/RoleCardSheet.vue'
 import SunArc from '@/components/SunArc.vue'
 import ActionLogDrawer from '@/components/ActionLogDrawer.vue'
 import GameSettingsModal from '@/components/GameSettingsModal.vue'
@@ -702,6 +685,7 @@ const props = defineProps<{
   isHost: boolean
   myRole?: PlayerRole
   roleHistory?: RoleHistoryData | null
+  wolfTeammates?: string[]
   isAlive?: boolean
   // userId of the game's current sheriff (null after BADGE_DESTROY).
   // Drives badge-handover UI: the dying sheriff to pass is whoever holds
@@ -903,56 +887,15 @@ const sortedTally = computed(() =>
 const showHistory = ref(false)
 const showRoleCard = ref(false)
 const myPlayer = computed(() => props.players.find((p) => p.userId === props.myUserId))
+const teammatePlayers = computed(() =>
+  props.players.filter((p) => props.wolfTeammates?.includes(p.userId)),
+)
 const showLog = ref(false)
 const showSettings = ref(false)
 
 watch([showHistory, showRoleCard], ([h, r]) => {
   document.body.style.overflow = h || r ? 'hidden' : ''
 })
-
-// ── Role card metadata ─────────────────────────────────────────────────────────
-interface RoleMeta {
-  emoji: string
-  team: string
-}
-const ROLE_META: Record<string, RoleMeta> = {
-  WEREWOLF: {
-    emoji: '🐺',
-    team: 'wolf',
-  },
-  VILLAGER: {
-    emoji: '🌾',
-    team: 'village',
-  },
-  SEER: {
-    emoji: '🔭',
-    team: 'special',
-  },
-  WITCH: {
-    emoji: '🔮',
-    team: 'special',
-  },
-  HUNTER: {
-    emoji: '🏹',
-    team: 'special',
-  },
-  GUARD: {
-    emoji: '🛡️',
-    team: 'special',
-  },
-  IDIOT: {
-    emoji: '🃏',
-    team: 'special',
-  },
-  WHITE_WOLF_KING: {
-    emoji: '👑',
-    team: 'wolf',
-  },
-  BLACK_WOLF_KING: {
-    emoji: '🖤',
-    team: 'wolf',
-  },
-}
 
 // ── Slot variants ─────────────────────────────────────────────────────────────
 function votingSlotVariant(player: GamePlayer) {
@@ -1244,86 +1187,6 @@ function onBadgeTap(player: GamePlayer) {
 
 .history-banner {
   margin-bottom: 0.375rem;
-}
-
-/* Role card centered modal */
-.role-card-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(26, 20, 12, 0.55);
-  z-index: 201;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  touch-action: none;
-}
-
-.role-card-sheet {
-  width: 100%;
-  max-width: 320px;
-  background: var(--paper);
-  border-radius: 1rem;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(26, 20, 12, 0.3);
-}
-
-.role-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.875rem 1rem 0.75rem;
-  border-bottom: 1px solid var(--border-l);
-  font-family: 'Noto Serif SC', serif;
-  font-size: 0.9375rem;
-  font-weight: 600;
-}
-
-.role-card-body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1.75rem 1.5rem 2rem;
-}
-
-.rc-emoji {
-  font-size: 3.5rem;
-  line-height: 1;
-  margin-bottom: 0.5rem;
-}
-.rc-name-zh {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text);
-}
-.rc-label {
-  font-size: 0.625rem;
-  letter-spacing: 0.2em;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-.rc-label-wolf {
-  color: var(--red);
-}
-.rc-label-village {
-  color: var(--green);
-}
-.rc-label-special {
-  color: var(--gold);
-}
-.rc-identity {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text);
-}
-.rc-desc {
-  font-size: 0.8125rem;
-  color: var(--muted);
-  line-height: 1.6;
-  text-align: center;
-  margin: 0;
 }
 
 /* Dead / Idiot overlays on player slots */

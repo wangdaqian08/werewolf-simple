@@ -89,22 +89,29 @@
           :class="roleRowClass(role)"
           class="role-row"
         >
-          <span class="role-emoji">{{ role.emoji }}</span>
-          <div class="role-names">
-            <span
-              :class="{ 'role-name-muted': !role.required && !isEnabled(role.id) }"
-              class="role-name"
-            >
-              {{ roleName(role.id) }} {{ roleTag(role.id) }}
+          <button
+            type="button"
+            class="role-info-btn"
+            :data-testid="`role-info-${role.id}`"
+            @click="openRole = role.id"
+          >
+            <span class="role-emoji">{{ role.emoji }}</span>
+            <span class="role-names">
+              <span
+                :class="{ 'role-name-muted': !role.required && !isEnabled(role.id) }"
+                class="role-name"
+              >
+                {{ roleName(role.id) }} {{ roleTag(role.id) }}
+              </span>
+              <span
+                v-if="KING_IDS.includes(role.id)"
+                class="win-cond-desc"
+                :data-testid="`role-hint-${role.id}`"
+              >
+                {{ $t('setup.kingMin', { n: KING_MIN_PLAYERS }) }}
+              </span>
             </span>
-            <span
-              v-if="KING_IDS.includes(role.id)"
-              class="win-cond-desc"
-              :data-testid="`role-hint-${role.id}`"
-            >
-              {{ $t('setup.kingMin', { n: KING_MIN_PLAYERS }) }}
-            </span>
-          </div>
+          </button>
           <!-- Required roles: label only -->
           <span
             v-if="role.required"
@@ -127,6 +134,13 @@
           </button>
         </div>
       </div>
+
+      <RoleCardSheet
+        v-if="openRole"
+        :role="openRole"
+        :title="$t('roleCard.info')"
+        @close="openRole = null"
+      />
 
       <RoleComposition
         :total-players="totalPlayers"
@@ -166,11 +180,13 @@ import {
 import { wolfBounds } from '@/utils/wolfBounds'
 import RoleComposition from '@/components/RoleComposition.vue'
 import ShareButton from '@/components/ShareButton.vue'
+import RoleCardSheet from '@/components/RoleCardSheet.vue'
 
 // Page 2 of room creation, and the host's "edit players & roles" from the room.
 const props = defineProps<{ room: Room }>()
 const emit = defineEmits<{ done: [] }>()
 const roomStore = useRoomStore()
+const openRole = ref<string | null>(null)
 
 const MIN_PLAYERS = 6
 // 15 = 5 wolves / 5 gods / 5 villagers, the largest board the current roles balance.
@@ -205,14 +221,16 @@ function decrement() {
 }
 
 // Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (only 5 exist) and
-// always leave ≥ 1 villager seat, and a wolf king (白狼王 / 黑狼王) needs 9+
-// players, one king per room (the backend enforces the king rules too).
+// always leave ≥ 1 villager seat, and a wolf king (白狼王 / 黑狼王, both may be
+// on) needs 9+ players and each king a plain fellow wolf: wolves ≥ kings + 1
+// (the backend enforces the king rules too).
 const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)
 const KING_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
 const KING_MIN_PLAYERS = 9
 
-const otherKingOn = (roleId: string) =>
-  KING_IDS.some((id) => id !== roleId && enabledOptional.value.has(id))
+const enabledKingCount = computed(
+  () => KING_IDS.filter((id) => enabledOptional.value.has(id)).length,
+)
 
 // Optional wolf roles (the kings) take a wolf seat, so they are not gods.
 const enabledGodCount = computed(
@@ -231,7 +249,9 @@ const canAddWolf = computed(
     wolfCount.value + 1 + enabledGodCount.value < totalPlayers.value,
 )
 const canRemoveWolf = computed(
-  () => wolfCount.value > currentBounds.value.min && enabledGodCount.value <= wolfCount.value,
+  () =>
+    wolfCount.value > Math.max(currentBounds.value.min, enabledKingCount.value + 1) &&
+    enabledGodCount.value <= wolfCount.value,
 )
 
 function wolfIncrement() {
@@ -266,7 +286,10 @@ function isEnabled(roleId: string): boolean {
 function canToggle(roleId: string): boolean {
   const on = enabledOptional.value.has(roleId)
   if (KING_IDS.includes(roleId))
-    return on || (totalPlayers.value >= KING_MIN_PLAYERS && !otherKingOn(roleId))
+    return (
+      on ||
+      (totalPlayers.value >= KING_MIN_PLAYERS && wolfCount.value >= enabledKingCount.value + 2)
+    )
   return on
     ? enabledGodCount.value > godRange.value.min
     : enabledGodCount.value < godRange.value.max
@@ -275,9 +298,9 @@ function canToggle(roleId: string): boolean {
 function toggleHint(roleId: string): string {
   if (canToggle(roleId)) return ''
   if (KING_IDS.includes(roleId))
-    return otherKingOn(roleId)
-      ? t('setup.oneKing')
-      : t('setup.needPlayers', { n: KING_MIN_PLAYERS })
+    return totalPlayers.value < KING_MIN_PLAYERS
+      ? t('setup.needPlayers', { n: KING_MIN_PLAYERS })
+      : t('setup.kingsNeedWolves', { n: enabledKingCount.value + 2 })
   const { min, max } = godRange.value
   return enabledOptional.value.has(roleId)
     ? t('setup.atLeast', { n: min })
@@ -329,6 +352,19 @@ async function save() {
 <style scoped src="../assets/room-form.css"></style>
 
 <style scoped>
+.role-info-btn {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .invite-row {
   display: flex;
   align-items: center;
