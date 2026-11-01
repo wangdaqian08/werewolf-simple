@@ -16,8 +16,9 @@ describe('RoleCardSheet', () => {
   it('lists the role rules, one per line', () => {
     mount(RoleCardSheet, { props: { role: 'GUARD' }, attachTo: document.body })
     const rules = [...document.body.querySelectorAll('[data-testid="rc-rules"] li')]
-    expect(rules).toHaveLength(4)
-    expect(rules[1]?.textContent).toBe('不能連續兩晚守護同一名玩家。')
+    expect(rules).toHaveLength(5)
+    expect(rules[0]?.textContent).toBe('陣營：好人陣營（神職）。')
+    expect(rules[2]?.textContent).toBe('不能連續兩晚守護同一名玩家。')
   })
 
   it('shows wolf teammates, a dead one struck through', () => {

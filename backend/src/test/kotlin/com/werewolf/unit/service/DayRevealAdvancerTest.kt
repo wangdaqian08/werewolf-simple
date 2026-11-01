@@ -117,6 +117,19 @@ class DayRevealAdvancerTest {
         assertThat(advancer.nightShooterUserId(gameId)).isNull()
     }
 
+
+    @Test
+    fun `no shot when the BLACK_WOLF_KING died from poison only`() {
+        stub(game(), listOf(player("k", PlayerRole.BLACK_WOLF_KING, alive = false)), night(poison = "k"))
+        assertThat(advancer.nightShooterUserId(gameId)).isNull()
+    }
+
+    @Test
+    fun `no shot for a wolf-killed WHITE_WOLF_KING`() {
+        stub(game(), listOf(player("k", PlayerRole.WHITE_WOLF_KING, alive = false)), night(wolf = "k"))
+        assertThat(advancer.nightShooterUserId(gameId)).isNull()
+    }
+
     @Test
     fun `no shot when the hunter is both wolf-targeted and poisoned`() {
         stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h", poison = "h"))

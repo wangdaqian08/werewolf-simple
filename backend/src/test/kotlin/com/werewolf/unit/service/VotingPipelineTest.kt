@@ -817,6 +817,25 @@ class VotingPipelineTest {
         verify(nightOrchestrator, never()).initNight(any(), any(), anyOrNull(), any())
     }
 
+
+    @Test
+    fun `handleHunterShoot - a shot kills an unrevealed IDIOT (no reveal, only the day vote does that)`() {
+        val hunter = player("h", 1, PlayerRole.HUNTER, alive = false)
+        val idiot = player("i", 2, PlayerRole.IDIOT)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = "h"), hunter, idiot, player("v", 3))
+        votedOut("h", PlayerRole.HUNTER)
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "i")).thenReturn(Optional.of(idiot))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        stubLoader(hunter, idiot, player("v", 3))
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
+
+        val result = votingPipeline.handleHunterShoot(req("h", ActionType.HUNTER_SHOOT, "i"), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(idiot.alive).isFalse()
+        assertThat(idiot.idiotRevealed).isFalse()
+    }
+
     @Test
     fun `handleHunterShoot - the chain shooter fires, the chain clears and the day pauses on VOTE_RESULT`() {
         val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)

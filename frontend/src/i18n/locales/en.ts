@@ -386,21 +386,22 @@ export default {
     },
     rules: {
       BLACK_WOLF_KING:
-        'Hunts with the wolves at night; the seer sees you as a wolf.\nWhen you are out (voted out, killed at night, or shot by the hunter) you may shoot one player, or hold fire.\nNo shot if the witch poisons you, you self-destruct, or the White Wolf King takes you.\nShoot before the host moves on, or the shot is lost.',
+        'Camp: wolves.\nHunts with the wolves at night; the seer sees you as a wolf.\nWhen you are out (voted out, killed by the wolves at night, or shot by the hunter) you may shoot one player, or hold fire.\nNo shot if the witch poisons you, you self-destruct, or the White Wolf King takes you, nor if your death already decides the game.\nShoot before the host moves on, or the shot is lost.',
       GUARD:
-        "Each night protect one living player (yourself included) from the wolves.\nYou cannot protect the same player two nights in a row.\nProtection does not stop the witch's poison.\nIf you and the witch's antidote save the same player, that player still dies.",
+        "Camp: good (a god role).\nEach night protect one living player (yourself included) from the wolves; if the room allows it you may also protect no one.\nYou cannot protect the same player two nights in a row.\nProtection does not stop the witch's poison.\nIf you and the witch's antidote save the same player, that player still dies (unless they hold night-1 immunity).",
       HUNTER:
-        'When you are out you may shoot one player, or hold fire.\nNo shot if the witch poisons you or the White Wolf King takes you.\nShoot before the host moves on, or the shot is lost.',
+        'Camp: good (a god role).\nWhen you are out (voted out, killed by the wolves at night, or shot by the Black Wolf King) you may shoot one player, or hold fire.\nNo shot if the witch poisons you or the White Wolf King takes you, nor if your death already decides the game.\nShoot before the host moves on, or the shot is lost.',
       IDIOT:
-        'When voted out you reveal your card and stay in, but lose your vote.\nThis works once only; a night kill or poison still kills you.',
-      SEER: 'Each night check one living player: good or wolf (wolf kings count as wolves).\nYou cannot check yourself.',
-      VILLAGER: 'No special ability.\nTalk, reason, and vote out the players you suspect.',
+        'Camp: good (a god role).\nWhen voted out you reveal your card and stay in, but lose your vote; a sheriff keeps the badge but cannot vote.\nThis works once only; any other death (night kill, poison, a shot, a White Wolf King take) still kills you.',
+      SEER: 'Camp: good (a god role).\nEach night check one living player: good or wolf (wolf kings count as wolves).\nYou cannot check yourself.',
+      VILLAGER:
+        'Camp: good (villager).\nNo special ability.\nTalk, reason, and vote out the players you suspect.',
       WEREWOLF:
-        'Each night pick a target with your fellow wolves; the first confirmed pick counts.\nYou may attack any living player, a fellow wolf or yourself included.\nDuring the day or the sheriff election you may self-destruct: the day ends at once, no vote, straight to night.\nThe seer sees you as a wolf.',
+        'Camp: wolves.\nEach night pick a target with your fellow wolves; the first confirmed pick counts.\nYou may attack any living player, a fellow wolf or yourself included.\nDuring the sheriff election, or in the day once the night result is shown, you may self-destruct: no vote that day, the host can only move to night.\nThe seer sees you as a wolf.',
       WHITE_WOLF_KING:
-        'Hunts with the wolves at night; the seer sees you as a wolf.\nWhen you self-destruct in the day you may take one player with you; they get no shot.\nNo ability when voted out or killed at night.',
+        "Camp: wolves.\nHunts with the wolves at night; the seer sees you as a wolf.\nWhen you self-destruct you may take one player with you (not yourself); they get no shot. As the last wolf you cannot take anyone.\nNo ability once voted out, shot, or killed at night; but in the day-1 sheriff election last night's deaths are not yet shown, so you can still self-destruct and take someone.",
       WITCH:
-        "One antidote and one poison, each usable once per game.\nThe antidote only saves tonight's wolf victim; you cannot use both potions in one night.\nYou may save yourself on night 1 only, and only if the room allows it.\nYou cannot poison yourself; a poisoned hunter or Black Wolf King gets no shot.\nIf you and the guard save the same player, that player still dies.",
+        "Camp: good (a god role).\nOne antidote and one poison, each usable once per game.\nThe antidote only saves tonight's wolf victim; you cannot use both potions in one night.\nYou may save yourself on night 1 only, and only if the room allows it.\nYou cannot poison yourself; a poisoned hunter or Black Wolf King gets no shot.\nIf you and the guard save the same player, that player still dies (unless they hold night-1 immunity).",
     },
   },
   roleCard: {

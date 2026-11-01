@@ -195,7 +195,7 @@ describe('RoomSetupPanel — role limits', () => {
     const sheet = document.body.querySelector('[data-testid="role-card-sheet"]')
     expect(sheet?.querySelector('.rc-name-zh')?.textContent).toBe('獵人')
     expect(sheet?.querySelector('[data-testid="rc-rules"]')?.textContent).toContain(
-      '被女巫毒死或被白狼王帶走時不能開槍。',
+      '被女巫毒死或被白狼王帶走時不能開槍',
     )
     expect(chip(w, 'HUNTER')).toBe(1) // opening the info does not toggle the role
     w.unmount()

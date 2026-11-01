@@ -22,4 +22,10 @@ class PlayerRoleTest {
     fun `BLACK_WOLF_KING is not a god`() {
         assertThat(PlayerRole.BLACK_WOLF_KING.isGod).isFalse()
     }
+
+    @Test
+    fun `the gods are SEER, WITCH, HUNTER, GUARD and IDIOT - the villager is not a god`() {
+        assertThat(PlayerRole.entries.filter { it.isGod })
+            .containsExactlyInAnyOrder(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER, PlayerRole.GUARD, PlayerRole.IDIOT)
+    }
 }
