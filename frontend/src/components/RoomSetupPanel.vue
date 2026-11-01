@@ -204,9 +204,9 @@ function decrement() {
   if (totalPlayers.value > minPlayers.value) totalPlayers.value--
 }
 
-// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (only 5 exist), and a
-// wolf king (白狼王 / 黑狼王) needs 9+ players, one king per room (the backend
-// enforces both too). Within these limits there is always ≥ 1 villager.
+// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (only 5 exist) and
+// always leave ≥ 1 villager seat, and a wolf king (白狼王 / 黑狼王) needs 9+
+// players, one king per room (the backend enforces the king rules too).
 const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)
 const KING_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
 const KING_MIN_PLAYERS = 9
@@ -220,12 +220,15 @@ const enabledGodCount = computed(
 )
 const godRange = computed(() => ({
   min: Math.max(0, wolfCount.value - 1),
-  max: Math.min(GOD_IDS.length, wolfCount.value + 1),
+  max: Math.min(GOD_IDS.length, wolfCount.value + 1, totalPlayers.value - wolfCount.value - 1),
 }))
 
 // One wolf more/less must keep the gods inside the new range.
 const canAddWolf = computed(
-  () => wolfCount.value < currentBounds.value.max && enabledGodCount.value >= wolfCount.value,
+  () =>
+    wolfCount.value < currentBounds.value.max &&
+    enabledGodCount.value >= wolfCount.value &&
+    wolfCount.value + 1 + enabledGodCount.value < totalPlayers.value,
 )
 const canRemoveWolf = computed(
   () => wolfCount.value > currentBounds.value.min && enabledGodCount.value <= wolfCount.value,
