@@ -83,6 +83,7 @@ interface RoomRepository : JpaRepository<Room, Int> {
 interface RoomPlayerRepository : JpaRepository<RoomPlayer, Int> {
     fun findByRoomId(roomId: Int): List<RoomPlayer>
     fun findByRoomIdAndUserId(roomId: Int, userId: String): Optional<RoomPlayer>
+    fun existsByRoomIdAndUserId(roomId: Int, userId: String): Boolean
     fun existsByRoomIdAndSeatIndex(roomId: Int, seatIndex: Int): Boolean
 
     @Modifying
@@ -113,6 +114,7 @@ interface GameRepository : JpaRepository<Game, Int> {
 interface GamePlayerRepository : JpaRepository<GamePlayer, Int> {
     fun findByGameId(gameId: Int): List<GamePlayer>
     fun findByGameIdAndUserId(gameId: Int, userId: String): Optional<GamePlayer>
+    fun existsByGameIdAndUserId(gameId: Int, userId: String): Boolean
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 }
 

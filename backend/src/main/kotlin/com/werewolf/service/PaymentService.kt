@@ -137,11 +137,28 @@ class PaymentService(
             return
         }
         when (event.type) {
-            "checkout.session.completed" -> {
+            "checkout.session.completed", "checkout.session.async_payment_succeeded" -> {
                 // Throw, don't return: the rollback un-records the event id and the 5xx makes Stripe retry.
                 val session = extractSession(event)
                     ?: error("[payment] cannot deserialize session from event ${event.id}")
+                // A delayed method (e.g. ACH) completes the session before the money moves:
+                // credit on async_payment_succeeded instead.
+                if (session.paymentStatus == "unpaid") {
+                    log.info("[payment] session {} completed but unpaid, waiting for the payment to clear", session.id)
+                    return
+                }
                 fulfill(session)
+            }
+            "checkout.session.async_payment_failed" -> {
+                val session = extractSession(event)
+                    ?: error("[payment] cannot deserialize session from event ${event.id}")
+                paymentOrderRepository.findByStripeSessionId(session.id).ifPresent { order ->
+                    if (order.status == PaymentOrderStatus.CREATED) {
+                        order.status = PaymentOrderStatus.FAILED
+                        paymentOrderRepository.save(order)
+                        log.info("[payment] order {} failed: delayed payment did not clear", order.orderNo)
+                    }
+                }
             }
             "checkout.session.expired" -> {
                 val session = extractSession(event) ?: return

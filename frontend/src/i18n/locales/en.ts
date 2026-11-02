@@ -93,6 +93,7 @@ export default {
     seatList: '({list})',
     seatNick: 'Seat {n} {name}',
     seatTight: 'Seat {n} · {name}',
+    sessionExpired: 'Your login has expired. Please log in again',
     votes: 'Votes: {n}',
   },
   countdown: {

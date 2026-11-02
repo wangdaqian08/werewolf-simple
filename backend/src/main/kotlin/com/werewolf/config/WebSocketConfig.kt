@@ -1,5 +1,7 @@
 package com.werewolf.config
 
+import com.werewolf.repository.GamePlayerRepository
+import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.util.JwtUtil
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -14,6 +16,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor
 import org.springframework.messaging.support.ChannelInterceptor
 import org.springframework.messaging.support.MessageHeaderAccessor
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.stereotype.Component
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry
@@ -23,7 +26,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 class WebSocketConfig(
     @Value("\${websocket.allowed-origins}") private val allowedOrigins: String,
-    private val jwtUtil: JwtUtil,
+    private val stompAuthInterceptor: StompAuthInterceptor,
 ) : WebSocketMessageBrokerConfigurer {
 
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
@@ -44,7 +47,7 @@ class WebSocketConfig(
     }
 
     override fun configureClientInboundChannel(registration: ChannelRegistration) {
-        registration.interceptors(StompAuthInterceptor(jwtUtil))
+        registration.interceptors(stompAuthInterceptor)
     }
 
     @Bean
@@ -61,8 +64,17 @@ class WebSocketConfig(
  * CONNECT must carry a valid JWT; its subject becomes the session user, so
  * /user/queue/private reaches only that player. Clients only listen: a SEND to
  * a broker destination would let anyone forge server events (e.g. GameOver).
+ * A topic subscription needs membership: a game's players, a room's members.
  */
-class StompAuthInterceptor(private val jwtUtil: JwtUtil) : ChannelInterceptor {
+@Component
+class StompAuthInterceptor(
+    private val jwtUtil: JwtUtil,
+    private val gamePlayerRepository: GamePlayerRepository,
+    private val roomPlayerRepository: RoomPlayerRepository,
+) : ChannelInterceptor {
+    private val gameTopic = Regex("^/topic/game/(\\d+)$")
+    private val roomTopic = Regex("^/topic/room/(\\d+)$")
+
     override fun preSend(message: Message<*>, channel: MessageChannel): Message<*> {
         val accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor::class.java) ?: return message
         when (accessor.command) {
@@ -75,12 +87,26 @@ class StompAuthInterceptor(private val jwtUtil: JwtUtil) : ChannelInterceptor {
             StompCommand.SEND ->
                 if (accessor.destination?.startsWith("/app/") != true)
                     throw MessageDeliveryException("Clients may only send to /app")
-            // Private queues are reached only through /user/queue/..., which resolves to the caller's own session.
-            StompCommand.SUBSCRIBE ->
-                if (accessor.destination?.startsWith("/queue") == true)
-                    throw MessageDeliveryException("Subscribe to /user/queue/... instead")
+            StompCommand.SUBSCRIBE -> {
+                val userId = accessor.user?.name ?: throw MessageDeliveryException("Not authenticated")
+                if (!maySubscribe(userId, accessor.destination.orEmpty()))
+                    throw MessageDeliveryException("Not allowed to subscribe to ${accessor.destination}")
+            }
             else -> {}
         }
         return message
+    }
+
+    internal fun maySubscribe(userId: String, destination: String): Boolean {
+        gameTopic.matchEntire(destination)?.let { m ->
+            val gameId = m.groupValues[1].toIntOrNull() ?: return false
+            return gamePlayerRepository.existsByGameIdAndUserId(gameId, userId)
+        }
+        roomTopic.matchEntire(destination)?.let { m ->
+            val roomId = m.groupValues[1].toIntOrNull() ?: return false
+            return roomPlayerRepository.existsByRoomIdAndUserId(roomId, userId)
+        }
+        // Private queues only through /user/queue/..., which resolves to the caller's own session.
+        return destination.startsWith("/user/queue/")
     }
 }

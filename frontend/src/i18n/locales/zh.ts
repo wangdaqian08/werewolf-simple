@@ -93,6 +93,7 @@ export default {
     seatList: '（{list}）',
     seatNick: '{n}號 {name}',
     seatTight: '{n}號·{name}',
+    sessionExpired: '登入已過期，請重新登入',
     votes: '{n} 票',
   },
   countdown: {
