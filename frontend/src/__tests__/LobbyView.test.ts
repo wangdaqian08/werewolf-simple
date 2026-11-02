@@ -62,6 +62,7 @@ async function mountLobby(path = '/') {
       { path: '/', name: 'lobby', component: LobbyView },
       { path: '/create-room', name: 'create-room', component: { template: '<div />' } },
       { path: '/room/:roomId', name: 'room', component: { template: '<div />' } },
+      { path: '/game/:gameId', name: 'game', component: { template: '<div />' } },
     ],
   })
   await router.push(path)
@@ -432,5 +433,65 @@ describe('LobbyView quick rejoin (#7)', () => {
 
     expect(wrapper.find('[data-testid="rejoin-room-btn"]').exists()).toBe(false)
     expect(getActiveRoomMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('LobbyView: logging in again after the login expired', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    getProvidersMock.mockReset()
+    getProvidersMock.mockResolvedValue({ google: null, wechat: null, guest: true })
+    loginMock.mockReset()
+    getActiveRoomMock.mockReset()
+    getActiveRoomMock.mockResolvedValue(null)
+  })
+
+  it('a guest logs in again with their nickname filled in and goes back to the game', async () => {
+    sessionStorage.setItem(
+      'ww-resume',
+      JSON.stringify({ path: '/game/42', nickname: 'Alice', guest: true }),
+    )
+    loginMock.mockResolvedValue({
+      token: VALID_JWT(),
+      user: { userId: 'guest:alice', nickname: 'Alice', avatarUrl: null },
+    })
+    const { wrapper, router } = await mountLobby()
+
+    expect(wrapper.find('[data-testid="resume-hint"]').exists()).toBe(true)
+    expect((wrapper.find('[data-testid="nickname-input"]').element as HTMLInputElement).value).toBe(
+      'Alice',
+    )
+    await wrapper.find('[data-testid="resume-login-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(loginMock).toHaveBeenCalledWith('Alice')
+    expect(router.currentRoute.value.fullPath).toBe('/game/42')
+    expect(sessionStorage.getItem('ww-resume')).toBeNull()
+  })
+
+  it('back from an OAuth login, the lobby goes straight to where the player was', async () => {
+    localStorage.setItem('jwt', VALID_JWT())
+    localStorage.setItem('userId', 'google:bob')
+    sessionStorage.setItem('ww-resume', JSON.stringify({ path: '/room/7' }))
+
+    const { router } = await mountLobby()
+
+    expect(router.currentRoute.value.fullPath).toBe('/room/7')
+  })
+
+  it('choosing to create a room instead drops the pending resume', async () => {
+    sessionStorage.setItem('ww-resume', JSON.stringify({ path: '/game/42', nickname: 'Alice' }))
+    loginMock.mockResolvedValue({
+      token: VALID_JWT(),
+      user: { userId: 'guest:alice', nickname: 'Alice', avatarUrl: null },
+    })
+    const { wrapper, router } = await mountLobby()
+
+    await wrapper.find('[data-testid="create-room-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('create-room')
+    expect(sessionStorage.getItem('ww-resume')).toBeNull()
   })
 })

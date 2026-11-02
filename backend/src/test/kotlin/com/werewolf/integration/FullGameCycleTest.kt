@@ -14,7 +14,12 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.doAnswer
+import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.resttestclient.TestRestTemplate
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
@@ -25,6 +30,10 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
@@ -38,7 +47,26 @@ class FullGameCycleTest {
     @Autowired lateinit var nightOrchestrator: NightOrchestrator
     @Autowired lateinit var walletRepository: com.werewolf.repository.WalletRepository
     @Autowired lateinit var creditTransactionRepository: com.werewolf.repository.CreditTransactionRepository
-    @Autowired lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
+    @MockitoSpyBean lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
+
+    /** The game's phase as ANOTHER connection sees it while settle() runs. */
+    private val phaseSeenDuringSettle = ConcurrentHashMap<Int, GamePhase>()
+
+    @BeforeEach
+    fun watchSettle() {
+        doAnswer { call ->
+            val gameId = call.getArgument<Int>(0)
+            val reader = Executors.newSingleThreadExecutor()
+            try {
+                phaseSeenDuringSettle[gameId] = reader.submit<GamePhase> {
+                    gameRepository.findById(gameId).orElseThrow().phase
+                }.get(5, TimeUnit.SECONDS)
+            } finally {
+                reader.shutdown()
+            }
+            call.callRealMethod()
+        }.whenever(rewardSettlementService).settle(any(), anyOrNull())
+    }
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -227,6 +255,11 @@ class FullGameCycleTest {
         val finalGame = gameRepository.findById(gameId).orElseThrow()
         assertThat(finalGame.phase).isEqualTo(GamePhase.GAME_OVER)
         assertThat(finalGame.winner).isEqualTo(WinnerSide.WEREWOLF)
+        // GAME_OVER and its rewards commit together: while settle() ran, nobody else could
+        // see GAME_OVER yet (this used to be visible first, so the reward check below was flaky).
+        assertThat(phaseSeenDuringSettle[gameId])
+            .`as`("GAME_OVER must not be visible before its rewards are committed")
+            .isEqualTo(GamePhase.NIGHT)
 
         // ── Reward settlement: every player got exactly one GAME_REWARD ledger
         // row and a matching wallet balance; re-settling is a no-op.

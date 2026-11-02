@@ -4,7 +4,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.web.server.LocalServerPort
+import com.werewolf.util.JwtUtil
 import org.springframework.messaging.simp.stomp.StompHeaders
 import org.springframework.messaging.simp.stomp.StompSession
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter
@@ -29,6 +31,9 @@ class StompHeartbeatTest {
     @LocalServerPort
     private var port: Int = 0
 
+    @Autowired
+    private lateinit var jwtUtil: JwtUtil
+
     @Test
     fun `CONNECTED frame advertises 10s_10s heartbeat`() {
         val transports = listOf(WebSocketTransport(StandardWebSocketClient()))
@@ -42,7 +47,11 @@ class StompHeartbeatTest {
         }
 
         val session: StompSession = stompClient
-            .connectAsync("ws://localhost:$port/ws", handler)
+            .connectAsync(
+                "ws://localhost:$port/ws", null,
+                StompHeaders().apply { add("Authorization", "Bearer ${jwtUtil.generateToken("guest:hb", "hb", null)}") },
+                handler,
+            )
             .get(5, TimeUnit.SECONDS)
 
         try {

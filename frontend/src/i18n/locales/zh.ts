@@ -54,6 +54,7 @@ export default {
     error: {
       INVALID_AMOUNT: '每次只能發放 1–100 積分',
       NOT_ADMIN: '僅管理員可操作',
+      PIN_LOCKED: '密碼錯誤次數過多，請 15 分鐘後再試',
       PIN_NOT_CONFIGURED: '服務器未設置管理員密碼，暫時無法發放',
       PLAYER_NOT_FOUND: '找不到該玩家',
       WRONG_PIN: '密碼錯誤',
@@ -92,6 +93,7 @@ export default {
     seatList: '（{list}）',
     seatNick: '{n}號 {name}',
     seatTight: '{n}號·{name}',
+    sessionExpired: '登入已過期，請重新登入',
     votes: '{n} 票',
   },
   countdown: {
@@ -194,6 +196,8 @@ export default {
     or: '或',
     payUnavailable: '支付暫不可用',
     rejoin: '繼續遊戲 · {code}',
+    resumeHint: '登入已過期，重新登入後返回遊戲',
+    resumeLogin: '重新登入並返回',
     roomCodePh: '房間號',
     subtitle: 'Werewolf',
     title: '狼人殺',

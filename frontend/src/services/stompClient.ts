@@ -1,5 +1,7 @@
 import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
+import { onSessionExpired } from './http'
+import { useUserStore } from '@/stores/userStore'
 
 // In mock mode this singleton is used instead of a real WebSocket connection.
 // Vite removes this dead-code branch in production builds (VITE_MOCK is not set).
@@ -36,6 +38,12 @@ export function createStompClient(token: string): Client {
     },
     onStompError: (frame) => {
       console.error('[stompClient] STOMP错误:', frame)
+      // The server refuses CONNECT without a valid JWT. Stop the 3s reconnect loop and
+      // send the player to log in again instead of leaving them on a dead page.
+      if (frame.headers.message?.includes('token') || !useUserStore().isLoggedIn) {
+        disconnectStomp()
+        onSessionExpired()
+      }
     },
     onWebSocketError: (evt) => {
       console.error('[stompClient] WebSocket错误:', evt)

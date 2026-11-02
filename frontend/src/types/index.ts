@@ -43,6 +43,7 @@ export type AdminErrorCode =
   | 'NOT_ADMIN'
   | 'PIN_NOT_CONFIGURED'
   | 'WRONG_PIN'
+  | 'PIN_LOCKED'
   | 'INVALID_AMOUNT'
   | 'PLAYER_NOT_FOUND'
 

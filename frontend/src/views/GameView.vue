@@ -1062,22 +1062,7 @@ onMounted(async () => {
 
   if (userStore.token) {
     const client = createStompClient(userStore.token)
-    let isFirstConnect = true
-    client.onConnect = async () => {
-      if (isFirstConnect) {
-        isFirstConnect = false
-      } else {
-        // STOMP auto-reconnects after ~3s but the broker does not replay
-        // events broadcast during the disconnect window. Resync once on
-        // every reconnect so the UI catches up to whatever the player
-        // missed (sub-phase advances, deaths, sheriff handover, etc.).
-        try {
-          await refreshState()
-        } catch {
-          /* user can still recover via refresh */
-        }
-      }
-
+    client.onConnect = () => {
       subscribeToTopic(`/topic/game/${gameId}`, async (msg: { body: string }) => {
         const data = JSON.parse(msg.body)
         // Diagnostic: every STOMP frame leaves a trace before any branch
@@ -1236,6 +1221,11 @@ onMounted(async () => {
         } else {
           gameStore.addEvent(data)
         }
+      })
+      // The broker does not replay: resync AFTER subscribing, on every connect (the first
+      // one too), so nothing sent during the handshake or a disconnect is lost.
+      refreshState().catch(() => {
+        /* user can still recover via refresh */
       })
     }
     client.activate()

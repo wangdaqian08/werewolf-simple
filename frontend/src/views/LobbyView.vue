@@ -26,6 +26,10 @@
         {{ $t('lobby.rejoin', { code: activeRoom.roomCode }) }}
       </button>
 
+      <p v-if="!userStore.isLoggedIn && resumePath" class="resume-hint" data-testid="resume-hint">
+        {{ $t('lobby.resumeHint') }}
+      </p>
+
       <!-- Logged-in identity card ─────────────────────────────────────── -->
       <div v-if="userStore.isLoggedIn" class="identity" data-testid="signed-in-as">
         <div class="identity-avatar" :class="{ 'has-image': !!safeAvatarUrl }">
@@ -205,6 +209,17 @@
             />
           </div>
 
+          <button
+            v-if="resumePath"
+            :class="{ 'is-loading': loading }"
+            :disabled="loading || !nickname.trim()"
+            class="btn btn-gold resume-btn"
+            data-testid="resume-login-btn"
+            @click="handleResumeLogin"
+          >
+            {{ $t('lobby.resumeLogin') }}
+          </button>
+
           <div class="actions">
             <button
               :class="{ 'is-loading': loading }"
@@ -253,6 +268,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
+import { clearResume, peekResume } from '@/services/sessionResume'
 import { userService } from '@/services/userService'
 import { paymentService, type CreditProduct } from '@/services/paymentService'
 import { buildGoogleAuthUrl, generateOAuthState } from '@/utils/oauth'
@@ -263,13 +279,17 @@ const router = useRouter()
 const userStore = useUserStore()
 const roomStore = useRoomStore()
 
-const nickname = ref(userStore.nickname ?? '')
+// Set when the login expired: where the player was, and who they were.
+const resume = peekResume()
+const resumePath = ref(resume?.path ?? null)
+
+const nickname = ref(userStore.nickname ?? resume?.nickname ?? '')
 // An invite link (/?room=123, from ShareButton) fills in the code.
 const room = useRoute().query.room
 const roomCode = ref(typeof room === 'string' ? room : '')
 const loading = ref(false)
 const error = ref('')
-const showGuest = ref(false)
+const showGuest = ref(!!resume?.guest)
 const providers = ref<ProvidersResponse>({ google: null, wechat: null, guest: true })
 const avatarFailed = ref(false)
 
@@ -339,6 +359,8 @@ function onAvatarError() {
 }
 
 onMounted(async () => {
+  // Back from an OAuth login (or already logged in) with a pending resume.
+  if (resumeIfPending()) return
   try {
     providers.value = await userService.getProviders()
   } catch {
@@ -357,6 +379,35 @@ async function refreshActiveRoom() {
     activeRoom.value = await roomService.getActiveRoom()
   } catch {
     // Best-effort — absence of the rejoin button is a safe fallback.
+  }
+}
+
+/** Logged in again after the login expired: go back to where the player was. */
+function resumeIfPending(): boolean {
+  const path = resumePath.value
+  if (!path || !userStore.isLoggedIn) return false
+  clearResume()
+  resumePath.value = null
+  void router.replace(path)
+  return true
+}
+
+/** The player chose to do something else: drop the pending resume. */
+function dropResume() {
+  clearResume()
+  resumePath.value = null
+}
+
+async function handleResumeLogin() {
+  error.value = ''
+  loading.value = true
+  try {
+    await ensureGuestSession()
+    resumeIfPending()
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : t('lobby.connectFailed')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -382,6 +433,7 @@ async function ensureGuestSession() {
 }
 
 async function handleCreateRoom() {
+  dropResume()
   error.value = ''
   loading.value = true
   try {
@@ -396,6 +448,7 @@ async function handleCreateRoom() {
 
 async function handleJoinRoom() {
   if (!roomCode.value.trim()) return
+  dropResume()
   error.value = ''
   loading.value = true
   try {
@@ -843,5 +896,17 @@ function signInWithWechat() {
   font-size: 0.875rem;
   text-align: center;
   margin-top: 0.75rem;
+}
+
+.resume-hint {
+  color: var(--gold);
+  font-size: 0.875rem;
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+
+.resume-btn {
+  width: 100%;
+  margin-bottom: 0.75rem;
 }
 </style>

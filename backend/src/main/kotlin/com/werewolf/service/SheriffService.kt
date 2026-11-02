@@ -359,11 +359,8 @@ class SheriffService(
         val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
             context.gameId, VoteContext.SHERIFF_ELECTION, context.game.dayNumber
         )
-        // A vote for a candidate declared out since it was cast counts for no one.
-        val tally = votes.mapNotNull { it.targetUserId }.filter { context.playerById(it)?.alive != false }
-            .groupingBy { it }.eachCount()
-        val maxVotes = tally.values.maxOrNull() ?: 0
-        val topCandidates = tally.filterValues { it == maxVotes }.keys.toList()
+        val tally = tally(votes, context)
+        val topCandidates = topOf(tally)
         if (topCandidates.isEmpty()) {
             // No effective votes (all abstained or no votes cast)
             val runningCandidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
@@ -433,6 +430,13 @@ class SheriffService(
         val candidates = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
         if (candidates.none { it.userId == targetUserId && it.status == CandidateStatus.RUNNING })
             return GameActionResult.Rejected("Target is not a running candidate")
+        // A real tie: only the tied leaders. Zero votes: any running candidate.
+        val priorVotes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
+            context.gameId, VoteContext.SHERIFF_ELECTION, context.game.dayNumber,
+        )
+        val leaders = topOf(tally(priorVotes, context))
+        if (leaders.isNotEmpty() && targetUserId !in leaders)
+            return GameActionResult.Rejected("Target is not one of the tied candidates")
 
         election.subPhase = ElectionSubPhase.RESULT
         election.electedSheriffUserId = targetUserId
@@ -441,9 +445,6 @@ class SheriffService(
 
         // Persist the appoint outcome with whatever sheriff-election votes were
         // already cast so the action log shows the host's pick was a tie-break.
-        val priorVotes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
-            context.gameId, VoteContext.SHERIFF_ELECTION, context.game.dayNumber,
-        )
         val priorTally = priorVotes.mapNotNull { it.targetUserId }.groupingBy { it }.eachCount()
         actionLogService.recordSheriffResult(
             context.gameId, context.game.dayNumber, targetUserId, priorVotes, priorTally,
@@ -455,6 +456,16 @@ class SheriffService(
         // Sheriff is shown on the RESULT screen until the host clicks 显示结果
         // (SHERIFF_END_RESULT) — no auto-timer.
         return GameActionResult.Success()
+    }
+
+    /** Sheriff votes per candidate; a vote for a candidate declared out since it was cast counts for no one. */
+    private fun tally(votes: List<Vote>, context: GameContext): Map<String, Int> =
+        votes.mapNotNull { it.targetUserId }.filter { context.playerById(it)?.alive != false }
+            .groupingBy { it }.eachCount()
+
+    private fun topOf(tally: Map<String, Int>): List<String> {
+        val max = tally.values.maxOrNull() ?: return emptyList()
+        return tally.filterValues { it == max }.keys.toList()
     }
 
     /** Speaking order = running candidates in a random (shuffled) order. */

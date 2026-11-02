@@ -34,7 +34,8 @@ class GameService(
 ) {
     @Transactional
     fun startGame(hostUserId: String, roomId: Int): GameActionResult {
-        val room = roomRepository.findById(roomId).orElse(null)
+        // Row lock: a double-tapped Start must see IN_GAME, not create a second game.
+        val room = roomRepository.findByIdForUpdate(roomId).orElse(null)
             ?: return GameActionResult.Rejected("Room not found")
         if (room.hostUserId != hostUserId)
             return GameActionResult.Rejected("Only the host can start the game")
@@ -281,7 +282,13 @@ class GameService(
                 VotingSubPhase.BADGE_HANDOVER.name,
             )
 
-            val rawTally: Map<String, Double> = TallyCalculator.calculateWeightedTally(votes)
+            val elimHistory = eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
+            // Matches VotingPipeline.revealTally: a vote for a player declared out counts for no one.
+            // Not `alive`: the player this vote eliminated is dead by now and keeps their votes.
+            val counted = votes.filter { v ->
+                v.targetUserId?.let { t -> playerMap[t]?.removedByHost != true || t == elimHistory?.eliminatedUserId } != false
+            }
+            val rawTally: Map<String, Double> = TallyCalculator.calculateWeightedTally(counted)
 
             val voterInfo = { v: Vote ->
                 mapOf(
@@ -295,7 +302,7 @@ class GameService(
                 rawTally.entries.map { (targetId, voteCount) ->
                     val targetPlayer = playerMap[targetId]
                     val targetUser = userLookup[targetId]
-                    val voters = votes.filter { it.targetUserId == targetId }.map(voterInfo)
+                    val voters = counted.filter { it.targetUserId == targetId }.map(voterInfo)
                     mapOf(
                         "playerId" to targetId,
                         "nickname" to (targetUser?.nickname ?: targetId),
@@ -310,7 +317,6 @@ class GameService(
                 votes.filter { it.targetUserId == null }.map(voterInfo)
             } else null
 
-            val elimHistory = eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
             val eliminatedPlayer = elimHistory?.eliminatedUserId?.let { playerMap[it] }
             val eliminatedUser = elimHistory?.eliminatedUserId?.let { userLookup[it] }
 

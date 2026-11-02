@@ -54,6 +54,7 @@ export default {
     error: {
       INVALID_AMOUNT: 'Each grant must be 1–100 credits',
       NOT_ADMIN: 'Admin only',
+      PIN_LOCKED: 'Too many wrong PINs. Try again in 15 minutes',
       PIN_NOT_CONFIGURED: 'The admin PIN is not set on the server, so grants are off',
       PLAYER_NOT_FOUND: 'Player not found',
       WRONG_PIN: 'Wrong PIN',
@@ -92,6 +93,7 @@ export default {
     seatList: '({list})',
     seatNick: 'Seat {n} {name}',
     seatTight: 'Seat {n} · {name}',
+    sessionExpired: 'Your login has expired. Please log in again',
     votes: 'Votes: {n}',
   },
   countdown: {
@@ -194,6 +196,8 @@ export default {
     or: 'or',
     payUnavailable: 'Payments unavailable',
     rejoin: 'Rejoin · {code}',
+    resumeHint: 'Your login expired. Log in again to go back to your game',
+    resumeLogin: 'Log in and go back',
     roomCodePh: 'Room code',
     subtitle: 'Werewolf',
     title: 'Werewolf',

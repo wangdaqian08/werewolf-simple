@@ -286,7 +286,7 @@ jobs:
             specs: e2e/real/night-rules-flow.spec.ts
             grep: ''
           - id: 10
-            specs: e2e/real/sheriff-hunter-rules-flow.spec.ts e2e/real/self-destruct-rules-flow.spec.ts e2e/real/host-declare-out-flow.spec.ts
+            specs: e2e/real/sheriff-hunter-rules-flow.spec.ts e2e/real/self-destruct-rules-flow.spec.ts e2e/real/host-declare-out-flow.spec.ts e2e/real/session-expiry-resume.spec.ts
             grep: ''
           - id: 11
             specs: e2e/real/win-rules-flow.spec.ts e2e/real/pk-revote-flow.spec.ts e2e/real/api-guards-flow.spec.ts e2e/real/host-countdown.spec.ts
@@ -368,7 +368,8 @@ jobs:
 
   merge-reports-integration:
     name: Merge Integration E2E Reports
-    if: always()
+    # Not when the shards were skipped (backend failed): there is nothing to merge.
+    if: always() && needs.e2e-integration.result != 'skipped'
     needs: e2e-integration
     runs-on: ubuntu-latest
     defaults:

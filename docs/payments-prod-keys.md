@@ -24,7 +24,9 @@ won't show it again.
 Dashboard (live mode) → Developers → Webhooks → "Add endpoint":
 
 - URL: `https://www.youplay123.online/api/payment/webhook`
-- Events: `checkout.session.completed`, `checkout.session.expired`
+- Events: `checkout.session.completed`, `checkout.session.expired`,
+  `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`
+  (the last two credit or fail a delayed payment such as ACH once it clears)
 - Copy the signing secret (`whsec_…`).
 
 ## 3. Configure the prod VM

@@ -112,6 +112,52 @@ class PaymentWebhookIntegrationTest {
         assertThat(walletService.balance(userId)).isEqualTo(100)
     }
 
+    private fun sessionEvent(type: String, eventId: String, sessionId: String, paymentStatus: String): Event =
+        ApiResource.GSON.fromJson(
+            """
+            {
+              "id": "$eventId",
+              "object": "event",
+              "api_version": "${Stripe.API_VERSION}",
+              "type": "$type",
+              "data": { "object": {
+                "id": "$sessionId", "object": "checkout.session",
+                "payment_intent": "pi_async_123", "payment_status": "$paymentStatus"
+              } }
+            }
+            """.trimIndent(),
+            Event::class.java,
+        )
+
+    @Test
+    fun `a delayed payment is credited only once it clears`() {
+        val (userId, order) = seedOrder()
+        val sessionId = order.stripeSessionId ?: error("no session id")
+
+        paymentService.handleEvent(sessionEvent("checkout.session.completed", "evt_c_$sessionId", sessionId, "unpaid"))
+        assertThat(walletService.balance(userId)).isEqualTo(0)
+        assertThat(paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow().status)
+            .isEqualTo(PaymentOrderStatus.CREATED)
+
+        paymentService.handleEvent(sessionEvent("checkout.session.async_payment_succeeded", "evt_s_$sessionId", sessionId, "paid"))
+        assertThat(walletService.balance(userId)).isEqualTo(100)
+        assertThat(paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow().status)
+            .isEqualTo(PaymentOrderStatus.COMPLETED)
+    }
+
+    @Test
+    fun `a delayed payment that fails marks the order FAILED without crediting`() {
+        val (userId, order) = seedOrder()
+        val sessionId = order.stripeSessionId ?: error("no session id")
+
+        paymentService.handleEvent(sessionEvent("checkout.session.completed", "evt_c_$sessionId", sessionId, "unpaid"))
+        paymentService.handleEvent(sessionEvent("checkout.session.async_payment_failed", "evt_f_$sessionId", sessionId, "unpaid"))
+
+        assertThat(walletService.balance(userId)).isEqualTo(0)
+        assertThat(paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow().status)
+            .isEqualTo(PaymentOrderStatus.FAILED)
+    }
+
     @Test
     fun `expired session marks the order EXPIRED without crediting`() {
         val (userId, order) = seedOrder()
