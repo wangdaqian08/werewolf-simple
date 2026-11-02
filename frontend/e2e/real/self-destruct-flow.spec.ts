@@ -137,7 +137,7 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
     await expect(drawer).toBeHidden({ timeout: 5_000 })
   })
 
-  test('non-wolf taps Action chip → sees 暫無操作, no self-destruct option', async ({}, testInfo) => {
+  test('non-wolf host taps Action chip → no self-destruct option, only 宣布玩家出局', async ({}, testInfo) => {
     // Assert on the always-stable HOST page rather than a role browser: the role
     // contexts have been driven through the full Night-1 flow and are no longer
     // reliable for a fresh interaction in this shared-game describe. Only a
@@ -150,8 +150,10 @@ test.describe('Wolf self-destruction (自爆) — real-backend flow', () => {
     await expect(actionBtn).toBeVisible({ timeout: 10_000 })
     await actionBtn.click()
 
-    // Empty-state menu is shown, self-destruct option is NOT rendered.
-    await expect(vp.getByTestId('action-menu-empty')).toBeVisible({ timeout: 5_000 })
+    // No self-destruct for a non-wolf. The host always has 宣布玩家出局 (declare a
+    // player out), so the menu is not the empty state.
+    await expect(vp.getByTestId('action-menu-declare-out')).toBeVisible({ timeout: 5_000 })
     await expect(vp.getByTestId('action-menu-self-destruct')).toHaveCount(0)
+    await expect(vp.getByTestId('action-menu-empty')).toHaveCount(0)
   })
 })
