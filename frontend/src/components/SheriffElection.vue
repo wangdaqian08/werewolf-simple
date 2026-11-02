@@ -15,7 +15,9 @@
           :is-alive="isAlive ?? false"
           :players="players"
           :my-user-id="myUserId"
+          :is-host="isHost"
           @self-destruct="(target) => emit('self-destruct', target)"
+          @declare-out="(target) => emit('declare-out', target)"
         />
         <CountdownArc
           v-if="election.subPhase === 'SPEECH'"
@@ -666,6 +668,7 @@ const emit = defineEmits<{
   endResult: []
   appoint: [userId: string]
   'self-destruct': [targetUserId?: string]
+  'declare-out': [targetUserId: string]
   'start-timer': [seconds: number]
   'stop-timer': []
 }>()

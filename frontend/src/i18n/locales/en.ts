@@ -39,6 +39,10 @@ export default {
     chip: 'Actions',
     confirmBody: 'This cannot be undone. You will die publicly and there will be no vote today.',
     confirmTitle: 'Confirm self-destruct?',
+    declareOut: 'Declare a player out',
+    declareOutConfirm: 'Declare {seat} out? This cannot be undone.',
+    declareOutPick: 'Pick the player who left the game',
+    declareOutTitle: 'Declare a player out',
     none: 'No actions available',
     selfDestruct: 'Self-destruct',
     take: 'Take a player with you (optional)',
@@ -145,6 +149,7 @@ export default {
   },
   game: {
     badPhase: 'Wrong game phase — cannot start voting. Current phase: {phase}',
+    declaredOut: '{seat} was declared out by the host',
     phase: {
       day: 'Day Phase',
       night: 'Night Phase',
@@ -155,6 +160,7 @@ export default {
     revealFirst: "Announce last night's result first",
     startNight: 'Start Night',
     waitingOthers: 'Waiting for others to confirm',
+    youDeclaredOut: 'The host declared you out',
   },
   install: {
     body: 'Hosts: install to Home Screen so audio keeps playing when the screen locks.',
@@ -194,6 +200,7 @@ export default {
     wechat: 'Sign in with WeChat',
   },
   log: {
+    declaredOut: '🚪 Declared out by the host',
     hit: '→ hit',
     idiotReveal: '🃏 Idiot Revealed',
     idiotSurvives: 'Idiot survives',
@@ -485,6 +492,7 @@ export default {
     dawn: '☀ Dawn ',
     dayN: 'Day {day}',
     dead: 'Out',
+    declaredOut: ' was declared out by the host',
     elected: ' elected',
     exile: 'Exile',
     guard: 'Guard ',

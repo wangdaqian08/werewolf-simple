@@ -11,6 +11,7 @@ import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.GameNotFoundException
+import com.werewolf.service.HostDeclareOutService
 import com.werewolf.service.SelfDestructService
 import com.werewolf.service.StompPublisher
 import org.springframework.stereotype.Service
@@ -28,6 +29,7 @@ class GameActionDispatcher(
     private val contextLoader: GameContextLoader,
     private val stompPublisher: StompPublisher,
     private val selfDestructService: SelfDestructService,
+    private val hostDeclareOutService: HostDeclareOutService,
 ) {
     @Transactional
     fun dispatch(request: GameActionRequest): GameActionResult {
@@ -104,6 +106,9 @@ class GameActionDispatcher(
 
             // ── Wolf self-destruction (day action) ─────────────────────────────
             ActionType.WOLF_SELF_DESTRUCT -> selfDestructService.selfDestruct(request, context)
+
+            // ── Host declares a player out (they left the game) ─────────────────
+            ActionType.HOST_DECLARE_OUT -> hostDeclareOutService.declareOut(request, context)
         }
     }
 

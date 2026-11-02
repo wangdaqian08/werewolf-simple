@@ -46,6 +46,10 @@ class GamePlayer(
     // Day the player died (NULL = survived to the end); drives wolf survival-scaled rewards
     @Column(name = "died_day")
     var diedDay: Int? = null,
+
+    // The host declared this player out (they left the game); see HostDeclareOutService
+    @Column(name = "removed_by_host", nullable = false)
+    var removedByHost: Boolean = false,
 ) {
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }

@@ -31,6 +31,7 @@ class GameActionDispatcherTest {
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var selfDestructService: SelfDestructService
+    @Mock lateinit var hostDeclareOutService: com.werewolf.service.HostDeclareOutService
 
     private val gameId = 1
     private val hostId = "host:001"
@@ -71,6 +72,7 @@ class GameActionDispatcherTest {
         contextLoader = contextLoader,
         stompPublisher = stompPublisher,
         selfDestructService = selfDestructService,
+        hostDeclareOutService = hostDeclareOutService,
     )
 
     // ── WOLF_KILL routing ─────────────────────────────────────────────────────

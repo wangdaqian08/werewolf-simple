@@ -18,7 +18,7 @@ import tools.jackson.module.kotlin.jacksonObjectMapper
 object PlayerReviewBuilder {
 
     private val mapper = jacksonObjectMapper()
-    private val DAY_EVENT_TYPES = setOf("SHERIFF_RESULT", "VOTE_RESULT", "HUNTER_SHOT", "SELF_DESTRUCT", "IDIOT_REVEAL", "BADGE_HANDOVER")
+    private val DAY_EVENT_TYPES = setOf("SHERIFF_RESULT", "VOTE_RESULT", "HUNTER_SHOT", "SELF_DESTRUCT", "IDIOT_REVEAL", "BADGE_HANDOVER", "DECLARED_OUT")
 
     /** [index] is the event's place in the whole game's log, which is what the cuts below compare. */
     private class LoggedEvent(val type: String, val day: Int, val payload: Map<String, Any?>, val index: Int)
@@ -65,6 +65,7 @@ object PlayerReviewBuilder {
             "VOTE_RESULT" -> e.payload["eliminatedUserId"] == viewerId
             "HUNTER_SHOT" -> e.payload["targetUserId"] == viewerId
             "SELF_DESTRUCT" -> e.payload["userId"] == viewerId || e.payload["takenUserId"] == viewerId
+            "DECLARED_OUT" -> e.payload["userId"] == viewerId
             else -> false
         }
         // A hunter's shot and a sheriff's handover land after the blow that killed them, yet
@@ -213,6 +214,7 @@ object PlayerReviewBuilder {
                 "HUNTER_SHOT" -> ref(p["hunterUserId"])?.let { h -> ref(p["targetUserId"])?.let { PlayerDayEvent.HunterShot(h, it) } }
                 "SELF_DESTRUCT" -> ref(p["userId"])?.let { PlayerDayEvent.SelfDestruct(it, ref(p["takenUserId"])) }
                 "IDIOT_REVEAL" -> ref(p["userId"])?.let { PlayerDayEvent.IdiotReveal(it) }
+                "DECLARED_OUT" -> ref(p["userId"])?.let { PlayerDayEvent.DeclaredOut(it) }
                 "BADGE_HANDOVER" -> ref(p["fromUserId"])?.let {
                     PlayerDayEvent.BadgeHandover(it, ref(p["toUserId"]), if (p["toUserId"] == viewerId) claimSheriff() else null)
                 }

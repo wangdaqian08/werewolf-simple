@@ -39,6 +39,10 @@ export default {
     chip: '行動',
     confirmBody: '此操作不可撤銷。你將公開死亡，今天不進行投票。',
     confirmTitle: '確認自爆？',
+    declareOut: '宣布玩家出局',
+    declareOutConfirm: '確定宣布 {seat} 出局？此操作不可撤銷。',
+    declareOutPick: '選擇已離開遊戲的玩家',
+    declareOutTitle: '宣布玩家出局',
     none: '暫無操作',
     selfDestruct: '自爆',
     take: '可選擇帶走一名玩家（可不選）',
@@ -145,6 +149,7 @@ export default {
   },
   game: {
     badPhase: '當前遊戲階段不正確，無法開始投票。當前階段: {phase}',
+    declaredOut: '{seat} 被房主判定出局',
     phase: {
       day: '白天',
       night: '黑夜',
@@ -155,6 +160,7 @@ export default {
     revealFirst: '請先公佈昨晚的結果',
     startNight: '開始夜晚',
     waitingOthers: '等待其他玩家確認',
+    youDeclaredOut: '你已被房主判定出局',
   },
   install: {
     body: '房主請將本應用添加到主屏幕，避免鎖屏後音頻中斷',
@@ -194,6 +200,7 @@ export default {
     wechat: '微信登錄',
   },
   log: {
+    declaredOut: '🚪 房主判定出局',
     hit: '→ 擊中',
     idiotReveal: '🃏 白癡身份揭示',
     idiotSurvives: '白癡倖存',
@@ -479,6 +486,7 @@ export default {
     dawn: '☀ 天亮 ',
     dayN: '第{day}天',
     dead: '已出局',
+    declaredOut: ' 被房主判定出局',
     elected: ' 當選',
     exile: '放逐',
     guard: '守 ',

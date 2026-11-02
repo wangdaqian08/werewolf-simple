@@ -278,3 +278,88 @@ describe('ActionMenu — self-destruct window', () => {
     ).toBe(false)
   })
 })
+
+describe('ActionMenu — host declares a player out', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const players: GamePlayer[] = [
+    { userId: 'h0', nickname: 'Host', seatIndex: 1, isAlive: true, isSheriff: false },
+    { userId: 'p2', nickname: 'Pat', seatIndex: 2, isAlive: true, isSheriff: false },
+    { userId: 'd3', nickname: 'Dead', seatIndex: 3, isAlive: false, isSheriff: false },
+    { userId: 's4', nickname: 'Sher', seatIndex: 4, isAlive: false, isSheriff: true },
+  ]
+
+  function mountMenu(props: { phase: GamePhase; subPhase?: string; isHost?: boolean }) {
+    return mount(ActionMenu, {
+      props: { myRole: 'VILLAGER', isAlive: true, players, myUserId: 'h0', isHost: true, ...props },
+      attachTo: document.body,
+    })
+  }
+
+  const q = (id: string) => document.querySelector(`[data-testid="${id}"]`) as HTMLElement | null
+
+  async function openPicker(wrapper: ReturnType<typeof mountMenu>) {
+    await wrapper.find('[data-testid="action-menu-btn"]').trigger('click')
+    q('action-menu-declare-out')?.click()
+    await wrapper.vm.$nextTick()
+  }
+
+  it('offers alive players other than the host; confirm emits the picked player', async () => {
+    const wrapper = mountMenu({ phase: 'DAY_DISCUSSION', subPhase: 'RESULT_REVEALED' })
+    await openPicker(wrapper)
+    expect(q('action-menu-declare-p2')).toBeTruthy()
+    expect(q('action-menu-declare-h0')).toBeFalsy()
+    expect(q('action-menu-declare-d3')).toBeFalsy()
+    expect(q('action-menu-declare-s4')).toBeFalsy()
+    expect((q('action-menu-declare-confirm') as HTMLButtonElement).disabled).toBe(true)
+
+    q('action-menu-declare-p2')?.click()
+    await wrapper.vm.$nextTick()
+    q('action-menu-declare-confirm')?.click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('declare-out')?.[0]).toEqual(['p2'])
+    wrapper.unmount()
+  })
+
+  it('cancel emits nothing', async () => {
+    const wrapper = mountMenu({ phase: 'DAY_VOTING', subPhase: 'VOTING' })
+    await openPicker(wrapper)
+    q('action-menu-declare-p2')?.click()
+    await wrapper.vm.$nextTick()
+    q('action-menu-declare-cancel')?.click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('declare-out')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('during badge handover the dead sheriff can be picked too', async () => {
+    const wrapper = mountMenu({ phase: 'DAY_DISCUSSION', subPhase: 'BADGE_HANDOVER' })
+    await openPicker(wrapper)
+    expect(q('action-menu-declare-s4')).toBeTruthy()
+    expect(q('action-menu-declare-d3')).toBeFalsy()
+    wrapper.unmount()
+  })
+
+  it('not offered before the night result is revealed, nor to a non-host', async () => {
+    for (const props of [
+      { phase: 'DAY_DISCUSSION' as GamePhase, subPhase: 'RESULT_HIDDEN' },
+      { phase: 'DAY_DISCUSSION' as GamePhase, subPhase: 'RESULT_REVEALED', isHost: false },
+    ]) {
+      const wrapper = mountMenu(props)
+      await wrapper.find('[data-testid="action-menu-btn"]').trigger('click')
+      expect(q('action-menu-declare-out')).toBeFalsy()
+      wrapper.unmount()
+    }
+  })
+
+  it('in ROLE_REVEAL the chip shows for the host only', () => {
+    const host = mountMenu({ phase: 'ROLE_REVEAL' })
+    expect(host.find('[data-testid="action-menu-btn"]').exists()).toBe(true)
+    host.unmount()
+    const guest = mountMenu({ phase: 'ROLE_REVEAL', isHost: false })
+    expect(guest.find('[data-testid="action-menu-btn"]').exists()).toBe(false)
+    guest.unmount()
+  })
+})

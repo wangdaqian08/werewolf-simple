@@ -125,7 +125,10 @@ class VotingPipeline(
         val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
             context.gameId, VoteContext.ELIMINATION, context.game.dayNumber
         )
-        val tally: Map<String, Double> = TallyCalculator.calculateWeightedTally(votes)
+        // A vote for a player declared out since it was cast is kept but counts for no one.
+        val tally: Map<String, Double> = TallyCalculator.calculateWeightedTally(
+            votes.filter { v -> v.targetUserId?.let { context.playerById(it)?.alive } != false }
+        )
 
         val eliminated = TallyCalculator.findTopCandidate(tally)
         val wasRevote = context.game.subPhase == VotingSubPhase.RE_VOTING.name
@@ -403,6 +406,20 @@ class VotingPipeline(
                 DomainEvent.PlayerEliminated(context.gameId, actorUserId),
             )
         }
+    }
+
+    /**
+     * The host declared [userId] out during DAY_VOTING (HostDeclareOutService): while
+     * voting is open, drop their own vote and their PK candidacy. Votes cast for them
+     * stay but no longer count (see [revealTally]).
+     */
+    fun onPlayerDeclaredOut(context: GameContext, userId: String) {
+        if (context.game.subPhase !in setOf(VotingSubPhase.VOTING.name, VotingSubPhase.RE_VOTING.name)) return
+        voteRepository.findByGameIdAndVoteContextAndDayNumber(context.gameId, VoteContext.ELIMINATION, context.game.dayNumber)
+            .filter { it.voterUserId == userId }
+            .forEach { voteRepository.delete(it) }
+        val pk = context.game.pkCandidates()
+        if (userId in pk) context.game.pkCandidateUserIds = (pk - userId).joinToString(",")
     }
 
     /** Check win condition; if no winner, stay in VOTE_RESULT for host to proceed to night. */

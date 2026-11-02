@@ -139,6 +139,10 @@ sealed interface PlayerDayEvent {
     @JsonTypeName("IDIOT_REVEAL")
     data class IdiotReveal(val player: PlayerSeat) : PlayerDayEvent
 
+    /** The host declared [player] out: they left the game. */
+    @JsonTypeName("DECLARED_OUT")
+    data class DeclaredOut(val player: PlayerSeat) : PlayerDayEvent
+
     /** [to] null = the badge was destroyed. */
     /** [points] is set when the viewer is the one receiving the badge. */
     @JsonTypeName("BADGE_HANDOVER")

@@ -243,6 +243,8 @@ function eventSegs(e: Exclude<PlayerDayEvent, PlayerVote>): Seg[] {
       ]
     case 'IDIOT_REVEAL':
       return [seg('🃏 '), name(e.player), seg(t('rv.idiotReveal'))]
+    case 'DECLARED_OUT':
+      return [seg('🚪 '), name(e.player), seg(t('rv.declaredOut'))]
     case 'BADGE_HANDOVER':
       return [
         seg('⭐ '),

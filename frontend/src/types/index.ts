@@ -280,6 +280,7 @@ export type ReviewDayEvent =
   | { type: 'HUNTER_SHOT'; hunter: ReviewPlayer; target: ReviewPlayer }
   | { type: 'SELF_DESTRUCT'; player: ReviewPlayer; taken: ReviewPlayer | null }
   | { type: 'IDIOT_REVEAL'; player: ReviewPlayer }
+  | { type: 'DECLARED_OUT'; player: ReviewPlayer }
   /** to = null: the badge was destroyed */
   | { type: 'BADGE_HANDOVER'; from: ReviewPlayer; to: ReviewPlayer | null }
 
@@ -362,6 +363,7 @@ export type PlayerDayEvent =
   | { type: 'HUNTER_SHOT'; hunter: PlayerSeat; target: PlayerSeat }
   | { type: 'SELF_DESTRUCT'; player: PlayerSeat; taken: PlayerSeat | null }
   | { type: 'IDIOT_REVEAL'; player: PlayerSeat }
+  | { type: 'DECLARED_OUT'; player: PlayerSeat }
   /** to = null: the badge was destroyed; points is set when the viewer receives it */
   | { type: 'BADGE_HANDOVER'; from: PlayerSeat; to: PlayerSeat | null; points: number | null }
 
@@ -460,6 +462,7 @@ export interface GamePlayer {
   role?: PlayerRole // only revealed to self, or at game end
   canVote?: boolean // false if idiot was revealed; undefined/true = can vote
   idiotRevealed?: boolean // true after idiot self-reveals on first elimination
+  removedByHost?: boolean // the host declared this player out (they left the game)
 }
 
 export interface RoleRevealState {
@@ -792,6 +795,7 @@ export interface ActionLogEntry {
     | 'SHERIFF_RESULT'
     | 'SELF_DESTRUCT'
     | 'BADGE_HANDOVER'
+    | 'DECLARED_OUT'
   message: string // raw JSON — parse per eventType
   targetUserId: string | null
   createdAt: string | null
