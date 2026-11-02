@@ -360,7 +360,7 @@ class SheriffService(
             context.gameId, VoteContext.SHERIFF_ELECTION, context.game.dayNumber
         )
         // A vote for a candidate declared out since it was cast counts for no one.
-        val tally = votes.mapNotNull { it.targetUserId }.filter { context.alivePlayerById(it) != null }
+        val tally = votes.mapNotNull { it.targetUserId }.filter { context.playerById(it)?.alive != false }
             .groupingBy { it }.eachCount()
         val maxVotes = tally.values.maxOrNull() ?: 0
         val topCandidates = tally.filterValues { it == maxVotes }.keys.toList()

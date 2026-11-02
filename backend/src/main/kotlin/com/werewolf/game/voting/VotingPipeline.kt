@@ -127,7 +127,7 @@ class VotingPipeline(
         )
         // A vote for a player declared out since it was cast is kept but counts for no one.
         val tally: Map<String, Double> = TallyCalculator.calculateWeightedTally(
-            votes.filter { v -> v.targetUserId.let { it == null || context.alivePlayerById(it) != null } }
+            votes.filter { v -> v.targetUserId?.let { context.playerById(it)?.alive } != false }
         )
 
         val eliminated = TallyCalculator.findTopCandidate(tally)
