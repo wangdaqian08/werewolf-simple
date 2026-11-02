@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { isSupportedBrowser, isWeChatBrowser } from '@/composables/useBrowserCompat'
+import { saveResume } from '@/services/sessionResume'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -119,6 +120,7 @@ router.beforeEach((to) => {
 
   const userStore = useUserStore()
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {
+    saveResume({ path: to.fullPath }) // e.g. a reload of /game/5 after the login expired
     return { name: 'lobby' }
   }
 })

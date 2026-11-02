@@ -196,6 +196,8 @@ export default {
     or: '或',
     payUnavailable: '支付暫不可用',
     rejoin: '繼續遊戲 · {code}',
+    resumeHint: '登入已過期，重新登入後返回遊戲',
+    resumeLogin: '重新登入並返回',
     roomCodePh: '房間號',
     subtitle: 'Werewolf',
     title: '狼人殺',

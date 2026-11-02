@@ -14,6 +14,7 @@ describe('a 401 mid-game sends the player to log in again', () => {
     vi.restoreAllMocks()
     localStorage.setItem('jwt', futureJwt)
     localStorage.setItem('userId', 'guest:alice')
+    sessionStorage.clear()
     setActivePinia(createPinia())
   })
 
@@ -31,6 +32,8 @@ describe('a 401 mid-game sends the player to log in again', () => {
     expect(useUserStore().token).toBeNull()
     expect(push).toHaveBeenCalledTimes(1)
     expect(push).toHaveBeenCalledWith({ name: 'lobby' })
+    // Logging in again takes them back: who they were is kept for the lobby.
+    expect(JSON.parse(sessionStorage.getItem('ww-resume') ?? '{}')).toMatchObject({ guest: true })
   })
 
   it('a non-401 error keeps the session', async () => {

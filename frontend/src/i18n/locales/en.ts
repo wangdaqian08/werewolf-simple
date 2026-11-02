@@ -196,6 +196,8 @@ export default {
     or: 'or',
     payUnavailable: 'Payments unavailable',
     rejoin: 'Rejoin · {code}',
+    resumeHint: 'Your login expired. Log in again to go back to your game',
+    resumeLogin: 'Log in and go back',
     roomCodePh: 'Room code',
     subtitle: 'Werewolf',
     title: 'Werewolf',

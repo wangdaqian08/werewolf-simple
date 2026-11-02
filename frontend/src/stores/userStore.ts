@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { userService } from '@/services/userService'
 import { walletService } from '@/services/walletService'
 import type { OAuthProvider } from '@/types'
+import { saveResume } from '@/services/sessionResume'
 
 function isTokenExpired(token: string): boolean {
   try {
@@ -21,6 +22,11 @@ function isTokenExpired(token: string): boolean {
 function loadPersistedSession() {
   const token = localStorage.getItem('jwt')
   if (token && isTokenExpired(token)) {
+    // Expired while the app was closed: keep the nickname so logging in again is one tap.
+    saveResume({
+      nickname: localStorage.getItem('nickname') ?? undefined,
+      guest: !!localStorage.getItem('userId')?.startsWith('guest:'),
+    })
     localStorage.removeItem('jwt')
     localStorage.removeItem('userId')
     localStorage.removeItem('nickname')
