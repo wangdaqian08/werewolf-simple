@@ -70,7 +70,7 @@ class GameServiceStartTest {
     @Test
     fun `startGame rejects when a guest is NOT_READY`() {
         val room = waitingRoom()
-        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(
             listOf(hostPlayer(), readyGuest("guest:1", 1), notReadyGuest("guest:2", 2), readyGuest("guest:3", 3))
         )
@@ -88,7 +88,7 @@ class GameServiceStartTest {
         val players = fourReadyGuests()
         val assignedGameId = 99
 
-        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(players)
         // Simulate Hibernate assigning the generated ID to the entity in-place via reflection
         whenever(gameRepository.save(any<Game>())).thenAnswer { invocation ->
@@ -117,7 +117,7 @@ class GameServiceStartTest {
     fun `startGame deals one WHITE_WOLF_KING in place of a werewolf when the room enables it`() {
         val room = Room(roomId = roomId, roomCode = "XYZW", hostUserId = hostId, totalPlayers = 4, wolfCount = 2, hasWhiteWolfKing = true)
             .also { it.status = RoomStatus.WAITING }
-        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(fourReadyGuests())
         whenever(gameRepository.save(any<Game>())).thenAnswer { invocation ->
             invocation.getArgument<Game>(0).also {
@@ -139,7 +139,7 @@ class GameServiceStartTest {
     fun `startGame deals one BLACK_WOLF_KING in place of a werewolf when the room enables it`() {
         val room = Room(roomId = roomId, roomCode = "XYZW", hostUserId = hostId, totalPlayers = 4, wolfCount = 2, hasBlackWolfKing = true)
             .also { it.status = RoomStatus.WAITING }
-        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
         whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(fourReadyGuests())
         whenever(gameRepository.save(any<Game>())).thenAnswer { invocation ->
             invocation.getArgument<Game>(0).also {

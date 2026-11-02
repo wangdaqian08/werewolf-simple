@@ -19,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
@@ -215,6 +216,27 @@ class HostDeclareOutIntegrationTest {
         assertThat(action(t.host, t.gameId, "VOTING_REVEAL_TALLY").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(game(t).subPhase).isEqualTo(VotingSubPhase.RE_VOTING.name)
         assertThat(eliminationHistoryRepository.findByGameIdAndDayNumber(t.gameId, 2)).isEmpty
+    }
+
+    @Test
+    fun `voting state - the revealed tally shows what was counted, the voted-out player keeps their votes`() {
+        val t = startGame("DOS")
+        setPhase(t, GamePhase.DAY_VOTING, VotingSubPhase.VOTING.name)
+        nightPhaseRepository.save(NightPhase(gameId = t.gameId, dayNumber = 2).also { it.subPhase = NightSubPhase.COMPLETE })
+        // Villager g4 leads 2–1 over wolf g1, then is declared out (villager g5 stays, so no win).
+        action(t.g(3), t.gameId, "SUBMIT_VOTE", t.g(4).userId)
+        action(t.g(5), t.gameId, "SUBMIT_VOTE", t.g(4).userId)
+        action(t.g(2), t.gameId, "SUBMIT_VOTE", t.g(1).userId)
+        assertThat(declareOut(t, t.g(4)).statusCode).isEqualTo(HttpStatus.OK)
+
+        assertThat(action(t.host, t.gameId, "VOTING_REVEAL_TALLY").statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(eliminationHistoryRepository.findByGameIdAndDayNumber(t.gameId, 2).orElseThrow().eliminatedUserId)
+            .isEqualTo(t.g(1).userId)
+
+        @Suppress("UNCHECKED_CAST")
+        val state = restTemplate.exchange("/api/game/${t.gameId}/state", HttpMethod.GET, HttpEntity<Unit>(headers(t.host.token)), Map::class.java).body!!
+        val tally = (state["votingPhase"] as Map<String, Any?>)["tally"] as List<Map<String, Any?>>
+        assertThat(tally.map { it["playerId"] }).containsExactly(t.g(1).userId) // dead by now, still shown
     }
 
     @Test

@@ -8,9 +8,17 @@ import type {
   PlayerReview,
 } from '@/types'
 
+// Each STOMP event triggers its own state fetch and responses can land out of order.
+// Never hand back a state older than one already returned for the same game.
+let issued = 0
+let newest: { gameId: string; seq: number; state: GameState } | null = null
+
 export const gameService = {
   async getState(gameId: string): Promise<GameState> {
+    const seq = ++issued
     const { data } = await http.get<GameState>(`/game/${gameId}/state`)
+    if (newest && newest.gameId === gameId && newest.seq > seq) return newest.state
+    newest = { gameId, seq, state: data }
     return data
   },
 

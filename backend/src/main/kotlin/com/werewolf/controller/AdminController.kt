@@ -1,5 +1,6 @@
 package com.werewolf.controller
 
+import com.werewolf.service.AdminPinLockedException
 import com.werewolf.service.AdminPinNotConfiguredException
 import com.werewolf.service.AdminService
 import com.werewolf.service.InvalidGrantAmountException
@@ -56,6 +57,8 @@ class AdminController(private val adminService: AdminService) {
         error(503, "PIN_NOT_CONFIGURED", e)
     } catch (e: WrongAdminPinException) {
         error(403, "WRONG_PIN", e)
+    } catch (e: AdminPinLockedException) {
+        error(429, "PIN_LOCKED", e)
     } catch (e: InvalidGrantAmountException) {
         error(400, "INVALID_AMOUNT", e)
     } catch (e: PlayerNotFoundException) {

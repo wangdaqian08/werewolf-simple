@@ -918,6 +918,32 @@ class SheriffServiceTest {
         assertThat(captor.allValues).anyMatch { it is DomainEvent.PhaseChanged && it.subPhase == ElectionSubPhase.RESULT.name }
     }
 
+    @Test
+    fun `appoint - on a real tie, a running candidate outside the tie is rejected`() {
+        val electionObj = election(subPhase = ElectionSubPhase.TIED)
+        val ctx = context(election = electionObj)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(
+            listOf("cand:A", "cand:B", "cand:C").map {
+                SheriffCandidate(electionId = electionId, userId = it, status = CandidateStatus.RUNNING)
+            },
+        )
+        // A 1, B 1, C 0 → only A and B are tied.
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.SHERIFF_ELECTION, 1))
+            .thenReturn(listOf(
+                Vote(gameId = gameId, voteContext = VoteContext.SHERIFF_ELECTION, dayNumber = 1,
+                    voterUserId = guestId, targetUserId = "cand:A"),
+                Vote(gameId = gameId, voteContext = VoteContext.SHERIFF_ELECTION, dayNumber = 1,
+                    voterUserId = hostId, targetUserId = "cand:B"),
+            ))
+
+        val req = GameActionRequest(gameId, hostId, ActionType.SHERIFF_APPOINT, targetUserId = "cand:C")
+        val result = sheriffService.handle(req, ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).contains("not one of the tied candidates")
+        assertThat(electionObj.subPhase).isEqualTo(ElectionSubPhase.TIED)
+    }
+
     // ── Group 10: SHERIFF_END_RESULT — host dismisses RESULT screen ──────────
 
     @Test

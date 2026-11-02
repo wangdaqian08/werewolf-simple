@@ -34,7 +34,7 @@ class GameActionDispatcher(
     @Transactional
     fun dispatch(request: GameActionRequest): GameActionResult {
         val context = try {
-            contextLoader.load(request.gameId)
+            contextLoader.loadForUpdate(request.gameId)
         } catch (e: GameNotFoundException) {
             return GameActionResult.Rejected(e.message!!)
         }

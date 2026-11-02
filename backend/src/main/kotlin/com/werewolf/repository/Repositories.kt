@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.transaction.annotation.Transactional
 import java.util.*
 
 interface UserRepository : JpaRepository<User, String> {
@@ -100,6 +101,10 @@ interface RoomPlayerRepository : JpaRepository<RoomPlayer, Int> {
 }
 
 interface GameRepository : JpaRepository<Game, Int> {
+    /** Row lock that serializes actions on one game (e.g. HUNTER_PASS racing VOTING_CONTINUE). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT g FROM Game g WHERE g.gameId = :gameId")
+    fun findByIdForUpdate(gameId: Int): Optional<Game>
     fun findByRoomIdAndEndedAtIsNull(roomId: Int): Optional<Game>
     fun findByEndedAtIsNull(): List<Game>
     fun findByRoomId(roomId: Int): List<Game>
@@ -112,6 +117,11 @@ interface GamePlayerRepository : JpaRepository<GamePlayer, Int> {
 }
 
 interface NightPhaseRepository : JpaRepository<NightPhase, Int> {
+    /** Sub-phase only: a full-row save from the night loop would overwrite an action committed meanwhile. */
+    @Transactional
+    @Modifying
+    @Query("UPDATE NightPhase n SET n.subPhase = :subPhase WHERE n.gameId = :gameId AND n.dayNumber = :dayNumber")
+    fun updateSubPhase(gameId: Int, dayNumber: Int, subPhase: NightSubPhase): Int
     fun findByGameIdAndDayNumber(gameId: Int, dayNumber: Int): Optional<NightPhase>
     fun findByGameId(gameId: Int): List<NightPhase>
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long

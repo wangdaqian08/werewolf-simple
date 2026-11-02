@@ -138,10 +138,9 @@ class PaymentService(
         }
         when (event.type) {
             "checkout.session.completed" -> {
-                val session = extractSession(event) ?: run {
-                    log.error("[payment] cannot deserialize session from event {}", event.id)
-                    return
-                }
+                // Throw, don't return: the rollback un-records the event id and the 5xx makes Stripe retry.
+                val session = extractSession(event)
+                    ?: error("[payment] cannot deserialize session from event ${event.id}")
                 fulfill(session)
             }
             "checkout.session.expired" -> {

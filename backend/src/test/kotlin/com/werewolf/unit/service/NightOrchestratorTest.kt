@@ -970,19 +970,15 @@ class NightOrchestratorTest {
         whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1))
             .thenReturn(Optional.of(sharedNightPhase))
 
-        // Track what gets saved: capture seerCheckedUserId from each save
-        val savedSeerCheckedUserIds = mutableListOf<String?>()
-        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { invocation ->
-            val saved = invocation.arguments[0] as NightPhase
-            savedSeerCheckedUserIds.add(saved.seerCheckedUserId)
-
-            // Simulate: after SEER_PICK is saved, the handler sets seerCheckedUserId.
-            // Since we return a shared entity, the next findByGameIdAndDayNumber will see this.
-            if (saved.subPhase == NightSubPhase.SEER_PICK) {
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        // Simulate: once SEER_PICK is set, the seer's handler commits its check on the same row.
+        whenever(nightPhaseRepository.updateSubPhase(eq(gameId), eq(1), any())).thenAnswer { invocation ->
+            sharedNightPhase.subPhase = invocation.arguments[2] as NightSubPhase
+            if (sharedNightPhase.subPhase == NightSubPhase.SEER_PICK) {
                 sharedNightPhase.seerCheckedUserId = "target-user"
                 sharedNightPhase.seerResultIsWerewolf = false
             }
-            saved
+            1
         }
 
         runBlocking {

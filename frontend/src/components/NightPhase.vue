@@ -593,6 +593,14 @@ watch(subPhase, () => {
   localSelected.value = undefined
 })
 
+// A wolf teammate's pick arrives via WolfSelectionChanged / state refresh: show it.
+watch(
+  () => props.nightPhase.selectedTargetId,
+  (id) => {
+    if (id) localSelected.value = id
+  },
+)
+
 const effectivePhase = computed(() => ({
   ...props.nightPhase,
   selectedTargetId: localSelected.value,

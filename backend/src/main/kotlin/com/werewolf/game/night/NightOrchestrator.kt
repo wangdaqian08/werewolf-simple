@@ -708,7 +708,7 @@ class NightOrchestrator(
                     // DB row back to null. The "save-about-to-merge" log pairs with the
                     // preceding "read-before-save" to prove stomp vs preserve.
                     logNightPhaseFields("save-about-to-merge", gameId, dayNumber, subPhase, nightPhase)
-                    nightPhaseRepository.save(nightPhase)
+                    nightPhaseRepository.updateSubPhase(gameId, dayNumber, subPhase)
                     stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, subPhase))
 
                     val deferred = CompletableDeferred<Unit>()
@@ -736,7 +736,7 @@ class NightOrchestrator(
                     logNightPhaseFields("read-dead-role", gameId, dayNumber, subPhase, nightPhase)
                     nightPhase.subPhase = subPhase
                     logNightPhaseFields("save-dead-role", gameId, dayNumber, subPhase, nightPhase)
-                    nightPhaseRepository.save(nightPhase)
+                    nightPhaseRepository.updateSubPhase(gameId, dayNumber, subPhase)
                     stompPublisher.broadcastGame(gameId, DomainEvent.NightSubPhaseChanged(gameId, subPhase))
                     delay(perSubPhaseMs.milliseconds)
                 }

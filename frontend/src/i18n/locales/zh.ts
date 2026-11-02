@@ -54,6 +54,7 @@ export default {
     error: {
       INVALID_AMOUNT: '每次只能發放 1–100 積分',
       NOT_ADMIN: '僅管理員可操作',
+      PIN_LOCKED: '密碼錯誤次數過多，請 15 分鐘後再試',
       PIN_NOT_CONFIGURED: '服務器未設置管理員密碼，暫時無法發放',
       PLAYER_NOT_FOUND: '找不到該玩家',
       WRONG_PIN: '密碼錯誤',

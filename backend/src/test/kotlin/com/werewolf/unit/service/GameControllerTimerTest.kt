@@ -4,7 +4,6 @@ import com.werewolf.controller.GameController
 import com.werewolf.controller.TimerStartRequest
 import com.werewolf.game.action.GameActionDispatcher
 import com.werewolf.game.action.GameActionResult
-import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.service.ActionLogService
 import com.werewolf.service.GameReviewService
@@ -24,7 +23,6 @@ class GameControllerTimerTest {
 
     @Mock lateinit var gameService: GameService
     @Mock lateinit var gameActionDispatcher: GameActionDispatcher
-    @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var actionLogService: ActionLogService
     @Mock lateinit var hostTimerService: HostTimerService
     @Mock lateinit var gameReviewService: GameReviewService
@@ -39,7 +37,7 @@ class GameControllerTimerTest {
     @BeforeEach
     fun setUp() {
         controller = GameController(
-            gameService, gameActionDispatcher, nightOrchestrator,
+            gameService, gameActionDispatcher,
             actionLogService, hostTimerService,gameReviewService
         )
         whenever(authentication.principal).thenReturn(hostId)

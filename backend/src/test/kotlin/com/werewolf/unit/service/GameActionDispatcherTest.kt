@@ -84,7 +84,7 @@ class GameActionDispatcherTest {
         fun `WOLF_KILL success - advances WEREWOLF_PICK sub-phase`() {
             val wolfHandler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success())
             val ctx = GameContext(game(), room(), emptyList())
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_KILL, "u2"))
 
@@ -95,7 +95,7 @@ class GameActionDispatcherTest {
         fun `WOLF_KILL rejected - does NOT advance sub-phase`() {
             val wolfHandler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Rejected("actor is dead"))
             val ctx = GameContext(game(), room(), emptyList())
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_KILL, "u2"))
 
@@ -119,7 +119,7 @@ class GameActionDispatcherTest {
 
         @Test
         fun `a repeated WITCH_ACT in the same turn is rejected and signals the night loop once`() {
-            whenever(contextLoader.load(gameId)).thenReturn(witchTurn())
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(witchTurn())
             val dispatcher = makeDispatcher(listOf(stubHandler(PlayerRole.WITCH, GameActionResult.Success())))
 
             val first = dispatcher.dispatch(req(witchId, ActionType.WITCH_ACT))
@@ -133,7 +133,7 @@ class GameActionDispatcherTest {
 
         @Test
         fun `a rejected turn action reopens the turn so the player can retry`() {
-            whenever(contextLoader.load(gameId)).thenReturn(witchTurn())
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(witchTurn())
             var calls = 0
             val flaky = object : RoleHandler {
                 override val role = PlayerRole.WITCH
@@ -151,7 +151,7 @@ class GameActionDispatcherTest {
 
         @Test
         fun `a non-holder cannot use up the witch's turn`() {
-            whenever(contextLoader.load(gameId)).thenReturn(witchTurn())
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(witchTurn())
             val witchHandler = object : RoleHandler {
                 override val role = PlayerRole.WITCH
                 override fun acceptedActions(phase: GamePhase, subPhase: String?) = emptySet<ActionType>()
@@ -173,7 +173,7 @@ class GameActionDispatcherTest {
                 listOf(player(witchId, 1, PlayerRole.WITCH), player(guardId, 2, PlayerRole.GUARD)),
                 nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.WITCH_ACT },
             )
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
             val guardInHandler = java.util.concurrent.CountDownLatch(1)
             val releaseGuard = java.util.concurrent.CountDownLatch(1)
             val slowGuard = object : RoleHandler {
@@ -204,7 +204,7 @@ class GameActionDispatcherTest {
                 game(), room(), listOf(player(wolfId, 1, PlayerRole.WEREWOLF)),
                 nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.WEREWOLF_PICK },
             )
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success())))
                 .dispatch(req(wolfId, ActionType.WOLF_SKIP))
@@ -227,7 +227,7 @@ class GameActionDispatcherTest {
             val villager = player("v1", 3, PlayerRole.VILLAGER)
             val wolfHandler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success(events = listOf(selectionEvent)))
             val ctx = GameContext(game(), room(), listOf(wolf1, wolf2, villager))
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
@@ -243,7 +243,7 @@ class GameActionDispatcherTest {
             val king = player(wolf2Id, 2, PlayerRole.WHITE_WOLF_KING)
             val wolfHandler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success(events = listOf(selectionEvent)))
             val ctx = GameContext(game(), room(), listOf(wolf, king))
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
@@ -256,7 +256,7 @@ class GameActionDispatcherTest {
             val deadWolf  = player(deadWolfId, 3, PlayerRole.WEREWOLF, alive = false)
             val wolfHandler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success(events = listOf(selectionEvent)))
             val ctx = GameContext(game(), room(), listOf(aliveWolf, deadWolf))
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
@@ -269,7 +269,7 @@ class GameActionDispatcherTest {
             val wolf = player(wolfId, 1, PlayerRole.WEREWOLF)
             val wolfHandler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success(events = listOf(selectionEvent)))
             val ctx = GameContext(game(), room(), listOf(wolf))
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
@@ -280,7 +280,7 @@ class GameActionDispatcherTest {
         fun `WOLF_SELECT rejected - does NOT call sendPrivate`() {
             val wolfHandler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Rejected("actor is dead"))
             val ctx = GameContext(game(), room(), emptyList())
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
@@ -292,7 +292,7 @@ class GameActionDispatcherTest {
             val aliveWolf = player(wolfId, 1, PlayerRole.WEREWOLF, alive = true)
             val wolfHandler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success(events = listOf(selectionEvent)))
             val ctx = GameContext(game(), room(), listOf(aliveWolf))
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(wolfHandler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
 
@@ -312,7 +312,7 @@ class GameActionDispatcherTest {
         fun `SEER_CHECK success - sends result privately to seer and advances SEER_PICK`() {
             val seerHandler = stubHandler(PlayerRole.SEER, GameActionResult.Success(events = listOf(seerResultEvent)))
             val ctx = GameContext(game(), room(), emptyList())
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(seerHandler)).dispatch(req(seerActorId, ActionType.SEER_CHECK, "u2"))
 
@@ -324,7 +324,7 @@ class GameActionDispatcherTest {
         fun `SEER_CHECK rejected - does NOT advance sub-phase`() {
             val seerHandler = stubHandler(PlayerRole.SEER, GameActionResult.Rejected("not the seer"))
             val ctx = GameContext(game(), room(), emptyList())
-            whenever(contextLoader.load(gameId)).thenReturn(ctx)
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
             makeDispatcher(listOf(seerHandler)).dispatch(req(seerActorId, ActionType.SEER_CHECK, "u2"))
 
@@ -339,7 +339,7 @@ class GameActionDispatcherTest {
     fun `SEER_CONFIRM success - advances SEER_RESULT sub-phase`() {
         val seerHandler = stubHandler(PlayerRole.SEER, GameActionResult.Success())
         val ctx = GameContext(game(subPhase = NightSubPhase.SEER_RESULT.name), room(), emptyList())
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
         makeDispatcher(listOf(seerHandler)).dispatch(req(seerActorId, ActionType.SEER_CONFIRM))
 
@@ -352,7 +352,7 @@ class GameActionDispatcherTest {
     fun `WITCH_ACT rejected - does NOT advance sub-phase`() {
         val witchHandler = stubHandler(PlayerRole.WITCH, GameActionResult.Rejected("antidote already used"))
         val ctx = GameContext(game(subPhase = NightSubPhase.WITCH_ACT.name), room(), emptyList())
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
@@ -365,7 +365,7 @@ class GameActionDispatcherTest {
     fun `GUARD_PROTECT success - advances GUARD_PICK sub-phase`() {
         val guardHandler = stubHandler(PlayerRole.GUARD, GameActionResult.Success())
         val ctx = GameContext(game(subPhase = NightSubPhase.GUARD_PICK.name), room(), emptyList())
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
         makeDispatcher(listOf(guardHandler)).dispatch(req("guard:001", ActionType.GUARD_PROTECT, "u2"))
 
@@ -376,7 +376,7 @@ class GameActionDispatcherTest {
     fun `GUARD_SKIP success - advances GUARD_PICK sub-phase`() {
         val guardHandler = stubHandler(PlayerRole.GUARD, GameActionResult.Success())
         val ctx = GameContext(game(subPhase = NightSubPhase.GUARD_PICK.name), room(), emptyList())
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
         makeDispatcher(listOf(guardHandler)).dispatch(req("guard:001", ActionType.GUARD_SKIP))
 
@@ -387,7 +387,7 @@ class GameActionDispatcherTest {
     fun `GUARD_PROTECT rejected - does NOT advance sub-phase`() {
         val guardHandler = stubHandler(PlayerRole.GUARD, GameActionResult.Rejected("same player two nights"))
         val ctx = GameContext(game(subPhase = NightSubPhase.GUARD_PICK.name), room(), emptyList())
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
         makeDispatcher(listOf(guardHandler)).dispatch(req("guard:001", ActionType.GUARD_PROTECT, "u2"))
 
@@ -418,7 +418,7 @@ class GameActionDispatcherTest {
             allNightPhases = emptyList()
         )
 
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
@@ -447,7 +447,7 @@ class GameActionDispatcherTest {
             allNightPhases = emptyList()
         )
 
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
@@ -477,7 +477,7 @@ class GameActionDispatcherTest {
             allNightPhases = emptyList()
         )
 
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
@@ -506,7 +506,7 @@ class GameActionDispatcherTest {
             allNightPhases = emptyList()
         )
 
-        whenever(contextLoader.load(gameId)).thenReturn(ctx)
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
 
         makeDispatcher(listOf(witchHandler)).dispatch(req("witch:001", ActionType.WITCH_ACT))
 
