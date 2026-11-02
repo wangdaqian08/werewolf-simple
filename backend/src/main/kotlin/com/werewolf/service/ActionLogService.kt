@@ -208,6 +208,18 @@ class ActionLogService(
         )
     }
 
+    fun recordDeclaredOut(gameId: Int, dayNumber: Int, userId: String, nickname: String, seatIndex: Int) {
+        val payload = mapOf("dayNumber" to dayNumber, "userId" to userId, "nickname" to nickname, "seatIndex" to seatIndex)
+        gameEventRepository.save(
+            GameEvent(
+                gameId       = gameId,
+                eventType    = "DECLARED_OUT",
+                message      = mapper.writeValueAsString(payload),
+                targetUserId = userId,
+            )
+        )
+    }
+
     fun recordSelfDestruct(
         gameId: Int,
         dayNumber: Int,

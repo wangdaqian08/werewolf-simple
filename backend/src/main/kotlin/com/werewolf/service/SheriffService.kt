@@ -359,7 +359,9 @@ class SheriffService(
         val votes = voteRepository.findByGameIdAndVoteContextAndDayNumber(
             context.gameId, VoteContext.SHERIFF_ELECTION, context.game.dayNumber
         )
-        val tally = votes.mapNotNull { it.targetUserId }.groupingBy { it }.eachCount()
+        // A vote for a candidate declared out since it was cast counts for no one.
+        val tally = votes.mapNotNull { it.targetUserId }.filter { context.alivePlayerById(it) != null }
+            .groupingBy { it }.eachCount()
         val maxVotes = tally.values.maxOrNull() ?: 0
         val topCandidates = tally.filterValues { it == maxVotes }.keys.toList()
         if (topCandidates.isEmpty()) {
@@ -481,7 +483,39 @@ class SheriffService(
 
         candidate.status = CandidateStatus.QUIT
         sheriffCandidateRepository.save(candidate)
+        if (endCampaignIfNoneRunning(context, election)) return GameActionResult.Success()
 
+        broadcastAfterCommit(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name)
+        )
+        return GameActionResult.Success()
+    }
+
+    /**
+     * The host declared [userId] out mid-campaign (HostDeclareOutService; the player is
+     * already dead): they quit like a 退水, and their own sheriff vote is dropped. In
+     * SIGNUP their decision is no longer awaited, so the sign-up may now complete.
+     */
+    fun onPlayerDeclaredOut(context: GameContext, userId: String) {
+        val election = context.election ?: return
+        val electionId = election.id ?: error("Election has no ID")
+        val candidates = sheriffCandidateRepository.findByElectionId(electionId)
+        candidates.firstOrNull { it.userId == userId && it.status == CandidateStatus.RUNNING }?.let {
+            it.status = CandidateStatus.QUIT
+            sheriffCandidateRepository.save(it)
+        }
+        voteRepository.findByGameIdAndVoteContextAndDayNumberAndVoterUserId(
+            context.gameId, VoteContext.SHERIFF_ELECTION, context.game.dayNumber, userId
+        ).ifPresent { voteRepository.delete(it) }
+        // Past SIGNUP, losing the last running candidate would leave nobody to vote for or appoint.
+        if (election.subPhase == ElectionSubPhase.SIGNUP) finishSignupDecision(election, candidates, context)
+        else endCampaignIfNoneRunning(context, election)
+    }
+
+    /** No running candidate left in the speaking order → straight to DAY_DISCUSSION/RESULT_HIDDEN. */
+    private fun endCampaignIfNoneRunning(context: GameContext, election: SheriffElection): Boolean {
+        val electionId = election.id ?: error("Election has no ID")
         // If no running candidates remain in the speaking order, skip to night
         val speakingOrderIds = election.speakingOrder?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
         val allCandidates = sheriffCandidateRepository.findByElectionId(electionId)
@@ -501,14 +535,9 @@ class SheriffService(
                 context.gameId,
                 DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_HIDDEN.name),
             )
-            return GameActionResult.Success()
+            return true
         }
-
-        broadcastAfterCommit(
-            context.gameId,
-            DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name)
-        )
-        return GameActionResult.Success()
+        return false
     }
 
     private fun vote(request: GameActionRequest, context: GameContext): GameActionResult {

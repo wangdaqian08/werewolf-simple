@@ -445,6 +445,7 @@ class GameService(
                     "confirmedRole" to p.confirmedRole,
                     "canVote"       to p.canVote,
                     "idiotRevealed" to p.idiotRevealed,
+                    "removedByHost" to p.removedByHost,
                     "role"          to if (p.userId == requestingUserId || game.phase == GamePhase.GAME_OVER) p.role.name else null,
                 )
             },

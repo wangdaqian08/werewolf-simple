@@ -90,4 +90,7 @@ enum class ActionType {
 
     // Wolf self-destruction (day action)
     WOLF_SELF_DESTRUCT,
+
+    // Host declares a player out (they had to leave the game)
+    HOST_DECLARE_OUT,
 }

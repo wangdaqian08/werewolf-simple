@@ -67,6 +67,7 @@ class DayRevealAdvancer(
         if (wolfTarget == game.selfDestructUserId || wolfTarget == game.selfDestructTakenUserId) return null
         val player = players.find { it.userId == wolfTarget } ?: return null
         if (player.alive) return null // survived (e.g. night-1 immunity perk)
+        if (player.removedByHost) return null // left the game: declared out during the sheriff campaign
         return if (player.role.shootsOnDeath) wolfTarget else null
     }
 }

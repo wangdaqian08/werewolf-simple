@@ -189,6 +189,16 @@
                   </template>
                 </div>
               </div>
+
+              <!-- Declared out by the host (the player left the game) -->
+              <div v-if="round.declaredOuts.length > 0" class="log-section">
+                <div class="section-title">{{ $t('log.declaredOut') }}</div>
+                <div v-for="d in round.declaredOuts" :key="d.userId" class="log-row">
+                  <span class="seat-badge">{{ $t('common.seat', { n: d.seatIndex }) }}</span>
+                  <span class="log-name">{{ d.nickname }}</span>
+                  <span class="log-tag tag-red">{{ $t('log.out') }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -221,6 +231,7 @@ interface Round {
   hunterShots: HunterShotPayload[]
   idiotReveals: IdiotRevealPayload[]
   selfDestructs: SelfDestructPayload[]
+  declaredOuts: NightDeathPayload[] // same payload shape: day, userId, nickname, seat
 }
 
 const loading = ref(false)
@@ -239,6 +250,7 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         hunterShots: [],
         idiotReveals: [],
         selfDestructs: [],
+        declaredOuts: [],
       })
     }
     return map.get(day)!
@@ -266,6 +278,9 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         break
       case 'SELF_DESTRUCT':
         getOrCreate(day).selfDestructs.push(payload as SelfDestructPayload)
+        break
+      case 'DECLARED_OUT':
+        getOrCreate(day).declaredOuts.push(payload as NightDeathPayload)
         break
     }
   }

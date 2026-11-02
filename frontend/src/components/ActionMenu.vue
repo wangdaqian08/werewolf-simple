@@ -32,8 +32,19 @@
               </button>
             </template>
 
-            <!-- Non-wolf or dead or disallowed → empty state -->
-            <template v-else>
+            <!-- Host: declare a player out (they had to leave the game) -->
+            <button
+              v-if="canDeclareOut"
+              class="action-menu-item action-menu-item-danger"
+              data-testid="action-menu-declare-out"
+              @click="onDeclareOutClick"
+            >
+              <span class="ami-icon">🚪</span>
+              <span class="ami-label">{{ $t('actionMenu.declareOut') }}</span>
+            </button>
+
+            <!-- No action available → empty state -->
+            <template v-if="!canSelfDestruct && !canDeclareOut">
               <div class="action-menu-empty" data-testid="action-menu-empty">
                 <span class="ami-icon">🌙</span>
                 <span class="ami-label">{{ $t('actionMenu.none') }}</span>
@@ -86,6 +97,56 @@
           </div>
         </div>
       </Transition>
+
+      <!-- Host: pick the player who left, then confirm -->
+      <Transition name="fade">
+        <div v-if="declareOpen" class="action-confirm-overlay" @click.self="cancelDeclare">
+          <div class="action-confirm-sheet">
+            <div class="action-confirm-title">{{ $t('actionMenu.declareOutTitle') }}</div>
+            <div class="action-confirm-body">
+              {{
+                declareTarget
+                  ? $t('actionMenu.declareOutConfirm', {
+                      seat: $t('common.seatDot', {
+                        n: declareTarget.seatIndex,
+                        name: declareTarget.nickname,
+                      }),
+                    })
+                  : $t('actionMenu.declareOutPick')
+              }}
+            </div>
+            <div class="action-take-list action-take">
+              <button
+                v-for="p in declareCandidates"
+                :key="p.userId"
+                class="action-take-item"
+                :class="{ 'action-take-item-selected': declareTargetId === p.userId }"
+                :data-testid="`action-menu-declare-${p.userId}`"
+                @click="declareTargetId = p.userId"
+              >
+                {{ $t('common.seatDot', { n: p.seatIndex, name: p.nickname }) }}
+              </button>
+            </div>
+            <div class="action-confirm-btns">
+              <button
+                class="btn btn-secondary"
+                data-testid="action-menu-declare-cancel"
+                @click="cancelDeclare"
+              >
+                {{ $t('common.cancel') }}
+              </button>
+              <button
+                class="btn btn-danger"
+                data-testid="action-menu-declare-confirm"
+                :disabled="!declareTarget"
+                @click="confirmDeclare"
+              >
+                {{ $t('common.confirm') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </Teleport>
   </template>
 </template>
@@ -103,10 +164,12 @@ const props = defineProps<{
   players?: GamePlayer[]
   myUserId?: string
   daySkipVoting?: boolean
+  isHost?: boolean
 }>()
 
 const emit = defineEmits<{
   'self-destruct': [targetUserId?: string]
+  'declare-out': [targetUserId: string]
 }>()
 
 const menuOpen = ref(false)
@@ -114,7 +177,10 @@ const confirmOpen = ref(false)
 
 const ALLOWED_PHASES: GamePhase[] = ['SHERIFF_ELECTION', 'DAY_DISCUSSION', 'DAY_VOTING']
 
-const chipVisible = computed(() => ALLOWED_PHASES.includes(props.phase))
+// ROLE_REVEAL: only the host has an action (declare out a player who left).
+const chipVisible = computed(
+  () => ALLOWED_PHASES.includes(props.phase) || (props.phase === 'ROLE_REVEAL' && !!props.isHost),
+)
 
 // Mirrors the server's self-destruct window: the sheriff campaign, or after the
 // night result is revealed and before voting starts — and only once per day.
@@ -128,6 +194,40 @@ const canSelfDestruct = computed(
   () =>
     isWolfRole(props.myRole) && props.isAlive && inSelfDestructWindow.value && !props.daySkipVoting,
 )
+
+// Mirrors the server's declare-out window (it validates); before the night reveal the host reveals first.
+const canDeclareOut = computed(
+  () => !!props.isHost && !(props.phase === 'DAY_DISCUSSION' && props.subPhase === 'RESULT_HIDDEN'),
+)
+// Alive players other than the host, plus a dead sheriff who left mid-handover (badge destroyed for them).
+const declareCandidates = computed(() =>
+  (props.players ?? []).filter(
+    (p) =>
+      p.userId !== props.myUserId &&
+      (p.isAlive || (props.subPhase === 'BADGE_HANDOVER' && p.isSheriff)),
+  ),
+)
+const declareOpen = ref(false)
+const declareTargetId = ref<string | undefined>()
+const declareTarget = computed(() =>
+  declareCandidates.value.find((p) => p.userId === declareTargetId.value),
+)
+
+function onDeclareOutClick() {
+  menuOpen.value = false
+  declareTargetId.value = undefined
+  declareOpen.value = true
+}
+
+function cancelDeclare() {
+  declareOpen.value = false
+}
+
+function confirmDeclare() {
+  if (!declareTarget.value) return
+  declareOpen.value = false
+  emit('declare-out', declareTarget.value.userId)
+}
 
 // The server validates the take; this only decides whether to offer it.
 const canTake = computed(() => props.myRole === 'WHITE_WOLF_KING')

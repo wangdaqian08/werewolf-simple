@@ -22,6 +22,14 @@
     <!-- Floating mute/unmute toggle with expanding volume slider -->
     <VolumeControl />
 
+    <div
+      v-if="myPlayer?.removedByHost && gameStore.state?.phase !== 'GAME_OVER'"
+      class="declared-out-banner"
+      data-testid="you-declared-out"
+    >
+      {{ $t('game.youDeclaredOut') }}
+    </div>
+
     <!-- Role Reveal phase -->
     <template v-if="gameStore.state?.phase === 'ROLE_REVEAL' && gameStore.state?.myRole">
       <RoleRevealCard
@@ -55,6 +63,17 @@
         >
           {{ $t('game.startNight') }}
         </button>
+        <!-- Host: declare out a player who left before confirming their role -->
+        <div v-if="isHost" style="margin-top: 1.5rem">
+          <ActionMenu
+            phase="ROLE_REVEAL"
+            :is-alive="true"
+            :is-host="true"
+            :players="gameStore.state.players"
+            :my-user-id="userStore.userId ?? ''"
+            @declare-out="handleDeclareOut"
+          />
+        </div>
       </div>
     </template>
 
@@ -86,6 +105,7 @@
         @end-result="handleSheriffEndResult"
         @appoint="handleSheriffAppoint"
         @self-destruct="handleSelfDestruct"
+        @declare-out="handleDeclareOut"
         @start-timer="(s) => handleTimerStart(Number(route.params.gameId), s)"
         @stop-timer="() => handleTimerStop(Number(route.params.gameId))"
       />
@@ -146,6 +166,7 @@
         @pass-badge="handlePassBadge"
         @destroy-badge="handleDestroyBadge"
         @self-destruct="handleSelfDestruct"
+        @declare-out="handleDeclareOut"
       />
     </template>
 
@@ -176,6 +197,7 @@
         @skip="handleDaySkip"
         @select-player="handleDaySelectPlayer"
         @self-destruct="handleSelfDestruct"
+        @declare-out="handleDeclareOut"
         @continue-to-night="handleVotingContinue"
         @pass-badge="handlePassBadge"
         @destroy-badge="handleDestroyBadge"
@@ -524,6 +546,7 @@ import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import VolumeControl from '@/components/VolumeControl.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
+import ActionMenu from '@/components/ActionMenu.vue'
 import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
 import NightPhase from '@/components/NightPhase.vue'
@@ -951,6 +974,12 @@ async function handleSelfDestruct(targetId?: string) {
   await action({ actionType: 'WOLF_SELF_DESTRUCT', targetId })
 }
 
+async function handleDeclareOut(targetId: string) {
+  await action({ actionType: 'HOST_DECLARE_OUT', targetId })
+}
+
+const myPlayer = computed(() => gameStore.state?.players.find((p) => p.userId === userStore.userId))
+
 async function debugVoting(scenario: string) {
   await http.post('/debug/voting/scenario', { scenario })
 }
@@ -1066,6 +1095,16 @@ onMounted(async () => {
         }
         if (data.type === 'GAME_EVENT') {
           gameStore.addEvent(data.payload)
+        }
+        // Real backend: the host declared a player out (they left the game)
+        if (data.type === 'PlayerDeclaredOut') {
+          ElMessage({
+            message: t('game.declaredOut', {
+              seat: t('common.seatDot', { n: data.seatIndex, name: data.nickname }),
+            }),
+            type: 'warning',
+            duration: 4000,
+          })
         }
         // Real backend: a player confirmed their role → increment counter
         if (data.type === 'RoleConfirmed') {
@@ -1308,6 +1347,18 @@ function normalizePhaseName(phase: string | undefined): string {
 }
 
 /* Waiting screen (after role confirmed) */
+.declared-out-banner {
+  position: fixed;
+  top: env(safe-area-inset-top, 0);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  padding: 6px 16px;
+  background: var(--red, #b5251a);
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+}
 .waiting-screen {
   display: flex;
   flex-direction: column;

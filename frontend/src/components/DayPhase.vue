@@ -59,7 +59,9 @@
           :is-alive="isAlive ?? false"
           :players="players"
           :my-user-id="myUserId"
+          :is-host="isHost"
           @self-destruct="(target) => emit('self-destruct', target)"
+          @declare-out="(target) => emit('declare-out', target)"
         />
       </div>
     </div>
@@ -480,6 +482,7 @@ const emit = defineEmits<{
   skip: []
   selectPlayer: [userId: string]
   'self-destruct': [targetUserId?: string]
+  'declare-out': [targetUserId: string]
   continueToNight: []
   passBadge: [userId: string]
   destroyBadge: []
