@@ -368,7 +368,8 @@ jobs:
 
   merge-reports-integration:
     name: Merge Integration E2E Reports
-    if: always()
+    # Not when the shards were skipped (backend failed): there is nothing to merge.
+    if: always() && needs.e2e-integration.result != 'skipped'
     needs: e2e-integration
     runs-on: ubuntu-latest
     defaults:

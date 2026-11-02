@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronization.STATUS_COMMITTED
 import org.springframework.transaction.support.TransactionSynchronizationManager
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
@@ -44,6 +45,8 @@ class NightOrchestrator(
     private val rewardSettlementService: com.werewolf.service.RewardSettlementService,
     private val perkService: com.werewolf.service.PerkService,
     private val nightTurnLedger: NightTurnLedger,
+    // Spring Boot provides it; unit tests that build the orchestrator by hand pass none.
+    private val transactionTemplate: TransactionTemplate? = null,
 ) {
     private val log = LoggerFactory.getLogger(NightOrchestrator::class.java)
 
@@ -752,13 +755,19 @@ class NightOrchestrator(
             }
         }
 
-        // Reload fresh context + night phase to pick up all actions committed during the night
-        val freshContext = contextLoader.load(gameId)
-        val freshNightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, dayNumber)
-            .orElseThrow { IllegalStateException("[nightRoleLoop] NightPhase not found at end of night for game $gameId") }
+        val resolve = {
+            // Reload fresh context + night phase to pick up all actions committed during the night
+            val freshContext = contextLoader.load(gameId)
+            val freshNightPhase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, dayNumber)
+                .orElseThrow { IllegalStateException("[nightRoleLoop] NightPhase not found at end of night for game $gameId") }
 
-        log.info("[nightRoleLoop] game=$gameId: resolving night kills (wolfTarget=${freshNightPhase.wolfTargetUserId})")
-        resolveNightKills(freshContext, freshNightPhase)
+            log.info("[nightRoleLoop] game=$gameId: resolving night kills (wolfTarget=${freshNightPhase.wolfTargetUserId})")
+            resolveNightKills(freshContext, freshNightPhase)
+        }
+        // One transaction (a self-call skips @Transactional): GAME_OVER commits together with
+        // its rewards, the day transition with its night-phase COMPLETE, and the broadcasts wait
+        // for the commit. Without it, GAME_OVER was visible before settle() had run.
+        if (transactionTemplate != null) transactionTemplate.executeWithoutResult { resolve() } else resolve()
     }
 
     /**
