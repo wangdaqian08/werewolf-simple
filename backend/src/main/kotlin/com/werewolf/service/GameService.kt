@@ -209,6 +209,36 @@ class GameService(
                     )
                 }
 
+                // ── MECHANICAL WOLF: learned role, tonight's skill, and tonight's action ──
+                if (myPlayer?.role == PlayerRole.MECHANICAL_WOLF) {
+                    val allNights = nightPhaseRepository.findByGameId(gameId)
+                    val skillTonight = RoleRules.mechNightSkill(myPlayer, np.dayNumber, allNights)
+                    fun target(id: String?) = mapOf(
+                        "targetPlayerId"   to id,
+                        "targetNickname"   to id?.let { userLookup[it]?.nickname ?: it },
+                        "targetSeatIndex"  to id?.let { playerMap[it]?.seatIndex },
+                    )
+                    val result: Map<String, Any?>? = when {
+                        np.mechLearnTargetUserId != null ->
+                            mapOf("kind" to "LEARN", "role" to myPlayer.learnedRole?.name) + target(np.mechLearnTargetUserId)
+                        np.mechCheckTargetUserId != null ->
+                            if (myPlayer.learnedRole?.learnedSkill == LearnedSkill.CHECK_ALIGNMENT)
+                                mapOf("kind" to "CHECK", "isWerewolf" to (np.mechCheckResultRole?.isWolf ?: false)) + target(np.mechCheckTargetUserId)
+                            else mapOf("kind" to "CHECK", "role" to np.mechCheckResultRole?.name) + target(np.mechCheckTargetUserId)
+                        np.mechPoisonTargetUserId != null -> mapOf("kind" to "POISON") + target(np.mechPoisonTargetUserId)
+                        np.mechGuardTargetUserId != null -> mapOf("kind" to "PROTECT") + target(np.mechGuardTargetUserId)
+                        // No field records a skip: reaching the result sub-phase with nothing done means it skipped.
+                        np.subPhase == NightSubPhase.MECH_WOLF_RESULT -> mapOf("kind" to "SKIP")
+                        else -> null
+                    }
+                    base["mechWolf"] = mapOf(
+                        "learnedRole"     to myPlayer.learnedRole?.name,
+                        "learnedPlayerId" to allNights.firstOrNull { it.mechLearnTargetUserId != null }?.mechLearnTargetUserId,
+                        "skillTonight"    to skillTonight.name,
+                        "result"          to result,
+                    )
+                }
+
                 // ── WITCH: share attack info + per-game potion availability ───────────
                 if (myPlayer?.role == PlayerRole.WITCH && np.subPhase == NightSubPhase.WITCH_ACT) {
                     val allNights = nightPhaseRepository.findByGameId(gameId)

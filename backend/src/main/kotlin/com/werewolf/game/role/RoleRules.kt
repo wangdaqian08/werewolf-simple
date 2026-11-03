@@ -22,7 +22,9 @@ object RoleRules {
     fun mechNightSkill(mech: GamePlayer, tonight: Int, allNights: List<NightPhase>): MechNightSkill {
         val learned = mech.learnedRole ?: return MechNightSkill.LEARN
         // A skill is usable from the night after learning.
-        if (tonight <= allNights.first { it.mechLearnTargetUserId != null }.dayNumber) return MechNightSkill.NONE
+        val learnNight = allNights.firstOrNull { it.mechLearnTargetUserId != null }?.dayNumber
+            ?: error("mechanical wolf ${mech.userId} has learnedRole but no learn night")
+        if (tonight <= learnNight) return MechNightSkill.NONE
         return when (learned.learnedSkill) {
             LearnedSkill.CHECK_ROLE -> MechNightSkill.CHECK_ROLE
             LearnedSkill.CHECK_ALIGNMENT -> MechNightSkill.CHECK_ALIGNMENT

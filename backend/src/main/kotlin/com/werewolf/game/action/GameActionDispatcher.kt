@@ -100,10 +100,15 @@ class GameActionDispatcher(
 
             ActionType.MEDIUM_CONFIRM -> nightTurn(request, context, PlayerRole.MEDIUM)
 
-            // ── Night: mechanical wolf — wired in a later task ────────────────
+            // ── Night: mechanical wolf ────────────────────────────────────────
             ActionType.MECH_LEARN, ActionType.MECH_CHECK, ActionType.MECH_POISON, ActionType.MECH_PROTECT,
-            ActionType.MECH_SKIP, ActionType.MECH_CONFIRM,
-                -> GameActionResult.Rejected("Not supported yet: ${request.actionType}")
+            ActionType.MECH_SKIP,
+                -> nightTurn(request, context, PlayerRole.MECHANICAL_WOLF) { result ->
+                    // After-commit private ping: the client refetches state to see what it learned or did.
+                    result.events.forEach { stompPublisher.sendPrivateAfterCommit(request.actorUserId, it) }
+                }
+
+            ActionType.MECH_CONFIRM -> nightTurn(request, context, PlayerRole.MECHANICAL_WOLF)
 
             // ── Idiot reveal (day) ────────────────────────────────────────────
             // The idiot reveals only by being voted out (VotingPipeline does it); no client sends this.
@@ -135,6 +140,12 @@ class GameActionDispatcher(
             ActionType.SEER_CONFIRM to NightSubPhase.SEER_RESULT,
             ActionType.MEDIUM_CHECK to NightSubPhase.MEDIUM_PICK,
             ActionType.MEDIUM_CONFIRM to NightSubPhase.MEDIUM_RESULT,
+            ActionType.MECH_LEARN to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_CHECK to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_POISON to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_PROTECT to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_SKIP to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_CONFIRM to NightSubPhase.MECH_WOLF_RESULT,
             ActionType.WITCH_ACT to NightSubPhase.WITCH_ACT,
             ActionType.GUARD_PROTECT to NightSubPhase.GUARD_PICK,
             ActionType.GUARD_SKIP to NightSubPhase.GUARD_PICK,

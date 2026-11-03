@@ -293,6 +293,74 @@ class GameServiceNightPhaseTest {
     }
 
     @Test
+    fun `mechWolf state - skillTonight LEARN before learning, POISON the night after learning WITCH`() {
+        val mech = player("u1", 1, PlayerRole.MECHANICAL_WOLF)
+        val target = player("u3", 3, PlayerRole.WITCH)
+        val users = listOf(user("u1", "Mech"), user("u3", "Wendy"))
+        setupGameAndPlayers(game(), listOf(mech, target), users, NightSubPhase.MECH_WOLF_PICK)
+        val np = nightPhase(subPhase = NightSubPhase.MECH_WOLF_PICK)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        val n1 = NightPhase(gameId = gameId, dayNumber = 1)
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(n1, np))
+
+        var state = nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>
+        assertThat(state["skillTonight"]).isEqualTo("LEARN")
+        assertThat(state["learnedRole"]).isNull()
+        assertThat(state["result"]).isNull()
+
+        // Learned WITCH on night 1: tonight (night 2) it can poison.
+        mech.learnedRole = PlayerRole.WITCH
+        n1.mechLearnTargetUserId = "u3"
+        state = nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>
+        assertThat(state["skillTonight"]).isEqualTo("POISON")
+        assertThat(state["learnedRole"]).isEqualTo("WITCH")
+        assertThat(state["learnedPlayerId"]).isEqualTo("u3")
+        assertThat(state["result"]).isNull()
+
+        // Poisoned tonight: the result is the action taken.
+        np.mechPoisonTargetUserId = "u3"
+        val result = (nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>)["result"] as Map<String, Any?>
+        assertThat(result["kind"]).isEqualTo("POISON")
+        assertThat(result["targetPlayerId"]).isEqualTo("u3")
+        assertThat(result["targetNickname"]).isEqualTo("Wendy")
+        assertThat(result["targetSeatIndex"]).isEqualTo(3)
+    }
+
+    @Test
+    fun `mechWolf state - a learned seer exposes only isWerewolf, SKIP shows in the result phase`() {
+        val mech = player("u1", 1, PlayerRole.MECHANICAL_WOLF).also { it.learnedRole = PlayerRole.SEER }
+        val target = player("u2", 2, PlayerRole.WEREWOLF)
+        val users = listOf(user("u1", "Mech"), user("u2", "Wolfie"))
+        setupGameAndPlayers(game(), listOf(mech, target), users, NightSubPhase.MECH_WOLF_RESULT)
+        val np = nightPhase(subPhase = NightSubPhase.MECH_WOLF_RESULT)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        val n1 = NightPhase(gameId = gameId, dayNumber = 1).also { it.mechLearnTargetUserId = "u2" }
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(n1, np))
+
+        var state = nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>
+        assertThat((state["result"] as Map<String, Any?>)["kind"]).isEqualTo("SKIP")
+
+        np.mechCheckTargetUserId = "u2"
+        np.mechCheckResultRole = PlayerRole.WEREWOLF
+        state = nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>
+        val result = state["result"] as Map<String, Any?>
+        assertThat(result["kind"]).isEqualTo("CHECK")
+        assertThat(result["isWerewolf"]).isEqualTo(true)
+        assertThat(result.containsKey("role")).isFalse()
+    }
+
+    @Test
+    fun `pack wolves never get mechWolf`() {
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val users = listOf(user("u1", "Wolf"))
+        setupGameAndPlayers(game(), listOf(wolf), users, NightSubPhase.MECH_WOLF_PICK)
+        val np = nightPhase(subPhase = NightSubPhase.MECH_WOLF_PICK)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+
+        assertThat(nightPhaseResult(gameService.getGameState(gameId, "u1")).containsKey("mechWolf")).isFalse()
+    }
+
+    @Test
     fun `non-medium never gets mediumResult`() {
         val seer = player("u1", 1, PlayerRole.SEER)
         val target = player("u3", 3, PlayerRole.WITCH)

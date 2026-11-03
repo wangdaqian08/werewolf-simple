@@ -586,6 +586,29 @@ class NightOrchestratorTest {
     }
 
     @Test
+    fun `night sequence with every role`() {
+        val orchestrator = makeOrchestrator(listOf(
+            stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK),
+            stubHandler(PlayerRole.MECHANICAL_WOLF, NightSubPhase.MECH_WOLF_PICK, NightSubPhase.MECH_WOLF_RESULT),
+            stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT),
+            stubHandler(PlayerRole.MEDIUM, NightSubPhase.MEDIUM_PICK, NightSubPhase.MEDIUM_RESULT),
+            stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK),
+        ))
+        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
+            hasMechanicalWolf = true, hasWitch = true, hasMedium = true, hasGuard = true)
+
+        assertThat(orchestrator.nightSequence(GameContext(game(), r, emptyList()))).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.MECH_WOLF_PICK,
+            NightSubPhase.MECH_WOLF_RESULT,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.MEDIUM_PICK,
+            NightSubPhase.MEDIUM_RESULT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    @Test
     fun `existing board sequence unchanged`() {
         val orchestrator = makeOrchestrator(listOf(
             stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK),

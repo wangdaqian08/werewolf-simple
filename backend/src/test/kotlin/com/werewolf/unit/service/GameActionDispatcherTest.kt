@@ -132,6 +132,29 @@ class GameActionDispatcherTest {
         }
 
         @Test
+        fun `second MECH_LEARN in the same turn is rejected`() {
+            val mechId = "mech:001"
+            val ctx = GameContext(
+                game(subPhase = NightSubPhase.MECH_WOLF_PICK.name),
+                room(),
+                listOf(player(mechId, 1, PlayerRole.MECHANICAL_WOLF), player(wolfId, 2, PlayerRole.WEREWOLF)),
+                nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.MECH_WOLF_PICK },
+            )
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+            val dispatcher = makeDispatcher(listOf(stubHandler(PlayerRole.MECHANICAL_WOLF,
+                GameActionResult.Success(listOf(DomainEvent.MechWolfResult(gameId))))))
+
+            val first = dispatcher.dispatch(req(mechId, ActionType.MECH_LEARN, "u2"))
+            val repeat = dispatcher.dispatch(req(mechId, ActionType.MECH_LEARN, "u3"))
+
+            assertThat(first).isInstanceOf(GameActionResult.Success::class.java)
+            assertThat(repeat).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((repeat as GameActionResult.Rejected).reason).contains("already confirmed")
+            verify(nightOrchestrator, times(1)).submitAction(gameId)
+            verify(stompPublisher, times(1)).sendPrivateAfterCommit(eq(mechId), eq(DomainEvent.MechWolfResult(gameId)))
+        }
+
+        @Test
         fun `a rejected turn action reopens the turn so the player can retry`() {
             whenever(contextLoader.loadForUpdate(gameId)).thenReturn(witchTurn())
             var calls = 0
