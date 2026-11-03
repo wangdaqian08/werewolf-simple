@@ -37,6 +37,12 @@ describe('findRoleLeaks', () => {
     expect(findRoleLeaks(log(mechState), 'me', 'MECHANICAL_WOLF')).toEqual([])
   })
 
+  it('never skips a subtree when the viewer role is unknown', () => {
+    const unknown = undefined as unknown as string
+    const leaks = findRoleLeaks(log(mediumState, mediumPush, mechState), 'me', unknown)
+    expect(leaks).toHaveLength(4)
+  })
+
   it("reports another role's own result as a leak", () => {
     const medium = [
       { src: 'test', id: 'u2', role: 'WITCH', key: 'role' },

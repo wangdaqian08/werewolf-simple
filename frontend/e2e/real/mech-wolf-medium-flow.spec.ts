@@ -217,6 +217,7 @@ test.describe('Mechanical wolf and medium (real backend)', () => {
     await captureSnapshot(ctx.pages, testInfo, 'd2-poisoned-villager-dead')
 
     // ── Role-leak scan: each page against its own player ────────────────
+    const ownersScanned: string[] = []
     for (const [label, log] of payloads) {
       const role: string | null = label === 'HOST' ? ctx.hostRole : label
       assertNonNull(role, 'host role known')
@@ -226,13 +227,17 @@ test.describe('Mechanical wolf and medium (real backend)', () => {
       assertNonNull(me, `${label} userId`)
       expect(log.bodies.length, `${label} recorded payloads`).toBeGreaterThan(0)
       expect(findRoleLeaks(log, me, role), `${label} (${role}) got a role`).toEqual([])
-      console.warn(`[mech-medium] leak-scan ${label}=${role} scanned=${log.bodies.length} leaks=0`)
+      if (role === 'MEDIUM' || role === 'MECHANICAL_WOLF') {
+        // The exemption is exercised: scanned as a villager, the owner's own result is a role leak.
+        expect(
+          findRoleLeaks(log, me, 'VILLAGER').length,
+          `${label} (${role}) received its own role-bearing result`,
+        ).toBeGreaterThan(0)
+        ownersScanned.push(role)
+      }
+      console.log(`[mech-medium] leak-scan ${label}=${role} scanned=${log.bodies.length} leaks=0`)
     }
-    // The exemption is exercised: each owner did receive its own result.
-    const own = (role: RoleName, key: string) =>
-      payloads.get(ctx!.hostRole === role ? 'HOST' : role)?.bodies.some((b) => b.body.includes(key))
-    expect(own('MEDIUM', '"mediumResult"'), 'medium received mediumResult').toBe(true)
-    expect(own('MECHANICAL_WOLF', '"mechWolf"'), 'mech wolf received mechWolf').toBe(true)
+    expect(ownersScanned.sort()).toEqual(['MECHANICAL_WOLF', 'MEDIUM'])
 
     // ── Backend evidence ────────────────────────────────────────────────
     const lines = readBackendLogSince(logStart)

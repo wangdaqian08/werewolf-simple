@@ -21,11 +21,12 @@ const PLAYER_ROLES = new Set([
   'MEDIUM',
 ])
 // The owner's own night results legitimately pair another player's id with a role;
-// on any other viewer's page they are a leak.
-const OWN_RESULT_OWNER: Record<string, string> = {
-  mediumResult: 'MEDIUM',
-  mechWolf: 'MECHANICAL_WOLF',
-}
+// on any other viewer's page they are a leak. Ownership is by role: one MEDIUM and one
+// MECHANICAL_WOLF per board.
+const OWN_RESULT_OWNER = new Map([
+  ['mediumResult', 'MEDIUM'],
+  ['mechWolf', 'MECHANICAL_WOLF'],
+])
 const ID_KEY = /(user|player)Id$/i
 const ROLE_KEY = /role$/i
 
@@ -107,7 +108,9 @@ export function findRoleLeaks(
         continue
       for (const [, id] of ids) leaks.push({ src, id: id as string, role, key })
     }
-    Object.entries(o).forEach(([k, x]) => OWN_RESULT_OWNER[k] === myRole || walk(src, x))
+    Object.entries(o).forEach(
+      ([k, x]) => (OWN_RESULT_OWNER.has(k) && OWN_RESULT_OWNER.get(k) === myRole) || walk(src, x),
+    )
   }
   for (const { src, body } of log.bodies.slice(from, to)) {
     try {
