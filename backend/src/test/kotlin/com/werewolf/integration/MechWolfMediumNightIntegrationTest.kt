@@ -10,6 +10,7 @@ import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
+import com.werewolf.model.DaySubPhase
 import com.werewolf.model.GamePhase
 import com.werewolf.model.GamePlayer
 import com.werewolf.model.NightSubPhase
@@ -21,10 +22,7 @@ import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
-import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.atLeastOnce
-import org.mockito.kotlin.eq
-import org.mockito.kotlin.verify
+import org.mockito.Mockito.mockingDetails
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.resttestclient.TestRestTemplate
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
@@ -157,28 +155,42 @@ class MechWolfMediumNightIntegrationTest {
         return Game(hostToken, gameId, tokens).also { it.players = gamePlayerRepository.findByGameId(gameId) }
     }
 
+    /**
+     * Waits until the night loop has written [target]. No extra sleep: an action that lands between
+     * the sub-phase write and the loop's `CompletableDeferred` is queued by
+     * `NightOrchestrator.releaseActionSignal` and consumed by the next await.
+     */
     private fun waitForSubPhase(gameId: Int, day: Int, target: NightSubPhase, timeoutMs: Long = 30_000L) {
         val deadline = System.currentTimeMillis() + timeoutMs
+        var last: NightSubPhase? = null
         while (System.currentTimeMillis() < deadline) {
-            if (nightPhaseRepository.findByGameIdAndDayNumber(gameId, day).orElse(null)?.subPhase == target) {
-                Thread.sleep(300) // the loop creates its action deferred right after writing the sub-phase
-                return
-            }
+            last = nightPhaseRepository.findByGameIdAndDayNumber(gameId, day).orElse(null)?.subPhase
+            if (last == target) return
             Thread.sleep(100)
         }
-        error("Night loop did not reach $target on day $day within ${timeoutMs}ms")
+        error("Night loop did not reach $target on day $day within ${timeoutMs}ms (last sub-phase: $last)")
     }
 
-    private fun waitForNightOver(gameId: Int, timeoutMs: Long = 30_000L) {
+    /** Every public `/topic/game/{id}` payload broadcast so far, in order. */
+    private fun broadcasts(gameId: Int): List<Any> =
+        mockingDetails(stompPublisher).invocations
+            .filter { it.method.name == "broadcastGame" && it.arguments[0] == gameId }
+            .map { it.arguments[1] }
+
+    private fun isDawnAudio(e: Any) = e is DomainEvent.AudioSequence &&
+        e.audioSequence.phase == GamePhase.DAY_DISCUSSION && e.audioSequence.subPhase == DaySubPhase.RESULT_HIDDEN.name
+
+    /** Waits for night [day]'s dawn: the RESULT_HIDDEN audio is the last broadcast the night resolution emits. */
+    private fun waitForNightOver(gameId: Int, day: Int, timeoutMs: Long = 30_000L) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
-            if (gameRepository.findById(gameId).orElseThrow().phase != GamePhase.NIGHT) {
-                Thread.sleep(1_000) // let the dawn broadcasts land
-                return
-            }
+            if (broadcasts(gameId).count(::isDawnAudio) >= day) return
             Thread.sleep(100)
         }
-        error("Night did not resolve within ${timeoutMs}ms")
+        error(
+            "Dawn of night $day was not broadcast within ${timeoutMs}ms " +
+                "(game.phase=${gameRepository.findById(gameId).orElseThrow().phase})"
+        )
     }
 
     /**
@@ -214,21 +226,31 @@ class MechWolfMediumNightIntegrationTest {
         waitForSubPhase(g.gameId, day, NightSubPhase.GUARD_PICK)
         ok(g.token(g.first(PlayerRole.GUARD)), g.gameId, "GUARD_SKIP")
 
-        waitForNightOver(g.gameId)
+        waitForNightOver(g.gameId, day)
     }
 
-    /** Ordered NightSubPhaseChanged + AudioSequence broadcasts for one game. */
-    private fun broadcastSequence(gameId: Int): List<String> {
-        val captor = argumentCaptor<Any>()
-        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
-        return captor.allValues.mapNotNull {
-            when (it) {
-                is DomainEvent.NightSubPhaseChanged -> "SUB:${it.subPhase}"
-                is DomainEvent.AudioSequence -> "AUDIO:${it.audioSequence.audioFiles}"
-                else -> null
+    /**
+     * Every public broadcast from the first night's entry on, as comparable strings. Sequence ids,
+     * timestamps and user ids are left out (they differ per game); [DomainEvent.TimerUpdated] is
+     * dropped because its count depends on timing. Event types without a listed payload compare
+     * by type only.
+     */
+    private fun broadcastFingerprint(gameId: Int): List<String> =
+        broadcasts(gameId)
+            .dropWhile { !(it is DomainEvent.PhaseChanged && it.phase == GamePhase.NIGHT) }
+            .filter { it !is DomainEvent.TimerUpdated }
+            .map {
+                when (it) {
+                    is DomainEvent.PhaseChanged -> "PhaseChanged:${it.phase}/${it.subPhase}"
+                    is DomainEvent.NightSubPhaseChanged -> "NightSubPhaseChanged:${it.subPhase}"
+                    is DomainEvent.AudioSequence -> it.audioSequence.let { a ->
+                        "AudioSequence:${a.phase}/${a.subPhase}/${a.audioFiles}/priority=${a.priority}"
+                    }
+                    is DomainEvent.OpenEyes -> "OpenEyes:${it.role}/${it.phase}/night${it.nightNumber}"
+                    is DomainEvent.CloseEyes -> "CloseEyes:${it.role}/${it.phase}/night${it.nightNumber}"
+                    else -> it.javaClass.simpleName
+                }
             }
-        }
-    }
 
     // ── Tests ─────────────────────────────────────────────────────────────────
 
@@ -241,14 +263,19 @@ class MechWolfMediumNightIntegrationTest {
             ok(g.hostToken, g.gameId, "START_NIGHT")
             // Villager target and a medium check on a villager: identical for all three nights.
             driveNight(g, 1, killer, g.villagers[0], mechAction(g), g.villagers[1])
-            return broadcastSequence(g.gameId)
+            return broadcastFingerprint(g.gameId)
         }
 
         val learns = runNight1("SQL", { g -> "MECH_LEARN" to g.first(PlayerRole.HUNTER).userId })
         val skips = runNight1("SQS", { "MECH_SKIP" to null })
         val dead = runNight1("SQD", { null }, killMech = true)
 
-        assertThat(learns).contains("SUB:MECH_WOLF_PICK", "SUB:MECH_WOLF_RESULT", "AUDIO:[mech_wolf_open_eyes.mp3]", "AUDIO:[mech_wolf_close_eyes.mp3]")
+        val learnsText = learns.joinToString("\n")
+        assertThat(learnsText).contains(
+            "NightSubPhaseChanged:MECH_WOLF_PICK", "NightSubPhaseChanged:MECH_WOLF_RESULT",
+            "[mech_wolf_open_eyes.mp3]", "[mech_wolf_close_eyes.mp3]",
+        )
+        assertThat(learns).describedAs("dawn was captured").anyMatch { it.startsWith("AudioSequence:DAY_DISCUSSION/RESULT_HIDDEN") }
         assertThat(skips).describedAs("skip vs learn").isEqualTo(learns)
         assertThat(dead).describedAs("dead vs learn").isEqualTo(learns)
     }
@@ -265,22 +292,9 @@ class MechWolfMediumNightIntegrationTest {
         // The WEREWOLF turn waits for the mechanical wolf: it is the killer and sees the pick.
         val mechState = state(g.gameId, g.token(g.mech))["nightPhase"] as Map<*, *>
         assertThat(mechState["wolfKiller"]).isEqualTo(true)
-        ok(g.token(g.mech), g.gameId, "WOLF_KILL", victim.userId)
 
-        // Night 1 is also the learning night: the mechanical wolf then acts in its own turn.
-        waitForSubPhase(g.gameId, 1, NightSubPhase.MECH_WOLF_PICK)
-        ok(g.token(g.mech), g.gameId, "MECH_SKIP")
-        waitForSubPhase(g.gameId, 1, NightSubPhase.MECH_WOLF_RESULT)
-        ok(g.token(g.mech), g.gameId, "MECH_CONFIRM")
-        waitForSubPhase(g.gameId, 1, NightSubPhase.WITCH_ACT)
-        ok(g.token(g.first(PlayerRole.WITCH)), g.gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false))
-        waitForSubPhase(g.gameId, 1, NightSubPhase.MEDIUM_PICK)
-        ok(g.token(g.first(PlayerRole.MEDIUM)), g.gameId, "MEDIUM_CHECK", g.villagers[1].userId)
-        waitForSubPhase(g.gameId, 1, NightSubPhase.MEDIUM_RESULT)
-        ok(g.token(g.first(PlayerRole.MEDIUM)), g.gameId, "MEDIUM_CONFIRM")
-        waitForSubPhase(g.gameId, 1, NightSubPhase.GUARD_PICK)
-        ok(g.token(g.first(PlayerRole.GUARD)), g.gameId, "GUARD_SKIP")
-        waitForNightOver(g.gameId)
+        // driveNight sends the mechanical wolf's WOLF_KILL; night 1 is also its learning night, so it then acts in its own turn.
+        driveNight(g, 1, g.mech, victim, "MECH_SKIP" to null, g.villagers[1])
 
         assertThat(nightPhaseRepository.findByGameIdAndDayNumber(g.gameId, 1).orElseThrow().wolfTargetUserId)
             .isEqualTo(victim.userId)
@@ -288,6 +302,41 @@ class MechWolfMediumNightIntegrationTest {
         assertThat(gamePlayerRepository.findByGameIdAndUserId(g.gameId, victim.userId).orElseThrow().alive)
             .describedAs("lone mechanical wolf's target dies at dawn").isFalse()
     }
+
+    private fun loneMechKillsOnNight2(prefix: String, night1Action: (Game) -> Pair<String, String?>) {
+        val g = setupGame(prefix)
+        val pack = g.packWolves.first()
+        val n1Victim = g.villagers[0]
+        // Not the last villager: with night 1's victim that wipes the villager side and ends the game before dawn.
+        val n2Victim = g.first(PlayerRole.IDIOT)
+
+        // Night 1: the pack is alive and kills; the mechanical wolf only learns or skips.
+        ok(g.hostToken, g.gameId, "START_NIGHT")
+        driveNight(g, 1, pack, n1Victim, night1Action(g), g.villagers[1])
+
+        // Move to night 2 the way NightPhaseDeadRoleIntegrationTest does, with the pack gone first.
+        val n1 = nightPhaseRepository.findByGameIdAndDayNumber(g.gameId, 1).orElseThrow()
+        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n1))
+        g.packWolves.forEach { gamePlayerRepository.save(it.also { p -> p.alive = false }) }
+        nightOrchestrator.initNight(g.gameId, 2)
+
+        // Night 2: WEREWOLF_PICK waits for the mechanical wolf, the only wolf left, and accepts its kill.
+        driveNight(g, 2, g.mech, n2Victim, "MECH_SKIP" to null, g.first(PlayerRole.HUNTER))
+
+        val n2 = nightPhaseRepository.findByGameIdAndDayNumber(g.gameId, 2).orElseThrow()
+        assertThat(n2.wolfTargetUserId).isEqualTo(n2Victim.userId)
+        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n2))
+        assertThat(gamePlayerRepository.findByGameIdAndUserId(g.gameId, n2Victim.userId).orElseThrow().alive)
+            .describedAs("target of the lone mechanical wolf on night 2 dies").isFalse()
+    }
+
+    @Test
+    fun `lone mechanical wolf kills on night 2 after learning on night 1 with the pack alive`() =
+        loneMechKillsOnNight2("LM2L") { g -> "MECH_LEARN" to g.first(PlayerRole.HUNTER).userId }
+
+    @Test
+    fun `lone mechanical wolf kills on night 2 after skipping on night 1 with the pack alive`() =
+        loneMechKillsOnNight2("LM2S") { "MECH_SKIP" to null }
 
     @Test
     fun `state API - pack wolves never see the mechanical wolf and the reverse`() {
@@ -330,20 +379,7 @@ class MechWolfMediumNightIntegrationTest {
         assertThat(mechNight).containsKey("mechWolf")
 
         // Let the night finish so the coroutine does not outlive the test.
-        ok(g.token(pack1), g.gameId, "WOLF_KILL", g.villagers[0].userId)
-        waitForSubPhase(g.gameId, 1, NightSubPhase.MECH_WOLF_PICK)
-        ok(g.token(mech), g.gameId, "MECH_SKIP")
-        waitForSubPhase(g.gameId, 1, NightSubPhase.MECH_WOLF_RESULT)
-        ok(g.token(mech), g.gameId, "MECH_CONFIRM")
-        waitForSubPhase(g.gameId, 1, NightSubPhase.WITCH_ACT)
-        ok(g.token(g.first(PlayerRole.WITCH)), g.gameId, "WITCH_ACT", payload = mapOf("useAntidote" to false))
-        waitForSubPhase(g.gameId, 1, NightSubPhase.MEDIUM_PICK)
-        ok(g.token(g.first(PlayerRole.MEDIUM)), g.gameId, "MEDIUM_CHECK", g.villagers[1].userId)
-        waitForSubPhase(g.gameId, 1, NightSubPhase.MEDIUM_RESULT)
-        ok(g.token(g.first(PlayerRole.MEDIUM)), g.gameId, "MEDIUM_CONFIRM")
-        waitForSubPhase(g.gameId, 1, NightSubPhase.GUARD_PICK)
-        ok(g.token(g.first(PlayerRole.GUARD)), g.gameId, "GUARD_SKIP")
-        waitForNightOver(g.gameId)
+        driveNight(g, 1, pack1, g.villagers[0], "MECH_SKIP" to null, g.villagers[1])
     }
 
     @Test
@@ -371,7 +407,8 @@ class MechWolfMediumNightIntegrationTest {
         nightOrchestrator.initNight(g.gameId, 2)
 
         // Night 2: it learns the hunter before the medium's turn, so the medium sees the learned role.
-        driveNight(g, 2, pack, g.villagers[1], "MECH_LEARN" to hunter.userId, g.mech) {
+        // Not villagers[1]: with night 1's victim that wipes the villager side and ends the game before dawn.
+        driveNight(g, 2, pack, g.first(PlayerRole.IDIOT), "MECH_LEARN" to hunter.userId, g.mech) {
             val (role, history) = mediumSaw(2)
             assertThat(role).isEqualTo("HUNTER")
             assertThat(history).containsExactly("MECHANICAL_WOLF", "HUNTER")
