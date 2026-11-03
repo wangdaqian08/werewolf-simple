@@ -92,3 +92,55 @@ describe('RoomSetupPanel — 白狼王 toggle', () => {
     )
   })
 })
+
+describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
+  beforeEach(() => h.updateBoardMock.mockReset())
+  afterEach(() => vi.clearAllMocks())
+
+  const click = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
+    w.find(`[data-testid="${id}"]`).trigger('click')
+  const disabled = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
+    w.find(`[data-testid="${id}"]`).attributes('disabled') !== undefined
+
+  it('enabling MEDIUM turns SEER off, and the reverse', async () => {
+    const w = await mountSetup() // SEER is on
+    await click(w, 'role-toggle-MEDIUM')
+    expect(chipCount(w, 'MEDIUM')).toBe(1)
+    expect(chipCount(w, 'SEER')).toBe(0)
+    await click(w, 'role-toggle-SEER')
+    expect(chipCount(w, 'SEER')).toBe(1)
+    expect(chipCount(w, 'MEDIUM')).toBe(0)
+  })
+
+  it('swapping SEER for MEDIUM is allowed at the god maximum', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-GUARD') // 4 gods: the maximum for 3 wolves
+    expect(disabled(w, 'role-toggle-MEDIUM')).toBe(false)
+    await click(w, 'role-toggle-MEDIUM')
+    expect(chipCount(w, 'MEDIUM')).toBe(1)
+    expect(chipCount(w, 'SEER')).toBe(0)
+  })
+
+  it('mechanical wolf needs 9+ players and enough wolves', async () => {
+    const w = await mountSetup() // 9 players, 3 wolves
+    expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(false)
+    await click(w, 'role-toggle-MECHANICAL_WOLF')
+    expect(chipCount(w, 'MECHANICAL_WOLF')).toBe(1)
+    expect(chipCount(w, 'WEREWOLF')).toBe(2)
+    await click(w, 'player-count-decrement') // 8 players: dropped
+    expect(chipCount(w, 'MECHANICAL_WOLF')).toBe(0)
+    expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(true)
+    expect(w.find('[data-testid="role-hint-MECHANICAL_WOLF"]').text()).toContain(
+      '9 人及以上才能開啟',
+    )
+  })
+
+  it('mechanical wolf is locked with 2 wolves, and counts toward the king limit', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-HUNTER') // 2 gods, so wolves can drop to 2
+    await click(w, 'wolf-count-decrement')
+    expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(false)
+    await click(w, 'role-toggle-MECHANICAL_WOLF')
+    expect(disabled(w, 'role-toggle-BLACK_WOLF_KING')).toBe(true) // 2 wolves = 2 specials
+  })
+})

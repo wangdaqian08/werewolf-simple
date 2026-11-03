@@ -452,6 +452,8 @@ export type PlayerRole =
   | 'IDIOT'
   | 'WHITE_WOLF_KING'
   | 'BLACK_WOLF_KING'
+  | 'MECHANICAL_WOLF'
+  | 'MEDIUM'
 
 export interface GamePlayer {
   userId: string
@@ -747,6 +749,10 @@ export type NightSubPhase =
   | 'SEER_RESULT' // seer sees the check result
   | 'WITCH_ACT' // witch decides antidote / poison
   | 'GUARD_PICK' // guard chooses a player to protect
+  | 'MECH_WOLF_PICK' // mechanical wolf learns / uses its learned skill
+  | 'MECH_WOLF_RESULT' // mechanical wolf sees the outcome
+  | 'MEDIUM_PICK' // medium chooses a player to check
+  | 'MEDIUM_RESULT' // medium sees the exact role
   | 'WAITING' // villagers / hunters / dead — eyes closed
 
 export interface SeerHistoryEntry {
@@ -755,11 +761,35 @@ export interface SeerHistoryEntry {
   isWerewolf: boolean
 }
 
+export interface MediumHistoryEntry {
+  round: number
+  nickname: string
+  role: PlayerRole
+}
+
+export type MechNightSkill =
+  | 'LEARN'
+  | 'CHECK_ROLE'
+  | 'CHECK_ALIGNMENT'
+  | 'POISON'
+  | 'PROTECT'
+  | 'NONE'
+
+export interface MechWolfResult {
+  kind: 'LEARN' | 'CHECK' | 'POISON' | 'PROTECT' | 'SKIP'
+  targetPlayerId?: string
+  targetNickname?: string
+  targetSeatIndex?: number
+  role?: PlayerRole // LEARN: the learned role; CHECK with CHECK_ROLE: the exact role
+  isWerewolf?: boolean // CHECK with CHECK_ALIGNMENT
+}
+
 export interface NightPhaseState {
   subPhase: NightSubPhase
   dayNumber: number
   // Werewolf
   teammates?: string[] // teammate nicknames (only sent to werewolves)
+  wolfKiller?: boolean // true when I am the one allowed to kill tonight (the pack, or the lone mechanical wolf)
   selectedTargetId?: string // player I've tapped as my target
   // Seer result
   seerResult?: {
@@ -768,6 +798,21 @@ export interface NightPhaseState {
     checkedSeatIndex: number
     isWerewolf: boolean
     history: SeerHistoryEntry[]
+  }
+  // Medium result
+  mediumResult?: {
+    checkedPlayerId: string
+    checkedNickname: string
+    checkedSeatIndex: number
+    role: PlayerRole
+    history: MediumHistoryEntry[]
+  }
+  // Mechanical wolf (private)
+  mechWolf?: {
+    learnedRole: PlayerRole | null
+    learnedPlayerId: string | null
+    skillTonight: MechNightSkill
+    result: MechWolfResult | null
   }
   // Witch
   attackedPlayerId?: string // who the wolves attacked (shown to witch)

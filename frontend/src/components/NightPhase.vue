@@ -628,6 +628,8 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
   IDIOT: { emoji: '🃏', team: 'special' },
   WHITE_WOLF_KING: { emoji: '👑', team: 'wolf' },
   BLACK_WOLF_KING: { emoji: '🖤', team: 'wolf' },
+  MECHANICAL_WOLF: { emoji: '🤖', team: 'wolf' },
+  MEDIUM: { emoji: '👁️', team: 'special' },
 }
 
 const meta = computed(() => (props.myRole ? ROLE_META[props.myRole] : null))

@@ -110,6 +110,13 @@
               >
                 {{ $t('setup.kingMin', { n: KING_MIN_PLAYERS }) }}
               </span>
+              <span
+                v-else-if="role.id in EXCLUSIVE_WITH"
+                class="win-cond-desc"
+                :data-testid="`role-hint-${role.id}`"
+              >
+                {{ $t('setup.mediumSeerExclusive') }}
+              </span>
             </span>
           </button>
           <!-- Required roles: label only -->
@@ -227,6 +234,8 @@ function decrement() {
 const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)
 const KING_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
 const KING_MIN_PLAYERS = 9
+// The seer and the medium are mutually exclusive: turning one on turns the other off.
+const EXCLUSIVE_WITH: Record<string, string> = { SEER: 'MEDIUM', MEDIUM: 'SEER' }
 
 const enabledKingCount = computed(
   () => KING_IDS.filter((id) => enabledOptional.value.has(id)).length,
@@ -238,7 +247,8 @@ const enabledGodCount = computed(
 )
 const godRange = computed(() => ({
   min: Math.max(0, wolfCount.value - 1),
-  max: Math.min(GOD_IDS.length, wolfCount.value + 1, totalPlayers.value - wolfCount.value - 1),
+  // -1: the seer and the medium are exclusive, so one god id is never available.
+  max: Math.min(GOD_IDS.length - 1, wolfCount.value + 1, totalPlayers.value - wolfCount.value - 1),
 }))
 
 // One wolf more/less must keep the gods inside the new range.
@@ -273,7 +283,7 @@ function fitRolesToBoard(n: number) {
   }
   for (const id of GOD_IDS) {
     if (enabledGods().length >= godRange.value.min) break
-    roles.add(id)
+    if (!roles.has(EXCLUSIVE_WITH[id] ?? '')) roles.add(id)
   }
 }
 
@@ -290,6 +300,8 @@ function canToggle(roleId: string): boolean {
       on ||
       (totalPlayers.value >= KING_MIN_PLAYERS && wolfCount.value >= enabledKingCount.value + 2)
     )
+  // Swapping SEER <-> MEDIUM keeps the god count, so it is always allowed.
+  if (!on && enabledOptional.value.has(EXCLUSIVE_WITH[roleId] ?? '')) return true
   return on
     ? enabledGodCount.value > godRange.value.min
     : enabledGodCount.value < godRange.value.max
@@ -310,7 +322,10 @@ function toggleHint(roleId: string): string {
 function toggleRole(roleId: string) {
   if (!canToggle(roleId)) return
   if (enabledOptional.value.has(roleId)) enabledOptional.value.delete(roleId)
-  else enabledOptional.value.add(roleId)
+  else {
+    enabledOptional.value.delete(EXCLUSIVE_WITH[roleId] ?? '')
+    enabledOptional.value.add(roleId)
+  }
 }
 
 function roleRowClass(role: RoleDefinition) {

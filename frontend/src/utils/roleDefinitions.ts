@@ -23,7 +23,10 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
     required: false,
     wolf: true,
   },
+  // Kept apart from the pack: it takes a wolf seat but wolves and it never see each other.
+  { id: 'MECHANICAL_WOLF', emoji: '🤖', required: false, wolf: true },
   { id: 'SEER', emoji: '🔮', required: false },
+  { id: 'MEDIUM', emoji: '👁️', required: false },
   { id: 'WITCH', emoji: '🧙‍♀️', required: false },
   { id: 'HUNTER', emoji: '🏹', required: false },
   { id: 'GUARD', emoji: '🛡️', required: false },
@@ -36,6 +39,11 @@ export function roleDefinition(id: string): RoleDefinition | undefined {
 
 export function isWolfRole(id: string | null | undefined): boolean {
   return !!id && roleDefinition(id)?.wolf === true
+}
+
+/** Wolf camp excluding the mechanical wolf, which is not part of the wolf pack (mirrors backend). */
+export function isPackWolfRole(id: string | null | undefined): boolean {
+  return isWolfRole(id) && id !== 'MECHANICAL_WOLF'
 }
 
 /** Localised role name for the active language (e.g. 狼人 / Werewolf). */

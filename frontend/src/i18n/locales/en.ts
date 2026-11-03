@@ -368,6 +368,8 @@ export default {
     GUARD: 'Guard',
     HUNTER: 'Hunter',
     IDIOT: 'Idiot',
+    MECHANICAL_WOLF: 'Mechanical Wolf',
+    MEDIUM: 'Medium',
     SEER: 'Seer',
     VILLAGER: 'Villager',
     WEREWOLF: 'Werewolf',
@@ -382,6 +384,10 @@ export default {
         'When you die you may shoot and take one player with you (not if you were poisoned by the witch).',
       IDIOT:
         'When voted out, reveal yourself as the Idiot and survive (but lose your right to vote).',
+      MECHANICAL_WOLF:
+        "You do not know the other wolves and they do not know you. On any night you may learn one player's role and gain that role's skill from the next night; you kill alone only once every other wolf is dead; you cannot self-destruct.",
+      MEDIUM:
+        'Each night, check one living player to learn their exact role. An unlearned Mechanical Wolf shows as Mechanical Wolf; a learned one shows as the role it learned.',
       SEER: 'Each night, check one player to learn whether they are a werewolf.',
       VILLAGER:
         'Find the wolves through discussion and voting, and protect the village. You have no special ability.',
@@ -393,6 +399,8 @@ export default {
     descShort: {
       GUARD: 'Each night, protect one player from the wolves.',
       IDIOT: 'When voted out, reveal yourself: you survive but lose your right to vote.',
+      MECHANICAL_WOLF: "Apart from the pack; learn one player's role and gain its skill.",
+      MEDIUM: "Each night, check one player's exact role.",
       VILLAGER: 'Find the wolves through discussion and voting, and protect the village.',
     },
     rules: {
@@ -404,6 +412,10 @@ export default {
         'Camp: good (a god role).\nWhen you are out (voted out, killed by the wolves at night, or shot by the Black Wolf King) you may shoot one player, or hold fire.\nNo shot if the witch poisons you or the White Wolf King takes you, nor if your death already decides the game.\nShoot before the host moves on, or the shot is lost.',
       IDIOT:
         'Camp: good (a god role).\nWhen voted out you reveal your card and stay in, but lose your vote; a sheriff keeps the badge but cannot vote.\nThis works once only; any other death (night kill, poison, a shot, a White Wolf King take) still kills you.',
+      MECHANICAL_WOLF:
+        "Camp: wolves (not part of the pack).\nYou do not know the other wolves and they do not know you; the pack's picks never show your name, and the wolves may attack you.\nOn any night you may learn one living player (not yourself) to see their role and gain that role's skill, or skip. You learn once per game and the learned role never changes.\nThe skill works from the next night: medium or seer checks one player each night; witch has one poison and no antidote; guard protects once per game (yourself included); hunter or Black Wolf King may shoot when out, from the night you learn.\nOnce every other wolf is dead you make the kill alone in the wolf turn.\nYou cannot self-destruct. The seer sees you as a wolf; the medium sees an unlearned you as Mechanical Wolf, and a learned you as the role you learned.",
+      MEDIUM:
+        'Camp: good (a god role).\nEach night check one living player (not yourself) to learn their exact role.\nAn unlearned Mechanical Wolf shows as Mechanical Wolf; a learned one shows as the role it learned.\nThe seer and the medium cannot be in the same room.',
       SEER: 'Camp: good (a god role).\nEach night check one living player: good or wolf (wolf kings count as wolves).\nYou cannot check yourself.',
       VILLAGER:
         'Camp: good (villager).\nNo special ability.\nTalk, reason, and vote out the players you suspect.',
@@ -571,8 +583,9 @@ export default {
     gods: 'Gods {min}–{max}',
     joined: '{n} joined',
     kingMin: '{n}+ players required',
+    mediumSeerExclusive: 'Seer or Medium, not both',
     needPlayers: 'Needs {n}+ players',
-    kingsNeedWolves: 'Both wolf kings need {n}+ wolves',
+    kingsNeedWolves: 'Special wolves need {n}+ wolves',
     players: 'Players (incl. host)',
     remaining: 'Remaining seats are filled with villagers.',
     required: 'REQUIRED',
