@@ -40,6 +40,8 @@ data class MediumTurn(val actor: ReviewPlayer, val dead: Boolean, val target: Re
 data class MechWolfTurn(
     val actor: ReviewPlayer, val dead: Boolean, val learned: ReviewPlayer?, val learnedRole: PlayerRole?,
     val check: ReviewPlayer?, val poison: ReviewPlayer?, val protect: ReviewPlayer?,
+    /** What the check told it: [checkRole] under a learned role check, [checkIsWerewolf] under an alignment check. */
+    val checkRole: PlayerRole?, val checkIsWerewolf: Boolean?,
 )
 data class WitchTurn(val actor: ReviewPlayer, val dead: Boolean, val antidote: ReviewPlayer?, val poison: ReviewPlayer?)
 data class GuardTurn(val actor: ReviewPlayer, val dead: Boolean, val target: ReviewPlayer?)

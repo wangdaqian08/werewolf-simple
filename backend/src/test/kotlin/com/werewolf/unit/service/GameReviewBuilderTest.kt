@@ -367,9 +367,9 @@ class GameReviewBuilderTest {
             .containsExactly(Triple(1, true, 1), Triple(2, true, 0))
     }
 
-    private fun mechBoard(diedDay: Map<String, Int> = emptyMap()) = board(diedDay) +
+    private fun mechBoard(diedDay: Map<String, Int> = emptyMap(), learned: PlayerRole? = null) = board(diedDay) +
         listOf(
-            GamePlayer(gameId = gameId, userId = "mech", seatIndex = 10, role = PlayerRole.MECHANICAL_WOLF)
+            GamePlayer(gameId = gameId, userId = "mech", seatIndex = 10, role = PlayerRole.MECHANICAL_WOLF, learnedRole = learned)
                 .also { p -> diedDay["mech"]?.let { p.alive = false; p.diedDay = it } },
             GamePlayer(gameId = gameId, userId = "medium", seatIndex = 11, role = PlayerRole.MEDIUM),
         )
@@ -397,13 +397,30 @@ class GameReviewBuilderTest {
         val review = build(mechBoard(mapOf("medium" to 2)), nights)
 
         assertThat(review.rounds[0].night!!.mech)
-            .isEqualTo(MechWolfTurn(mref("mech"), false, mref("seer"), PlayerRole.SEER, null, null, null))
+            .isEqualTo(MechWolfTurn(mref("mech"), false, mref("seer"), PlayerRole.SEER, null, null, null, null, null))
         assertThat(review.rounds[0].night!!.medium)
             .isEqualTo(MediumTurn(mref("medium"), false, mref("v"), PlayerRole.VILLAGER))
         assertThat(review.rounds[1].night!!.mech)
-            .isEqualTo(MechWolfTurn(mref("mech"), false, null, null, mref("w1"), mref("hunter"), mref("seer")))
+            .isEqualTo(MechWolfTurn(mref("mech"), false, null, null, mref("w1"), mref("hunter"), mref("seer"), null, null))
         assertThat(review.rounds[1].night!!.medium).isEqualTo(MediumTurn(mref("medium"), false, null, null))
         assertThat(build(board(), listOf(night(1))).rounds.single().night!!.let { it.mech to it.medium }).isEqualTo(null to null)
+    }
+
+    @Test
+    fun `mech check carries the told role for a learned role check and wolf-or-not for an alignment check`() {
+        val nights = listOf(night(1) { mechCheckTargetUserId = "w1"; mechCheckResultRole = PlayerRole.WEREWOLF })
+
+        val roleCheck = build(mechBoard(learned = PlayerRole.MEDIUM), nights).rounds.single().night!!.mech!!
+        assertThat(roleCheck.checkRole).isEqualTo(PlayerRole.WEREWOLF)
+        assertThat(roleCheck.checkIsWerewolf).isNull()
+
+        val alignment = build(mechBoard(learned = PlayerRole.SEER), nights).rounds.single().night!!.mech!!
+        assertThat(alignment.checkRole).isNull()
+        assertThat(alignment.checkIsWerewolf).isTrue()
+
+        val noCheck = build(mechBoard(learned = PlayerRole.SEER), listOf(night(1))).rounds.single().night!!.mech!!
+        assertThat(noCheck.checkRole).isNull()
+        assertThat(noCheck.checkIsWerewolf).isNull()
     }
 
     @Test

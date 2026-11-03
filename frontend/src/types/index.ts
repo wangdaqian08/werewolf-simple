@@ -259,6 +259,9 @@ export interface ReviewNight {
     check: ReviewPlayer | null
     poison: ReviewPlayer | null
     protect: ReviewPlayer | null
+    /** what the check told it: a role under the learned role check, wolf-or-not under the alignment check */
+    checkRole: PlayerRole | null
+    checkIsWerewolf: boolean | null
   } | null
   medium: {
     actor: ReviewPlayer

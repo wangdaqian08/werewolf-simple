@@ -170,6 +170,8 @@ describe('GameReview', () => {
       check: null,
       poison: null,
       protect: null,
+      checkRole: null,
+      checkIsWerewolf: null,
       ...over,
     })
     const wrapper = render([
@@ -184,7 +186,7 @@ describe('GameReview', () => {
       {
         day: 2,
         night: night({
-          mech: turn({ check: hunter, poison: vil, protect: seer }),
+          mech: turn({ check: hunter, checkRole: 'HUNTER', poison: vil, protect: seer }),
           medium: { actor: medium, dead: true, target: null, role: null },
         }),
         events: [],
@@ -209,12 +211,14 @@ describe('GameReview', () => {
       check: null,
       poison: null,
       protect: null,
+      checkRole: null,
+      checkIsWerewolf: null,
       ...over,
     })
     const wrapper = render([
       { day: 1, night: night({ mech: turn({ learned: seer, learnedRole: 'SEER' }) }), events: [] },
-      { day: 2, night: night({ mech: turn({ check: w1 }) }), events: [] },
-      { day: 3, night: night({ mech: turn({ check: vil }) }), events: [] },
+      { day: 2, night: night({ mech: turn({ check: w1, checkIsWerewolf: true }) }), events: [] },
+      { day: 3, night: night({ mech: turn({ check: vil, checkIsWerewolf: false }) }), events: [] },
       { day: 4, night: night({ mech: turn({}) }), events: [] },
     ])
     const text = lines(wrapper).filter((l) => l.includes('機械狼'))
@@ -224,6 +228,34 @@ describe('GameReview', () => {
       '⚙ 機械狼 10號 驗 9號 Val → 好人',
       '⚙ 機械狼 10號 無行動',
     ])
+  })
+
+  it("renders the result the server stored, not the target's real role", () => {
+    const wrapper = render([
+      {
+        day: 1,
+        night: night({
+          // the medium checked a mechanical wolf that learned SEER: told 預言家, not 機械狼
+          mech: {
+            actor: mech,
+            dead: false,
+            learned: null,
+            learnedRole: null,
+            check: hunter,
+            checkRole: 'SEER',
+            checkIsWerewolf: null,
+            poison: null,
+            protect: null,
+          },
+          medium: { actor: medium, dead: false, target: mech, role: 'SEER' },
+        }),
+        events: [],
+      },
+    ])
+    const text = lines(wrapper)
+    expect(text).toContain('👻 通靈師 11號 驗 10號 Mia〔預言家〕')
+    expect(text).toContain('⚙ 機械狼 10號 驗 7號 Hal〔預言家〕')
+    expect(text.join('')).not.toContain('〔機械狼〕')
   })
 
   it('空刀, 自刀, dead and idle roles, and each death with its cause', () => {

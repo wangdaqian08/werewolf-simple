@@ -89,12 +89,15 @@ object GameReviewBuilder {
             seer = holder(PlayerRole.SEER)?.let {
                 SeerTurn(refs.getValue(it.userId), deadAt(it), n.seerCheckedUserId?.let(refs::get), n.seerResultIsWerewolf ?: false)
             },
-            mech = holder(PlayerRole.MECHANICAL_WOLF)?.let {
+            mech = holder(PlayerRole.MECHANICAL_WOLF)?.let { m ->
+                val skill = m.learnedRole?.learnedSkill
                 MechWolfTurn(
-                    refs.getValue(it.userId), deadAt(it), n.mechLearnTargetUserId?.let(refs::get),
+                    refs.getValue(m.userId), deadAt(m), n.mechLearnTargetUserId?.let(refs::get),
                     n.mechLearnTargetUserId?.let { id -> refs[id]?.role },
                     n.mechCheckTargetUserId?.let(refs::get), n.mechPoisonTargetUserId?.let(refs::get),
                     n.mechGuardTargetUserId?.let(refs::get),
+                    checkRole = n.mechCheckResultRole.takeIf { skill == LearnedSkill.CHECK_ROLE },
+                    checkIsWerewolf = n.mechCheckResultRole?.isWolf.takeIf { skill == LearnedSkill.CHECK_ALIGNMENT },
                 )
             },
             medium = holder(PlayerRole.MEDIUM)?.let {
