@@ -20,7 +20,11 @@ class NightKillMatrixTest {
         antidoteUsed: Boolean = false,
         poisonTarget: String? = null,
         dayNumber: Int = 2,
+        mechGuard: String? = null,
+        mechPoison: String? = null,
     ) = NightPhase(gameId = 1, dayNumber = dayNumber).also {
+        it.mechGuardTargetUserId = mechGuard
+        it.mechPoisonTargetUserId = mechPoison
         it.wolfTargetUserId = wolfTarget
         it.guardTargetUserId = guardTarget
         it.witchAntidoteUsed = antidoteUsed
@@ -65,5 +69,54 @@ class NightKillMatrixTest {
             night(wolfTarget = "u1", poisonTarget = "u1"),
         )
         assertThat(kills).containsExactly("u1")
+    }
+
+    @Test
+    fun `mech guard blocks the wolf kill`() {
+        assertThat(NightOrchestrator.computeKills(night(wolfTarget = "u1", mechGuard = "u1"))).isEmpty()
+    }
+
+    @Test
+    fun `mech guard blocks the witch poison`() {
+        assertThat(NightOrchestrator.computeKills(night(poisonTarget = "u1", mechGuard = "u1"))).isEmpty()
+    }
+
+    @Test
+    fun `mech guard plus antidote on the wolf target - target lives`() {
+        val kills = NightOrchestrator.computeKills(
+            night(wolfTarget = "u1", antidoteUsed = true, mechGuard = "u1"),
+        )
+        assertThat(kills).isEmpty()
+    }
+
+    @Test
+    fun `mech guard shields the target of the mech poison too`() {
+        assertThat(NightOrchestrator.computeKills(night(mechPoison = "u1", mechGuard = "u1"))).isEmpty()
+    }
+
+    @Test
+    fun `mech poison kills`() {
+        assertThat(NightOrchestrator.computeKills(night(mechPoison = "u2"))).containsExactly("u2")
+    }
+
+    @Test
+    fun `wolf kill, witch poison and mech poison on three players`() {
+        val kills = NightOrchestrator.computeKills(night(wolfTarget = "u1", poisonTarget = "u2", mechPoison = "u3"))
+        assertThat(kills).containsExactlyInAnyOrder("u1", "u2", "u3")
+    }
+
+    @Test
+    fun `kill list order does not reveal the source`() {
+        val kills = NightOrchestrator.computeKills(night(wolfTarget = "u9", poisonTarget = "u1"))
+        assertThat(kills).containsExactly("u1", "u9")
+    }
+
+    @Test
+    fun `night-1 perk is not a decisive save when the mech guard shielded the wolf target`() {
+        val saves = NightOrchestrator.night1PerkDecisiveSaves(
+            night(wolfTarget = "u1", dayNumber = 1, mechGuard = "u1"),
+            setOf("u1"),
+        )
+        assertThat(saves).isEmpty()
     }
 }

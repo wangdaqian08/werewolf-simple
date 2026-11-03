@@ -71,18 +71,19 @@ class NightOrchestrator(
          */
         fun computeKills(nightPhase: NightPhase, immuneUserIds: Set<String> = emptySet()): List<String> {
             val kills = mutableListOf<String>()
+            val shield = nightPhase.mechGuardTargetUserId // mechanical-wolf guard: absolute night immunity
             val wolfTarget = nightPhase.wolfTargetUserId
-            if (wolfTarget != null && wolfKillLands(nightPhase)) {
+            if (wolfTarget != null && wolfTarget != shield && wolfKillLands(nightPhase)) {
                 val perkSaved = nightPhase.dayNumber == 1 && wolfTarget in immuneUserIds
                 if (!perkSaved) {
                     kills.add(wolfTarget)
                 }
             }
-            val poisonTarget = nightPhase.witchPoisonTargetUserId
-            if (poisonTarget != null) {
-                kills.add(poisonTarget)
-            }
-            return kills.distinct()
+            listOfNotNull(nightPhase.witchPoisonTargetUserId, nightPhase.mechPoisonTargetUserId)
+                .filter { it != shield }
+                .forEach { kills.add(it) }
+            // Sorted so the dawn list never reveals which death came from which source.
+            return kills.distinct().sorted()
         }
 
         /**
@@ -106,6 +107,7 @@ class NightOrchestrator(
             val wolfTarget = nightPhase.wolfTargetUserId ?: return emptySet()
             if (wolfTarget !in immuneUserIds) return emptySet()
             if (!wolfKillLands(nightPhase)) return emptySet()
+            if (wolfTarget == nightPhase.mechGuardTargetUserId) return emptySet() // shielded: not the perk's save
             return setOf(wolfTarget)
         }
     }

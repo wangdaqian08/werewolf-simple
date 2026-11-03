@@ -1,6 +1,7 @@
 package com.werewolf.game.phase
 
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.role.RoleRules
 import com.werewolf.model.DaySubPhase
 import com.werewolf.model.Game
 import com.werewolf.model.GamePlayer
@@ -62,12 +63,12 @@ class DayRevealAdvancer(
     fun nightShooterId(game: Game, nightPhase: NightPhase?, players: List<GamePlayer>): String? {
         val wolfTarget = nightPhase?.wolfTargetUserId ?: return null
         if (!NightOrchestrator.wolfKillLands(nightPhase)) return null
-        if (wolfTarget == nightPhase.witchPoisonTargetUserId) return null // poisoned → cannot shoot
+        if (wolfTarget in setOf(nightPhase.witchPoisonTargetUserId, nightPhase.mechPoisonTargetUserId)) return null // poisoned → cannot shoot
         // Self-destructed or taken (the night victim is still alive in the sheriff campaign) → no shot.
         if (wolfTarget == game.selfDestructUserId || wolfTarget == game.selfDestructTakenUserId) return null
         val player = players.find { it.userId == wolfTarget } ?: return null
         if (player.alive) return null // survived (e.g. night-1 immunity perk)
         if (player.removedByHost) return null // left the game: declared out during the sheriff campaign
-        return if (player.role.shootsOnDeath) wolfTarget else null
+        return if (RoleRules.shootsOnDeath(player)) wolfTarget else null
     }
 }
