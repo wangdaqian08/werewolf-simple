@@ -187,7 +187,11 @@ test.describe('Mechanical wolf and medium (real backend)', () => {
     await recheck.click()
     await mediumPage.getByTestId('medium-confirm').click()
     await reach(ctx, 'MEDIUM_RESULT')
-    await expect(mediumPage.getByTestId('medium-result')).toBeVisible({ timeout: scale(10_000) })
+    const reseen = mediumPage.getByTestId('medium-result')
+    await expect(reseen).toHaveAttribute('data-checked-seat', String(mech.seat), {
+      timeout: scale(10_000),
+    })
+    await expect(reseen).toHaveAttribute('data-role', 'WITCH')
     await mediumPage.getByTestId('medium-result-confirm').click()
 
     await reach(ctx, 'GUARD_PICK')
