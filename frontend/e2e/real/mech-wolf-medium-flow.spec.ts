@@ -16,6 +16,9 @@
  *  - every action is gated on the backend sub-phase, never on a sleep;
  *  - V1/V2 are non-host villagers, so the host's page always stays usable;
  *  - timeouts scale 2× under CI; the backend log must show no REJECTED action.
+ *
+ * Role-leak scan: every browser records what the server sends it; after N2 no
+ * page holds another player's role except the owner's own medium/mech result.
  */
 import { expect, type Page, test } from '@playwright/test'
 import { type GameContext, setupGame } from './helpers/multi-browser'
@@ -28,6 +31,7 @@ import { findNightOrderViolations } from './helpers/audio-manifest'
 import { assertNoBrowserErrors } from './helpers/error-sentinel'
 import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-screenshot'
 import { cleanupRoomData } from './helpers/test-support'
+import { findRoleLeaks, type PayloadLog, recordPayloads } from './helpers/role-leak'
 
 // WITCH must stay in the list (setupGame role-toggle trap, see memory).
 const ROLES: RoleName[] = ['WEREWOLF', 'MECHANICAL_WOLF', 'VILLAGER', 'MEDIUM', 'WITCH', 'GUARD']
@@ -90,11 +94,13 @@ test.describe('Mechanical wolf and medium (real backend)', () => {
   }, testInfo) => {
     test.setTimeout(process.env.CI ? 480_000 : 240_000)
 
+    const payloads = new Map<string, PayloadLog>()
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
       roles: ROLES,
       browserRoles: ['MECHANICAL_WOLF', 'MEDIUM'],
+      onPage: (label, p) => payloads.set(label, recordPayloads(p)),
     })
     const logStart = readBackendLogLineCount()
     ctx.markBackendLogPosition()
@@ -209,6 +215,24 @@ test.describe('Mechanical wolf and medium (real backend)', () => {
     )
     expect(await isAlive(ctx, v1.seat), 'the guard protected V1 on N2').toBe(true)
     await captureSnapshot(ctx.pages, testInfo, 'd2-poisoned-villager-dead')
+
+    // ── Role-leak scan: each page against its own player ────────────────
+    for (const [label, log] of payloads) {
+      const role: string | null = label === 'HOST' ? ctx.hostRole : label
+      assertNonNull(role, 'host role known')
+      const me: string | null = await (
+        label === 'HOST' ? ctx.hostPage : page(ctx, label as RoleName)
+      ).evaluate(() => localStorage.getItem('userId'))
+      assertNonNull(me, `${label} userId`)
+      expect(log.bodies.length, `${label} recorded payloads`).toBeGreaterThan(0)
+      expect(findRoleLeaks(log, me, role), `${label} (${role}) got a role`).toEqual([])
+      console.warn(`[mech-medium] leak-scan ${label}=${role} scanned=${log.bodies.length} leaks=0`)
+    }
+    // The exemption is exercised: each owner did receive its own result.
+    const own = (role: RoleName, key: string) =>
+      payloads.get(ctx!.hostRole === role ? 'HOST' : role)?.bodies.some((b) => b.body.includes(key))
+    expect(own('MEDIUM', '"mediumResult"'), 'medium received mediumResult').toBe(true)
+    expect(own('MECHANICAL_WOLF', '"mechWolf"'), 'mech wolf received mechWolf').toBe(true)
 
     // ── Backend evidence ────────────────────────────────────────────────
     const lines = readBackendLogSince(logStart)

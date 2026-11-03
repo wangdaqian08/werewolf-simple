@@ -5,24 +5,52 @@ const log = (...bodies: unknown[]): PayloadLog => ({
   bodies: bodies.map((b) => ({ src: 'test', body: JSON.stringify(b) })),
 })
 
+const mediumState = {
+  nightPhase: { mediumResult: { checkedPlayerId: 'u2', role: 'WITCH', history: [] } },
+}
+const mediumPush = { type: 'MediumResult', gameId: 1, checkedUserId: 'u2', role: 'MEDIUM' }
+const mechState = {
+  nightPhase: {
+    mechWolf: {
+      learnedRole: 'WITCH',
+      learnedPlayerId: 'u3',
+      result: { kind: 'LEARN', targetPlayerId: 'u3', role: 'WITCH' },
+    },
+  },
+}
+
 describe('findRoleLeaks', () => {
   it("flags another player's id paired with a new role", () => {
-    const leaks = findRoleLeaks(log({ players: [{ userId: 'u2', role: 'MECHANICAL_WOLF' }] }), 'me')
+    const leaks = findRoleLeaks(
+      log({ players: [{ userId: 'u2', role: 'MECHANICAL_WOLF' }] }),
+      'me',
+      'VILLAGER',
+    )
     expect(leaks).toEqual([{ src: 'test', id: 'u2', role: 'MECHANICAL_WOLF', key: 'role' }])
   })
 
-  it("exempts the viewer's own mediumResult, mechWolf and MediumResult push", () => {
-    const state = {
-      nightPhase: {
-        mediumResult: { checkedPlayerId: 'u2', role: 'WITCH', history: [] },
-        mechWolf: {
-          learnedRole: 'WITCH',
-          learnedPlayerId: 'u3',
-          result: { kind: 'LEARN', targetPlayerId: 'u3', role: 'WITCH' },
-        },
-      },
-    }
-    const push = { type: 'MediumResult', gameId: 1, checkedUserId: 'u2', role: 'MEDIUM' }
-    expect(findRoleLeaks(log(state, push), 'me')).toEqual([])
+  it('exempts mediumResult and the MediumResult push only on the medium page', () => {
+    expect(findRoleLeaks(log(mediumState, mediumPush), 'me', 'MEDIUM')).toEqual([])
+  })
+
+  it('exempts mechWolf only on the mechanical wolf page', () => {
+    expect(findRoleLeaks(log(mechState), 'me', 'MECHANICAL_WOLF')).toEqual([])
+  })
+
+  it("reports another role's own result as a leak", () => {
+    const medium = [
+      { src: 'test', id: 'u2', role: 'WITCH', key: 'role' },
+      { src: 'test', id: 'u2', role: 'MEDIUM', key: 'role' },
+    ]
+    const mech = [
+      { src: 'test', id: 'u3', role: 'WITCH', key: 'learnedRole' },
+      { src: 'test', id: 'u3', role: 'WITCH', key: 'role' },
+    ]
+    expect(findRoleLeaks(log(mediumState, mediumPush), 'me', 'MECHANICAL_WOLF')).toEqual(medium)
+    expect(findRoleLeaks(log(mechState), 'me', 'MEDIUM')).toEqual(mech)
+    expect(findRoleLeaks(log(mediumState, mediumPush, mechState), 'me', 'VILLAGER')).toEqual([
+      ...medium,
+      ...mech,
+    ])
   })
 })

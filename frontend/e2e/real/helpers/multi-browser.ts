@@ -102,6 +102,8 @@ export interface GameSetupOptions {
    * and no `<audio src*="/audio/bgm/">` element will be created during NIGHT.
    */
   bgmTrack?: string
+  /** Called on every page setupGame opens ('HOST' or the role), before its first goto. */
+  onPage?: (label: string, page: Page) => void
 }
 
 // ── Setup ────────────────────────────────────────────────────────────────────
@@ -133,6 +135,7 @@ export async function setupGame(
   contexts.push(hostContext)
   const hostPage = await hostContext.newPage()
   attachErrorListeners('HOST', hostPage, errors)
+  opts.onPage?.('HOST', hostPage)
 
   await hostPage.goto(`${BASE_URL}/`)
   await hostPage.evaluate(() => localStorage.clear())
@@ -571,6 +574,7 @@ export async function setupGame(
     contexts.push(ctx)
     const page = await ctx.newPage()
     attachErrorListeners(role, page, errors)
+    opts.onPage?.(role, page)
 
     // Login by setting localStorage directly
     await page.goto(`${BASE_URL}/`)
