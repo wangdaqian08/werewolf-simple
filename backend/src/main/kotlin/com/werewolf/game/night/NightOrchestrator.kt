@@ -134,11 +134,17 @@ class NightOrchestrator(
     /**
      * Ordered list of night sub-phases for this game.
      */
+    fun activeNightRoles(room: Room): List<PlayerRole> = buildList {
+        add(PlayerRole.WEREWOLF)
+        if (room.hasMechanicalWolf) add(PlayerRole.MECHANICAL_WOLF)
+        if (room.hasSeer) add(PlayerRole.SEER)
+        if (room.hasMedium) add(PlayerRole.MEDIUM)
+        if (room.hasWitch) add(PlayerRole.WITCH)
+        if (room.hasGuard) add(PlayerRole.GUARD)
+    }
+
     fun nightSequence(context: GameContext): List<NightSubPhase> {
-        val activeRoles = mutableSetOf(PlayerRole.WEREWOLF)
-        if (context.room.hasSeer) activeRoles.add(PlayerRole.SEER)
-        if (context.room.hasWitch) activeRoles.add(PlayerRole.WITCH)
-        if (context.room.hasGuard) activeRoles.add(PlayerRole.GUARD)
+        val activeRoles = activeNightRoles(context.room)
 
         val sequence = handlers
             .filter { it.role in activeRoles }
@@ -667,12 +673,7 @@ class NightOrchestrator(
         val gameConfig = context.room.config
             ?: throw IllegalArgumentException("[nightRoleLoop] Room.config is null for game $gameId — set GameConfig before starting night")
 
-        val activeRoles = buildList {
-            add(PlayerRole.WEREWOLF)
-            if (context.room.hasSeer) add(PlayerRole.SEER)
-            if (context.room.hasWitch) add(PlayerRole.WITCH)
-            if (context.room.hasGuard) add(PlayerRole.GUARD)
-        }
+        val activeRoles = activeNightRoles(context.room)
 
         val activeHandlers = handlers.filter { it.role in activeRoles }
         log.info("[nightRoleLoop] game=$gameId: roles=${activeHandlers.map { it.role }}")

@@ -566,6 +566,56 @@ class NightOrchestratorTest {
     }
 
     @Test
+    fun `medium board sequence`() {
+        val orchestrator = makeOrchestrator(listOf(
+            stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK),
+            stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT),
+            stubHandler(PlayerRole.MEDIUM, NightSubPhase.MEDIUM_PICK, NightSubPhase.MEDIUM_RESULT),
+            stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK),
+        ))
+        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
+            hasMedium = true, hasWitch = true, hasGuard = true)
+
+        assertThat(orchestrator.nightSequence(GameContext(game(), r, emptyList()))).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.MEDIUM_PICK,
+            NightSubPhase.MEDIUM_RESULT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    @Test
+    fun `existing board sequence unchanged`() {
+        val orchestrator = makeOrchestrator(listOf(
+            stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK),
+            stubHandler(PlayerRole.WITCH, NightSubPhase.WITCH_ACT),
+            stubHandler(PlayerRole.SEER, NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT),
+            stubHandler(PlayerRole.MEDIUM, NightSubPhase.MEDIUM_PICK, NightSubPhase.MEDIUM_RESULT),
+            stubHandler(PlayerRole.GUARD, NightSubPhase.GUARD_PICK),
+        ))
+        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
+            hasSeer = true, hasWitch = true, hasGuard = true)
+
+        assertThat(orchestrator.nightSequence(GameContext(game(), r, emptyList()))).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    @Test
+    fun `activeNightRoles adds mechanical wolf and medium when the room has them`() {
+        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
+            hasMechanicalWolf = true, hasMedium = true)
+
+        assertThat(nightOrchestrator.activeNightRoles(r))
+            .containsExactlyInAnyOrder(PlayerRole.WEREWOLF, PlayerRole.MECHANICAL_WOLF, PlayerRole.MEDIUM)
+    }
+
+    @Test
     fun `firstSubPhase - returns WEREWOLF_PICK by default`() {
         val ctx = GameContext(game(), room(), emptyList())
         val result = nightOrchestrator.firstSubPhase(ctx)

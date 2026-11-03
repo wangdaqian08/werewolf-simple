@@ -14,6 +14,18 @@ class AudioService {
 
     private val log = LoggerFactory.getLogger(AudioService::class.java)
 
+    private companion object {
+        /** Result-display sub-phases: no open-eyes audio, and entering one plays no close-eyes audio. */
+        val RESULT_SUB_PHASES = setOf(NightSubPhase.SEER_RESULT, NightSubPhase.MECH_WOLF_RESULT, NightSubPhase.MEDIUM_RESULT)
+
+        /** Each PICK sub-phase paired with the RESULT sub-phase that closes the same role's turn. */
+        val PICK_TO_RESULT = mapOf(
+            NightSubPhase.SEER_PICK to NightSubPhase.SEER_RESULT,
+            NightSubPhase.MECH_WOLF_PICK to NightSubPhase.MECH_WOLF_RESULT,
+            NightSubPhase.MEDIUM_PICK to NightSubPhase.MEDIUM_RESULT,
+        )
+    }
+
     /**
      * Map NightSubPhase to PlayerRole
      */
@@ -22,6 +34,8 @@ class AudioService {
             NightSubPhase.WEREWOLF_PICK -> PlayerRole.WEREWOLF
             NightSubPhase.SEER_PICK -> PlayerRole.SEER
             NightSubPhase.SEER_RESULT -> PlayerRole.SEER
+            NightSubPhase.MECH_WOLF_PICK, NightSubPhase.MECH_WOLF_RESULT -> PlayerRole.MECHANICAL_WOLF
+            NightSubPhase.MEDIUM_PICK, NightSubPhase.MEDIUM_RESULT -> PlayerRole.MEDIUM
             NightSubPhase.WITCH_ACT -> PlayerRole.WITCH
             NightSubPhase.GUARD_PICK -> PlayerRole.GUARD
             else -> null
@@ -118,9 +132,9 @@ class AudioService {
         try {
             // Add "close eyes" audio for previous role
             if (oldSubPhase != null && oldSubPhase != NightSubPhase.WAITING) {
-                // SEER_RESULT is a result display phase, not a role phase
-                // Don't add close eyes audio when entering SEER_RESULT
-                if (newSubPhase != NightSubPhase.SEER_RESULT) {
+                // A RESULT sub-phase is a result display phase, not a role phase:
+                // don't add close eyes audio when entering one.
+                if (newSubPhase !in RESULT_SUB_PHASES) {
                     getCloseEyesAudio(oldSubPhase)?.let { audioFiles.add(it) }
                 }
             }
@@ -161,8 +175,8 @@ class AudioService {
      * Public for testing purposes.
      */
     fun calculateOpenEyesAudio(subPhase: NightSubPhase): String? {
-        // SEER_RESULT doesn't have open eyes audio (it's just showing results)
-        if (subPhase == NightSubPhase.SEER_RESULT) return null
+        // RESULT sub-phases have no open eyes audio (they just show results)
+        if (subPhase in RESULT_SUB_PHASES) return null
 
         val role = mapSubPhaseToRole(subPhase) ?: return null
         return RoleRegistry.getOpenEyesAudio(role)
@@ -253,34 +267,22 @@ class AudioService {
             for (skippedRole in skippedRoles) {
                 if (skippedRole == NightSubPhase.WAITING) continue
                 
-                // Special handling for seer: SEER_PICK and SEER_RESULT together form one complete sequence
-                if (skippedRole == NightSubPhase.SEER_PICK) {
-                    // Check if SEER_RESULT is also skipped (seer is completely dead)
-                    val seerResultSkipped = skippedRoles.contains(NightSubPhase.SEER_RESULT)
-                    if (seerResultSkipped) {
-                        // Dead seer: play seer_open_eyes.mp3 → seer_close_eyes.mp3
-                        val seerOpenAudio = getOpenEyesAudio(NightSubPhase.SEER_PICK)
-                        val seerCloseAudio = getCloseEyesAudio(NightSubPhase.SEER_RESULT)
-                        if (seerOpenAudio != null) audioFiles.add(seerOpenAudio)
-                        if (seerCloseAudio != null) audioFiles.add(seerCloseAudio)
-                        // Skip SEER_RESULT since we already handled it
-                        continue
+                // PICK/RESULT pairs (seer, mech wolf, medium) form one open → close sequence
+                val resultPhase = PICK_TO_RESULT[skippedRole]
+                if (resultPhase != null) {
+                    if (skippedRoles.contains(resultPhase)) {
+                        // Role completely dead: play open_eyes → close_eyes once; RESULT is consumed here
+                        getOpenEyesAudio(skippedRole)?.let { audioFiles.add(it) }
+                        getCloseEyesAudio(resultPhase)?.let { audioFiles.add(it) }
                     } else {
-                        // Only SEER_PICK skipped (unusual case)
-                        val openEyesAudio = getOpenEyesAudio(skippedRole)
-                        if (openEyesAudio != null) audioFiles.add(openEyesAudio)
+                        // Only PICK skipped (unusual case)
+                        getOpenEyesAudio(skippedRole)?.let { audioFiles.add(it) }
                     }
-                } else if (skippedRole == NightSubPhase.SEER_RESULT) {
-                    // SEER_RESULT without SEER_PICK - check if SEER_PICK was processed
-                    val seerPickSkipped = skippedRoles.contains(NightSubPhase.SEER_PICK)
-                    if (seerPickSkipped) {
-                        // Already handled together with SEER_PICK above
-                        continue
-                    } else {
-                        // Only SEER_RESULT skipped (unusual case)
-                        val closeEyesAudio = getCloseEyesAudio(skippedRole)
-                        if (closeEyesAudio != null) audioFiles.add(closeEyesAudio)
-                    }
+                } else if (skippedRole in RESULT_SUB_PHASES) {
+                    // RESULT whose PICK was skipped was already handled with its PICK above
+                    if (PICK_TO_RESULT.any { (pick, result) -> result == skippedRole && skippedRoles.contains(pick) }) continue
+                    // Only RESULT skipped (unusual case)
+                    getCloseEyesAudio(skippedRole)?.let { audioFiles.add(it) }
                 } else {
                     // Normal role: complete sequence open eyes → close eyes
                     val openEyesAudio = getOpenEyesAudio(skippedRole)

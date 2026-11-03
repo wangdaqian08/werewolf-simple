@@ -189,6 +189,26 @@ class GameService(
                     )
                 }
 
+                // ── MEDIUM: share the exact role seen + full check history ─────────────
+                if (myPlayer?.role == PlayerRole.MEDIUM && np.mediumCheckedUserId != null) {
+                    val history = nightPhaseRepository.findByGameId(gameId)
+                        .filter { it.mediumCheckedUserId != null }
+                        .sortedBy { it.dayNumber }
+                    base["mediumResult"] = mapOf(
+                        "checkedPlayerId"  to np.mediumCheckedUserId,
+                        "checkedNickname"  to (userLookup[np.mediumCheckedUserId]?.nickname ?: np.mediumCheckedUserId),
+                        "checkedSeatIndex" to (playerMap[np.mediumCheckedUserId]?.seatIndex ?: 0),
+                        "role"             to np.mediumResultRole?.name,
+                        "history"          to history.map { h ->
+                            mapOf(
+                                "round"    to h.dayNumber,
+                                "nickname" to (userLookup[h.mediumCheckedUserId]?.nickname ?: h.mediumCheckedUserId),
+                                "role"     to h.mediumResultRole?.name,
+                            )
+                        }
+                    )
+                }
+
                 // ── WITCH: share attack info + per-game potion availability ───────────
                 if (myPlayer?.role == PlayerRole.WITCH && np.subPhase == NightSubPhase.WITCH_ACT) {
                     val allNights = nightPhaseRepository.findByGameId(gameId)

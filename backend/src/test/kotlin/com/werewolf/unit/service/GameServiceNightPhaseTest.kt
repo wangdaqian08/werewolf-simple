@@ -68,6 +68,8 @@ class GameServiceNightPhaseTest {
         antidoteUsed: Boolean = false,
         poisonTarget: String? = null,
         prevGuardTarget: String? = null,
+        mediumChecked: String? = null,
+        mediumRole: PlayerRole? = null,
     ) = NightPhase(
         gameId = gameId,
         dayNumber = day,
@@ -78,6 +80,8 @@ class GameServiceNightPhaseTest {
         witchAntidoteUsed = antidoteUsed,
         witchPoisonTargetUserId = poisonTarget,
         prevGuardTargetUserId = prevGuardTarget,
+        mediumCheckedUserId = mediumChecked,
+        mediumResultRole = mediumRole,
     )
 
     @BeforeEach
@@ -256,6 +260,50 @@ class GameServiceNightPhaseTest {
         assertThat(history).hasSize(2)
         assertThat(history[0]["round"]).isEqualTo(1)
         assertThat(history[0]["isWerewolf"]).isEqualTo(true)
+    }
+
+    @Test
+    fun `medium state carries role and history`() {
+        val medium = player("u1", 1, PlayerRole.MEDIUM)
+        val target = player("u3", 3, PlayerRole.WITCH)
+        val users = listOf(user("u1", "Medium"), user("u3", "Wendy"))
+        setupGameAndPlayers(game(), listOf(medium, target), users, NightSubPhase.MEDIUM_RESULT)
+        val np = nightPhase(subPhase = NightSubPhase.MEDIUM_RESULT, mediumChecked = "u3", mediumRole = PlayerRole.WITCH)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        val prev = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.mediumCheckedUserId = "u3"
+            it.mediumResultRole = PlayerRole.WITCH
+        }
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(prev, np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        @Suppress("UNCHECKED_CAST")
+        val mediumResult = night["mediumResult"] as Map<String, Any?>
+        assertThat(mediumResult["checkedPlayerId"]).isEqualTo("u3")
+        assertThat(mediumResult["checkedNickname"]).isEqualTo("Wendy")
+        assertThat(mediumResult["checkedSeatIndex"]).isEqualTo(3)
+        assertThat(mediumResult["role"]).isEqualTo("WITCH")
+        @Suppress("UNCHECKED_CAST")
+        val history = mediumResult["history"] as List<Map<String, Any?>>
+        assertThat(history).hasSize(2)
+        assertThat(history[0]["round"]).isEqualTo(1)
+        assertThat(history[0]["nickname"]).isEqualTo("Wendy")
+        assertThat(history[0]["role"]).isEqualTo("WITCH")
+    }
+
+    @Test
+    fun `non-medium never gets mediumResult`() {
+        val seer = player("u1", 1, PlayerRole.SEER)
+        val target = player("u3", 3, PlayerRole.WITCH)
+        val users = listOf(user("u1", "Seer"), user("u3", "Wendy"))
+        setupGameAndPlayers(game(), listOf(seer, target), users, NightSubPhase.MEDIUM_RESULT)
+        val np = nightPhase(subPhase = NightSubPhase.MEDIUM_RESULT, mediumChecked = "u3", mediumRole = PlayerRole.WITCH)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night.containsKey("mediumResult")).isFalse()
     }
 
     @Test

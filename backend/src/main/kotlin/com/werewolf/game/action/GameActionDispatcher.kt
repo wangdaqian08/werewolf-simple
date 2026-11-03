@@ -92,9 +92,17 @@ class GameActionDispatcher(
 
             // ── Night: guard ──────────────────────────────────────────────────
             ActionType.GUARD_PROTECT, ActionType.GUARD_SKIP -> nightTurn(request, context, PlayerRole.GUARD)
-            // ── Night: mechanical wolf + medium — wired in a later task ───────
+            // ── Night: medium ─────────────────────────────────────────────────
+            ActionType.MEDIUM_CHECK -> nightTurn(request, context, PlayerRole.MEDIUM) { result ->
+                // Same after-commit private push as SEER_CHECK: the client refetches state on MediumResult.
+                result.events.forEach { stompPublisher.sendPrivateAfterCommit(request.actorUserId, it) }
+            }
+
+            ActionType.MEDIUM_CONFIRM -> nightTurn(request, context, PlayerRole.MEDIUM)
+
+            // ── Night: mechanical wolf — wired in a later task ────────────────
             ActionType.MECH_LEARN, ActionType.MECH_CHECK, ActionType.MECH_POISON, ActionType.MECH_PROTECT,
-            ActionType.MECH_SKIP, ActionType.MECH_CONFIRM, ActionType.MEDIUM_CHECK, ActionType.MEDIUM_CONFIRM,
+            ActionType.MECH_SKIP, ActionType.MECH_CONFIRM,
                 -> GameActionResult.Rejected("Not supported yet: ${request.actionType}")
 
             // ── Idiot reveal (day) ────────────────────────────────────────────
@@ -125,6 +133,8 @@ class GameActionDispatcher(
             ActionType.WOLF_SKIP to NightSubPhase.WEREWOLF_PICK,
             ActionType.SEER_CHECK to NightSubPhase.SEER_PICK,
             ActionType.SEER_CONFIRM to NightSubPhase.SEER_RESULT,
+            ActionType.MEDIUM_CHECK to NightSubPhase.MEDIUM_PICK,
+            ActionType.MEDIUM_CONFIRM to NightSubPhase.MEDIUM_RESULT,
             ActionType.WITCH_ACT to NightSubPhase.WITCH_ACT,
             ActionType.GUARD_PROTECT to NightSubPhase.GUARD_PICK,
             ActionType.GUARD_SKIP to NightSubPhase.GUARD_PICK,
