@@ -40,12 +40,13 @@ Sources:
 - **M3.** Results of checking the mechanical wolf:
   - If it has not learned yet: `MECHANICAL_WOLF`.
   - If it has learned, including earlier the same night: the learned role.
+- **M4.** The seer is unchanged: it sees the mechanical wolf as a wolf, learned or not.
 
 ### 机械狼 / MECHANICAL_WOLF (wolf side)
 
 - **W1. Kept apart from the pack.**
   - The other wolf-side roles (`WEREWOLF`, `WHITE_WOLF_KING`, `BLACK_WOLF_KING`) never see the mechanical wolf as a teammate, and it never sees them.
-  - It gets no `WolfSelectionChanged` broadcast.
+  - While any pack wolf is alive it gets no `WolfSelectionChanged` broadcast. Once it is the lone killer (W6) it is the only one who gets it.
   - Wolves may pick it as their kill target.
 - **W2.** It cannot self-destruct (自爆).
 - **W3.** It counts as a wolf in every win check, in both CLASSIC and HARD_MODE. Villagers win only once it is dead too.
@@ -57,7 +58,9 @@ Sources:
 
   | Learned role | Skill |
   |---|---|
-  | `MEDIUM` | From the next night, check one living player (not self) each night and see the exact role. The same check-result rules as M3 apply, including a check on itself, which is not allowed anyway. |
+  Targets: every skill below picks a living player. Only the protection may target the mechanical wolf itself; the checks and the poison may not.
+
+  | `MEDIUM` | From the next night, check one living player (not self) each night and see the exact role, with the same M3 rules. |
   | `SEER` | From the next night, check one living player (not self) each night and see wolf or good. |
   | `WITCH` | From the next night, one poison for the whole game and no antidote. It uses the same rules as the witch's poison: the guard does not block it, the antidote cannot undo it, and a player it kills cannot shoot. |
   | `GUARD` | From the next night, one protection for the whole game. It may protect itself. The protected player cannot die at night that night: not to the wolf kill, not to the witch's poison. It does not cancel out with the antidote (no 奶穿) and has no effect on the witch. |
@@ -91,7 +94,7 @@ Sources:
     - self-destruct (`SelfDestructService`);
     - `GameStateLogger`.
   - Add one helper on `PlayerRole` for "the pack" so the rule lives in one place. The lone-kill rule (W6) is: the actors are the living pack, or, if the pack is empty, the living mechanical wolf.
-- **Seer.** It needs no change: `isWolf` is true for the mechanical wolf, which is rule M-seer and Q6.
+- **Seer.** It needs no change: `isWolf` is true for the mechanical wolf, so the seer always sees it as a wolf, learned or not (M4).
 - **Room.**
   - New `rooms.has_mechanical_wolf` and `rooms.has_medium` columns, following V26.
   - `RoomService` validation adds M2 and W7.
