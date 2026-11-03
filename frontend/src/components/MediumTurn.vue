@@ -20,7 +20,8 @@
           type="button"
           class="btn btn-danger mt-btn"
           data-testid="medium-confirm"
-          :disabled="!picked"
+          :class="{ 'is-loading': actionPending }"
+          :disabled="!picked || actionPending"
           @click="emit('action', 'MEDIUM_CHECK', picked)"
         >
           {{ $t('night.medium.confirm') }}
@@ -64,6 +65,8 @@
           type="button"
           class="btn btn-secondary mt-btn"
           data-testid="medium-result-confirm"
+          :class="{ 'is-loading': actionPending }"
+          :disabled="actionPending"
           @click="emit('action', 'MEDIUM_CONFIRM')"
         >
           {{ $t('night.medium.done') }}
@@ -83,6 +86,7 @@ const props = defineProps<{
   mediumResult?: NightPhaseState['mediumResult']
   players: GamePlayer[]
   myUserId: string
+  actionPending?: boolean
 }>()
 const emit = defineEmits<{
   action: [type: 'MEDIUM_CHECK' | 'MEDIUM_CONFIRM', targetUserId?: string]
@@ -94,57 +98,11 @@ const targets = computed(() =>
 )
 </script>
 
+<style scoped src="../assets/night-turn.css"></style>
 <style scoped>
-.mt-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-.mt-hint {
-  font-size: 0.75rem;
-  color: rgba(245, 240, 232, 0.48);
-  padding: 0.375rem 0.875rem 0.25rem;
-  line-height: 1.5;
-}
-.mt-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
-  gap: 0.5rem;
-  align-content: start;
-  padding: 0.375rem 0.875rem;
-  flex: 1;
-}
-.mt-slot {
-  padding: 0.75rem 0.25rem;
-  border-radius: 0.5rem;
-  background: rgba(42, 31, 20, 0.45);
-  border: 1px solid rgba(245, 240, 232, 0.14);
-  color: var(--paper);
-  font-size: 0.875rem;
-}
-.mt-slot-on {
-  border-color: var(--red);
-  background: rgba(181, 37, 26, 0.22);
-}
 .mt-card {
-  margin: 0.625rem 0.875rem 0;
-  border-radius: 0.625rem;
-  padding: 1.125rem 1rem;
-  text-align: center;
   background: rgba(160, 120, 48, 0.22);
   border: 1px solid rgba(160, 120, 48, 0.5);
-}
-.mt-who {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--paper);
-  margin-bottom: 0.375rem;
-}
-.mt-verdict {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--paper);
 }
 .mt-hist {
   margin: 0.625rem 0.875rem 0;
@@ -172,31 +130,5 @@ const targets = computed(() =>
 }
 .mt-dim {
   color: rgba(245, 240, 232, 0.38);
-}
-.mt-foot {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.625rem 0.875rem var(--fab-clearance);
-  border-top: 1px solid rgba(245, 240, 232, 0.07);
-  background: rgba(255, 255, 255, 0.025);
-}
-.mt-foot-end {
-  margin-top: auto;
-}
-.mt-btn {
-  flex: 1;
-}
-.btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.btn-danger {
-  background: var(--red);
-  color: #fff;
-}
-.btn-secondary {
-  background: rgba(245, 240, 232, 0.1);
-  color: rgba(245, 240, 232, 0.72);
-  border: 1px solid rgba(245, 240, 232, 0.14);
 }
 </style>

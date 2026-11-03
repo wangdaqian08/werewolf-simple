@@ -114,6 +114,54 @@ describe('MechWolfTurn', () => {
     expect(r.text()).not.toContain(roleName('SEER'))
   })
 
+  it('a CHECK result with neither role nor isWerewolf shows no verdict', () => {
+    const w = mountResult({
+      kind: 'CHECK',
+      targetPlayerId: 'a',
+      targetNickname: 'a',
+      targetSeatIndex: 2,
+    })
+    const r = w.find('[data-testid="mech-result"]')
+    expect(r.text()).not.toContain('好人')
+    expect(r.text()).not.toContain('狼人')
+    expect(w.find('[data-testid="mech-verdict"]').exists()).toBe(false)
+  })
+
+  it('actionPending disables skip, confirm and the result button', async () => {
+    const pending = mount(MechWolfTurn, {
+      props: {
+        subPhase: 'MECH_WOLF_PICK',
+        mechWolf: {
+          learnedRole: null,
+          learnedPlayerId: null,
+          skillTonight: 'POISON',
+          result: null,
+        },
+        players,
+        myUserId: 'me',
+        actionPending: true,
+      },
+    })
+    await pending.find('[data-testid="mech-skill-target-2"]').trigger('click')
+    expect(pending.find('[data-testid="mech-skip"]').attributes('disabled')).toBeDefined()
+    expect(pending.find('[data-testid="mech-skill-confirm"]').attributes('disabled')).toBeDefined()
+    const result = mount(MechWolfTurn, {
+      props: {
+        subPhase: 'MECH_WOLF_RESULT',
+        mechWolf: {
+          learnedRole: null,
+          learnedPlayerId: null,
+          skillTonight: 'NONE',
+          result: { kind: 'SKIP' },
+        },
+        players,
+        myUserId: 'me',
+        actionPending: true,
+      },
+    })
+    expect(result.find('[data-testid="mech-result-confirm"]').attributes('disabled')).toBeDefined()
+  })
+
   it('SKIP result says no action tonight', () => {
     const w = mountResult({ kind: 'SKIP' })
     expect(w.find('[data-testid="mech-result"]').attributes('data-kind')).toBe('SKIP')

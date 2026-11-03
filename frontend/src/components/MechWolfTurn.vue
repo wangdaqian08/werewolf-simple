@@ -23,6 +23,8 @@
           type="button"
           class="btn btn-secondary mt-btn"
           data-testid="mech-skip"
+          :class="{ 'is-loading': actionPending }"
+          :disabled="actionPending"
           @click="emit('action', 'MECH_SKIP')"
         >
           {{ skill === 'NONE' ? $t('night.mech.noAction') : $t('night.mech.skip') }}
@@ -32,7 +34,8 @@
           type="button"
           class="btn btn-danger mt-btn"
           :data-testid="`${prefix}-confirm`"
-          :disabled="!picked"
+          :class="{ 'is-loading': actionPending }"
+          :disabled="!picked || actionPending"
           @click="emit('action', ACTION[skill], picked)"
         >
           {{ $t(`night.mech.${CONFIRM_KEY[skill]}`) }}
@@ -51,13 +54,15 @@
         <div v-if="result.targetSeatIndex !== undefined" class="mt-who">
           {{ $t('common.seatDot', { n: result.targetSeatIndex, name: result.targetNickname }) }}
         </div>
-        <div class="mt-verdict">{{ verdict }}</div>
+        <div v-if="verdict" class="mt-verdict" data-testid="mech-verdict">{{ verdict }}</div>
       </div>
       <footer class="mt-foot mt-foot-end">
         <button
           type="button"
           class="btn btn-secondary mt-btn"
           data-testid="mech-result-confirm"
+          :class="{ 'is-loading': actionPending }"
+          :disabled="actionPending"
           @click="emit('action', 'MECH_CONFIRM')"
         >
           {{ $t('night.mech.done') }}
@@ -86,6 +91,7 @@ const props = defineProps<{
   mechWolf?: NightPhaseState['mechWolf']
   players: GamePlayer[]
   myUserId: string
+  actionPending?: boolean
 }>()
 const emit = defineEmits<{ action: [type: MechAction, targetUserId?: string] }>()
 
@@ -131,6 +137,7 @@ const verdict = computed(() => {
       return t('night.mech.learned', { role: roleName(r.role) })
     case 'CHECK':
       if (r.role) return t('night.mech.role', { role: roleName(r.role) })
+      if (r.isWerewolf === undefined) return '' // no verdict rather than a guessed "good"
       return r.isWerewolf ? t('night.isWolf') : t('night.isGood')
     case 'POISON':
       return t('night.mech.poisoned')
@@ -142,86 +149,14 @@ const verdict = computed(() => {
 })
 </script>
 
+<style scoped src="../assets/night-turn.css"></style>
 <style scoped>
-.mt-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-.mt-hint {
-  font-size: 0.75rem;
-  color: rgba(245, 240, 232, 0.48);
-  padding: 0.375rem 0.875rem 0.25rem;
-  line-height: 1.5;
-}
-.mt-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(85px, 47%), 1fr));
-  gap: 0.5rem;
-  align-content: start;
-  padding: 0.375rem 0.875rem;
-  flex: 1;
-}
-.mt-slot {
-  padding: 0.75rem 0.25rem;
-  border-radius: 0.5rem;
-  background: rgba(42, 31, 20, 0.45);
-  border: 1px solid rgba(245, 240, 232, 0.14);
-  color: var(--paper);
-  font-size: 0.875rem;
-}
-.mt-slot-on {
-  border-color: var(--red);
-  background: rgba(181, 37, 26, 0.22);
-}
 .mt-card {
-  margin: 0.625rem 0.875rem 0;
-  border-radius: 0.625rem;
-  padding: 1.125rem 1rem;
-  text-align: center;
   background: rgba(45, 106, 63, 0.22);
   border: 1px solid rgba(45, 106, 63, 0.5);
 }
 .mt-card-wolf {
   background: rgba(181, 37, 26, 0.22);
   border-color: rgba(181, 37, 26, 0.5);
-}
-.mt-who {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--paper);
-  margin-bottom: 0.375rem;
-}
-.mt-verdict {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--paper);
-}
-.mt-foot {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.625rem 0.875rem var(--fab-clearance);
-  border-top: 1px solid rgba(245, 240, 232, 0.07);
-  background: rgba(255, 255, 255, 0.025);
-}
-.mt-foot-end {
-  margin-top: auto;
-}
-.mt-btn {
-  flex: 1;
-}
-.btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.btn-danger {
-  background: var(--red);
-  color: #fff;
-}
-.btn-secondary {
-  background: rgba(245, 240, 232, 0.1);
-  color: rgba(245, 240, 232, 0.72);
-  border: 1px solid rgba(245, 240, 232, 0.14);
 }
 </style>

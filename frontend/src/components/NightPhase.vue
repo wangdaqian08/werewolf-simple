@@ -417,6 +417,7 @@
       :mech-wolf="nightPhase.mechWolf"
       :players="players"
       :my-user-id="myUserId"
+      :action-pending="actionPending"
       @action="sendNightAction"
     />
     <MediumTurn
@@ -430,6 +431,7 @@
       :medium-result="nightPhase.mediumResult"
       :players="players"
       :my-user-id="myUserId"
+      :action-pending="actionPending"
       @action="sendNightAction"
     />
 

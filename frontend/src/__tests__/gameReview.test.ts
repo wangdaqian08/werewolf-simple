@@ -77,6 +77,21 @@ const tally = (wrapper: ReturnType<typeof render>) =>
     return `${r.find('.rv-target').text()} ${r.find('.rv-votes').text()} ← ${seats}${out}`
   })
 
+const turn = (
+  over: Partial<NonNullable<ReviewNight['mech']>>,
+): NonNullable<ReviewNight['mech']> => ({
+  actor: mech,
+  dead: false,
+  learned: null,
+  learnedRole: null,
+  check: null,
+  poison: null,
+  protect: null,
+  checkRole: null,
+  checkIsWerewolf: null,
+  ...over,
+})
+
 describe('GameReview', () => {
   it('points: every player who earned is listed with their amount', () => {
     const w = render([], 'VILLAGER', players, [
@@ -160,20 +175,6 @@ describe('GameReview', () => {
   })
 
   it('game review lists the mech learn/check/poison/protect and medium checks per night', () => {
-    const turn = (
-      over: Partial<NonNullable<ReviewNight['mech']>>,
-    ): NonNullable<ReviewNight['mech']> => ({
-      actor: mech,
-      dead: false,
-      learned: null,
-      learnedRole: null,
-      check: null,
-      poison: null,
-      protect: null,
-      checkRole: null,
-      checkIsWerewolf: null,
-      ...over,
-    })
     const wrapper = render([
       {
         day: 1,
@@ -201,20 +202,6 @@ describe('GameReview', () => {
   })
 
   it('a learned alignment check shows wolf or good, never a role name', () => {
-    const turn = (
-      over: Partial<NonNullable<ReviewNight['mech']>>,
-    ): NonNullable<ReviewNight['mech']> => ({
-      actor: mech,
-      dead: false,
-      learned: null,
-      learnedRole: null,
-      check: null,
-      poison: null,
-      protect: null,
-      checkRole: null,
-      checkIsWerewolf: null,
-      ...over,
-    })
     const wrapper = render([
       { day: 1, night: night({ mech: turn({ learned: seer, learnedRole: 'SEER' }) }), events: [] },
       { day: 2, night: night({ mech: turn({ check: w1, checkIsWerewolf: true }) }), events: [] },

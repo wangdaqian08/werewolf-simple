@@ -1,5 +1,6 @@
 import AxiosMockAdapter from 'axios-mock-adapter'
 import http from '@/services/http'
+import { isPackWolfRole } from '@/utils/roleDefinitions'
 import {
   makeDayHidden,
   makeDayRevealed,
@@ -307,7 +308,11 @@ export function setupMocks() {
       if (mockGameState.phase === 'NIGHT' && mockGameState.nightPhase?.subPhase === 'WAITING') {
         mockGameState = {
           ...mockGameState,
-          nightPhase: { ...mockGameState.nightPhase!, subPhase: 'WEREWOLF_PICK', wolfKiller: true },
+          nightPhase: {
+            ...mockGameState.nightPhase!,
+            subPhase: 'WEREWOLF_PICK',
+            wolfKiller: isPackWolfRole(mockGameState.myRole),
+          },
           audioSequence: nightSubPhaseAudio('WAITING', 'WEREWOLF_PICK'),
         }
         pushGameStateUpdate()
@@ -568,7 +573,7 @@ export function setupMocks() {
               nightPhase: {
                 ...mockGameState.nightPhase!,
                 subPhase: 'WEREWOLF_PICK',
-                wolfKiller: true,
+                wolfKiller: isPackWolfRole(mockGameState.myRole),
               },
               audioSequence: nightSubPhaseAudio('WAITING', 'WEREWOLF_PICK'),
             }

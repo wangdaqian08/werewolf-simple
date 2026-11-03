@@ -24,6 +24,32 @@ describe('MediumTurn', () => {
     expect(w.emitted('action')).toEqual([['MEDIUM_CHECK', 'a']])
   })
 
+  it('actionPending disables the pick and result confirm buttons', async () => {
+    const pick = mount(MediumTurn, {
+      props: { subPhase: 'MEDIUM_PICK', players, myUserId: 'me', actionPending: true },
+    })
+    await pick.find('[data-testid="medium-target-2"]').trigger('click')
+    expect(pick.find('[data-testid="medium-confirm"]').attributes('disabled')).toBeDefined()
+    const result = mount(MediumTurn, {
+      props: {
+        subPhase: 'MEDIUM_RESULT',
+        players,
+        myUserId: 'me',
+        actionPending: true,
+        mediumResult: {
+          checkedPlayerId: 'a',
+          checkedNickname: 'a',
+          checkedSeatIndex: 2,
+          role: 'SEER',
+          history: [],
+        },
+      },
+    })
+    expect(
+      result.find('[data-testid="medium-result-confirm"]').attributes('disabled'),
+    ).toBeDefined()
+  })
+
   it('cannot pick self', () => {
     const w = mount(MediumTurn, {
       props: { subPhase: 'MEDIUM_PICK', players, myUserId: 'me' },
