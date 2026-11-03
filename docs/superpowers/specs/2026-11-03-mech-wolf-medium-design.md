@@ -165,7 +165,7 @@ Put them in `backend/src/main/resources/static/audio/`:
 - [ ] `medium_open_eyes.mp3`: 通灵师请睁眼
 - [ ] `medium_close_eyes.mp3`: 通灵师请闭眼
 
-Until the files exist, the build and tests must still pass, and the night must still run without them. A missing narration file must not stall the night loop.
+Owner's call (2026-11-03): until the real recordings exist, this branch ships **placeholder files with exactly these names** (short silent mp3s), so nothing ever 404s. The owner replaces them in place later; no code change is needed then.
 
 ## Calls made during the design review (author's calls, not owner-confirmed)
 
@@ -174,9 +174,7 @@ Until the files exist, the build and tests must still pass, and the night must s
 - **Real-backend role-leak scanner** (`frontend/e2e/real/helpers/role-leak.ts`):
   - add both roles to `PLAYER_ROLES`;
   - exempt a player's own private result: the medium's check, the mechanical wolf's learned role and its check.
-- **To verify during the build:**
-  - a narration 404 does not stall the frontend audio queue;
-  - `GameConfig.getDelayForRole` falls back to the default for rooms whose stored config predates the new roles.
+- **Old rooms are out of scope** (owner's call, 2026-11-03): no open room predates the new roles, so there is no fallback work for stored configs without them.
 
 ## Builder's calls (left open on purpose)
 
