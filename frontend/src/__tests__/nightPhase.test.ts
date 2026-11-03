@@ -173,7 +173,12 @@ describe('NightPhase - eliminated banner gating', () => {
     const target = mkPlayer({ userId: 'v1', seatIndex: 2 })
 
     const wrapper = mountNight({
-      nightPhase: mkNight({ subPhase: 'WEREWOLF_PICK', dayNumber: 1, teammates: [] }),
+      nightPhase: mkNight({
+        subPhase: 'WEREWOLF_PICK',
+        dayNumber: 1,
+        teammates: [],
+        wolfKiller: true,
+      }),
       players: [wolf, target],
       myUserId: 'w1',
       myRole: 'WEREWOLF',
@@ -203,6 +208,94 @@ describe('NightPhase - eliminated banner gating', () => {
   })
 })
 
+describe('NightPhase - mechanical wolf and medium turns', () => {
+  const pl = (userId: string, seatIndex: number): GamePlayer => ({
+    userId,
+    nickname: userId,
+    seatIndex,
+    isAlive: true,
+    isSheriff: false,
+  })
+  const base = (nightPhase: NightPhaseState, myUserId: string, myRole: PlayerRole) => ({
+    nightPhase,
+    players: [pl('m1', 1), pl('v1', 2), pl('w1', 3)],
+    myUserId,
+    myRole,
+  })
+
+  it('mechanical wolf sees closed eyes in WEREWOLF_PICK when wolfKiller is false', () => {
+    const wrapper = mount(NightPhase, {
+      props: base(
+        { subPhase: 'WEREWOLF_PICK', dayNumber: 1, wolfKiller: false },
+        'm1',
+        'MECHANICAL_WOLF',
+      ),
+    })
+    expect(wrapper.find('[data-testid="wolf-confirm-kill"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="sleep-screen-title"]').exists()).toBe(true)
+  })
+
+  it('lone mechanical wolf sees the kill UI when wolfKiller is true', () => {
+    const wrapper = mount(NightPhase, {
+      props: base(
+        { subPhase: 'WEREWOLF_PICK', dayNumber: 1, wolfKiller: true },
+        'm1',
+        'MECHANICAL_WOLF',
+      ),
+    })
+    expect(wrapper.find('[data-testid="wolf-confirm-kill"]').exists()).toBe(true)
+  })
+
+  it('a pack wolf without wolfKiller does not get the kill UI', () => {
+    const wrapper = mount(NightPhase, {
+      props: base({ subPhase: 'WEREWOLF_PICK', dayNumber: 1 }, 'w1', 'WEREWOLF'),
+    })
+    expect(wrapper.find('[data-testid="wolf-confirm-kill"]').exists()).toBe(false)
+  })
+
+  it('other players see the closed badge during MECH_WOLF_PICK and MEDIUM_PICK', () => {
+    for (const subPhase of ['MECH_WOLF_PICK', 'MEDIUM_PICK'] as const) {
+      const wrapper = mount(NightPhase, {
+        props: base({ subPhase, dayNumber: 1 }, 'v1', 'VILLAGER'),
+      })
+      expect(wrapper.find('[data-testid="sleep-screen-title"]').exists(), subPhase).toBe(true)
+      expect(wrapper.find('[data-testid="mech-skip"]').exists(), subPhase).toBe(false)
+      expect(wrapper.find('[data-testid="medium-confirm"]').exists(), subPhase).toBe(false)
+    }
+  })
+
+  it('the mechanical wolf gets its turn UI in MECH_WOLF_PICK and a nightAction emit', async () => {
+    const wrapper = mount(NightPhase, {
+      props: base(
+        {
+          subPhase: 'MECH_WOLF_PICK',
+          dayNumber: 1,
+          mechWolf: {
+            learnedRole: null,
+            learnedPlayerId: null,
+            skillTonight: 'LEARN',
+            result: null,
+          },
+        },
+        'm1',
+        'MECHANICAL_WOLF',
+      ),
+    })
+    await wrapper.find('[data-testid="mech-learn-target-2"]').trigger('click')
+    await wrapper.find('[data-testid="mech-learn-confirm"]').trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['MECH_LEARN', 'v1']])
+  })
+
+  it('the medium gets its turn UI in MEDIUM_PICK and a nightAction emit', async () => {
+    const wrapper = mount(NightPhase, {
+      props: base({ subPhase: 'MEDIUM_PICK', dayNumber: 1 }, 'm1', 'MEDIUM'),
+    })
+    await wrapper.find('[data-testid="medium-target-3"]').trigger('click')
+    await wrapper.find('[data-testid="medium-confirm"]').trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['MEDIUM_CHECK', 'w1']])
+  })
+})
+
 describe('NightPhase - 白狼王 acts in the wolf turn', () => {
   it('WHITE_WOLF_KING sees the wolf badge and target grid during WEREWOLF_PICK', () => {
     const king: GamePlayer = {
@@ -221,7 +314,12 @@ describe('NightPhase - 白狼王 acts in the wolf turn', () => {
     }
     const wrapper = mount(NightPhase, {
       props: {
-        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1, teammates: ['3·Wolf'] },
+        nightPhase: {
+          subPhase: 'WEREWOLF_PICK',
+          dayNumber: 1,
+          teammates: ['3·Wolf'],
+          wolfKiller: true,
+        },
         players: [king, target],
         myUserId: 'k1',
         myRole: 'WHITE_WOLF_KING',
@@ -250,7 +348,11 @@ describe('NightPhase - 空刀 and witch self-save rules', () => {
   it('the 空刀 button is hidden when the room has not enabled 空刀 (default)', () => {
     const wrapper = mount(NightPhase, {
       props: {
-        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1 } as NightPhaseState,
+        nightPhase: {
+          subPhase: 'WEREWOLF_PICK',
+          dayNumber: 1,
+          wolfKiller: true,
+        } as NightPhaseState,
         players: [p('w1', 1), p('v1', 2)],
         myUserId: 'w1',
         myRole: 'WEREWOLF' as PlayerRole,
@@ -263,7 +365,11 @@ describe('NightPhase - 空刀 and witch self-save rules', () => {
   it('a wolf can choose 空刀 (no kill) and the click emits wolfSkip', async () => {
     const wrapper = mount(NightPhase, {
       props: {
-        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1 } as NightPhaseState,
+        nightPhase: {
+          subPhase: 'WEREWOLF_PICK',
+          dayNumber: 1,
+          wolfKiller: true,
+        } as NightPhaseState,
         players: [p('w1', 1), p('v1', 2)],
         myUserId: 'w1',
         myRole: 'WEREWOLF' as PlayerRole,

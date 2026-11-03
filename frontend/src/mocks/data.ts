@@ -522,6 +522,7 @@ export function makeNightScenario(
           subPhase: 'WEREWOLF_PICK',
           dayNumber: 2,
           teammates: ['Alice', 'Eve'], // u2=Alice, u6=Eve per MOCK_GAME_STATE players
+          wolfKiller: true,
         } satisfies NightPhaseState,
       }
     case 'SEER_PICK':

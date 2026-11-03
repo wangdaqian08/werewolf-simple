@@ -75,7 +75,7 @@ describe('actionPending disables all confirm buttons', () => {
   }
 
   it('werewolf confirm button disabled + has is-loading when actionPending=true', () => {
-    const w = mountNight('WEREWOLF_PICK', 'wolf1', 'WEREWOLF', true)
+    const w = mountNight('WEREWOLF_PICK', 'wolf1', 'WEREWOLF', true, { wolfKiller: true })
     const btn = w.find('button.btn-danger')
     expect(btn.exists()).toBe(true)
     expect(btn.attributes('disabled')).toBeDefined()
@@ -83,7 +83,7 @@ describe('actionPending disables all confirm buttons', () => {
   })
 
   it('werewolf confirm button enabled + no is-loading when actionPending=false', () => {
-    const w = mountNight('WEREWOLF_PICK', 'wolf1', 'WEREWOLF', false)
+    const w = mountNight('WEREWOLF_PICK', 'wolf1', 'WEREWOLF', false, { wolfKiller: true })
     const btn = w.find('button.btn-danger')
     expect(btn.exists()).toBe(true)
     expect(btn.attributes('disabled')).toBeUndefined()
