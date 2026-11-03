@@ -276,7 +276,7 @@ export default {
     medium: {
       confirm: 'Check',
       done: 'Done',
-      hint: 'Choose a player to learn their exact role',
+      hint: 'Choose a player to check their exact role',
       history: 'Check history',
       noHistory: 'No history yet',
       role: 'Role: {role}',
@@ -334,8 +334,8 @@ export default {
     guard: '🛡 I guarded ',
     guardNone: '🛡 I guarded no one',
     legend: 'In votes, {seat} red seats are werewolves you know of',
-    mechHead: '⚙ I ',
-    mechLearn: 'Learn ',
+    mechHead: '⚙ My night: ',
+    mechLearn: 'Learned ',
     mechNone: 'No action',
     mediumCheck: '👻 I checked ',
     mediumNone: '👻 I checked no one',
@@ -420,7 +420,7 @@ export default {
       IDIOT:
         'When voted out, reveal yourself as the Idiot and survive (but lose your right to vote).',
       MECHANICAL_WOLF:
-        "You do not know the other wolves and they do not know you. On any night you may learn one player's role and gain that role's skill from the next night; you kill alone only once every other wolf is dead; you cannot self-destruct; you count as a wolf, so the villagers win only once you are dead too.",
+        "You do not know the other wolves and they do not know you. On any night you may learn one player's role (once per game) and gain that role's skill; you kill alone only once every other wolf is dead; you cannot self-destruct; you count as a wolf, so the villagers win only once you are dead too.",
       MEDIUM:
         'Each night, check one living player to learn their exact role. An unlearned Mechanical Wolf shows as Mechanical Wolf; a learned one shows as the role it learned.',
       SEER: 'Each night, check one player to learn whether they are a werewolf.',
@@ -448,7 +448,7 @@ export default {
       IDIOT:
         'Camp: good (a god role).\nWhen voted out you reveal your card and stay in, but lose your vote; a sheriff keeps the badge but cannot vote.\nThis works once only; any other death (night kill, poison, a shot, a White Wolf King take) still kills you.',
       MECHANICAL_WOLF:
-        "Camp: wolves (not part of the pack).\nYou do not know the other wolves and they do not know you; the pack's picks never show your name, and the wolves may attack you.\nOn any night you may learn one living player (not yourself) to see their role and gain that role's skill, or skip. You learn once per game and the learned role never changes.\nThe skill works from the next night: medium or seer checks one player each night; witch has one poison and no antidote; guard protects once per game (yourself included); hunter or Black Wolf King may shoot when out, from the night you learn.\nOnce every other wolf is dead you make the kill alone in the wolf turn.\nYou cannot self-destruct. You count as a wolf: the villagers win only once you are dead too. The seer sees you as a wolf; the medium sees an unlearned you as Mechanical Wolf, and a learned you as the role you learned.",
+        "Camp: wolves (not part of the pack).\nYou do not know the other wolves and they do not know you; you never see the pack's picks and are never shown as their teammate, and the wolves may attack you.\nOn any night you may learn one living player (not yourself) to see their role and gain that role's skill, or skip. You learn once per game and the learned role never changes.\nChecks, poison and protection work from the next night: medium or seer checks one player each night; witch has one poison and no antidote; guard protects once per game (yourself included); hunter or Black Wolf King may shoot when out, from the night you learn.\nOnce every other wolf is dead you make the kill alone in the wolf turn.\nYou cannot self-destruct. You count as a wolf: the villagers win only once you are dead too. The seer sees you as a wolf; the medium sees an unlearned you as Mechanical Wolf, and a learned you as the role you learned.",
       MEDIUM:
         'Camp: good (a god role).\nEach night check one living player (not yourself) to learn their exact role.\nAn unlearned Mechanical Wolf shows as Mechanical Wolf; a learned one shows as the role it learned.\nThe seer and the medium cannot be in the same room.',
       SEER: 'Camp: good (a god role).\nEach night check one living player: good or wolf (wolf kings count as wolves).\nYou cannot check yourself.',

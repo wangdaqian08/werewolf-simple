@@ -124,10 +124,10 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
   it('the seer/medium exclusivity hint shows only under a row whose partner is enabled', async () => {
     const w = await mountSetup() // SEER on, MEDIUM off
     expect(w.find('[data-testid="role-hint-SEER"]').exists()).toBe(false)
-    expect(w.find('[data-testid="role-hint-MEDIUM"]').text()).toContain('二選一')
+    expect(w.find('[data-testid="role-hint-MEDIUM"]').text()).toContain('不能同時選')
     await click(w, 'role-toggle-MEDIUM') // swaps SEER off
     expect(w.find('[data-testid="role-hint-MEDIUM"]').exists()).toBe(false)
-    expect(w.find('[data-testid="role-hint-SEER"]').text()).toContain('二選一')
+    expect(w.find('[data-testid="role-hint-SEER"]').text()).toContain('不能同時選')
   })
 
   it('mechanical wolf needs 9+ players and enough wolves', async () => {
