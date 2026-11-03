@@ -8,6 +8,7 @@ import com.werewolf.game.phase.HardModeCounterplay
 import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.role.RoleRules
 import com.werewolf.game.role.WerewolfHandler
 import com.werewolf.model.*
 import com.werewolf.repository.GamePlayerRepository
@@ -677,8 +678,9 @@ class NightOrchestrator(
         for ((index, handler) in activeHandlers.withIndex()) {
             val role = handler.role
             val config = gameConfig.getDelayForRole(role)
-            // Every wolf-camp role (e.g. WHITE_WOLF_KING) acts in the WEREWOLF turn.
-            val isAlive = context.alivePlayers.any { it.role == role || (role == PlayerRole.WEREWOLF && it.role.isWolf) }
+            // Every killer (pack wolf, or the lone mechanical wolf) acts in the WEREWOLF turn.
+            val isAlive = if (role == PlayerRole.WEREWOLF) RoleRules.wolfKillers(context.alivePlayers).isNotEmpty()
+            else context.alivePlayers.any { it.role == role }
             val isLastRole = index == activeHandlers.lastIndex
 
             log.info("[nightRoleLoop] game=$gameId: role=$role alive=$isAlive")

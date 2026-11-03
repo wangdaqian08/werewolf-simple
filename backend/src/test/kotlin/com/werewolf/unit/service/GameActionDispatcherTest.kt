@@ -513,4 +513,46 @@ class GameActionDispatcherTest {
         // 应该推进
         verify(nightOrchestrator).submitAction(gameId)
     }
+
+
+    // ── Mechanical wolf is outside the pack ───────────────────────────────────
+
+    @Nested
+    inner class MechanicalWolfPackTests {
+
+        private val mechId = "mech:001"
+        private val selectionEvent = DomainEvent.WolfSelectionChanged(gameId, "u2")
+
+        @Test
+        fun `WOLF_SELECT is pushed to pack wolves only`() {
+            val ctx = GameContext(
+                game(), room(),
+                listOf(player(wolfId, 1, PlayerRole.WEREWOLF), player(mechId, 2, PlayerRole.MECHANICAL_WOLF)),
+            )
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+            val handler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success(events = listOf(selectionEvent)))
+
+            makeDispatcher(listOf(handler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
+
+            verify(stompPublisher).sendPrivateAfterCommit(wolfId, selectionEvent)
+            verify(stompPublisher, never()).sendPrivateAfterCommit(eq(mechId), any())
+        }
+
+        @Test
+        fun `mechanical wolf does not hold the WEREWOLF turn while the pack lives`() {
+            val ctx = GameContext(
+                game(), room(),
+                listOf(player(wolfId, 1, PlayerRole.WEREWOLF), player(mechId, 2, PlayerRole.MECHANICAL_WOLF)),
+                nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.WEREWOLF_PICK },
+            )
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+            val dispatcher = makeDispatcher(listOf(stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success())))
+
+            // If the mech wolf's action claimed the turn, the pack's own action would be refused.
+            dispatcher.dispatch(req(mechId, ActionType.WOLF_SKIP))
+            val packResult = dispatcher.dispatch(req(wolfId, ActionType.WOLF_SKIP))
+
+            assertThat(packResult).isInstanceOf(GameActionResult.Success::class.java)
+        }
+    }
 }

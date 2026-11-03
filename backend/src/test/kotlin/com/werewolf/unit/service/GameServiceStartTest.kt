@@ -156,4 +156,30 @@ class GameServiceStartTest {
         assertThat(roles.count { it == PlayerRole.BLACK_WOLF_KING }).isEqualTo(1)
         assertThat(roles.count { it == PlayerRole.WEREWOLF }).isEqualTo(1)
     }
+
+
+    @Test
+    fun `role list deals one MECHANICAL_WOLF inside wolfCount and one MEDIUM`() {
+        val room = Room(
+            roomId = roomId, roomCode = "XYZW", hostUserId = hostId, totalPlayers = 4, wolfCount = 2,
+            hasMechanicalWolf = true, hasMedium = true,
+        ).also { it.status = RoomStatus.WAITING }
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(fourReadyGuests())
+        whenever(gameRepository.save(any<Game>())).thenAnswer { invocation ->
+            invocation.getArgument<Game>(0).also {
+                val field = Game::class.java.getDeclaredField("gameId"); field.isAccessible = true; field.set(it, 99)
+            }
+        }
+        whenever(gamePlayerRepository.saveAll(any<List<GamePlayer>>())).thenAnswer { it.arguments[0] }
+
+        gameService.startGame(hostId, roomId)
+
+        val captor = argumentCaptor<List<GamePlayer>>()
+        verify(gamePlayerRepository).saveAll(captor.capture())
+        val roles = captor.firstValue.map { it.role }
+        assertThat(roles.count { it == PlayerRole.MECHANICAL_WOLF }).isEqualTo(1)
+        assertThat(roles.count { it.isWolf }).isEqualTo(room.wolfCount)
+        assertThat(roles.count { it == PlayerRole.MEDIUM }).isEqualTo(1)
+    }
 }

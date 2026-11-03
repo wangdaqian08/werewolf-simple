@@ -54,7 +54,7 @@ class SelfDestructService(
         val actor = context.playerById(request.actorUserId)
             ?: return GameActionResult.Rejected("Player not found")
         if (!actor.alive) return GameActionResult.Rejected("Dead players cannot act")
-        if (!actor.role.isWolf)
+        if (!actor.role.isPackWolf)
             return GameActionResult.Rejected("Only werewolves can self-destruct")
         if (!inSelfDestructWindow(context.game))
             return GameActionResult.Rejected(
@@ -85,7 +85,7 @@ class SelfDestructService(
         }
         // House rule: the last wolf may still self-destruct, but takes no one.
         val isLastWolf = context.alivePlayers.none {
-            it.role.isWolf && it.userId != actor.userId && it.userId !in pendingNightKills
+            it.role.isPackWolf && it.userId != actor.userId && it.userId !in pendingNightKills
         }
         val takenUserId = if (isLastWolf) null else request.targetUserId
 

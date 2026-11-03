@@ -727,4 +727,71 @@ class RoomServiceTest {
         verify(perkActivationRepository).findByRoomIdAndStatus(1, PerkActivationStatus.ACTIVE)
         assertThat(dto.perkActivations).isEmpty()
     }
+
+
+    // ── Mechanical wolf + medium ──────────────────────────────────────────────
+
+    private fun stubCreate() {
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+    }
+
+    @Test
+    fun `seer and medium together is rejected`() {
+        val cfg = RoomConfigRequest(
+            totalPlayers = 9, wolfCount = 3,
+            roles = listOf(PlayerRole.SEER, PlayerRole.MEDIUM, PlayerRole.WITCH),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
+    @Test
+    fun `mechanical wolf needs a plain wolf`() {
+        val rejected = RoomConfigRequest(
+            totalPlayers = 9, wolfCount = 1,
+            roles = listOf(PlayerRole.MECHANICAL_WOLF, PlayerRole.WITCH),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, rejected) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("Mechanical Wolf")
+
+        stubCreate()
+        val accepted = rejected.copy(wolfCount = 2)
+        roomService.createRoom(hostId, "Host", null, accepted)
+        verify(roomRepository).save(argThat<Room> { hasMechanicalWolf && wolfCount == 2 })
+    }
+
+    @Test
+    fun `mech + both kings needs 4 wolves`() {
+        val roles = listOf(PlayerRole.MECHANICAL_WOLF, PlayerRole.WHITE_WOLF_KING, PlayerRole.BLACK_WOLF_KING, PlayerRole.WITCH)
+        assertThatThrownBy {
+            roomService.createRoom(hostId, "Host", null, RoomConfigRequest(totalPlayers = 12, wolfCount = 3, roles = roles))
+        }.isInstanceOf(InvalidRoleCompositionException::class.java)
+
+        stubCreate()
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest(totalPlayers = 12, wolfCount = 4, roles = roles))
+        verify(roomRepository).save(argThat<Room> { wolfCount == 4 })
+    }
+
+    @Test
+    fun `create sets hasMechanicalWolf and hasMedium`() {
+        stubCreate()
+        val cfg = RoomConfigRequest(
+            totalPlayers = 9, wolfCount = 2,
+            roles = listOf(PlayerRole.MECHANICAL_WOLF, PlayerRole.MEDIUM, PlayerRole.WITCH),
+        )
+
+        val dto = roomService.createRoom(hostId, "Host", null, cfg)
+
+        verify(roomRepository).save(argThat<Room> { hasMechanicalWolf && hasMedium && !hasSeer })
+        assertThat(dto.config.roles).contains(PlayerRole.MECHANICAL_WOLF, PlayerRole.MEDIUM)
+    }
 }

@@ -57,6 +57,12 @@ data class RoleDelayConfig(
          */
         val GUARD_DEFAULT = RoleDelayConfig(20000L, 15000L)
 
+        /** 机械狼默认配置：同预言家 */
+        val MECHANICAL_WOLF_DEFAULT = SEER_DEFAULT
+
+        /** 通灵师默认配置：同预言家 */
+        val MEDIUM_DEFAULT = SEER_DEFAULT
+
         /**
          * 获取角色的默认配置
          */
@@ -66,6 +72,8 @@ data class RoleDelayConfig(
                 PlayerRole.SEER -> SEER_DEFAULT
                 PlayerRole.WITCH -> WITCH_DEFAULT
                 PlayerRole.GUARD -> GUARD_DEFAULT
+                PlayerRole.MECHANICAL_WOLF -> MECHANICAL_WOLF_DEFAULT
+                PlayerRole.MEDIUM -> MEDIUM_DEFAULT
                 else -> RoleDelayConfig(30000L, 25000L) // 默认值
             }
         }
@@ -85,7 +93,9 @@ data class GameConfig(
         PlayerRole.WEREWOLF to RoleDelayConfig.WEREWOLF_DEFAULT,
         PlayerRole.SEER to RoleDelayConfig.SEER_DEFAULT,
         PlayerRole.WITCH to RoleDelayConfig.WITCH_DEFAULT,
-        PlayerRole.GUARD to RoleDelayConfig.GUARD_DEFAULT
+        PlayerRole.GUARD to RoleDelayConfig.GUARD_DEFAULT,
+        PlayerRole.MECHANICAL_WOLF to RoleDelayConfig.MECHANICAL_WOLF_DEFAULT,
+        PlayerRole.MEDIUM to RoleDelayConfig.MEDIUM_DEFAULT
     ),
 
     /**

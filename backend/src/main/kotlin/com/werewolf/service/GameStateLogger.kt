@@ -1,5 +1,6 @@
 package com.werewolf.service
 
+import com.werewolf.game.role.RoleRules
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import org.slf4j.LoggerFactory
@@ -122,7 +123,7 @@ class GameStateLogger(
             .orElse(null) ?: return emptyList()
         return when (np.subPhase) {
             NightSubPhase.WAITING, NightSubPhase.COMPLETE -> emptyList()  // auto-advance
-            NightSubPhase.WEREWOLF_PICK -> alivePlayers.filter { it.role.isWolf }.map { it.userId }
+            NightSubPhase.WEREWOLF_PICK -> RoleRules.wolfKillers(alivePlayers).map { it.userId }
             NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT ->
                 alivePlayers.filter { it.role == PlayerRole.SEER }.map { it.userId }
             NightSubPhase.MECH_WOLF_PICK, NightSubPhase.MECH_WOLF_RESULT ->

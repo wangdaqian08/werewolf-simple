@@ -5,6 +5,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.night.NightTurnLedger
 import com.werewolf.game.phase.GamePhasePipeline
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.role.RoleRules
 import com.werewolf.game.voting.VotingPipeline
 import com.werewolf.model.ActionType
 import com.werewolf.model.NightSubPhase
@@ -67,7 +68,7 @@ class GameActionDispatcher(
                     // Broadcast selection to all alive wolves (no sub-phase advance).
                     // afterCommit ordering keeps the event consistent with what
                     // /api/game/{id}/state will return on a follow-up read.
-                    val aliveWolves = context.alivePlayers.filter { it.role.isWolf }
+                    val aliveWolves = RoleRules.wolfKillers(context.alivePlayers)
                     result.events.forEach { event ->
                         aliveWolves.forEach { wolf -> stompPublisher.sendPrivateAfterCommit(wolf.userId, event) }
                     }
@@ -143,7 +144,7 @@ class GameActionDispatcher(
         onSuccess: (GameActionResult.Success) -> Unit = {},
     ): GameActionResult {
         val actor = context.alivePlayerById(request.actorUserId)
-        val holdsRole = actor != null && (if (role == PlayerRole.WEREWOLF) actor.role.isWolf else actor.role == role)
+        val holdsRole = actor != null && (if (role == PlayerRole.WEREWOLF) actor in RoleRules.wolfKillers(context.alivePlayers) else actor.role == role)
         // Claim only the action's own turn while it is live: an out-of-turn request
         // must never hold another role's turn (the handler rejects it unclaimed).
         val turn = context.nightPhase

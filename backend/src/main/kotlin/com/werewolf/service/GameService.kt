@@ -6,6 +6,7 @@ import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.voting.TallyCalculator
+import com.werewolf.game.role.RoleRules
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import org.springframework.stereotype.Service
@@ -130,9 +131,9 @@ class GameService(
 
         val roleReveal = if (game.phase == GamePhase.ROLE_REVEAL) {
             val confirmedCount = players.count { it.confirmedRole }
-            val teammates = if (myPlayer?.role?.isWolf == true) {
+            val teammates = if (myPlayer?.role?.isPackWolf == true) {
                 players
-                    .filter { it.role.isWolf && it.userId != requestingUserId }
+                    .filter { it.role.isPackWolf && it.userId != requestingUserId }
                     .map { userLookup[it.userId]?.nickname ?: it.userId }
             } else emptyList()
             mapOf(
@@ -155,9 +156,13 @@ class GameService(
                 val playerMap = players.associateBy { it.userId }
 
                 // ── WEREWOLF: share selected target + formatted teammate list ──────────
-                if (myPlayer?.role?.isWolf == true) {
-                    if (np.wolfTargetUserId != null) base["selectedTargetId"] = np.wolfTargetUserId
-                    val teammates = players.filter { it.role.isWolf && it.userId != requestingUserId }
+                // The mechanical wolf is not in the pack: no teammates, and it sees the
+                // pick only while it is the lone killer.
+                val wolfKiller = myPlayer != null && myPlayer in RoleRules.wolfKillers(players.filter { it.alive })
+                base["wolfKiller"] = wolfKiller
+                if (wolfKiller && np.wolfTargetUserId != null) base["selectedTargetId"] = np.wolfTargetUserId
+                if (myPlayer?.role?.isPackWolf == true) {
+                    val teammates = players.filter { it.role.isPackWolf && it.userId != requestingUserId }
                     base["teammates"] = teammates.map { tp ->
                         "${tp.seatIndex}·${userLookup[tp.userId]?.nickname ?: tp.userId}"
                     }
@@ -418,8 +423,8 @@ class GameService(
             "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
             // Wolves know each other all game (role card); everyone else gets an empty list.
-            "wolfTeammates" to if (myPlayer?.role?.isWolf == true) {
-                players.filter { it.role.isWolf && it.userId != requestingUserId }.sortedBy { it.seatIndex }.map { it.userId }
+            "wolfTeammates" to if (myPlayer?.role?.isPackWolf == true) {
+                players.filter { it.role.isPackWolf && it.userId != requestingUserId }.sortedBy { it.seatIndex }.map { it.userId }
             } else emptyList(),
             "roleReveal" to roleReveal,
             "sheriffElection" to sheriffElection,
@@ -462,12 +467,14 @@ class GameService(
         val roles = mutableListOf<PlayerRole>()
         if (room.hasWhiteWolfKing) roles.add(PlayerRole.WHITE_WOLF_KING)
         if (room.hasBlackWolfKing) roles.add(PlayerRole.BLACK_WOLF_KING)
+        if (room.hasMechanicalWolf) roles.add(PlayerRole.MECHANICAL_WOLF)
         while (roles.size < room.wolfCount) roles.add(PlayerRole.WEREWOLF)
         if (room.hasSeer) roles.add(PlayerRole.SEER)
         if (room.hasWitch) roles.add(PlayerRole.WITCH)
         if (room.hasHunter) roles.add(PlayerRole.HUNTER)
         if (room.hasGuard) roles.add(PlayerRole.GUARD)
         if (room.hasIdiot) roles.add(PlayerRole.IDIOT)
+        if (room.hasMedium) roles.add(PlayerRole.MEDIUM)
         while (roles.size < playerCount) roles.add(PlayerRole.VILLAGER)
         return roles
     }

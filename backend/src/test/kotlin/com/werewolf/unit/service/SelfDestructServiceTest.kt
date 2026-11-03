@@ -581,4 +581,34 @@ class SelfDestructServiceTest {
 
         assertThat(ctx.game.selfDestructUserId).isEqualTo(wolfId)
     }
+
+
+    // ── Mechanical wolf is outside the pack ───────────────────────────────────
+
+    @Test
+    fun `mechanical wolf cannot self-destruct`() {
+        val mech = GamePlayer(gameId = gameId, userId = wolfId, seatIndex = 1, role = PlayerRole.MECHANICAL_WOLF)
+        val ctx = context(players = listOf(mech, wolfPlayer("wolf:002", seat = 3), villagePlayer()))
+        stubCanSucceed(ctx)
+
+        val result = selfDestructService.selfDestruct(req(), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(mech.alive).isTrue()
+    }
+
+    @Test
+    fun `last-wolf rule counts only the pack`() {
+        val king = kingPlayer()
+        val taken = villagePlayer()
+        val mech = player("mech:001", 4, PlayerRole.MECHANICAL_WOLF)
+        val ctx = context(players = listOf(king, mech, taken))
+        ctx.game.dayNumber = 2
+        stubKingTakes(ctx, king, taken)
+
+        val result = selfDestructService.selfDestruct(req(kingId, targetUserId = taken.userId), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(taken.alive).isTrue()
+    }
 }

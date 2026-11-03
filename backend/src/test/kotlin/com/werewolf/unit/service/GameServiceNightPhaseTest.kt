@@ -540,4 +540,64 @@ class GameServiceNightPhaseTest {
         assertThat(wolfEntry["role"]).isNull() // hidden
         assertThat(seerEntry["role"]).isEqualTo("SEER") // own role visible
     }
+
+
+    // ── Mechanical wolf is outside the pack ───────────────────────────────────
+
+    private fun wolfPickWith(vararg players: GamePlayer, wolfTarget: String? = null) {
+        setupGameAndPlayers(game(), players.toList(), players.map { user(it.userId, "N${it.seatIndex}") }, NightSubPhase.WEREWOLF_PICK)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.of(nightPhase(NightSubPhase.WEREWOLF_PICK, wolfTarget = wolfTarget)))
+    }
+
+    @Test
+    fun `mechanical wolf gets no teammates and no selectedTargetId during WEREWOLF_PICK`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF), player("u2", 2, PlayerRole.MECHANICAL_WOLF),
+            player("u3", 3, PlayerRole.VILLAGER), wolfTarget = "u3",
+        )
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u2"))
+
+        assertThat(night).doesNotContainKeys("teammates", "selectedTargetId")
+        assertThat(gameService.getGameState(gameId, "u2")["wolfTeammates"] as List<*>).isEmpty()
+    }
+
+    @Test
+    fun `pack wolf teammates exclude the mechanical wolf`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF), player("u2", 2, PlayerRole.MECHANICAL_WOLF),
+            player("u3", 3, PlayerRole.WHITE_WOLF_KING), player("u4", 4, PlayerRole.VILLAGER),
+        )
+
+        val state = gameService.getGameState(gameId, "u1")
+
+        assertThat(nightPhaseResult(state)["teammates"] as List<String>).containsExactly("3·N3")
+        assertThat(state["wolfTeammates"] as List<String>).containsExactly("u3")
+    }
+
+    @Test
+    fun `wolfKiller is true only for killers`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF), player("u2", 2, PlayerRole.MECHANICAL_WOLF),
+            player("u3", 3, PlayerRole.VILLAGER),
+        )
+        fun killer(uid: String) = nightPhaseResult(gameService.getGameState(gameId, uid))["wolfKiller"]
+        assertThat(killer("u1")).isEqualTo(true)
+        assertThat(killer("u2")).isEqualTo(false)
+        assertThat(killer("u3")).isEqualTo(false)
+    }
+
+    @Test
+    fun `wolfKiller is true for the mechanical wolf once the pack is dead`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF).also { it.alive = false }, player("u2", 2, PlayerRole.MECHANICAL_WOLF),
+            player("u3", 3, PlayerRole.VILLAGER), wolfTarget = "u3",
+        )
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u2"))
+
+        assertThat(night["wolfKiller"]).isEqualTo(true)
+        assertThat(night["selectedTargetId"]).isEqualTo("u3")
+    }
 }
