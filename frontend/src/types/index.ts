@@ -215,15 +215,17 @@ export interface RoleHistoryPlayer {
 
 export interface RoleHistoryEntry {
   round: number
-  action: 'CHECK' | 'GUARD' | 'KILL' | 'ATTACKED' | 'ANTIDOTE' | 'POISON'
+  action: 'CHECK' | 'GUARD' | 'KILL' | 'ATTACKED' | 'ANTIDOTE' | 'POISON' | 'LEARN' | 'PROTECT'
   /** null = 空守 (guard) / 空刀 (wolf KILL, WITCH attacked) */
   target: RoleHistoryPlayer | null
-  /** SEER only */
+  /** SEER, and the mechanical wolf's learned alignment check */
   isWerewolf?: boolean
+  /** MEDIUM / mechanical-wolf role check: the role told; LEARN: the role learned */
+  role?: PlayerRole | null
 }
 
 export interface RoleHistory {
-  role: 'WITCH' | 'SEER' | 'GUARD' | 'WOLF'
+  role: 'WITCH' | 'SEER' | 'GUARD' | 'WOLF' | 'MEDIUM' | 'MECHANICAL_WOLF'
   entries: RoleHistoryEntry[]
 }
 // ── Game review (上帝视角复盘) ────────────────────────────────────────────────
@@ -241,12 +243,28 @@ export interface ReviewNight {
     action: 'KILL' | 'SKIP' | 'SELF_KILL'
     target: ReviewPlayer | null
   }
-  /** seer / witch / guard: null when the role is not in the game */
+  /** seer / mech / medium / witch / guard: null when the role is not in the game */
   seer: {
     actor: ReviewPlayer
     dead: boolean
     target: ReviewPlayer | null
     isWerewolf: boolean
+  } | null
+  mech: {
+    actor: ReviewPlayer
+    dead: boolean
+    /** the player whose skill was learned this night, and that player's role */
+    learned: ReviewPlayer | null
+    learnedRole: PlayerRole | null
+    check: ReviewPlayer | null
+    poison: ReviewPlayer | null
+    protect: ReviewPlayer | null
+  } | null
+  medium: {
+    actor: ReviewPlayer
+    dead: boolean
+    target: ReviewPlayer | null
+    role: PlayerRole | null
   } | null
   witch: {
     actor: ReviewPlayer
@@ -334,6 +352,18 @@ export type MyNightAction =
       poison: PlayerSeat | null
     }
   | { type: 'GUARD'; target: PlayerSeat | null }
+  | { type: 'MEDIUM'; target: PlayerSeat | null; role: PlayerRole | null }
+  /** checkRole is set only for a learned role check; an alignment check is read off check.camp */
+  | {
+      type: 'MECHANICAL_WOLF'
+      learned: PlayerSeat | null
+      learnedRole: PlayerRole | null
+      check: PlayerSeat | null
+      checkRole: PlayerRole | null
+      poison: PlayerSeat | null
+      protect: PlayerSeat | null
+      kill: PlayerSeat | null
+    }
 
 export interface PlayerNight {
   /** null for the roles that sleep through the night */

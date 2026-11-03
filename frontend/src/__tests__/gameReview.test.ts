@@ -30,11 +30,15 @@ const guard = P(6, 'Gus', 'GUARD')
 const hunter = P(7, 'Hal', 'HUNTER')
 const idiot = P(8, 'Ida', 'IDIOT')
 const vil = P(9, 'Val', 'VILLAGER')
+const mech = P(10, 'Mia', 'MECHANICAL_WOLF')
+const medium = P(11, 'Meg', 'MEDIUM')
 const players = [w1, w2, king, seer, witch, guard, hunter, idiot, vil]
 
 const night = (over: Partial<ReviewNight> = {}): ReviewNight => ({
   wolf: { actors: [w1, w2, king], action: 'KILL', target: vil },
   seer: { actor: seer, dead: false, target: null, isWerewolf: false },
+  mech: null,
+  medium: null,
   witch: { actor: witch, dead: false, antidote: null, poison: null },
   guard: { actor: guard, dead: false, target: null },
   dawn: { deaths: [], saved: null },
@@ -152,6 +156,73 @@ describe('GameReview', () => {
       '🧪 女巫 5號 未用藥',
       '🛡 守衛 6號 守 9號 Val',
       '☀ 天亮 平安夜（9號 Val 被守衛守住）',
+    ])
+  })
+
+  it('game review lists the mech learn/check/poison/protect and medium checks per night', () => {
+    const turn = (
+      over: Partial<NonNullable<ReviewNight['mech']>>,
+    ): NonNullable<ReviewNight['mech']> => ({
+      actor: mech,
+      dead: false,
+      learned: null,
+      learnedRole: null,
+      check: null,
+      poison: null,
+      protect: null,
+      ...over,
+    })
+    const wrapper = render([
+      {
+        day: 1,
+        night: night({
+          mech: turn({ learned: medium, learnedRole: 'MEDIUM' }),
+          medium: { actor: medium, dead: false, target: vil, role: 'VILLAGER' },
+        }),
+        events: [],
+      },
+      {
+        day: 2,
+        night: night({
+          mech: turn({ check: hunter, poison: vil, protect: seer }),
+          medium: { actor: medium, dead: true, target: null, role: null },
+        }),
+        events: [],
+      },
+    ])
+    const text = lines(wrapper)
+    expect(text).toContain('⚙ 機械狼 10號 學 11號 Meg〔通靈師〕')
+    expect(text).toContain('👻 通靈師 11號 驗 9號 Val〔村民〕')
+    // learned the medium's role check, so the check reads out the role
+    expect(text).toContain('⚙ 機械狼 10號 驗 7號 Hal〔獵人〕，毒 9號 Val〔村民〕，守 4號 Sia')
+    expect(text).toContain('👻 通靈師 11號 已出局')
+  })
+
+  it('a learned alignment check shows wolf or good, never a role name', () => {
+    const turn = (
+      over: Partial<NonNullable<ReviewNight['mech']>>,
+    ): NonNullable<ReviewNight['mech']> => ({
+      actor: mech,
+      dead: false,
+      learned: null,
+      learnedRole: null,
+      check: null,
+      poison: null,
+      protect: null,
+      ...over,
+    })
+    const wrapper = render([
+      { day: 1, night: night({ mech: turn({ learned: seer, learnedRole: 'SEER' }) }), events: [] },
+      { day: 2, night: night({ mech: turn({ check: w1 }) }), events: [] },
+      { day: 3, night: night({ mech: turn({ check: vil }) }), events: [] },
+      { day: 4, night: night({ mech: turn({}) }), events: [] },
+    ])
+    const text = lines(wrapper).filter((l) => l.includes('機械狼'))
+    expect(text).toEqual([
+      '⚙ 機械狼 10號 學 4號 Sia〔預言家〕',
+      '⚙ 機械狼 10號 驗 1號 Wolf1 → 狼人',
+      '⚙ 機械狼 10號 驗 9號 Val → 好人',
+      '⚙ 機械狼 10號 無行動',
     ])
   })
 

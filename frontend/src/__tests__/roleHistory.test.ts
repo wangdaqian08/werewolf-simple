@@ -75,6 +75,36 @@ describe('RoleHistory', () => {
     expect(rows(wrapper)).toEqual(['第1夜 · 刀了 2號 Amy', '第2夜 · 空刀'])
   })
 
+  it('role history renders LEARN/CHECK/POISON/PROTECT/KILL entries', async () => {
+    const wrapper = await openPanel({
+      role: 'MECHANICAL_WOLF',
+      entries: [
+        { round: 1, action: 'LEARN', target: ref('Dana', 4), role: 'SEER' },
+        { round: 2, action: 'CHECK', target: ref('Alice', 1), isWerewolf: true },
+        { round: 2, action: 'POISON', target: ref('Bob', 2) },
+        { round: 3, action: 'PROTECT', target: ref('Cat', 5) },
+        { round: 3, action: 'KILL', target: ref('Dee', 6) },
+        { round: 4, action: 'KILL', target: null },
+      ],
+    })
+    expect(rows(wrapper)).toEqual([
+      '第1夜 · 學習 4號 Dana → 預言家',
+      '第2夜 · 查驗 1號 Alice → 狼人',
+      '第2夜 · 毒藥毒了 2號 Bob',
+      '第3夜 · 守護 5號 Cat',
+      '第3夜 · 刀了 6號 Dee',
+      '第4夜 · 空刀',
+    ])
+  })
+
+  it('medium: each check shows the role it was told; a role check reads the role, not wolf/good', async () => {
+    const wrapper = await openPanel({
+      role: 'MEDIUM',
+      entries: [{ round: 1, action: 'CHECK', target: ref('Amy', 2), role: 'HUNTER' }],
+    })
+    expect(rows(wrapper)).toEqual(['第1夜 · 查驗 2號 Amy → 獵人'])
+  })
+
   it('shows 暫無記錄 when there are no entries yet', async () => {
     const wrapper = await openPanel({ role: 'SEER', entries: [] })
     expect(wrapper.find('[data-testid="role-history"]').text()).toContain('暫無記錄')

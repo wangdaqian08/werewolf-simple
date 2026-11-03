@@ -60,6 +60,7 @@
 import { computed } from 'vue'
 import type {
   GameReview,
+  PlayerRole,
   ReviewDayEvent,
   ReviewNight,
   ReviewPlayer,
@@ -158,6 +159,33 @@ function seerSegs(s: NonNullable<ReviewNight['seer']>): Seg[] {
   ]
 }
 
+/**
+ * [skill] is the role the mechanical wolf last learned from, which decides what a check tells it:
+ * the medium's gives the role, anything else (the seer's, or nothing learned) only wolf or good.
+ */
+function mechSegs(m: NonNullable<ReviewNight['mech']>, skill: PlayerRole | null): Seg[] {
+  const head = seg(t('rv.mechHead', { seat: t('common.seat', { n: m.actor.seatIndex }) }))
+  if (m.dead) return [head, seg(t('rv.dead'))]
+  const parts: Seg[][] = []
+  if (m.learned) parts.push([seg(t('rv.learn')), ...withRole(m.learned)])
+  if (m.check)
+    parts.push([
+      seg(t('rv.check')),
+      ...(skill === 'MEDIUM'
+        ? withRole(m.check)
+        : [name(m.check), seg(isWolfRole(m.check.role) ? t('rv.toWolf') : t('rv.toGood'))]),
+    ])
+  if (m.poison) parts.push([seg(t('rv.poison')), ...withRole(m.poison)])
+  if (m.protect) parts.push([seg(t('rv.guard')), name(m.protect)])
+  return [head, ...(parts.length ? joined(parts, t('common.comma')) : [seg(t('rv.noAction'))])]
+}
+
+function mediumSegs(m: NonNullable<ReviewNight['medium']>): Seg[] {
+  const head = seg(t('rv.mediumHead', { seat: t('common.seat', { n: m.actor.seatIndex }) }))
+  if (m.dead) return [head, seg(t('rv.dead'))]
+  return m.target ? [head, seg(t('rv.check')), ...withRole(m.target)] : [head, seg(t('rv.noCheck'))]
+}
+
 function witchSegs(w: NonNullable<ReviewNight['witch']>): Seg[] {
   const head = seg(t('rv.witchHead', { seat: t('common.seat', { n: w.actor.seatIndex }) }))
   if (w.dead) return [head, seg(t('rv.dead'))]
@@ -189,10 +217,12 @@ function dawnSegs(d: ReviewNight['dawn']): Seg[] {
   return [seg(t('rv.dawn')), ...segs]
 }
 
-function nightLines(n: ReviewNight): Line[] {
+function nightLines(n: ReviewNight, skill: PlayerRole | null): Line[] {
   const rows = [
     wolfSegs(n.wolf),
+    n.mech && mechSegs(n.mech, skill),
     n.seer && seerSegs(n.seer),
+    n.medium && mediumSegs(n.medium),
     n.witch && witchSegs(n.witch),
     n.guard && guardSegs(n.guard),
     dawnSegs(n.dawn),
@@ -268,12 +298,12 @@ function eventSegs(e: Exclude<ReviewDayEvent, ReviewVote>): Seg[] {
   }
 }
 
-function roundLines(r: ReviewRound): Line[] {
+function roundLines(r: ReviewRound, skill: PlayerRole | null): Line[] {
   const lines: Line[] = []
   if (r.night)
     lines.push(
       { kind: 'title', segs: [seg(t('rv.nightN', { day: r.day }))] },
-      ...nightLines(r.night),
+      ...nightLines(r.night, skill),
     )
   if (r.events.length) {
     lines.push({ kind: 'title', segs: [seg(t('rv.dayN', { day: r.day }))] })
@@ -285,7 +315,13 @@ function roundLines(r: ReviewRound): Line[] {
   return lines
 }
 
-const lines = computed(() => props.review.rounds.flatMap(roundLines))
+const lines = computed(() => {
+  let skill: PlayerRole | null = null
+  return props.review.rounds.flatMap((r) => {
+    skill = r.night?.mech?.learnedRole ?? skill
+    return roundLines(r, skill)
+  })
+})
 const hasTally = computed(() => lines.value.some((l) => l.kind === 'tally'))
 </script>
 
