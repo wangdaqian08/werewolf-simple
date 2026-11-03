@@ -50,6 +50,11 @@ class GamePlayer(
     // The host declared this player out (they left the game); see HostDeclareOutService
     @Column(name = "removed_by_host", nullable = false)
     var removedByHost: Boolean = false,
+
+    // Mechanical wolf only: the role it learned from its target (fixed once set)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "learned_role", length = 20)
+    var learnedRole: PlayerRole? = null,
 ) {
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }

@@ -42,6 +42,31 @@ class NightPhase(
 
     @Column(name = "prev_guard_target_user_id", length = 128)
     var prevGuardTargetUserId: String? = null,
+
+    // Mechanical wolf: whom it learned from (once per game), and the nightly results of the learned skill
+    @Column(name = "mech_learn_target_user_id", length = 128)
+    var mechLearnTargetUserId: String? = null,
+
+    @Column(name = "mech_check_target_user_id", length = 128)
+    var mechCheckTargetUserId: String? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mech_check_result_role", length = 20)
+    var mechCheckResultRole: PlayerRole? = null,
+
+    @Column(name = "mech_poison_target_user_id", length = 128)
+    var mechPoisonTargetUserId: String? = null,
+
+    @Column(name = "mech_guard_target_user_id", length = 128)
+    var mechGuardTargetUserId: String? = null,
+
+    // Medium: whom it checked and the exact role it saw
+    @Column(name = "medium_checked_user_id", length = 128)
+    var mediumCheckedUserId: String? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "medium_result_role", length = 20)
+    var mediumResultRole: PlayerRole? = null,
 ) {
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }

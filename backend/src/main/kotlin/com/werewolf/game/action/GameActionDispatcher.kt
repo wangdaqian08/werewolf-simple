@@ -91,6 +91,11 @@ class GameActionDispatcher(
 
             // ── Night: guard ──────────────────────────────────────────────────
             ActionType.GUARD_PROTECT, ActionType.GUARD_SKIP -> nightTurn(request, context, PlayerRole.GUARD)
+            // ── Night: mechanical wolf + medium — wired in a later task ───────
+            ActionType.MECH_LEARN, ActionType.MECH_CHECK, ActionType.MECH_POISON, ActionType.MECH_PROTECT,
+            ActionType.MECH_SKIP, ActionType.MECH_CONFIRM, ActionType.MEDIUM_CHECK, ActionType.MEDIUM_CONFIRM,
+                -> GameActionResult.Rejected("Not supported yet: ${request.actionType}")
+
             // ── Idiot reveal (day) ────────────────────────────────────────────
             // The idiot reveals only by being voted out (VotingPipeline does it); no client sends this.
             ActionType.IDIOT_REVEAL -> GameActionResult.Rejected("The idiot is revealed only when voted out")

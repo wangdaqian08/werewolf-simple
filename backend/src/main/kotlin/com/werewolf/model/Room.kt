@@ -56,6 +56,12 @@ class Room(
     @Column(name = "has_black_wolf_king", nullable = false)
     var hasBlackWolfKing: Boolean = false,
 
+    @Column(name = "has_mechanical_wolf", nullable = false)
+    var hasMechanicalWolf: Boolean = false,
+
+    @Column(name = "has_medium", nullable = false)
+    var hasMedium: Boolean = false,
+
     @Column(name = "has_sheriff", nullable = false)
     val hasSheriff: Boolean = true,
 

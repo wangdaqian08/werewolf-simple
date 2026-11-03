@@ -125,6 +125,10 @@ class GameStateLogger(
             NightSubPhase.WEREWOLF_PICK -> alivePlayers.filter { it.role.isWolf }.map { it.userId }
             NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT ->
                 alivePlayers.filter { it.role == PlayerRole.SEER }.map { it.userId }
+            NightSubPhase.MECH_WOLF_PICK, NightSubPhase.MECH_WOLF_RESULT ->
+                alivePlayers.filter { it.role == PlayerRole.MECHANICAL_WOLF }.map { it.userId }
+            NightSubPhase.MEDIUM_PICK, NightSubPhase.MEDIUM_RESULT ->
+                alivePlayers.filter { it.role == PlayerRole.MEDIUM }.map { it.userId }
             NightSubPhase.WITCH_ACT -> alivePlayers.filter { it.role == PlayerRole.WITCH }.map { it.userId }
             NightSubPhase.GUARD_PICK -> alivePlayers.filter { it.role == PlayerRole.GUARD }.map { it.userId }
         }
