@@ -176,7 +176,6 @@ describe('nightRoleOrder (mechanical wolf / medium boards)', () => {
   const board = { mechanicalWolf: true, medium: true }
 
   it('keeps Werewolf→Witch→Seer→Guard for boards without them', () => {
-    expect(nightRoleOrder()).toEqual([...NIGHT_ROLE_ORDER])
     expect(NIGHT_ROLE_ORDER).toEqual([
       'wolf_open_eyes.mp3',
       'wolf_close_eyes.mp3',

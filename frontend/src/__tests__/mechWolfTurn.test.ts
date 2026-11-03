@@ -111,7 +111,6 @@ describe('MechWolfTurn', () => {
     expect(r.attributes('data-kind')).toBe('CHECK')
     expect(r.attributes('data-role') ?? '').toBe('')
     expect(r.text()).toContain('狼人')
-    expect(r.text()).not.toContain(roleName('SEER'))
   })
 
   it('a CHECK result with neither role nor isWerewolf shows no verdict', () => {

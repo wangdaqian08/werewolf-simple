@@ -130,7 +130,7 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
     expect(w.find('[data-testid="role-hint-SEER"]').text()).toContain('不能同時選')
   })
 
-  it('mechanical wolf needs 9+ players and enough wolves', async () => {
+  it('mechanical wolf needs 9+ players', async () => {
     const w = await mountSetup() // 9 players, 3 wolves
     expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(false)
     await click(w, 'role-toggle-MECHANICAL_WOLF')
@@ -144,7 +144,7 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
     )
   })
 
-  it('mechanical wolf is locked with 2 wolves, and counts toward the king limit', async () => {
+  it('mechanical wolf is allowed with 2 wolves, and counts toward the special-wolf limit', async () => {
     const w = await mountSetup()
     await click(w, 'role-toggle-HUNTER') // 2 gods, so wolves can drop to 2
     await click(w, 'wolf-count-decrement')
