@@ -334,7 +334,7 @@ export default {
     guard: '🛡 I guarded ',
     guardNone: '🛡 I guarded no one',
     legend: 'In votes, {seat} red seats are werewolves you know of',
-    mechHead: '⚙ ',
+    mechHead: '⚙ I ',
     mechLearn: 'Learn ',
     mechNone: 'No action',
     mediumCheck: '👻 I checked ',

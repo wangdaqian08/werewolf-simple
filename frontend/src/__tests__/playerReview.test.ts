@@ -124,7 +124,7 @@ describe('PlayerReview', () => {
     const text = mount(PlayerReview, { props: { review: r } }).text()
     expect(text).toContain('⚙ 我驗 2號 Bob → 好人')
     expect(text).not.toContain('2號 Bob〔')
-    r.rounds[0]!.night!.action = { type: 'MECHANICAL_WOLF', ...base }
+    r.rounds[0]!.night!.action = { type: 'MECHANICAL_WOLF', ...base, check: null }
     expect(mount(PlayerReview, { props: { review: r } }).text()).toContain('⚙ 我無行動')
   })
 

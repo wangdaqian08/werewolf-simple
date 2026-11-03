@@ -561,6 +561,8 @@ const ROLE_LABELS: Record<PlayerRole, string> = {
   VILLAGER: '村民',
   WHITE_WOLF_KING: '白狼王',
   BLACK_WOLF_KING: '黑狼王',
+  MECHANICAL_WOLF: '机械狼',
+  MEDIUM: '通灵师',
 }
 const SHERIFF_SUBPHASES: SheriffSubPhase[] = ['SIGNUP', 'SPEECH', 'VOTING', 'RESULT']
 const DAY_SUBPHASES: DaySubPhase[] = ['RESULT_HIDDEN', 'RESULT_REVEALED']
