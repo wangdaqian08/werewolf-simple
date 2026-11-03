@@ -296,6 +296,53 @@ describe('NightPhase - mechanical wolf and medium turns', () => {
   })
 })
 
+describe('NightPhase - pick actions keep the screen until the result arrives', () => {
+  const pl = (userId: string, seatIndex: number): GamePlayer => ({
+    userId,
+    nickname: userId,
+    seatIndex,
+    isAlive: true,
+    isSheriff: false,
+  })
+  const props = (nightPhase: NightPhaseState) => ({
+    nightPhase,
+    players: [pl('m1', 1), pl('v1', 2), pl('w1', 3)],
+    myUserId: 'm1',
+    myRole: 'MEDIUM' as PlayerRole,
+  })
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('a medium pick does not flash the eyes-closed screen before MEDIUM_RESULT', async () => {
+    const wrapper = mount(NightPhase, { props: props({ subPhase: 'MEDIUM_PICK', dayNumber: 1 }) })
+    await wrapper.find('[data-testid="medium-target-3"]').trigger('click')
+    await wrapper.find('[data-testid="medium-confirm"]').trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['MEDIUM_CHECK', 'w1']])
+    expect(wrapper.find('[data-testid="sleep-screen-title"]').exists()).toBe(false)
+  })
+
+  it('confirming the medium result closes the eyes at once', async () => {
+    const wrapper = mount(NightPhase, {
+      props: props({
+        subPhase: 'MEDIUM_RESULT',
+        dayNumber: 1,
+        mediumResult: {
+          checkedPlayerId: 'w1',
+          checkedSeatIndex: 3,
+          checkedNickname: 'w1',
+          role: 'WEREWOLF',
+          history: [],
+        },
+      }),
+    })
+    await wrapper.find('[data-testid="medium-result-confirm"]').trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['MEDIUM_CONFIRM', undefined]])
+    expect(wrapper.find('[data-testid="sleep-screen-title"]').exists()).toBe(true)
+  })
+})
+
 describe('NightPhase - 白狼王 acts in the wolf turn', () => {
   it('WHITE_WOLF_KING sees the wolf badge and target grid during WEREWOLF_PICK', () => {
     const king: GamePlayer = {

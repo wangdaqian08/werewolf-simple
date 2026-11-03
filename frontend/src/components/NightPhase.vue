@@ -543,7 +543,8 @@ const poisonMode = ref(false)
 // GameView.vue includes subPhase + dayNumber), so hasActed resets naturally.
 // Intentionally NOT applied to SEER_PICK (the click advances to SEER_RESULT,
 // which is a different screen on the same component — showing sleep in between
-// would flash for the seer).
+// would flash for the seer). The mechanical wolf's and the medium's picks are
+// exempt for the same reason; only their CONFIRM clicks set it.
 const hasActed = ref(false)
 // A rejected action did not use up the turn: show the controls again.
 watch(
@@ -574,7 +575,8 @@ function confirmGuardSkip() {
   emit('guardSkip')
 }
 function sendNightAction(type: string, targetUserId?: string) {
-  hasActed.value = true
+  // Only the CONFIRM actions end the turn; a pick advances to the RESULT screen, so (like the seer) it must not flash eyes-closed.
+  if (type === 'MECH_CONFIRM' || type === 'MEDIUM_CONFIRM') hasActed.value = true
   emit('nightAction', type, targetUserId)
 }
 function confirmWitchSkip() {
