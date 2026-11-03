@@ -35,8 +35,8 @@ class WerewolfHandlerPackTest {
         return GameContext(game, Room(roomCode = "ABCD", hostUserId = "host", totalPlayers = 6), players.toList(), nightPhase = np)
     }
 
-    private fun kill(actor: String) =
-        GameActionRequest(gameId = gameId, actorUserId = actor, actionType = ActionType.WOLF_KILL, targetUserId = "v")
+    private fun kill(actor: String, target: String = "v") =
+        GameActionRequest(gameId = gameId, actorUserId = actor, actionType = ActionType.WOLF_KILL, targetUserId = target)
 
     @Test
     fun `mechanical wolf cannot WOLF_KILL while a pack wolf lives`() {
@@ -69,5 +69,15 @@ class WerewolfHandlerPackTest {
 
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(c.nightPhase?.wolfTargetUserId).isEqualTo("v")
+    }
+
+    @Test
+    fun `pack wolf may pick the living mechanical wolf as the kill target`() {
+        val c = ctx(player("w", 1, PlayerRole.WEREWOLF), player("m", 2, PlayerRole.MECHANICAL_WOLF), player("v", 3, PlayerRole.VILLAGER))
+
+        val result = WerewolfHandler(nightPhaseRepository).handle(kill("w", target = "m"), c)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(c.nightPhase?.wolfTargetUserId).isEqualTo("m")
     }
 }

@@ -477,6 +477,25 @@ class GameServiceNightPhaseTest {
     }
 
     @Test
+    fun `getGameState - WITCH in WITCH_ACT sees only the wolf target, never the mech poison target`() {
+        val players = listOf(
+            player("u1", 1, PlayerRole.WITCH), player("u3", 3, PlayerRole.MECHANICAL_WOLF),
+            player("u4", 4, PlayerRole.VILLAGER), player("u5", 5, PlayerRole.VILLAGER),
+        )
+        val users = listOf(user("u1", "Witch"), user("u3", "Mech"), user("u4", "Dave"), user("u5", "Eve"))
+        setupGameAndPlayers(game(), players, users, NightSubPhase.WITCH_ACT)
+
+        val np = nightPhase(subPhase = NightSubPhase.WITCH_ACT, wolfTarget = "u4").also { it.mechPoisonTargetUserId = "u5" }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night["attackedPlayerId"]).isEqualTo("u4")
+        assertThat(night.toString()).doesNotContain("u5").doesNotContain("Eve")
+    }
+
+    @Test
     fun `getGameState - WITCH gets hasPoison=false when poison used in a previous night`() {
         val witch = player("u1", 1, PlayerRole.WITCH)
         val players = listOf(witch)

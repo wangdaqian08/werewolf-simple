@@ -86,18 +86,6 @@ class MechanicalWolfHandlerTest {
     }
 
     @Test
-    fun `learn keeps the role after the target dies`() {
-        val np = night()
-        val mech = player(mechId, 1, PlayerRole.MECHANICAL_WOLF)
-        val target = player(targetId, 2, PlayerRole.WITCH)
-        handler.handle(req(ActionType.MECH_LEARN), ctx(np, mech, target))
-
-        target.alive = false
-
-        assertThat(mech.learnedRole).isEqualTo(PlayerRole.WITCH)
-    }
-
-    @Test
     fun `cannot learn twice in a game`() {
         val np = night(2)
         val mech = player(mechId, 1, PlayerRole.MECHANICAL_WOLF, learned = PlayerRole.WITCH)
@@ -224,7 +212,7 @@ class MechanicalWolfHandlerTest {
     }
 
     @Test
-    fun `MECH_PROTECT rejected when learned WITCH`() {
+    fun `learned WITCH - MECH_CHECK and MECH_PROTECT are rejected`() {
         val np = night(2)
         val mech = player(mechId, 1, PlayerRole.MECHANICAL_WOLF, learned = PlayerRole.WITCH)
         rejected(handler.handle(

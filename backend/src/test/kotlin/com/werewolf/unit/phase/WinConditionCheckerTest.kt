@@ -290,6 +290,17 @@ class WinConditionCheckerTest {
     }
 
     @Test
+    fun `villagers do not win while the mechanical wolf lives in HARD_MODE`() {
+        val result = check(
+            alivePlayers = listOf(player("m", 1, PlayerRole.MECHANICAL_WOLF), villager(2), villager(3)),
+            mode = WinConditionMode.HARD_MODE,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = noCounterplay,
+        )
+        assertThat(result).isNull()
+    }
+
+    @Test
     fun `wolves win (屠边) when every god incl MEDIUM is dead`() {
         val roster = listOf(wolf(1), player("m", 2, PlayerRole.MEDIUM), seer(3), villager(4))
         val result = check(

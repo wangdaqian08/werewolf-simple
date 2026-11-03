@@ -142,6 +142,13 @@ class DayRevealAdvancerTest {
     }
 
     @Test
+    fun `witch-poisoned mechanical wolf that learned HUNTER cannot shoot`() {
+        val mech = player("m", PlayerRole.MECHANICAL_WOLF, alive = false).also { it.learnedRole = PlayerRole.HUNTER }
+        stub(game(), listOf(mech), night(wolf = "m", poison = "m"))
+        assertThat(advancer.nightShooterUserId(gameId)).isNull()
+    }
+
+    @Test
     fun `mech-poisoned hunter wolf target cannot shoot`() {
         stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h", mechPoison = "h"))
         assertThat(advancer.nightShooterUserId(gameId)).isNull()

@@ -100,6 +100,17 @@ class NightKillMatrixTest {
     }
 
     @Test
+    fun `mech poison pierces the real guard - the guarded target still dies`() {
+        assertThat(NightOrchestrator.computeKills(night(guardTarget = "u2", mechPoison = "u2"))).containsExactly("u2")
+    }
+
+    @Test
+    fun `antidote does not undo the mech poison on the wolf target`() {
+        val kills = NightOrchestrator.computeKills(night(wolfTarget = "u1", antidoteUsed = true, mechPoison = "u1"))
+        assertThat(kills).containsExactly("u1")
+    }
+
+    @Test
     fun `wolf kill, witch poison and mech poison on three players`() {
         val kills = NightOrchestrator.computeKills(night(wolfTarget = "u1", poisonTarget = "u2", mechPoison = "u3"))
         assertThat(kills).containsExactlyInAnyOrder("u1", "u2", "u3")
