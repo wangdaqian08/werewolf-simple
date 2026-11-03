@@ -184,7 +184,7 @@ object PlayerReviewBuilder {
             me.role.isPackWolf -> MyNightAction.Wolf(
                 teammates = players.filter { it.role.isPackWolf && !deadAt(it) }.sortedBy { it.seatIndex }.mapNotNull { seat(it.userId) },
                 target = target?.let(seat),
-                selfKill = target != null && byId[target]?.role?.isWolf == true,
+                selfKill = target != null && byId[target]?.role?.isPackWolf == true,
             )
             me.role == PlayerRole.SEER -> MyNightAction.Seer(n.seerCheckedUserId?.let(seat), n.seerResultIsWerewolf ?: false)
             // The witch is shown the night's attack before she chooses.

@@ -394,6 +394,13 @@ class PlayerReviewBuilderTest {
     }
 
     @Test
+    fun `a pack kill of the mechanical wolf is not a self-kill to the pack`() {
+        val review = build("w1", mechBoard(), listOf(night(1) { wolfTargetUserId = "mech" }))
+
+        assertThat((review.rounds.single().night!!.action as MyNightAction.Wolf).selfKill).isFalse()
+    }
+
+    @Test
     fun `medium review shows the role it was told`() {
         val review = build("medium", mechBoard(), listOf(night(1) { mediumCheckedUserId = "v"; mediumResultRole = PlayerRole.VILLAGER }))
 
