@@ -470,6 +470,29 @@ class RoomServiceTest {
         })
     }
 
+    @Test
+    fun `updateBoard - sets hasMechanicalWolf and hasMedium and clears the flags that are dropped`() {
+        val room = room().also { it.hasSeer = true }
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(listOf(RoomPlayer(roomId = 1, userId = hostId, host = true)))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        val dto = roomService.updateBoard(hostId, 1, 9, 2, listOf(PlayerRole.MECHANICAL_WOLF, PlayerRole.MEDIUM, PlayerRole.WITCH))
+
+        verify(roomRepository).save(argThat<Room> { hasMechanicalWolf && hasMedium && !hasSeer && hasWitch })
+        assertThat(dto.config.roles).contains(PlayerRole.MECHANICAL_WOLF, PlayerRole.MEDIUM)
+    }
+
+    @Test
+    fun `updateBoard - rejects seer and medium together without saving`() {
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(room()))
+
+        assertThatThrownBy {
+            roomService.updateBoard(hostId, 1, 9, 3, listOf(PlayerRole.SEER, PlayerRole.MEDIUM, PlayerRole.WITCH))
+        }.isInstanceOf(InvalidRoleCompositionException::class.java)
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
     // ── getRoom ──────────────────────────────────────────────────────────────
 
     @Test

@@ -18,6 +18,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
@@ -577,5 +579,42 @@ class GameActionDispatcherTest {
 
             assertThat(packResult).isInstanceOf(GameActionResult.Success::class.java)
         }
+    }
+
+    // ── Mechanical wolf + medium routes ───────────────────────────────────────
+
+    @ParameterizedTest(name = "{0} claims {2} and pushes privately = {3}")
+    @CsvSource(
+        "MEDIUM_CHECK,MEDIUM,MEDIUM_PICK,true",
+        "MEDIUM_CONFIRM,MEDIUM,MEDIUM_RESULT,false",
+        "MECH_LEARN,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_CHECK,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_POISON,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_PROTECT,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_SKIP,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_CONFIRM,MECHANICAL_WOLF,MECH_WOLF_RESULT,false",
+    )
+    fun `mech wolf and medium actions claim their sub-phase turn and only the picks push privately`(
+        action: ActionType, role: PlayerRole, subPhase: NightSubPhase, pushes: Boolean,
+    ) {
+        val actorId = "actor:001"
+        val ctx = GameContext(
+            game(subPhase = subPhase.name),
+            room(),
+            listOf(player(actorId, 1, role), player(wolfId, 2, PlayerRole.WEREWOLF)),
+            nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = subPhase },
+        )
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+        val event = DomainEvent.MechWolfResult(gameId)
+        val dispatcher = makeDispatcher(listOf(stubHandler(role, GameActionResult.Success(listOf(event)))))
+
+        val first = dispatcher.dispatch(req(actorId, action, "u2"))
+        val repeat = dispatcher.dispatch(req(actorId, action, "u2"))
+
+        assertThat(first).isInstanceOf(GameActionResult.Success::class.java)
+        // The repeat is refused only if the first claimed the turn for exactly this sub-phase.
+        assertThat(repeat).isInstanceOf(GameActionResult.Rejected::class.java)
+        verify(stompPublisher, times(if (pushes) 1 else 0)).sendPrivateAfterCommit(actorId, event)
+        verify(nightOrchestrator, times(1)).submitAction(gameId)
     }
 }

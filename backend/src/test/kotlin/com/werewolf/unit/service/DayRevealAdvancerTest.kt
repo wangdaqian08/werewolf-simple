@@ -62,7 +62,9 @@ class DayRevealAdvancerTest {
         antidote: Boolean = false,
         guard: String? = null,
         mechPoison: String? = null,
+        mechGuard: String? = null,
     ) = NightPhase(gameId = gameId, dayNumber = day).also {
+        it.mechGuardTargetUserId = mechGuard
         it.mechPoisonTargetUserId = mechPoison
         it.wolfTargetUserId = wolf
         it.witchPoisonTargetUserId = poison
@@ -142,6 +144,12 @@ class DayRevealAdvancerTest {
     @Test
     fun `mech-poisoned hunter wolf target cannot shoot`() {
         stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h", mechPoison = "h"))
+        assertThat(advancer.nightShooterUserId(gameId)).isNull()
+    }
+
+    @Test
+    fun `no shot for a mech-shielded hunter even if marked dead (the predicate alone)`() {
+        stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h", mechGuard = "h"))
         assertThat(advancer.nightShooterUserId(gameId)).isNull()
     }
 

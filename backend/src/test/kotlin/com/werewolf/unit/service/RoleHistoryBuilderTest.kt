@@ -143,6 +143,20 @@ class RoleHistoryBuilderTest {
     }
 
     @Test
+    fun `mechanical wolf that learned SEER gets an alignment check - isWerewolf and no role`() {
+        mech.learnedRole = PlayerRole.SEER
+        val nights = listOf(
+            night(1) { mechLearnTargetUserId = "seer" },
+            night(2) { mechCheckTargetUserId = "wolf"; mechCheckResultRole = PlayerRole.WEREWOLF },
+        )
+        val e = entries(build(mech, game(GamePhase.DAY_DISCUSSION, 2), nights))
+
+        val check = e.single { it["action"] == "CHECK" }
+        assertThat(check["isWerewolf"]).isEqualTo(true)
+        assertThat(check).doesNotContainKey("role")
+    }
+
+    @Test
     fun `mechanical wolf history carries a KILL only on nights it was the lone killer`() {
         val deadPack = listOf(
             player("wolf", 4, PlayerRole.WEREWOLF).also { it.alive = false; it.diedDay = 1 },

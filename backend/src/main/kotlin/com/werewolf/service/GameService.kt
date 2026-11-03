@@ -4,9 +4,9 @@ import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.role.RoleRules
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.voting.TallyCalculator
-import com.werewolf.game.role.RoleRules
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import org.springframework.stereotype.Service
@@ -157,7 +157,8 @@ class GameService(
 
                 // ── WEREWOLF: share selected target + formatted teammate list ──────────
                 // The mechanical wolf is not in the pack: no teammates, and it sees the
-                // pick only while it is the lone killer.
+                // pick only while it is the lone killer. Only current killers (alive) see the pick:
+                // a dead pack wolf gets neither selectedTargetId nor wolfKiller.
                 val wolfKiller = myPlayer != null && myPlayer in RoleRules.wolfKillers(players.filter { it.alive })
                 base["wolfKiller"] = wolfKiller
                 if (wolfKiller && np.wolfTargetUserId != null) base["selectedTargetId"] = np.wolfTargetUserId

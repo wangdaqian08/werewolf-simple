@@ -96,6 +96,7 @@ class NightOrchestrator(
          * Whether the wolf attack kills its target, before the night-1 perk.
          * Exactly one save (witch antidote or guard) blocks it. Both on the same
          * target is 同守同救: the saves cancel and the target dies (奶穿).
+         * Does not include the mechanical wolf's shield (`mechGuardTargetUserId`): [computeKills] applies it.
          */
         fun wolfKillLands(nightPhase: NightPhase): Boolean {
             val wolfTarget = nightPhase.wolfTargetUserId ?: return false
@@ -564,7 +565,12 @@ class NightOrchestrator(
      * first-night immunity perk — indistinguishable from a save: only the final kill
      * list is filtered, the witch still saw the attack. Witch poison target
      * dies unconditionally (poison is not a wolf kill, immunity does not
-     * cover it).
+     * cover it). The mechanical wolf's shield (`mechGuardTargetUserId`) is absolute:
+     * it blocks the wolf kill and any poison on that player; the mechanical wolf's
+     * own poison (`mechPoisonTargetUserId`) kills like the witch's.
+     *
+     * The result is sorted by user id, not by seat, so it does not reveal which death
+     * came from which source; apply seat order at display time via [bySeat].
      */
     fun computePendingKills(nightPhase: NightPhase, immuneUserIds: Set<String> = emptySet()): List<String> =
         computeKills(nightPhase, immuneUserIds)
@@ -878,7 +884,7 @@ class NightOrchestrator(
         np: NightPhase,
     ) {
         log.info(
-            "[race] {} game={} day={} subPhase={} thread={} -> wolfTarget={} seerChecked={} seerIsWolf={} witchAntidoteUsed={} witchPoisonTarget={} guardTarget={}",
+            "[race] {} game={} day={} subPhase={} thread={} -> wolfTarget={} seerChecked={} seerIsWolf={} witchAntidoteUsed={} witchPoisonTarget={} guardTarget={} mechLearn={} mechCheck={} mechPoison={} mechGuard={} mediumChecked={} mediumResultRole={}",
             tag,
             gameId,
             dayNumber,
@@ -890,6 +896,12 @@ class NightOrchestrator(
             np.witchAntidoteUsed,
             np.witchPoisonTargetUserId,
             np.guardTargetUserId,
+            np.mechLearnTargetUserId,
+            np.mechCheckTargetUserId,
+            np.mechPoisonTargetUserId,
+            np.mechGuardTargetUserId,
+            np.mediumCheckedUserId,
+            np.mediumResultRole,
         )
     }
 

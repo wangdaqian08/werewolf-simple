@@ -716,4 +716,20 @@ class GameServiceNightPhaseTest {
         assertThat(night["wolfKiller"]).isEqualTo(true)
         assertThat(night["selectedTargetId"]).isEqualTo("u3")
     }
+
+    @Test
+    fun `a dead pack wolf gets neither selectedTargetId nor wolfKiller`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF).also { it.alive = false }, player("u2", 2, PlayerRole.WEREWOLF),
+            player("u3", 3, PlayerRole.VILLAGER), wolfTarget = "u3",
+        )
+
+        val dead = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+        val alive = nightPhaseResult(gameService.getGameState(gameId, "u2"))
+
+        assertThat(dead["wolfKiller"]).isEqualTo(false)
+        assertThat(dead).doesNotContainKey("selectedTargetId")
+        assertThat(alive["wolfKiller"]).isEqualTo(true)
+        assertThat(alive["selectedTargetId"]).isEqualTo("u3")
+    }
 }

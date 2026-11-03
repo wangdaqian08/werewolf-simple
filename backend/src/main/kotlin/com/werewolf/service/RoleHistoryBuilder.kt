@@ -1,5 +1,6 @@
 package com.werewolf.service
 
+import com.werewolf.game.role.RoleRules
 import com.werewolf.model.Game
 import com.werewolf.model.GamePhase
 import com.werewolf.model.GamePlayer
@@ -63,7 +64,7 @@ object RoleHistoryBuilder {
             me.role == PlayerRole.MECHANICAL_WOLF -> mapOf(
                 "role" to "MECHANICAL_WOLF",
                 "entries" to done.flatMap { n ->
-                    val loneKiller = players.none { it.role.isPackWolf && !deadAt(it, n.dayNumber) }
+                    val loneKiller = RoleRules.wolfKillers(players.filter { !deadAt(it, n.dayNumber) }).any { it.userId == me.userId }
                     listOfNotNull(
                         n.mechLearnTargetUserId?.let { entry(n.dayNumber, "LEARN", it) + ("role" to me.learnedRole) },
                         n.mechCheckTargetUserId?.let {

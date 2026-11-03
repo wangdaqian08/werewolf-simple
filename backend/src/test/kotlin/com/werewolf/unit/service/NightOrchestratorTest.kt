@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.junit.jupiter.MockitoSettings
 import org.mockito.kotlin.*
 import org.mockito.quality.Strictness
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Duration
 import java.util.*
 
@@ -442,6 +443,37 @@ class NightOrchestratorTest {
         verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
         val nightResult = captor.allValues.filterIsInstance<DomainEvent.NightResult>().single()
         assertThat(nightResult.kills).containsExactly("u3", "u2")
+    }
+
+    @Test
+    fun `resolveNightKills - game-over NightResult is seat-ordered on the after-commit path too`() {
+        val wolf = player("u1", 3, PlayerRole.WEREWOLF)
+        val wolfVictim = player("u2", 2)
+        val poisonVictim = player("u3", 1)
+        val np = nightPhase(wolfTarget = "u2", poisonTarget = "u3")
+        val initialCtx = ctx(wolf, wolfVictim, poisonVictim, roomOverride = room())
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(wolfVictim))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u3")).thenReturn(Optional.of(poisonVictim))
+        whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
+
+        TransactionSynchronizationManager.initSynchronization()
+        TransactionSynchronizationManager.setActualTransactionActive(true)
+        try {
+            nightOrchestrator.resolveNightKills(initialCtx, np)
+            // Nothing is broadcast until the transaction commits.
+            verify(stompPublisher, never()).broadcastGame(any(), any())
+            TransactionSynchronizationManager.getSynchronizations().forEach { it.afterCommit() }
+        } finally {
+            TransactionSynchronizationManager.setActualTransactionActive(false)
+            TransactionSynchronizationManager.clearSynchronization()
+        }
+
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
+        assertThat(captor.allValues.filterIsInstance<DomainEvent.NightResult>().single().kills)
+            .containsExactly("u3", "u2")
     }
 
     @Test

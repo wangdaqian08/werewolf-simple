@@ -2,6 +2,7 @@ package com.werewolf.service
 
 import com.werewolf.dto.*
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.role.RoleRules
 import com.werewolf.model.*
 import tools.jackson.module.kotlin.jacksonObjectMapper
 
@@ -74,8 +75,7 @@ object GameReviewBuilder {
         fun deadAt(p: GamePlayer) = (p.diedDay ?: Int.MAX_VALUE) < n.dayNumber
         fun holder(role: PlayerRole) = players.firstOrNull { it.role == role }
         val target = n.wolfTargetUserId?.let(refs::get)
-        val wolfActors = players.filter { it.role.isPackWolf && !deadAt(it) }
-            .ifEmpty { players.filter { it.role == PlayerRole.MECHANICAL_WOLF && !deadAt(it) } }
+        val wolfActors = RoleRules.wolfKillers(players.filter { !deadAt(it) })
             .sortedBy { it.seatIndex }.map { refs.getValue(it.userId) }
         return ReviewNight(
             wolf = WolfTurn(

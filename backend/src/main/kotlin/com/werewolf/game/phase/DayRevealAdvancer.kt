@@ -64,6 +64,7 @@ class DayRevealAdvancer(
     fun nightShooterId(game: Game, nightPhase: NightPhase?, players: List<GamePlayer>): String? {
         val wolfTarget = nightPhase?.wolfTargetUserId ?: return null
         if (!NightOrchestrator.wolfKillLands(nightPhase)) return null
+        if (wolfTarget == nightPhase.mechGuardTargetUserId) return null // shielded: the kill never lands
         if (wolfTarget in setOf(nightPhase.witchPoisonTargetUserId, nightPhase.mechPoisonTargetUserId)) return null // poisoned → cannot shoot
         // Self-destructed or taken (the night victim is still alive in the sheriff campaign) → no shot.
         if (wolfTarget == game.selfDestructUserId || wolfTarget == game.selfDestructTakenUserId) return null

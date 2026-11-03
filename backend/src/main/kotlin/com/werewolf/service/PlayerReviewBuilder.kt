@@ -2,6 +2,7 @@ package com.werewolf.service
 
 import com.werewolf.dto.*
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.role.RoleRules
 import com.werewolf.model.*
 import tools.jackson.module.kotlin.jacksonObjectMapper
 
@@ -169,7 +170,8 @@ object PlayerReviewBuilder {
         fun deadAt(p: GamePlayer) = (p.diedDay ?: Int.MAX_VALUE) < n.dayNumber
         val target = n.wolfTargetUserId
         // The mechanical wolf makes the kill only once every pack wolf is gone.
-        val loneKiller = me.role == PlayerRole.MECHANICAL_WOLF && players.none { it.role.isPackWolf && !deadAt(it) }
+        val loneKiller = me.role == PlayerRole.MECHANICAL_WOLF &&
+            RoleRules.wolfKillers(players.filter { !deadAt(it) }).any { it.userId == me.userId }
         val action = when {
             me.role == PlayerRole.MECHANICAL_WOLF -> MyNightAction.MechWolf(
                 learned = n.mechLearnTargetUserId?.let(seat),
