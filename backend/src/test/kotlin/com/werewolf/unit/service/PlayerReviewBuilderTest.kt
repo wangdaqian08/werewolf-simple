@@ -329,4 +329,75 @@ class PlayerReviewBuilderTest {
         assertThat(review.rounds.map { it.day }).containsExactly(1, 2)
         assertThat(review.rounds.last().events).hasSize(1)
     }
+
+    private fun mechBoard(diedDay: Map<String, Int> = emptyMap()) = board(diedDay) +
+        listOf(
+            GamePlayer(gameId = gameId, userId = "mech", seatIndex = 10, role = PlayerRole.MECHANICAL_WOLF)
+                .also { p -> p.learnedRole = PlayerRole.SEER; diedDay["mech"]?.let { p.alive = false; p.diedDay = it } },
+            GamePlayer(gameId = gameId, userId = "medium", seatIndex = 11, role = PlayerRole.MEDIUM),
+        )
+
+    private fun mseat(id: String, role: PlayerRole? = null, camp: KnownCamp? = null) =
+        mechBoard().first { it.userId == id }.let { PlayerSeat(id, "N-$id", it.seatIndex, role, camp) }
+
+    @Test
+    fun `mechanical wolf review knows only its learned target`() {
+        val review = build("mech", mechBoard(), listOf(
+            night(1) { wolfTargetUserId = "v"; mechLearnTargetUserId = "seer" },
+            night(2) { wolfTargetUserId = "v2"; mechPoisonTargetUserId = "hunter" },
+        ))
+
+        assertThat(review.seats.filter { it.role != null })
+            .containsExactlyInAnyOrder(mseat("mech", PlayerRole.MECHANICAL_WOLF), mseat("seer", PlayerRole.SEER))
+        val n1 = review.rounds[0].night!!
+        assertThat(n1.action).isEqualTo(
+            MyNightAction.MechWolf(mseat("seer", PlayerRole.SEER), PlayerRole.SEER, null, null, null, null, null),
+        )
+        // The pack lived, so the mechanical wolf was never told of the attack, nor made it.
+        assertThat(n1.dawn.saved).isNull()
+        assertThat(review.rounds[1].night!!.action).isEqualTo(
+            MyNightAction.MechWolf(null, null, null, null, mseat("hunter"), null, null),
+        )
+    }
+
+    @Test
+    fun `mechanical wolf is told of the attack and holds the kill only when it is the lone killer`() {
+        val dead = mapOf("w1" to 1, "w2" to 1, "king" to 1)
+        val review = build("mech", mechBoard(dead), listOf(
+            night(1),
+            night(2) { wolfTargetUserId = "v"; mechGuardTargetUserId = "v" },
+        ))
+
+        val n2 = review.rounds[1].night!!
+        assertThat((n2.action as MyNightAction.MechWolf).kill).isEqualTo(mseat("v"))
+        assertThat(n2.dawn.saved).isEqualTo(mseat("v"))
+    }
+
+    @Test
+    fun `an alignment check gives the mechanical wolf a camp, not a role`() {
+        val review = build("mech", mechBoard(), listOf(
+            night(1) { mechLearnTargetUserId = "seer" },
+            night(2) { mechCheckTargetUserId = "hunter"; mechCheckResultRole = PlayerRole.HUNTER },
+        ))
+
+        assertThat(review.rounds[1].night!!.action)
+            .isEqualTo(MyNightAction.MechWolf(null, null, mseat("hunter", camp = KnownCamp.GOOD), null, null, null, null))
+    }
+
+    @Test
+    fun `pack review does not reveal the mechanical wolf`() {
+        val review = build("w1", mechBoard(), listOf(night(1) { wolfTargetUserId = "v" }))
+
+        assertThat(review.seats.filter { it.role != null }.map { it.userId }).containsExactlyInAnyOrder("w1", "w2", "king")
+        assertThat((review.rounds.single().night!!.action as MyNightAction.Wolf).teammates.map { it.userId })
+            .containsExactly("w1", "w2", "king")
+    }
+
+    @Test
+    fun `medium review shows the role it was told`() {
+        val review = build("medium", mechBoard(), listOf(night(1) { mediumCheckedUserId = "v"; mediumResultRole = PlayerRole.VILLAGER }))
+
+        assertThat(review.rounds.single().night!!.action)
+            .isEqualTo(MyNightAction.Medium(mseat("v", PlayerRole.VILLAGER), PlayerRole.VILLAGER))
+    }
 }

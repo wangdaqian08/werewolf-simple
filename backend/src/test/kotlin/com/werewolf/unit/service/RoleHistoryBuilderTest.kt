@@ -27,8 +27,11 @@ class RoleHistoryBuilderTest {
     private fun night(day: Int, block: NightPhase.() -> Unit = {}) =
         NightPhase(gameId = gameId, dayNumber = day).also { it.subPhase = NightSubPhase.COMPLETE; it.block() }
 
-    private fun build(me: GamePlayer, game: Game, nights: List<NightPhase>) =
-        RoleHistoryBuilder.build(me, game, nights, players) { "N-$it" }
+    private val mech = player("mech", 8, PlayerRole.MECHANICAL_WOLF)
+    private val medium = player("medium", 9, PlayerRole.MEDIUM)
+
+    private fun build(me: GamePlayer, game: Game, nights: List<NightPhase>, roster: List<GamePlayer> = players + mech + medium) =
+        RoleHistoryBuilder.build(me, game, nights, roster) { "N-$it" }
 
     @Suppress("UNCHECKED_CAST")
     private fun entries(h: Map<String, Any?>?) = h!!["entries"] as List<Map<String, Any?>>
@@ -119,5 +122,52 @@ class RoleHistoryBuilderTest {
         assertThat(build(deadSeer, game(GamePhase.DAY_DISCUSSION, 1), nights)).isNull()
         assertThat(build(v1, game(GamePhase.DAY_DISCUSSION, 1), nights)).isNull()
         assertThat(build(player("h", 8, PlayerRole.HUNTER), game(GamePhase.DAY_DISCUSSION, 1), nights)).isNull()
+    }
+
+    @Test
+    fun `mechanical wolf history shows its own actions, never the pack's kills`() {
+        mech.learnedRole = PlayerRole.MEDIUM
+        val nights = listOf(
+            night(1) { wolfTargetUserId = "v1"; mechLearnTargetUserId = "medium" },
+            night(2) { wolfTargetUserId = "v2"; mechCheckTargetUserId = "wolf"; mechCheckResultRole = PlayerRole.WEREWOLF },
+            night(3) { mechPoisonTargetUserId = "v1"; mechGuardTargetUserId = "v2" },
+        )
+        val h = build(mech, game(GamePhase.DAY_DISCUSSION, 3), nights)
+
+        assertThat(h!!["role"]).isEqualTo("MECHANICAL_WOLF")
+        val e = entries(h)
+        assertThat(e.map { it["round"] to it["action"] })
+            .containsExactly(1 to "LEARN", 2 to "CHECK", 3 to "POISON", 3 to "PROTECT")
+        assertThat(target(e[0])!!["userId"]).isEqualTo("medium")
+        assertThat(e[1]["role"]).isEqualTo(PlayerRole.WEREWOLF)
+    }
+
+    @Test
+    fun `mechanical wolf history carries a KILL only on nights it was the lone killer`() {
+        val deadPack = listOf(
+            player("wolf", 4, PlayerRole.WEREWOLF).also { it.alive = false; it.diedDay = 1 },
+            player("king", 5, PlayerRole.WHITE_WOLF_KING).also { it.alive = false; it.diedDay = 1 },
+            mech, v1, v2,
+        )
+        val nights = listOf(night(1) { wolfTargetUserId = "v1" }, night(2) { wolfTargetUserId = "v2" })
+        val e = entries(build(mech, game(GamePhase.DAY_DISCUSSION, 2), nights, deadPack))
+
+        assertThat(e.map { it["round"] to it["action"] }).containsExactly(2 to "KILL")
+        assertThat(target(e[0])!!["userId"]).isEqualTo("v2")
+    }
+
+    @Test
+    fun `medium history carries roles`() {
+        val nights = listOf(
+            night(1),
+            night(2) { mediumCheckedUserId = "seer"; mediumResultRole = PlayerRole.SEER },
+        )
+        val h = build(medium, game(GamePhase.DAY_DISCUSSION, 2), nights)
+
+        assertThat(h!!["role"]).isEqualTo("MEDIUM")
+        val e = entries(h)
+        assertThat(e.map { it["round"] to it["action"] }).containsExactly(2 to "CHECK")
+        assertThat(e.single()["role"]).isEqualTo(PlayerRole.SEER)
+        assertThat(target(e.single())!!["userId"]).isEqualTo("seer")
     }
 }

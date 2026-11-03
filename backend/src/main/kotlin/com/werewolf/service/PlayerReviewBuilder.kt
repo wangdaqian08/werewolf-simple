@@ -94,9 +94,21 @@ object PlayerReviewBuilder {
         // Knowledge is gathered over exactly the rounds the viewer lived through.
         val knownRoles = mutableMapOf(me.userId to me.role)
         val knownCamps = mutableMapOf<String, KnownCamp>()
-        if (me.role.isWolf) players.filter { it.role.isWolf }.forEach { knownRoles[it.userId] = it.role }
+        // The pack never meets the mechanical wolf, and it never meets them.
+        if (me.role.isPackWolf) players.filter { it.role.isPackWolf }.forEach { knownRoles[it.userId] = it.role }
         if (me.role == PlayerRole.SEER) days.mapNotNull(completed::get).forEach { n ->
             n.seerCheckedUserId?.let { knownCamps[it] = if (n.seerResultIsWerewolf == true) KnownCamp.WOLF else KnownCamp.GOOD }
+        }
+        if (me.role == PlayerRole.MEDIUM) days.mapNotNull(completed::get).forEach { n ->
+            val checked = n.mediumCheckedUserId
+            val told = n.mediumResultRole
+            if (checked != null && told != null) knownRoles[checked] = told
+        }
+        if (me.role == PlayerRole.MECHANICAL_WOLF) days.mapNotNull(completed::get).forEach { n ->
+            n.mechLearnTargetUserId?.let { id -> byId[id]?.let { knownRoles[id] = it.role } }
+            val checked = n.mechCheckTargetUserId ?: return@forEach
+            if (me.learnedRole?.learnedSkill == LearnedSkill.CHECK_ROLE) n.mechCheckResultRole?.let { knownRoles[checked] = it }
+            else knownCamps[checked] = if (n.mechCheckResultRole?.isWolf == true) KnownCamp.WOLF else KnownCamp.GOOD
         }
         days.flatMap(::visibleEvents).forEach { e ->
             val subject = e.payload["userId"] as? String ?: return@forEach
@@ -156,9 +168,21 @@ object PlayerReviewBuilder {
         // Dying during night N (diedDay == N) still means they acted that night.
         fun deadAt(p: GamePlayer) = (p.diedDay ?: Int.MAX_VALUE) < n.dayNumber
         val target = n.wolfTargetUserId
+        // The mechanical wolf makes the kill only once every pack wolf is gone.
+        val loneKiller = me.role == PlayerRole.MECHANICAL_WOLF && players.none { it.role.isPackWolf && !deadAt(it) }
         val action = when {
-            me.role.isWolf -> MyNightAction.Wolf(
-                teammates = players.filter { it.role.isWolf && !deadAt(it) }.sortedBy { it.seatIndex }.mapNotNull { seat(it.userId) },
+            me.role == PlayerRole.MECHANICAL_WOLF -> MyNightAction.MechWolf(
+                learned = n.mechLearnTargetUserId?.let(seat),
+                learnedRole = n.mechLearnTargetUserId?.let { byId[it]?.role },
+                check = n.mechCheckTargetUserId?.let(seat),
+                checkRole = n.mechCheckResultRole.takeIf { me.learnedRole?.learnedSkill == LearnedSkill.CHECK_ROLE },
+                poison = n.mechPoisonTargetUserId?.let(seat),
+                protect = n.mechGuardTargetUserId?.let(seat),
+                kill = target?.takeIf { loneKiller }?.let(seat),
+            )
+            me.role == PlayerRole.MEDIUM -> MyNightAction.Medium(n.mediumCheckedUserId?.let(seat), n.mediumResultRole)
+            me.role.isPackWolf -> MyNightAction.Wolf(
+                teammates = players.filter { it.role.isPackWolf && !deadAt(it) }.sortedBy { it.seatIndex }.mapNotNull { seat(it.userId) },
                 target = target?.let(seat),
                 selfKill = target != null && byId[target]?.role?.isWolf == true,
             )
@@ -172,8 +196,8 @@ object PlayerReviewBuilder {
             me.role == PlayerRole.GUARD -> MyNightAction.Guard(n.guardTargetUserId?.let(seat))
             else -> null
         }
-        // Only the wolves and the witch are told an attack happened, so only they can see it fail.
-        val knewOfAttack = me.role.isWolf || me.role == PlayerRole.WITCH
+        // Only the killing wolves and the witch are told an attack happened, so only they can see it fail.
+        val knewOfAttack = me.role.isPackWolf || me.role == PlayerRole.WITCH || loneKiller
         val saved = target?.takeIf { it !in died && knewOfAttack }?.let(seat)
         return PlayerNight(action, PublicDawn(died.mapNotNull(seat).sortedBy { it.seatIndex }, saved))
     }

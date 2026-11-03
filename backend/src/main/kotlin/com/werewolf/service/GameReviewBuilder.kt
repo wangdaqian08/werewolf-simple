@@ -76,7 +76,9 @@ object GameReviewBuilder {
         val target = n.wolfTargetUserId?.let(refs::get)
         return ReviewNight(
             wolf = WolfTurn(
-                actors = players.filter { it.role.isWolf && !deadAt(it) }.sortedBy { it.seatIndex }.map { refs.getValue(it.userId) },
+                actors = players.filter { it.role.isPackWolf && !deadAt(it) }
+                    .ifEmpty { players.filter { it.role == PlayerRole.MECHANICAL_WOLF && !deadAt(it) } }
+                    .sortedBy { it.seatIndex }.map { refs.getValue(it.userId) },
                 action = when {
                     target == null -> WolfAction.SKIP
                     target.role.isWolf -> WolfAction.SELF_KILL
@@ -86,6 +88,17 @@ object GameReviewBuilder {
             ),
             seer = holder(PlayerRole.SEER)?.let {
                 SeerTurn(refs.getValue(it.userId), deadAt(it), n.seerCheckedUserId?.let(refs::get), n.seerResultIsWerewolf ?: false)
+            },
+            mech = holder(PlayerRole.MECHANICAL_WOLF)?.let {
+                MechWolfTurn(
+                    refs.getValue(it.userId), deadAt(it), n.mechLearnTargetUserId?.let(refs::get),
+                    n.mechLearnTargetUserId?.let { id -> refs[id]?.role },
+                    n.mechCheckTargetUserId?.let(refs::get), n.mechPoisonTargetUserId?.let(refs::get),
+                    n.mechGuardTargetUserId?.let(refs::get),
+                )
+            },
+            medium = holder(PlayerRole.MEDIUM)?.let {
+                MediumTurn(refs.getValue(it.userId), deadAt(it), n.mediumCheckedUserId?.let(refs::get), n.mediumResultRole)
             },
             witch = holder(PlayerRole.WITCH)?.let {
                 WitchTurn(refs.getValue(it.userId), deadAt(it), target.takeIf { n.witchAntidoteUsed }, n.witchPoisonTargetUserId?.let(refs::get))
@@ -100,13 +113,14 @@ object GameReviewBuilder {
     private fun dawn(n: NightPhase, refs: Map<String, ReviewPlayer>, died: List<String>, night1PerkSaved: Set<String>): Dawn {
         val deaths = died.mapNotNull(refs::get).sortedBy { it.seatIndex }.map { p ->
             NightDeath(p, when {
-                p.userId == n.witchPoisonTargetUserId -> DeathCause.POISON
+                p.userId == n.witchPoisonTargetUserId || p.userId == n.mechPoisonTargetUserId -> DeathCause.POISON
                 p.userId == n.wolfTargetUserId && n.witchAntidoteUsed && n.guardTargetUserId == p.userId -> DeathCause.BOTH_SAVES
                 else -> DeathCause.WOLF
             })
         }
         val saved = n.wolfTargetUserId?.takeIf { it !in died }?.let(refs::get)?.let { p ->
             when {
+                p.userId == n.mechGuardTargetUserId -> SaveSource.GUARD // absolute shield: beats the perk and the antidote
                 n.dayNumber == 1 && p.userId in night1PerkSaved -> SaveSource.PERK
                 n.witchAntidoteUsed -> SaveSource.ANTIDOTE
                 n.guardTargetUserId == p.userId -> SaveSource.GUARD

@@ -3,6 +3,7 @@ package com.werewolf.service
 import com.werewolf.model.Game
 import com.werewolf.model.GamePhase
 import com.werewolf.model.GamePlayer
+import com.werewolf.model.LearnedSkill
 import com.werewolf.model.NightPhase
 import com.werewolf.model.PlayerRole
 
@@ -12,7 +13,10 @@ import com.werewolf.model.PlayerRole
  *
  *  - SEER:  every check (round, player, result)
  *  - GUARD: every protected player (null target = skipped)
- *  - WOLF:  every wolf-team kill (null target = 空刀), for all wolves incl. 白狼王
+ *  - WOLF:  every wolf-team kill (null target = 空刀), for the pack incl. 白狼王
+ *  - MECHANICAL_WOLF: its own learn / check / poison / protect, and the kills of the nights
+ *           it was the lone killer; never the pack's kills
+ *  - MEDIUM: every check with the role it was told
  *  - WITCH: every night's wolf victim (null target = 空刀) she was told while
  *           holding the antidote, then the antidote save + poison (round, player)
  *
@@ -38,6 +42,7 @@ object RoleHistoryBuilder {
         fun entry(round: Int, action: String, target: String?) =
             mapOf("round" to round, "action" to action, "target" to ref(target))
 
+        fun deadAt(p: GamePlayer, day: Int) = (p.diedDay ?: Int.MAX_VALUE) < day
         return when {
             me.role == PlayerRole.SEER -> mapOf(
                 "role" to "SEER",
@@ -49,7 +54,32 @@ object RoleHistoryBuilder {
                 "role" to "GUARD",
                 "entries" to done.map { entry(it.dayNumber, "GUARD", it.guardTargetUserId) },
             )
-            me.role.isWolf -> mapOf(
+            me.role == PlayerRole.MEDIUM -> mapOf(
+                "role" to "MEDIUM",
+                "entries" to done.filter { it.mediumCheckedUserId != null }.map {
+                    entry(it.dayNumber, "CHECK", it.mediumCheckedUserId) + ("role" to it.mediumResultRole)
+                },
+            )
+            me.role == PlayerRole.MECHANICAL_WOLF -> mapOf(
+                "role" to "MECHANICAL_WOLF",
+                "entries" to done.flatMap { n ->
+                    val loneKiller = players.none { it.role.isPackWolf && !deadAt(it, n.dayNumber) }
+                    listOfNotNull(
+                        n.mechLearnTargetUserId?.let { entry(n.dayNumber, "LEARN", it) + ("role" to me.learnedRole) },
+                        n.mechCheckTargetUserId?.let {
+                            // Only the role-check skill is told a role; the alignment check is told wolf or not.
+                            val result = if (me.learnedRole?.learnedSkill == LearnedSkill.CHECK_ROLE)
+                                "role" to n.mechCheckResultRole
+                            else "isWerewolf" to (n.mechCheckResultRole?.isWolf ?: false)
+                            entry(n.dayNumber, "CHECK", it) + result
+                        },
+                        n.mechPoisonTargetUserId?.let { entry(n.dayNumber, "POISON", it) },
+                        n.mechGuardTargetUserId?.let { entry(n.dayNumber, "PROTECT", it) },
+                        if (loneKiller) entry(n.dayNumber, "KILL", n.wolfTargetUserId) else null,
+                    )
+                },
+            )
+            me.role.isPackWolf -> mapOf(
                 "role" to "WOLF",
                 "entries" to done.map { entry(it.dayNumber, "KILL", it.wolfTargetUserId) },
             )

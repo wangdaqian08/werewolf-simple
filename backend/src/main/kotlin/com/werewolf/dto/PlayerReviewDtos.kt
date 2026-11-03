@@ -105,6 +105,20 @@ sealed interface MyNightAction {
 
     @JsonTypeName("GUARD")
     data class Guard(val target: PlayerSeat?) : MyNightAction
+
+    /** [role] is what the medium was told about [target]. */
+    @JsonTypeName("MEDIUM")
+    data class Medium(val target: PlayerSeat?, val role: PlayerRole?) : MyNightAction
+
+    /**
+     * The mechanical wolf's own turn. [checkRole] is set only when the learned skill reveals a role;
+     * [kill] only on nights it was the lone killer.
+     */
+    @JsonTypeName("MECHANICAL_WOLF")
+    data class MechWolf(
+        val learned: PlayerSeat?, val learnedRole: PlayerRole?, val check: PlayerSeat?, val checkRole: PlayerRole?,
+        val poison: PlayerSeat?, val protect: PlayerSeat?, val kill: PlayerSeat?,
+    ) : MyNightAction
 }
 
 /**
