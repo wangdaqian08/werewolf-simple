@@ -386,6 +386,22 @@ class GameReviewBuilderTest {
     }
 
     @Test
+    fun `a pack kill on the mechanical wolf is a normal kill, not 自刀`() {
+        val review = build(mechBoard(), listOf(night(1) { wolfTargetUserId = "mech" }))
+
+        assertThat(review.rounds.single().night!!.wolf.action).isEqualTo(WolfAction.KILL)
+    }
+
+    @Test
+    fun `a vote between the mechanical wolf and a pack wolf is not 倒钩`() {
+        val review = build(mechBoard(), listOf(night(1)), listOf(
+            voteResult(1, mapOf("w1" to listOf("mech"), "mech" to listOf("w1"))),
+        ))
+
+        assertThat(votes(review, 1).single().wolfPlay).isNull()
+    }
+
+    @Test
     fun `mech and medium turns appear per night`() {
         val nights = listOf(
             night(1) { mechLearnTargetUserId = "seer"; mediumCheckedUserId = "v"; mediumResultRole = PlayerRole.VILLAGER },

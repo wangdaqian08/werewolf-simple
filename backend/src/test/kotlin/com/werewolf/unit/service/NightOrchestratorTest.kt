@@ -422,6 +422,29 @@ class NightOrchestratorTest {
     }
 
     @Test
+    fun `resolveNightKills - game-over NightResult lists the dead in seat order, not userId order`() {
+        // userId order (u2, u3) differs from seat order (u3 sits at 1, u2 at 2).
+        val wolf = player("u1", 3, PlayerRole.WEREWOLF)
+        val wolfVictim = player("u2", 2)
+        val poisonVictim = player("u3", 1)
+        val np = nightPhase(wolfTarget = "u2", poisonTarget = "u3")
+        val r = room()
+        val initialCtx = ctx(wolf, wolfVictim, poisonVictim, roomOverride = r)
+
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u2")).thenReturn(Optional.of(wolfVictim))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u3")).thenReturn(Optional.of(poisonVictim))
+        whenever(contextLoader.load(gameId)).thenReturn(initialCtx)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(WinnerSide.WEREWOLF)
+
+        nightOrchestrator.resolveNightKills(initialCtx, np)
+
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
+        val nightResult = captor.allValues.filterIsInstance<DomainEvent.NightResult>().single()
+        assertThat(nightResult.kills).containsExactly("u3", "u2")
+    }
+
+    @Test
     fun `resolveNightKills - villagers win when all wolves are dead`() {
         val villager = player("u2", 2)
         val deadWolf = player("u1", 1, PlayerRole.WEREWOLF, alive = false)

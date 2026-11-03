@@ -107,6 +107,29 @@ class GamePhasePipelineDayTest {
         verify(stompPublisher).broadcastGameAfterCommit(eq(gameId), any())
     }
 
+    @Test
+    fun `revealNightResult - NightResult broadcast lists the dead in seat order, not userId order`() {
+        val game = game()
+        val a = GamePlayer(gameId = gameId, userId = "u2", seatIndex = 2, role = PlayerRole.VILLAGER)
+        val b = GamePlayer(gameId = gameId, userId = "u3", seatIndex = 1, role = PlayerRole.VILLAGER)
+        val np = NightPhase(gameId = gameId, dayNumber = 2)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(java.util.Optional.of(np))
+        // computeKills hands back userId order.
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("u2", "u3"))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
+
+        pipeline.revealNightResult(
+            req(hostId, ActionType.REVEAL_NIGHT_RESULT),
+            GameContext(game, room(), listOf(a, b)),
+        )
+
+        val captor = org.mockito.kotlin.argumentCaptor<com.werewolf.game.DomainEvent>()
+        verify(stompPublisher, org.mockito.kotlin.atLeastOnce()).broadcastGameAfterCommit(eq(gameId), captor.capture())
+        val nightResult = captor.allValues.filterIsInstance<com.werewolf.game.DomainEvent.NightResult>().single()
+        assertThat(nightResult.kills).containsExactly("u3", "u2")
+    }
+
     // ── dayAdvance ───────────────────────────────────────────────────────────
 
     @Test

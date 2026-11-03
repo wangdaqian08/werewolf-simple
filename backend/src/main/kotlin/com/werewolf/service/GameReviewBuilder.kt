@@ -74,14 +74,16 @@ object GameReviewBuilder {
         fun deadAt(p: GamePlayer) = (p.diedDay ?: Int.MAX_VALUE) < n.dayNumber
         fun holder(role: PlayerRole) = players.firstOrNull { it.role == role }
         val target = n.wolfTargetUserId?.let(refs::get)
+        val wolfActors = players.filter { it.role.isPackWolf && !deadAt(it) }
+            .ifEmpty { players.filter { it.role == PlayerRole.MECHANICAL_WOLF && !deadAt(it) } }
+            .sortedBy { it.seatIndex }.map { refs.getValue(it.userId) }
         return ReviewNight(
             wolf = WolfTurn(
-                actors = players.filter { it.role.isPackWolf && !deadAt(it) }
-                    .ifEmpty { players.filter { it.role == PlayerRole.MECHANICAL_WOLF && !deadAt(it) } }
-                    .sortedBy { it.seatIndex }.map { refs.getValue(it.userId) },
+                actors = wolfActors,
                 action = when {
                     target == null -> WolfAction.SKIP
-                    target.role.isWolf -> WolfAction.SELF_KILL
+                    // 自刀 = the pack hit its own; the mechanical wolf is not on the pack's side of the table.
+                    target.role.isPackWolf || target in wolfActors -> WolfAction.SELF_KILL
                     else -> WolfAction.KILL
                 },
                 target = target,
@@ -167,9 +169,9 @@ object GameReviewBuilder {
 
     /** Exile votes only. 倒钩: a wolf voted out a teammate. 冲票: 2+ wolves voted, all for the same good player. */
     private fun wolfPlay(tally: List<TallyEntry>): WolfPlay? {
-        val wolfTargets = tally.flatMap { t -> t.voters.filter { it.role.isWolf }.map { t.target } }
+        val wolfTargets = tally.flatMap { t -> t.voters.filter { it.role.isPackWolf }.map { t.target } }
         return when {
-            wolfTargets.any { it.role.isWolf } -> WolfPlay.BUS
+            wolfTargets.any { it.role.isPackWolf } -> WolfPlay.BUS
             wolfTargets.size >= 2 && wolfTargets.distinct().size == 1 -> WolfPlay.PUSH
             else -> null
         }

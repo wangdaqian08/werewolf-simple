@@ -57,7 +57,8 @@ class DayRevealAdvancer(
      * Pure predicate: the wolf-target userId when that player
      * [PlayerRole.shootsOnDeath], actually died to the wolves this night
      * ([NightOrchestrator.wolfKillLands], so 同守同救 counts), was NOT also
-     * poisoned (poison disables the gun), and did not 自爆 or get taken by the
+     * poisoned by the witch or the mechanical wolf (poison disables the gun), was
+     * not shielded by the mechanical wolf's guard, and did not 自爆 or get taken by the
      * White Wolf King during the sheriff campaign. Otherwise null.
      */
     fun nightShooterId(game: Game, nightPhase: NightPhase?, players: List<GamePlayer>): String? {

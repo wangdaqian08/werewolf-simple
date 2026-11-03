@@ -86,6 +86,12 @@ class NightOrchestrator(
             return kills.distinct().sorted()
         }
 
+        /** Orders user ids by seat — the order every player-visible death list uses. */
+        fun bySeat(userIds: List<String>, players: List<GamePlayer>): List<String> {
+            val seatOf = players.associate { it.userId to it.seatIndex }
+            return userIds.sortedBy { seatOf[it] ?: Int.MAX_VALUE }
+        }
+
         /**
          * Whether the wolf attack kills its target, before the night-1 perk.
          * Exactly one save (witch antidote or guard) blocks it. Both on the same
@@ -131,9 +137,7 @@ class NightOrchestrator(
 
     // ── Public API ──────────────────────────────────────────────────────────
 
-    /**
-     * Ordered list of night sub-phases for this game.
-     */
+    /** The roles that act tonight, in wake order (only those present in the room). */
     fun activeNightRoles(room: Room): List<PlayerRole> = buildList {
         add(PlayerRole.WEREWOLF)
         if (room.hasMechanicalWolf) add(PlayerRole.MECHANICAL_WOLF)
@@ -143,6 +147,7 @@ class NightOrchestrator(
         if (room.hasGuard) add(PlayerRole.GUARD)
     }
 
+    /** Ordered list of night sub-phases for this game. */
     fun nightSequence(context: GameContext): List<NightSubPhase> {
         val activeRoles = activeNightRoles(context.room)
 
@@ -376,7 +381,7 @@ class NightOrchestrator(
                 TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
                     override fun afterCommit() {
                         try {
-                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, pendingKills))
+                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, bySeat(pendingKills, context.players)))
                         } catch (e: Exception) {
                             log.error("[resolveNightKills] Failed to broadcast NightResult for game $gameId", e)
                         }
@@ -393,7 +398,7 @@ class NightOrchestrator(
                     }
                 })
             } else {
-                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, pendingKills))
+                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, bySeat(pendingKills, context.players)))
                 stompPublisher.broadcastGame(gameId, DomainEvent.GameOver(gameId, winner))
             }
         } else if (

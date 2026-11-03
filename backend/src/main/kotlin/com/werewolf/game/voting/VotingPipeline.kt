@@ -208,8 +208,8 @@ class VotingPipeline(
      * (HUNTER and BLACK_WOLF_KING). Only [Game.pendingShooterUserId] may act, while
      * the day sits on its normal post-death sub-phase: nothing public marks a
      * pending shot, and a pass broadcasts nothing. A shooter killed by a shot is
-     * the next pending shooter (a chain); a room has at most one of each shooter,
-     * so a chain is at most two shots.
+     * the next pending shooter (a chain). A learned mechanical wolf can make the
+     * chain longer than two; it ends when a shot kills no further shooter.
      */
     @Transactional
     fun handleHunterShoot(request: GameActionRequest, context: GameContext): GameActionResult {

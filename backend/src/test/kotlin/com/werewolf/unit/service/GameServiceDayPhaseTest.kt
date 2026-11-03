@@ -261,6 +261,23 @@ class GameServiceDayPhaseTest {
     }
 
     @Test
+    fun `getGameState DAY - killedPlayers are in seat order, not userId order`() {
+        // userId order is u2, u3; seats say u3 (seat 1) comes before u2 (seat 2).
+        val wolfVictim = player("u2", 2)
+        val poisonVictim = player("u3", 1)
+        val players = listOf(player(hostId, 0), wolfVictim, poisonVictim)
+        val users = listOf(user(hostId, "Host"), user("u2", "A"), user("u3", "B"))
+        setupGameAndPlayers(game(DaySubPhase.RESULT_REVEALED.name), players, users)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.of(nightPhase(wolfTarget = "u2", poisonTarget = "u3")))
+
+        val nightResult = dayResult(gameService.getGameState(gameId, hostId))["nightResult"] as Map<String, Any?>
+        val killedPlayers = nightResult["killedPlayers"] as List<Map<String, Any?>>
+
+        assertThat(killedPlayers.map { it["killedPlayerId"] }).containsExactly("u3", "u2")
+    }
+
+    @Test
     fun `getGameState DAY - only witch poison when wolf target saved by antidote`() {
         val players = listOf(player(hostId, 0), player("u2", 1), player("u3", 2))
         val users = listOf(user(hostId, "Host"), user("u2", "Saved"), user("u3", "Poisoned"))

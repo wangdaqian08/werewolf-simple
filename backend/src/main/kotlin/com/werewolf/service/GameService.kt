@@ -281,7 +281,7 @@ class GameService(
             val nightResult = if (showNightResult) {
                 val np = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
                 if (np != null) {
-                    val uniqueKilledIds = nightOrchestrator.computePendingKills(gameId, np).toSet()
+                    val uniqueKilledIds = NightOrchestrator.bySeat(nightOrchestrator.computePendingKills(gameId, np), players)
 
                     if (uniqueKilledIds.isNotEmpty()) {
                         mapOf(
