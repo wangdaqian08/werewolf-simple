@@ -14,19 +14,24 @@ import {
   findAudioManifestViolations,
   findNightOrderViolations,
   NIGHT_ROLE_ORDER,
+  nightRoleOrder,
 } from '../../e2e/real/helpers/audio-manifest'
 
 const PREFIX = '2026-07-06T10:00:00.000  INFO 1 --- [pool-1] c.w.game.night.NightOrchestrator :'
 
 /** Backend log lines for one full night of game `gameId`. */
-function syntheticNightLines(gameId: number, aliveByRole: Record<string, boolean> = {}): string[] {
+function syntheticNightLines(
+  gameId: number,
+  aliveByRole: Record<string, boolean> = {},
+  order: readonly string[] = NIGHT_ROLE_ORDER,
+): string[] {
   const lines = [
     `${PREFIX} [broadcastNightInit] game=${gameId} day=1 withWaiting=false initialSubPhase=WEREWOLF_PICK audioFiles=[goes_dark_close_eyes.mp3, wolf_howl.mp3] priority=10`,
     `${PREFIX} [nightRoleLoop] game=${gameId}: roles=[WEREWOLF, WITCH, SEER, GUARD]`,
   ]
   const roleOf = (file: string): string =>
     file.startsWith('wolf') ? 'WEREWOLF' : (file.split('_')[0] ?? '').toUpperCase()
-  for (const file of NIGHT_ROLE_ORDER) {
+  for (const file of order) {
     if (file.endsWith('open_eyes.mp3')) {
       const role = roleOf(file)
       const alive = aliveByRole[role] ?? true
@@ -164,6 +169,52 @@ describe('extractPerNightRoleAudio / findNightOrderViolations', () => {
     expect(findNightOrderViolations(syntheticNightLines(7), '7', 2)).toEqual([
       'night blocks: expected 2 [nightRoleLoop] headers, got 1',
     ])
+  })
+})
+
+describe('nightRoleOrder (mechanical wolf / medium boards)', () => {
+  const board = { mechanicalWolf: true, medium: true }
+
+  it('keeps Werewolf→Witch→Seer→Guard for boards without them', () => {
+    expect(nightRoleOrder()).toEqual([...NIGHT_ROLE_ORDER])
+    expect(NIGHT_ROLE_ORDER).toEqual([
+      'wolf_open_eyes.mp3',
+      'wolf_close_eyes.mp3',
+      'witch_open_eyes.mp3',
+      'witch_close_eyes.mp3',
+      'seer_open_eyes.mp3',
+      'seer_close_eyes.mp3',
+      'guard_open_eyes.mp3',
+      'guard_close_eyes.mp3',
+    ])
+  })
+
+  it('puts the mechanical wolf after the wolves and the medium in the seer slot', () => {
+    expect(nightRoleOrder(board)).toEqual([
+      'wolf_open_eyes.mp3',
+      'wolf_close_eyes.mp3',
+      'mech_wolf_open_eyes.mp3',
+      'mech_wolf_close_eyes.mp3',
+      'witch_open_eyes.mp3',
+      'witch_close_eyes.mp3',
+      'medium_open_eyes.mp3',
+      'medium_close_eyes.mp3',
+      'guard_open_eyes.mp3',
+      'guard_close_eyes.mp3',
+    ])
+    expect(nightRoleOrder({ mechanicalWolf: true })).toContain('seer_open_eyes.mp3')
+  })
+
+  it('checks the night order and the manifest against the board', () => {
+    const lines = syntheticNightLines(7, {}, nightRoleOrder(board))
+    expect(findNightOrderViolations(lines, '7', 1, board)).toEqual([])
+    expect(findNightOrderViolations(lines, '7', 1)).toHaveLength(1)
+
+    const m = buildGameAudioManifest({ nights: 2, dayCues: 2, board })
+    expect(m.backendRolePerFile['mech_wolf_open_eyes.mp3']).toBe(2)
+    expect(m.backendRolePerFile['medium_close_eyes.mp3']).toBe(2)
+    expect(m.backendRolePerFile['seer_open_eyes.mp3']).toBeUndefined()
+    expect(m.totalFiles).toBe(2 * (10 + 2) + 2 * 2)
   })
 })
 

@@ -17,7 +17,11 @@ const PLAYER_ROLES = new Set([
   'IDIOT',
   'WHITE_WOLF_KING',
   'BLACK_WOLF_KING',
+  'MECHANICAL_WOLF',
+  'MEDIUM',
 ])
+// The viewer's own night results legitimately pair another player's id with a role.
+const OWN_RESULT_KEYS = new Set(['mediumResult', 'mechWolf'])
 const ID_KEY = /(user|player)Id$/i
 const ROLE_KEY = /role$/i
 
@@ -75,6 +79,8 @@ export function findRoleLeaks(log: PayloadLog, me: string, from = 0, to?: number
     if (Array.isArray(v)) return v.forEach((x) => walk(src, x))
     if (!v || typeof v !== 'object') return
     const o = v as Record<string, unknown>
+    // The medium's private MediumResult push carries the same own result as `mediumResult`.
+    if (o.type === 'MediumResult') return
     const ids = Object.entries(o).filter(
       ([k, x]) => ID_KEY.test(k) && typeof x === 'string' && x !== me,
     )
@@ -88,7 +94,7 @@ export function findRoleLeaks(log: PayloadLog, me: string, from = 0, to?: number
         continue
       for (const [, id] of ids) leaks.push({ src, id: id as string, role, key })
     }
-    Object.values(o).forEach((x) => walk(src, x))
+    Object.entries(o).forEach(([k, x]) => OWN_RESULT_KEYS.has(k) || walk(src, x))
   }
   for (const { src, body } of log.bodies.slice(from, to)) {
     try {

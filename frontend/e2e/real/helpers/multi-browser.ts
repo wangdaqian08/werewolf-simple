@@ -280,6 +280,8 @@ export async function setupGame(
       'IDIOT',
       'WHITE_WOLF_KING',
       'BLACK_WOLF_KING',
+      'MECHANICAL_WOLF',
+      'MEDIUM',
     ]
 
     // For each optional role, toggle to match desired state. Retry up to
