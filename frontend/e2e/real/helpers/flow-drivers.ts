@@ -17,6 +17,7 @@ import {
   readUnvotedAlivePlayerIds,
   waitForCondition,
   waitForDayRevealed,
+  waitForNightSubPhase,
   waitForVotingSubPhase,
 } from './state-polling'
 
@@ -154,27 +155,8 @@ export async function waitForSubPhase(
   target: string,
   timeoutMs = 30_000,
 ): Promise<boolean> {
-  // Same CI scaling rationale as assertions.ts: slow GH runners need more slack.
-  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
-  const deadline = Date.now() + effective
-  while (Date.now() < deadline) {
-    const state = await hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      if (!token) return null
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return null
-      return res.json()
-    }, gameId)
-    const sp = state?.nightPhase?.subPhase
-    const phase = state?.phase
-    if (sp === target) return true
-    // Short-circuit if game already moved past NIGHT (e.g., already in DAY)
-    if (phase && phase !== 'NIGHT' && target !== phase) return false
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  // Same helper as state-polling (CI-scaled, short-circuits once the game left NIGHT).
+  return waitForNightSubPhase(hostPage, gameId, target, timeoutMs)
 }
 
 /**
@@ -194,23 +176,15 @@ export async function waitForSheriffSubPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
-  const deadline = Date.now() + effective
-  while (Date.now() < deadline) {
-    const sub = await hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      if (!token) return null
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return null
-      const state = await res.json()
-      return state?.sheriffElection?.subPhase ?? null
-    }, gameId)
-    if (sub === target) return true
-    await hostPage.waitForTimeout(200)
-  }
-  return false
+  return waitForCondition(
+    async () => (await readSheriffSubPhase(hostPage, gameId)) === target,
+    `sheriff sub-phase ${target}`,
+    timeoutMs,
+    200,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /**

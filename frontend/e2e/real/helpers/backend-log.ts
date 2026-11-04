@@ -120,6 +120,8 @@ export async function waitForBackendLog(
     if (Date.now() >= deadline) {
       throw new Error(`waitForBackendLog timed out after ${timeoutMs}ms: ${description}`)
     }
+    // Poll interval for the log file (no page involved, so not waitForCondition).
+    // eslint-disable-next-line no-restricted-syntax
     await new Promise((r) => setTimeout(r, 250))
     lines = readBackendLogSince(startLine, logPath)
   }

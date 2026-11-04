@@ -10,53 +10,14 @@
  * This test verifies that guard_close_eyes.mp3 plays exactly ONCE when guard completes.
  */
 import {expect, test} from '@playwright/test'
-import type {Page} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, actName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {completeDay} from './helpers/flow-drivers'
+import {completeDay, waitForSubPhase} from './helpers/flow-drivers'
 import {readAlivePlayerIds} from './helpers/state-polling'
 
 let ctx: GameContext
-
-/**
- * Poll the backend via the host page's JWT until nightPhase.subPhase matches
- * `target`. Without this, bot actions fired via act.sh race against the
- * Kotlin role-loop coroutine: the action arrives before the coroutine is
- * awaiting that sub-phase, the backend rejects with "Not in X sub-phase",
- * and the test proceeds unaware while the coroutine stalls forever.
- *
- * flow-12p-sheriff.spec.ts has the original implementation; this is a local
- * copy to keep the fix scoped to the failing spec.
- */
-async function waitForSubPhase(
-  hostPage: Page,
-  gameId: string,
-  target: string,
-  timeoutMs = 15_000,
-): Promise<boolean> {
-  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
-  const deadline = Date.now() + effective
-  while (Date.now() < deadline) {
-    const state = await hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      if (!token) return null
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return null
-      return res.json()
-    }, gameId)
-    const sp = state?.nightPhase?.subPhase
-    const phase = state?.phase
-    if (sp === target) return true
-    // Short-circuit if game already advanced past NIGHT (test should move on)
-    if (phase && phase !== 'NIGHT') return false
-    await hostPage.waitForTimeout(150)
-  }
-  return false
-}
 
 /** Block until the host logged `Starting playback: day_time.mp3` (the last file of the DAY cue). */
 async function waitForDayTimePlayback(audioEvents: string[]): Promise<void> {
@@ -240,11 +201,12 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     // headroom we need.
     const lastSentinel = (e: string): boolean =>
       e.includes('Starting playback') && e.includes('rooster_crowing.mp3')
-    const sentinelDeadline = Date.now() + (process.env.CI ? 45_000 : 30_000)
-    while (Date.now() < sentinelDeadline) {
-      if (audioEvents.some(lastSentinel)) break
-      await hostPage.waitForTimeout(250)
-    }
+    await expect
+      .poll(() => audioEvents.some(lastSentinel), {
+        timeout: process.env.CI ? 45_000 : 30_000,
+        message: 'rooster_crowing.mp3 playback started',
+      })
+      .toBe(true)
     // day_time.mp3 follows rooster_crowing in the same DAY cue (FIFO queue):
     // once it starts, any duplicate guard_close_eyes queued before the day
     // cue (the bug we're hunting) has already surfaced in the buffer.

@@ -89,6 +89,11 @@ jobs:
       - name: Lint (ESLint)
         run: npm run lint
 
+      - name: No sleeps in E2E
+        # waitForTimeout / setTimeout sleeps are banned in the Playwright
+        # suites (CLAUDE.md "E2E tests: no fixed sleeps").
+        run: npx eslint -c eslint.e2e-waits.config.js e2e
+
       - name: Type-check
         run: npx vue-tsc -b --noEmit
 

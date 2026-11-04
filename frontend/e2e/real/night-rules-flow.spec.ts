@@ -239,6 +239,8 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witc
                         })
                         const sp = res.ok ? (await res.json())?.nightPhase?.subPhase : null
                         if (sp && w.__subPhases[w.__subPhases.length - 1] !== sp) w.__subPhases.push(sp)
+                        // In-page sampler interval (records every sub-phase the browser can see).
+                        // eslint-disable-next-line no-restricted-syntax
                         await new Promise((r) => setTimeout(r, 40))
                     }
                 })()

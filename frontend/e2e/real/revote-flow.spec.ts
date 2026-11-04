@@ -18,6 +18,7 @@ import {
   readHostUserId,
   readUnvotedAlivePlayerIds,
   waitForAllVotesRegistered,
+  waitForCondition,
   waitForDayRevealed,
   waitForNightSubPhase,
   waitForPhaseIn,
@@ -52,6 +53,25 @@ async function readAlivePlayersNonHost(
       .filter((p) => p.isAlive && p.nickname !== 'Host')
       .map((p) => ({ nickname: p.nickname, seat: p.seatIndex }))
   }, gameId)
+}
+
+/**
+ * After VOTING_REVEAL_TALLY: the backend lands on VOTE_RESULT (decisive) or
+ * RE_VOTING (tie). Returns the sub-phase it reached, or whatever it shows
+ * after 6 s — a second consecutive tie leaves DAY_VOTING altogether.
+ */
+async function waitForTallyOutcome(hostPage: Page, gameId: string): Promise<string | null> {
+  let sub: string | null = null
+  await waitForCondition(
+    async () => {
+      sub = await readVotingSubPhase(hostPage, gameId)
+      return sub === 'VOTE_RESULT' || sub === 'RE_VOTING'
+    },
+    'tally outcome (VOTE_RESULT or RE_VOTING)',
+    6_000,
+    300,
+  ).catch(() => {})
+  return sub
 }
 
 /** Read state.votingPhase?.subPhase (VOTING | RE_VOTING | VOTE_RESULT | …). */
@@ -399,12 +419,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     // Poll for whichever sub-phase the backend lands on, then fire
     // VOTING_CONTINUE only when it's appropriate.
     tryAct('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })
-    let postRevealSub: string | null = null
-    for (let i = 0; i < 20; i++) {
-      postRevealSub = await readVotingSubPhase(hostPage, ctx.gameId)
-      if (postRevealSub === 'VOTE_RESULT' || postRevealSub === 'RE_VOTING') break
-      await hostPage.waitForTimeout(300)
-    }
+    const postRevealSub = await waitForTallyOutcome(hostPage, ctx.gameId)
 
     await captureSnapshot(ctx.pages, testInfo, '03-vote-tally-tied')
 
@@ -525,12 +540,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
       await revealBtn.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
       await expect(revealBtn).toBeEnabled({ timeout: 15_000 }).catch(() => {})
       tryAct('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })
-      let postRevealSub: string | null = null
-      for (let i = 0; i < 20; i++) {
-        postRevealSub = await readVotingSubPhase(ctx.hostPage, ctx.gameId)
-        if (postRevealSub === 'VOTE_RESULT' || postRevealSub === 'RE_VOTING') break
-        await ctx.hostPage.waitForTimeout(300)
-      }
+      const postRevealSub = await waitForTallyOutcome(ctx.hostPage, ctx.gameId)
       if (postRevealSub === 'VOTE_RESULT') {
         tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
         await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT', 'DAY_DISCUSSION', 'GAME_OVER'], 15_000)

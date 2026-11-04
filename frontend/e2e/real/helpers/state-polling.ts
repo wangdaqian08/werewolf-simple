@@ -58,16 +58,22 @@ export async function waitForNightSubPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    const sp = state?.nightPhase?.subPhase
-    const phase = state?.phase
-    if (sp === target) return true
-    if (phase && phase !== 'NIGHT' && target !== phase) return false
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  let leftNight = false
+  return waitForCondition(
+    async () => {
+      const state = await fetchGameState(hostPage, gameId)
+      if (state?.nightPhase?.subPhase === target) return true
+      // Stop early once the game has left NIGHT (dead role, skipped turn).
+      leftNight = !!state?.phase && state.phase !== 'NIGHT' && target !== state.phase
+      return leftNight
+    },
+    `night sub-phase ${target}`,
+    timeoutMs,
+    300,
+  ).then(
+    () => !leftNight,
+    () => false,
+  )
 }
 
 /**
@@ -80,13 +86,15 @@ export async function waitForPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    if (state?.phase === target) return true
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  return waitForCondition(
+    async () => (await fetchGameState(hostPage, gameId))?.phase === target,
+    `phase ${target}`,
+    timeoutMs,
+    300,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /**
@@ -99,13 +107,15 @@ export async function waitForDaySubPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    if (state?.dayPhase?.subPhase === target) return true
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  return waitForCondition(
+    async () => (await fetchGameState(hostPage, gameId))?.dayPhase?.subPhase === target,
+    `day sub-phase ${target}`,
+    timeoutMs,
+    300,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /** Poll the top-level `state.daySkipVoting` flag until it becomes true. */
@@ -114,13 +124,15 @@ export async function waitForDaySkipVoting(
   gameId: string,
   timeoutMs = 10_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    if (state?.daySkipVoting === true) return true
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  return waitForCondition(
+    async () => (await fetchGameState(hostPage, gameId))?.daySkipVoting === true,
+    'daySkipVoting flag',
+    timeoutMs,
+    300,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /**
@@ -133,14 +145,15 @@ export async function waitForVotingSubPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    const sp = state?.votingPhase?.subPhase
-    if (sp === target) return true
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  return waitForCondition(
+    async () => (await fetchGameState(hostPage, gameId))?.votingPhase?.subPhase === target,
+    `voting sub-phase ${target}`,
+    timeoutMs,
+    300,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /**
@@ -278,6 +291,8 @@ export async function waitForCondition(
     } catch (e) {
       lastErr = e
     }
+    // The one poll interval of the suite: every other wait builds on this.
+    // eslint-disable-next-line no-restricted-syntax
     await new Promise((r) => setTimeout(r, pollMs))
   }
   const tail = lastErr ? ` (last predicate error: ${(lastErr as Error).message})` : ''

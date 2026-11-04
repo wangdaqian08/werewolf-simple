@@ -58,7 +58,7 @@ import {
   waitForVoteRegistered,
   waitForVotingSubPhase,
 } from './helpers/state-polling'
-import { readBackendLogLineCount, readBackendLogSince } from './helpers/backend-log'
+import { readBackendLogLineCount, readBackendLogSince, waitForBackendLog } from './helpers/backend-log'
 
 test.describe('Dead-role night audio — eliminated specials still play role-call', () => {
   test.setTimeout(180_000)
@@ -231,19 +231,13 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
       // For a dead seer at N2, the loop logs `role=SEER alive=false` —
       // proving the dead-role path was taken (and thus seer_open_eyes +
       // seer_close_eyes were broadcast via NightOrchestrator.broadcastAudio).
-      let logTail: string[] = []
-      const deadline = Date.now() + 30_000
-      while (Date.now() < deadline) {
-        logTail = readBackendLogSince(logLineBeforeN2)
-        if (
-          logTail.some((line) =>
-            /\[nightRoleLoop\].+game=\d+:.+role=SEER alive=false/.test(line),
-          )
-        ) {
-          break
-        }
-        await hostPage.waitForTimeout(500)
-      }
+      const logTail = await waitForBackendLog(
+        logLineBeforeN2,
+        (lines) =>
+          lines.some((line) => /\[nightRoleLoop\].+game=\d+:.+role=SEER alive=false/.test(line)),
+        '[nightRoleLoop] role=SEER alive=false at N2',
+        30_000,
+      ).catch(() => readBackendLogSince(logLineBeforeN2)) // the assertion below reports it
 
       const deadSeerLine = logTail.find((line) =>
         /\[nightRoleLoop\].+game=\d+:.+role=SEER alive=false/.test(line),
@@ -433,21 +427,18 @@ test.describe('Dead-role night audio — eliminated specials still play role-cal
       // The loop iterates every active role at N2; each dead role logs
       // `role=X alive=false` before broadcastAudio fires its open+close
       // eyes mp3.
-      let logTail: string[] = []
-      const deadline = Date.now() + 45_000
-      let deadSeer = false
-      let deadGuard = false
-      while (Date.now() < deadline) {
-        logTail = readBackendLogSince(logLineBeforeN2)
-        deadSeer = logTail.some((line) =>
-          /\[nightRoleLoop\].+game=\d+:.+role=SEER alive=false/.test(line),
+      const isDead = (lines: string[], role: string): boolean =>
+        lines.some((line) =>
+          new RegExp(`\\[nightRoleLoop\\].+game=\\d+:.+role=${role} alive=false`).test(line),
         )
-        deadGuard = logTail.some((line) =>
-          /\[nightRoleLoop\].+game=\d+:.+role=GUARD alive=false/.test(line),
-        )
-        if (deadSeer && deadGuard) break
-        await hostPage.waitForTimeout(500)
-      }
+      const logTail = await waitForBackendLog(
+        logLineBeforeN2,
+        (lines) => isDead(lines, 'SEER') && isDead(lines, 'GUARD'),
+        '[nightRoleLoop] role=SEER and role=GUARD alive=false at N2',
+        45_000,
+      ).catch(() => readBackendLogSince(logLineBeforeN2)) // the assertion below reports it
+      const deadSeer = isDead(logTail, 'SEER')
+      const deadGuard = isDead(logTail, 'GUARD')
 
       expect(
         deadSeer,

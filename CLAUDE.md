@@ -388,6 +388,19 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## E2E tests: no fixed sleeps
+
+A test may never wait for a guessed amount of time. `page.waitForTimeout(N)`, `new Promise(r => setTimeout(r, N))` and any "sleep then check" are banned in `frontend/e2e/**` and enforced in CI (`npx eslint -c eslint.e2e-waits.config.js e2e`, job "Lint & Test"). A sleep passes on a fast machine and fails on CI (~2× slower), and it hides the bug it was waiting around.
+
+Wait for the thing the next step needs:
+
+- backend phase / sub-phase: `waitForPhaseIn`, `waitForNightSubPhase`, `waitForDaySubPhase`, `waitForVotingSubPhase`, `waitForDayRevealed` (`e2e/real/helpers/state-polling.ts`)
+- the browser having rendered it: `waitForUiSubPhase(page, sub)`, `verifyAllBrowsersPhase`, `locator.waitFor()`, `expect(locator).toBeVisible()`
+- a backend log line: `waitForBackendLog`
+- anything else: `waitForCondition(predicate)` or `expect.poll`
+
+`locator.isVisible()` never waits (its `timeout` option is ignored) — use it only for a probe after a `waitFor`, never as the gate. The only poll intervals are inside `waitForCondition` and `waitForBackendLog`; a new helper builds on them. See the `write-real-e2e-test` skill.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

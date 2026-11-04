@@ -348,14 +348,16 @@ test.describe('5-night HARD_MODE spine — corrected master script', () => {
     // Let the last STOMP frames settle: the D5 morning cue precedes the vote
     // so everything should already be in, but slow frames get a short grace.
     const manifest = buildGameAudioManifest({ nights: 5, dayCues: 5 })
-    const settleDeadline = Date.now() + 30_000
-    while (Date.now() < settleDeadline) {
-      const roosters = capture.stompFrames.filter(
-          (f) => f.includes('AudioSequence') && f.includes('rooster_crowing.mp3'),
-      ).length
-      if (roosters >= 5) break
-      await hostPage.waitForTimeout(500)
-    }
+    await expect
+      .poll(
+          () =>
+              capture.stompFrames.filter(
+                  (f) => f.includes('AudioSequence') && f.includes('rooster_crowing.mp3'),
+              ).length,
+          { timeout: 30_000, message: 'all five morning cues received over STOMP' },
+      )
+      .toBeGreaterThanOrEqual(5)
+      .catch(() => {}) // the manifest assertion below reports what is missing
 
     const backendLines = readBackendLogSince(0)
     const violations = findAudioManifestViolations({

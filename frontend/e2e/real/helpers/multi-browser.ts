@@ -31,6 +31,7 @@ import {
 } from './shell-runner'
 import { attachErrorListeners, type BrowserError, resetBrowserErrors } from './error-sentinel'
 import { assertNoBackendErrorsSince, readBackendLogLineCount } from './backend-log'
+import { waitForCondition } from './state-polling'
 
 const BASE_URL = 'http://localhost:5174'
 
@@ -508,12 +509,19 @@ export async function setupGame(
   // where roleMap.IDIOT was undefined even though IDIOT was requested.
   let roleMap = getRoles(roomCode)
   const expectedRoles = (opts.roles ?? []) as RoleName[]
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const haveAllRequested =
-        expectedRoles.length === 0 || expectedRoles.every((r) => (roleMap[r]?.length ?? 0) > 0)
-    if (Object.keys(roleMap).length > 0 && haveAllRequested) break
-    await new Promise((r) => setTimeout(r, 500))
-    roleMap = getRoles(roomCode)
+  const haveAllRequested = (): boolean =>
+      Object.keys(roleMap).length > 0 &&
+      (expectedRoles.length === 0 || expectedRoles.every((r) => (roleMap[r]?.length ?? 0) > 0))
+  if (!haveAllRequested()) {
+    await waitForCondition(
+        async () => {
+          roleMap = getRoles(roomCode)
+          return haveAllRequested()
+        },
+        'roles.sh reports every requested role',
+        10_000,
+        500,
+    ).catch(() => {}) // the spec's own role lookups report what is missing
   }
   const state = readStateFile(roomCode)
 

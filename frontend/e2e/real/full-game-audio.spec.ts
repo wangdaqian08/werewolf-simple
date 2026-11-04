@@ -183,21 +183,6 @@ function countBackendNightInits(lines: string[]): Record<string, number> {
   return perFile
 }
 
-async function waitForAudioFile(
-  audioEvents: string[],
-  filename: string,
-  hostPage: Page,
-  budgetMs: number,
-): Promise<boolean> {
-  const seen = (): boolean =>
-    audioEvents.some((e) => e.includes('Starting playback') && e.includes(filename))
-  const deadline = Date.now() + budgetMs
-  while (Date.now() < deadline) {
-    if (seen()) return true
-    await hostPage.waitForTimeout(250)
-  }
-  return false
-}
 
 // Drive a single night through all four role sub-phases. Returns nothing —
 // callers should await the resulting sub-phase transition before the next step.
@@ -498,14 +483,16 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
       // in production, real player action latency lets each frame play
       // through before the next arrives; the verification of "audio plays
       // as designed" reduces to "audio is broadcast and received."
-      const stompSettleDeadline = Date.now() + 60_000
-      while (Date.now() < stompSettleDeadline) {
-        const guardCloseStomps = stompFrames.filter(
-          (f) => f.includes('AudioSequence') && f.includes('guard_close_eyes.mp3'),
-        ).length
-        if (guardCloseStomps >= 2) break
-        await hostPage.waitForTimeout(500)
-      }
+      await expect
+        .poll(
+          () =>
+            stompFrames.filter(
+              (f) => f.includes('AudioSequence') && f.includes('guard_close_eyes.mp3'),
+            ).length,
+          { timeout: 60_000, message: 'both nights’ guard_close_eyes frames received' },
+        )
+        .toBeGreaterThanOrEqual(2)
+        .catch(() => {}) // the manifest assertion below reports what is missing
 
       // ── DIAGNOSTIC DUMP: write full audio + STOMP buffers to /tmp ────────
       // Playwright testInfo.attach() only writes into the report blob, not

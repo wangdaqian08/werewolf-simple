@@ -23,13 +23,8 @@ async function bootMock(page: Page) {
     localStorage.setItem('nickname', 'You')
   })
   await page.goto('/game/game-001')
-  // Initial state fetched, and the mock STOMP game topic subscribed so debug pushes are delivered
+  // Initial state rendered (the mock queues debug pushes until the view subscribes)
   await expect(page.locator('.game-wrap')).toHaveAttribute('data-phase', /./)
-  await page.waitForFunction(() =>
-    (window as unknown as { __mockStompClient?: { subs?: Map<string, unknown> } }).__mockStompClient?.subs?.has(
-      '/topic/game/game-001',
-    ),
-  )
 }
 
 async function gotoScenario(page: Page, debugTestId: string, waitFor: string) {
