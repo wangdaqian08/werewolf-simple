@@ -522,6 +522,7 @@ export function makeNightScenario(
           subPhase: 'WEREWOLF_PICK',
           dayNumber: 2,
           teammates: ['Alice', 'Eve'], // u2=Alice, u6=Eve per MOCK_GAME_STATE players
+          wolfKiller: true,
         } satisfies NightPhaseState,
       }
     case 'SEER_PICK':
@@ -1351,6 +1352,8 @@ export const MOCK_GAME_REVIEW: GameReview = {
         seer: { actor: R2, dead: false, target: R9, isWerewolf: true },
         witch: { actor: R5, dead: false, antidote: R3, poison: null },
         guard: { actor: R7, dead: false, target: R2 },
+        mech: null,
+        medium: null,
         dawn: { deaths: [], saved: { player: R3, by: 'ANTIDOTE' } },
       },
       events: [
@@ -1402,6 +1405,8 @@ export const MOCK_GAME_REVIEW: GameReview = {
         seer: { actor: R2, dead: false, target: R12, isWerewolf: false },
         witch: { actor: R5, dead: false, antidote: null, poison: R11 },
         guard: { actor: R7, dead: false, target: R8 },
+        mech: null,
+        medium: null,
         dawn: {
           deaths: [
             { player: R2, cause: 'WOLF' },
@@ -1435,6 +1440,8 @@ export const MOCK_GAME_REVIEW: GameReview = {
         seer: { actor: R2, dead: true, target: null, isWerewolf: false },
         witch: { actor: R5, dead: false, antidote: null, poison: null },
         guard: { actor: R7, dead: false, target: R10 },
+        mech: null,
+        medium: null,
         dawn: { deaths: [{ player: R8, cause: 'WOLF' }], saved: null },
       },
       events: [

@@ -158,6 +158,32 @@ function seerSegs(s: NonNullable<ReviewNight['seer']>): Seg[] {
   ]
 }
 
+function mechSegs(m: NonNullable<ReviewNight['mech']>): Seg[] {
+  const head = seg(t('rv.mechHead', { seat: t('common.seat', { n: m.actor.seatIndex }) }))
+  if (m.dead) return [head, seg(t('rv.dead'))]
+  const parts: Seg[][] = []
+  if (m.learned) parts.push([seg(t('rv.learn')), ...withRole(m.learned)])
+  if (m.check) {
+    // What the check told it: a role under the learned role check, wolf or good under the alignment check.
+    const result = m.checkRole
+      ? [seg(t('rv.roleTag', { role: roleName(m.checkRole) }))]
+      : [seg(m.checkIsWerewolf ? t('rv.toWolf') : t('rv.toGood'))]
+    parts.push([seg(t('rv.check')), name(m.check), ...result])
+  }
+  if (m.poison) parts.push([seg(t('rv.poison')), ...withRole(m.poison)])
+  if (m.protect) parts.push([seg(t('rv.guard')), name(m.protect)])
+  return [head, ...(parts.length ? joined(parts, t('common.comma')) : [seg(t('rv.noAction'))])]
+}
+
+function mediumSegs(m: NonNullable<ReviewNight['medium']>): Seg[] {
+  const head = seg(t('rv.mediumHead', { seat: t('common.seat', { n: m.actor.seatIndex }) }))
+  if (m.dead) return [head, seg(t('rv.dead'))]
+  // The role the medium was told, which is not the real one when the target is a learned mechanical wolf.
+  return m.target
+    ? [head, seg(t('rv.check')), name(m.target), seg(t('rv.roleTag', { role: roleName(m.role) }))]
+    : [head, seg(t('rv.noCheck'))]
+}
+
 function witchSegs(w: NonNullable<ReviewNight['witch']>): Seg[] {
   const head = seg(t('rv.witchHead', { seat: t('common.seat', { n: w.actor.seatIndex }) }))
   if (w.dead) return [head, seg(t('rv.dead'))]
@@ -192,7 +218,9 @@ function dawnSegs(d: ReviewNight['dawn']): Seg[] {
 function nightLines(n: ReviewNight): Line[] {
   const rows = [
     wolfSegs(n.wolf),
+    n.mech && mechSegs(n.mech),
     n.seer && seerSegs(n.seer),
+    n.medium && mediumSegs(n.medium),
     n.witch && witchSegs(n.witch),
     n.guard && guardSegs(n.guard),
     dawnSegs(n.dawn),

@@ -13,8 +13,12 @@ import type { AudioSequence } from '@/types'
 
 const HIGH_VOL_NIGHT_SUBPHASES: ReadonlySet<string> = new Set([
   'WEREWOLF_PICK',
+  'MECH_WOLF_PICK',
+  'MECH_WOLF_RESULT',
   'SEER_PICK',
   'SEER_RESULT',
+  'MEDIUM_PICK',
+  'MEDIUM_RESULT',
   'WITCH_ACT',
   'GUARD_PICK',
 ])

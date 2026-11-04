@@ -92,6 +92,10 @@ class JsonWireFormatTest {
                 """{"type":"NightResult","gameId":1,"kills":["u2","u3"]}""",
         DomainEvent.SeerResult(1, "u2", true) to
                 """{"type":"SeerResult","gameId":1,"checkedUserId":"u2","isWerewolf":true}""",
+        DomainEvent.MediumResult(1, "u2", PlayerRole.WITCH) to
+                """{"type":"MediumResult","gameId":1,"checkedUserId":"u2","role":"WITCH"}""",
+        DomainEvent.MechWolfResult(1) to
+                """{"type":"MechWolfResult","gameId":1}""",
         DomainEvent.VoteSubmitted(1, "u1") to
                 """{"type":"VoteSubmitted","gameId":1,"voterUserId":"u1"}""",
         DomainEvent.VoteTally(1, null, mapOf("u2" to 1.5, "u3" to 2.0)) to

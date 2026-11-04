@@ -875,4 +875,21 @@ describe('useAudioService', () => {
     expect(mockStartBgm).toHaveBeenCalledWith('suspicion.mp3')
     expect(mockStartBgm).not.toHaveBeenCalledWith('心愿便利贴.mp3')
   })
+
+  // ── BGM volume tier per night sub-phase ─────────────────────────────────
+
+  it.each(['MECH_WOLF_PICK', 'MECH_WOLF_RESULT', 'MEDIUM_PICK', 'MEDIUM_RESULT'])(
+    'BGM stays at HIGH tier during %s, like every other role turn',
+    async (subPhase) => {
+      const gameStore = useGameStore()
+      setupComposable()
+
+      gameStore.setState(
+        makeState({ phase: 'NIGHT', nightPhase: { subPhase, dayNumber: 1 } as never }),
+      )
+      await nextTick()
+
+      expect(mockSetBgmLevel).toHaveBeenLastCalledWith('HIGH')
+    },
+  )
 })

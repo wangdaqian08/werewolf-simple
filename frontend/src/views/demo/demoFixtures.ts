@@ -49,6 +49,7 @@ export function buildNightPhaseState(
   const base: NightPhaseState = { subPhase, dayNumber: 1 }
   if (role === 'WEREWOLF') {
     base.teammates = ['Bob']
+    base.wolfKiller = true
   }
   if (role === 'WITCH') {
     base.hasAntidote = true

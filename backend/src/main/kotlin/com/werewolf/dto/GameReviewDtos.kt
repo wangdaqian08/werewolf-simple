@@ -21,10 +21,12 @@ data class ReviewPlayer(val userId: String, val nickname: String, val seatIndex:
 /** One day number: the night that opens it (null when not completed) and that day's events in order. */
 data class ReviewRound(val day: Int, val night: ReviewNight?, val events: List<ReviewDayEvent>)
 
-/** [seer], [witch] and [guard] are null when the role is not in the game. */
+/** [seer], [mech], [medium], [witch] and [guard] are null when the role is not in the game. */
 data class ReviewNight(
     val wolf: WolfTurn,
     val seer: SeerTurn?,
+    val mech: MechWolfTurn?,
+    val medium: MediumTurn?,
     val witch: WitchTurn?,
     val guard: GuardTurn?,
     val dawn: Dawn,
@@ -34,6 +36,13 @@ enum class WolfAction { KILL, SKIP, SELF_KILL }
 
 data class WolfTurn(val actors: List<ReviewPlayer>, val action: WolfAction, val target: ReviewPlayer?)
 data class SeerTurn(val actor: ReviewPlayer, val dead: Boolean, val target: ReviewPlayer?, val isWerewolf: Boolean)
+data class MediumTurn(val actor: ReviewPlayer, val dead: Boolean, val target: ReviewPlayer?, val role: PlayerRole?)
+data class MechWolfTurn(
+    val actor: ReviewPlayer, val dead: Boolean, val learned: ReviewPlayer?, val learnedRole: PlayerRole?,
+    val check: ReviewPlayer?, val poison: ReviewPlayer?, val protect: ReviewPlayer?,
+    /** What the check told it: [checkRole] under a learned role check, [checkIsWerewolf] under an alignment check. */
+    val checkRole: PlayerRole?, val checkIsWerewolf: Boolean?,
+)
 data class WitchTurn(val actor: ReviewPlayer, val dead: Boolean, val antidote: ReviewPlayer?, val poison: ReviewPlayer?)
 data class GuardTurn(val actor: ReviewPlayer, val dead: Boolean, val target: ReviewPlayer?)
 

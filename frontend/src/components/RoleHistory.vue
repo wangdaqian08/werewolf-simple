@@ -21,6 +21,7 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
 import { ref } from 'vue'
+import { roleName } from '@/utils/roleDefinitions'
 import type { RoleHistory, RoleHistoryEntry, RoleHistoryPlayer } from '@/types'
 
 defineProps<{ history?: RoleHistory | null }>()
@@ -36,8 +37,18 @@ function describe(e: RoleHistoryEntry): string {
     case 'CHECK':
       return t('roleHistory.check', {
         who: who(e.target),
-        result: e.isWerewolf ? t('roleHistory.wolf') : t('roleHistory.good'),
+        // A role check carries the role; an alignment check only wolf / good.
+        result:
+          e.isWerewolf === undefined
+            ? roleName(e.role)
+            : e.isWerewolf
+              ? t('roleHistory.wolf')
+              : t('roleHistory.good'),
       })
+    case 'LEARN':
+      return t('roleHistory.learn', { who: who(e.target), role: roleName(e.role) })
+    case 'PROTECT':
+      return t('roleHistory.protect', { who: who(e.target) })
     case 'GUARD':
       return e.target ? t('roleHistory.guard', { who: who(e.target) }) : t('roleHistory.guardNone')
     case 'KILL':

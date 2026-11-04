@@ -20,6 +20,11 @@ sealed class DomainEvent {
     data class NightResult(val gameId: Int, val kills: List<String>) : DomainEvent()
     @JsonTypeName("SeerResult")
     data class SeerResult(val gameId: Int, val checkedUserId: String, val isWerewolf: Boolean) : DomainEvent()
+    @JsonTypeName("MediumResult")
+    data class MediumResult(val gameId: Int, val checkedUserId: String, val role: PlayerRole) : DomainEvent()
+    // Ping only: the client refetches state to see what the mechanical wolf learned or did.
+    @JsonTypeName("MechWolfResult")
+    data class MechWolfResult(val gameId: Int) : DomainEvent()
     @JsonTypeName("VoteSubmitted")
     data class VoteSubmitted(val gameId: Int, val voterUserId: String) : DomainEvent()
     @JsonTypeName("VoteTally")

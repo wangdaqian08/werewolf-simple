@@ -17,6 +17,15 @@ const PLAYER_ROLES = new Set([
   'IDIOT',
   'WHITE_WOLF_KING',
   'BLACK_WOLF_KING',
+  'MECHANICAL_WOLF',
+  'MEDIUM',
+])
+// The owner's own night results legitimately pair another player's id with a role;
+// on any other viewer's page they are a leak. Ownership is by role: one MEDIUM and one
+// MECHANICAL_WOLF per board.
+const OWN_RESULT_OWNER = new Map([
+  ['mediumResult', 'MEDIUM'],
+  ['mechWolf', 'MECHANICAL_WOLF'],
 ])
 const ID_KEY = /(user|player)Id$/i
 const ROLE_KEY = /role$/i
@@ -58,8 +67,17 @@ export interface RoleLeak {
   key: string
 }
 
-/** Objects (also JSON nested in string fields) pairing a non-[me] id with a role, in bodies [from, to). */
-export function findRoleLeaks(log: PayloadLog, me: string, from = 0, to?: number): RoleLeak[] {
+/**
+ * Objects (also JSON nested in string fields) pairing a non-[me] id with a role, in bodies [from, to).
+ * [myRole] is the viewer's role: only its own night result is exempt.
+ */
+export function findRoleLeaks(
+  log: PayloadLog,
+  me: string,
+  myRole: string,
+  from = 0,
+  to?: number,
+): RoleLeak[] {
   const leaks: RoleLeak[] = []
   const walk = (src: string, v: unknown): void => {
     if (typeof v === 'string') {
@@ -75,6 +93,8 @@ export function findRoleLeaks(log: PayloadLog, me: string, from = 0, to?: number
     if (Array.isArray(v)) return v.forEach((x) => walk(src, x))
     if (!v || typeof v !== 'object') return
     const o = v as Record<string, unknown>
+    // The medium's private MediumResult push carries the same own result as `mediumResult`.
+    if (o.type === 'MediumResult' && myRole === 'MEDIUM') return
     const ids = Object.entries(o).filter(
       ([k, x]) => ID_KEY.test(k) && typeof x === 'string' && x !== me,
     )
@@ -88,7 +108,9 @@ export function findRoleLeaks(log: PayloadLog, me: string, from = 0, to?: number
         continue
       for (const [, id] of ids) leaks.push({ src, id: id as string, role, key })
     }
-    Object.values(o).forEach((x) => walk(src, x))
+    Object.entries(o).forEach(
+      ([k, x]) => (OWN_RESULT_OWNER.has(k) && OWN_RESULT_OWNER.get(k) === myRole) || walk(src, x),
+    )
   }
   for (const { src, body } of log.bodies.slice(from, to)) {
     try {

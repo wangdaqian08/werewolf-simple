@@ -266,7 +266,7 @@ function assertNoRoleLeak(t: Table) {
     const live = log.bodies.slice(0, over < 0 ? undefined : over)
     expect(live.length, `seat ${seat} recorded payloads`).toBeGreaterThan(0)
     expect(
-      findRoleLeaks(log, t.seatUser.get(seat)!, 0, over < 0 ? undefined : over),
+      findRoleLeaks(log, t.seatUser.get(seat)!, role, 0, over < 0 ? undefined : over),
       `seat ${seat} (${role}) got a role`,
     ).toEqual([])
     for (const { src, body } of live) {

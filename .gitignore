@@ -53,3 +53,6 @@ scripts/.env.vm
 # ─── Logs ──────────────────────────────────────────────────────────────────────
 *.log
 logs/
+
+# Playwright MCP browser-tool scratch (console logs, screenshots)
+.playwright-mcp/

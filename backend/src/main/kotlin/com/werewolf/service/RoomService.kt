@@ -69,6 +69,8 @@ class RoomService(
                 hasIdiot = PlayerRole.IDIOT in cfg.roles,
                 hasWhiteWolfKing = PlayerRole.WHITE_WOLF_KING in cfg.roles,
                 hasBlackWolfKing = PlayerRole.BLACK_WOLF_KING in cfg.roles,
+                hasMechanicalWolf = PlayerRole.MECHANICAL_WOLF in cfg.roles,
+                hasMedium = PlayerRole.MEDIUM in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
                 config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed, cfg.noKillAllowed, cfg.guardSkipAllowed),
@@ -236,6 +238,8 @@ class RoomService(
         room.hasIdiot = PlayerRole.IDIOT in roles
         room.hasWhiteWolfKing = PlayerRole.WHITE_WOLF_KING in roles
         room.hasBlackWolfKing = PlayerRole.BLACK_WOLF_KING in roles
+        room.hasMechanicalWolf = PlayerRole.MECHANICAL_WOLF in roles
+        room.hasMedium = PlayerRole.MEDIUM in roles
         roomRepository.save(room)
         members.filter { !it.host }.forEach { it.status = ReadyStatus.NOT_READY }
         roomPlayerRepository.saveAll(members)
@@ -370,12 +374,14 @@ class RoomService(
             add(PlayerRole.WEREWOLF)
             if (room.hasWhiteWolfKing) add(PlayerRole.WHITE_WOLF_KING)
             if (room.hasBlackWolfKing) add(PlayerRole.BLACK_WOLF_KING)
+            if (room.hasMechanicalWolf) add(PlayerRole.MECHANICAL_WOLF)
             add(PlayerRole.VILLAGER)
             if (room.hasSeer) add(PlayerRole.SEER)
             if (room.hasWitch) add(PlayerRole.WITCH)
             if (room.hasHunter) add(PlayerRole.HUNTER)
             if (room.hasGuard) add(PlayerRole.GUARD)
             if (room.hasIdiot) add(PlayerRole.IDIOT)
+            if (room.hasMedium) add(PlayerRole.MEDIUM)
         }
 
         val activeGameId = if (room.status == RoomStatus.IN_GAME) {
@@ -429,10 +435,12 @@ class RoomService(
      * Backend enforces game-correctness invariants only:
      *   1. wolfCount must be > 0 (a wolfless game is not werewolf)
      *   2. wolves + gods ≤ totalPlayers (no seat overflow)
-     *   3. each wolf king (白狼王 / 黑狼王, both may be on) needs a plain
-     *      fellow wolf: wolfCount ≥ kings + 1. For the White Wolf King alone it
+     *   3. each special wolf (白狼王 / 黑狼王 / 机械狼, any may be on) needs a plain
+     *      fellow wolf: wolfCount ≥ specials + 1. For the White Wolf King alone it
      *      is always the last wolf and could never take anyone; the Black Wolf
-     *      King shares the gate (owner's call: one rule for both)
+     *      King shares the gate (owner's call: one rule for both). The mechanical
+     *      wolf is not part of the pack, so it needs a pack wolf to act with
+     *   4. SEER and MEDIUM are mutually exclusive
      *
      * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
      * for the host-facing stepper — they intentionally do NOT gate the API,
@@ -457,11 +465,23 @@ class RoomService(
                 "Composition overflow: $wolfCount wolves + $godCount gods > $totalPlayers seats",
             )
         }
-        val kings = roles.filter { it == PlayerRole.WHITE_WOLF_KING || it == PlayerRole.BLACK_WOLF_KING }.distinct()
-        if (kings.isNotEmpty() && wolfCount < kings.size + 1) {
-            val names = kings.joinToString(" + ") { if (it == PlayerRole.WHITE_WOLF_KING) "White Wolf King" else "Black Wolf King" }
+        // The seer and the medium both open the same night slot; the board takes one.
+        if (PlayerRole.SEER in roles && PlayerRole.MEDIUM in roles) {
+            throw InvalidRoleCompositionException("Seer and Medium cannot be on the same board")
+        }
+        val specials = roles.filter {
+            it == PlayerRole.WHITE_WOLF_KING || it == PlayerRole.BLACK_WOLF_KING || it == PlayerRole.MECHANICAL_WOLF
+        }.distinct()
+        if (specials.isNotEmpty() && wolfCount < specials.size + 1) {
+            val names = specials.joinToString(" + ") {
+                when (it) {
+                    PlayerRole.WHITE_WOLF_KING -> "White Wolf King"
+                    PlayerRole.BLACK_WOLF_KING -> "Black Wolf King"
+                    else -> "Mechanical Wolf"
+                }
+            }
             throw InvalidRoleCompositionException(
-                "$names needs at least ${kings.size + 1} wolves, got $wolfCount",
+                "$names needs at least ${specials.size + 1} wolves, got $wolfCount",
             )
         }
     }
@@ -478,6 +498,8 @@ class RoomService(
                 PlayerRole.SEER to timing.applyTo(PlayerRole.SEER),
                 PlayerRole.WITCH to timing.applyTo(PlayerRole.WITCH),
                 PlayerRole.GUARD to timing.applyTo(PlayerRole.GUARD),
+                PlayerRole.MECHANICAL_WOLF to timing.applyTo(PlayerRole.MECHANICAL_WOLF),
+                PlayerRole.MEDIUM to timing.applyTo(PlayerRole.MEDIUM),
             ),
             bgmTrack = bgmTrack,
             witchSelfSaveAllowed = witchSelfSaveAllowed,

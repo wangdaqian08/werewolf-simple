@@ -133,6 +133,7 @@
         @witch-poison="handleWitchPoison"
         @witch-pass-poison="handleWitchPassPoison"
         @witch-skip="handleWitchSkip"
+        @night-action="handleNightAction"
       />
     </template>
 
@@ -581,6 +582,14 @@ const NIGHT_TURN_ACTIONS = new Set([
   'WITCH_ACT',
   'GUARD_PROTECT',
   'GUARD_SKIP',
+  'MECH_LEARN',
+  'MECH_CHECK',
+  'MECH_POISON',
+  'MECH_PROTECT',
+  'MECH_SKIP',
+  'MECH_CONFIRM',
+  'MEDIUM_CHECK',
+  'MEDIUM_CONFIRM',
 ])
 
 // Wraps gameService.submitAction to always include the gameId from the route
@@ -849,6 +858,9 @@ async function handleNightSelect(userId: string) {
 }
 async function handleWolfSkip() {
   await action({ actionType: 'WOLF_SKIP' })
+}
+async function handleNightAction(actionType: string, targetId?: string) {
+  await action({ actionType, targetId })
 }
 async function handleGuardSkip() {
   await action({ actionType: 'GUARD_SKIP' })
@@ -1215,7 +1227,11 @@ onMounted(async () => {
           gameStore.setMyRole(data.role)
         } else if (data.type === 'WolfSelectionChanged') {
           gameStore.updateNightPhaseSelection(data.selectedTargetUserId)
-        } else if (data.type === 'SeerResult') {
+        } else if (
+          data.type === 'SeerResult' ||
+          data.type === 'MediumResult' ||
+          data.type === 'MechWolfResult'
+        ) {
           // Refetch picks up nightPhase.seerCheckedUserId + seerResultIsWerewolf
           await refreshState()
         } else {

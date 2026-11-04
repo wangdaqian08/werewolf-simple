@@ -81,7 +81,7 @@ class GamePhasePipeline(
         if (pendingKills.isNotEmpty()) {
             stompPublisher.broadcastGameAfterCommit(
                 context.gameId,
-                DomainEvent.NightResult(context.gameId, pendingKills)
+                DomainEvent.NightResult(context.gameId, NightOrchestrator.bySeat(pendingKills, context.players))
             )
         }
         stompPublisher.broadcastGameAfterCommit(

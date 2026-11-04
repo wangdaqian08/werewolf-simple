@@ -68,6 +68,8 @@ class GameServiceNightPhaseTest {
         antidoteUsed: Boolean = false,
         poisonTarget: String? = null,
         prevGuardTarget: String? = null,
+        mediumChecked: String? = null,
+        mediumRole: PlayerRole? = null,
     ) = NightPhase(
         gameId = gameId,
         dayNumber = day,
@@ -78,6 +80,8 @@ class GameServiceNightPhaseTest {
         witchAntidoteUsed = antidoteUsed,
         witchPoisonTargetUserId = poisonTarget,
         prevGuardTargetUserId = prevGuardTarget,
+        mediumCheckedUserId = mediumChecked,
+        mediumResultRole = mediumRole,
     )
 
     @BeforeEach
@@ -259,6 +263,118 @@ class GameServiceNightPhaseTest {
     }
 
     @Test
+    fun `medium state carries role and history`() {
+        val medium = player("u1", 1, PlayerRole.MEDIUM)
+        val target = player("u3", 3, PlayerRole.WITCH)
+        val users = listOf(user("u1", "Medium"), user("u3", "Wendy"))
+        setupGameAndPlayers(game(), listOf(medium, target), users, NightSubPhase.MEDIUM_RESULT)
+        val np = nightPhase(subPhase = NightSubPhase.MEDIUM_RESULT, mediumChecked = "u3", mediumRole = PlayerRole.WITCH)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        val prev = NightPhase(gameId = gameId, dayNumber = 1).also {
+            it.mediumCheckedUserId = "u3"
+            it.mediumResultRole = PlayerRole.WITCH
+        }
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(prev, np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        @Suppress("UNCHECKED_CAST")
+        val mediumResult = night["mediumResult"] as Map<String, Any?>
+        assertThat(mediumResult["checkedPlayerId"]).isEqualTo("u3")
+        assertThat(mediumResult["checkedNickname"]).isEqualTo("Wendy")
+        assertThat(mediumResult["checkedSeatIndex"]).isEqualTo(3)
+        assertThat(mediumResult["role"]).isEqualTo("WITCH")
+        @Suppress("UNCHECKED_CAST")
+        val history = mediumResult["history"] as List<Map<String, Any?>>
+        assertThat(history).hasSize(2)
+        assertThat(history[0]["round"]).isEqualTo(1)
+        assertThat(history[0]["nickname"]).isEqualTo("Wendy")
+        assertThat(history[0]["role"]).isEqualTo("WITCH")
+    }
+
+    @Test
+    fun `mechWolf state - skillTonight LEARN before learning, POISON the night after learning WITCH`() {
+        val mech = player("u1", 1, PlayerRole.MECHANICAL_WOLF)
+        val target = player("u3", 3, PlayerRole.WITCH)
+        val users = listOf(user("u1", "Mech"), user("u3", "Wendy"))
+        setupGameAndPlayers(game(), listOf(mech, target), users, NightSubPhase.MECH_WOLF_PICK)
+        val np = nightPhase(subPhase = NightSubPhase.MECH_WOLF_PICK)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        val n1 = NightPhase(gameId = gameId, dayNumber = 1)
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(n1, np))
+
+        var state = nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>
+        assertThat(state["skillTonight"]).isEqualTo("LEARN")
+        assertThat(state["learnedRole"]).isNull()
+        assertThat(state["result"]).isNull()
+
+        // Learned WITCH on night 1: tonight (night 2) it can poison.
+        mech.learnedRole = PlayerRole.WITCH
+        n1.mechLearnTargetUserId = "u3"
+        state = nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>
+        assertThat(state["skillTonight"]).isEqualTo("POISON")
+        assertThat(state["learnedRole"]).isEqualTo("WITCH")
+        assertThat(state["learnedPlayerId"]).isEqualTo("u3")
+        assertThat(state["result"]).isNull()
+
+        // Poisoned tonight: the result is the action taken.
+        np.mechPoisonTargetUserId = "u3"
+        val result = (nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>)["result"] as Map<String, Any?>
+        assertThat(result["kind"]).isEqualTo("POISON")
+        assertThat(result["targetPlayerId"]).isEqualTo("u3")
+        assertThat(result["targetNickname"]).isEqualTo("Wendy")
+        assertThat(result["targetSeatIndex"]).isEqualTo(3)
+    }
+
+    @Test
+    fun `mechWolf state - a learned seer exposes only isWerewolf, SKIP shows in the result phase`() {
+        val mech = player("u1", 1, PlayerRole.MECHANICAL_WOLF).also { it.learnedRole = PlayerRole.SEER }
+        val target = player("u2", 2, PlayerRole.WEREWOLF)
+        val users = listOf(user("u1", "Mech"), user("u2", "Wolfie"))
+        setupGameAndPlayers(game(), listOf(mech, target), users, NightSubPhase.MECH_WOLF_RESULT)
+        val np = nightPhase(subPhase = NightSubPhase.MECH_WOLF_RESULT)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        val n1 = NightPhase(gameId = gameId, dayNumber = 1).also { it.mechLearnTargetUserId = "u2" }
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(n1, np))
+
+        var state = nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>
+        assertThat((state["result"] as Map<String, Any?>)["kind"]).isEqualTo("SKIP")
+
+        np.mechCheckTargetUserId = "u2"
+        np.mechCheckResultRole = PlayerRole.WEREWOLF
+        state = nightPhaseResult(gameService.getGameState(gameId, "u1"))["mechWolf"] as Map<String, Any?>
+        val result = state["result"] as Map<String, Any?>
+        assertThat(result["kind"]).isEqualTo("CHECK")
+        assertThat(result["isWerewolf"]).isEqualTo(true)
+        assertThat(result.containsKey("role")).isFalse()
+    }
+
+    @Test
+    fun `pack wolves never get mechWolf`() {
+        val wolf = player("u1", 1, PlayerRole.WEREWOLF)
+        val users = listOf(user("u1", "Wolf"))
+        setupGameAndPlayers(game(), listOf(wolf), users, NightSubPhase.MECH_WOLF_PICK)
+        val np = nightPhase(subPhase = NightSubPhase.MECH_WOLF_PICK)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+
+        assertThat(nightPhaseResult(gameService.getGameState(gameId, "u1")).containsKey("mechWolf")).isFalse()
+    }
+
+    @Test
+    fun `non-medium never gets mediumResult`() {
+        val seer = player("u1", 1, PlayerRole.SEER)
+        val target = player("u3", 3, PlayerRole.WITCH)
+        val users = listOf(user("u1", "Seer"), user("u3", "Wendy"))
+        setupGameAndPlayers(game(), listOf(seer, target), users, NightSubPhase.MEDIUM_RESULT)
+        val np = nightPhase(subPhase = NightSubPhase.MEDIUM_RESULT, mediumChecked = "u3", mediumRole = PlayerRole.WITCH)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night.containsKey("mediumResult")).isFalse()
+    }
+
+    @Test
     fun `getGameState - SEER does NOT get seerResult before check is done`() {
         val seer = player("u1", 1, PlayerRole.SEER)
         val players = listOf(seer)
@@ -358,6 +474,25 @@ class GameServiceNightPhaseTest {
         val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
 
         assertThat(night["selfSaveBlocked"]).isEqualTo(false)
+    }
+
+    @Test
+    fun `getGameState - WITCH in WITCH_ACT sees only the wolf target, never the mech poison target`() {
+        val players = listOf(
+            player("u1", 1, PlayerRole.WITCH), player("u3", 3, PlayerRole.MECHANICAL_WOLF),
+            player("u4", 4, PlayerRole.VILLAGER), player("u5", 5, PlayerRole.VILLAGER),
+        )
+        val users = listOf(user("u1", "Witch"), user("u3", "Mech"), user("u4", "Dave"), user("u5", "Eve"))
+        setupGameAndPlayers(game(), players, users, NightSubPhase.WITCH_ACT)
+
+        val np = nightPhase(subPhase = NightSubPhase.WITCH_ACT, wolfTarget = "u4").also { it.mechPoisonTargetUserId = "u5" }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night["attackedPlayerId"]).isEqualTo("u4")
+        assertThat(night.toString()).doesNotContain("u5").doesNotContain("Eve")
     }
 
     @Test
@@ -539,5 +674,81 @@ class GameServiceNightPhaseTest {
         val seerEntry = playerList.first { it["userId"] == "u2" }
         assertThat(wolfEntry["role"]).isNull() // hidden
         assertThat(seerEntry["role"]).isEqualTo("SEER") // own role visible
+    }
+
+
+    // ── Mechanical wolf is outside the pack ───────────────────────────────────
+
+    private fun wolfPickWith(vararg players: GamePlayer, wolfTarget: String? = null) {
+        setupGameAndPlayers(game(), players.toList(), players.map { user(it.userId, "N${it.seatIndex}") }, NightSubPhase.WEREWOLF_PICK)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.of(nightPhase(NightSubPhase.WEREWOLF_PICK, wolfTarget = wolfTarget)))
+    }
+
+    @Test
+    fun `mechanical wolf gets no teammates and no selectedTargetId during WEREWOLF_PICK`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF), player("u2", 2, PlayerRole.MECHANICAL_WOLF),
+            player("u3", 3, PlayerRole.VILLAGER), wolfTarget = "u3",
+        )
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u2"))
+
+        assertThat(night).doesNotContainKeys("teammates", "selectedTargetId")
+        assertThat(gameService.getGameState(gameId, "u2")["wolfTeammates"] as List<*>).isEmpty()
+    }
+
+    @Test
+    fun `pack wolf teammates exclude the mechanical wolf`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF), player("u2", 2, PlayerRole.MECHANICAL_WOLF),
+            player("u3", 3, PlayerRole.WHITE_WOLF_KING), player("u4", 4, PlayerRole.VILLAGER),
+        )
+
+        val state = gameService.getGameState(gameId, "u1")
+
+        assertThat(nightPhaseResult(state)["teammates"] as List<String>).containsExactly("3·N3")
+        assertThat(state["wolfTeammates"] as List<String>).containsExactly("u3")
+    }
+
+    @Test
+    fun `wolfKiller is true only for killers`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF), player("u2", 2, PlayerRole.MECHANICAL_WOLF),
+            player("u3", 3, PlayerRole.VILLAGER),
+        )
+        fun killer(uid: String) = nightPhaseResult(gameService.getGameState(gameId, uid))["wolfKiller"]
+        assertThat(killer("u1")).isEqualTo(true)
+        assertThat(killer("u2")).isEqualTo(false)
+        assertThat(killer("u3")).isEqualTo(false)
+    }
+
+    @Test
+    fun `wolfKiller is true for the mechanical wolf once the pack is dead`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF).also { it.alive = false }, player("u2", 2, PlayerRole.MECHANICAL_WOLF),
+            player("u3", 3, PlayerRole.VILLAGER), wolfTarget = "u3",
+        )
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u2"))
+
+        assertThat(night["wolfKiller"]).isEqualTo(true)
+        assertThat(night["selectedTargetId"]).isEqualTo("u3")
+    }
+
+    @Test
+    fun `a dead pack wolf gets neither selectedTargetId nor wolfKiller`() {
+        wolfPickWith(
+            player("u1", 1, PlayerRole.WEREWOLF).also { it.alive = false }, player("u2", 2, PlayerRole.WEREWOLF),
+            player("u3", 3, PlayerRole.VILLAGER), wolfTarget = "u3",
+        )
+
+        val dead = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+        val alive = nightPhaseResult(gameService.getGameState(gameId, "u2"))
+
+        assertThat(dead["wolfKiller"]).isEqualTo(false)
+        assertThat(dead).doesNotContainKey("selectedTargetId")
+        assertThat(alive["wolfKiller"]).isEqualTo(true)
+        assertThat(alive["selectedTargetId"]).isEqualTo("u3")
     }
 }

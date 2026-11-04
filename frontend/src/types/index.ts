@@ -215,15 +215,17 @@ export interface RoleHistoryPlayer {
 
 export interface RoleHistoryEntry {
   round: number
-  action: 'CHECK' | 'GUARD' | 'KILL' | 'ATTACKED' | 'ANTIDOTE' | 'POISON'
+  action: 'CHECK' | 'GUARD' | 'KILL' | 'ATTACKED' | 'ANTIDOTE' | 'POISON' | 'LEARN' | 'PROTECT'
   /** null = 空守 (guard) / 空刀 (wolf KILL, WITCH attacked) */
   target: RoleHistoryPlayer | null
-  /** SEER only */
+  /** SEER, and the mechanical wolf's learned alignment check */
   isWerewolf?: boolean
+  /** MEDIUM / mechanical-wolf role check: the role told; LEARN: the role learned */
+  role?: PlayerRole | null
 }
 
 export interface RoleHistory {
-  role: 'WITCH' | 'SEER' | 'GUARD' | 'WOLF'
+  role: 'WITCH' | 'SEER' | 'GUARD' | 'WOLF' | 'MEDIUM' | 'MECHANICAL_WOLF'
   entries: RoleHistoryEntry[]
 }
 // ── Game review (上帝视角复盘) ────────────────────────────────────────────────
@@ -241,12 +243,31 @@ export interface ReviewNight {
     action: 'KILL' | 'SKIP' | 'SELF_KILL'
     target: ReviewPlayer | null
   }
-  /** seer / witch / guard: null when the role is not in the game */
+  /** seer / mech / medium / witch / guard: null when the role is not in the game */
   seer: {
     actor: ReviewPlayer
     dead: boolean
     target: ReviewPlayer | null
     isWerewolf: boolean
+  } | null
+  mech: {
+    actor: ReviewPlayer
+    dead: boolean
+    /** the player whose skill was learned this night, and that player's role */
+    learned: ReviewPlayer | null
+    learnedRole: PlayerRole | null
+    check: ReviewPlayer | null
+    poison: ReviewPlayer | null
+    protect: ReviewPlayer | null
+    /** what the check told it: a role under the learned role check, wolf-or-not under the alignment check */
+    checkRole: PlayerRole | null
+    checkIsWerewolf: boolean | null
+  } | null
+  medium: {
+    actor: ReviewPlayer
+    dead: boolean
+    target: ReviewPlayer | null
+    role: PlayerRole | null
   } | null
   witch: {
     actor: ReviewPlayer
@@ -334,6 +355,18 @@ export type MyNightAction =
       poison: PlayerSeat | null
     }
   | { type: 'GUARD'; target: PlayerSeat | null }
+  | { type: 'MEDIUM'; target: PlayerSeat | null; role: PlayerRole | null }
+  /** checkRole is set only for a learned role check; an alignment check is read off check.camp */
+  | {
+      type: 'MECHANICAL_WOLF'
+      learned: PlayerSeat | null
+      learnedRole: PlayerRole | null
+      check: PlayerSeat | null
+      checkRole: PlayerRole | null
+      poison: PlayerSeat | null
+      protect: PlayerSeat | null
+      kill: PlayerSeat | null
+    }
 
 export interface PlayerNight {
   /** null for the roles that sleep through the night */
@@ -452,6 +485,8 @@ export type PlayerRole =
   | 'IDIOT'
   | 'WHITE_WOLF_KING'
   | 'BLACK_WOLF_KING'
+  | 'MECHANICAL_WOLF'
+  | 'MEDIUM'
 
 export interface GamePlayer {
   userId: string
@@ -747,6 +782,10 @@ export type NightSubPhase =
   | 'SEER_RESULT' // seer sees the check result
   | 'WITCH_ACT' // witch decides antidote / poison
   | 'GUARD_PICK' // guard chooses a player to protect
+  | 'MECH_WOLF_PICK' // mechanical wolf learns / uses its learned skill
+  | 'MECH_WOLF_RESULT' // mechanical wolf sees the outcome
+  | 'MEDIUM_PICK' // medium chooses a player to check
+  | 'MEDIUM_RESULT' // medium sees the exact role
   | 'WAITING' // villagers / hunters / dead — eyes closed
 
 export interface SeerHistoryEntry {
@@ -755,11 +794,35 @@ export interface SeerHistoryEntry {
   isWerewolf: boolean
 }
 
+export interface MediumHistoryEntry {
+  round: number
+  nickname: string
+  role: PlayerRole
+}
+
+export type MechNightSkill =
+  | 'LEARN'
+  | 'CHECK_ROLE'
+  | 'CHECK_ALIGNMENT'
+  | 'POISON'
+  | 'PROTECT'
+  | 'NONE'
+
+export interface MechWolfResult {
+  kind: 'LEARN' | 'CHECK' | 'POISON' | 'PROTECT' | 'SKIP'
+  targetPlayerId?: string
+  targetNickname?: string
+  targetSeatIndex?: number
+  role?: PlayerRole // LEARN: the learned role; CHECK with CHECK_ROLE: the exact role
+  isWerewolf?: boolean // CHECK with CHECK_ALIGNMENT
+}
+
 export interface NightPhaseState {
   subPhase: NightSubPhase
   dayNumber: number
   // Werewolf
   teammates?: string[] // teammate nicknames (only sent to werewolves)
+  wolfKiller?: boolean // true when I am the one allowed to kill tonight (the pack, or the lone mechanical wolf)
   selectedTargetId?: string // player I've tapped as my target
   // Seer result
   seerResult?: {
@@ -768,6 +831,21 @@ export interface NightPhaseState {
     checkedSeatIndex: number
     isWerewolf: boolean
     history: SeerHistoryEntry[]
+  }
+  // Medium result
+  mediumResult?: {
+    checkedPlayerId: string
+    checkedNickname: string
+    checkedSeatIndex: number
+    role: PlayerRole
+    history: MediumHistoryEntry[]
+  }
+  // Mechanical wolf (private)
+  mechWolf?: {
+    learnedRole: PlayerRole | null
+    learnedPlayerId: string | null
+    skillTonight: MechNightSkill
+    result: MechWolfResult | null
   }
   // Witch
   attackedPlayerId?: string // who the wolves attacked (shown to witch)

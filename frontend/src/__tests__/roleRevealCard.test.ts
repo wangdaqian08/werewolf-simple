@@ -27,3 +27,22 @@ describe('RoleRevealCard — 黑狼王', () => {
     expect(wrapper.text()).toContain('Alice')
   })
 })
+
+describe('RoleRevealCard — 机械狼 and 通灵师', () => {
+  it('mechanical wolf card shows no teammates and its rule text', () => {
+    const wrapper = mount(RoleRevealCard, {
+      props: { role: 'MECHANICAL_WOLF', revealed: true },
+    })
+    expect(wrapper.text()).toContain('機械狼')
+    expect(wrapper.find('.role-label-wolf').exists()).toBe(true)
+    expect(wrapper.find('.role-teammates').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="role-reveal-desc"]').text()).toContain('不知道其他狼人')
+  })
+
+  it('medium card shows the medium name, special styling and its check rule', () => {
+    const wrapper = mount(RoleRevealCard, { props: { role: 'MEDIUM', revealed: true } })
+    expect(wrapper.text()).toContain('通靈師')
+    expect(wrapper.find('.role-label-special').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="role-reveal-desc"]').text()).toContain('確切身份')
+  })
+})

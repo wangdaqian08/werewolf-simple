@@ -154,7 +154,7 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import type { GamePhase, GamePlayer, PlayerRole } from '@/types'
-import { isWolfRole } from '@/utils/roleDefinitions'
+import { isPackWolfRole } from '@/utils/roleDefinitions'
 
 const props = defineProps<{
   phase: GamePhase
@@ -192,7 +192,10 @@ const inSelfDestructWindow = computed(
 
 const canSelfDestruct = computed(
   () =>
-    isWolfRole(props.myRole) && props.isAlive && inSelfDestructWindow.value && !props.daySkipVoting,
+    isPackWolfRole(props.myRole) &&
+    props.isAlive &&
+    inSelfDestructWindow.value &&
+    !props.daySkipVoting,
 )
 
 // Mirrors the server's declare-out window (it validates); before the night reveal the host reveals first.

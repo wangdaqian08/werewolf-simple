@@ -8,6 +8,7 @@ import com.werewolf.game.phase.HardModeCounterplay
 import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.role.RoleRules
 import com.werewolf.game.role.WerewolfHandler
 import com.werewolf.model.*
 import com.werewolf.repository.GamePlayerRepository
@@ -70,24 +71,32 @@ class NightOrchestrator(
          */
         fun computeKills(nightPhase: NightPhase, immuneUserIds: Set<String> = emptySet()): List<String> {
             val kills = mutableListOf<String>()
+            val shield = nightPhase.mechGuardTargetUserId // mechanical-wolf guard: absolute night immunity
             val wolfTarget = nightPhase.wolfTargetUserId
-            if (wolfTarget != null && wolfKillLands(nightPhase)) {
+            if (wolfTarget != null && wolfTarget != shield && wolfKillLands(nightPhase)) {
                 val perkSaved = nightPhase.dayNumber == 1 && wolfTarget in immuneUserIds
                 if (!perkSaved) {
                     kills.add(wolfTarget)
                 }
             }
-            val poisonTarget = nightPhase.witchPoisonTargetUserId
-            if (poisonTarget != null) {
-                kills.add(poisonTarget)
-            }
-            return kills.distinct()
+            listOfNotNull(nightPhase.witchPoisonTargetUserId, nightPhase.mechPoisonTargetUserId)
+                .filter { it != shield }
+                .forEach { kills.add(it) }
+            // Sorted so the dawn list never reveals which death came from which source.
+            return kills.distinct().sorted()
+        }
+
+        /** Orders user ids by seat — the order every player-visible death list uses. */
+        fun bySeat(userIds: List<String>, players: List<GamePlayer>): List<String> {
+            val seatOf = players.associate { it.userId to it.seatIndex }
+            return userIds.sortedBy { seatOf[it] ?: Int.MAX_VALUE }
         }
 
         /**
          * Whether the wolf attack kills its target, before the night-1 perk.
          * Exactly one save (witch antidote or guard) blocks it. Both on the same
          * target is 同守同救: the saves cancel and the target dies (奶穿).
+         * Does not include the mechanical wolf's shield (`mechGuardTargetUserId`): [computeKills] applies it.
          */
         fun wolfKillLands(nightPhase: NightPhase): Boolean {
             val wolfTarget = nightPhase.wolfTargetUserId ?: return false
@@ -105,6 +114,7 @@ class NightOrchestrator(
             val wolfTarget = nightPhase.wolfTargetUserId ?: return emptySet()
             if (wolfTarget !in immuneUserIds) return emptySet()
             if (!wolfKillLands(nightPhase)) return emptySet()
+            if (wolfTarget == nightPhase.mechGuardTargetUserId) return emptySet() // shielded: not the perk's save
             return setOf(wolfTarget)
         }
     }
@@ -128,14 +138,19 @@ class NightOrchestrator(
 
     // ── Public API ──────────────────────────────────────────────────────────
 
-    /**
-     * Ordered list of night sub-phases for this game.
-     */
+    /** The roles that act tonight, in wake order (only those present in the room). */
+    fun activeNightRoles(room: Room): List<PlayerRole> = buildList {
+        add(PlayerRole.WEREWOLF)
+        if (room.hasMechanicalWolf) add(PlayerRole.MECHANICAL_WOLF)
+        if (room.hasSeer) add(PlayerRole.SEER)
+        if (room.hasMedium) add(PlayerRole.MEDIUM)
+        if (room.hasWitch) add(PlayerRole.WITCH)
+        if (room.hasGuard) add(PlayerRole.GUARD)
+    }
+
+    /** Ordered list of night sub-phases for this game. */
     fun nightSequence(context: GameContext): List<NightSubPhase> {
-        val activeRoles = mutableSetOf(PlayerRole.WEREWOLF)
-        if (context.room.hasSeer) activeRoles.add(PlayerRole.SEER)
-        if (context.room.hasWitch) activeRoles.add(PlayerRole.WITCH)
-        if (context.room.hasGuard) activeRoles.add(PlayerRole.GUARD)
+        val activeRoles = activeNightRoles(context.room)
 
         val sequence = handlers
             .filter { it.role in activeRoles }
@@ -367,7 +382,7 @@ class NightOrchestrator(
                 TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
                     override fun afterCommit() {
                         try {
-                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, pendingKills))
+                            stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, bySeat(pendingKills, context.players)))
                         } catch (e: Exception) {
                             log.error("[resolveNightKills] Failed to broadcast NightResult for game $gameId", e)
                         }
@@ -384,7 +399,7 @@ class NightOrchestrator(
                     }
                 })
             } else {
-                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, pendingKills))
+                stompPublisher.broadcastGame(gameId, DomainEvent.NightResult(gameId, bySeat(pendingKills, context.players)))
                 stompPublisher.broadcastGame(gameId, DomainEvent.GameOver(gameId, winner))
             }
         } else if (
@@ -550,7 +565,12 @@ class NightOrchestrator(
      * first-night immunity perk — indistinguishable from a save: only the final kill
      * list is filtered, the witch still saw the attack. Witch poison target
      * dies unconditionally (poison is not a wolf kill, immunity does not
-     * cover it).
+     * cover it). The mechanical wolf's shield (`mechGuardTargetUserId`) is absolute:
+     * it blocks the wolf kill and any poison on that player; the mechanical wolf's
+     * own poison (`mechPoisonTargetUserId`) kills like the witch's.
+     *
+     * The result is sorted by user id, not by seat, so it does not reveal which death
+     * came from which source; apply seat order at display time via [bySeat].
      */
     fun computePendingKills(nightPhase: NightPhase, immuneUserIds: Set<String> = emptySet()): List<String> =
         computeKills(nightPhase, immuneUserIds)
@@ -664,12 +684,7 @@ class NightOrchestrator(
         val gameConfig = context.room.config
             ?: throw IllegalArgumentException("[nightRoleLoop] Room.config is null for game $gameId — set GameConfig before starting night")
 
-        val activeRoles = buildList {
-            add(PlayerRole.WEREWOLF)
-            if (context.room.hasSeer) add(PlayerRole.SEER)
-            if (context.room.hasWitch) add(PlayerRole.WITCH)
-            if (context.room.hasGuard) add(PlayerRole.GUARD)
-        }
+        val activeRoles = activeNightRoles(context.room)
 
         val activeHandlers = handlers.filter { it.role in activeRoles }
         log.info("[nightRoleLoop] game=$gameId: roles=${activeHandlers.map { it.role }}")
@@ -677,8 +692,9 @@ class NightOrchestrator(
         for ((index, handler) in activeHandlers.withIndex()) {
             val role = handler.role
             val config = gameConfig.getDelayForRole(role)
-            // Every wolf-camp role (e.g. WHITE_WOLF_KING) acts in the WEREWOLF turn.
-            val isAlive = context.alivePlayers.any { it.role == role || (role == PlayerRole.WEREWOLF && it.role.isWolf) }
+            // Every killer (pack wolf, or the lone mechanical wolf) acts in the WEREWOLF turn.
+            val isAlive = if (role == PlayerRole.WEREWOLF) RoleRules.wolfKillers(context.alivePlayers).isNotEmpty()
+            else context.alivePlayers.any { it.role == role }
             val isLastRole = index == activeHandlers.lastIndex
 
             log.info("[nightRoleLoop] game=$gameId: role=$role alive=$isAlive")
@@ -868,7 +884,7 @@ class NightOrchestrator(
         np: NightPhase,
     ) {
         log.info(
-            "[race] {} game={} day={} subPhase={} thread={} -> wolfTarget={} seerChecked={} seerIsWolf={} witchAntidoteUsed={} witchPoisonTarget={} guardTarget={}",
+            "[race] {} game={} day={} subPhase={} thread={} -> wolfTarget={} seerChecked={} seerIsWolf={} witchAntidoteUsed={} witchPoisonTarget={} guardTarget={} mechLearn={} mechCheck={} mechPoison={} mechGuard={} mediumChecked={} mediumResultRole={}",
             tag,
             gameId,
             dayNumber,
@@ -880,6 +896,12 @@ class NightOrchestrator(
             np.witchAntidoteUsed,
             np.witchPoisonTargetUserId,
             np.guardTargetUserId,
+            np.mechLearnTargetUserId,
+            np.mechCheckTargetUserId,
+            np.mechPoisonTargetUserId,
+            np.mechGuardTargetUserId,
+            np.mediumCheckedUserId,
+            np.mediumResultRole,
         )
     }
 

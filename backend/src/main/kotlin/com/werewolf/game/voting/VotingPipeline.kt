@@ -10,6 +10,7 @@ import com.werewolf.game.phase.HardModeCounterplay
 import com.werewolf.game.phase.WinCheckTrigger
 import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.role.RoleRules
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.*
 import com.werewolf.repository.EliminationHistoryRepository
@@ -207,8 +208,8 @@ class VotingPipeline(
      * (HUNTER and BLACK_WOLF_KING). Only [Game.pendingShooterUserId] may act, while
      * the day sits on its normal post-death sub-phase: nothing public marks a
      * pending shot, and a pass broadcasts nothing. A shooter killed by a shot is
-     * the next pending shooter (a chain); a room has at most one of each shooter,
-     * so a chain is at most two shots.
+     * the next pending shooter (a chain). A learned mechanical wolf can make the
+     * chain longer than two; it ends when a shot kills no further shooter.
      */
     @Transactional
     fun handleHunterShoot(request: GameActionRequest, context: GameContext): GameActionResult {
@@ -261,7 +262,7 @@ class VotingPipeline(
         }
 
         // A shot shooter fires next. It dies at once, even as sheriff.
-        val nextShooter = target.takeIf { targetPlayer.role.shootsOnDeath }
+        val nextShooter = target.takeIf { RoleRules.shootsOnDeath(targetPlayer) }
 
         // Sheriff target: defer the kill (国标 rule — the dying sheriff
         // performs the badge handover BEFORE being marked dead).
@@ -503,7 +504,7 @@ class VotingPipeline(
             endGame(updatedContext, winner)
             return
         }
-        context.game.pendingShooterUserId = target.takeIf { targetPlayer.role.shootsOnDeath }
+        context.game.pendingShooterUserId = target.takeIf { RoleRules.shootsOnDeath(targetPlayer) }
         val nextSubPhase = dayRevealAdvancer.nextSubPhase(context.gameId)
         context.game.subPhase = nextSubPhase.name
         gameRepository.save(context.game)
@@ -624,7 +625,7 @@ class VotingPipeline(
 
         // A shooter (hunter / black wolf king) gets a private shot: the day
         // looks the same as any other vote-out.
-        if (player.role.shootsOnDeath) {
+        if (RoleRules.shootsOnDeath(player)) {
             context.game.pendingShooterUserId = targetId
             gameRepository.save(context.game)
         }

@@ -79,6 +79,27 @@ Dead roles still receive the same open-eyes → delay → close-eyes sequence (s
 ADR-010 Dead-Role Information Hiding). Audio is identical whether the role
 player is alive or dead.
 
+## Generating narration files
+
+All spoken narration (`*_open_eyes`, `*_close_eyes`, `goes_dark_close_eyes`,
+`day_time`) is generated on https://ttsmaker.com/ with the voice
+**1506-AI 阿乐**. Use the same site and voice for every new line so the
+narrator never changes mid-game.
+
+- Text: the short phrase only, e.g. `机械狼请睁眼` / `机械狼请闭眼`. The
+  existing clips are 2.1–2.3 s; on-screen prompts carry the instructions.
+- Format: 24000 Hz, mono, 48 kbps MP3.
+- Loudness: the clips were raised ~10 dB in #160 (mean ≈ −16.5 dB, peak
+  ≈ −1.7 dB). Match a new file before committing:
+
+  ```bash
+  ffmpeg -i in.mp3 -af "loudnorm=I=-16:TP=-1.5" -ar 24000 -ac 1 -b:a 48k out.mp3
+  ffmpeg -i out.mp3 -af volumedetect -f null - 2>&1 | grep volume  # check
+  ```
+
+- Put the file in `backend/src/main/resources/static/audio/` under the exact
+  name the role's `AudioConfig` uses.
+
 ## Background music (BGM)
 
 Optional looping music per room, picked by the host on the create-room screen

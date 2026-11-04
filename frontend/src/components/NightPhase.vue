@@ -36,7 +36,11 @@
     </div>
 
     <!-- ── WEREWOLF_PICK ──────────────────────────────────────────────── -->
-    <template v-if="subPhase === 'WEREWOLF_PICK' && isWolfRole(myRole) && me?.isAlive && !hasActed">
+    <template
+      v-if="
+        subPhase === 'WEREWOLF_PICK' && nightPhase.wolfKiller === true && me?.isAlive && !hasActed
+      "
+    >
       <div v-if="nightPhase.teammates?.length" class="team-row">
         <span class="tr-label">{{ $t('night.teammates') }}</span>
         <span v-for="(mate, i) in nightPhase.teammates" :key="mate" class="tr-name">
@@ -47,8 +51,8 @@
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
-          :self="p.userId === myUserId"
           :key="p.userId"
+          :self="p.userId === myUserId"
           mode="room"
           :seat="p.seatIndex"
           :nickname="p.nickname"
@@ -94,8 +98,8 @@
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
-          :self="p.userId === myUserId"
           :key="p.userId"
+          :self="p.userId === myUserId"
           mode="room"
           :seat="p.seatIndex"
           :nickname="p.nickname"
@@ -259,8 +263,8 @@
           <section class="player-grid player-grid-sm">
             <PlayerSlot
               v-for="p in players"
-              :self="p.userId === myUserId"
               :key="p.userId"
+              :self="p.userId === myUserId"
               mode="room"
               :seat="p.seatIndex"
               :nickname="p.nickname"
@@ -358,8 +362,8 @@
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
-          :self="p.userId === myUserId"
           :key="p.userId"
+          :self="p.userId === myUserId"
           mode="room"
           :seat="p.seatIndex"
           :nickname="p.nickname"
@@ -401,6 +405,36 @@
       </footer>
     </template>
 
+    <!-- ── MECH_WOLF_* / MEDIUM_* ─────────────────────────────────────── -->
+    <MechWolfTurn
+      v-else-if="
+        (subPhase === 'MECH_WOLF_PICK' || subPhase === 'MECH_WOLF_RESULT') &&
+        myRole === 'MECHANICAL_WOLF' &&
+        me?.isAlive &&
+        !hasActed
+      "
+      :sub-phase="subPhase"
+      :mech-wolf="nightPhase.mechWolf"
+      :players="players"
+      :my-user-id="myUserId"
+      :action-pending="actionPending"
+      @action="sendNightAction"
+    />
+    <MediumTurn
+      v-else-if="
+        (subPhase === 'MEDIUM_PICK' || subPhase === 'MEDIUM_RESULT') &&
+        myRole === 'MEDIUM' &&
+        me?.isAlive &&
+        !hasActed
+      "
+      :sub-phase="subPhase"
+      :medium-result="nightPhase.mediumResult"
+      :players="players"
+      :my-user-id="myUserId"
+      :action-pending="actionPending"
+      @action="sendNightAction"
+    />
+
     <!-- ── Sleep screen — non-actor during any active phase ──────────── -->
     <template v-else-if="subPhase !== 'WAITING'">
       <div class="sleep-screen">
@@ -440,9 +474,10 @@ import { t } from '@/i18n'
 import { roleName, roleTag } from '@/utils/roleDefinitions'
 import { computed, ref, watch } from 'vue'
 
-import { isWolfRole } from '@/utils/roleDefinitions'
 import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
+import MechWolfTurn from '@/components/MechWolfTurn.vue'
+import MediumTurn from '@/components/MediumTurn.vue'
 import {
   guardVariant,
   isGuardTarget,
@@ -495,6 +530,7 @@ const emit = defineEmits<{
   witchPoison: [targetId: string]
   witchPassPoison: []
   witchSkip: []
+  nightAction: [type: string, targetUserId?: string]
 }>()
 
 const subPhase = computed(() => props.nightPhase.subPhase)
@@ -509,7 +545,8 @@ const poisonMode = ref(false)
 // GameView.vue includes subPhase + dayNumber), so hasActed resets naturally.
 // Intentionally NOT applied to SEER_PICK (the click advances to SEER_RESULT,
 // which is a different screen on the same component — showing sleep in between
-// would flash for the seer).
+// would flash for the seer). The mechanical wolf's and the medium's picks are
+// exempt for the same reason; only their CONFIRM clicks set it.
 const hasActed = ref(false)
 // A rejected action did not use up the turn: show the controls again.
 watch(
@@ -538,6 +575,11 @@ function confirmGuardProtect() {
 function confirmGuardSkip() {
   hasActed.value = true
   emit('guardSkip')
+}
+function sendNightAction(type: string, targetUserId?: string) {
+  // Only the CONFIRM actions end the turn; a pick advances to the RESULT screen, so (like the seer) it must not flash eyes-closed.
+  if (type === 'MECH_CONFIRM' || type === 'MEDIUM_CONFIRM') hasActed.value = true
+  emit('nightAction', type, targetUserId)
 }
 function confirmWitchSkip() {
   hasActed.value = true
@@ -578,10 +620,12 @@ const isMyTurn = computed(() => {
   // Dead players cannot take turns
   if (!me.value?.isAlive) return false
   if (!role) return false
-  if (sp === 'WEREWOLF_PICK') return isWolfRole(role)
+  if (sp === 'WEREWOLF_PICK') return props.nightPhase.wolfKiller === true
   if (sp === 'SEER_PICK' || sp === 'SEER_RESULT') return role === 'SEER'
   if (sp === 'WITCH_ACT') return role === 'WITCH'
   if (sp === 'GUARD_PICK') return role === 'GUARD'
+  if (sp === 'MECH_WOLF_PICK' || sp === 'MECH_WOLF_RESULT') return role === 'MECHANICAL_WOLF'
+  if (sp === 'MEDIUM_PICK' || sp === 'MEDIUM_RESULT') return role === 'MEDIUM'
   return false
 })
 
@@ -628,6 +672,8 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
   IDIOT: { emoji: '🃏', team: 'special' },
   WHITE_WOLF_KING: { emoji: '👑', team: 'wolf' },
   BLACK_WOLF_KING: { emoji: '🖤', team: 'wolf' },
+  MECHANICAL_WOLF: { emoji: '🤖', team: 'wolf' },
+  MEDIUM: { emoji: '👁️', team: 'special' },
 }
 
 const meta = computed(() => (props.myRole ? ROLE_META[props.myRole] : null))
@@ -636,7 +682,7 @@ const badgeSub = computed(() => {
   const role = props.myRole
   switch (subPhase.value) {
     case 'WEREWOLF_PICK':
-      return isWolfRole(role) ? t('night.badge.wolf') : t('night.badge.closed')
+      return props.nightPhase.wolfKiller === true ? t('night.badge.wolf') : t('night.badge.closed')
     case 'SEER_PICK':
       return role === 'SEER' ? t('night.badge.seer') : t('night.badge.closed')
     case 'SEER_RESULT':
@@ -645,6 +691,14 @@ const badgeSub = computed(() => {
       return role === 'WITCH' ? t('night.badge.witch') : t('night.badge.closed')
     case 'GUARD_PICK':
       return role === 'GUARD' ? t('night.badge.guard') : t('night.badge.closed')
+    case 'MECH_WOLF_PICK':
+      return role === 'MECHANICAL_WOLF' ? t('night.badge.mech') : t('night.badge.closed')
+    case 'MECH_WOLF_RESULT':
+      return role === 'MECHANICAL_WOLF' ? t('night.badge.mechDone') : t('night.badge.closed')
+    case 'MEDIUM_PICK':
+      return role === 'MEDIUM' ? t('night.badge.medium') : t('night.badge.closed')
+    case 'MEDIUM_RESULT':
+      return role === 'MEDIUM' ? t('night.badge.mediumDone') : t('night.badge.closed')
     default:
       return ''
   }

@@ -163,6 +163,32 @@ function actionSegs(a: MyNightAction): Seg[] {
     }
     case 'GUARD':
       return a.target ? [seg(t('pr.guard')), ...withTag(a.target)] : [seg(t('pr.guardNone'))]
+    case 'MEDIUM':
+      return a.target
+        ? [
+            seg(t('pr.mediumCheck')),
+            name(a.target),
+            seg(t('rv.roleTag', { role: roleName(a.role) })),
+          ]
+        : [seg(t('pr.mediumNone'))]
+    case 'MECHANICAL_WOLF': {
+      const parts: Seg[][] = []
+      if (a.learned) parts.push([seg(t('pr.mechLearn')), ...withTag(a.learned)])
+      if (a.check) {
+        // A role check is told the role; an alignment check only wolf or good.
+        const result = a.checkRole
+          ? [seg(t('rv.roleTag', { role: roleName(a.checkRole) }))]
+          : [seg(isKnownWolf(a.check) ? t('rv.toWolf') : t('rv.toGood'))]
+        parts.push([seg(t('rv.check')), name(a.check), ...result])
+      }
+      if (a.poison) parts.push([seg(t('rv.poison')), ...withTag(a.poison)])
+      if (a.protect) parts.push([seg(t('rv.guard')), name(a.protect)])
+      if (a.kill) parts.push([seg(t('rv.kill')), ...withTag(a.kill)])
+      return [
+        seg(t('pr.mechHead')),
+        ...(parts.length ? joined(parts, t('common.comma')) : [seg(t('pr.mechNone'))]),
+      ]
+    }
   }
 }
 

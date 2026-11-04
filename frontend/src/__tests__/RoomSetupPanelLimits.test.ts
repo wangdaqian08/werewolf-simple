@@ -185,7 +185,7 @@ describe('RoomSetupPanel — role limits', () => {
     await click(w, 'role-toggle-BLACK_WOLF_KING')
     expect(disabled(w, 'role-toggle-WHITE_WOLF_KING')).toBe(true)
     expect(w.find('[data-testid="role-toggle-WHITE_WOLF_KING"]').attributes('title')).toContain(
-      '兩個狼王需要至少 3 匹狼',
+      '特殊狼需要至少 3 匹狼',
     )
   })
 

@@ -23,7 +23,9 @@ class RoleAudioConfiguration {
             IdiotAudioConfig(),
             VillagerAudioConfig(),
             WhiteWolfKingAudioConfig(),
-            BlackWolfKingAudioConfig()
+            BlackWolfKingAudioConfig(),
+            MechanicalWolfAudioConfig(),
+            MediumAudioConfig()
         )
 
         RoleRegistry.registerAll(configs)

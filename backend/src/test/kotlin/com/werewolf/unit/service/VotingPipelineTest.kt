@@ -235,6 +235,38 @@ class VotingPipelineTest {
     }
 
     @Test
+    fun `voted-out mechanical wolf with learned BLACK_WOLF_KING gets the shot`() {
+        val host = player(hostId, 0)
+        val mech = player("u1", 1, PlayerRole.MECHANICAL_WOLF).also { it.learnedRole = PlayerRole.BLACK_WOLF_KING }
+        val context = ctx(game(), host, mech)
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(listOf(vote("u2", "u1"), vote("u3", "u1")))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(mech))
+        stubLoader(host, mech)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        assertThat(context.game.pendingShooterUserId).isEqualTo("u1")
+    }
+
+    @Test
+    fun `voted-out mechanical wolf with learned SEER gets no shot`() {
+        val host = player(hostId, 0)
+        val mech = player("u1", 1, PlayerRole.MECHANICAL_WOLF).also { it.learnedRole = PlayerRole.SEER }
+        val context = ctx(game(), host, mech)
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(listOf(vote("u2", "u1"), vote("u3", "u1")))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(mech))
+        stubLoader(host, mech)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        assertThat(context.game.pendingShooterUserId).isNull()
+    }
+
+    @Test
     fun `revealTally - a voted-out hunter-sheriff gets the private shot and the public badge handover`() {
         val host = player(hostId, 0)
         val hunter = player("u1", 1, PlayerRole.HUNTER)
@@ -819,6 +851,23 @@ class VotingPipelineTest {
 
 
     @Test
+    fun `handleHunterShoot - a shot at a mechanical wolf that learned HUNTER chains the next shot to it`() {
+        val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)
+        val mech = player("m", 2, PlayerRole.MECHANICAL_WOLF).also { it.learnedRole = PlayerRole.HUNTER }
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, shooter = "k"), king, mech, player("v", 3))
+        votedOut("k", PlayerRole.BLACK_WOLF_KING)
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "m")).thenReturn(Optional.of(mech))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        stubLoader(king, mech, player("v", 3))
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
+
+        votingPipeline.handleHunterShoot(req("k", ActionType.HUNTER_SHOOT, "m"), context)
+
+        assertThat(mech.alive).isFalse()
+        assertThat(context.game.pendingShooterUserId).isEqualTo("m")
+    }
+
+    @Test
     fun `handleHunterShoot - a shot kills an unrevealed IDIOT (no reveal, only the day vote does that)`() {
         val hunter = player("h", 1, PlayerRole.HUNTER, alive = false)
         val idiot = player("i", 2, PlayerRole.IDIOT)
@@ -973,6 +1022,28 @@ class VotingPipelineTest {
         assertThat(hunter.alive).isFalse()
         assertThat(g.pendingShooterUserId).isEqualTo("h")
         assertThat(g.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+    }
+
+    @Test
+    fun `handleHunterShoot - night - a shot at a mechanical wolf that learned HUNTER chains the next shot to it`() {
+        val king = player("k", 1, PlayerRole.BLACK_WOLF_KING, alive = false)
+        val mech = player("m", 2, PlayerRole.MECHANICAL_WOLF).also { it.learnedRole = PlayerRole.HUNTER }
+        val g = nightRevealGame(sheriff = "x").also {
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
+            it.sheriffUserId = null
+            it.pendingShooterUserId = "k"
+        }
+        val context = GameContext(g, room(), listOf(king, mech, player("v", 3)))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "m")).thenReturn(Optional.of(mech))
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+
+        votingPipeline.handleHunterShoot(req("k", ActionType.HUNTER_SHOOT, "m"), context)
+
+        assertThat(mech.alive).isFalse()
+        assertThat(g.pendingShooterUserId).isEqualTo("m")
     }
 
     @Test

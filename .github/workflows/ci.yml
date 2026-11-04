@@ -277,11 +277,12 @@ jobs:
             specs: e2e/real/flow-5night-hardmode.spec.ts
             grep: ''
           # Shard 8: flow-12p scenario 3 (never sharded before — shards 1+2
-          # grep only its siblings) + the witch-selfsave variant. The grep is
-          # a regex alternation over both describe titles.
+          # grep only its siblings) + the witch-selfsave variant + the
+          # mechanical wolf/medium flow. The grep is a regex alternation over
+          # the describe titles — rename one and update it here.
           - id: 8
-            specs: e2e/real/flow-12p-sheriff.spec.ts e2e/real/witch-selfsave-blocked-flow.spec.ts
-            grep: 'night-killed sheriff|Witch self-save blocked'
+            specs: e2e/real/flow-12p-sheriff.spec.ts e2e/real/witch-selfsave-blocked-flow.spec.ts e2e/real/mech-wolf-medium-flow.spec.ts
+            grep: 'night-killed sheriff|Witch self-save blocked|Mechanical wolf and medium'
           - id: 9
             specs: e2e/real/night-rules-flow.spec.ts
             grep: ''

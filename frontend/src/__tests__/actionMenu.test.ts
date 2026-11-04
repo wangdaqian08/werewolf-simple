@@ -230,6 +230,7 @@ describe('ActionMenu — self-destruct window', () => {
     phase: GamePhase
     subPhase: string
     daySkipVoting?: boolean
+    myRole?: PlayerRole
   }) {
     const wrapper = mount(ActionMenu, {
       props: { myRole: 'WEREWOLF', isAlive: true, ...props },
@@ -252,6 +253,12 @@ describe('ActionMenu — self-destruct window', () => {
     expect(await offersSelfDestruct({ phase: 'DAY_DISCUSSION', subPhase: 'RESULT_REVEALED' })).toBe(
       true,
     )
+  })
+
+  it('a mechanical wolf is never offered self-destruct, a werewolf still is', async () => {
+    const window = { phase: 'DAY_DISCUSSION', subPhase: 'RESULT_REVEALED' } as const
+    expect(await offersSelfDestruct({ ...window, myRole: 'MECHANICAL_WOLF' })).toBe(false)
+    expect(await offersSelfDestruct({ ...window, myRole: 'WEREWOLF' })).toBe(true)
   })
 
   it.each(['RESULT_HIDDEN', 'HUNTER_SHOOT_NIGHT_DEATH', 'BADGE_HANDOVER'])(

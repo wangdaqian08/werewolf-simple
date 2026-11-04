@@ -30,11 +30,15 @@ const guard = P(6, 'Gus', 'GUARD')
 const hunter = P(7, 'Hal', 'HUNTER')
 const idiot = P(8, 'Ida', 'IDIOT')
 const vil = P(9, 'Val', 'VILLAGER')
+const mech = P(10, 'Mia', 'MECHANICAL_WOLF')
+const medium = P(11, 'Meg', 'MEDIUM')
 const players = [w1, w2, king, seer, witch, guard, hunter, idiot, vil]
 
 const night = (over: Partial<ReviewNight> = {}): ReviewNight => ({
   wolf: { actors: [w1, w2, king], action: 'KILL', target: vil },
   seer: { actor: seer, dead: false, target: null, isWerewolf: false },
+  mech: null,
+  medium: null,
   witch: { actor: witch, dead: false, antidote: null, poison: null },
   guard: { actor: guard, dead: false, target: null },
   dawn: { deaths: [], saved: null },
@@ -72,6 +76,21 @@ const tally = (wrapper: ReturnType<typeof render>) =>
     const out = r.find('.rv-votes').classes('rv-out') ? ' out' : ''
     return `${r.find('.rv-target').text()} ${r.find('.rv-votes').text()} ← ${seats}${out}`
   })
+
+const turn = (
+  over: Partial<NonNullable<ReviewNight['mech']>>,
+): NonNullable<ReviewNight['mech']> => ({
+  actor: mech,
+  dead: false,
+  learned: null,
+  learnedRole: null,
+  check: null,
+  poison: null,
+  protect: null,
+  checkRole: null,
+  checkIsWerewolf: null,
+  ...over,
+})
 
 describe('GameReview', () => {
   it('points: every player who earned is listed with their amount', () => {
@@ -153,6 +172,77 @@ describe('GameReview', () => {
       '🛡 守衛 6號 守 9號 Val',
       '☀ 天亮 平安夜（9號 Val 被守衛守住）',
     ])
+  })
+
+  it('game review lists the mech learn/check/poison/protect and medium checks per night', () => {
+    const wrapper = render([
+      {
+        day: 1,
+        night: night({
+          mech: turn({ learned: medium, learnedRole: 'MEDIUM' }),
+          medium: { actor: medium, dead: false, target: vil, role: 'VILLAGER' },
+        }),
+        events: [],
+      },
+      {
+        day: 2,
+        night: night({
+          mech: turn({ check: hunter, checkRole: 'HUNTER', poison: vil, protect: seer }),
+          medium: { actor: medium, dead: true, target: null, role: null },
+        }),
+        events: [],
+      },
+    ])
+    const text = lines(wrapper)
+    expect(text).toContain('⚙ 機械狼 10號 學 11號 Meg〔通靈師〕')
+    expect(text).toContain('👻 通靈師 11號 驗 9號 Val〔村民〕')
+    // learned the medium's role check, so the check reads out the role
+    expect(text).toContain('⚙ 機械狼 10號 驗 7號 Hal〔獵人〕，毒 9號 Val〔村民〕，守 4號 Sia')
+    expect(text).toContain('👻 通靈師 11號 已出局')
+  })
+
+  it('a learned alignment check shows wolf or good, never a role name', () => {
+    const wrapper = render([
+      { day: 1, night: night({ mech: turn({ learned: seer, learnedRole: 'SEER' }) }), events: [] },
+      { day: 2, night: night({ mech: turn({ check: w1, checkIsWerewolf: true }) }), events: [] },
+      { day: 3, night: night({ mech: turn({ check: vil, checkIsWerewolf: false }) }), events: [] },
+      { day: 4, night: night({ mech: turn({}) }), events: [] },
+    ])
+    const text = lines(wrapper).filter((l) => l.includes('機械狼'))
+    expect(text).toEqual([
+      '⚙ 機械狼 10號 學 4號 Sia〔預言家〕',
+      '⚙ 機械狼 10號 驗 1號 Wolf1 → 狼人',
+      '⚙ 機械狼 10號 驗 9號 Val → 好人',
+      '⚙ 機械狼 10號 無行動',
+    ])
+  })
+
+  it("renders the result the server stored, not the target's real role", () => {
+    const wrapper = render([
+      {
+        day: 1,
+        night: night({
+          // the medium checked a mechanical wolf that learned SEER: told 預言家, not 機械狼
+          mech: {
+            actor: mech,
+            dead: false,
+            learned: null,
+            learnedRole: null,
+            check: hunter,
+            checkRole: 'SEER',
+            checkIsWerewolf: null,
+            poison: null,
+            protect: null,
+          },
+          medium: { actor: medium, dead: false, target: mech, role: 'SEER' },
+        }),
+        events: [],
+      },
+    ])
+    const text = lines(wrapper)
+    expect(text).toContain('👻 通靈師 11號 驗 10號 Mia〔預言家〕')
+    expect(text).toContain('⚙ 機械狼 10號 驗 7號 Hal〔預言家〕')
+    expect(text.join('')).not.toContain('〔機械狼〕')
   })
 
   it('空刀, 自刀, dead and idle roles, and each death with its cause', () => {

@@ -2,6 +2,7 @@ package com.werewolf.service
 
 import com.werewolf.dto.*
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.role.RoleRules
 import com.werewolf.model.*
 import tools.jackson.module.kotlin.jacksonObjectMapper
 
@@ -74,18 +75,35 @@ object GameReviewBuilder {
         fun deadAt(p: GamePlayer) = (p.diedDay ?: Int.MAX_VALUE) < n.dayNumber
         fun holder(role: PlayerRole) = players.firstOrNull { it.role == role }
         val target = n.wolfTargetUserId?.let(refs::get)
+        val wolfActors = RoleRules.wolfKillers(players.filter { !deadAt(it) })
+            .sortedBy { it.seatIndex }.map { refs.getValue(it.userId) }
         return ReviewNight(
             wolf = WolfTurn(
-                actors = players.filter { it.role.isWolf && !deadAt(it) }.sortedBy { it.seatIndex }.map { refs.getValue(it.userId) },
+                actors = wolfActors,
                 action = when {
                     target == null -> WolfAction.SKIP
-                    target.role.isWolf -> WolfAction.SELF_KILL
+                    // 自刀 = the pack hit its own; the mechanical wolf is not on the pack's side of the table.
+                    target.role.isPackWolf || target in wolfActors -> WolfAction.SELF_KILL
                     else -> WolfAction.KILL
                 },
                 target = target,
             ),
             seer = holder(PlayerRole.SEER)?.let {
                 SeerTurn(refs.getValue(it.userId), deadAt(it), n.seerCheckedUserId?.let(refs::get), n.seerResultIsWerewolf ?: false)
+            },
+            mech = holder(PlayerRole.MECHANICAL_WOLF)?.let { m ->
+                val skill = m.learnedRole?.learnedSkill
+                MechWolfTurn(
+                    refs.getValue(m.userId), deadAt(m), n.mechLearnTargetUserId?.let(refs::get),
+                    n.mechLearnTargetUserId?.let { id -> refs[id]?.role },
+                    n.mechCheckTargetUserId?.let(refs::get), n.mechPoisonTargetUserId?.let(refs::get),
+                    n.mechGuardTargetUserId?.let(refs::get),
+                    checkRole = n.mechCheckResultRole.takeIf { skill == LearnedSkill.CHECK_ROLE },
+                    checkIsWerewolf = n.mechCheckResultRole?.isWolf.takeIf { skill == LearnedSkill.CHECK_ALIGNMENT },
+                )
+            },
+            medium = holder(PlayerRole.MEDIUM)?.let {
+                MediumTurn(refs.getValue(it.userId), deadAt(it), n.mediumCheckedUserId?.let(refs::get), n.mediumResultRole)
             },
             witch = holder(PlayerRole.WITCH)?.let {
                 WitchTurn(refs.getValue(it.userId), deadAt(it), target.takeIf { n.witchAntidoteUsed }, n.witchPoisonTargetUserId?.let(refs::get))
@@ -100,13 +118,14 @@ object GameReviewBuilder {
     private fun dawn(n: NightPhase, refs: Map<String, ReviewPlayer>, died: List<String>, night1PerkSaved: Set<String>): Dawn {
         val deaths = died.mapNotNull(refs::get).sortedBy { it.seatIndex }.map { p ->
             NightDeath(p, when {
-                p.userId == n.witchPoisonTargetUserId -> DeathCause.POISON
+                p.userId == n.witchPoisonTargetUserId || p.userId == n.mechPoisonTargetUserId -> DeathCause.POISON
                 p.userId == n.wolfTargetUserId && n.witchAntidoteUsed && n.guardTargetUserId == p.userId -> DeathCause.BOTH_SAVES
                 else -> DeathCause.WOLF
             })
         }
         val saved = n.wolfTargetUserId?.takeIf { it !in died }?.let(refs::get)?.let { p ->
             when {
+                p.userId == n.mechGuardTargetUserId -> SaveSource.GUARD // absolute shield: beats the perk and the antidote
                 n.dayNumber == 1 && p.userId in night1PerkSaved -> SaveSource.PERK
                 n.witchAntidoteUsed -> SaveSource.ANTIDOTE
                 n.guardTargetUserId == p.userId -> SaveSource.GUARD
@@ -150,9 +169,9 @@ object GameReviewBuilder {
 
     /** Exile votes only. 倒钩: a wolf voted out a teammate. 冲票: 2+ wolves voted, all for the same good player. */
     private fun wolfPlay(tally: List<TallyEntry>): WolfPlay? {
-        val wolfTargets = tally.flatMap { t -> t.voters.filter { it.role.isWolf }.map { t.target } }
+        val wolfTargets = tally.flatMap { t -> t.voters.filter { it.role.isPackWolf }.map { t.target } }
         return when {
-            wolfTargets.any { it.role.isWolf } -> WolfPlay.BUS
+            wolfTargets.any { it.role.isPackWolf } -> WolfPlay.BUS
             wolfTargets.size >= 2 && wolfTargets.distinct().size == 1 -> WolfPlay.PUSH
             else -> null
         }

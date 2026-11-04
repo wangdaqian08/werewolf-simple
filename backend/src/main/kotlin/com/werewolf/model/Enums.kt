@@ -19,16 +19,33 @@ enum class GamePhase {
 // isWolf = wolf camp: wakes with the wolves, seer sees "wolf", counts as a wolf for win checks.
 // isGod = 神职: every good-camp role except the plain villager (the 屠边 "gods" side).
 // shootsOnDeath = fires one shot when killed (not poisoned) — the shared HUNTER_SHOOT flow.
+// isPackWolf = wolf camp minus the mechanical wolf: it wakes with the wolves, the mechanical wolf does not.
+// learnedSkill = what a mechanical wolf gains by learning this role (NONE = nothing).
 enum class PlayerRole(val isWolf: Boolean = false) {
     WEREWOLF(isWolf = true), VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT,
-    WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true);
+    WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true), MECHANICAL_WOLF(isWolf = true), MEDIUM;
 
     val isGod: Boolean get() = !isWolf && this != VILLAGER
     val shootsOnDeath: Boolean get() = this == HUNTER || this == BLACK_WOLF_KING
+    val isPackWolf: Boolean get() = isWolf && this != MECHANICAL_WOLF
+    val learnedSkill: LearnedSkill
+        get() = when (this) {
+            MEDIUM -> LearnedSkill.CHECK_ROLE
+            SEER -> LearnedSkill.CHECK_ALIGNMENT
+            WITCH -> LearnedSkill.POISON
+            GUARD -> LearnedSkill.PROTECT
+            HUNTER, BLACK_WOLF_KING -> LearnedSkill.SHOOT
+            else -> LearnedSkill.NONE
+        }
 }
 
+enum class LearnedSkill { NONE, CHECK_ROLE, CHECK_ALIGNMENT, POISON, PROTECT, SHOOT }
 
-enum class NightSubPhase { WAITING, WEREWOLF_PICK, SEER_PICK, SEER_RESULT, WITCH_ACT, GUARD_PICK, COMPLETE }
+
+enum class NightSubPhase {
+    WAITING, WEREWOLF_PICK, MECH_WOLF_PICK, MECH_WOLF_RESULT, SEER_PICK, SEER_RESULT,
+    MEDIUM_PICK, MEDIUM_RESULT, WITCH_ACT, GUARD_PICK, COMPLETE
+}
 
 enum class ElectionSubPhase { SIGNUP, SPEECH, VOTING, RESULT, TIED }
 
@@ -74,6 +91,10 @@ enum class ActionType {
 
     // Night: guard
     GUARD_PROTECT, GUARD_SKIP,
+
+    // Night: mechanical wolf (MECH_LEARN once; then the learned skill's action) and medium
+    MECH_LEARN, MECH_CHECK, MECH_POISON, MECH_PROTECT, MECH_SKIP, MECH_CONFIRM,
+    MEDIUM_CHECK, MEDIUM_CONFIRM,
 
     // Idiot reveal (day)
     IDIOT_REVEAL,

@@ -18,6 +18,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.*
@@ -129,6 +131,29 @@ class GameActionDispatcherTest {
             assertThat(repeat).isInstanceOf(GameActionResult.Rejected::class.java)
             assertThat((repeat as GameActionResult.Rejected).reason).contains("already confirmed")
             verify(nightOrchestrator, times(1)).submitAction(gameId)
+        }
+
+        @Test
+        fun `second MECH_LEARN in the same turn is rejected`() {
+            val mechId = "mech:001"
+            val ctx = GameContext(
+                game(subPhase = NightSubPhase.MECH_WOLF_PICK.name),
+                room(),
+                listOf(player(mechId, 1, PlayerRole.MECHANICAL_WOLF), player(wolfId, 2, PlayerRole.WEREWOLF)),
+                nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.MECH_WOLF_PICK },
+            )
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+            val dispatcher = makeDispatcher(listOf(stubHandler(PlayerRole.MECHANICAL_WOLF,
+                GameActionResult.Success(listOf(DomainEvent.MechWolfResult(gameId))))))
+
+            val first = dispatcher.dispatch(req(mechId, ActionType.MECH_LEARN, "u2"))
+            val repeat = dispatcher.dispatch(req(mechId, ActionType.MECH_LEARN, "u3"))
+
+            assertThat(first).isInstanceOf(GameActionResult.Success::class.java)
+            assertThat(repeat).isInstanceOf(GameActionResult.Rejected::class.java)
+            assertThat((repeat as GameActionResult.Rejected).reason).contains("already confirmed")
+            verify(nightOrchestrator, times(1)).submitAction(gameId)
+            verify(stompPublisher, times(1)).sendPrivateAfterCommit(eq(mechId), eq(DomainEvent.MechWolfResult(gameId)))
         }
 
         @Test
@@ -512,5 +537,84 @@ class GameActionDispatcherTest {
 
         // 应该推进
         verify(nightOrchestrator).submitAction(gameId)
+    }
+
+
+    // ── Mechanical wolf is outside the pack ───────────────────────────────────
+
+    @Nested
+    inner class MechanicalWolfPackTests {
+
+        private val mechId = "mech:001"
+        private val selectionEvent = DomainEvent.WolfSelectionChanged(gameId, "u2")
+
+        @Test
+        fun `WOLF_SELECT is pushed to pack wolves only`() {
+            val ctx = GameContext(
+                game(), room(),
+                listOf(player(wolfId, 1, PlayerRole.WEREWOLF), player(mechId, 2, PlayerRole.MECHANICAL_WOLF)),
+            )
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+            val handler = stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success(events = listOf(selectionEvent)))
+
+            makeDispatcher(listOf(handler)).dispatch(req(wolfId, ActionType.WOLF_SELECT, "u2"))
+
+            verify(stompPublisher).sendPrivateAfterCommit(wolfId, selectionEvent)
+            verify(stompPublisher, never()).sendPrivateAfterCommit(eq(mechId), any())
+        }
+
+        @Test
+        fun `mechanical wolf does not hold the WEREWOLF turn while the pack lives`() {
+            val ctx = GameContext(
+                game(), room(),
+                listOf(player(wolfId, 1, PlayerRole.WEREWOLF), player(mechId, 2, PlayerRole.MECHANICAL_WOLF)),
+                nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.WEREWOLF_PICK },
+            )
+            whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+            val dispatcher = makeDispatcher(listOf(stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success())))
+
+            // If the mech wolf's action claimed the turn, the pack's own action would be refused.
+            dispatcher.dispatch(req(mechId, ActionType.WOLF_SKIP))
+            val packResult = dispatcher.dispatch(req(wolfId, ActionType.WOLF_SKIP))
+
+            assertThat(packResult).isInstanceOf(GameActionResult.Success::class.java)
+        }
+    }
+
+    // ── Mechanical wolf + medium routes ───────────────────────────────────────
+
+    @ParameterizedTest(name = "{0} claims {2} and pushes privately = {3}")
+    @CsvSource(
+        "MEDIUM_CHECK,MEDIUM,MEDIUM_PICK,true",
+        "MEDIUM_CONFIRM,MEDIUM,MEDIUM_RESULT,false",
+        "MECH_LEARN,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_CHECK,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_POISON,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_PROTECT,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_SKIP,MECHANICAL_WOLF,MECH_WOLF_PICK,true",
+        "MECH_CONFIRM,MECHANICAL_WOLF,MECH_WOLF_RESULT,false",
+    )
+    fun `mech wolf and medium actions claim their sub-phase turn and only the picks push privately`(
+        action: ActionType, role: PlayerRole, subPhase: NightSubPhase, pushes: Boolean,
+    ) {
+        val actorId = "actor:001"
+        val ctx = GameContext(
+            game(subPhase = subPhase.name),
+            room(),
+            listOf(player(actorId, 1, role), player(wolfId, 2, PlayerRole.WEREWOLF)),
+            nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = subPhase },
+        )
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+        val event = DomainEvent.MechWolfResult(gameId)
+        val dispatcher = makeDispatcher(listOf(stubHandler(role, GameActionResult.Success(listOf(event)))))
+
+        val first = dispatcher.dispatch(req(actorId, action, "u2"))
+        val repeat = dispatcher.dispatch(req(actorId, action, "u2"))
+
+        assertThat(first).isInstanceOf(GameActionResult.Success::class.java)
+        // The repeat is refused only if the first claimed the turn for exactly this sub-phase.
+        assertThat(repeat).isInstanceOf(GameActionResult.Rejected::class.java)
+        verify(stompPublisher, times(if (pushes) 1 else 0)).sendPrivateAfterCommit(actorId, event)
+        verify(nightOrchestrator, times(1)).submitAction(gameId)
     }
 }

@@ -47,6 +47,9 @@ class WerewolfHandler(
             ?: return GameActionResult.Rejected("Actor not found")
         if (!actor.role.isWolf) return GameActionResult.Rejected("Not a werewolf")
         if (!actor.alive) return GameActionResult.Rejected("Actor is dead")
+        // The mechanical wolf kills only once the pack is gone.
+        if (actor !in RoleRules.wolfKillers(context.alivePlayers))
+            return GameActionResult.Rejected("The mechanical wolf cannot kill while a pack wolf lives")
 
         val nightPhase = context.nightPhase
             ?: return GameActionResult.Rejected("No active night phase")

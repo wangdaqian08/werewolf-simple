@@ -43,6 +43,91 @@ describe('PlayerReview', () => {
     expect(text).toContain('🔮 我查驗 1號 Alice → 狼人')
   })
 
+  it('player review shows MechWolf and Medium night actions', () => {
+    const asMech = (action: NonNullable<PlayerReviewData['rounds'][number]['night']>['action']) => {
+      const r = review({ me: seat(10, 'Mia', 'MECHANICAL_WOLF') })
+      r.rounds[0]!.night!.action = action
+      return mount(PlayerReview, { props: { review: r } }).text()
+    }
+    const medium = review({ me: seat(11, 'Meg', 'MEDIUM') })
+    medium.rounds[0]!.night!.action = {
+      type: 'MEDIUM',
+      target: seat(2, 'Bob', 'VILLAGER'),
+      role: 'VILLAGER',
+    }
+    expect(mount(PlayerReview, { props: { review: medium } }).text()).toContain(
+      '👻 我驗 2號 Bob〔村民〕',
+    )
+    medium.rounds[0]!.night!.action = { type: 'MEDIUM', target: null, role: null }
+    expect(mount(PlayerReview, { props: { review: medium } }).text()).toContain('👻 我未查驗')
+
+    const base = {
+      learned: null,
+      learnedRole: null,
+      check: null,
+      checkRole: null,
+      poison: null,
+      protect: null,
+      kill: null,
+    }
+    expect(
+      asMech({
+        type: 'MECHANICAL_WOLF',
+        ...base,
+        learned: seat(4, 'Dana', 'SEER'),
+        learnedRole: 'SEER',
+      }),
+    ).toContain('⚙ 我學 4號 Dana〔預言家〕')
+    // role check: the role is told
+    expect(
+      asMech({
+        type: 'MECHANICAL_WOLF',
+        ...base,
+        check: seat(2, 'Bob', 'HUNTER'),
+        checkRole: 'HUNTER',
+      }),
+    ).toContain('⚙ 我驗 2號 Bob〔獵人〕')
+    expect(
+      asMech({
+        type: 'MECHANICAL_WOLF',
+        ...base,
+        poison: seat(2, 'Bob'),
+        protect: seat(4, 'Dana'),
+        kill: seat(1, 'Alice', null, 'WOLF'),
+      }),
+    ).toContain('⚙ 我毒 2號 Bob，守 4號 Dana，刀 1號 Alice〔狼人〕')
+  })
+
+  it('player review: a learned alignment check shows wolf or good, never a role', () => {
+    const r = review({ me: seat(10, 'Mia', 'MECHANICAL_WOLF') })
+    const base = {
+      learned: null,
+      learnedRole: null,
+      checkRole: null,
+      poison: null,
+      protect: null,
+      kill: null,
+    }
+    r.rounds[0]!.night!.action = {
+      type: 'MECHANICAL_WOLF',
+      ...base,
+      check: seat(1, 'Alice', null, 'WOLF'),
+    }
+    expect(mount(PlayerReview, { props: { review: r } }).text()).toContain(
+      '⚙ 我驗 1號 Alice → 狼人',
+    )
+    r.rounds[0]!.night!.action = {
+      type: 'MECHANICAL_WOLF',
+      ...base,
+      check: seat(2, 'Bob', null, 'GOOD'),
+    }
+    const text = mount(PlayerReview, { props: { review: r } }).text()
+    expect(text).toContain('⚙ 我驗 2號 Bob → 好人')
+    expect(text).not.toContain('2號 Bob〔')
+    r.rounds[0]!.night!.action = { type: 'MECHANICAL_WOLF', ...base, check: null }
+    expect(mount(PlayerReview, { props: { review: r } }).text()).toContain('⚙ 我無行動')
+  })
+
   it('dawn names the dead seat but never the role or the cause', () => {
     const text = mount(PlayerReview, { props: { review: review() } }).text()
     expect(text).toContain('☀ 天亮 2號 Bob 出局')

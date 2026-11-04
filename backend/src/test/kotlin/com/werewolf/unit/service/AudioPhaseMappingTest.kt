@@ -26,7 +26,9 @@ class AudioPhaseMappingTest {
             GuardAudioConfig(),
             HunterAudioConfig(),
             IdiotAudioConfig(),
-            VillagerAudioConfig()
+            VillagerAudioConfig(),
+            MechanicalWolfAudioConfig(),
+            MediumAudioConfig()
         ))
         
         audioService = AudioService()
@@ -109,6 +111,57 @@ class AudioPhaseMappingTest {
 
         assertThat(sequence.audioFiles).contains("seer_open_eyes.mp3")
         assertThat(sequence.subPhase).isEqualTo(NightSubPhase.SEER_PICK.name)
+    }
+
+    @Test
+    fun `MEDIUM_PICK opens with medium_open_eyes mp3`() {
+        val sequence = audioService.calculateNightSubPhaseTransition(
+            gameId = 1,
+            oldSubPhase = NightSubPhase.WITCH_ACT,
+            newSubPhase = NightSubPhase.MEDIUM_PICK,
+        )
+        assertThat(sequence.audioFiles).containsExactly("witch_close_eyes.mp3", "medium_open_eyes.mp3")
+    }
+
+    @Test
+    fun `MEDIUM_RESULT has no open-eyes audio`() {
+        assertThat(audioService.calculateOpenEyesAudio(NightSubPhase.MEDIUM_RESULT)).isNull()
+        val entering = audioService.calculateNightSubPhaseTransition(
+            gameId = 1, oldSubPhase = NightSubPhase.MEDIUM_PICK, newSubPhase = NightSubPhase.MEDIUM_RESULT,
+        )
+        assertThat(entering.audioFiles).isEmpty()
+        val leaving = audioService.calculateNightSubPhaseTransition(
+            gameId = 1, oldSubPhase = NightSubPhase.MEDIUM_RESULT, newSubPhase = NightSubPhase.GUARD_PICK,
+        )
+        assertThat(leaving.audioFiles).contains("medium_close_eyes.mp3")
+    }
+
+    @Test
+    fun `MECH_WOLF_PICK opens with mech_wolf_open_eyes mp3`() {
+        val sequence = audioService.calculateNightSubPhaseTransition(
+            gameId = 1,
+            oldSubPhase = NightSubPhase.WEREWOLF_PICK,
+            newSubPhase = NightSubPhase.MECH_WOLF_PICK,
+        )
+        assertThat(sequence.audioFiles).containsExactly("wolf_close_eyes.mp3", "mech_wolf_open_eyes.mp3")
+        assertThat(audioService.calculateOpenEyesAudio(NightSubPhase.MECH_WOLF_RESULT)).isNull()
+    }
+
+    @Test
+    fun `dead medium and mech wolf play one open-close pair each`() {
+        val sequence = audioService.calculateDeadRoleAudioSequence(
+            gameId = 1,
+            skippedRoles = listOf(
+                NightSubPhase.MECH_WOLF_PICK, NightSubPhase.MECH_WOLF_RESULT,
+                NightSubPhase.MEDIUM_PICK, NightSubPhase.MEDIUM_RESULT,
+            ),
+            targetSubPhase = NightSubPhase.GUARD_PICK,
+        )
+        assertThat(sequence.audioFiles).containsExactly(
+            "mech_wolf_open_eyes.mp3", "mech_wolf_close_eyes.mp3",
+            "medium_open_eyes.mp3", "medium_close_eyes.mp3",
+            "guard_open_eyes.mp3",
+        )
     }
 
     @Test

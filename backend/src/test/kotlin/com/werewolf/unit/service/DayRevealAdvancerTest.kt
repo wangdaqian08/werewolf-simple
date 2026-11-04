@@ -61,7 +61,11 @@ class DayRevealAdvancerTest {
         poison: String? = null,
         antidote: Boolean = false,
         guard: String? = null,
+        mechPoison: String? = null,
+        mechGuard: String? = null,
     ) = NightPhase(gameId = gameId, dayNumber = day).also {
+        it.mechGuardTargetUserId = mechGuard
+        it.mechPoisonTargetUserId = mechPoison
         it.wolfTargetUserId = wolf
         it.witchPoisonTargetUserId = poison
         it.witchAntidoteUsed = antidote
@@ -127,6 +131,32 @@ class DayRevealAdvancerTest {
     @Test
     fun `no shot for a wolf-killed WHITE_WOLF_KING`() {
         stub(game(), listOf(player("k", PlayerRole.WHITE_WOLF_KING, alive = false)), night(wolf = "k"))
+        assertThat(advancer.nightShooterUserId(gameId)).isNull()
+    }
+
+    @Test
+    fun `mechanical wolf that learned HUNTER and died to wolves shoots`() {
+        val mech = player("m", PlayerRole.MECHANICAL_WOLF, alive = false).also { it.learnedRole = PlayerRole.HUNTER }
+        stub(game(), listOf(mech), night(wolf = "m"))
+        assertThat(advancer.nightShooterUserId(gameId)).isEqualTo("m")
+    }
+
+    @Test
+    fun `witch-poisoned mechanical wolf that learned HUNTER cannot shoot`() {
+        val mech = player("m", PlayerRole.MECHANICAL_WOLF, alive = false).also { it.learnedRole = PlayerRole.HUNTER }
+        stub(game(), listOf(mech), night(wolf = "m", poison = "m"))
+        assertThat(advancer.nightShooterUserId(gameId)).isNull()
+    }
+
+    @Test
+    fun `mech-poisoned hunter wolf target cannot shoot`() {
+        stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h", mechPoison = "h"))
+        assertThat(advancer.nightShooterUserId(gameId)).isNull()
+    }
+
+    @Test
+    fun `no shot for a mech-shielded hunter even if marked dead (the predicate alone)`() {
+        stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(wolf = "h", mechGuard = "h"))
         assertThat(advancer.nightShooterUserId(gameId)).isNull()
     }
 

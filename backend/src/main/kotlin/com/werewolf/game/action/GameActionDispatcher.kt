@@ -5,6 +5,7 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.night.NightTurnLedger
 import com.werewolf.game.phase.GamePhasePipeline
 import com.werewolf.game.role.RoleHandler
+import com.werewolf.game.role.RoleRules
 import com.werewolf.game.voting.VotingPipeline
 import com.werewolf.model.ActionType
 import com.werewolf.model.NightSubPhase
@@ -67,7 +68,7 @@ class GameActionDispatcher(
                     // Broadcast selection to all alive wolves (no sub-phase advance).
                     // afterCommit ordering keeps the event consistent with what
                     // /api/game/{id}/state will return on a follow-up read.
-                    val aliveWolves = context.alivePlayers.filter { it.role.isWolf }
+                    val aliveWolves = RoleRules.wolfKillers(context.alivePlayers)
                     result.events.forEach { event ->
                         aliveWolves.forEach { wolf -> stompPublisher.sendPrivateAfterCommit(wolf.userId, event) }
                     }
@@ -91,6 +92,24 @@ class GameActionDispatcher(
 
             // ── Night: guard ──────────────────────────────────────────────────
             ActionType.GUARD_PROTECT, ActionType.GUARD_SKIP -> nightTurn(request, context, PlayerRole.GUARD)
+            // ── Night: medium ─────────────────────────────────────────────────
+            ActionType.MEDIUM_CHECK -> nightTurn(request, context, PlayerRole.MEDIUM) { result ->
+                // Same after-commit private push as SEER_CHECK: the client refetches state on MediumResult.
+                result.events.forEach { stompPublisher.sendPrivateAfterCommit(request.actorUserId, it) }
+            }
+
+            ActionType.MEDIUM_CONFIRM -> nightTurn(request, context, PlayerRole.MEDIUM)
+
+            // ── Night: mechanical wolf ────────────────────────────────────────
+            ActionType.MECH_LEARN, ActionType.MECH_CHECK, ActionType.MECH_POISON, ActionType.MECH_PROTECT,
+            ActionType.MECH_SKIP,
+                -> nightTurn(request, context, PlayerRole.MECHANICAL_WOLF) { result ->
+                    // After-commit private ping: the client refetches state to see what it learned or did.
+                    result.events.forEach { stompPublisher.sendPrivateAfterCommit(request.actorUserId, it) }
+                }
+
+            ActionType.MECH_CONFIRM -> nightTurn(request, context, PlayerRole.MECHANICAL_WOLF)
+
             // ── Idiot reveal (day) ────────────────────────────────────────────
             // The idiot reveals only by being voted out (VotingPipeline does it); no client sends this.
             ActionType.IDIOT_REVEAL -> GameActionResult.Rejected("The idiot is revealed only when voted out")
@@ -119,6 +138,14 @@ class GameActionDispatcher(
             ActionType.WOLF_SKIP to NightSubPhase.WEREWOLF_PICK,
             ActionType.SEER_CHECK to NightSubPhase.SEER_PICK,
             ActionType.SEER_CONFIRM to NightSubPhase.SEER_RESULT,
+            ActionType.MEDIUM_CHECK to NightSubPhase.MEDIUM_PICK,
+            ActionType.MEDIUM_CONFIRM to NightSubPhase.MEDIUM_RESULT,
+            ActionType.MECH_LEARN to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_CHECK to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_POISON to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_PROTECT to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_SKIP to NightSubPhase.MECH_WOLF_PICK,
+            ActionType.MECH_CONFIRM to NightSubPhase.MECH_WOLF_RESULT,
             ActionType.WITCH_ACT to NightSubPhase.WITCH_ACT,
             ActionType.GUARD_PROTECT to NightSubPhase.GUARD_PICK,
             ActionType.GUARD_SKIP to NightSubPhase.GUARD_PICK,
@@ -138,7 +165,7 @@ class GameActionDispatcher(
         onSuccess: (GameActionResult.Success) -> Unit = {},
     ): GameActionResult {
         val actor = context.alivePlayerById(request.actorUserId)
-        val holdsRole = actor != null && (if (role == PlayerRole.WEREWOLF) actor.role.isWolf else actor.role == role)
+        val holdsRole = actor != null && (if (role == PlayerRole.WEREWOLF) actor in RoleRules.wolfKillers(context.alivePlayers) else actor.role == role)
         // Claim only the action's own turn while it is live: an out-of-turn request
         // must never hold another role's turn (the handler rejects it unclaimed).
         val turn = context.nightPhase

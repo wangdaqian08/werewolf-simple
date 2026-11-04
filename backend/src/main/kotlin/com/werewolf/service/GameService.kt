@@ -4,6 +4,7 @@ import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.DomainEvent
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.role.RoleRules
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.game.voting.TallyCalculator
 import com.werewolf.model.*
@@ -130,9 +131,9 @@ class GameService(
 
         val roleReveal = if (game.phase == GamePhase.ROLE_REVEAL) {
             val confirmedCount = players.count { it.confirmedRole }
-            val teammates = if (myPlayer?.role?.isWolf == true) {
+            val teammates = if (myPlayer?.role?.isPackWolf == true) {
                 players
-                    .filter { it.role.isWolf && it.userId != requestingUserId }
+                    .filter { it.role.isPackWolf && it.userId != requestingUserId }
                     .map { userLookup[it.userId]?.nickname ?: it.userId }
             } else emptyList()
             mapOf(
@@ -155,9 +156,14 @@ class GameService(
                 val playerMap = players.associateBy { it.userId }
 
                 // ── WEREWOLF: share selected target + formatted teammate list ──────────
-                if (myPlayer?.role?.isWolf == true) {
-                    if (np.wolfTargetUserId != null) base["selectedTargetId"] = np.wolfTargetUserId
-                    val teammates = players.filter { it.role.isWolf && it.userId != requestingUserId }
+                // The mechanical wolf is not in the pack: no teammates, and it sees the
+                // pick only while it is the lone killer. Only current killers (alive) see the pick:
+                // a dead pack wolf gets neither selectedTargetId nor wolfKiller.
+                val wolfKiller = myPlayer != null && myPlayer in RoleRules.wolfKillers(players.filter { it.alive })
+                base["wolfKiller"] = wolfKiller
+                if (wolfKiller && np.wolfTargetUserId != null) base["selectedTargetId"] = np.wolfTargetUserId
+                if (myPlayer?.role?.isPackWolf == true) {
+                    val teammates = players.filter { it.role.isPackWolf && it.userId != requestingUserId }
                     base["teammates"] = teammates.map { tp ->
                         "${tp.seatIndex}·${userLookup[tp.userId]?.nickname ?: tp.userId}"
                     }
@@ -181,6 +187,56 @@ class GameService(
                                 "isWerewolf" to (h.seerResultIsWerewolf ?: false),
                             )
                         }
+                    )
+                }
+
+                // ── MEDIUM: share the exact role seen + full check history ─────────────
+                if (myPlayer?.role == PlayerRole.MEDIUM && np.mediumCheckedUserId != null) {
+                    val history = nightPhaseRepository.findByGameId(gameId)
+                        .filter { it.mediumCheckedUserId != null }
+                        .sortedBy { it.dayNumber }
+                    base["mediumResult"] = mapOf(
+                        "checkedPlayerId"  to np.mediumCheckedUserId,
+                        "checkedNickname"  to (userLookup[np.mediumCheckedUserId]?.nickname ?: np.mediumCheckedUserId),
+                        "checkedSeatIndex" to (playerMap[np.mediumCheckedUserId]?.seatIndex ?: 0),
+                        "role"             to np.mediumResultRole?.name,
+                        "history"          to history.map { h ->
+                            mapOf(
+                                "round"    to h.dayNumber,
+                                "nickname" to (userLookup[h.mediumCheckedUserId]?.nickname ?: h.mediumCheckedUserId),
+                                "role"     to h.mediumResultRole?.name,
+                            )
+                        }
+                    )
+                }
+
+                // ── MECHANICAL WOLF: learned role, tonight's skill, and tonight's action ──
+                if (myPlayer?.role == PlayerRole.MECHANICAL_WOLF) {
+                    val allNights = nightPhaseRepository.findByGameId(gameId)
+                    val skillTonight = RoleRules.mechNightSkill(myPlayer, np.dayNumber, allNights)
+                    fun target(id: String?) = mapOf(
+                        "targetPlayerId"   to id,
+                        "targetNickname"   to id?.let { userLookup[it]?.nickname ?: it },
+                        "targetSeatIndex"  to id?.let { playerMap[it]?.seatIndex },
+                    )
+                    val result: Map<String, Any?>? = when {
+                        np.mechLearnTargetUserId != null ->
+                            mapOf("kind" to "LEARN", "role" to myPlayer.learnedRole?.name) + target(np.mechLearnTargetUserId)
+                        np.mechCheckTargetUserId != null ->
+                            if (myPlayer.learnedRole?.learnedSkill == LearnedSkill.CHECK_ALIGNMENT)
+                                mapOf("kind" to "CHECK", "isWerewolf" to (np.mechCheckResultRole?.isWolf ?: false)) + target(np.mechCheckTargetUserId)
+                            else mapOf("kind" to "CHECK", "role" to np.mechCheckResultRole?.name) + target(np.mechCheckTargetUserId)
+                        np.mechPoisonTargetUserId != null -> mapOf("kind" to "POISON") + target(np.mechPoisonTargetUserId)
+                        np.mechGuardTargetUserId != null -> mapOf("kind" to "PROTECT") + target(np.mechGuardTargetUserId)
+                        // No field records a skip: reaching the result sub-phase with nothing done means it skipped.
+                        np.subPhase == NightSubPhase.MECH_WOLF_RESULT -> mapOf("kind" to "SKIP")
+                        else -> null
+                    }
+                    base["mechWolf"] = mapOf(
+                        "learnedRole"     to myPlayer.learnedRole?.name,
+                        "learnedPlayerId" to allNights.firstOrNull { it.mechLearnTargetUserId != null }?.mechLearnTargetUserId,
+                        "skillTonight"    to skillTonight.name,
+                        "result"          to result,
                     )
                 }
 
@@ -226,7 +282,7 @@ class GameService(
             val nightResult = if (showNightResult) {
                 val np = nightPhaseRepository.findByGameIdAndDayNumber(gameId, game.dayNumber).orElse(null)
                 if (np != null) {
-                    val uniqueKilledIds = nightOrchestrator.computePendingKills(gameId, np).toSet()
+                    val uniqueKilledIds = NightOrchestrator.bySeat(nightOrchestrator.computePendingKills(gameId, np), players)
 
                     if (uniqueKilledIds.isNotEmpty()) {
                         mapOf(
@@ -418,8 +474,8 @@ class GameService(
             "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
             // Wolves know each other all game (role card); everyone else gets an empty list.
-            "wolfTeammates" to if (myPlayer?.role?.isWolf == true) {
-                players.filter { it.role.isWolf && it.userId != requestingUserId }.sortedBy { it.seatIndex }.map { it.userId }
+            "wolfTeammates" to if (myPlayer?.role?.isPackWolf == true) {
+                players.filter { it.role.isPackWolf && it.userId != requestingUserId }.sortedBy { it.seatIndex }.map { it.userId }
             } else emptyList(),
             "roleReveal" to roleReveal,
             "sheriffElection" to sheriffElection,
@@ -462,12 +518,14 @@ class GameService(
         val roles = mutableListOf<PlayerRole>()
         if (room.hasWhiteWolfKing) roles.add(PlayerRole.WHITE_WOLF_KING)
         if (room.hasBlackWolfKing) roles.add(PlayerRole.BLACK_WOLF_KING)
+        if (room.hasMechanicalWolf) roles.add(PlayerRole.MECHANICAL_WOLF)
         while (roles.size < room.wolfCount) roles.add(PlayerRole.WEREWOLF)
         if (room.hasSeer) roles.add(PlayerRole.SEER)
         if (room.hasWitch) roles.add(PlayerRole.WITCH)
         if (room.hasHunter) roles.add(PlayerRole.HUNTER)
         if (room.hasGuard) roles.add(PlayerRole.GUARD)
         if (room.hasIdiot) roles.add(PlayerRole.IDIOT)
+        if (room.hasMedium) roles.add(PlayerRole.MEDIUM)
         while (roles.size < playerCount) roles.add(PlayerRole.VILLAGER)
         return roles
     }

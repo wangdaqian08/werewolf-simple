@@ -104,11 +104,18 @@
                 {{ roleName(role.id) }} {{ roleTag(role.id) }}
               </span>
               <span
-                v-if="KING_IDS.includes(role.id)"
+                v-if="SPECIAL_WOLF_IDS.includes(role.id)"
                 class="win-cond-desc"
                 :data-testid="`role-hint-${role.id}`"
               >
-                {{ $t('setup.kingMin', { n: KING_MIN_PLAYERS }) }}
+                {{ $t('setup.specialWolfMinPlayers', { n: SPECIAL_WOLF_MIN_PLAYERS }) }}
+              </span>
+              <span
+                v-else-if="enabledOptional.has(EXCLUSIVE_WITH[role.id] ?? '')"
+                class="win-cond-desc"
+                :data-testid="`role-hint-${role.id}`"
+              >
+                {{ $t('setup.mediumSeerExclusive') }}
               </span>
             </span>
           </button>
@@ -221,24 +228,27 @@ function decrement() {
 }
 
 // Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (only 5 exist) and
-// always leave ≥ 1 villager seat, and a wolf king (白狼王 / 黑狼王, both may be
-// on) needs 9+ players and each king a plain fellow wolf: wolves ≥ kings + 1
-// (the backend enforces the king rules too).
+// always leave ≥ 1 villager seat, and a special wolf (白狼王 / 黑狼王 / 機械狼, any
+// may be on) needs 9+ players and each a plain fellow wolf: wolves ≥ specials + 1
+// (the backend enforces these rules too).
 const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)
-const KING_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
-const KING_MIN_PLAYERS = 9
+const SPECIAL_WOLF_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
+const SPECIAL_WOLF_MIN_PLAYERS = 9
+// The seer and the medium are mutually exclusive: turning one on turns the other off.
+const EXCLUSIVE_WITH: Record<string, string> = { SEER: 'MEDIUM', MEDIUM: 'SEER' }
 
-const enabledKingCount = computed(
-  () => KING_IDS.filter((id) => enabledOptional.value.has(id)).length,
+const enabledSpecialWolfCount = computed(
+  () => SPECIAL_WOLF_IDS.filter((id) => enabledOptional.value.has(id)).length,
 )
 
-// Optional wolf roles (the kings) take a wolf seat, so they are not gods.
+// Optional wolf roles (the special wolves) take a wolf seat, so they are not gods.
 const enabledGodCount = computed(
   () => Array.from(enabledOptional.value).filter((id) => !isWolfRole(id)).length,
 )
 const godRange = computed(() => ({
   min: Math.max(0, wolfCount.value - 1),
-  max: Math.min(GOD_IDS.length, wolfCount.value + 1, totalPlayers.value - wolfCount.value - 1),
+  // -1: the seer and the medium are exclusive, so one god id is never available.
+  max: Math.min(GOD_IDS.length - 1, wolfCount.value + 1, totalPlayers.value - wolfCount.value - 1),
 }))
 
 // One wolf more/less must keep the gods inside the new range.
@@ -250,7 +260,7 @@ const canAddWolf = computed(
 )
 const canRemoveWolf = computed(
   () =>
-    wolfCount.value > Math.max(currentBounds.value.min, enabledKingCount.value + 1) &&
+    wolfCount.value > Math.max(currentBounds.value.min, enabledSpecialWolfCount.value + 1) &&
     enabledGodCount.value <= wolfCount.value,
 )
 
@@ -262,10 +272,10 @@ function wolfDecrement() {
 }
 
 // After a player-count change (wolves were just reset): drop gods from the end
-// of the list / add from the front until they fit, and drop the kings below 9.
+// of the list / add from the front until they fit, and drop the special wolves below 9.
 function fitRolesToBoard(n: number) {
   const roles = enabledOptional.value
-  if (n < KING_MIN_PLAYERS) KING_IDS.forEach((id) => roles.delete(id))
+  if (n < SPECIAL_WOLF_MIN_PLAYERS) SPECIAL_WOLF_IDS.forEach((id) => roles.delete(id))
   const enabledGods = () => GOD_IDS.filter((id) => roles.has(id))
   for (const id of [...GOD_IDS].reverse()) {
     if (enabledGods().length <= godRange.value.max) break
@@ -273,7 +283,7 @@ function fitRolesToBoard(n: number) {
   }
   for (const id of GOD_IDS) {
     if (enabledGods().length >= godRange.value.min) break
-    roles.add(id)
+    if (!roles.has(EXCLUSIVE_WITH[id] ?? '')) roles.add(id)
   }
 }
 
@@ -285,11 +295,14 @@ function isEnabled(roleId: string): boolean {
 
 function canToggle(roleId: string): boolean {
   const on = enabledOptional.value.has(roleId)
-  if (KING_IDS.includes(roleId))
+  if (SPECIAL_WOLF_IDS.includes(roleId))
     return (
       on ||
-      (totalPlayers.value >= KING_MIN_PLAYERS && wolfCount.value >= enabledKingCount.value + 2)
+      (totalPlayers.value >= SPECIAL_WOLF_MIN_PLAYERS &&
+        wolfCount.value >= enabledSpecialWolfCount.value + 2)
     )
+  // Swapping SEER <-> MEDIUM keeps the god count, so it is always allowed.
+  if (!on && enabledOptional.value.has(EXCLUSIVE_WITH[roleId] ?? '')) return true
   return on
     ? enabledGodCount.value > godRange.value.min
     : enabledGodCount.value < godRange.value.max
@@ -297,10 +310,10 @@ function canToggle(roleId: string): boolean {
 
 function toggleHint(roleId: string): string {
   if (canToggle(roleId)) return ''
-  if (KING_IDS.includes(roleId))
-    return totalPlayers.value < KING_MIN_PLAYERS
-      ? t('setup.needPlayers', { n: KING_MIN_PLAYERS })
-      : t('setup.kingsNeedWolves', { n: enabledKingCount.value + 2 })
+  if (SPECIAL_WOLF_IDS.includes(roleId))
+    return totalPlayers.value < SPECIAL_WOLF_MIN_PLAYERS
+      ? t('setup.needPlayers', { n: SPECIAL_WOLF_MIN_PLAYERS })
+      : t('setup.specialWolvesNeedWolves', { n: enabledSpecialWolfCount.value + 2 })
   const { min, max } = godRange.value
   return enabledOptional.value.has(roleId)
     ? t('setup.atLeast', { n: min })
@@ -310,7 +323,10 @@ function toggleHint(roleId: string): string {
 function toggleRole(roleId: string) {
   if (!canToggle(roleId)) return
   if (enabledOptional.value.has(roleId)) enabledOptional.value.delete(roleId)
-  else enabledOptional.value.add(roleId)
+  else {
+    enabledOptional.value.delete(EXCLUSIVE_WITH[roleId] ?? '')
+    enabledOptional.value.add(roleId)
+  }
 }
 
 function roleRowClass(role: RoleDefinition) {

@@ -366,4 +366,86 @@ class GameReviewBuilderTest {
         assertThat(review.rounds.map { Triple(it.day, it.night != null, it.events.size) })
             .containsExactly(Triple(1, true, 1), Triple(2, true, 0))
     }
+
+    private fun mechBoard(diedDay: Map<String, Int> = emptyMap(), learned: PlayerRole? = null) = board(diedDay) +
+        listOf(
+            GamePlayer(gameId = gameId, userId = "mech", seatIndex = 10, role = PlayerRole.MECHANICAL_WOLF, learnedRole = learned)
+                .also { p -> diedDay["mech"]?.let { p.alive = false; p.diedDay = it } },
+            GamePlayer(gameId = gameId, userId = "medium", seatIndex = 11, role = PlayerRole.MEDIUM),
+        )
+
+    private fun mref(id: String) = mechBoard().first { it.userId == id }.let { ReviewPlayer(id, "N-$id", it.seatIndex, it.role) }
+
+    @Test
+    fun `wolf actors exclude the mechanical wolf while the pack lives`() {
+        val packDead = mapOf("w1" to 1, "w2" to 1, "king" to 1)
+        val review = build(mechBoard(packDead), listOf(night(1) { wolfTargetUserId = "v" }, night(2) { wolfTargetUserId = "seer" }))
+
+        assertThat(review.rounds[0].night!!.wolf.actors).containsExactly(mref("w1"), mref("w2"), mref("king"))
+        assertThat(review.rounds[1].night!!.wolf.actors).containsExactly(mref("mech"))
+    }
+
+    @Test
+    fun `a pack kill on the mechanical wolf is a normal kill, not 自刀`() {
+        val review = build(mechBoard(), listOf(night(1) { wolfTargetUserId = "mech" }))
+
+        assertThat(review.rounds.single().night!!.wolf.action).isEqualTo(WolfAction.KILL)
+    }
+
+    @Test
+    fun `a vote between the mechanical wolf and a pack wolf is not 倒钩`() {
+        val review = build(mechBoard(), listOf(night(1)), listOf(
+            voteResult(1, mapOf("w1" to listOf("mech"), "mech" to listOf("w1"))),
+        ))
+
+        assertThat(votes(review, 1).single().wolfPlay).isNull()
+    }
+
+    @Test
+    fun `mech and medium turns appear per night`() {
+        val nights = listOf(
+            night(1) { mechLearnTargetUserId = "seer"; mediumCheckedUserId = "v"; mediumResultRole = PlayerRole.VILLAGER },
+            night(2) {
+                mechCheckTargetUserId = "w1"; mechCheckResultRole = PlayerRole.WEREWOLF
+                mechPoisonTargetUserId = "hunter"; mechGuardTargetUserId = "seer"
+            },
+        )
+        val review = build(mechBoard(mapOf("medium" to 2)), nights)
+
+        assertThat(review.rounds[0].night!!.mech)
+            .isEqualTo(MechWolfTurn(mref("mech"), false, mref("seer"), PlayerRole.SEER, null, null, null, null, null))
+        assertThat(review.rounds[0].night!!.medium)
+            .isEqualTo(MediumTurn(mref("medium"), false, mref("v"), PlayerRole.VILLAGER))
+        assertThat(review.rounds[1].night!!.mech)
+            .isEqualTo(MechWolfTurn(mref("mech"), false, null, null, mref("w1"), mref("hunter"), mref("seer"), null, null))
+        assertThat(review.rounds[1].night!!.medium).isEqualTo(MediumTurn(mref("medium"), false, null, null))
+        assertThat(build(board(), listOf(night(1))).rounds.single().night!!.let { it.mech to it.medium }).isEqualTo(null to null)
+    }
+
+    @Test
+    fun `mech check carries the told role for a learned role check and wolf-or-not for an alignment check`() {
+        val nights = listOf(night(1) { mechCheckTargetUserId = "w1"; mechCheckResultRole = PlayerRole.WEREWOLF })
+
+        val roleCheck = build(mechBoard(learned = PlayerRole.MEDIUM), nights).rounds.single().night!!.mech!!
+        assertThat(roleCheck.checkRole).isEqualTo(PlayerRole.WEREWOLF)
+        assertThat(roleCheck.checkIsWerewolf).isNull()
+
+        val alignment = build(mechBoard(learned = PlayerRole.SEER), nights).rounds.single().night!!.mech!!
+        assertThat(alignment.checkRole).isNull()
+        assertThat(alignment.checkIsWerewolf).isTrue()
+
+        val noCheck = build(mechBoard(learned = PlayerRole.SEER), listOf(night(1))).rounds.single().night!!.mech!!
+        assertThat(noCheck.checkRole).isNull()
+        assertThat(noCheck.checkIsWerewolf).isNull()
+    }
+
+    @Test
+    fun `a mechanical wolf poison is a POISON death and its guard shows as a save`() {
+        val review = build(mechBoard(mapOf("hunter" to 1)), listOf(
+            night(1) { mechPoisonTargetUserId = "hunter"; wolfTargetUserId = "v"; mechGuardTargetUserId = "v" },
+        ), listOf(nightDeath(1, "hunter")))
+
+        assertThat(review.rounds.single().night!!.dawn)
+            .isEqualTo(Dawn(listOf(NightDeath(mref("hunter"), DeathCause.POISON)), NightSave(mref("v"), SaveSource.GUARD)))
+    }
 }

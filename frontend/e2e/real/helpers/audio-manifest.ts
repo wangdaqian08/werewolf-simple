@@ -27,21 +27,30 @@ import type { Page } from '@playwright/test'
 
 export const NIGHT_ENTRY_FILES = ['goes_dark_close_eyes.mp3', 'wolf_howl.mp3'] as const
 
+/** Optional night roles on the board; each changes the role-loop order. */
+export interface NightBoard {
+  mechanicalWolf?: boolean
+  medium?: boolean
+}
+
 /**
- * Per-night role broadcast order. Werewolf → Witch → Seer → Guard is pinned
- * by the handlers' Spring @Order(1..4); each role emits open then close,
- * dead or alive (dead-role masking).
+ * Per-night role broadcast order, pinned by the handlers' Spring @Order:
+ * Werewolf → [Mechanical wolf] → Witch → Seer or Medium (exclusive) → Guard.
+ * Each role emits open then close, dead or alive (dead-role masking).
  */
-export const NIGHT_ROLE_ORDER = [
-  'wolf_open_eyes.mp3',
-  'wolf_close_eyes.mp3',
-  'witch_open_eyes.mp3',
-  'witch_close_eyes.mp3',
-  'seer_open_eyes.mp3',
-  'seer_close_eyes.mp3',
-  'guard_open_eyes.mp3',
-  'guard_close_eyes.mp3',
-] as const
+export function nightRoleOrder(board: NightBoard = {}): string[] {
+  const roles = [
+    'wolf',
+    ...(board.mechanicalWolf ? ['mech_wolf'] : []),
+    'witch',
+    board.medium ? 'medium' : 'seer',
+    'guard',
+  ]
+  return roles.flatMap((r) => [`${r}_open_eyes.mp3`, `${r}_close_eyes.mp3`])
+}
+
+/** The order for boards without the mechanical wolf or the medium. */
+export const NIGHT_ROLE_ORDER: readonly string[] = nightRoleOrder()
 
 export const DAY_CUE_FILES = ['rooster_crowing.mp3', 'day_time.mp3'] as const
 
@@ -65,10 +74,12 @@ export interface GameAudioManifest {
 export function buildGameAudioManifest(opts: {
   nights: number
   dayCues: number
+  board?: NightBoard
 }): GameAudioManifest {
   const { nights, dayCues } = opts
+  const roleOrder = nightRoleOrder(opts.board)
   const backendRolePerFile: Record<string, number> = {}
-  for (const f of NIGHT_ROLE_ORDER) backendRolePerFile[f] = nights
+  for (const f of roleOrder) backendRolePerFile[f] = nights
   const backendNightInitPerFile: Record<string, number> = {}
   for (const f of NIGHT_ENTRY_FILES) backendNightInitPerFile[f] = nights
   const dayCuePerFile: Record<string, number> = {}
@@ -82,7 +93,7 @@ export function buildGameAudioManifest(opts: {
     backendRolePerFile,
     backendNightInitPerFile,
     stompPerFile,
-    totalFiles: nights * (NIGHT_ROLE_ORDER.length + NIGHT_ENTRY_FILES.length) + dayCues * 2,
+    totalFiles: nights * (roleOrder.length + NIGHT_ENTRY_FILES.length) + dayCues * 2,
   }
 }
 
@@ -262,13 +273,14 @@ export function findAudioManifestViolations(input: {
 
 /**
  * Assert every completed night broadcast its role audio in the pinned
- * Werewolf → Witch → Seer → Guard open/close order. Returns violation
+ * open/close order for `board` (see nightRoleOrder). Returns violation
  * strings; empty = order held for all `expectedNights` nights.
  */
 export function findNightOrderViolations(
   backendLines: string[],
   gameId: string,
   expectedNights: number,
+  board: NightBoard = {},
 ): string[] {
   const violations: string[] = []
   const nights = extractPerNightRoleAudio(backendLines, gameId)
@@ -277,7 +289,7 @@ export function findNightOrderViolations(
       `night blocks: expected ${expectedNights} [nightRoleLoop] headers, got ${nights.length}`,
     )
   }
-  const expected = NIGHT_ROLE_ORDER.join(' → ')
+  const expected = nightRoleOrder(board).join(' → ')
   nights.forEach((files, i) => {
     const actual = files.join(' → ')
     if (actual !== expected) {
