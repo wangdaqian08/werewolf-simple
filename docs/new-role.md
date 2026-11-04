@@ -89,7 +89,7 @@ Backend
 - `game/role/<Role>Handler.kt` + `game/action/GameActionDispatcher.kt`
 - `game/night/NightOrchestrator.kt` (active roles in `nightSequence` and `nightRoleLoop`, night order) for night roles
 - `game/phase/GamePhasePipeline.kt`, `game/phase/WinConditionChecker.kt`
-- `audio/impl/<Role>AudioConfig.kt` + `audio/RoleAudioConfiguration.kt` + narration files
+- `audio/impl/<Role>AudioConfig.kt` + `audio/RoleAudioConfiguration.kt` + narration files (generate on ttsmaker.com, voice 1506-AI 阿乐; see [ADR audio](adr/audio.md#generating-narration-files))
 - `service/ActionLogService.kt`, `model/EliminationHistory.kt`. Check that game review (PR #155) renders the role
 - Camp-dependent services: `PerkService`, `RewardSettlementService`
 

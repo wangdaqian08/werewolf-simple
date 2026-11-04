@@ -162,7 +162,7 @@ Sources:
 
 ## Audio files to generate (owner)
 
-Put them in `backend/src/main/resources/static/audio/`:
+Generate on https://ttsmaker.com/ with voice **1506-AI 阿乐**, then loudness-match (see `docs/adr/audio.md` § Generating narration files). Put them in `backend/src/main/resources/static/audio/`:
 - [ ] `mech_wolf_open_eyes.mp3`: 机械狼请睁眼
 - [ ] `mech_wolf_close_eyes.mp3`: 机械狼请闭眼
 - [ ] `medium_open_eyes.mp3`: 通灵师请睁眼
