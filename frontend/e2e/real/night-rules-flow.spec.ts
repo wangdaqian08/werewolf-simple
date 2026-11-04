@@ -182,7 +182,8 @@ test.describe('Night rules — repeated actions, dead seer, 空刀, 空守, witc
             expect(repeat, 'a second WITCH_ACT in the same turn must be rejected').toBe(false)
 
             expect(await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 15_000)).toBe(true)
-            await ctx.hostPage.waitForTimeout(1_500)
+            // The seer's own browser renders her pick step: the turn is live, not skipped.
+            await expect(page(ctx, 'SEER').getByTestId('seer-check')).toBeVisible({ timeout: 10_000 })
             expect(
                 (await readState(ctx.hostPage, ctx.gameId))?.nightPhase?.subPhase,
                 'the seer turn was not skipped',

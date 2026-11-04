@@ -10,7 +10,7 @@ test('__debug helper is exposed on window in mock mode', async ({ page }) => {
   await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(70)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
 
   // __debug should be available after setupMocks() runs
   const keys = await page.evaluate(() => Object.keys((window as any).__debug ?? {}))
@@ -37,7 +37,7 @@ test('__debug.gameStart() navigates to game view', async ({ page }) => {
   await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(70)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
@@ -58,7 +58,7 @@ test('__debug.roleSkip() advances to Sheriff Election', async ({ page }) => {
   await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(70)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
@@ -67,7 +67,6 @@ test('__debug.roleSkip() advances to Sheriff Election', async ({ page }) => {
   await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
-  await page.waitForTimeout(70)
 
   await expect(page.getByText(/警長競選|Sheriff Election|Sign Up|Run for Sheriff/i).first()).toBeVisible()
 })
@@ -82,7 +81,7 @@ test('__debug.dayScenario() loads day phase', async ({ page }) => {
   await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(70)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
 
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
@@ -91,7 +90,6 @@ test('__debug.dayScenario() loads day phase', async ({ page }) => {
   await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.dayScenario('HOST_REVEALED'))
-  await page.waitForTimeout(70)
 
   await expect(page.getByText(/Carol/i).first()).toBeVisible()
 })

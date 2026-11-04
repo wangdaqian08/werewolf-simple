@@ -18,7 +18,7 @@ import { type GameContext, setupGame } from './helpers/multi-browser'
 import { type RoleName } from './helpers/shell-runner'
 import { driveMinimalNight1ViaDom, waitForDayDiscussionAfterSheriff } from './helpers/night-driver'
 import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-screenshot'
-import { readHostSeat, waitForCondition } from './helpers/state-polling'
+import { readHostSeat, waitForCondition, waitForPhaseIn } from './helpers/state-polling'
 import {
   assertNonNull,
   completeDay,
@@ -134,16 +134,16 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
         const killSeat = villagerSeats[round % villagerSeats.length] ?? 1
         const checkSeat = wolvesToEliminate[0]?.seat ?? 1
         await completeNight(ctx, killSeat, checkSeat)
-        await ctx.hostPage.waitForTimeout(3_000)
-        if (ctx.hostPage.url().includes('/result/')) break
+        const dawn = await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['DAY_DISCUSSION', 'GAME_OVER'])
+        if (dawn === 'GAME_OVER') break
         await captureSnapshot(ctx.pages, testInfo, `classic-06-night-${round + 1}-actions`)
       }
 
       // Day: vote out the front wolf
       const targetWolfSeat = wolvesToEliminate[0].seat
       await completeDay(ctx, testInfo, targetWolfSeat, `classic-07-day-${round + 1}`)
-      await ctx.hostPage.waitForTimeout(2_500)
-      if (ctx.hostPage.url().includes('/result/')) break
+      const dusk = await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT', 'GAME_OVER'])
+      if (dusk === 'GAME_OVER') break
 
       wolvesToEliminate.shift()
       round++
@@ -152,13 +152,13 @@ test.describe('12p sheriff — CLASSIC villager win', () => {
     // Expect GAME_OVER — assert via authoritative API state, not URL.
     // STOMP-driven router.push to /result lags backend commit by 200-500ms
     // (longer on CI), so URL-only detection is racy.
-    const finalPhase = await ctx.hostPage.evaluate(async (id: string) => {
+    const finalPhase = (await ctx.hostPage.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
       const res = await fetch(`/api/game/${id}/state`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       return res.ok ? (await res.json())?.phase : null
-    }, ctx.gameId)
+    }, ctx.gameId)) as string | null
     expect(
       finalPhase,
       `villager-win plan must reach GAME_OVER within ${maxRounds} rounds — actual phase=${finalPhase}`,
@@ -308,18 +308,11 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
       'a non-host wolf is needed as the badge recipient so the badge stays put for the rest of the test',
     )
     await completeDay(ctx, testInfo, seer.seat, 'hard-05-day-1', seerPage, badgeWolfBot.seat)
-    await ctx.hostPage.waitForTimeout(2_000)
 
     // Plan needs 2 nights: D1 vote-out fires BADGE_HANDOVER + post-vote win
     // check, but counterplay (witch + alive humans) keeps it from ending.
     // Use API state, not URL — STOMP /result/ redirect lags backend commit.
-    const phaseAfterD1 = await ctx.hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      return res.ok ? (await res.json())?.phase : null
-    }, ctx.gameId)
+    const phaseAfterD1 = await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT', 'GAME_OVER'])
     expect(
       phaseAfterD1,
       'wolf-win plan needs 2 nights — D1 vote-out should NOT end the game',
@@ -330,19 +323,11 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     // completeNight) forces the witch to decline self-heal — she dies. After:
     // 9 alive (4W/0S/0Wi/0G/5V), no remaining counterplay tokens.
     await completeNight(ctx, witch.seat)
-    await ctx.hostPage.waitForTimeout(2_500)
-    await captureSnapshot(ctx.pages, testInfo, 'hard-06-night-2-done')
-
     // Edge: if N2 already wrapped the game (wolves got parity via cascading
     // death), capture and assert wolf-win here. Use API state — STOMP
     // /result/ redirect lags backend GAME_OVER commit.
-    const phaseAfterN2 = await ctx.hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      return res.ok ? (await res.json())?.phase : null
-    }, ctx.gameId)
+    const phaseAfterN2 = await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['DAY_DISCUSSION', 'GAME_OVER'])
+    await captureSnapshot(ctx.pages, testInfo, 'hard-06-night-2-done')
     if (phaseAfterN2 === 'GAME_OVER') {
       await ctx.hostPage.waitForURL(/\/result\//, { timeout: 30_000 })
       await captureSnapshot(ctx.pages, testInfo, 'hard-99-result-screen')
@@ -358,16 +343,9 @@ test.describe('12p sheriff — HARD_MODE wolf win with badge passover', () => {
     // kit), counterplay.any=false. Wolves at parity (4W vs 4 humans
     // remaining: host + 3 villagers) → HARD_MODE wolf-win logical branch.
     await completeDay(ctx, testInfo, villagerSeats[0], 'hard-07-day-2')
-    await ctx.hostPage.waitForTimeout(2_000)
 
     // Authoritative GAME_OVER assertion via API, not URL.
-    const phaseAfterD2 = await ctx.hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      return res.ok ? (await res.json())?.phase : null
-    }, ctx.gameId)
+    const phaseAfterD2 = await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['GAME_OVER', 'NIGHT'])
     expect(
       phaseAfterD2,
       `HARD_MODE plan must reach GAME_OVER after N1(guard)+D1(seer)+N2(witch)+D2(villager) — actual=${phaseAfterD2}`,
@@ -469,7 +447,7 @@ test.describe('12p sheriff — night-killed sheriff hands over badge at day reve
     const wolfToKill = wolfBots.find((b) => b.nick !== 'Host') ?? wolfBots[0]
     assertNonNull(wolfToKill, 'need a wolf to vote out on D1')
     await completeDay(ctx, testInfo, wolfToKill.seat, 'sndh-03-d1')
-    await ctx.hostPage.waitForTimeout(2_000)
+    await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT'])
 
     // ── N2: wolves target the SHERIFF (the seer). Witch+guard pass via
     //         completeNight defaults (witch declines antidote → kill stands;

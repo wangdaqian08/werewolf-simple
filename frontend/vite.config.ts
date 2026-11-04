@@ -33,6 +33,10 @@ export default defineConfig({
         global: 'globalThis',
     },
     server: {
+        // Vite full-reloads every open page when an .html file under its root
+        // changes; a Playwright report written here mid-run reloads the pages
+        // of any other suite still running against this dev server.
+        watch: { ignored: ['**/playwright-report/**', '**/test-results/**'] },
         proxy: {
             '/api': 'http://localhost:8080',
             '/ws': {

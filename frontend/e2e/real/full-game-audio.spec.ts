@@ -46,7 +46,7 @@
 import { expect, type Page, test } from '@playwright/test'
 import { setupGame } from './helpers/multi-browser'
 import { act, actName, type BotInfo, type RoleName } from './helpers/shell-runner'
-import { readBackendLogLineCount, readBackendLogSince } from './helpers/backend-log'
+import { readBackendLogLineCount, readBackendLogSince, waitForBackendLog } from './helpers/backend-log'
 import {
   readUnvotedAlivePlayerIds,
   waitForAllVotesRegistered,
@@ -542,9 +542,6 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
       }
 
       // ── LAYER 1: backend [broadcastAudio] for ROLE audio ─────────────────
-      // Brief tail wait so Spring Boot's async logger flushes the last
-      // [broadcastNightInit] / [broadcastAudio] line to disk.
-      await hostPage.waitForTimeout(3_000)
       // Read the WHOLE file from line 0, not from a snapshot offset.
       // readBackendLogSince had an off-by-one: readFileSync().split('\n')
       // returns N+1 elements when the file ends in '\n', so the logStartLine
@@ -553,7 +550,33 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
       // treating it as if it had been there at snapshot time. Each test
       // launches its own game (game=1 in this fresh-truncated file) so
       // grep-without-offset is unambiguous.
-      const backendLines = readBackendLogSince(0)
+      const missingIn = (lines: string[]): string[] => {
+        const roleCounts = countBackendBroadcasts(lines)
+        const nightInitCounts = countBackendNightInits(lines)
+        const missing: string[] = []
+        for (const [file, expected] of Object.entries(expectedRolePerFile)) {
+          const actual = roleCounts[file] ?? 0
+          if (actual < expected) {
+            missing.push(`${file}: expected ${expected} [broadcastAudio], got ${actual}`)
+          }
+        }
+        for (const [file, expected] of Object.entries(expectedNightInitPerFile)) {
+          const actual = nightInitCounts[file] ?? 0
+          if (actual < expected) {
+            missing.push(`${file}: expected ${expected} [broadcastNightInit], got ${actual}`)
+          }
+        }
+        return missing
+      }
+      // Spring's logger flushes asynchronously: wait for the last expected
+      // [broadcastNightInit] / [broadcastAudio] line to reach the file. On
+      // timeout the assertion below reports exactly which lines are short.
+      const backendLines = await waitForBackendLog(
+        0,
+        (lines) => missingIn(lines).length === 0,
+        'every expected backend audio line flushed to the log',
+        15_000,
+      ).catch(() => readBackendLogSince(0))
       const totalNightInitLines = backendLines.filter((l) =>
         l.includes('[broadcastNightInit]'),
       ).length
@@ -563,19 +586,7 @@ test.describe('Full 7p game audio — every transition fires every cue', () => {
       )
       const backendRoleCounts = countBackendBroadcasts(backendLines)
       const backendNightInitCounts = countBackendNightInits(backendLines)
-      const backendMissing: string[] = []
-      for (const [file, expected] of Object.entries(expectedRolePerFile)) {
-        const actual = backendRoleCounts[file] ?? 0
-        if (actual < expected) {
-          backendMissing.push(`${file}: expected ${expected} [broadcastAudio], got ${actual}`)
-        }
-      }
-      for (const [file, expected] of Object.entries(expectedNightInitPerFile)) {
-        const actual = backendNightInitCounts[file] ?? 0
-        if (actual < expected) {
-          backendMissing.push(`${file}: expected ${expected} [broadcastNightInit], got ${actual}`)
-        }
-      }
+      const backendMissing = missingIn(backendLines)
       expect(
         backendMissing,
         `Backend MUST publish every role audio (via [broadcastAudio]) and ` +

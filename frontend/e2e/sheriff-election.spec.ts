@@ -20,7 +20,7 @@ async function goToSheriffSignup(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
   // Navigate to sheriff SIGNUP phase
   await page.getByRole('button', { name: 'Skip → Sheriff' }).click()
-  await page.waitForTimeout(100)
+  await expect(page.getByTestId('sheriff-decision-progress')).toBeVisible()
 }
 
 // ── Test 1: run → withdraw toggles between Run/Pass and Withdraw buttons ─────
@@ -58,7 +58,7 @@ test('pass button changes to Passed state', async ({ page }) => {
 
   // Click "放棄 / Pass"
   await page.getByRole('button', { name: /放棄|Pass/, exact: true }).click()
-  await page.waitForTimeout(100)
+  await expect(page.getByTestId('sheriff-decision-progress')).toContainText(/6\s*\/\s*8/)
 
   // The "Pass" button disappears after clicking it
   await expect(page.getByRole('button', { name: /放棄|Pass/, exact: true })).not.toBeVisible()
@@ -73,7 +73,6 @@ test('host sees Next Speaker in My Turn view', async ({ page }) => {
 
   // Use the debug helper to jump to SPEECH_CANDIDATE preset where currentSpeakerId === u1 (the host/You)
   await page.evaluate(() => (window as any).__debug.sheriffPhase('SPEECH_CANDIDATE'))
-  await page.waitForTimeout(100)
 
   // Should now be in "My Turn" view (currentSpeakerId === myUserId)
   await expect(page.getByText(/輪到你了|Your Turn/i)).toBeVisible()
@@ -97,7 +96,6 @@ test('Reveal Result stays visible disabled when host quit campaign and others no
 
   // Jump to VOTING state where host (u1) quit campaign — canVote=false, allVoted=false
   await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING_HOST_QUIT'))
-  await page.waitForTimeout(100)
 
   // Host sees "已放棄投票 / Vote forfeited" (can't vote)
   await expect(page.getByRole('button', { name: /(?:已放棄投票|Vote forfeited)/i })).toBeVisible()
@@ -116,7 +114,6 @@ test('Reveal Result stays visible disabled when host quit campaign and others no
 test('vote count shows and Reveal Result enables after Give Up Vote', async ({ page }) => {
   await goToSheriffSignup(page)
   await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING'))
-  await page.waitForTimeout(100)
 
   // Vote progress label shows X/Y 已投票 (X/Y voted in English)
   await expect(page.getByText(/\d+\/\d+ (?:已投票|voted)/i)).toBeVisible()
@@ -128,7 +125,6 @@ test('vote count shows and Reveal Result enables after Give Up Vote', async ({ p
 
   // Click "Give Up Vote"
   await page.getByRole('button', { name: /(?:放棄投票|Give Up Vote)/i }).click()
-  await page.waitForTimeout(100)
 
   // Locked state: "已棄票 / Abstained" shown, vote buttons gone
   await expect(page.getByText(/(?:已棄票|Abstained)/i)).toBeVisible()
@@ -145,23 +141,20 @@ test('vote count shows and Reveal Result enables after Give Up Vote', async ({ p
 test('abstaining clears previously selected candidate highlight', async ({ page }) => {
   await goToSheriffSignup(page)
   await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING'))
-  await page.waitForTimeout(100)
 
   // Select a candidate (Tom, u6)
   await page.locator('.vote-row').filter({ hasText: 'Tom' }).click()
-  await page.waitForTimeout(100)
 
   // Verify Tom row is selected
   await expect(page.locator('.vote-row-selected')).toBeVisible()
 
   // Click Give Up Vote
   await page.getByRole('button', { name: /(?:放棄投票|Give Up Vote)/i }).click()
-  await page.waitForTimeout(100)
 
-  // No row should be selected anymore
-  await expect(page.locator('.vote-row-selected')).not.toBeVisible()
   // Locked abstain badge shown
   await expect(page.getByText(/(?:已棄票|Abstained)/i)).toBeVisible()
+  // No row should be selected anymore
+  await expect(page.locator('.vote-row-selected')).not.toBeVisible()
 })
 
 // ── Test 7: cannot select self when voting as a candidate ────────────────────
@@ -173,7 +166,6 @@ test('cannot select self when voting as a candidate', async ({ page }) => {
 
   // Jump to VOTING state where u1 (host/me) is a running candidate
   await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING_WITH_HOST_CANDIDATE'))
-  await page.waitForTimeout(100)
 
   // u1's row (nickname '我') should have .vote-row-self class
   const selfRow = page.locator('.vote-row-self')
@@ -181,7 +173,6 @@ test('cannot select self when voting as a candidate', async ({ page }) => {
 
   // Clicking the self row should NOT select it
   await selfRow.click()
-  await page.waitForTimeout(100)
 
   // No selection state on the self row
   await expect(selfRow).not.toHaveClass(/vote-row-selected/)
@@ -197,7 +188,6 @@ test('cannot select self when voting as a candidate', async ({ page }) => {
 test('quit candidate does not appear as a vote column in result', async ({ page }) => {
   await goToSheriffSignup(page)
   await page.evaluate(() => (window as any).__debug.sheriffPhase('RESULT'))
-  await page.waitForTimeout(100)
 
   // RESULT screen should be shown
   await expect(page.getByText(/警長當選/i)).toBeVisible()
@@ -226,7 +216,6 @@ test('selecting a candidate immediately highlights the row and enables Confirm V
 }) => {
   await goToSheriffSignup(page)
   await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING'))
-  await page.waitForTimeout(100)
 
   // Before any selection: no row highlighted, Confirm Vote disabled
   await expect(page.locator('.vote-row-selected')).not.toBeVisible()
@@ -234,7 +223,6 @@ test('selecting a candidate immediately highlights the row and enables Confirm V
 
   // Click Tom's candidate row
   await page.locator('.vote-row').filter({ hasText: 'Tom' }).click()
-  await page.waitForTimeout(100)
 
   // Row is immediately highlighted — no server roundtrip needed
   await expect(page.locator('.vote-row-selected')).toBeVisible()
@@ -251,15 +239,12 @@ test('selecting a candidate immediately highlights the row and enables Confirm V
 test('Confirm Vote shows locked voted badge with candidate name', async ({ page }) => {
   await goToSheriffSignup(page)
   await page.evaluate(() => (window as any).__debug.sheriffPhase('VOTING'))
-  await page.waitForTimeout(100)
 
   // Select Tom
   await page.locator('.vote-row').filter({ hasText: 'Tom' }).click()
-  await page.waitForTimeout(100)
 
   // Confirm the vote
   await page.getByRole('button', { name: /(?:確認投票|Confirm Vote)/i }).click()
-  await page.waitForTimeout(200)
 
   // Locked state: "已投票 — Tom" badge visible
   await expect(page.locator('.voted-badge')).toBeVisible()
@@ -279,7 +264,6 @@ test('Confirm Vote shows locked voted badge with candidate name', async ({ page 
 test('result tally columns are sorted highest votes first', async ({ page }) => {
   await goToSheriffSignup(page)
   await page.evaluate(() => (window as any).__debug.sheriffPhase('RESULT'))
-  await page.waitForTimeout(100)
 
   await expect(page.getByText(/警長當選/i)).toBeVisible()
 

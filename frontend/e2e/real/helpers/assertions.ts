@@ -276,16 +276,3 @@ export async function waitForText(
     await expect(page.getByText(text).first()).toBeVisible({ timeout })
   }
 }
-
-/**
- * Verify a page does NOT show a specific selector (e.g., dead player should not see vote buttons).
- */
-export async function verifyNotVisible(
-  page: Page,
-  selector: string,
-  timeout = 2_000,
-): Promise<void> {
-  // Give a brief window for any pending updates, then assert hidden
-  await page.waitForTimeout(timeout)
-  await expect(page.locator(selector).first()).not.toBeVisible()
-}

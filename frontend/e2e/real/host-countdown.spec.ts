@@ -122,8 +122,13 @@ test.describe('Flow A — DAY_DISCUSSION timer start/stop syncs to all clients',
     const allPages = [ctx.hostPage, ...ctx.pages.values()]
     const before = await getRemainingMsAll(allPages)
 
-    await new Promise((r) => setTimeout(r, 3_000))
-    await new Promise((r) => setTimeout(r, 200)) // extra tick
+    // Let the host's own clock run ≥ 3 s (no fixed sleep), then read everyone.
+    await expect
+        .poll(async () => before[0] - (await getRemainingMsAll([ctx.hostPage]))[0], {
+          intervals: [100],
+          timeout: 8_000,
+        })
+        .toBeGreaterThanOrEqual(3_000)
 
     const after = await getRemainingMsAll(allPages)
     for (let i = 0; i < allPages.length; i++) {
@@ -182,7 +187,13 @@ test.describe('Flow C — reconnect mid-timer recovers correct remaining', () =>
   })
 
   test('C.2 wait 5s, one player reloads — recovers 65-71s remaining', async () => {
-    await new Promise((r) => setTimeout(r, 5_000))
+    // Let ≥ 5 s of the 75 s timer run on the host's clock before the reload.
+    await expect
+        .poll(async () => (await getRemainingMsAll([ctx.hostPage]))[0], {
+          intervals: [100],
+          timeout: 10_000,
+        })
+        .toBeLessThanOrEqual(70_000)
 
     // Pick any non-host page to reload
     const playerPage = [...ctx.pages.values()][0]

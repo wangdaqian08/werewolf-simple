@@ -13,7 +13,17 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, actName, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {readAlivePlayerIds, readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase} from './helpers/state-polling'
+import {
+  readAlivePlayerIds,
+  readHostUserId,
+  readUnvotedAlivePlayerIds,
+  waitForAllVotesRegistered,
+  waitForDayRevealed,
+  waitForNightSubPhase,
+  waitForPhaseIn,
+  waitForUiSubPhase,
+  waitForVoteRegistered,
+} from './helpers/state-polling'
 
 let ctx: GameContext
 
@@ -189,7 +199,6 @@ test.describe('Voting tie → revote → game proceeds', () => {
       const slot = wolfPage.locator('.player-grid .slot-alive').first()
       if (await slot.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await slot.click()
-        await wolfPage.waitForTimeout(500)
         await wolfPage.getByTestId('wolf-confirm-kill').click()
       }
     }
@@ -217,14 +226,10 @@ test.describe('Voting tie → revote → game proceeds', () => {
       if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
         if (opts.witchUseAntidote) {
           const useBtn = witchPage.getByTestId('witch-antidote')
-          if (await useBtn.isVisible().catch(() => false)) {
-            await useBtn.click()
-            await witchPage.waitForTimeout(500)
-          }
+          if (await useBtn.isVisible().catch(() => false)) await useBtn.click()
         } else {
           const passBtn = witchPage.getByTestId('switch-pass-antidote')
           if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
-          await witchPage.waitForTimeout(500)
         }
         const skipBtn = witchPage.getByTestId('witch-skip')
         if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
@@ -330,7 +335,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const revealBtn = hostPage.getByTestId('day-reveal-result')
     await revealBtn.waitFor({ state: 'visible', timeout: 10_000 })
     await revealBtn.click()
-    await hostPage.waitForTimeout(1_000)
+    await waitForUiSubPhase(hostPage, 'RESULT_REVEALED')
 
     // Host starts vote
     const startVoteBtn = hostPage.getByTestId('day-start-vote')
@@ -350,10 +355,8 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const target1 = nonWolves[0]
     const target2 = nonWolves[1] ?? nonWolves[0]
 
-    // Host votes for target1
     const abstainBtn = hostPage.locator('.skip-btn').first()
-    // Select target1 slot and vote
-    await hostPage.waitForTimeout(500)
+    const hostId = await readHostUserId(hostPage)
 
     // Use scripts to vote: half vote for target1, half for target2
     // This is simpler than clicking in all browsers.
@@ -365,10 +368,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const votingBots = allBots.filter((b) => b.nick !== 'Host')
     const half = Math.floor(votingBots.length / 2)
 
-    // Host abstains (to not affect the tie)
-    if (await abstainBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    // Host abstains (to not affect the tie). isVisible() never waits, so an
+    // alive host waits for the button instead of probing it.
+    if (hostId && (await readUnvotedAlivePlayerIds(hostPage, ctx.gameId)).has(hostId)) {
+      await abstainBtn.waitFor({ state: 'visible', timeout: 10_000 })
       await abstainBtn.click()
-      await hostPage.waitForTimeout(500)
+      await waitForVoteRegistered(hostPage, ctx.gameId, hostId)
     }
 
     // First half votes for target1
@@ -381,7 +386,11 @@ test.describe('Voting tie → revote → game proceeds', () => {
       tryAct('SUBMIT_VOTE', bot.nick, { target: String(target2.seat), room: ctx.roomCode })
     }
 
-    await hostPage.waitForTimeout(2_000)
+    await waitForAllVotesRegistered(
+      hostPage,
+      ctx.gameId,
+      votingBots.map((b) => b.userId),
+    )
 
     // Host reveals tally. Backend's next sub-phase depends on the tally:
     //   - decisive vote → VOTE_RESULT (VOTING_CONTINUE applies)
@@ -404,8 +413,13 @@ test.describe('Voting tie → revote → game proceeds', () => {
     // there and would be rejected with "Not in VOTE_RESULT sub-phase".
     if (postRevealSub === 'VOTE_RESULT') {
       tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+      const next = await waitForPhaseIn(hostPage, ctx.gameId, ['NIGHT', 'DAY_DISCUSSION', 'GAME_OVER'], 15_000)
+      if (next === 'GAME_OVER') await hostPage.waitForURL(/\/result\//, { timeout: 15_000 })
+      else await verifyAllBrowsersPhase(ctx.pages, next === 'NIGHT' ? 'NIGHT' : 'DAY', 15_000)
+    } else {
+      // The tie auto-opened the re-vote: the host's browser renders RE_VOTING.
+      await waitForUiSubPhase(hostPage, 'RE_VOTING')
     }
-    await hostPage.waitForTimeout(3_000)
 
     await captureSnapshot(ctx.pages, testInfo, '03-after-continue')
 
@@ -438,7 +452,7 @@ test.describe('Voting tie → revote → game proceeds', () => {
     const startNightBtn = ctx.hostPage.getByTestId('start-night')
     if (await startNightBtn.isVisible().catch(() => false)) {
       await startNightBtn.click()
-      await ctx.hostPage.waitForTimeout(2_000)
+      await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT'], 15_000)
     }
 
     /**
@@ -493,9 +507,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
       }
       // Host abstains via the skip-btn click so the host's vote counts toward
       // allVoted (voting-reveal button is disabled until allVoted=true).
-      const abstainBtn = ctx.hostPage.locator('.skip-btn').first()
-      if (await abstainBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      // isVisible() never waits: an alive, unvoted host waits for the button.
+      if (hostId && unvoted.has(hostId)) {
+        const abstainBtn = ctx.hostPage.getByTestId('voting-skip')
+        await abstainBtn.waitFor({ state: 'visible', timeout: 10_000 })
         await abstainBtn.click()
+        await waitForVoteRegistered(ctx.hostPage, ctx.gameId, hostId)
       }
     }
 
@@ -516,8 +533,8 @@ test.describe('Voting tie → revote → game proceeds', () => {
       }
       if (postRevealSub === 'VOTE_RESULT') {
         tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+        await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT', 'DAY_DISCUSSION', 'GAME_OVER'], 15_000)
       }
-      await ctx.hostPage.waitForTimeout(1_500)
     }
 
     /**
@@ -603,12 +620,12 @@ test.describe('Voting tie → revote → game proceeds', () => {
         const revealBtn = ctx.hostPage.getByTestId('day-reveal-result')
         if (await revealBtn.isVisible().catch(() => false)) {
           await revealBtn.click()
-          await ctx.hostPage.waitForTimeout(1_000)
+          if ((await waitForDayRevealed(ctx.hostPage, ctx.gameId)) === 'GAME_OVER') continue
         }
         const startVoteBtn = ctx.hostPage.getByTestId('day-start-vote')
         if (await startVoteBtn.isVisible().catch(() => false)) {
           await startVoteBtn.click()
-          await ctx.hostPage.waitForTimeout(1_000)
+          await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['DAY_VOTING'], 15_000)
         }
         await completeVote()
         continue
@@ -621,9 +638,14 @@ test.describe('Voting tie → revote → game proceeds', () => {
       }
 
       // Unknown state (waiting screen, sub-phase transition in progress) —
-      // small wait and re-probe. Hunter / idiot sub-phases fall here; the
-      // next iteration's DAY/VOTING branch picks up once they resolve.
-      await ctx.hostPage.waitForTimeout(1_500)
+      // wait for any known screen to render, then re-probe. Hunter / idiot
+      // sub-phases fall here; the next iteration's DAY/VOTING branch picks
+      // up once they resolve (the result page ends the loop via the URL).
+      await ctx.hostPage
+        .locator('.voting-wrap, .day-wrap, .game-wrap.night-mode')
+        .first()
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .catch(() => {})
     }
 
     // Game should be over.

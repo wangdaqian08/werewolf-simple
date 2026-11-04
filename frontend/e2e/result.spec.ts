@@ -11,7 +11,7 @@ async function setup(page: Page) {
   await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(70)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
   await page.evaluate(() => (window as unknown as { __debug: { gameStart: () => void } }).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
   await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })

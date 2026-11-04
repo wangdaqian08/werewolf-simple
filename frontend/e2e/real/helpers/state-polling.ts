@@ -332,6 +332,70 @@ export async function waitForAllVotesRegistered(
 }
 
 /**
+ * Poll `state.phase` until it is one of `targets` and return the phase
+ * reached. Use after a night/day driver when the game may either go on or
+ * end — e.g. `['DAY_DISCUSSION', 'GAME_OVER']` after a night, or
+ * `['NIGHT', 'GAME_OVER']` after a vote — instead of sleeping and then
+ * sniffing the URL. Throws on timeout (scaled 2× on CI).
+ */
+export async function waitForPhaseIn(
+  hostPage: Page,
+  gameId: string,
+  targets: readonly string[],
+  timeoutMs = 30_000,
+): Promise<string> {
+  let reached = ''
+  await waitForCondition(
+    async () => {
+      const phase = (await fetchGameState(hostPage, gameId))?.phase
+      if (phase && targets.includes(phase)) {
+        reached = phase
+        return true
+      }
+      return false
+    },
+    `phase ∈ {${targets.join(', ')}}`,
+    timeoutMs,
+    300,
+  )
+  return reached
+}
+
+/**
+ * After the host clicks 顯示結果: wait until the day result is revealed
+ * (RESULT_HIDDEN → RESULT_REVEALED / BADGE_HANDOVER) or the reveal ended
+ * the game. Returns the phase the game is in afterwards.
+ */
+export async function waitForDayRevealed(hostPage: Page, gameId: string, timeoutMs = 15_000): Promise<string> {
+  let phase = ''
+  await waitForCondition(
+    async () => {
+      const state = await fetchGameState(hostPage, gameId)
+      if (!state?.phase) return false
+      phase = state.phase
+      return state.phase !== 'DAY_DISCUSSION' || state.dayPhase?.subPhase !== 'RESULT_HIDDEN'
+    },
+    'day result revealed',
+    timeoutMs,
+    300,
+  )
+  return phase
+}
+
+/**
+ * Wait until a browser RENDERS the given sub-phase: GameView writes the
+ * authoritative `data-phase-sub` (night / voting / day / election sub-phase)
+ * onto `.game-wrap`, so this proves the STOMP update reached this page and
+ * the UI moved — the backend-state polls above only prove the server did.
+ */
+export async function waitForUiSubPhase(page: Page, subPhase: string, timeoutMs = 15_000): Promise<void> {
+  await page
+    .locator(`.game-wrap[data-phase-sub="${subPhase}"]`)
+    .first()
+    .waitFor({ state: 'visible', timeout: scale(timeoutMs) })
+}
+
+/**
  * Block until the night sub-phase is anything OTHER than `fromSubPhase`
  * (or the game has left NIGHT entirely). Use after firing a role-action
  * to confirm the role-loop coroutine advanced. Returns the new sub-phase

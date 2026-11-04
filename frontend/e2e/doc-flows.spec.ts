@@ -14,7 +14,7 @@ async function setup(page: Page) {
   await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(70)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
 }
 
 // ── Flow 1: Full game flow from lobby ─────────────────────────────────────────
@@ -32,7 +32,6 @@ test('flow: gameStart → roleSkip → Sheriff SIGNUP', async ({ page }) => {
   await expect(page.getByText(/知道了|Got it/)).toBeVisible()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
-  await page.waitForTimeout(70)
 
   // Should be on Sheriff Election SIGNUP
   await expect(page.getByText(/競選警長|Sign Up|Run for Sheriff|警長競選/i).first()).toBeVisible()
@@ -50,16 +49,15 @@ test('flow: gameStart → roleSkip → sheriffExit → dayScenario HOST_REVEALED
   await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
-  await page.waitForTimeout(70)
+  await expect(page.getByTestId('sheriff-decision-progress')).toBeVisible()
 
   await page.evaluate(() => (window as any).__debug.sheriffExit())
-  await page.waitForTimeout(70)
+  await expect(page.locator('.day-wrap')).toBeVisible()
 
   // After sheriffExit we're in DAY HIDDEN — confirm we're not on sheriff screen
   await expect(page.getByText(/競選警長|Sign Up/i)).not.toBeVisible()
 
   await page.evaluate(() => (window as any).__debug.dayScenario('HOST_REVEALED'))
-  await page.waitForTimeout(70)
 
   // HOST_REVEALED: Carol was killed, kill banner visible
   await expect(page.getByText(/Carol/i).first()).toBeVisible()
@@ -102,7 +100,6 @@ test('flow: sheriffCandidate is a no-op when candidate already exists', async ({
   await expect(progress).toContainText(/6\s*\/\s*8/)
   // Adding Alice again should be a no-op: counter stays at 6/8.
   await page.evaluate(() => (window as any).__debug.sheriffCandidate('u2', 'Alice', '😊'))
-  await page.waitForTimeout(70)
   await expect(progress).toContainText(/6\s*\/\s*8/)
 })
 
@@ -139,10 +136,9 @@ test('flow: sheriffPhase SPEECH_CANDIDATE after roleSkip works', async ({ page }
   await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.evaluate(() => (window as any).__debug.roleSkip())
-  await page.waitForTimeout(70)
+  await expect(page.getByTestId('sheriff-decision-progress')).toBeVisible()
 
   await page.evaluate(() => (window as any).__debug.sheriffPhase('SPEECH_CANDIDATE'))
-  await page.waitForTimeout(70)
 
   // Should now be on speech phase
   await expect(page.getByText(/發言|Speech|speaking/i).first()).toBeVisible()

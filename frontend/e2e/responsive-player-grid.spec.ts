@@ -25,7 +25,13 @@ async function bootMockDay(page: Page) {
     localStorage.setItem('nickname', 'You')
   })
   await page.goto('/game/game-001')
-  await page.waitForTimeout(300)
+  // Initial state fetched, and the mock STOMP game topic subscribed so debug pushes are delivered
+  await expect(page.locator('.game-wrap')).toHaveAttribute('data-phase', /./)
+  await page.waitForFunction(() =>
+    (window as unknown as { __mockStompClient?: { subs?: Map<string, unknown> } }).__mockStompClient?.subs?.has(
+      '/topic/game/game-001',
+    ),
+  )
   await page.locator('[data-testid="debug-scenario-host-revealed"]').click()
   await expect(page.locator('.day-wrap')).toBeVisible({ timeout: 3000 })
   await expect(page.locator('.player-grid > .player-slot').first()).toBeVisible()
@@ -51,9 +57,7 @@ test('grid renders 4 columns at 480px viewport', async ({ page }) => {
   // Boot at default viewport so the debug button is reachable, then resize.
   await bootMockDay(page)
   await page.setViewportSize({ width: 480, height: 800 })
-  await page.waitForTimeout(150) // allow grid to relayout
-  const cols = await countColumns(page)
-  expect(cols, 'columns at 480px viewport').toBe(4)
+  await expect.poll(() => countColumns(page), { message: 'columns at 480px viewport' }).toBe(4)
   await page.screenshot({
     path: 'e2e/screenshots/responsive-grid-480.png',
     fullPage: false,
@@ -63,9 +67,7 @@ test('grid renders 4 columns at 480px viewport', async ({ page }) => {
 test('grid renders 3 columns at 340px viewport', async ({ page }) => {
   await bootMockDay(page)
   await page.setViewportSize({ width: 340, height: 800 })
-  await page.waitForTimeout(150)
-  const cols = await countColumns(page)
-  expect(cols, 'columns at 340px viewport').toBe(3)
+  await expect.poll(() => countColumns(page), { message: 'columns at 340px viewport' }).toBe(3)
   await page.screenshot({
     path: 'e2e/screenshots/responsive-grid-340.png',
     fullPage: false,
@@ -75,9 +77,7 @@ test('grid renders 3 columns at 340px viewport', async ({ page }) => {
 test('grid renders 2 columns at 260px viewport', async ({ page }) => {
   await bootMockDay(page)
   await page.setViewportSize({ width: 260, height: 800 })
-  await page.waitForTimeout(150)
-  const cols = await countColumns(page)
-  expect(cols, 'columns at 260px viewport').toBe(2)
+  await expect.poll(() => countColumns(page), { message: 'columns at 260px viewport' }).toBe(2)
   await page.screenshot({
     path: 'e2e/screenshots/responsive-grid-260.png',
     fullPage: false,

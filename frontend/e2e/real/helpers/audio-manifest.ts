@@ -31,11 +31,13 @@ export const NIGHT_ENTRY_FILES = ['goes_dark_close_eyes.mp3', 'wolf_howl.mp3'] a
 export interface NightBoard {
   mechanicalWolf?: boolean
   medium?: boolean
+  /** The guard is on the board (default true). */
+  guard?: boolean
 }
 
 /**
  * Per-night role broadcast order, pinned by the handlers' Spring @Order:
- * Werewolf → [Mechanical wolf] → Witch → Seer or Medium (exclusive) → Guard.
+ * Werewolf → [Mechanical wolf] → Witch → Seer or Medium (exclusive) → [Guard].
  * Each role emits open then close, dead or alive (dead-role masking).
  */
 export function nightRoleOrder(board: NightBoard = {}): string[] {
@@ -44,7 +46,7 @@ export function nightRoleOrder(board: NightBoard = {}): string[] {
     ...(board.mechanicalWolf ? ['mech_wolf'] : []),
     'witch',
     board.medium ? 'medium' : 'seer',
-    'guard',
+    ...(board.guard === false ? [] : ['guard']),
   ]
   return roles.flatMap((r) => [`${r}_open_eyes.mp3`, `${r}_close_eyes.mp3`])
 }

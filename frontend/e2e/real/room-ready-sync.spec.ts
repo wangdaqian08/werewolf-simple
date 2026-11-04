@@ -56,9 +56,9 @@ async function createWaitingRoom(browser: Browser): Promise<{
   const roomId = host.url().match(/\/room\/(\d+)/)![1]
   const roomCode = (await host.locator('[data-testid="room-code"]').textContent())!.trim()
 
-  // Host claims a seat (auto-readies the host).
+  // Host claims a seat (auto-readies the host): 5 of the 6 seats stay free.
   await host.locator('.slot-selectable').first().click()
-  await host.waitForTimeout(800)
+  await expect(host.locator('.slot-selectable')).toHaveCount(5, { timeout: 10_000 })
   return { hctx, host, roomId, roomCode }
 }
 
@@ -94,8 +94,10 @@ test.describe('Room ready-sync across a STOMP disconnect — real-backend flow',
     await expect(startBtn, 'online: re-ready → Start enabled').toBeEnabled({ timeout: 10_000 })
 
     // ── DISCONNECT WINDOW: drop the host socket, undo-ready while it's down. ──
+    // setOffline resolves once the context is offline: anything the broker
+    // sends from here on is dropped on the host side (the open socket is only
+    // torn down at the next missed heartbeat, which is the real-world shape).
     await hctx.setOffline(true)
-    await host.waitForTimeout(1_000)
     await setReady(bot.token, roomId, false)
     const snapshot = await fetch(`${API}/room/${roomId}`, {
       headers: { Authorization: `Bearer ${bot.token}` },
@@ -109,7 +111,6 @@ test.describe('Room ready-sync across a STOMP disconnect — real-backend flow',
     // Host comes back online → STOMP auto-reconnects (reconnectDelay 3s) and
     // RoomView re-syncs the WAITING-room players, recovering the missed undo.
     await hctx.setOffline(false)
-    await host.waitForTimeout(1_500)
 
     await expect(
       startBtn,
