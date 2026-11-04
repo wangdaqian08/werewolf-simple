@@ -51,8 +51,8 @@
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
-          :self="p.userId === myUserId"
           :key="p.userId"
+          :self="p.userId === myUserId"
           mode="room"
           :seat="p.seatIndex"
           :nickname="p.nickname"
@@ -98,8 +98,8 @@
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
-          :self="p.userId === myUserId"
           :key="p.userId"
+          :self="p.userId === myUserId"
           mode="room"
           :seat="p.seatIndex"
           :nickname="p.nickname"
@@ -263,8 +263,8 @@
           <section class="player-grid player-grid-sm">
             <PlayerSlot
               v-for="p in players"
-              :self="p.userId === myUserId"
               :key="p.userId"
+              :self="p.userId === myUserId"
               mode="room"
               :seat="p.seatIndex"
               :nickname="p.nickname"
@@ -362,8 +362,8 @@
       <section class="player-grid">
         <PlayerSlot
           v-for="p in players"
-          :self="p.userId === myUserId"
           :key="p.userId"
+          :self="p.userId === myUserId"
           mode="room"
           :seat="p.seatIndex"
           :nickname="p.nickname"
