@@ -25,6 +25,7 @@ type GameStateMinimal = {
   dayPhase?: { subPhase?: string } | null
   sheriffElection?: { subPhase?: string } | null
   players?: { seatIndex?: number; isAlive?: boolean }[]
+  timer?: { remainingMs?: number; durationMs?: number; running?: boolean }
 }
 
 export async function fetchGameState(hostPage: Page, gameId: string): Promise<GameStateMinimal | null> {

@@ -11,7 +11,8 @@
 import { expect, type Page, test } from '@playwright/test'
 import { type GameContext, setupGame } from './helpers/multi-browser'
 import { type RoleName } from './helpers/shell-runner'
-import { waitForCondition, waitForPhase } from './helpers/state-polling'
+import { fetchGameState, waitForCondition, waitForPhase } from './helpers/state-polling'
+import { verifyAllBrowsersPhase } from './helpers/assertions'
 import { attachCompositeOnFailure } from './helpers/composite-screenshot'
 import { driveMinimalNight1ViaDom } from './helpers/night-driver'
 
@@ -244,11 +245,21 @@ test.describe('Flow D — DAY_DISCUSSION exit cancels timer', () => {
   })
 
   test('D.2 host starts vote — all clients see timer running=false within 2s', async () => {
-    const allPages = [ctx.hostPage, ...ctx.pages.values()]
+    const allPages = new Map([['HOST', ctx.hostPage], ...ctx.pages])
 
     // Advance DAY_DISCUSSION to DAY_VOTING
     await ctx.hostPage.getByTestId('day-start-vote').click()
 
-    await waitForTimerOnAllPages(allPages, 0, 0, 3_000)
+    // CountdownArc renders only inside DayPhase. The backend cancels the timer
+    // and broadcasts PhaseChanged ~2 ms apart, so a page shows remaining=0 for
+    // one render before it swaps to VotingPhase — polling for that window is a
+    // race. What every client observably sees is the swap itself: DAY_VOTING
+    // with no countdown left; the backend snapshot proves the timer stopped.
+    await verifyAllBrowsersPhase(allPages, 'VOTING', 10_000)
+    for (const page of allPages.values()) {
+      await expect(page.getByTestId('phase-countdown')).toHaveCount(0)
+    }
+    const state = await fetchGameState(ctx.hostPage, ctx.gameId)
+    expect(state?.timer).toMatchObject({ running: false, remainingMs: 0 })
   })
 })
