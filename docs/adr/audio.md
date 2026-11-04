@@ -99,6 +99,7 @@ narrator never changes mid-game.
 
 - Put the file in `backend/src/main/resources/static/audio/` under the exact
   name the role's `AudioConfig` uses.
+- File names and scripts for future roles: [narration-scripts.md](../narration-scripts.md).
 
 ## Background music (BGM)
 
