@@ -4,9 +4,16 @@ import type { GameEvent, GameState, PlayerRole, TimerState } from '@/types'
 
 export const useGameStore = defineStore('game', () => {
   const state = ref<GameState | null>(null)
+  // Bumped by every STOMP TimerUpdated. A caller that issues GET /state reads it
+  // first and passes it to setState, so a fetch whose snapshot predates a timer
+  // start/stop that landed while it was in flight cannot overwrite the newer timer.
+  const timerSeq = ref(0)
 
-  function setState(s: GameState) {
+  function setState(s: GameState, opts?: { timerSeqAtFetch?: number }) {
     const newState = JSON.parse(JSON.stringify(s))
+    const timerRaced =
+      opts?.timerSeqAtFetch !== undefined && opts.timerSeqAtFetch !== timerSeq.value
+    const timer = timerRaced ? state.value?.timer : newState.timer
     // Preserve audioSequence across polled-state writes. STOMP `AudioSequence`
     // events push the live audio onto the store; HTTP `getGameState` polls
     // (fired after PhaseChanged / NightSubPhaseChanged) compute the field via
@@ -30,6 +37,7 @@ export const useGameStore = defineStore('game', () => {
       events: s.events ?? [],
       audioSequence,
       audioReplayBuffer,
+      timer,
     }
   }
 
@@ -70,12 +78,14 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function setTimer(payload: TimerState) {
+    timerSeq.value++
     if (!state.value) return
     state.value = { ...state.value, timer: { ...payload } }
   }
 
   return {
     state,
+    timerSeq,
     setState,
     addEvent,
     incrementConfirmedCount,

@@ -1054,8 +1054,9 @@ onMounted(async () => {
   const gameId = route.params.gameId as string
 
   async function refreshState(): Promise<void> {
+    const timerSeqAtFetch = gameStore.timerSeq
     const state = await gameService.getState(gameId)
-    gameStore.setState(state)
+    gameStore.setState(state, { timerSeqAtFetch })
   }
 
   try {
@@ -1114,6 +1115,9 @@ onMounted(async () => {
 
           // Small delay to ensure backend transaction has committed before we read state
           await new Promise((r) => setTimeout(r, 100))
+          // A host timer start/stop can land while this GET is in flight (its
+          // snapshot predates the timer commit); setState keeps the newer timer.
+          const timerSeqAtFetch = gameStore.timerSeq
           let state = await gameService.getState(gameId)
           // Retry once if the fetched state doesn't match the event yet (slow-runner
           // commit race). Compare BOTH the phase AND the effective sub-phase, so a
@@ -1137,7 +1141,7 @@ onMounted(async () => {
             state.phase = normalizePhaseName(state.phase) as any
           }
           // Audio is managed by AudioSequence events - don't touch audioSequence here
-          gameStore.setState(state)
+          gameStore.setState(state, { timerSeqAtFetch })
         }
         // Real backend: night sub-phase advanced (e.g. WAITING → WEREWOLF_PICK) → re-fetch state
         if (data.type === 'NightSubPhaseChanged') {
