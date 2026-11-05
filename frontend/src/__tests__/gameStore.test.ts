@@ -180,4 +180,43 @@ describe('gameStore', () => {
     store.setTimer({ remainingMs: 0, durationMs: 0, running: false })
     expect(store.state).toBeNull()
   })
+
+  // ── setState vs. a TimerUpdated that raced the fetch ──────────────────────
+
+  const IDLE = { remainingMs: 0, durationMs: 0, running: false }
+  const RUNNING = { remainingMs: 180_000, durationMs: 180_000, running: true }
+
+  it('setState() keeps the timer from a TimerUpdated that arrived after the fetch was issued', () => {
+    const store = useGameStore()
+    store.setState({ ...freshState(), timer: IDLE })
+
+    // GameView: PhaseChanged → remember the timer sequence, then GET /state.
+    const timerSeqAtFetch = store.timerSeq
+    // Host taps start while that GET is in flight: TimerUpdated(running=true).
+    store.setTimer(RUNNING)
+    // The GET's snapshot was computed before the timer start committed.
+    store.setState({ ...freshState(), timer: IDLE }, { timerSeqAtFetch })
+
+    expect(store.state?.timer).toEqual(RUNNING)
+  })
+
+  it('setState() adopts the fetched timer when no TimerUpdated arrived since the fetch was issued', () => {
+    const store = useGameStore()
+    store.setState({ ...freshState(), timer: IDLE })
+
+    const timerSeqAtFetch = store.timerSeq
+    store.setState({ ...freshState(), timer: RUNNING }, { timerSeqAtFetch })
+
+    expect(store.state?.timer).toEqual(RUNNING)
+  })
+
+  it('setState() without a fetch sequence adopts the fetched timer (reconnect / initial load)', () => {
+    const store = useGameStore()
+    store.setState({ ...freshState(), timer: IDLE })
+    store.setTimer(RUNNING)
+
+    store.setState({ ...freshState(), timer: IDLE })
+
+    expect(store.state?.timer).toEqual(IDLE)
+  })
 })
