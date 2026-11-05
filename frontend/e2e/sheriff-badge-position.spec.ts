@@ -23,7 +23,8 @@ async function bootMock(page: Page) {
     localStorage.setItem('nickname', 'You')
   })
   await page.goto('/game/game-001')
-  await page.waitForTimeout(300)
+  // Initial state rendered (the mock queues debug pushes until the view subscribes)
+  await expect(page.locator('.game-wrap')).toHaveAttribute('data-phase', /./)
 }
 
 async function gotoScenario(page: Page, debugTestId: string, waitFor: string) {

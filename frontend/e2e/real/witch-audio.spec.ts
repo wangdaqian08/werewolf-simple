@@ -144,11 +144,10 @@ test.describe('Witch audio — open_eyes must play during WITCH_ACT', () => {
             e.includes('Starting playback') &&
             e.includes('witch_open_eyes.mp3'),
         )
-      const witchSentinelDeadline = Date.now() + 30_000
-      while (Date.now() < witchSentinelDeadline) {
-        if (witchPlaybackSeen()) break
-        await hostPage.waitForTimeout(250)
-      }
+      await expect
+        .poll(witchPlaybackSeen, { timeout: 30_000, message: 'witch_open_eyes.mp3 playback started' })
+        .toBe(true)
+        .catch(() => {}) // the layered assertions below say which link broke
 
       // ── ASSERTION 1: backend log contains [broadcastAudio] for witch ─────
       const backendLines = readBackendLogSince(logStartLine)

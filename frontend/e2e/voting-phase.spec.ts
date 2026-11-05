@@ -22,7 +22,7 @@ async function goToGame(page: Page) {
 // Scoped to the Day Scenarios debug section to avoid label collisions
 async function loadDayScenario(page: Page, label: string) {
   await page.locator('[data-testid="debug-day-scenario-btns"]').getByRole('button', { name: label }).click()
-  await page.waitForTimeout(70)
+  await expect(page.locator('.day-wrap')).toBeVisible()
 }
 
 // Scoped to the Voting Screens debug section to avoid label collisions
@@ -42,7 +42,7 @@ async function loadVotingScenario(page: Page, label: string) {
   }
   const testId = testIdMap[label] || `debug-voting-${label.toLowerCase().replace(/\s+/g, '-')}`
   await page.locator(`[data-testid="${testId}"]`).click()
-  await page.waitForTimeout(70)
+  await expect(page.locator('.voting-wrap')).toBeVisible()
 }
 
 // ── Host perspective ──────────────────────────────────────────────────────────

@@ -89,6 +89,11 @@ jobs:
       - name: Lint (ESLint)
         run: npm run lint
 
+      - name: No sleeps in E2E
+        # waitForTimeout / setTimeout sleeps are banned in the Playwright
+        # suites (CLAUDE.md "E2E tests: no fixed sleeps").
+        run: npx eslint -c eslint.e2e-waits.config.js e2e
+
       - name: Type-check
         run: npx vue-tsc -b --noEmit
 
@@ -241,6 +246,23 @@ jobs:
   #                                               shards 1+2 grep only
   #                                               CLASSIC/HARD_MODE)
   #     witch-selfsave-blocked-flow.spec.ts ~35s  (one night + one reveal)
+  #
+  #   2026-11-05 rebalance (CI blob reports of run 41829631212, test time
+  #   only; each job adds ~2.5-4 min of gradle/npm/browser setup):
+  #     old long pole: shard 3 (game-flow + sheriff + both kings) 517 s → 12m32s.
+  #     black-wolf-king-scenarios 415 s and night-rules-flow 387 s are each
+  #     split in two by --grep on their test titles; every shard now carries
+  #     ≤ ~340 s, the floor set by flow-5night-hardmode (341 s) running alone.
+  #     hunter-night-death-flow + reconnect-rejoin were in NO shard (never ran
+  #     in CI); mech-wolf-rules-flow is new. Per spec (s): black-wolf-king 415
+  #     (happy/vote-out 176, night chain/edge/create 240), night-rules 387
+  #     (repeated/dead seer/history 245, 空刀/self-save/空守 141), 5night 341,
+  #     flow-12p 254 (CLASSIC 101, HARD 106, night-killed 47), sheriff-hunter
+  #     185, revote 131, win-rules 111, werewolf-win 107, d1-outcomes 84,
+  #     host-declare-out 80, idiot 76, self-destruct-rules 74, game-flow 69,
+  #     dead-role 69, mech-medium 60, api-guards 50, the rest ≤ 40 each.
+  #   A grep applies to every spec on its shard, so a shard that greps lists
+  #   the describe/test titles of ALL its specs — rename one, update it here.
   e2e-integration:
     # Denominator-free for the same reason as the UI shards (see above).
     name: E2E · Integration (${{ matrix.shard.id }})
@@ -250,47 +272,48 @@ jobs:
       fail-fast: false
       matrix:
         shard:
-          # Shard 1 + 2 split flow-12p-sheriff via --grep on the describe
-          # title. If you rename either describe, update the grep here.
-          - id: 1
-            specs: e2e/real/flow-12p-sheriff.spec.ts
-            grep: 'CLASSIC villager win'
-          - id: 2
-            specs: e2e/real/flow-12p-sheriff.spec.ts
-            grep: 'HARD_MODE wolf win'
-          - id: 3
-            specs: e2e/real/game-flow.spec.ts e2e/real/sheriff-flow.spec.ts e2e/real/white-wolf-king-flow.spec.ts e2e/real/black-wolf-king-scenarios.spec.ts
-            grep: ''
-          - id: 4
-            specs: e2e/real/revote-flow.spec.ts e2e/real/idiot-flow.spec.ts e2e/real/game-flow-d1-outcomes.spec.ts e2e/real/ghost-member.spec.ts e2e/real/room-board.spec.ts
-            grep: ''
-          - id: 5
-            specs: e2e/real/dead-role-audio.spec.ts e2e/real/werewolf-win.spec.ts e2e/real/full-game-audio.spec.ts
-            grep: ''
-          - id: 6
-            specs: e2e/real/witch-audio.spec.ts e2e/real/audio-reconnect-recovery.spec.ts e2e/real/login.spec.ts e2e/real/room-ready-sync.spec.ts e2e/real/guard-audio-sequence.spec.ts e2e/real/self-destruct-flow.spec.ts e2e/real/guard-witch-same-target-flow.spec.ts
-            grep: ''
-          # Shard 7: the 5-night HARD_MODE spine — the longest single spec,
+          # Shard 1: the 5-night HARD_MODE spine — the longest single spec,
           # runs alone. Pre-agreed fallback: demote to a nightly workflow
           # (payment-e2e.yml pattern) if p95 exceeds 15m or it flakes >1/20.
-          - id: 7
+          - id: 1
             specs: e2e/real/flow-5night-hardmode.spec.ts
             grep: ''
-          # Shard 8: flow-12p scenario 3 (never sharded before — shards 1+2
-          # grep only its siblings) + the witch-selfsave variant + the
-          # mechanical wolf/medium flow. The grep is a regex alternation over
-          # the describe titles — rename one and update it here.
-          - id: 8
-            specs: e2e/real/flow-12p-sheriff.spec.ts e2e/real/witch-selfsave-blocked-flow.spec.ts e2e/real/mech-wolf-medium-flow.spec.ts
-            grep: 'night-killed sheriff|Witch self-save blocked|Mechanical wolf and medium'
-          - id: 9
+          # Shards 2 + 3 split black-wolf-king-scenarios by test-title prefix
+          # ('happy:' / 'vote-out…' vs 'night chain:' / 'edge:' / 'create room:').
+          # Playwright greps the whole title path (file › describe › test), so
+          # the terms are unanchored and must not occur in a describe title.
+          - id: 2
+            specs: e2e/real/black-wolf-king-scenarios.spec.ts e2e/real/mech-wolf-medium-flow.spec.ts e2e/real/api-guards-flow.spec.ts
+            grep: 'happy: knifed|vote-out|Mechanical wolf and medium|API guards'
+          - id: 3
+            specs: e2e/real/black-wolf-king-scenarios.spec.ts e2e/real/pk-revote-flow.spec.ts
+            grep: 'night chain:|edge:|create room:|PK re-vote'
+          # Shards 4 + 5 split night-rules-flow by words unique to each test
+          # title (its describe title repeats most of the topic words).
+          - id: 4
             specs: e2e/real/night-rules-flow.spec.ts
+            grep: 'keeps her turn|查驗結果|holds the antidote'
+          - id: 5
+            specs: e2e/real/night-rules-flow.spec.ts e2e/real/win-rules-flow.spec.ts
+            grep: 'sees no victim|cannot save herself|protects no one|no skip button|Win rules'
+          # Shards 6 + 7 split flow-12p-sheriff by describe title.
+          - id: 6
+            specs: e2e/real/flow-12p-sheriff.spec.ts e2e/real/werewolf-win.spec.ts e2e/real/audio-reconnect-recovery.spec.ts
+            grep: 'HARD_MODE wolf win|night-killed sheriff|Werewolf win|Audio reconnect recovery'
+          - id: 7
+            specs: e2e/real/flow-12p-sheriff.spec.ts e2e/real/sheriff-hunter-rules-flow.spec.ts
+            grep: 'CLASSIC villager win|Sheriff \+ hunter rules'
+          - id: 8
+            specs: e2e/real/mech-wolf-rules-flow.spec.ts e2e/real/game-flow.spec.ts
+            grep: ''
+          - id: 9
+            specs: e2e/real/revote-flow.spec.ts e2e/real/game-flow-d1-outcomes.spec.ts e2e/real/host-declare-out-flow.spec.ts
             grep: ''
           - id: 10
-            specs: e2e/real/sheriff-hunter-rules-flow.spec.ts e2e/real/self-destruct-rules-flow.spec.ts e2e/real/host-declare-out-flow.spec.ts e2e/real/session-expiry-resume.spec.ts
+            specs: e2e/real/idiot-flow.spec.ts e2e/real/self-destruct-rules-flow.spec.ts e2e/real/dead-role-audio.spec.ts e2e/real/hunter-night-death-flow.spec.ts e2e/real/reconnect-rejoin.spec.ts e2e/real/white-wolf-king-flow.spec.ts
             grep: ''
           - id: 11
-            specs: e2e/real/win-rules-flow.spec.ts e2e/real/pk-revote-flow.spec.ts e2e/real/api-guards-flow.spec.ts e2e/real/host-countdown.spec.ts
+            specs: e2e/real/full-game-audio.spec.ts e2e/real/guard-audio-sequence.spec.ts e2e/real/witch-audio.spec.ts e2e/real/host-countdown.spec.ts e2e/real/sheriff-flow.spec.ts e2e/real/session-expiry-resume.spec.ts e2e/real/ghost-member.spec.ts e2e/real/self-destruct-flow.spec.ts e2e/real/witch-selfsave-blocked-flow.spec.ts e2e/real/login.spec.ts e2e/real/room-ready-sync.spec.ts e2e/real/guard-witch-same-target-flow.spec.ts e2e/real/room-board.spec.ts
             grep: ''
 
     steps:
@@ -379,6 +402,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Every real spec is in the shard matrix
+        # A spec missing from the matrix above silently never runs in CI
+        # (hunter-night-death-flow and reconnect-rejoin sat unlisted for
+        # months). LOCAL-ONLY specs opt out by name here.
+        run: |
+          missing=0
+          for f in e2e/real/*.spec.ts; do
+            b=$(basename "$f")
+            case "$b" in
+              audio-autoplay-unlock.spec.ts|audio-autoplay-unlock-firefox.spec.ts) continue ;;
+            esac
+            if ! grep -q "e2e/real/$b" ../.github/workflows/ci.yml; then
+              echo "::error::$b is not in the e2e-integration shard matrix (.github/workflows/ci.yml)"
+              missing=1
+            fi
+          done
+          exit $missing
 
       - uses: actions/setup-node@v4
         with:

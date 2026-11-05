@@ -10,53 +10,30 @@
  * This test verifies that guard_close_eyes.mp3 plays exactly ONCE when guard completes.
  */
 import {expect, test} from '@playwright/test'
-import type {Page} from '@playwright/test'
 import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, actName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import {completeDay, waitForSubPhase} from './helpers/flow-drivers'
+import {readAlivePlayerIds} from './helpers/state-polling'
 
 let ctx: GameContext
 
-/**
- * Poll the backend via the host page's JWT until nightPhase.subPhase matches
- * `target`. Without this, bot actions fired via act.sh race against the
- * Kotlin role-loop coroutine: the action arrives before the coroutine is
- * awaiting that sub-phase, the backend rejects with "Not in X sub-phase",
- * and the test proceeds unaware while the coroutine stalls forever.
- *
- * flow-12p-sheriff.spec.ts has the original implementation; this is a local
- * copy to keep the fix scoped to the failing spec.
- */
-async function waitForSubPhase(
-  hostPage: Page,
-  gameId: string,
-  target: string,
-  timeoutMs = 15_000,
-): Promise<boolean> {
-  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
-  const deadline = Date.now() + effective
-  while (Date.now() < deadline) {
-    const state = await hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      if (!token) return null
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return null
-      return res.json()
-    }, gameId)
-    const sp = state?.nightPhase?.subPhase
-    const phase = state?.phase
-    if (sp === target) return true
-    // Short-circuit if game already advanced past NIGHT (test should move on)
-    if (phase && phase !== 'NIGHT') return false
-    await hostPage.waitForTimeout(150)
-  }
-  return false
+/** Block until the host logged `Starting playback: day_time.mp3` (the last file of the DAY cue). */
+async function waitForDayTimePlayback(audioEvents: string[]): Promise<void> {
+  await expect
+    .poll(
+      () => audioEvents.some((e) => e.includes('Starting playback') && e.includes('day_time.mp3')),
+      { timeout: process.env.CI ? 45_000 : 30_000, message: 'day_time.mp3 playback started' },
+    )
+    .toBe(true)
 }
 
 test.describe('Guard Audio Sequence — Regression Test', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   // 90s was tight once we added waitForSubPhase polling (up to ~5 × 15s of
   // legitimate coroutine waiting); bump to 180s so the test body fits even
   // when the CI coroutine is at the slow end of its range.
@@ -154,7 +131,6 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       const passAntidoteBtn = witchPage.getByTestId('switch-pass-antidote')
       if (await passAntidoteBtn.isVisible().catch(() => false)) {
         await passAntidoteBtn.click()
-        await witchPage.waitForTimeout(500)
       }
       const skipPoisonBtn = witchPage.getByTestId('switch-pass-poison')
       if (await skipPoisonBtn.isVisible().catch(() => false)) {
@@ -229,14 +205,16 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     // headroom we need.
     const lastSentinel = (e: string): boolean =>
       e.includes('Starting playback') && e.includes('rooster_crowing.mp3')
-    const sentinelDeadline = Date.now() + (process.env.CI ? 45_000 : 30_000)
-    while (Date.now() < sentinelDeadline) {
-      if (audioEvents.some(lastSentinel)) break
-      await hostPage.waitForTimeout(250)
-    }
-    // Settle so any duplicate guard_close_eyes (the bug we're hunting)
-    // has time to surface in the buffer.
-    await hostPage.waitForTimeout(1_000)
+    await expect
+      .poll(() => audioEvents.some(lastSentinel), {
+        timeout: process.env.CI ? 45_000 : 30_000,
+        message: 'rooster_crowing.mp3 playback started',
+      })
+      .toBe(true)
+    // day_time.mp3 follows rooster_crowing in the same DAY cue (FIFO queue):
+    // once it starts, any duplicate guard_close_eyes queued before the day
+    // cue (the bug we're hunting) has already surfaced in the buffer.
+    await waitForDayTimePlayback(audioEvents)
 
     // Two audio log sources:
     //   audioService.ts:    `[AudioService] Starting playback: ${filename}` — template literal, filename inline
@@ -286,12 +264,12 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     const hostPage = ctx.hostPage
     const gameId = ctx.gameId
 
-    // Start another night
-    const startNightBtn = hostPage.getByTestId('start-night')
-    if (await startNightBtn.isVisible().catch(() => false)) {
-      await startNightBtn.click()
-      await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 15_000)
-    }
+    // Test 1 leaves the game on DAY_DISCUSSION (no start-night button there):
+    // play the day out with an abstain vote so night 2 actually starts.
+    // Before this, every gate below fell through and the "rapid" night was
+    // test 1's leftover day.
+    expect(await completeDay(ctx, testInfo, { targetSeat: null, label: 'rapid-d1' })).toBe('NIGHT')
+    await verifyAllBrowsersPhase(ctx.pages, 'NIGHT', 15_000)
 
     // Collect audio playback events. Track only the host page — every open
     // browser runs the same audio sequence, so listening on all of them
@@ -316,7 +294,9 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
     const seerBots = ctx.roleMap.SEER ?? []
     const witchBots = ctx.roleMap.WITCH ?? []
     const guardBots = ctx.roleMap.GUARD ?? []
-    const villagerBots = ctx.roleMap.VILLAGER ?? []
+    // Test 1's wolf kill already removed one villager: target the living ones.
+    const alive = await readAlivePlayerIds(hostPage, gameId)
+    const villagerBots = (ctx.roleMap.VILLAGER ?? []).filter((b) => alive.has(b.userId))
 
     const wolfBot = wolfBots[0]
     const seerBot = seerBots[0]
@@ -348,9 +328,10 @@ test.describe('Guard Audio Sequence — Regression Test', () => {
       await act('GUARD_SKIP', actName(guardBot), { room: ctx.roomCode })
     }
 
-    // Wait for day transition
+    // Wait for day transition, then for the day cue to play through (FIFO:
+    // every role file broadcast before it has started by then).
     await verifyAllBrowsersPhase(ctx.pages, 'DAY', 20_000)
-    await hostPage.waitForTimeout(3_000)
+    await waitForDayTimePlayback(audioEvents)
 
     await captureSnapshot(ctx.pages, testInfo, 'rapid-transitions-complete')
 

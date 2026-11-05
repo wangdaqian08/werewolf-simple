@@ -25,6 +25,7 @@ type GameStateMinimal = {
   dayPhase?: { subPhase?: string } | null
   sheriffElection?: { subPhase?: string } | null
   players?: { seatIndex?: number; isAlive?: boolean }[]
+  timer?: { remainingMs?: number; durationMs?: number; running?: boolean }
 }
 
 export async function fetchGameState(hostPage: Page, gameId: string): Promise<GameStateMinimal | null> {
@@ -58,16 +59,22 @@ export async function waitForNightSubPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    const sp = state?.nightPhase?.subPhase
-    const phase = state?.phase
-    if (sp === target) return true
-    if (phase && phase !== 'NIGHT' && target !== phase) return false
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  let leftNight = false
+  return waitForCondition(
+    async () => {
+      const state = await fetchGameState(hostPage, gameId)
+      if (state?.nightPhase?.subPhase === target) return true
+      // Stop early once the game has left NIGHT (dead role, skipped turn).
+      leftNight = !!state?.phase && state.phase !== 'NIGHT' && target !== state.phase
+      return leftNight
+    },
+    `night sub-phase ${target}`,
+    timeoutMs,
+    300,
+  ).then(
+    () => !leftNight,
+    () => false,
+  )
 }
 
 /**
@@ -80,13 +87,15 @@ export async function waitForPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    if (state?.phase === target) return true
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  return waitForCondition(
+    async () => (await fetchGameState(hostPage, gameId))?.phase === target,
+    `phase ${target}`,
+    timeoutMs,
+    300,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /**
@@ -99,13 +108,15 @@ export async function waitForDaySubPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    if (state?.dayPhase?.subPhase === target) return true
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  return waitForCondition(
+    async () => (await fetchGameState(hostPage, gameId))?.dayPhase?.subPhase === target,
+    `day sub-phase ${target}`,
+    timeoutMs,
+    300,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /** Poll the top-level `state.daySkipVoting` flag until it becomes true. */
@@ -114,13 +125,15 @@ export async function waitForDaySkipVoting(
   gameId: string,
   timeoutMs = 10_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    if (state?.daySkipVoting === true) return true
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  return waitForCondition(
+    async () => (await fetchGameState(hostPage, gameId))?.daySkipVoting === true,
+    'daySkipVoting flag',
+    timeoutMs,
+    300,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /**
@@ -133,14 +146,15 @@ export async function waitForVotingSubPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchGameState(hostPage, gameId)
-    const sp = state?.votingPhase?.subPhase
-    if (sp === target) return true
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  return waitForCondition(
+    async () => (await fetchGameState(hostPage, gameId))?.votingPhase?.subPhase === target,
+    `voting sub-phase ${target}`,
+    timeoutMs,
+    300,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /**
@@ -278,6 +292,8 @@ export async function waitForCondition(
     } catch (e) {
       lastErr = e
     }
+    // The one poll interval of the suite: every other wait builds on this.
+    // eslint-disable-next-line no-restricted-syntax
     await new Promise((r) => setTimeout(r, pollMs))
   }
   const tail = lastErr ? ` (last predicate error: ${(lastErr as Error).message})` : ''
@@ -329,6 +345,70 @@ export async function waitForAllVotesRegistered(
     `all ${expectedVoters.length} expected voters have voted`,
     timeoutMs,
   )
+}
+
+/**
+ * Poll `state.phase` until it is one of `targets` and return the phase
+ * reached. Use after a night/day driver when the game may either go on or
+ * end — e.g. `['DAY_DISCUSSION', 'GAME_OVER']` after a night, or
+ * `['NIGHT', 'GAME_OVER']` after a vote — instead of sleeping and then
+ * sniffing the URL. Throws on timeout (scaled 2× on CI).
+ */
+export async function waitForPhaseIn(
+  hostPage: Page,
+  gameId: string,
+  targets: readonly string[],
+  timeoutMs = 30_000,
+): Promise<string> {
+  let reached = ''
+  await waitForCondition(
+    async () => {
+      const phase = (await fetchGameState(hostPage, gameId))?.phase
+      if (phase && targets.includes(phase)) {
+        reached = phase
+        return true
+      }
+      return false
+    },
+    `phase ∈ {${targets.join(', ')}}`,
+    timeoutMs,
+    300,
+  )
+  return reached
+}
+
+/**
+ * After the host clicks 顯示結果: wait until the day result is revealed
+ * (RESULT_HIDDEN → RESULT_REVEALED / BADGE_HANDOVER) or the reveal ended
+ * the game. Returns the phase the game is in afterwards.
+ */
+export async function waitForDayRevealed(hostPage: Page, gameId: string, timeoutMs = 15_000): Promise<string> {
+  let phase = ''
+  await waitForCondition(
+    async () => {
+      const state = await fetchGameState(hostPage, gameId)
+      if (!state?.phase) return false
+      phase = state.phase
+      return state.phase !== 'DAY_DISCUSSION' || state.dayPhase?.subPhase !== 'RESULT_HIDDEN'
+    },
+    'day result revealed',
+    timeoutMs,
+    300,
+  )
+  return phase
+}
+
+/**
+ * Wait until a browser RENDERS the given sub-phase: GameView writes the
+ * authoritative `data-phase-sub` (night / voting / day / election sub-phase)
+ * onto `.game-wrap`, so this proves the STOMP update reached this page and
+ * the UI moved — the backend-state polls above only prove the server did.
+ */
+export async function waitForUiSubPhase(page: Page, subPhase: string, timeoutMs = 15_000): Promise<void> {
+  await page
+    .locator(`.game-wrap[data-phase-sub="${subPhase}"]`)
+    .first()
+    .waitFor({ state: 'visible', timeout: scale(timeoutMs) })
 }
 
 /**

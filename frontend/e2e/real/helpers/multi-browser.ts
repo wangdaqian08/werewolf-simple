@@ -31,6 +31,7 @@ import {
 } from './shell-runner'
 import { attachErrorListeners, type BrowserError, resetBrowserErrors } from './error-sentinel'
 import { assertNoBackendErrorsSince, readBackendLogLineCount } from './backend-log'
+import { waitForCondition } from './state-polling'
 
 const BASE_URL = 'http://localhost:5174'
 
@@ -172,7 +173,7 @@ export async function setupGame(
     const toggle = sheriffRow.locator('.toggle-on')
     if ((await toggle.count()) > 0) {
       await toggle.click()
-      await hostPage.waitForTimeout(300)
+      await expect(sheriffRow.locator('.toggle-on')).toHaveCount(0, { timeout: 5_000 })
     }
   }
 
@@ -320,7 +321,11 @@ export async function setupGame(
 
           await toggle.click()
           changed = true
-          await hostPage.waitForTimeout(300)
+          // The toggle may legitimately refuse (mutually exclusive kings): the
+          // attempt loop re-reads the row either way.
+          await expect(roleRow.locator('.toggle-on'))
+            .toHaveCount(shouldBeEnabled ? 1 : 0, { timeout: 3_000 })
+            .catch(() => {})
         }
       }
       if (!changed) break
@@ -374,17 +379,15 @@ export async function setupGame(
     writeFileSync(stateFilePath, JSON.stringify(stateData, null, 2))
   }
 
-  // Wait for room to reflect all bots
-  await hostPage.waitForTimeout(2_000)
+  // The room reflects all bots once exactly one seat (the host's) is still free.
+  await expect(hostPage.locator('.slot-selectable')).toHaveCount(1, { timeout: 15_000 })
 
   // ── Step 3: Host claims a seat + starts game ───────────────────────────
 
   // The host needs to click on an empty seat to claim it.
   // After bots fill seats 1..(N-1), the last seat should be selectable.
   const emptySlot = hostPage.locator('.slot-selectable').first()
-  await emptySlot.waitFor({ state: 'visible', timeout: 5_000 })
   await emptySlot.click()
-  await hostPage.waitForTimeout(1_000)
 
   // Host has no Ready button (only guests do). Claiming the seat auto-readies the host.
   // Wait for Start Game to become enabled.
@@ -477,56 +480,48 @@ export async function setupGame(
   // is synchronized. For hosts with hasSheriff=false, the browser should show
   // the role reveal screen until all players are confirmed.
 
-  await hostPage.waitForTimeout(1_000)
+  // The game view lands on either the un-revealed role card or (if the host's
+  // confirm already went through) the waiting screen — wait for one of them.
+  const revealBtn = hostPage.getByTestId('reveal-role-btn')
+  await hostPage
+    .locator('[data-testid="reveal-role-btn"], .waiting-screen')
+    .first()
+    .waitFor({ state: 'visible', timeout: 15_000 })
 
-  // Check if we're still on the role reveal screen
-  const revealWrap = hostPage.locator('.reveal-wrap')
-  const revealVisible = await revealWrap.isVisible().catch(() => false)
-
-  if (revealVisible) {
+  if (await revealBtn.isVisible().catch(() => false)) {
     // Still on role reveal screen - need to complete the browser confirm flow
-    const revealBtn = hostPage.getByTestId('reveal-role-btn')
-    const revealBtnCount = await revealBtn.count()
-
-    if (revealBtnCount > 0) {
-      const revealBtnVisible = await revealBtn.isVisible().catch(() => false)
-
-      if (revealBtnVisible) {
-        // Click reveal button
-        await revealBtn.click()
-        await hostPage.waitForTimeout(300)
-
-        // Click confirm button
-        const confirmBtn = hostPage.getByTestId('confirm-role-btn')
-        try {
-          await confirmBtn.waitFor({ state: 'visible', timeout: 2_000 })
-          await confirmBtn.click()
-        } catch {
-          // Confirm button not found - page likely transitioned, which is acceptable
-          console.log('Confirm button not found (page may have transitioned), continuing...')
-        }
-      }
+    await revealBtn.click()
+    const confirmBtn = hostPage.getByTestId('confirm-role-btn')
+    try {
+      await confirmBtn.waitFor({ state: 'visible', timeout: 5_000 })
+      await confirmBtn.click()
+    } catch {
+      // Confirm button not found - page likely transitioned, which is acceptable
+      console.log('Confirm button not found (page may have transitioned), continuing...')
     }
   }
 
-  // Additional wait to ensure all STMP events are processed
-  await hostPage.waitForTimeout(2_000)
-
   // ── Step 7: Discover roles ─────────────────────────────────────────────
 
-  // Role assignment is async on the backend — on loaded CI runners the
-  // 2s wait above is sometimes not enough and roles.sh returns an empty
-  // or partial mapping. Poll up to 8 extra seconds; exit early on the
-  // first non-empty result. Fixes observed flake where roleMap.IDIOT was
-  // undefined even though IDIOT was in the requested roles list.
+  // Role assignment is async on the backend — on loaded CI runners roles.sh
+  // can return an empty or partial mapping right after start. Poll up to
+  // 10 s; exit early on the first complete result. Fixes observed flake
+  // where roleMap.IDIOT was undefined even though IDIOT was requested.
   let roleMap = getRoles(roomCode)
   const expectedRoles = (opts.roles ?? []) as RoleName[]
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const haveAllRequested =
-        expectedRoles.length === 0 || expectedRoles.every((r) => (roleMap[r]?.length ?? 0) > 0)
-    if (Object.keys(roleMap).length > 0 && haveAllRequested) break
-    await hostPage.waitForTimeout(1_000)
-    roleMap = getRoles(roomCode)
+  const haveAllRequested = (): boolean =>
+      Object.keys(roleMap).length > 0 &&
+      (expectedRoles.length === 0 || expectedRoles.every((r) => (roleMap[r]?.length ?? 0) > 0))
+  if (!haveAllRequested()) {
+    await waitForCondition(
+        async () => {
+          roleMap = getRoles(roomCode)
+          return haveAllRequested()
+        },
+        'roles.sh reports every requested role',
+        10_000,
+        500,
+    ).catch(() => {}) // the spec's own role lookups report what is missing
   }
   const state = readStateFile(roomCode)
 

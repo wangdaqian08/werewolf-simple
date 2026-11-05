@@ -23,7 +23,7 @@ async function setup(page: Page) {
   await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(70)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
   await page.evaluate(
     () => (window as unknown as { __debug: { gameStart: () => void } }).__debug.gameStart(),
   )
@@ -74,15 +74,17 @@ test('result-view: narrow 280x600 collapses to 2-column grid', async ({ page }) 
   await setup(page)
   await goToResult(page, 'VILLAGER')
   await page.setViewportSize({ width: 280, height: 600 })
-  await page.waitForTimeout(150)
-  const cols = await page.evaluate(() => {
-    const cells = Array.from(document.querySelectorAll('.reveal-grid > .reveal-card'))
-    if (cells.length === 0) return 0
-    const ys = cells.map((c) => c.getBoundingClientRect().y)
-    const firstY = ys[0]
-    return ys.filter((y) => Math.abs(y - firstY) < 1).length
-  })
-  expect(cols).toBe(2)
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const cells = Array.from(document.querySelectorAll('.reveal-grid > .reveal-card'))
+        if (cells.length === 0) return 0
+        const ys = cells.map((c) => c.getBoundingClientRect().y)
+        const firstY = ys[0]
+        return ys.filter((y) => Math.abs(y - firstY) < 1).length
+      }),
+    )
+    .toBe(2)
   await page.screenshot({
     path: 'e2e/screenshots/result-light-280.png',
     fullPage: true,

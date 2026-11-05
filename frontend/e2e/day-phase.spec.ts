@@ -29,7 +29,7 @@ async function loadScenario(
 
   // Load the scenario via debug panel button — STOMP subscription is now ready
   await page.getByRole('button', { name: scenarioLabel(scenario), exact: true }).click()
-  await page.waitForTimeout(70)
+  await expect(page.locator('.day-wrap')).toBeVisible()
 }
 
 function scenarioLabel(scenario: string): string {
@@ -142,7 +142,7 @@ async function joinAsGuestAndStartGame(page: import('@playwright/test').Page) {
 test('guest joined via room join does not see 顯示結果 on day hidden', async ({ page }) => {
   await joinAsGuestAndStartGame(page)
   await page.getByRole('button', { name: /^Hidden$/ }).click()
-  await page.waitForTimeout(70)
+  await expect(page.locator('.day-wrap')).toBeVisible()
   await expect(page.getByRole('button', { name: /顯示結果/ })).not.toBeVisible()
   await expect(page.getByText(/等待房主公佈結果/)).toBeVisible()
 })
@@ -150,7 +150,7 @@ test('guest joined via room join does not see 顯示結果 on day hidden', async
 test('guest joined via room join does not see 顯示結果 on day revealed', async ({ page }) => {
   await joinAsGuestAndStartGame(page)
   await page.locator('[data-testid="debug-day-btns"]').getByRole('button', { name: 'Revealed' }).click()
-  await page.waitForTimeout(70)
+  await expect(page.locator('.day-wrap')).toBeVisible()
   await expect(page.getByRole('button', { name: /顯示結果/ })).not.toBeVisible()
   // Vote buttons are now in VotingPhase — DayPhase shows waiting hint for non-host
   await expect(page.getByText(/等待房主開始投票/)).toBeVisible()

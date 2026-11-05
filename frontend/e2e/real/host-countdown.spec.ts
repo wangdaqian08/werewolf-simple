@@ -11,7 +11,8 @@
 import { expect, type Page, test } from '@playwright/test'
 import { type GameContext, setupGame } from './helpers/multi-browser'
 import { type RoleName } from './helpers/shell-runner'
-import { waitForCondition, waitForPhase } from './helpers/state-polling'
+import { fetchGameState, waitForCondition, waitForPhase } from './helpers/state-polling'
+import { verifyAllBrowsersPhase } from './helpers/assertions'
 import { attachCompositeOnFailure } from './helpers/composite-screenshot'
 import { driveMinimalNight1ViaDom } from './helpers/night-driver'
 
@@ -81,6 +82,10 @@ async function driveToDay(ctx: GameContext) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Flow A — DAY_DISCUSSION timer start/stop syncs to all clients', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   let ctx: GameContext
 
   test.setTimeout(180_000)
@@ -122,8 +127,13 @@ test.describe('Flow A — DAY_DISCUSSION timer start/stop syncs to all clients',
     const allPages = [ctx.hostPage, ...ctx.pages.values()]
     const before = await getRemainingMsAll(allPages)
 
-    await new Promise((r) => setTimeout(r, 3_000))
-    await new Promise((r) => setTimeout(r, 200)) // extra tick
+    // Let the host's own clock run ≥ 3 s (no fixed sleep), then read everyone.
+    await expect
+        .poll(async () => before[0] - (await getRemainingMsAll([ctx.hostPage]))[0], {
+          intervals: [100],
+          timeout: 8_000,
+        })
+        .toBeGreaterThanOrEqual(3_000)
 
     const after = await getRemainingMsAll(allPages)
     for (let i = 0; i < allPages.length; i++) {
@@ -151,6 +161,10 @@ test.describe('Flow A — DAY_DISCUSSION timer start/stop syncs to all clients',
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Flow C — reconnect mid-timer recovers correct remaining', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   let ctx: GameContext
 
   test.setTimeout(180_000)
@@ -182,7 +196,13 @@ test.describe('Flow C — reconnect mid-timer recovers correct remaining', () =>
   })
 
   test('C.2 wait 5s, one player reloads — recovers 65-71s remaining', async () => {
-    await new Promise((r) => setTimeout(r, 5_000))
+    // Let ≥ 5 s of the 75 s timer run on the host's clock before the reload.
+    await expect
+        .poll(async () => (await getRemainingMsAll([ctx.hostPage]))[0], {
+          intervals: [100],
+          timeout: 10_000,
+        })
+        .toBeLessThanOrEqual(70_000)
 
     // Pick any non-host page to reload
     const playerPage = [...ctx.pages.values()][0]
@@ -202,6 +222,10 @@ test.describe('Flow C — reconnect mid-timer recovers correct remaining', () =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Flow D — DAY_DISCUSSION exit cancels timer', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   let ctx: GameContext
 
   test.setTimeout(180_000)
@@ -233,11 +257,21 @@ test.describe('Flow D — DAY_DISCUSSION exit cancels timer', () => {
   })
 
   test('D.2 host starts vote — all clients see timer running=false within 2s', async () => {
-    const allPages = [ctx.hostPage, ...ctx.pages.values()]
+    const allPages = new Map([['HOST', ctx.hostPage], ...ctx.pages])
 
     // Advance DAY_DISCUSSION to DAY_VOTING
     await ctx.hostPage.getByTestId('day-start-vote').click()
 
-    await waitForTimerOnAllPages(allPages, 0, 0, 3_000)
+    // CountdownArc renders only inside DayPhase. The backend cancels the timer
+    // and broadcasts PhaseChanged ~2 ms apart, so a page shows remaining=0 for
+    // one render before it swaps to VotingPhase — polling for that window is a
+    // race. What every client observably sees is the swap itself: DAY_VOTING
+    // with no countdown left; the backend snapshot proves the timer stopped.
+    await verifyAllBrowsersPhase(allPages, 'VOTING', 10_000)
+    for (const page of allPages.values()) {
+      await expect(page.getByTestId('phase-countdown')).toHaveCount(0)
+    }
+    const state = await fetchGameState(ctx.hostPage, ctx.gameId)
+    expect(state?.timer).toMatchObject({ running: false, remainingMs: 0 })
   })
 })

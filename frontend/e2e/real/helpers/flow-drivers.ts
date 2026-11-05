@@ -10,10 +10,14 @@ import { act, actName, type RoleName, sheriff } from './shell-runner'
 import { verifyAllBrowsersPhase } from './assertions'
 import { captureSnapshot } from './composite-screenshot'
 import {
+  fetchGameState,
   readAlivePlayerIds,
   readHostSeat,
   readHostUserId,
   readUnvotedAlivePlayerIds,
+  waitForCondition,
+  waitForDayRevealed,
+  waitForNightSubPhase,
   waitForVotingSubPhase,
 } from './state-polling'
 
@@ -151,27 +155,8 @@ export async function waitForSubPhase(
   target: string,
   timeoutMs = 30_000,
 ): Promise<boolean> {
-  // Same CI scaling rationale as assertions.ts: slow GH runners need more slack.
-  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
-  const deadline = Date.now() + effective
-  while (Date.now() < deadline) {
-    const state = await hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      if (!token) return null
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return null
-      return res.json()
-    }, gameId)
-    const sp = state?.nightPhase?.subPhase
-    const phase = state?.phase
-    if (sp === target) return true
-    // Short-circuit if game already moved past NIGHT (e.g., already in DAY)
-    if (phase && phase !== 'NIGHT' && target !== phase) return false
-    await hostPage.waitForTimeout(300)
-  }
-  return false
+  // Same helper as state-polling (CI-scaled, short-circuits once the game left NIGHT).
+  return waitForNightSubPhase(hostPage, gameId, target, timeoutMs)
 }
 
 /**
@@ -191,23 +176,15 @@ export async function waitForSheriffSubPhase(
   target: string,
   timeoutMs = 15_000,
 ): Promise<boolean> {
-  const effective = process.env.CI ? timeoutMs * 2 : timeoutMs
-  const deadline = Date.now() + effective
-  while (Date.now() < deadline) {
-    const sub = await hostPage.evaluate(async (id: string) => {
-      const token = localStorage.getItem('jwt')
-      if (!token) return null
-      const res = await fetch(`/api/game/${id}/state`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return null
-      const state = await res.json()
-      return state?.sheriffElection?.subPhase ?? null
-    }, gameId)
-    if (sub === target) return true
-    await hostPage.waitForTimeout(200)
-  }
-  return false
+  return waitForCondition(
+    async () => (await readSheriffSubPhase(hostPage, gameId)) === target,
+    `sheriff sub-phase ${target}`,
+    timeoutMs,
+    200,
+  ).then(
+    () => true,
+    () => false,
+  )
 }
 
 /**
@@ -261,9 +238,20 @@ export async function advanceAllSheriffSpeeches(hostPage: Page, gameId: string):
       continue
     }
 
+    const speakerBefore = await readSheriffSpeaker(hostPage, gameId)
     await advanceBtn.click()
-    // Small settle so the next state poll observes the post-click state.
-    await hostPage.waitForTimeout(400)
+    // The click took effect once the backend moved to the next speaker or
+    // left SPEECH altogether.
+    await waitForCondition(
+      async () =>
+        (await readSheriffSubPhase(hostPage, gameId)) !== 'SPEECH' ||
+        (await readSheriffSpeaker(hostPage, gameId)) !== speakerBefore,
+      `sheriff speech advanced past ${speakerBefore}`,
+      10_000,
+    ).catch((e: Error) => {
+      // eslint-disable-next-line no-console
+      console.warn(`[sheriff] ${e.message} — will re-poll`)
+    })
   }
   // eslint-disable-next-line no-console
   console.warn('[sheriff] advanceAllSpeeches hit maxIterations — check backend speaker count')
@@ -279,6 +267,12 @@ export async function readTopPhase(hostPage: Page, gameId: string): Promise<stri
     if (!res.ok) return null
     return (await res.json())?.phase ?? null
   }, gameId)
+}
+
+/** The userId of the candidate currently speaking (null outside SPEECH). */
+async function readSheriffSpeaker(hostPage: Page, gameId: string): Promise<string | null> {
+  const state = await fetchGameState(hostPage, gameId)
+  return (state?.sheriffElection as { currentSpeakerId?: string } | null | undefined)?.currentSpeakerId ?? null
 }
 
 export async function readSheriffSubPhase(hostPage: Page, gameId: string): Promise<string | null> {
@@ -459,8 +453,17 @@ export async function runSheriffElection(
     await revealBtn.click()
     // eslint-disable-next-line no-console
     console.warn('[sheriff] clicked sheriff-reveal-result')
+    // The reveal lands on RESULT / TIED, or the backend has already moved
+    // the game on to the day.
+    await waitForCondition(
+      async () => {
+        const sub = await readSheriffSubPhase(hostPage, gameId)
+        return sub === 'RESULT' || sub === 'TIED' || (await readTopPhase(hostPage, gameId)) !== 'SHERIFF_ELECTION'
+      },
+      'sheriff election left VOTING after the reveal',
+      15_000,
+    )
   }
-  await hostPage.waitForTimeout(1_500)
   // eslint-disable-next-line no-console
   console.warn(
     `[sheriff] leaving runSheriffElection — subPhase=${await readSheriffSubPhase(hostPage, gameId)}`,
@@ -709,13 +712,18 @@ export async function completeDay(
   await revealBtn.waitFor({ state: 'visible', timeout: 30_000 }).catch(() => {})
   if (await revealBtn.isVisible().catch(() => false)) {
     await revealBtn.click()
-    await hostPage.waitForTimeout(800)
+    // The reveal leaves RESULT_HIDDEN (→ RESULT_REVEALED, or BADGE_HANDOVER
+    // when the sheriff died at night) — or ends the game at dawn.
+    if ((await waitForDayRevealed(hostPage, gameId)) === 'GAME_OVER') return 'GAME_OVER'
   }
   await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-day-result-revealed`)
 
-  // Host starts vote
+  // Host starts vote. isVisible() never waits (its timeout option is
+  // ignored): wait for the button, tolerating its absence (pending shot,
+  // host-less page) the way the sub-phase gate below does.
   const startVoteBtn = hostPage.getByTestId('day-start-vote')
-  if (await startVoteBtn.isVisible({ timeout: 8_000 }).catch(() => false)) {
+  await startVoteBtn.waitFor({ state: 'visible', timeout: 8_000 }).catch(() => {})
+  if (await startVoteBtn.isVisible()) {
     await startVoteBtn.click()
   }
   await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-day-voting-opened`)
@@ -811,7 +819,17 @@ export async function completeDay(
         tryAct('SUBMIT_VOTE', bot.nick, voteOpts)
       }
     }
-    await hostPage.waitForTimeout(1_500)
+    // Every alive player has voted once the backend's unvoted set is empty.
+    // A rejected vote leaves it non-empty: log it and let the reveal step
+    // below report the stall with the backend snapshot.
+    await waitForCondition(
+      async () => (await readUnvotedAlivePlayerIds(hostPage, gameId)).size === 0,
+      'all alive players voted',
+      15_000,
+    ).catch((e: Error) => {
+      // eslint-disable-next-line no-console
+      console.warn(`[completeDay] ${e.message}`)
+    })
 
     const revealTallyBtn = hostPage.getByTestId('voting-reveal')
     await revealTallyBtn.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {})
@@ -820,11 +838,20 @@ export async function completeDay(
       .catch(() => {})
     if (await revealTallyBtn.isVisible().catch(() => false)) {
       await revealTallyBtn.click()
-      await hostPage.waitForTimeout(1_500)
     } else {
       tryAct('VOTING_REVEAL_TALLY', 'Host', { room: ctx.roomCode })
-      await hostPage.waitForTimeout(1_500)
     }
+    // The tally leaves VOTING/RE_VOTING: VOTE_RESULT, BADGE_HANDOVER, an
+    // auto RE_VOTING on a tie, or a phase change (second tie → NIGHT, win → GAME_OVER).
+    const subBeforeReveal = attempt === 0 ? 'VOTING' : 'RE_VOTING'
+    await waitForCondition(
+      async () => {
+        const state = await fetchGameState(hostPage, gameId)
+        return state?.phase !== 'DAY_VOTING' || state?.votingPhase?.subPhase !== subBeforeReveal
+      },
+      `vote tally revealed (left ${subBeforeReveal})`,
+      15_000,
+    )
     await captureSnapshot(
       ctx.pages,
       testInfo,
@@ -942,7 +969,6 @@ export async function completeDay(
           : resolvedSheriffPage.locator('.player-grid .slot-alive').first()
       await slot.waitFor({ state: 'visible', timeout: 10_000 })
       await slot.click()
-      await resolvedSheriffPage.waitForTimeout(300)
 
       const passBtn = resolvedSheriffPage.getByTestId('badge-pass')
       const passEnabled = await passBtn
@@ -964,7 +990,6 @@ export async function completeDay(
       // eslint-disable-next-line no-console
       console.warn(`[completeDay] left BADGE_HANDOVER → VOTE_RESULT: ${leftBadge}`)
     }
-    await hostPage.waitForTimeout(1_000)
     await captureSnapshot(ctx.pages, testInfo, `${evidenceLabel}-badge-handover-done`)
   }
 
@@ -974,9 +999,15 @@ export async function completeDay(
   // /result and the button never renders — that's fine, just skip it.
   if (hostPage.url().includes('/result/')) return 'GAME_OVER'
   const continueBtn = hostPage.getByTestId('voting-continue')
-  if (await continueBtn.isVisible({ timeout: 6_000 }).catch(() => false)) {
+  await continueBtn.waitFor({ state: 'visible', timeout: 6_000 }).catch(() => {})
+  if (await continueBtn.isVisible()) {
     await continueBtn.click()
-    await hostPage.waitForTimeout(1_200)
+    // Continue leaves DAY_VOTING (→ NIGHT, or GAME_OVER on a post-vote win).
+    await waitForCondition(
+      async () => (await readTopPhase(hostPage, gameId)) !== 'DAY_VOTING',
+      'voting-continue advanced the game past DAY_VOTING',
+      15_000,
+    )
   }
   return readTopPhase(hostPage, gameId)
 }

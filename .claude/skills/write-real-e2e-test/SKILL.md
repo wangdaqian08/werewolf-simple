@@ -40,9 +40,18 @@ If you cannot point to the line that proves your assertion holds, the assertion 
 
 The shell helpers under `scripts/act.sh` drive bots. When the host needs to fire an action, pass the host nickname explicitly — `PLAYER_SEL=all` is the default fan-out which has bitten us before.
 
-## Step 4 — Gate on sub-phase, not on time
+## Step 4 — Gate on sub-phase, not on time (rule, enforced)
 
-When waiting for a phase/sub-phase transition, poll `/api/game/{id}/state` via `waitForSubPhase(hostPage, gameId, target, timeoutMs)` rather than sleeping. Use `TIMEOUT_SCALE` from `assertions.ts` for CI-friendly timeouts (CI is ~2× slower locally).
+`page.waitForTimeout(N)` and `setTimeout` sleeps are banned in `frontend/e2e/**`; CI runs `npx eslint -c eslint.e2e-waits.config.js e2e` and fails on any. Every wait names the state it needs:
+
+- backend phase / sub-phase: `waitForPhaseIn(hostPage, gameId, ['DAY_DISCUSSION', 'GAME_OVER'])`, `waitForNightSubPhase`, `waitForDaySubPhase`, `waitForVotingSubPhase`, `waitForDayRevealed` — all in `helpers/state-polling.ts`, all CI-scaled 2×;
+- the browser having rendered it: `waitForUiSubPhase(page, 'RE_VOTING')` (reads `.game-wrap[data-phase-sub]`), `verifyAllBrowsersPhase`, `locator.waitFor()` / `expect(locator).toBeVisible()`;
+- a backend log line: `waitForBackendLog(startLine, predicate, description)`;
+- anything else: `waitForCondition(predicate, description)` or `expect.poll`.
+
+`locator.isVisible()` does NOT wait (its `timeout` option is ignored). `if (await btn.isVisible({timeout})) click()` only ever worked because of the sleep before it — gate on state first (e.g. "host is alive and unvoted → `voting-skip` must appear → `waitFor`"), then click.
+
+A hand-rolled `while (Date.now() < deadline) { …; sleep }` loop is the same mistake: use `waitForCondition` (the single poll primitive) and let its timeout message say what you were waiting for.
 
 `verifyAllBrowsersPhase` already appends a backend-state snapshot on failure — leave that in. It turns "flaky test" into "here is exactly what the DB looked like when we gave up."
 

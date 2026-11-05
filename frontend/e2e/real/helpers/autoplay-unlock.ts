@@ -51,6 +51,8 @@ export async function installTrigger(page: Page, mode: 'pristine' | 'flagged'): 
       const wantsRepro = location.hash.includes('unlock-repro')
       const run = () => {
         if (!wantsRepro) return
+        // Browser-side deferral inside the init script (not a test wait).
+        // eslint-disable-next-line no-restricted-syntax
         setTimeout(async () => {
           try {
             await import(/* @vite-ignore */ '/src/services/audioService.ts' as string)

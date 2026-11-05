@@ -26,6 +26,8 @@ export class MockStompClient {
   private subs: Map<string, MsgCallback[]> = new Map()
   private scheduled: ScheduledEvent[] = []
   private subscribeWaiters: Map<string, (() => void)[]> = new Map()
+  /** Messages pushed to a topic nobody has subscribed to yet, delivered on the first subscribe. */
+  private pending: Map<string, IMessage[]> = new Map()
 
   scheduleEvent(delayMs: number, topic: string, payload: unknown | PayloadFn) {
     this.scheduled.push({ delayMs, topic, payload })
@@ -49,6 +51,7 @@ export class MockStompClient {
   deactivate() {
     this.subs.clear()
     this.scheduled = []
+    this.pending.clear()
   }
 
   subscribe(topic: string, callback: MsgCallback) {
@@ -56,16 +59,25 @@ export class MockStompClient {
     this.subs.set(topic, [...list, callback])
     this.subscribeWaiters.get(topic)?.forEach((resolve) => resolve())
     this.subscribeWaiters.delete(topic)
+    // A debug push fired between the first render and this subscribe (the
+    // view subscribes ~50 ms after mount) would otherwise be lost.
+    this.pending.get(topic)?.forEach((msg) => callback(msg))
+    this.pending.delete(topic)
     return {
       id: topic,
       unsubscribe: () => {},
     }
   }
 
-  /** Push a fake message to all subscribers of a topic. */
+  /** Push a fake message to all subscribers of a topic (queued until the first one subscribes). */
   push(topic: string, payload: unknown) {
     const fakeMsg = { body: JSON.stringify(payload) } as IMessage
-    this.subs.get(topic)?.forEach((cb) => cb(fakeMsg))
+    const subs = this.subs.get(topic)
+    if (!subs?.length) {
+      this.pending.set(topic, [...(this.pending.get(topic) ?? []), fakeMsg])
+      return
+    }
+    subs.forEach((cb) => cb(fakeMsg))
   }
 
   whenSubscribed(topic: string, timeoutMs = 5000): Promise<void> {

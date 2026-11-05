@@ -32,13 +32,13 @@ async function goToGameView(page: Page) {
 async function goToSheriffView(page: Page) {
   await goToGameView(page)
   await page.getByRole('button', { name: 'Skip → Sheriff' }).click()
-  await page.waitForTimeout(70)
+  await expect(page.getByTestId('sheriff-decision-progress')).toBeVisible()
 }
 
 async function goToDayView(page: Page) {
   await goToSheriffView(page)
   await page.getByRole('button', { name: '← Day' }).click()
-  await page.waitForTimeout(70)
+  await expect(page.locator('.day-wrap')).toBeVisible()
 }
 
 // ── Room endpoints ─────────────────────────────────────────────────────────────
@@ -79,7 +79,6 @@ test('POST /debug/role/skip — skips role reveal to sheriff election', async ({
   await goToGameView(page)
   // Currently in ROLE_REVEAL; click Skip → Sheriff
   await page.getByRole('button', { name: 'Skip → Sheriff' }).click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/警長競選|Sheriff Election|競選警長|Sign Up|Run for Sheriff/i).first()).toBeVisible()
 })
 
@@ -88,14 +87,12 @@ test('POST /debug/role/skip — skips role reveal to sheriff election', async ({
 test('POST /debug/sheriff/phase SIGNUP — shows signup screen', async ({ page }) => {
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Sign-up' }).click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/Sign Up|競選警長|SIGNUP/i).first()).toBeVisible()
 })
 
 test('POST /debug/sheriff/phase SPEECH_CANDIDATE — shows speech screen as speaker', async ({ page }) => {
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Speech: Me' }).click()
-  await page.waitForTimeout(70)
   // User is the current speaker
   await expect(page.getByText(/發言|Speech|speaking/i).first()).toBeVisible()
 })
@@ -103,28 +100,24 @@ test('POST /debug/sheriff/phase SPEECH_CANDIDATE — shows speech screen as spea
 test('POST /debug/sheriff/phase SPEECH_AUDIENCE — shows speech screen as audience', async ({ page }) => {
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Speech: Watch' }).click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/Tom|發言|Speech/i).first()).toBeVisible()
 })
 
 test('POST /debug/sheriff/phase VOTING — shows voting screen', async ({ page }) => {
   await goToSheriffView(page)
   await page.locator('[data-testid="debug-sheriff-voting"]').click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/投票|Vote|VOTING/i).first()).toBeVisible()
 })
 
 test('POST /debug/sheriff/phase RESULT — shows result screen', async ({ page }) => {
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Result', exact: true }).click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/Tom|結果|Result|Sheriff/i).first()).toBeVisible()
 })
 
 test('POST /debug/sheriff/candidate RUN — adds a candidate', async ({ page }) => {
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Sign-up' }).click()
-  await page.waitForTimeout(70)
   // SIGNUP UI hides identities (2026-05-11). The visible signal that the
   // helper added a candidate is the decision-progress counter advancing.
   const progress = page.getByTestId('sheriff-decision-progress')
@@ -136,7 +129,6 @@ test('POST /debug/sheriff/candidate RUN — adds a candidate', async ({ page }) 
 test('POST /debug/sheriff/candidate REMOVE — removes a candidate', async ({ page }) => {
   await goToSheriffView(page)
   await page.getByRole('button', { name: 'Sign-up' }).click()
-  await page.waitForTimeout(70)
   const progress = page.getByTestId('sheriff-decision-progress')
   // Add then remove Alice — the counter should bump up then back down.
   await page.getByRole('button', { name: '+ Alice' }).click()
@@ -148,7 +140,6 @@ test('POST /debug/sheriff/candidate REMOVE — removes a candidate', async ({ pa
 test('POST /debug/sheriff/exit — exits sheriff to day phase', async ({ page }) => {
   await goToSheriffView(page)
   await page.getByRole('button', { name: '← Day' }).click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/Carol|killed|Day/i).first()).toBeVisible()
 })
 
@@ -157,65 +148,55 @@ test('POST /debug/sheriff/exit — exits sheriff to day phase', async ({ page })
 test('POST /debug/day/scenario HOST_HIDDEN — host, result hidden', async ({ page }) => {
   await goToDayView(page)
   await page.getByRole('button', { name: 'Host·Hidden' }).click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/顯示結果|Reveal/i).first()).toBeVisible()
 })
 
 test('POST /debug/day/scenario HOST_REVEALED — host, result revealed', async ({ page }) => {
   await goToDayView(page)
   await page.getByRole('button', { name: 'Host·Revealed' }).click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/Carol/i).first()).toBeVisible()
 })
 
 test('POST /debug/day/scenario DEAD — user is dead', async ({ page }) => {
   await goToDayView(page)
   await page.locator('[data-testid="debug-day-scenario-btns"]').getByRole('button', { name: 'Dead' }).click()
-  await page.waitForTimeout(500)
   await expect(page.getByText(/你在上一晚被淘汰/).first()).toBeVisible()
 })
 
 test('POST /debug/day/scenario ALIVE_HIDDEN — alive player, result hidden', async ({ page }) => {
   await goToDayView(page)
   await page.getByRole('button', { name: 'Alive·Hidden' }).click()
-  await page.waitForTimeout(70)
   await expect(page.locator('.game-wrap')).toBeVisible()
 })
 
 test('POST /debug/day/scenario ALIVE_REVEALED — alive player, result revealed', async ({ page }) => {
   await goToDayView(page)
   await page.getByRole('button', { name: 'Alive·Revealed' }).click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/Carol/i).first()).toBeVisible()
 })
 
 test('POST /debug/day/scenario GUEST — spectator view', async ({ page }) => {
   await goToDayView(page)
   await page.getByRole('button', { name: 'Guest' }).click()
-  await page.waitForTimeout(70)
   await expect(page.locator('.game-wrap')).toBeVisible()
 })
 
 test('POST /debug/day/phase HIDDEN — switches to hidden result', async ({ page }) => {
   await goToDayView(page)
   await page.getByRole('button', { name: 'Hidden', exact: true }).click()
-  await page.waitForTimeout(70)
   await expect(page.locator('.game-wrap')).toBeVisible()
 })
 
 test('POST /debug/day/phase REVEALED — switches to revealed result', async ({ page }) => {
   await goToDayView(page)
   await page.locator('[data-testid="debug-day-btns"]').getByRole('button', { name: 'Revealed' }).click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/Carol/i).first()).toBeVisible()
 })
 
 test('POST /debug/day/reveal — host reveals night result', async ({ page }) => {
   await goToDayView(page)
   await page.getByRole('button', { name: 'Host·Hidden' }).click()
-  await page.waitForTimeout(70)
   // Host clicks reveal button in the UI
   await page.getByText(/顯示結果|Reveal/i).first().click()
-  await page.waitForTimeout(70)
   await expect(page.getByText(/Carol/i).first()).toBeVisible()
 })

@@ -67,7 +67,6 @@ test('no-sheriff: confirming role shows waiting screen', async ({ page }) => {
 
   // goToGameViewNoSheriff ends with role revealed — just confirm directly
   await page.getByRole('button', { name: /知道了|Got it/ }).click()
-  await page.waitForTimeout(100)
 
   await expect(page.getByText('等待其他玩家確認')).toBeVisible()
 })
@@ -76,14 +75,13 @@ test('no-sheriff: Start Night button appears after all players confirm', async (
   await goToGameViewNoSheriff(page)
 
   await page.getByRole('button', { name: /知道了|Got it/ }).click()
-  await page.waitForTimeout(100)
+  await expect(page.getByText('等待其他玩家確認')).toBeVisible()
 
   // Not all confirmed yet — button should not be visible
   await expect(page.getByTestId('start-night')).not.toBeVisible()
 
   // Simulate all players confirming via debug button
   await page.getByRole('button', { name: /All Confirmed/i }).click()
-  await page.waitForTimeout(100)
 
   // Now "Start Night" button should be visible for the host
   await expect(page.getByTestId('start-night')).toBeVisible()
@@ -93,14 +91,11 @@ test('no-sheriff: host clicks Start Night shows WAITING screen then advances to 
   await goToGameViewNoSheriff(page)
 
   await page.getByRole('button', { name: /知道了|Got it/ }).click()
-  await page.waitForTimeout(100)
 
   await page.getByRole('button', { name: /All Confirmed/i }).click()
-  await page.waitForTimeout(100)
 
   // Click "Start Night"
   await page.getByTestId('start-night').click()
-  await page.waitForTimeout(200)
 
   // Should show WAITING screen (night is beginning)
   await expect(page.getByText('夜晚即將開始')).toBeVisible({ timeout: 2000 })
@@ -121,10 +116,9 @@ test('no-sheriff: sheriff election screen does NOT appear after all confirm', as
   await goToGameViewNoSheriff(page)
 
   await page.getByRole('button', { name: /知道了|Got it/ }).click()
-  await page.waitForTimeout(100)
 
   await page.getByRole('button', { name: /All Confirmed/i }).click()
-  await page.waitForTimeout(100)
+  await expect(page.getByTestId('start-night')).toBeVisible()
 
   // Sheriff Election must not appear
   await expect(page.getByText(/Sign Up for Sheriff/i)).not.toBeVisible()
@@ -149,7 +143,6 @@ test('sheriff-enabled: skip to sheriff shows sheriff election', async ({ page })
   await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
 
   await page.getByRole('button', { name: 'Skip → Sheriff' }).click()
-  await page.waitForTimeout(100)
 
   await expect(page.getByText(/警長競選|Sheriff Election|Sign Up/i).first()).toBeVisible()
 })
@@ -158,7 +151,6 @@ test('no-sheriff: Skip → Night debug button shows WAITING screen', async ({ pa
   await goToGameViewNoSheriff(page)
 
   await page.getByRole('button', { name: 'Skip → Night' }).click()
-  await page.waitForTimeout(200)
 
   // Should show WAITING countdown screen
   await expect(page.getByText('夜晚即將開始')).toBeVisible({ timeout: 2000 })

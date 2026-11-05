@@ -22,7 +22,7 @@ import { type GameContext, setupGame } from './helpers/multi-browser'
 import type { RoleName } from './helpers/shell-runner'
 import { driveMinimalNight1ViaDom } from './helpers/night-driver'
 import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-screenshot'
-import { readHostSeat, waitForCondition } from './helpers/state-polling'
+import { readHostSeat, waitForCondition, waitForDaySubPhase } from './helpers/state-polling'
 
 const BROWSER_ROLES: RoleName[] = ['WEREWOLF', 'SEER', 'WITCH', 'GUARD', 'HUNTER', 'VILLAGER']
 
@@ -51,23 +51,6 @@ async function fetchState(page: Page, gameId: string): Promise<GameStateLite | n
     const res = await fetch(`/api/game/${id}/state`, { headers: { Authorization: `Bearer ${token}` } })
     return res.ok ? await res.json() : null
   }, gameId)
-}
-
-/** Poll `state.dayPhase.subPhase` until it matches `target`. (No shared helper
- *  reads the day tree — night/voting ones look at the wrong sub-object.) */
-async function waitForDaySubPhase(
-  page: Page,
-  gameId: string,
-  target: string,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + scale(timeoutMs)
-  while (Date.now() < deadline) {
-    const state = await fetchState(page, gameId)
-    if (state?.dayPhase?.subPhase === target) return true
-    await page.waitForTimeout(300)
-  }
-  return false
 }
 
 async function seatAlive(page: Page, gameId: string, seat: number): Promise<boolean> {

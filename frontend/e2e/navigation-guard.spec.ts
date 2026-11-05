@@ -81,13 +81,10 @@ test('lobby does not block browser back', async ({page}) => {
 test('lobby does not show a refresh dialog', async ({page}) => {
     await goToLobby(page)
 
-    let dialogFired = false
-    page.once('dialog', () => {
-        dialogFired = true
-    })
+    const dialogPromise = page.waitForEvent('dialog', { timeout: 500 }).catch(() => null)
     page.evaluate(() => location.reload())
 
     // Give the dialog a short window to appear; it should not
-    await page.waitForTimeout(500)
-    expect(dialogFired).toBe(false)
+    const dialog = await dialogPromise
+    expect(dialog).toBeNull()
 })

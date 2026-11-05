@@ -102,6 +102,33 @@ export function readBackendLogSince(startLine: number, logPath = DEFAULT_LOG_PAT
 }
 
 /**
+ * Poll the backend log (from `startLine`) until `predicate(lines)` holds,
+ * and return those lines. Spring's logger flushes asynchronously, so a spec
+ * that asserts on log content right after a phase change must wait for the
+ * line it needs rather than sleep and hope. Throws on timeout (scaled 2× on CI).
+ */
+export async function waitForBackendLog(
+  startLine: number,
+  predicate: (lines: string[]) => boolean,
+  description: string,
+  timeoutMs = 15_000,
+  logPath = DEFAULT_LOG_PATH,
+): Promise<string[]> {
+  const deadline = Date.now() + (process.env.CI ? timeoutMs * 2 : timeoutMs)
+  let lines = readBackendLogSince(startLine, logPath)
+  while (!predicate(lines)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`waitForBackendLog timed out after ${timeoutMs}ms: ${description}`)
+    }
+    // Poll interval for the log file (no page involved, so not waitForCondition).
+    // eslint-disable-next-line no-restricted-syntax
+    await new Promise((r) => setTimeout(r, 250))
+    lines = readBackendLogSince(startLine, logPath)
+  }
+  return lines
+}
+
+/**
  * Filter `lines` to those that match an ERROR_LINE_PATTERN and are not
  * matched by any allow-list pattern. Exposed for unit testing and for
  * specs that want to inspect the same set the assertion would fail on.

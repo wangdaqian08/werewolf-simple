@@ -18,7 +18,8 @@ async function goToVotingScenario(page: Page, scenario: string) {
   })
   // Navigate directly to the game view (mock returns state for game-001)
   await page.goto('/game/game-001')
-  await page.waitForTimeout(300) // allow mock state to load
+  // Initial state rendered (the mock queues debug pushes until the view subscribes)
+  await expect(page.locator('.game-wrap')).toHaveAttribute('data-phase', /./)
 
   // Click the scenario button in the debug voting buttons section
   const testIdMap: Record<string, string> = {
@@ -36,7 +37,7 @@ async function goToVotingScenario(page: Page, scenario: string) {
   }
   const testId = testIdMap[scenario] || `debug-voting-${scenario.toLowerCase().replace(/\s+/g, '-')}`
   await page.locator(`[data-testid="${testId}"]`).click()
-  await page.waitForTimeout(100)
+  await expect(page.locator('.voting-wrap')).toBeVisible()
 }
 
 // ── Feature 1: My Role badge ──────────────────────────────────────────────────

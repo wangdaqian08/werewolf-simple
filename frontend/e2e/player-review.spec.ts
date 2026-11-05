@@ -17,7 +17,7 @@ async function startGame(page: Page) {
   await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click()
   await page.waitForURL(/\/room\//, { timeout: 5000 })
-  await page.waitForTimeout(70)
+  await page.getByRole('button', { name: /Debug: Launch Game/i }).waitFor({ state: 'visible' })
   await page.evaluate(() =>
     (window as unknown as { __debug: { gameStart: () => void } }).__debug.gameStart(),
   )

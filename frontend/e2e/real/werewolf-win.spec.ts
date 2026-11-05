@@ -13,11 +13,27 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, actName, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {readAlivePlayerIds, readHostUserId, readUnvotedAlivePlayerIds, waitForNightSubPhase, waitForVotingSubPhase} from './helpers/state-polling'
+import {
+  fetchGameState,
+  readAlivePlayerIds,
+  readHostUserId,
+  readUnvotedAlivePlayerIds,
+  waitForCondition,
+  waitForDayRevealed,
+  waitForNightSubPhase,
+  waitForPhaseIn,
+  waitForUiSubPhase,
+  waitForVoteRegistered,
+  waitForVotingSubPhase,
+} from './helpers/state-polling'
 
 let ctx: GameContext
 
 test.describe('Werewolf win — result screen shows all roles', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   // 300s (up from 180s): the per-role sub-phase gates added for Category A
   // can each cost up to ~15s × CI-2× = 30s when a role's bot is dead (gate
   // waits full timeout before returning false). Across 6 rounds × 4 roles
@@ -110,7 +126,6 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       const slot = wolfPage.locator('.player-grid .slot-alive').first()
       if (await slot.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await slot.click()
-        await wolfPage.waitForTimeout(500)
         await wolfPage.getByTestId('wolf-confirm-kill').click()
       }
     }
@@ -149,7 +164,6 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
         const passBtn = witchPage.getByTestId('switch-pass-antidote')
         if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
-        await witchPage.waitForTimeout(500)
         const skipBtn = witchPage.getByTestId('witch-skip')
         if (await skipBtn.isVisible().catch(() => false)) await skipBtn.click()
       }
@@ -240,15 +254,20 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     const hostPage = ctx.hostPage
 
     // Host reveals night result
+    // isVisible() never waits (its timeout option is ignored): wait for the
+    // host-only buttons to render, tolerating their absence after a game end.
     const revealBtn = hostPage.getByTestId('day-reveal-result')
-    if (await revealBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
+    await revealBtn.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
+    if (await revealBtn.isVisible()) {
       await revealBtn.click()
-      await hostPage.waitForTimeout(1_000)
+      // 屠邊 can end the game at this reveal — then there is no vote.
+      if ((await waitForDayRevealed(hostPage, ctx.gameId)) === 'GAME_OVER') return
     }
 
     // Host starts vote
     const startVoteBtn = hostPage.getByTestId('day-start-vote')
-    if (await startVoteBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
+    await startVoteBtn.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {})
+    if (await startVoteBtn.isVisible()) {
       await startVoteBtn.click()
     }
 
@@ -262,52 +281,59 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       const reachedVoting = await waitForVotingSubPhase(ctx.hostPage, ctx.gameId, target, 15_000)
       if (!reachedVoting) break
 
-      const abstainBtn = hostPage.locator('.skip-btn').first()
-      if (await abstainBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
+      const hostId = await readHostUserId(ctx.hostPage)
+      let unvoted = await readUnvotedAlivePlayerIds(ctx.hostPage, ctx.gameId)
+      if (hostId && unvoted.has(hostId)) {
+        // An alive, unvoted host MUST get the abstain button: wait for it.
+        const abstainBtn = hostPage.getByTestId('voting-skip')
+        await abstainBtn.waitFor({ state: 'visible', timeout: 10_000 })
         await abstainBtn.click()
-        await hostPage.waitForTimeout(500)
+        await waitForVoteRegistered(ctx.hostPage, ctx.gameId, hostId)
+        unvoted = await readUnvotedAlivePlayerIds(ctx.hostPage, ctx.gameId)
       }
 
       // Fan-out abstain to alive, non-host, unvoted bots only. Avoids the
       // "Already voted" / "Dead players cannot vote" retry cascade in
       // act.sh when some bots have already abstained via the host-browser
       // click above.
-      const unvoted = await readUnvotedAlivePlayerIds(ctx.hostPage, ctx.gameId)
-      const hostId = await readHostUserId(ctx.hostPage)
       for (const bot of ctx.allBots) {
         if (bot.nick === 'Host' || bot.userId === hostId) continue
         if (!unvoted.has(bot.userId)) continue
         tryAct('SUBMIT_VOTE', bot.nick, { room: ctx.roomCode })
       }
-      await hostPage.waitForTimeout(2_000)
+      await waitForCondition(
+        async () => (await readUnvotedAlivePlayerIds(ctx.hostPage, ctx.gameId)).size === 0,
+        'every alive player has voted',
+        15_000,
+      )
 
       // Reveal tally → backend's next sub-phase depends on the tally:
       //   - decisive → VOTE_RESULT (VOTING_CONTINUE applies)
       //   - tied     → RE_VOTING auto-fires (VOTING_CONTINUE doesn't apply,
       //                firing it returns "Not in VOTE_RESULT sub-phase")
       // Poll for either; only fire VOTING_CONTINUE on VOTE_RESULT.
+      //   - second consecutive tie → the backend goes straight to NIGHT
+      //                (or GAME_OVER): no VOTING_CONTINUE at all.
       tryAct('VOTING_REVEAL_TALLY', 'HOST', { room: ctx.roomCode })
-      let postRevealSub: string | null = null
-      for (let i = 0; i < 20; i++) {
-        postRevealSub = await ctx.hostPage.evaluate(async (id: string) => {
-          const token = localStorage.getItem('jwt')
-          const res = await fetch(`/api/game/${id}/state`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          return res.ok ? ((await res.json())?.votingPhase?.subPhase ?? null) : null
-        }, ctx.gameId)
-        if (postRevealSub === 'VOTE_RESULT' || postRevealSub === 'RE_VOTING') break
-        await hostPage.waitForTimeout(300)
-      }
+      let after: { phase?: string; sub?: string } = {}
+      await waitForCondition(
+        async () => {
+          const state = await fetchGameState(ctx.hostPage, ctx.gameId)
+          after = { phase: state?.phase, sub: state?.votingPhase?.subPhase }
+          return after.phase !== 'DAY_VOTING' || after.sub !== target
+        },
+        `tally revealed (left ${target})`,
+        15_000,
+      )
 
-      if (postRevealSub === 'VOTE_RESULT') {
+      if (after.phase !== 'DAY_VOTING') break
+      if (after.sub === 'VOTE_RESULT') {
         tryAct('VOTING_CONTINUE', 'HOST', { room: ctx.roomCode })
+        await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT', 'GAME_OVER'], 15_000)
+        break
       }
-      await hostPage.waitForTimeout(3_000)
-
-      // Check if still in voting (revote) — if skip-btn reappears, another round needed
-      const stillVoting = await hostPage.locator('.skip-btn').first().isVisible().catch(() => false)
-      if (!stillVoting) break
+      // A tie auto-opened the next round: the host's browser renders RE_VOTING.
+      await waitForUiSubPhase(hostPage, 'RE_VOTING')
     }
   }
 
@@ -343,15 +369,11 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       // Night
       const targetSeat = targets[round % targets.length]
       await completeNight(targetSeat)
-
-      // Wait for DAY or GAME_OVER
-      await ctx.hostPage.waitForTimeout(5_000)
-      if (ctx.hostPage.url().includes('/result/')) break
+      if ((await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['DAY_DISCUSSION', 'GAME_OVER'])) === 'GAME_OVER') break
 
       // Day
       await completeDay()
-      await ctx.hostPage.waitForTimeout(3_000)
-      if (ctx.hostPage.url().includes('/result/')) break
+      if ((await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT', 'GAME_OVER'])) === 'GAME_OVER') break
     }
 
     // Game should be over — verify result screen

@@ -61,7 +61,8 @@
 import {expect, test} from '@playwright/test'
 import {setupGame} from './helpers/multi-browser'
 import {act, actName, type RoleName} from './helpers/shell-runner'
-import {waitForNightSubPhase, waitForPhase} from './helpers/state-polling'
+import {waitForCondition, waitForNightSubPhase, waitForPhase} from './helpers/state-polling'
+import {readBackendLogLineCount, waitForBackendLog} from './helpers/backend-log'
 
 test.describe('Audio reconnect recovery', () => {
 test.setTimeout(180_000)
@@ -120,6 +121,8 @@ test('STOMP reconnect during night replays missed AudioSequence via getGameState
       expect(wolfTarget, 'kit must yield a non-wolf wolf-kill target').toBeTruthy()
 
       // ── N1: start night and reach WEREWOLF_PICK ────────────────────────
+      const logStart = readBackendLogLineCount()
+      const witchOpenBroadcast = new RegExp(`\\[broadcastAudio\\] game=${gameId} file=witch_open_eyes\\.mp3`)
       const startNightBtn = hostPage.getByTestId('start-night')
       await startNightBtn.waitFor({state: 'visible', timeout: 15_000})
       await startNightBtn.click()
@@ -148,12 +151,17 @@ test('STOMP reconnect during night replays missed AudioSequence via getGameState
           .toBe(true)
 
       // ── Force host offline through the witch_open_eyes broadcast ──────
-      // 5 s is comfortably longer than (audio-cooldown-ms + inter-role-gap-ms)
-      // under any test profile, so witch_open is guaranteed to land while
-      // the WebSocket is closed. STOMP-JS reconnects on `setOffline(false)`
+      // Stay offline until the backend log shows it published witch_open
+      // for this game (so the cue provably went out while the WebSocket was
+      // closed), then come back. STOMP-JS reconnects on `setOffline(false)`
       // (`reconnectDelay: 3000` ms means the next attempt fires within ~3 s).
       await ctx.hostPage.context().setOffline(true)
-      await ctx.hostPage.waitForTimeout(5_000)
+      await waitForBackendLog(
+          logStart,
+          (lines) => lines.some((l) => witchOpenBroadcast.test(l)),
+          `[broadcastAudio] witch_open_eyes for game=${gameId} while the host is offline`,
+          30_000,
+      )
       await ctx.hostPage.context().setOffline(false)
 
       // ── Drive the rest of N1 through DAY_DISCUSSION ────────────────────
@@ -179,10 +187,6 @@ test('STOMP reconnect during night replays missed AudioSequence via getGameState
 
       expect(await waitForPhase(hostPage, gameId, 'DAY_DISCUSSION', 30_000)).toBe(true)
 
-      // Brief settle so any post-reconnect refreshState completes flushing
-      // its useAudioService log line before assertions read the buffer.
-      await hostPage.waitForTimeout(2_000)
-
       // Extract .mp3 file tokens from each event log. Playwright's
       // msg.text() serialises object literals with "Array(N)" placeholders
       // for nested arrays, but the AudioSequence id always ends with the
@@ -197,6 +201,27 @@ test('STOMP reconnect during night replays missed AudioSequence via getGameState
           }
           return out
       }
+      const N1_ROLE_FILES = [
+          'wolf_open_eyes.mp3',
+          'wolf_close_eyes.mp3',
+          'witch_open_eyes.mp3',
+          'witch_close_eyes.mp3',
+          'seer_open_eyes.mp3',
+          'seer_close_eyes.mp3',
+          'guard_open_eyes.mp3',
+          'guard_close_eyes.mp3',
+      ]
+      // The post-reconnect refreshState logs its replayed cues asynchronously:
+      // wait until every N1 cue has been logged (live or replay) instead of
+      // sleeping. On timeout, assertion 1 below reports exactly what is missing.
+      await waitForCondition(
+          async () => {
+              const heard = new Set([...extractFiles(liveAudioEvents), ...extractFiles(replayAudioEvents)])
+              return N1_ROLE_FILES.every((f) => heard.has(f))
+          },
+          'every N1 role cue heard by useAudioService (live or replay)',
+          20_000,
+      ).catch(() => {})
       const liveFiles = extractFiles(liveAudioEvents)
       const replayFiles = extractFiles(replayAudioEvents)
       const heardByComposable = new Set<string>([...liveFiles, ...replayFiles])
@@ -250,16 +275,6 @@ test('STOMP reconnect during night replays missed AudioSequence via getGameState
       // replayFiles is the union of "arrived via STOMP" and "recovered via
       // getGameState's audioReplayBuffer". Both paths feed the same audio
       // queue through useAudioService.tryPlay.
-      const N1_ROLE_FILES = [
-          'wolf_open_eyes.mp3',
-          'wolf_close_eyes.mp3',
-          'witch_open_eyes.mp3',
-          'witch_close_eyes.mp3',
-          'seer_open_eyes.mp3',
-          'seer_close_eyes.mp3',
-          'guard_open_eyes.mp3',
-          'guard_close_eyes.mp3',
-      ]
       const missing = N1_ROLE_FILES.filter((f) => !heardByComposable.has(f))
       expect(
           missing,
