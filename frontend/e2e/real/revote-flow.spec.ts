@@ -89,6 +89,10 @@ async function readVotingSubPhase(hostPage: Page, gameId: string): Promise<strin
 }
 
 test.describe('Voting tie → revote → game proceeds', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   test.setTimeout(180_000)
 
   test.beforeAll(async ({ browser }, testInfo) => {

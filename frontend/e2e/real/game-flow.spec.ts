@@ -58,6 +58,10 @@ function roleOfSeat(seat: number): RoleName | null {
 }
 
 test.describe('Game flow — multi-browser STOMP verification', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   test.setTimeout(180_000) // 3 min per test — N1 + N2 + N3 nights each cycle 4 roles
 
   test.beforeAll(async ({ browser }, testInfo) => {

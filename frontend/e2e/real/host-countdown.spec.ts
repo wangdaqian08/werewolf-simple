@@ -82,6 +82,10 @@ async function driveToDay(ctx: GameContext) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Flow A — DAY_DISCUSSION timer start/stop syncs to all clients', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   let ctx: GameContext
 
   test.setTimeout(180_000)
@@ -157,6 +161,10 @@ test.describe('Flow A — DAY_DISCUSSION timer start/stop syncs to all clients',
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Flow C — reconnect mid-timer recovers correct remaining', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   let ctx: GameContext
 
   test.setTimeout(180_000)
@@ -214,6 +222,10 @@ test.describe('Flow C — reconnect mid-timer recovers correct remaining', () =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Flow D — DAY_DISCUSSION exit cancels timer', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   let ctx: GameContext
 
   test.setTimeout(180_000)

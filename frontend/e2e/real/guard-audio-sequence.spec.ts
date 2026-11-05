@@ -30,6 +30,10 @@ async function waitForDayTimePlayback(audioEvents: string[]): Promise<void> {
 }
 
 test.describe('Guard Audio Sequence — Regression Test', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   // 90s was tight once we added waitForSubPhase polling (up to ~5 × 15s of
   // legitimate coroutine waiting); bump to 180s so the test body fits even
   // when the CI coroutine is at the slow end of its range.

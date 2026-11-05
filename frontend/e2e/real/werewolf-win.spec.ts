@@ -30,6 +30,10 @@ import {
 let ctx: GameContext
 
 test.describe('Werewolf win — result screen shows all roles', () => {
+  // One game per describe: a later test needs the earlier ones, so a retry must
+  // replay the group from its first test, not resume mid-game after beforeAll.
+  test.describe.configure({ mode: 'serial' })
+
   // 300s (up from 180s): the per-role sub-phase gates added for Category A
   // can each cost up to ~15s × CI-2× = 30s when a role's bot is dead (gate
   // waits full timeout before returning false). Across 6 rounds × 4 roles
