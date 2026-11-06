@@ -2,8 +2,8 @@
   <section class="rp-panel" data-testid="role-pick-panel">
     <div class="rp-title">
       <span>{{ locked ? $t('rolePick.titleLocked') : $t('rolePick.title') }}</span>
-      <span v-if="balance !== null" class="rp-balance">
-        ◈ {{ balance }}
+      <span v-if="balance !== null" class="rp-balance" data-testid="rp-balance">
+        {{ $t('rolePick.balance', { n: balance }) }}
         <span v-if="view.frozenCredits > 0" class="rp-frozen" data-testid="role-pick-frozen">{{
           $t('rolePick.frozen', { n: view.frozenCredits })
         }}</span>

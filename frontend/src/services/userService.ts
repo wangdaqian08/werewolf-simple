@@ -1,5 +1,5 @@
 import http from './http'
-import type { LoginResponse, ProvidersResponse, User } from '@/types'
+import type { LoginResponse, ProvidersResponse, User, UserStats } from '@/types'
 
 export const userService = {
   async login(nickname: string): Promise<LoginResponse> {
@@ -24,6 +24,11 @@ export const userService = {
 
   async getProfile(): Promise<User> {
     const { data } = await http.get<User>('/user/profile')
+    return data
+  },
+
+  async getStats(): Promise<UserStats> {
+    const { data } = await http.get<UserStats>('/user/stats')
     return data
   },
 

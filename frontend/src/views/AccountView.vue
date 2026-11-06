@@ -24,6 +24,11 @@
           {{ $t('account.adminLink') }}
         </button>
 
+        <StatsCard v-if="stats" :stats="stats" />
+        <p v-if="userStore.isGuest" class="guest-note" data-testid="account-guest-note">
+          {{ $t('account.guestNote') }}
+        </p>
+
         <!-- ── Section 1: credits + ledger ─────────────────────────────── -->
         <section class="section" data-testid="account-wallet">
           <h2 class="section-title">{{ $t('account.credits') }}</h2>
@@ -137,11 +142,14 @@ import { useUserStore } from '@/stores/userStore'
 import { walletService } from '@/services/walletService'
 import { paymentService } from '@/services/paymentService'
 import { adminService } from '@/services/adminService'
+import { userService } from '@/services/userService'
+import StatsCard from '@/components/StatsCard.vue'
 import type {
   CreditTxType,
   MyPerkActivation,
   PaymentOrderSummary,
   PerkActivationStatus,
+  UserStats,
   Wallet,
 } from '@/types'
 
@@ -150,6 +158,7 @@ const userStore = useUserStore()
 
 const loading = ref(false)
 const wallet = ref<Wallet | null>(null)
+const stats = ref<UserStats | null>(null)
 const perks = ref<MyPerkActivation[]>([])
 const orders = ref<PaymentOrderSummary[]>([])
 // Per-section error fallbacks — one failed fetch must not blank the page.
@@ -253,6 +262,15 @@ onMounted(async () => {
       })
       .catch(() => {
         perksError.value = true
+      }),
+    // A failed stats load just hides the card.
+    userService
+      .getStats()
+      .then((s) => {
+        stats.value = s
+      })
+      .catch(() => {
+        stats.value = null
       }),
     // Keeps the lobby chip in sync; never throws (errors swallowed in store).
     userStore.refreshWallet(),
