@@ -51,7 +51,7 @@ const revealState = (myRolePick?: GameState['myRolePick']): GameState =>
     myRolePick,
   }) as GameState
 
-async function mountWith(state: GameState) {
+async function mountWith(state: GameState, reveal = true) {
   h.getStateMock.mockResolvedValue(state)
   const pinia = createPinia()
   setActivePinia(pinia)
@@ -74,12 +74,16 @@ async function mountWith(state: GameState) {
       stubs: {
         PlayerSlot: true,
         VolumeControl: true,
-        RoleRevealCard: { template: '<div><slot /></div>' },
+
         ActionMenu: true,
       },
     },
   })
   await flushPromises()
+  if (reveal) {
+    await wrapper.get('[data-testid="reveal-role-btn"]').trigger('click')
+    await flushPromises()
+  }
   return wrapper
 }
 
@@ -96,6 +100,11 @@ describe('GameView role-reveal — role-pick result line', () => {
     expect(w.get('[data-testid="role-pick-result"]').text()).toBe(
       '點將卡未抽中，20◈ 將在遊戲結束時退回',
     )
+  })
+
+  it('hides the line while the role is still unrevealed', async () => {
+    const w = await mountWith(revealState({ choice: 'GOD', tookEffect: true, price: 20 }), false)
+    expect(w.find('[data-testid="role-pick-result"]').exists()).toBe(false)
   })
 
   it.each([null, undefined])('renders nothing when myRolePick is %s', async (v) => {

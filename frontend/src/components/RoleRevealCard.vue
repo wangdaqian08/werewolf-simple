@@ -31,7 +31,7 @@
       </div>
     </div>
 
-    <slot />
+    <slot v-if="revealed" />
 
     <!-- Buttons -->
     <template v-if="!revealed">
