@@ -258,6 +258,9 @@ class RoomService(
     fun setReady(userId: String, roomId: Int, ready: Boolean) {
         val room = roomRepository.findById(roomId).orElse(null) ?: throw RoomNotFoundException("Room not found")
         if (room.status != RoomStatus.WAITING) throw RoomNotOpenException("Room is not open")
+        if (ready && room.config?.perksAllowed != false &&
+            roomPlayerRepository.findByRoomIdAndUserId(roomId, userId).orElse(null)?.let { it.rolePick == null } == true
+        ) throw RolePickRequiredException("Choose a role-pick card before getting ready")
 
         val affected = if (ready) {
             roomPlayerRepository.setReadyIfSeated(roomId, userId)
@@ -523,3 +526,4 @@ class CannotKickHostException(message: String) : RuntimeException(message)
 class InvalidBgmTrackException(message: String) : RuntimeException(message)
 class InvalidRoleCompositionException(message: String) : RuntimeException(message)
 class RoomTooSmallException(message: String) : RuntimeException(message)
+class RolePickRequiredException(message: String) : RuntimeException(message)

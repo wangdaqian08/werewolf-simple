@@ -1,5 +1,6 @@
 package com.werewolf.integration
 
+import com.werewolf.game.action.GameActionResult
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.*
@@ -24,6 +25,10 @@ class RolePickServiceIntegrationTest {
     @Autowired lateinit var roomRepository: RoomRepository
     @Autowired lateinit var roomPlayerRepository: RoomPlayerRepository
     @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
+    @Autowired lateinit var perkService: PerkService
+    @Autowired lateinit var gameService: GameService
+    @Autowired lateinit var gameRepository: GameRepository
+    @Autowired lateinit var perkSettlementService: PerkSettlementService
 
     private var seq = 0
 
@@ -245,5 +250,53 @@ class RolePickServiceIntegrationTest {
         } finally {
             ensureRolePickPerks()
         }
+    }
+
+    @Test
+    fun `re-choosing a paid card whose activation was refunded elsewhere charges again`() {
+        val host = newUser("h"); val roomId = newRoom(host); fund(host, 100)
+        rolePickService.choose(host, roomId, RolePickChoice.WOLF)
+        // Something else (e.g. the stale-room sweep) refunds the card but leaves role_pick = WOLF.
+        rows(roomId, host).single().let { it.status = PerkActivationStatus.REFUNDED; perkActivationRepository.save(it) }
+        walletService.credit(host, 20, CreditTxType.REFUND, note = "sweep")
+        assertThat(walletService.balance(host)).isEqualTo(100)
+        assertThat(rolePickOf(roomId, host)).isEqualTo(RolePickChoice.WOLF)
+
+        val view = rolePickService.choose(host, roomId, RolePickChoice.WOLF)
+
+        assertThat(view.choice).isEqualTo(RolePickChoice.WOLF)
+        assertThat(walletService.balance(host)).isEqualTo(80)
+        assertThat(perkService.liveRolePicks(roomId)).containsEntry(host, RolePickChoice.WOLF)
+    }
+
+    @Test
+    fun `host board edit to zero villagers after a VILLAGER pick - game starts, pick untriggered, settlement refunds 20`() {
+        val host = newUser("h"); val roomId = newRoom(host)
+        roomPlayerRepository.findByRoomIdAndUserId(roomId, host).get().let { it.seatIndex = 1; roomPlayerRepository.save(it) }
+        val guests = (2..6).map { seat ->
+            newUser("g").also { g -> roomPlayerRepository.save(RoomPlayer(roomId = roomId, userId = g, seatIndex = seat)) }
+        }
+        val picker = guests.first(); fund(picker, 100)
+        rolePickService.choose(picker, roomId, RolePickChoice.VILLAGER)
+
+        // 6 seats = 2 wolves + 4 gods: the VILLAGER camp now has 0 seats.
+        roomService.updateBoard(host, roomId, 6, 2,
+            listOf(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER, PlayerRole.GUARD))
+        rolePickService.choose(host, roomId, RolePickChoice.NONE)
+        guests.drop(1).forEach { rolePickService.choose(it, roomId, RolePickChoice.NONE) }
+        guests.forEach { roomService.setReady(it, roomId, true) }
+
+        assertThat(gameService.startGame(host, roomId)).isInstanceOf(GameActionResult.Success::class.java)
+
+        val gameId = gameRepository.findAll().single { it.roomId == roomId }.gameId ?: error("no game id")
+        val card = rows(roomId, picker).single()
+        assertThat(card.gameId).isEqualTo(gameId)
+        assertThat(card.triggeredAt).isNull()
+        assertThat(walletService.balance(picker)).isEqualTo(80)
+
+        perkSettlementService.settleForGame(gameId, cancelled = false)
+
+        assertThat(rows(roomId, picker).single().status).isEqualTo(PerkActivationStatus.REFUNDED)
+        assertThat(walletService.balance(picker)).isEqualTo(100)
     }
 }

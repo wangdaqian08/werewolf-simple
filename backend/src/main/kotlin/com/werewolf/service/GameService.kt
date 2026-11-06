@@ -60,8 +60,13 @@ class GameService(
         if (notReady.isNotEmpty())
             return GameActionResult.Rejected("Not all players are ready")
 
+        val perksOn = room.config?.perksAllowed != false
+        if (perksOn && roomPlayers.any { it.rolePick == null })
+            return GameActionResult.Rejected("Every player must choose a role-pick card")
+
         val dealt = RoleDealer.deal(
-            RoleDealer.roleList(room, roomPlayers.size), roomPlayers.map { it.userId }, emptyMap(), Random.Default,
+            RoleDealer.roleList(room, roomPlayers.size), roomPlayers.map { it.userId },
+            if (perksOn) perkService.liveRolePicks(roomId) else emptyMap(), Random.Default,
         )
 
         val game = Game(roomId = roomId, hostUserId = hostUserId)
@@ -476,6 +481,7 @@ class GameService(
             "winner" to game.winner?.name,
             "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
+            "myRolePick" to perkService.myRolePick(gameId, requestingUserId),
             // Wolves know each other all game (role card); everyone else gets an empty list.
             "wolfTeammates" to if (myPlayer?.role?.isPackWolf == true) {
                 players.filter { it.role.isPackWolf && it.userId != requestingUserId }.sortedBy { it.seatIndex }.map { it.userId }

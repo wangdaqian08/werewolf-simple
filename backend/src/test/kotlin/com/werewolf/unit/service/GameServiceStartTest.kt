@@ -50,13 +50,13 @@ class GameServiceStartTest {
     ).also { it.status = RoomStatus.WAITING }
 
     private fun hostPlayer() = RoomPlayer(roomId = roomId, userId = hostId, host = true, status = ReadyStatus.NOT_READY)
-        .also { it.seatIndex = 0 }
+        .also { it.seatIndex = 0; it.rolePick = RolePickChoice.NONE }
 
     private fun readyGuest(id: String, seat: Int) = RoomPlayer(roomId = roomId, userId = id, host = false, status = ReadyStatus.READY)
-        .also { it.seatIndex = seat }
+        .also { it.seatIndex = seat; it.rolePick = RolePickChoice.NONE }
 
     private fun notReadyGuest(id: String, seat: Int) = RoomPlayer(roomId = roomId, userId = id, host = false, status = ReadyStatus.NOT_READY)
-        .also { it.seatIndex = seat }
+        .also { it.seatIndex = seat; it.rolePick = RolePickChoice.NONE }
 
     private fun fourReadyGuests() = listOf(
         hostPlayer(),
@@ -181,5 +181,60 @@ class GameServiceStartTest {
         assertThat(roles.count { it == PlayerRole.MECHANICAL_WOLF }).isEqualTo(1)
         assertThat(roles.count { it.isWolf }).isEqualTo(room.wolfCount)
         assertThat(roles.count { it == PlayerRole.MEDIUM }).isEqualTo(1)
+    }
+
+    // ── role-pick gate and dealing ────────────────────────────────────────────
+
+    private fun stubSaves() {
+        whenever(gameRepository.save(any<Game>())).thenAnswer { invocation ->
+            invocation.getArgument<Game>(0).also {
+                val field = Game::class.java.getDeclaredField("gameId"); field.isAccessible = true; field.set(it, 99)
+            }
+        }
+        whenever(gamePlayerRepository.saveAll(any<List<GamePlayer>>())).thenAnswer { it.arguments[0] }
+    }
+
+    @Test
+    fun `startGame rejects when perks allowed and any player (host included) has rolePick null`() {
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(waitingRoom()))
+        val players = fourReadyGuests().also { it[0].rolePick = null } // the host
+        whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(players)
+
+        val result = gameService.startGame(hostId, roomId)
+
+        assertThat((result as GameActionResult.Rejected).reason).isEqualTo("Every player must choose a role-pick card")
+        verifyNoInteractions(gameRepository)
+    }
+
+    @Test
+    fun `startGame with perksAllowed=false ignores rolePick`() {
+        val room = waitingRoom().also { it.config = GameConfig(perksAllowed = false) }
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(fourReadyGuests().onEach { it.rolePick = null })
+        stubSaves()
+
+        val result = gameService.startGame(hostId, roomId)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        verify(perkService, never()).liveRolePicks(any())
+    }
+
+    @Test
+    fun `startGame deals picks`() {
+        // 4 seats, 1 wolf: guest:1's paid WOLF card must land on the only wolf seat.
+        val room = Room(roomId = roomId, roomCode = "XYZW", hostUserId = hostId, totalPlayers = 4, wolfCount = 1)
+            .also { it.status = RoomStatus.WAITING }
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(fourReadyGuests())
+        whenever(perkService.liveRolePicks(roomId)).thenReturn(mapOf("guest:1" to RolePickChoice.WOLF))
+        stubSaves()
+
+        repeat(20) { gameService.startGame(hostId, roomId); room.status = RoomStatus.WAITING }
+
+        val captor = argumentCaptor<List<GamePlayer>>()
+        verify(gamePlayerRepository, times(20)).saveAll(captor.capture())
+        captor.allValues.forEach { dealt ->
+            assertThat(dealt.single { it.userId == "guest:1" }.role.isWolf).isTrue()
+        }
     }
 }

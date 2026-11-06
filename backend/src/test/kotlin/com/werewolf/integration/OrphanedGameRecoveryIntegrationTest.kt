@@ -9,12 +9,16 @@ import com.werewolf.integration.TestConstants.FIELD_ROOM_CODE
 import com.werewolf.integration.TestConstants.FIELD_ROOM_ID
 import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.FIELD_TOTAL_PLAYERS
+import com.werewolf.integration.TestConstants.FIELD_USER
+import com.werewolf.integration.TestConstants.FIELD_USER_ID
 import com.werewolf.integration.TestConstants.JOIN_ROOM_URL
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.OrphanedGameRecovery
 import com.werewolf.service.PERK_NIGHT1_IMMUNITY
+import com.werewolf.service.RolePickService
+import com.werewolf.service.isRolePickCode
 import com.werewolf.service.StompPublisher
 import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
@@ -58,6 +62,8 @@ class OrphanedGameRecoveryIntegrationTest {
     @Autowired lateinit var perkActivationRepository: PerkActivationRepository
     @Autowired lateinit var walletService: WalletService
     @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
+    @Autowired lateinit var perkRepository: PerkRepository
+    @Autowired lateinit var rolePickService: RolePickService
 
     @MockitoSpyBean lateinit var stompPublisher: StompPublisher
 
@@ -65,6 +71,7 @@ class OrphanedGameRecoveryIntegrationTest {
         private const val SEAT_URL = "/api/room/seat"
         private const val READY_URL = "/api/room/ready"
         private const val START_URL = "/api/game/start"
+        private const val ROLE_PICK_URL = "/api/room/role-pick"
         private const val TOTAL_PLAYERS = 4
         // 2 wolves (RoomConfigRequest default) + 1 god + 1 villager = 4 seats.
         // Backend now rejects role lists that overflow the seat budget; the
@@ -75,8 +82,12 @@ class OrphanedGameRecoveryIntegrationTest {
     private fun login(nickname: String): String {
         val resp = restTemplate.postForEntity(LOGIN_URL, mapOf(FIELD_NICKNAME to nickname), Map::class.java)
         assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
-        return resp.body!![FIELD_TOKEN] as String
+        val token = resp.body!![FIELD_TOKEN] as String
+        userIdByToken[token] = (resp.body!![FIELD_USER] as Map<*, *>)[FIELD_USER_ID] as String
+        return token
     }
+
+    private val userIdByToken = mutableMapOf<String, String>()
 
     private fun authHeaders(token: String) = HttpHeaders().also {
         it.setBearerAuth(token)
@@ -84,9 +95,14 @@ class OrphanedGameRecoveryIntegrationTest {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun setupRoomAndStartGame(prefix: String): Triple<String, Int, Int> {
+    private fun setupRoomAndStartGame(
+        prefix: String,
+        perksAllowed: Boolean = false,
+        // Runs for every player (host included) after seating, before ready; arguments: token, roomId.
+        beforeReady: (String, Int) -> Unit = { _, _ -> },
+    ): Triple<String, Int, Int> {
         val hostToken = login("${prefix}Host")
-        val createBody = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES))
+        val createBody = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES, "perksAllowed" to perksAllowed))
         val room = restTemplate.postForEntity(
             CREATE_ROOM_URL, HttpEntity(createBody, authHeaders(hostToken)), Map::class.java
         ).body!! as Map<String, Any?>
@@ -94,10 +110,12 @@ class OrphanedGameRecoveryIntegrationTest {
         val roomCode = room[FIELD_ROOM_CODE] as String
 
         restTemplate.postForEntity(SEAT_URL, HttpEntity(mapOf("seatIndex" to 0, "roomId" to roomId), authHeaders(hostToken)), Map::class.java)
+        beforeReady(hostToken, roomId)
         repeat(TOTAL_PLAYERS - 1) { i ->
             val token = login("${prefix}Guest$i")
             restTemplate.postForEntity(JOIN_ROOM_URL, HttpEntity(mapOf("roomCode" to roomCode), authHeaders(token)), Map::class.java)
             restTemplate.postForEntity(SEAT_URL, HttpEntity(mapOf("seatIndex" to i + 1, "roomId" to roomId), authHeaders(token)), Map::class.java)
+            beforeReady(token, roomId)
             restTemplate.postForEntity(READY_URL, HttpEntity(mapOf("ready" to true, "roomId" to roomId), authHeaders(token)), Map::class.java)
         }
 
@@ -190,5 +208,44 @@ class OrphanedGameRecoveryIntegrationTest {
             .filter { it.type == CreditTxType.REFUND }
         assertThat(refunds).hasSize(1)
         assertThat(refunds.single().perkActivationId).isEqualTo(settled.id)
+    }
+
+    private fun chooseRolePick(token: String, roomId: Int, choice: RolePickChoice) {
+        val resp = restTemplate.postForEntity(
+            ROLE_PICK_URL, HttpEntity(mapOf("roomId" to roomId, "choice" to choice.name), authHeaders(token)), Map::class.java,
+        )
+        assertThat(resp.statusCode).describedAs("role-pick %s: %s", choice, resp.body).isEqualTo(HttpStatus.OK)
+    }
+
+    private fun ensureRolePickPerks() {
+        listOf("ROLE_PICK_WOLF", "ROLE_PICK_GOD", "ROLE_PICK_VILLAGER").forEach { code ->
+            if (perkRepository.findById(code).isEmpty)
+                perkRepository.save(Perk(perkCode = code, name = code, description = "test", priceCredits = 20))
+        }
+    }
+
+    @Test
+    fun `recovery clears every rolePick, refunds the cancelled game's role cards, and the player can choose again`() {
+        ensureRolePickPerks()
+        val userIds = mutableListOf<String>()
+        val (_, roomId, gameId) = setupRoomAndStartGame("OrphanPick", perksAllowed = true) { token, rid ->
+            val userId = userIdByToken.getValue(token)
+            userIds += userId
+            walletService.credit(userId, 100, CreditTxType.GAME_REWARD, note = "test-seed")
+            chooseRolePick(token, rid, RolePickChoice.WOLF)
+        }
+        val picker = userIds.first()
+        assertThat(perkActivationRepository.findByGameId(gameId).filter { isRolePickCode(it.perkCode) }).hasSize(TOTAL_PLAYERS)
+
+        orphanedGameRecovery.cancelInFlightGames()
+
+        assertThat(roomPlayerRepository.findByRoomId(roomId)).allMatch { it.rolePick == null }
+        assertThat(perkActivationRepository.findByGameId(gameId).filter { isRolePickCode(it.perkCode) })
+            .allMatch { it.status == PerkActivationStatus.REFUNDED }
+        userIds.forEach { assertThat(walletService.balance(it)).isEqualTo(100) }
+
+        val view = rolePickService.choose(picker, roomId, RolePickChoice.WOLF)
+        assertThat(view.choice).isEqualTo(RolePickChoice.WOLF)
+        assertThat(walletService.balance(picker)).isEqualTo(80)
     }
 }

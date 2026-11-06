@@ -54,9 +54,9 @@ class RoomReadySeatControllerTest {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun createAndJoin(hostNick: String, guestNick: String): Triple<String, String, Int> {
+    private fun createAndJoin(hostNick: String, guestNick: String, perksAllowed: Boolean = false): Triple<String, String, Int> {
         val hostToken = login(hostNick)
-        val createBody = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to DEFAULT_TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES))
+        val createBody = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to DEFAULT_TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES, "perksAllowed" to perksAllowed))
         val room = restTemplate.postForEntity(
             CREATE_ROOM_URL, HttpEntity(createBody, authHeaders(hostToken)), Map::class.java
         ).body!! as Map<String, Any?>
@@ -149,6 +149,26 @@ class RoomReadySeatControllerTest {
         assertThat(response.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
         @Suppress("UNCHECKED_CAST")
         assertThat(response.body!![FIELD_ERROR] as String).isNotBlank()
+    }
+
+    @Test
+    fun `POST ready returns 400 with error when perks are allowed and no role-pick card is chosen`() {
+        val (_, guestToken, roomId) = createAndJoin("HostR4", "GuestR4", perksAllowed = true)
+        restTemplate.postForEntity(
+            SEAT_URL,
+            HttpEntity(mapOf("seatIndex" to 1, "roomId" to roomId), authHeaders(guestToken)),
+            Map::class.java,
+        )
+
+        val response = restTemplate.postForEntity(
+            READY_URL,
+            HttpEntity(mapOf("ready" to true, "roomId" to roomId), authHeaders(guestToken)),
+            Map::class.java,
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(response.body!![FIELD_ERROR] as String).isEqualTo("Choose a role-pick card before getting ready")
+        assertThat(roomPlayerRepository.findByRoomId(roomId).first { !it.host }.status).isEqualTo(ReadyStatus.NOT_READY)
     }
 
     @Test

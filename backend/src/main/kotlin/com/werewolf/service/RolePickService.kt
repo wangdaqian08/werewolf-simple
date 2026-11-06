@@ -52,7 +52,9 @@ class RolePickService(
         if (player.status == ReadyStatus.READY) throw RolePickLockedException("Cancel ready before changing your role card")
 
         val current = player.rolePick
-        if (choice == current) return view(room, userId, current)
+        // A paid choice is a no-op only while its card is still live; a card refunded elsewhere (stale sweep) is re-bought.
+        if (choice == current && (choice.perkCode == null || perkService.liveRolePicks(roomId)[userId] == choice))
+            return view(room, userId, current)
 
         val seats = seats(room)
         val code = choice.perkCode
