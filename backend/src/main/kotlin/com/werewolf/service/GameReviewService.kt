@@ -9,6 +9,8 @@ import com.werewolf.model.GameEvent
 import com.werewolf.model.GamePhase
 import com.werewolf.model.GamePlayer
 import com.werewolf.model.NightPhase
+import com.werewolf.model.PerkActivation
+import com.werewolf.model.PerkActivationStatus
 import com.werewolf.model.RolePickChoice
 import com.werewolf.repository.*
 import org.springframework.stereotype.Service
@@ -64,7 +66,7 @@ class GameReviewService(
             // Rewards come from the ledger, the durable record, so both replays show the same numbers.
             creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD)
                 .associate { it.userId to it.amount },
-            perks.mapNotNull { a -> RolePickChoice.fromPerkCode(a.perkCode)?.let { a.userId to (it to (a.triggeredAt != null)) } }.toMap(),
+            perks.mapNotNull { a -> RolePickChoice.fromPerkCode(a.perkCode)?.let { a.userId to (it to tookEffect(a)) } }.toMap(),
         ) { id -> roomNames[id]?.displayName ?: users[id]?.nickname ?: id }
     }
 
@@ -92,3 +94,7 @@ class GameReviewService(
         )
     }
 }
+
+// A cancelled game refunds the card, so a stamped triggeredAt alone does not mean it took effect.
+private fun tookEffect(a: PerkActivation) =
+    a.status == PerkActivationStatus.CONSUMED || (a.status == PerkActivationStatus.ACTIVE && a.triggeredAt != null)

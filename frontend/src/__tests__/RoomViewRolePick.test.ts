@@ -121,6 +121,27 @@ async function mountRoom(myUserId: string, r: Room = room()) {
   return wrapper
 }
 
+async function mountRoomNoWait(myUserId: string, r: Room) {
+  localStorage.setItem('userId', myUserId)
+  localStorage.setItem('nickname', myUserId)
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  useRoomStore().setRoom(r)
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', name: 'lobby', component: { template: '<div />' } },
+      { path: '/room/:roomId', name: 'room', component: RoomView },
+      { path: '/game/:gameId', name: 'game', component: { template: '<div />' } },
+    ],
+  })
+  await router.push('/room/1')
+  await router.isReady()
+  const wrapper = mount(RoomView, { global: { plugins: [pinia, router] } })
+  await Promise.resolve()
+  return wrapper
+}
+
 function axiosError(status: number, error?: string) {
   return Object.assign(new Error('request failed'), {
     isAxiosError: true,
@@ -211,5 +232,54 @@ describe('RoomView role-pick gate', () => {
     await w.find('[data-testid="role-pick-NONE"]').trigger('click')
     await flushPromises()
     expect(readyBtn(w).disabled).toBe(false)
+  })
+
+  it('does not flash the load-error row while the first GET is pending', async () => {
+    let rejectGet!: (e: Error) => void
+    h.getRolePickMock.mockReturnValueOnce(new Promise((_, rej) => (rejectGet = rej)))
+    localStorage.setItem('jwt', makeJwt(3600))
+    const w = await mountRoomNoWait('u2', room({ u2Ready: false }))
+    expect(w.find('[data-testid="role-pick-load-error"]').exists()).toBe(false)
+    rejectGet(new Error('boom'))
+    await flushPromises()
+    expect(w.find('[data-testid="role-pick-load-error"]').exists()).toBe(true)
+  })
+
+  it('a ready-toggle ROOM_UPDATE with an unchanged board does not refetch', async () => {
+    const w = await mountRoom('u2', room({ u2Ready: false }))
+    h.getRolePickMock.mockClear()
+    const r = room({ u2Ready: true })
+    useRoomStore().setRoom(r)
+    await flushPromises()
+    expect(h.getRolePickMock).not.toHaveBeenCalled()
+    r.config = { ...r.config, totalPlayers: 5 }
+    useRoomStore().setRoom({ ...r })
+    await flushPromises()
+    expect(h.getRolePickMock).toHaveBeenCalledTimes(1)
+    w.unmount()
+  })
+
+  it('a stale GET resolving after a choose does not overwrite the choice', async () => {
+    const w = await mountRoom('u2', room({ u2Ready: false }))
+    let resolveStale!: (v: unknown) => void
+    h.getRolePickMock.mockReturnValueOnce(new Promise((res) => (resolveStale = res)))
+    const r = room({ u2Ready: false })
+    r.config = { ...r.config, totalPlayers: 5 }
+    useRoomStore().setRoom(r)
+    await flushPromises()
+    await w.find('[data-testid="role-pick-WOLF"]').trigger('click')
+    await flushPromises()
+    resolveStale(VIEW_NONE)
+    await flushPromises()
+    expect(w.find('[data-testid="role-pick-WOLF"]').classes()).toContain('rp-sel')
+  })
+
+  it('refreshes the role-pick view after activating immunity', async () => {
+    h.activatePerkMock.mockResolvedValue(undefined)
+    const w = await mountRoom('u2', room({ u2Ready: false }))
+    h.getRolePickMock.mockClear()
+    await w.find('[data-testid="perk-activate-btn"]').trigger('click')
+    await flushPromises()
+    expect(h.getRolePickMock).toHaveBeenCalledTimes(1)
   })
 })

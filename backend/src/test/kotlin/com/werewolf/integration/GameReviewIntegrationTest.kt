@@ -167,6 +167,24 @@ class GameReviewIntegrationTest {
     }
 
     @Test
+    fun `a triggered but refunded role-pick card does not show as having taken effect`() {
+        val wolf = login("ReviewPickRefunded")
+        val room = roomRepository.save(Room(roomCode = TestConstants.nextSeededRoomCode(), hostUserId = wolf.userId, totalPlayers = 6))
+        val gameId = gameRepository.save(Game(roomId = room.roomId!!, hostUserId = wolf.userId).also {
+            it.phase = GamePhase.GAME_OVER; it.winner = WinnerSide.VILLAGER; it.endedAt = LocalDateTime.now()
+        }).gameId!!
+        gamePlayerRepository.save(GamePlayer(gameId = gameId, userId = wolf.userId, seatIndex = 1, role = PlayerRole.WEREWOLF))
+        perkActivationRepository.save(
+            PerkActivation(roomId = room.roomId!!, gameId = gameId, userId = wolf.userId, perkCode = "ROLE_PICK_WOLF", pricePaid = 20)
+                .also { it.triggeredAt = LocalDateTime.now(); it.status = PerkActivationStatus.REFUNDED },
+        )
+
+        val picks = getReview(gameId, wolf.token).body!!["rolePicks"] as List<Map<String, Any?>>
+
+        assertThat(picks.map { it["tookEffect"] }).containsExactly(false)
+    }
+
+    @Test
     fun `a night-1 save by the immunity perk is read from the perk record`() {
         val wolf = login("ReviewPerkWolf")
         val holder = login("ReviewPerkHolder")

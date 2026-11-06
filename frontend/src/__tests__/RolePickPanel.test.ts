@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import RolePickPanel from '@/components/RolePickPanel.vue'
 import type { RolePickChoice, RolePickView } from '@/types'
@@ -123,5 +123,14 @@ describe('RolePickPanel', () => {
     expect(w.find('[data-testid="role-pick-immunity-hint"]').text()).toContain('30')
     const g = await mountPanel({ view: view({ choice: 'GOD' }), immunityPrice: 30 })
     expect(g.find('[data-testid="role-pick-immunity-hint"]').exists()).toBe(false)
+  })
+
+  it('renders the top-up link outside any button and it navigates to account', async () => {
+    const w = await mountPanel({ balance: 10 })
+    const link = w.find('[data-testid="role-pick-topup-GOD"]')
+    expect(link.element.closest('button')).toBeNull()
+    await link.trigger('click')
+    await flushPromises()
+    expect(w.vm.$router.currentRoute.value.name).toBe('account')
   })
 })

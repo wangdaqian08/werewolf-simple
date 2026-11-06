@@ -128,12 +128,17 @@
         :immunity-price="immunityPrice"
         @choose="handleChooseRolePick"
       />
-      <div v-if="perksEnabled && !rolePick" class="perk-error" data-testid="role-pick-load-error">
+      <div
+        v-if="perksEnabled && rolePickLoadFailed"
+        class="perk-error"
+        data-testid="role-pick-load-error"
+      >
         {{ $t('rolePick.loadFailed') }}
         <button
           type="button"
           class="btn btn-outline perk-btn"
           data-testid="role-pick-retry"
+          :disabled="rolePickLoading"
           @click="loadRolePick"
         >
           {{ $t('rolePick.retry') }}
@@ -394,6 +399,7 @@ async function handleActivatePerk(perkCode: string) {
   perkBusy.value = true
   try {
     await roomService.activatePerk(roomStore.room.roomId, perkCode)
+    await loadRolePick() // frozen chip
     // PERK_UPDATE lands via STOMP; refresh balance for the panel chip.
     await userStore.refreshWallet()
   } catch (err) {
@@ -407,6 +413,9 @@ async function handleActivatePerk(perkCode: string) {
 const rolePick = ref<RolePickView | null>(null)
 const rolePickBusy = ref(false)
 const rolePickError = ref('')
+const rolePickLoadFailed = ref(false)
+const rolePickLoading = ref(false)
+let rolePickSeq = 0 // bumped by each choose; a GET issued before it is stale
 const needsRolePick = computed(() => perksEnabled.value && rolePick.value?.choice == null)
 const immunityPrice = computed(
   () =>
@@ -417,10 +426,16 @@ const immunityPrice = computed(
 
 async function loadRolePick() {
   if (!roomStore.room || !perksEnabled.value) return
+  const seq = rolePickSeq
+  rolePickLoading.value = true
   try {
-    rolePick.value = await roomService.getRolePick(roomStore.room.roomId)
+    const v = await roomService.getRolePick(roomStore.room.roomId)
+    if (seq === rolePickSeq) rolePick.value = v
+    rolePickLoadFailed.value = false
   } catch {
-    /* gate stays closed; the load-error row offers a retry */
+    rolePickLoadFailed.value = true // gate stays closed; the load-error row offers a retry
+  } finally {
+    rolePickLoading.value = false
   }
 }
 
@@ -428,8 +443,10 @@ async function handleChooseRolePick(choice: RolePickChoice) {
   if (!roomStore.room) return
   rolePickError.value = ''
   rolePickBusy.value = true
+  rolePickSeq++
   try {
     rolePick.value = await roomService.chooseRolePick(roomStore.room.roomId, choice)
+    rolePickSeq++
     await userStore.refreshWallet()
   } catch (err) {
     rolePickError.value = perkErrorMessage(err)
@@ -439,7 +456,10 @@ async function handleChooseRolePick(choice: RolePickChoice) {
 }
 
 // The host may edit the board (seat counts per camp change) while we wait.
-watch(() => roomStore.room?.config, loadRolePick, { deep: true })
+watch(() => {
+  const c = roomStore.room?.config
+  return c && JSON.stringify([c.totalPlayers, c.wolfCount, c.roles])
+}, loadRolePick)
 
 async function handleWithdrawPerk(perkCode: string) {
   if (!roomStore.room) return
@@ -447,6 +467,7 @@ async function handleWithdrawPerk(perkCode: string) {
   perkBusy.value = true
   try {
     await roomService.withdrawPerk(roomStore.room.roomId, perkCode)
+    await loadRolePick()
     await userStore.refreshWallet()
   } catch (err) {
     perkError.value = perkErrorMessage(err)

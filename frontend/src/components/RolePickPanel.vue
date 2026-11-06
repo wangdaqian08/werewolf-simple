@@ -13,31 +13,31 @@
     <p v-else class="rp-hint" data-testid="role-pick-locked">{{ $t('rolePick.titleLocked') }}</p>
 
     <div class="rp-grid">
-      <button
-        v-for="c in cards"
-        :key="c.value"
-        type="button"
-        class="rp-card"
-        :class="{ 'rp-sel': view.choice === c.value, 'rp-off': isDisabled(c.value) }"
-        :data-testid="`role-pick-${c.value}`"
-        :disabled="isDisabled(c.value)"
-        @click="emit('choose', c.value)"
-      >
-        <span class="rp-name">{{ c.icon }} {{ $t(c.name) }}</span>
-        <span class="rp-price">{{
-          c.value === 'NONE' ? $t('rolePick.free') : `◈${view.prices[c.value] ?? ''}`
-        }}</span>
-        <span class="rp-desc">{{ $t(c.desc) }}</span>
-        <span v-if="c.value !== 'NONE'" class="rp-seats">{{ reason(c.value) }}</span>
+      <div v-for="c in cards" :key="c.value" class="rp-cell">
+        <button
+          type="button"
+          class="rp-card"
+          :class="{ 'rp-sel': view.choice === c.value, 'rp-off': isDisabled(c.value) }"
+          :data-testid="`role-pick-${c.value}`"
+          :disabled="isDisabled(c.value)"
+          @click="emit('choose', c.value)"
+        >
+          <span class="rp-name">{{ c.icon }} {{ $t(c.name) }}</span>
+          <span class="rp-price">{{
+            c.value === 'NONE' ? $t('rolePick.free') : `◈${view.prices[c.value] ?? ''}`
+          }}</span>
+          <span class="rp-desc">{{ $t(c.desc) }}</span>
+          <span v-if="c.value !== 'NONE'" class="rp-seats">{{ reason(c.value) }}</span>
+        </button>
+        <!-- sibling, not a child: a disabled button swallows clicks and <a> in <button> is invalid -->
         <RouterLink
           v-if="c.value !== 'NONE' && tooPoor(c.value)"
           :to="{ name: 'account' }"
           class="rp-topup"
           :data-testid="`role-pick-topup-${c.value}`"
-          @click.stop
           >{{ $t('rolePick.topUp') }}</RouterLink
         >
-      </button>
+      </div>
     </div>
 
     <p v-if="paid" class="rp-note rp-note-gold" data-testid="role-pick-draw-note">
@@ -141,7 +141,13 @@ function reason(c: PaidRolePick): string {
   grid-template-columns: 1fr 1fr;
   gap: 0.4375rem;
 }
+.rp-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
 .rp-card {
+  flex: 1;
   position: relative;
   text-align: left;
   min-height: 4rem;
