@@ -507,6 +507,15 @@ export default {
     wolf: 'Werewolf',
   },
   rolePick: {
+    errors: {
+      ROOM_NOT_FOUND: 'Room not found',
+      ROOM_NOT_OPEN: 'The game has started; you can no longer change your card',
+      PERKS_DISABLED: 'Perks are disabled in this room',
+      NOT_IN_ROOM: 'You are not in this room',
+      INSUFFICIENT_CREDITS: 'Not enough credits',
+      ROLE_PICK_LOCKED: 'You are ready — cancel ready to change your card',
+      ROLE_PICK_UNAVAILABLE: 'This card is not available in this room',
+    },
     title: 'Role card · pick before ready',
     titleLocked: 'Role card · locked 🔒',
     hint: 'Pick a camp. Credits are only spent if you are drawn; they come back if you are not, or the game is cancelled.',

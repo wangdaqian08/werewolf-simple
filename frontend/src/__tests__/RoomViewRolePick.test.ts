@@ -142,10 +142,10 @@ async function mountRoomNoWait(myUserId: string, r: Room) {
   return wrapper
 }
 
-function axiosError(status: number, error?: string) {
+function axiosError(status: number, error?: string, code?: string) {
   return Object.assign(new Error('request failed'), {
     isAxiosError: true,
-    response: { status, data: error ? { error } : {} },
+    response: { status, data: error ? { error, ...(code ? { code } : {}) } : {} },
   })
 }
 
@@ -208,17 +208,31 @@ describe('RoomView role-pick gate', () => {
     expect(w.find('[data-testid="role-pick-locked"]').exists()).toBe(true)
   })
 
-  it('refreshes the wallet after choosing and shows the backend error on failure', async () => {
+  it('refreshes the wallet after choosing and shows a translated error on failure', async () => {
     const w = await mountRoom('u2', room({ u2Ready: false }))
     h.getWalletMock.mockClear()
     await w.find('[data-testid="role-pick-WOLF"]').trigger('click')
     await flushPromises()
     expect(h.getWalletMock).toHaveBeenCalled()
 
-    h.chooseRolePickMock.mockRejectedValue(axiosError(400, 'Insufficient credits'))
+    h.chooseRolePickMock.mockRejectedValue(
+      axiosError(400, 'Insufficient credits', 'INSUFFICIENT_CREDITS'),
+    )
     await w.find('[data-testid="role-pick-GOD"]').trigger('click')
     await flushPromises()
-    expect(w.find('[data-testid="role-pick-error"]').text()).toContain('Insufficient credits')
+    const text = w.find('[data-testid="role-pick-error"]').text()
+    expect(text).toBe('積分不足')
+    expect(text).not.toContain('Insufficient')
+  })
+
+  it('never shows the raw backend text for an unknown error code', async () => {
+    const w = await mountRoom('u2', room({ u2Ready: false }))
+    h.chooseRolePickMock.mockRejectedValue(axiosError(400, 'Something odd', 'SOMETHING_NEW'))
+    await w.find('[data-testid="role-pick-GOD"]').trigger('click')
+    await flushPromises()
+    const text = w.find('[data-testid="role-pick-error"]').text()
+    expect(text).not.toContain('Something odd')
+    expect(text.length).toBeGreaterThan(0)
   })
 
   it('a failed load shows a retry control, keeps Ready gated, and recovers on retry', async () => {

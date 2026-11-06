@@ -501,6 +501,15 @@ export default {
     wolf: '狼人',
   },
   rolePick: {
+    errors: {
+      ROOM_NOT_FOUND: '房間不存在',
+      ROOM_NOT_OPEN: '遊戲已開始，無法更換點將卡',
+      PERKS_DISABLED: '本房間未開放道具',
+      NOT_IN_ROOM: '你不在這個房間',
+      INSUFFICIENT_CREDITS: '積分不足',
+      ROLE_PICK_LOCKED: '已準備，請先取消準備再更換點將卡',
+      ROLE_PICK_UNAVAILABLE: '本局無法使用這張點將卡',
+    },
     title: '點將卡 · 準備前必選',
     titleLocked: '點將卡 · 已鎖定 🔒',
     hint: '選一個陣營。抽中才扣積分；沒抽中、遊戲取消都會把積分退回。',
