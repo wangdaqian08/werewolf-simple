@@ -41,7 +41,21 @@
         @hide="isRoleRevealed = false"
         @confirm="handleRoleConfirm"
       />
-      <div v-else class="waiting-screen">
+      <p
+        v-if="gameStore.state.myRolePick && !hasConfirmedRole"
+        class="role-pick-result"
+        data-testid="role-pick-result"
+      >
+        {{
+          $t(
+            gameStore.state.myRolePick.tookEffect
+              ? 'game.rolePickTookEffect'
+              : 'game.rolePickMissed',
+            { price: gameStore.state.myRolePick.price },
+          )
+        }}
+      </p>
+      <div v-if="hasConfirmedRole" class="waiting-screen">
         <div class="waiting-icon">⏳</div>
         <div class="waiting-title">{{ $t('game.waitingOthers') }}</div>
         <div class="waiting-count">

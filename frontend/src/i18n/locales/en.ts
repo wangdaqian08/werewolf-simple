@@ -159,6 +159,8 @@ export default {
       sheriff: 'Sheriff Election',
       voting: 'Voting',
     },
+    rolePickMissed: 'Role-pick card missed: {price}◈ will be refunded when the game ends',
+    rolePickTookEffect: 'Role-pick card took effect: {price}◈ will be deducted when the game ends',
     revealFirst: "Announce last night's result first",
     startNight: 'Start Night',
     waitingOthers: 'Waiting for others to confirm',

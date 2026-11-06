@@ -159,6 +159,8 @@ export default {
       sheriff: '警長競選',
       voting: '投票',
     },
+    rolePickMissed: '點將卡未抽中，{price}◈ 將在遊戲結束時退回',
+    rolePickTookEffect: '點將卡生效，遊戲結束扣除 {price}◈',
     revealFirst: '請先公佈昨晚的結果',
     startNight: '開始夜晚',
     waitingOthers: '等待其他玩家確認',

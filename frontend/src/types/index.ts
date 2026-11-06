@@ -546,6 +546,8 @@ export interface GameState {
   dayNumber: number
   players: GamePlayer[]
   myRole?: PlayerRole
+  /** Requesting user's own role-pick card outcome; null/absent when none held. */
+  myRolePick?: { choice: PaidRolePick; tookEffect: boolean; price: number } | null
   /** Other wolves' userIds — sent only to wolves (empty for everyone else). */
   wolfTeammates?: string[]
   // The backend response key is `sheriffUserId` (see GameService.getGameState).
