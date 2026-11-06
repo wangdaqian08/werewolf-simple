@@ -118,6 +118,20 @@
         </div>
       </section>
 
+      <!-- 点将卡: pick a camp before Ready (private; gates Ready + host Start) -->
+      <RolePickPanel
+        v-if="perksEnabled && rolePick"
+        :view="rolePick"
+        :balance="userStore.credits"
+        :locked="iAmReady"
+        :busy="rolePickBusy"
+        :immunity-price="immunityPrice"
+        @choose="handleChooseRolePick"
+      />
+      <p v-if="rolePickError" class="perk-error" data-testid="role-pick-error">
+        {{ rolePickError }}
+      </p>
+
       <!-- Perk panel: catalog + activation (visible pre-game when host allows perks) -->
       <section v-if="perksEnabled && perks.length" class="perk-panel" data-testid="perk-panel">
         <div class="perk-panel-title">
@@ -182,6 +196,9 @@
       </div>
 
       <!-- Status bar -->
+      <div v-if="needsRolePick" class="status-bar status-neutral" data-testid="role-pick-status">
+        {{ $t('rolePick.status') }}
+      </div>
       <div v-if="isHost" :class="canStart ? 'status-ok' : 'status-wait'" class="status-bar">
         <template v-if="canStart">{{ $t('room.allReady') }}</template>
         <template v-else>{{
@@ -211,7 +228,7 @@
         <!-- Host: start game -->
         <button
           v-if="isHost"
-          :disabled="!canStart"
+          :disabled="!canStart || needsRolePick"
           class="btn btn-primary"
           data-testid="start-game-btn"
           @click="handleStartGame"
@@ -226,7 +243,7 @@
             v-if="!iAmReady"
             class="btn btn-gold"
             data-testid="ready-btn"
-            :disabled="!hasPickedSeat || perkBusy"
+            :disabled="!hasPickedSeat || perkBusy || needsRolePick"
             @click="handleReady(true)"
           >
             {{ $t('room.ready') }}
@@ -243,9 +260,10 @@
 <script lang="ts" setup>
 import { t } from '@/i18n'
 import axios from 'axios'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import http from '@/services/http'
-import type { Perk, PerkActivation, RoomPlayer } from '@/types'
+import RolePickPanel from '@/components/RolePickPanel.vue'
+import type { Perk, PerkActivation, RolePickChoice, RolePickView, RoomPlayer } from '@/types'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/userStore'
@@ -373,6 +391,44 @@ async function handleActivatePerk(perkCode: string) {
     perkBusy.value = false
   }
 }
+
+// ── 点将卡 (role pick) ───────────────────────────────────────────────────────
+const rolePick = ref<RolePickView | null>(null)
+const rolePickBusy = ref(false)
+const rolePickError = ref('')
+const needsRolePick = computed(() => perksEnabled.value && rolePick.value?.choice == null)
+const immunityPrice = computed(
+  () =>
+    (iHold('NIGHT1_IMMUNITY') &&
+      perks.value.find((p) => p.perkCode === 'NIGHT1_IMMUNITY')?.priceCredits) ||
+    null,
+)
+
+async function loadRolePick() {
+  if (!roomStore.room || !perksEnabled.value) return
+  try {
+    rolePick.value = await roomService.getRolePick(roomStore.room.roomId)
+  } catch {
+    /* panel stays hidden; backend still gates Ready/Start */
+  }
+}
+
+async function handleChooseRolePick(choice: RolePickChoice) {
+  if (!roomStore.room) return
+  rolePickError.value = ''
+  rolePickBusy.value = true
+  try {
+    rolePick.value = await roomService.chooseRolePick(roomStore.room.roomId, choice)
+    await userStore.refreshWallet()
+  } catch (err) {
+    rolePickError.value = perkErrorMessage(err)
+  } finally {
+    rolePickBusy.value = false
+  }
+}
+
+// The host may edit the board (seat counts per camp change) while we wait.
+watch(() => roomStore.room?.config, loadRolePick, { deep: true })
 
 async function handleWithdrawPerk(perkCode: string) {
   if (!roomStore.room) return
@@ -521,6 +577,7 @@ onMounted(async () => {
       /* panel simply stays hidden */
     }
     void userStore.refreshWallet()
+    await loadRolePick()
   }
 
   // Trigger 1 — on mount: if the room already has an active game (page refresh

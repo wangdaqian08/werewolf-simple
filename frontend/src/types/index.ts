@@ -83,6 +83,16 @@ export interface Perk {
   priceCredits: number
 }
 
+/** 点将卡 — pre-ready camp pick (private to the caller). */
+export type RolePickChoice = 'NONE' | 'WOLF' | 'GOD' | 'VILLAGER'
+export type PaidRolePick = Exclude<RolePickChoice, 'NONE'>
+export interface RolePickView {
+  choice: RolePickChoice | null
+  frozenCredits: number
+  prices: Partial<Record<PaidRolePick, number>>
+  seats: Record<PaidRolePick, number>
+}
+
 /** A live perk activation in the room — visible to every room member. */
 export interface PerkActivation {
   userId: string

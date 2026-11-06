@@ -61,4 +61,22 @@ describe('roomService perk endpoints', () => {
       perkCode: 'NIGHT1_IMMUNITY',
     })
   })
+
+  it('getRolePick GETs /room/{id}/role-pick', async () => {
+    const v = {
+      choice: null,
+      frozenCredits: 0,
+      prices: {},
+      seats: { WOLF: 1, GOD: 1, VILLAGER: 1 },
+    }
+    mockedHttp.get.mockResolvedValueOnce({ data: v })
+    expect(await roomService.getRolePick('42')).toEqual(v)
+    expect(mockedHttp.get).toHaveBeenCalledWith('/room/42/role-pick')
+  })
+
+  it('chooseRolePick POSTs /room/role-pick with numeric roomId and choice', async () => {
+    mockedHttp.post.mockResolvedValueOnce({ data: { choice: 'GOD' } })
+    expect(await roomService.chooseRolePick('42', 'GOD')).toEqual({ choice: 'GOD' })
+    expect(mockedHttp.post).toHaveBeenCalledWith('/room/role-pick', { roomId: 42, choice: 'GOD' })
+  })
 })

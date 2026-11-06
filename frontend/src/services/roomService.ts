@@ -1,5 +1,12 @@
 import http from './http'
-import type { CreateRoomRequest, JoinRoomRequest, Perk, Room } from '@/types'
+import type {
+  CreateRoomRequest,
+  JoinRoomRequest,
+  Perk,
+  Room,
+  RolePickChoice,
+  RolePickView,
+} from '@/types'
 
 export const roomService = {
   async createRoom(req: CreateRoomRequest): Promise<Room> {
@@ -67,6 +74,19 @@ export const roomService = {
   /** Charge-at-click; backend rejects with 400 + error (FCFS taken / insufficient credits). */
   async activatePerk(roomId: string, perkCode: string): Promise<void> {
     await http.post('/room/perk/activate', { roomId: Number(roomId), perkCode })
+  },
+
+  async getRolePick(roomId: string): Promise<RolePickView> {
+    const { data } = await http.get<RolePickView>(`/room/${roomId}/role-pick`)
+    return data
+  },
+
+  async chooseRolePick(roomId: string, choice: RolePickChoice): Promise<RolePickView> {
+    const { data } = await http.post<RolePickView>('/room/role-pick', {
+      roomId: Number(roomId),
+      choice,
+    })
+    return data
   },
 
   async withdrawPerk(roomId: string, perkCode: string): Promise<void> {
