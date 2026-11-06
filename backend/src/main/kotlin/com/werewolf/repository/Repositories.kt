@@ -120,7 +120,6 @@ interface GamePlayerRepository : JpaRepository<GamePlayer, Int> {
     fun existsByGameIdAndUserId(gameId: Int, userId: String): Boolean
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 
-    /** Counted games only: ended with a winner (cancelled and running games excluded). */
     /** One row per ranked player (>= 5 counted games) other than [userId]: games and wins. */
     @Query("select new com.werewolf.service.RankedRecord(gp.userId, count(gp), " +
         "sum(case when (gp.role in :wolves and g.winner = :wolfWin) or (gp.role not in :wolves and g.winner = :goodWin) then 1 else 0 end)) " +
@@ -131,6 +130,7 @@ interface GamePlayerRepository : JpaRepository<GamePlayer, Int> {
         @Param("wolfWin") wolfWin: WinnerSide, @Param("goodWin") goodWin: WinnerSide,
     ): List<com.werewolf.service.RankedRecord>
 
+    /** Counted games only: ended with a winner (cancelled and running games excluded). */
     @Query("select new com.werewolf.service.FinishedResult(g.gameId, gp.role, g.winner, g.endedAt) " +
         "from GamePlayer gp, Game g where gp.gameId = g.gameId and gp.userId = :userId " +
         "and g.endedAt is not null and g.winner is not null")

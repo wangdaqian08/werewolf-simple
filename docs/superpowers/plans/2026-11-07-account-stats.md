@@ -27,7 +27,7 @@
   - `餘額 ◈{n}`, `（凍結 {n}）`
 - No `!!` in `backend/src/main`. No new Spring test contexts (`@SpringBootTest @ActiveProfiles("test")` only, no `@MockBean`/`@SpyBean`). Use portable JPQL, since tests run on H2 locally and Postgres in CI.
 - `data-testid` on every element a test reads. Type-check with `npx vue-tsc -b`. Run `npm run format:check` (Prettier; CI fails on it).
-- Stage individual files. Commit trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Stage individual files. Commit trailer: the `Co-Authored-By` attribution line the session provides.
 
 ## Review Focus
 

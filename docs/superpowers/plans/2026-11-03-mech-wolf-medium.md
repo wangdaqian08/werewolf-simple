@@ -31,7 +31,7 @@
 - **i18n.** `zh.ts` is Traditional Chinese. `en.ts` and `zh.ts` keep the same keys, and the existing `i18nParity.test.ts` must stay green.
 - **E2E.** Locate elements with `getByTestId` only, never `getByText`. Every new real-backend spec must be listed in a `.github/workflows/ci.yml` shard. The `roles` list must include `WITCH` (the setupGame trap).
 - **Old rooms are out of scope.** Add no fallback for stored configs that lack the new roles.
-- **Commits.** End each commit message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Commits.** End each commit message with the `Co-Authored-By` attribution line the session provides.
 
 ## Review Focus
 
