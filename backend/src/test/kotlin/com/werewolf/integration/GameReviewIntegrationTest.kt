@@ -137,6 +137,36 @@ class GameReviewIntegrationTest {
     }
 
     @Test
+    fun `the review lists every role-pick card by seat with whether it took effect`() {
+        val wolf = login("ReviewPickWolf")
+        val holder = login("ReviewPickHolder")
+        val room = roomRepository.save(Room(roomCode = TestConstants.nextSeededRoomCode(), hostUserId = wolf.userId, totalPlayers = 6))
+        val gameId = gameRepository.save(Game(roomId = room.roomId!!, hostUserId = wolf.userId).also {
+            it.phase = GamePhase.GAME_OVER; it.winner = WinnerSide.VILLAGER; it.endedAt = LocalDateTime.now()
+        }).gameId!!
+        gamePlayerRepository.saveAll(listOf(
+            GamePlayer(gameId = gameId, userId = wolf.userId, seatIndex = 1, role = PlayerRole.WEREWOLF),
+            GamePlayer(gameId = gameId, userId = holder.userId, seatIndex = 2, role = PlayerRole.VILLAGER),
+        ))
+        // Saved out of seat order: the later seat first.
+        perkActivationRepository.save(
+            PerkActivation(roomId = room.roomId!!, gameId = gameId, userId = holder.userId, perkCode = "ROLE_PICK_GOD", pricePaid = 20),
+        )
+        perkActivationRepository.save(
+            PerkActivation(roomId = room.roomId!!, gameId = gameId, userId = wolf.userId, perkCode = "ROLE_PICK_WOLF", pricePaid = 20)
+                .also { it.triggeredAt = LocalDateTime.now() },
+        )
+
+        val review = getReview(gameId, wolf.token).body!!
+        val picks = review["rolePicks"] as List<Map<String, Any?>>
+
+        assertThat(picks.map { (it["player"] as Map<*, *>)["seatIndex"] }).containsExactly(1, 2)
+        assertThat(picks.map { it["choice"] }).containsExactly("WOLF", "GOD")
+        assertThat(picks.map { it["tookEffect"] }).containsExactly(true, false)
+        assertThat(getPlayerReview(gameId, wolf.token).body!!.keys).doesNotContain("rolePicks")
+    }
+
+    @Test
     fun `a night-1 save by the immunity perk is read from the perk record`() {
         val wolf = login("ReviewPerkWolf")
         val holder = login("ReviewPerkHolder")

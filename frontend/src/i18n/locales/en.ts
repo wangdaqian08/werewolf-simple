@@ -573,6 +573,10 @@ export default {
     },
     poison: 'Poison ',
     rewardsTitle: 'Points this game',
+    rolePickCamp: { GOD: 'God', VILLAGER: 'Villager', WOLF: 'Werewolf' },
+    rolePickHit: 'Took effect',
+    rolePickMiss: 'Not drawn',
+    rolePicksTitle: 'Role-pick cards',
     roleTag: ' [{role}]',
     save: 'Save ',
     saved: {

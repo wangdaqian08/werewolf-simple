@@ -567,6 +567,10 @@ export default {
     },
     poison: '毒 ',
     rewardsTitle: '本局積分',
+    rolePickCamp: { GOD: '神', VILLAGER: '村民', WOLF: '狼人' },
+    rolePickHit: '生效',
+    rolePickMiss: '未抽中',
+    rolePicksTitle: '點將卡',
     roleTag: '〔{role}〕',
     save: '救 ',
     saved: {

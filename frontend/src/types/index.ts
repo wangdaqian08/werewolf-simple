@@ -318,12 +318,20 @@ export interface ReviewReward {
   amount: number
 }
 
+/** A 点将卡 bought for this game; [tookEffect] false = the deal did not give the player the camp. */
+export interface ReviewRolePick {
+  player: ReviewPlayer
+  choice: 'WOLF' | 'GOD' | 'VILLAGER'
+  tookEffect: boolean
+}
+
 export interface GameReview {
   winner: 'WEREWOLF' | 'VILLAGER' | null
   players: ReviewPlayer[]
   rounds: ReviewRound[]
   /** Empty when the game was never settled. */
   rewards: ReviewReward[]
+  rolePicks: ReviewRolePick[]
 }
 
 // ── Player review (玩家视角复盘) ───────────────────────────────────────────────

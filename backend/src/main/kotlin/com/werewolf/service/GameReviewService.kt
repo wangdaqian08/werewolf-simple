@@ -9,6 +9,7 @@ import com.werewolf.model.GameEvent
 import com.werewolf.model.GamePhase
 import com.werewolf.model.GamePlayer
 import com.werewolf.model.NightPhase
+import com.werewolf.model.RolePickChoice
 import com.werewolf.repository.*
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -36,6 +37,7 @@ class GameReviewService(
         val events: List<GameEvent>,
         val night1PerkSaved: Set<String>,
         val rewards: Map<String, Int>,
+        val rolePicks: Map<String, Pair<RolePickChoice, Boolean>>,
         val displayNameFor: (String) -> String,
     )
 
@@ -49,7 +51,8 @@ class GameReviewService(
         val users = userRepository.findAllById(players.map { it.userId }).associateBy { it.userId }
         val roomNames = roomPlayerRepository.findByRoomId(game.roomId).associateBy { it.userId }
         // PerkService.markNight1Triggered stamps triggeredAt only when the perk was the decisive night-1 save.
-        val night1PerkSaved = perkActivationRepository.findByGameId(gameId)
+        val perks = perkActivationRepository.findByGameId(gameId)
+        val night1PerkSaved = perks
             .filter { it.perkCode == PERK_NIGHT1_IMMUNITY && it.triggeredAt != null }
             .mapTo(mutableSetOf()) { it.userId }
         return ReviewData(
@@ -61,13 +64,14 @@ class GameReviewService(
             // Rewards come from the ledger, the durable record, so both replays show the same numbers.
             creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD)
                 .associate { it.userId to it.amount },
+            perks.mapNotNull { a -> RolePickChoice.fromPerkCode(a.perkCode)?.let { a.userId to (it to (a.triggeredAt != null)) } }.toMap(),
         ) { id -> roomNames[id]?.displayName ?: users[id]?.nickname ?: id }
     }
 
     /** Every role and night action, with every player's true role. */
     @Transactional(readOnly = true)
     fun getReview(gameId: Int, userId: String): GameReview = with(load(gameId, userId)) {
-        GameReviewBuilder.build(game, players, nights, events, night1PerkSaved, rewards, displayNameFor)
+        GameReviewBuilder.build(game, players, nights, events, night1PerkSaved, rewards, rolePicks, displayNameFor)
     }
 
     /** Only what [userId] themselves knew, and only up to the moment they left the game. */
