@@ -1088,4 +1088,35 @@ describe('VotingPhase — role card history', () => {
     expect(document.body.querySelector('[data-testid="role-history-btn"]')).not.toBeNull()
     wrapper.unmount()
   })
+
+  it('locks page scroll while the vote-history sheet is open', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+    const wrapper = mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+      props: {
+        gameId: 1,
+        players: [],
+        myUserId: 'p1',
+        isHost: false,
+        voteHistory: [{ dayNumber: 1, round: 1, tallies: [] } as never],
+        votingPhase: {
+          subPhase: 'VOTING',
+          dayNumber: 1,
+          phaseDeadline: 0,
+          phaseStarted: 0,
+        } as VotingState,
+      },
+    })
+    expect(document.body.style.position).toBe('')
+    await wrapper.find('.history-btn').trigger('click')
+    expect(document.body.style.position).toBe('fixed')
+    wrapper.unmount()
+    expect(document.body.style.position).toBe('')
+  })
 })

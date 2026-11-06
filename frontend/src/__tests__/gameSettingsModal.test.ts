@@ -220,4 +220,14 @@ describe('GameSettingsModal — role info', () => {
     expect(bodyEl('rc-rules')!.textContent).toContain('不能查驗自己。')
     wrapper.unmount()
   })
+
+  it('locks page scroll only while open', async () => {
+    const wrapper = mountModal({ open: false })
+    expect(document.body.style.position).toBe('')
+    await wrapper.setProps({ open: true })
+    expect(document.body.style.position).toBe('fixed')
+    await wrapper.setProps({ open: false })
+    expect(document.body.style.position).toBe('')
+    wrapper.unmount()
+  })
 })

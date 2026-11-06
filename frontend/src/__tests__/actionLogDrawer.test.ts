@@ -171,4 +171,18 @@ describe('ActionLogDrawer — shots (hunter / 黑狼王)', () => {
     expect(document.body.textContent).not.toContain('獵人')
     wrapper.unmount()
   })
+
+  it('locks page scroll only while open', async () => {
+    vi.mocked(gameService.getActionLog).mockResolvedValue([])
+    const wrapper = mount(ActionLogDrawer, {
+      props: { gameId: 42, open: false },
+      attachTo: document.body,
+    })
+    expect(document.body.style.position).toBe('')
+    await wrapper.setProps({ open: true })
+    expect(document.body.style.position).toBe('fixed')
+    await wrapper.setProps({ open: false })
+    expect(document.body.style.position).toBe('')
+    wrapper.unmount()
+  })
 })

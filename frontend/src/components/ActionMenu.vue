@@ -153,6 +153,7 @@
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
+import { useScrollLock } from '@/composables/useScrollLock'
 import type { GamePhase, GamePlayer, PlayerRole } from '@/types'
 import { isPackWolfRole } from '@/utils/roleDefinitions'
 
@@ -211,6 +212,7 @@ const declareCandidates = computed(() =>
   ),
 )
 const declareOpen = ref(false)
+useScrollLock(() => menuOpen.value || confirmOpen.value || declareOpen.value)
 const declareTargetId = ref<string | undefined>()
 const declareTarget = computed(() =>
   declareCandidates.value.find((p) => p.userId === declareTargetId.value),

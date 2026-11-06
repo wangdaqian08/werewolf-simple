@@ -369,4 +369,13 @@ describe('ActionMenu — host declares a player out', () => {
     expect(guest.find('[data-testid="action-menu-btn"]').exists()).toBe(false)
     guest.unmount()
   })
+
+  it('locks page scroll while the menu sheet is open', async () => {
+    const wrapper = mount(ActionMenu, { props: makeProps({}), attachTo: document.body })
+    expect(document.body.style.position).toBe('')
+    await wrapper.find('[data-testid="action-menu-btn"]').trigger('click')
+    expect(document.body.style.position).toBe('fixed')
+    wrapper.unmount()
+    expect(document.body.style.position).toBe('')
+  })
 })

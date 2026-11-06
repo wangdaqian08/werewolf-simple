@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
 import RoleCardSheet from '@/components/RoleCardSheet.vue'
 import RoleComposition from '@/components/RoleComposition.vue'
 import type { GamePlayer } from '@/types'
+
+// Unmount every sheet after each test so its page-scroll lock is released.
+enableAutoUnmount(afterEach)
 
 const sheet = () => document.body.querySelector('[data-testid="role-card-sheet"]')
 const mate = (userId: string, seatIndex: number, nickname: string, isAlive = true) =>
@@ -47,5 +50,12 @@ describe('RoleCardSheet', () => {
     ;(sheet()?.querySelector('.history-close') as HTMLButtonElement).click()
     await w.vm.$nextTick()
     expect(sheet()).toBeNull()
+  })
+
+  it('locks page scroll while open, so a swipe cannot move the page behind it', () => {
+    const w = mount(RoleCardSheet, { props: { role: 'SEER' }, attachTo: document.body })
+    expect(document.body.style.position).toBe('fixed')
+    w.unmount()
+    expect(document.body.style.position).toBe('')
   })
 })

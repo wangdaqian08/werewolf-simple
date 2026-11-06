@@ -663,6 +663,7 @@
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import { roleName } from '@/utils/roleDefinitions'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useScrollLock } from '@/composables/useScrollLock'
 import type {
   GamePlayer,
   GameSettings,
@@ -888,6 +889,7 @@ const sortedTally = computed(() =>
 
 // ── Vote History panel ────────────────────────────────────────────────────────
 const showHistory = ref(false)
+useScrollLock(() => showHistory.value)
 const showRoleCard = ref(false)
 const myPlayer = computed(() => props.players.find((p) => p.userId === props.myUserId))
 const teammatePlayers = computed(() =>
