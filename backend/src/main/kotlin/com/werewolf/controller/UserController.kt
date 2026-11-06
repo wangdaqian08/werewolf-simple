@@ -5,8 +5,8 @@ import com.werewolf.dto.UserLoginRequest
 import com.werewolf.service.UserStatsService
 import jakarta.validation.Valid
 import org.springframework.security.core.Authentication
-import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -35,7 +35,6 @@ class UserController(private val authService: AuthService, private val userStats
 
     @GetMapping("/stats")
     fun stats(authentication: Authentication) = userStatsService.statsFor(authentication.principal as String)
-
 
     @PostMapping("/login")
     fun login(@Valid @RequestBody request: UserLoginRequest): ResponseEntity<Any> {

@@ -137,6 +137,33 @@ class UserStatsIntegrationTest {
     }
 
     @Test
+    fun `recent breaks endedAt ties by newest game id`() {
+        val u = login()
+        val t = LocalDateTime.now().minusDays(1)
+        seed(u, PlayerRole.SEER, WinnerSide.VILLAGER, t) // lower gameId: W
+        seed(u, PlayerRole.SEER, WinnerSide.WEREWOLF, t) // higher gameId: L
+        assertThat(userStatsService.statsFor(u.userId).recent).containsExactly("L", "W")
+    }
+
+    @Test
+    fun `aggregate query ranks others only and the percentile follows it`() {
+        val caller = login()
+        val loser = login()
+        val short = login()
+        repeat(5) { seed(caller, PlayerRole.SEER, WinnerSide.VILLAGER) } // 5/5
+        repeat(5) { seed(loser, PlayerRole.WEREWOLF, WinnerSide.VILLAGER) } // 0/5
+        repeat(4) { seed(short, PlayerRole.SEER, WinnerSide.VILLAGER) } // under 5 games
+        val rows = gamePlayerRepository.findRankedRecords(
+            caller.userId, PlayerRole.entries.filter { it.isWolf }, WinnerSide.WEREWOLF, WinnerSide.VILLAGER,
+        )
+        assertThat(rows.map { it.userId }).doesNotContain(caller.userId, short.userId)
+        assertThat(rows.single { it.userId == loser.userId }.let { it.games to it.wins }).isEqualTo(5L to 0L)
+        val expected = percentileOf(5, 5, rows.map { it.wins.toInt() to it.games.toInt() })
+        assertThat(userStatsService.statsFor(caller.userId).percentile).isEqualTo(expected)
+        assertThat(expected).isGreaterThanOrEqualTo(1) // beats the 0/5 loser
+    }
+
+    @Test
     fun `population of one gives 0`() {
         assertThat(percentileOf(3, 5, emptyList())).isEqualTo(0)
         assertThat(percentileOf(3, 5, listOf(2 to 2))).isEqualTo(0)

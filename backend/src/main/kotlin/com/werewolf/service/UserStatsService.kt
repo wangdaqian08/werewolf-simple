@@ -14,8 +14,11 @@ data class UserStats(
     val percentile: Int?, val gamesToRank: Int,
 )
 
+/** One ranked player's counted games and wins; the aggregate JPQL target (count/sum are Long). */
+data class RankedRecord(val userId: String, val games: Long, val wins: Long)
+
 /** One finished game from one player's seat; the JPQL constructor target. */
-data class FinishedResult(val userId: String, val role: PlayerRole, val winner: WinnerSide, val endedAt: LocalDateTime) {
+data class FinishedResult(val gameId: Int, val role: PlayerRole, val winner: WinnerSide, val endedAt: LocalDateTime) {
     val won: Boolean get() = role.isWolf == (winner == WinnerSide.WEREWOLF)
 }
 
@@ -37,15 +40,14 @@ fun percentileOf(wins: Int, games: Int, others: List<Pair<Int, Int>>): Int {
 class UserStatsService(private val gamePlayerRepository: GamePlayerRepository) {
 
     fun statsFor(userId: String): UserStats {
-        val mine = gamePlayerRepository.findFinishedResultsFor(userId).sortedByDescending { it.endedAt }
+        val mine = gamePlayerRepository.findFinishedResultsFor(userId).sortedWith(compareByDescending<FinishedResult> { it.endedAt }.thenByDescending { it.gameId })
         val wins = mine.count { it.won }
         val games = mine.size
         val (wolfGames, goodGames) = mine.partition { it.role.isWolf }
         val percentile = if (games < MIN_GAMES_TO_RANK) null else {
-            val others = gamePlayerRepository.findFinishedResults()
-                .filter { it.userId != userId }
-                .groupBy { it.userId }
-                .values.map { rs -> rs.count { it.won } to rs.size }
+            val others = gamePlayerRepository.findRankedRecords(
+                userId, PlayerRole.entries.filter { it.isWolf }, WinnerSide.WEREWOLF, WinnerSide.VILLAGER,
+            ).map { it.wins.toInt() to it.games.toInt() }
             percentileOf(wins, games, others)
         }
         return UserStats(
