@@ -83,16 +83,21 @@ class PerkController(private val perkService: PerkService, private val rolePickS
     fun chooseRolePick(@RequestBody body: RolePickRequest, authentication: Authentication): ResponseEntity<Any> =
         rolePickResponse { rolePickService.choose(authentication.principal as String, body.roomId, body.choice) }
 
-    // Every domain failure is a 400 {"error": message}; unparseable bodies are already 400 from Spring.
+    // Every domain failure is a 400 {"error": message, "code": CODE}; the client translates the code
+    // (the message is English, for logs). Unparseable bodies are already 400 from Spring.
     private fun rolePickResponse(block: () -> Any): ResponseEntity<Any> = try {
         ResponseEntity.ok(block())
     } catch (e: RuntimeException) {
-        when (e) {
-            is RoomNotFoundException, is RoomNotOpenException, is PerksDisabledException,
-            is PlayerNotInRoomException, is InsufficientCreditsException,
-            is RolePickLockedException, is RolePickUnavailableException ->
-                ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        val code = when (e) {
+            is RoomNotFoundException -> "ROOM_NOT_FOUND"
+            is RoomNotOpenException -> "ROOM_NOT_OPEN"
+            is PerksDisabledException -> "PERKS_DISABLED"
+            is PlayerNotInRoomException -> "NOT_IN_ROOM"
+            is InsufficientCreditsException -> "INSUFFICIENT_CREDITS"
+            is RolePickLockedException -> "ROLE_PICK_LOCKED"
+            is RolePickUnavailableException -> "ROLE_PICK_UNAVAILABLE"
             else -> throw e
         }
+        ResponseEntity.badRequest().body(mapOf("error" to e.message, "code" to code))
     }
 }

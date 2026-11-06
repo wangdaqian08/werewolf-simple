@@ -36,7 +36,7 @@
 - Picks are private:
   - Never put `ROLE_PICK_*` data in `RoomDto`, `PERK_UPDATE`, `ROOM_UPDATE`, `GAME_STARTED` or any `/topic/*` broadcast.
   - Own-pick data travels only in the response to a request the owner made.
-- Commit trailer: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Stage individual files, never `git add -A`.
+- Commit trailer: the `Co-Authored-By` attribution line the session provides. Stage individual files, never `git add -A`.
 
 ## Review Focus
 

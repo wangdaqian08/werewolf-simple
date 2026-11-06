@@ -388,4 +388,16 @@ class PerkControllerTest {
         val (roomId, _) = createRoom(token)
         assertThat(rolePick(token, roomId, "DRAGON").statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
     }
+
+    @Test
+    fun `POST role-pick failure carries a stable code for the client to translate`() {
+        ensureWolfCard()
+        val (token, _) = login("RolePickPoor") // fresh account: balance 0
+        val (roomId, _) = createRoom(token)
+
+        val resp = rolePick(token, roomId, "WOLF")
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(resp.body!!["code"]).isEqualTo("INSUFFICIENT_CREDITS")
+    }
 }

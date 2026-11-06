@@ -36,6 +36,7 @@ import {
   MOCK_SHERIFF_VOTING_HOST_QUIT,
   MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
   MOCK_STOMP_EVENTS,
+  MOCK_USER_STATS,
   MOCK_WALLET,
 } from './data'
 import { mockStompClient } from './mockStompClient'
@@ -163,6 +164,7 @@ export function setupMocks() {
   // ── User ──────────────────────────────────────────────────────────────────────
   mock.onPost('/user/login').reply(200, MOCK_LOGIN)
   mock.onGet('/user/profile').reply(200, MOCK_LOGIN.user)
+  mock.onGet('/user/stats').reply(200, MOCK_USER_STATS)
   mock.onPost('/user/logout').reply(200)
 
   // ── Wallet / Perks / Payments (account page) ──────────────────────────────────

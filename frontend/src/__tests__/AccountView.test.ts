@@ -9,6 +9,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AccountView from '@/views/AccountView.vue'
+import { MOCK_USER_STATS } from '@/mocks/data'
 import type { MyPerkActivation, PaymentOrderSummary, Wallet } from '@/types'
 
 const h = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const h = vi.hoisted(() => ({
   getMyPerksMock: vi.fn(),
   listOrdersMock: vi.fn(),
   isAdminMock: vi.fn(),
+  getStatsMock: vi.fn(),
 }))
 
 vi.mock('@/services/walletService', () => ({
@@ -23,6 +25,9 @@ vi.mock('@/services/walletService', () => ({
 }))
 vi.mock('@/services/paymentService', () => ({
   paymentService: { listOrders: h.listOrdersMock },
+}))
+vi.mock('@/services/userService', () => ({
+  userService: { getStats: h.getStatsMock },
 }))
 vi.mock('@/services/adminService', () => ({
   adminService: { isAdmin: h.isAdminMock },
@@ -147,6 +152,7 @@ describe('AccountView', () => {
     h.getMyPerksMock.mockReset().mockResolvedValue([perk('ACTIVE')])
     h.listOrdersMock.mockReset().mockResolvedValue(ORDERS)
     h.isAdminMock.mockReset().mockResolvedValue(false)
+    h.getStatsMock.mockReset().mockResolvedValue(MOCK_USER_STATS)
   })
   afterEach(() => vi.clearAllMocks())
 
@@ -254,6 +260,19 @@ describe('AccountView', () => {
     const rows = wrapper.findAll('[data-testid="perk-row"]')
     expect(rows[0]!.text()).toContain('結算')
     expect(rows[1]!.text()).not.toContain('結算')
+  })
+
+  it('settled perk row shows one separator dot, and each date as its own unbreakable piece', async () => {
+    h.getMyPerksMock.mockResolvedValue([perk('CONSUMED', '2026-06-09T22:00:00')])
+    const { wrapper } = await mountAccount()
+    const row = wrapper.find('[data-testid="perk-row"]')
+    expect(row.text().match(/·/g)).toHaveLength(1)
+    const created = row.find('[data-testid="perk-created"]')
+    const settled = row.find('[data-testid="perk-settled"]')
+    expect(created.classes()).toContain('nowrap')
+    expect(settled.classes()).toContain('nowrap')
+    expect(created.text()).not.toContain('結算')
+    expect(settled.text()).toContain('結算')
   })
 
   it('not logged in: shows the sign-in prompt and fetches nothing', async () => {
@@ -406,5 +425,28 @@ describe('AccountView money formatting and status fallbacks', () => {
     expect(wrapper.find('[data-testid="account-balance"]').text()).toContain('250')
     expect(wrapper.find('[data-testid="perk-row"]').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('加載中')
+  })
+
+  it('renders the stats card above the wallet', async () => {
+    const { wrapper } = await mountAccount()
+    const html = wrapper.html()
+    expect(wrapper.find('[data-testid="stats-card"]').exists()).toBe(true)
+    expect(html.indexOf('stats-card')).toBeLessThan(html.indexOf('account-wallet'))
+  })
+
+  it('hides the card but keeps the wallet when stats fail to load', async () => {
+    h.getStatsMock.mockRejectedValue(new Error('boom'))
+    const { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="stats-card"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="account-wallet"]').exists()).toBe(true)
+  })
+
+  it('shows the guest note only for guests', async () => {
+    const guest = await mountAccount('guest:abc')
+    expect(guest.wrapper.find('[data-testid="account-guest-note"]').text()).toBe(
+      '訪客帳號跟隨暱稱，更換暱稱會看不到原來的戰績和積分',
+    )
+    const google = await mountAccount('google:abc')
+    expect(google.wrapper.find('[data-testid="account-guest-note"]').exists()).toBe(false)
   })
 })

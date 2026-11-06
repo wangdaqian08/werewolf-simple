@@ -274,7 +274,7 @@
 </template>
 
 <script lang="ts" setup>
-import { t } from '@/i18n'
+import { i18n, t } from '@/i18n'
 import axios from 'axios'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import http from '@/services/http'
@@ -393,6 +393,15 @@ function perkErrorMessage(err: unknown): string {
   return t('room.actionFailed')
 }
 
+// Role-pick failures carry a stable code; show its translation, never the backend's English text.
+function rolePickErrorMessage(err: unknown): string {
+  const code = axios.isAxiosError(err)
+    ? (err.response?.data as { code?: string } | undefined)?.code
+    : undefined
+  const key = `rolePick.errors.${code}`
+  return code && i18n.global.te(key) ? t(key) : t('room.actionFailed')
+}
+
 async function handleActivatePerk(perkCode: string) {
   if (!roomStore.room) return
   perkError.value = ''
@@ -449,7 +458,7 @@ async function handleChooseRolePick(choice: RolePickChoice) {
     rolePickSeq++
     await userStore.refreshWallet()
   } catch (err) {
-    rolePickError.value = perkErrorMessage(err)
+    rolePickError.value = rolePickErrorMessage(err)
   } finally {
     rolePickBusy.value = false
   }

@@ -53,6 +53,7 @@ describe('RolePickPanel', () => {
     expect(card(w, 'WOLF').text()).toContain('◈20')
     expect(card(w, 'WOLF').text()).toContain('本局 3 個名額')
     expect(card(w, 'NONE').text()).not.toContain('個名額')
+    expect(card(w, 'NONE').text()).toContain('無所畏懼，哪個角色都玩得好')
   })
 
   it('disables a card whose camp has 0 seats', async () => {
@@ -97,6 +98,18 @@ describe('RolePickPanel', () => {
     const w = await mountPanel({ locked: true })
     for (const c of ['NONE', 'WOLF', 'GOD', 'VILLAGER'] as const) expect(disabled(w, c)).toBe(true)
     expect(w.find('[data-testid="role-pick-locked"]').exists()).toBe(true)
+  })
+
+  it('labels the balance', async () => {
+    const w = await mountPanel({ balance: 80 })
+    expect(w.find('[data-testid="rp-balance"]').text()).toBe('餘額 ◈80')
+  })
+
+  it('shows available balance next to the frozen amount', async () => {
+    const w = await mountPanel({ balance: 60, view: view({ frozenCredits: 20 }) })
+    const t = w.find('[data-testid="rp-balance"]').text()
+    expect(t).toContain('餘額 ◈60')
+    expect(t).toContain('（凍結 20）')
   })
 
   it('shows frozen credits only when positive', async () => {

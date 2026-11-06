@@ -29,6 +29,7 @@ import type {
   VoteTally,
   VoteVoter,
   VotingState,
+  UserStats,
   Wallet,
 } from '@/types'
 
@@ -1600,3 +1601,15 @@ export const MOCK_REWARD_RULES: RewardRule[] = [
     unit: '次',
   },
 ]
+
+export const MOCK_USER_STATS: UserStats = {
+  games: 37,
+  wins: 22,
+  losses: 15,
+  winRate: 59,
+  wolf: { wins: 9, losses: 5 },
+  good: { wins: 13, losses: 10 },
+  recent: 'WWLWLLWWWLWLWWLLWLWW'.split('') as ('W' | 'L')[],
+  percentile: 72,
+  gamesToRank: 0,
+}

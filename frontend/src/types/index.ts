@@ -55,6 +55,18 @@ export interface CreditTransaction {
   createdAt: string
 }
 
+export interface UserStats {
+  games: number
+  wins: number
+  losses: number
+  winRate: number
+  wolf: { wins: number; losses: number }
+  good: { wins: number; losses: number }
+  recent: ('W' | 'L')[]
+  percentile: number | null
+  gamesToRank: number
+}
+
 export interface Wallet {
   balance: number
   recent: CreditTransaction[]

@@ -24,6 +24,11 @@
           {{ $t('account.adminLink') }}
         </button>
 
+        <StatsCard v-if="stats" :stats="stats" />
+        <p v-if="userStore.isGuest" class="guest-note" data-testid="account-guest-note">
+          {{ $t('account.guestNote') }}
+        </p>
+
         <!-- ── Section 1: credits + ledger ─────────────────────────────── -->
         <section class="section" data-testid="account-wallet">
           <h2 class="section-title">{{ $t('account.credits') }}</h2>
@@ -82,12 +87,14 @@
               </div>
               <div class="row-sub">
                 <span>◈{{ perk.pricePaid }}</span>
-                <span
-                  >{{ fmtDate(perk.createdAt)
-                  }}<template v-if="perk.settledAt">
-                    · {{ $t('account.settled', { date: fmtDate(perk.settledAt) }) }}</template
-                  ></span
-                >
+                <span class="dates">
+                  <span class="nowrap" data-testid="perk-created">{{
+                    fmtDate(perk.createdAt)
+                  }}</span>
+                  <span v-if="perk.settledAt" class="nowrap" data-testid="perk-settled">{{
+                    $t('account.settled', { date: fmtDate(perk.settledAt) })
+                  }}</span>
+                </span>
               </div>
             </li>
           </ul>
@@ -137,11 +144,14 @@ import { useUserStore } from '@/stores/userStore'
 import { walletService } from '@/services/walletService'
 import { paymentService } from '@/services/paymentService'
 import { adminService } from '@/services/adminService'
+import { userService } from '@/services/userService'
+import StatsCard from '@/components/StatsCard.vue'
 import type {
   CreditTxType,
   MyPerkActivation,
   PaymentOrderSummary,
   PerkActivationStatus,
+  UserStats,
   Wallet,
 } from '@/types'
 
@@ -150,6 +160,7 @@ const userStore = useUserStore()
 
 const loading = ref(false)
 const wallet = ref<Wallet | null>(null)
+const stats = ref<UserStats | null>(null)
 const perks = ref<MyPerkActivation[]>([])
 const orders = ref<PaymentOrderSummary[]>([])
 // Per-section error fallbacks — one failed fetch must not blank the page.
@@ -253,6 +264,15 @@ onMounted(async () => {
       })
       .catch(() => {
         perksError.value = true
+      }),
+    // A failed stats load just hides the card.
+    userService
+      .getStats()
+      .then((s) => {
+        stats.value = s
+      })
+      .catch(() => {
+        stats.value = null
       }),
     // Keeps the lobby chip in sync; never throws (errors swallowed in store).
     userStore.refreshWallet(),
@@ -435,6 +455,19 @@ onMounted(async () => {
   margin-top: 0.125rem;
 }
 
+/* Created + settled dates: each date stays on one line; the pair may wrap between them. */
+.dates {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  column-gap: 0.375rem;
+  text-align: right;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
 .status-badge {
   font-size: 0.75rem;
   white-space: nowrap;
@@ -451,6 +484,10 @@ onMounted(async () => {
 
 .status-refunded {
   color: var(--green);
+}
+
+.account-card > .guest-note {
+  margin: -0.5rem 0 1rem;
 }
 
 .guest-note,
