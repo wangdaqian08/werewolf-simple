@@ -130,14 +130,12 @@ describe('RoomView perk panel', () => {
   beforeEach(() => {
     localStorage.clear()
     h.getPerksMock.mockReset().mockResolvedValue(CATALOG)
-    h.getRolePickMock
-      .mockReset()
-      .mockResolvedValue({
-        choice: 'NONE',
-        frozenCredits: 0,
-        prices: {},
-        seats: { WOLF: 0, GOD: 0, VILLAGER: 0 },
-      })
+    h.getRolePickMock.mockReset().mockResolvedValue({
+      choice: 'NONE',
+      frozenCredits: 0,
+      prices: {},
+      seats: { WOLF: 0, GOD: 0, VILLAGER: 0 },
+    })
     h.activatePerkMock.mockReset().mockResolvedValue(undefined)
     h.withdrawPerkMock.mockReset().mockResolvedValue(undefined)
     h.getWalletMock.mockReset().mockResolvedValue({ balance: 100, recent: [] })
