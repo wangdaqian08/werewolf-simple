@@ -4,7 +4,9 @@ import com.werewolf.model.*
 import com.werewolf.repository.*
 import com.werewolf.service.InsufficientCreditsException
 import com.werewolf.service.PERK_NIGHT1_IMMUNITY
+import com.werewolf.service.PerkNotFoundException
 import com.werewolf.service.PerkService
+import com.werewolf.service.RoomService
 import com.werewolf.service.PerkSettlementService
 import com.werewolf.service.PerkTakenException
 import com.werewolf.service.PerksDisabledException
@@ -32,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class PerkServiceIntegrationTest {
 
     @Autowired lateinit var perkService: PerkService
+    @Autowired lateinit var roomService: RoomService
     @Autowired lateinit var perkSettlementService: PerkSettlementService
     @Autowired lateinit var walletService: WalletService
     @Autowired lateinit var perkRepository: PerkRepository
@@ -55,6 +58,17 @@ class PerkServiceIntegrationTest {
                 ),
             )
         }
+
+    private fun ensureRolePickPerks() {
+        listOf("ROLE_PICK_WOLF", "ROLE_PICK_GOD", "ROLE_PICK_VILLAGER").forEach { code ->
+            if (perkRepository.findById(code).isEmpty)
+                perkRepository.save(Perk(perkCode = code, name = code, description = "test", priceCredits = 20))
+        }
+    }
+
+    /** Role-pick purchase is Task 3's endpoint; here we seed the row directly. */
+    private fun pick(roomId: Int, userId: String, code: String) =
+        perkActivationRepository.save(PerkActivation(roomId = roomId, userId = userId, perkCode = code, pricePaid = 20))
 
     private fun newUser(prefix: String): String {
         val id = "guest:$prefix-${++seq}-${System.nanoTime()}"
@@ -417,5 +431,101 @@ class PerkServiceIntegrationTest {
         assertThat(perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)).hasSize(1)
         // Exactly one wallet was debited
         assertThat(walletService.balance(a) + walletService.balance(b)).isEqualTo(170)
+    }
+
+    @Test
+    fun `wolf-dealt role-pick WOLF is not voided and is marked triggered`() {
+        ensurePerk(); ensureRolePickPerks()
+        val a = newUser("a")
+        val roomId = newRoom(a)
+        pick(roomId, a, "ROLE_PICK_WOLF")
+        pick(roomId, a, PERK_NIGHT1_IMMUNITY)
+        val gameId = 997_000 + seq
+
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(GamePlayer(gameId = gameId, userId = a, seatIndex = 0, role = PlayerRole.WEREWOLF)),
+        )
+
+        val rows = perkActivationRepository.findByGameId(gameId).associateBy { it.perkCode }
+        assertThat(rows.getValue("ROLE_PICK_WOLF").status).isEqualTo(PerkActivationStatus.ACTIVE)
+        assertThat(rows.getValue("ROLE_PICK_WOLF").triggeredAt).isNotNull()
+        assertThat(rows.getValue(PERK_NIGHT1_IMMUNITY).status).isEqualTo(PerkActivationStatus.VOID)
+    }
+
+    @Test
+    fun `role-pick that did not match stays ACTIVE and untriggered`() {
+        ensureRolePickPerks()
+        val a = newUser("a")
+        val roomId = newRoom(a)
+        pick(roomId, a, "ROLE_PICK_GOD")
+        val gameId = 896_000 + seq
+
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(GamePlayer(gameId = gameId, userId = a, seatIndex = 0, role = PlayerRole.VILLAGER)),
+        )
+
+        val row = perkActivationRepository.findByGameId(gameId).single()
+        assertThat(row.status).isEqualTo(PerkActivationStatus.ACTIVE)
+        assertThat(row.triggeredAt).isNull()
+    }
+
+    @Test
+    fun `catalog excludes role-pick perks`() {
+        ensurePerk(); ensureRolePickPerks()
+        assertThat(perkService.catalog().map { it["perkCode"] as String }).noneMatch { it.startsWith("ROLE_PICK_") }
+            .contains(PERK_NIGHT1_IMMUNITY)
+    }
+
+    @Test
+    fun `generic activate and withdraw reject a role-pick code`() {
+        ensureRolePickPerks()
+        val a = newUser("a")
+        val roomId = newRoom(a)
+        fund(a, 100)
+        assertThatThrownBy { perkService.activate(a, roomId, "ROLE_PICK_WOLF") }
+            .isInstanceOf(PerkNotFoundException::class.java)
+        assertThatThrownBy { perkService.withdraw(a, roomId, "ROLE_PICK_WOLF") }
+            .isInstanceOf(PerkNotFoundException::class.java)
+        assertThat(walletService.balance(a)).isEqualTo(100)
+    }
+
+    @Test
+    fun `room DTO omits role picks`() {
+        ensurePerk(); ensureRolePickPerks()
+        val a = newUser("a")
+        val b = newUser("b")
+        val roomId = newRoom(a)
+        join(roomId, b)
+        pick(roomId, b, "ROLE_PICK_WOLF")
+        pick(roomId, a, PERK_NIGHT1_IMMUNITY)
+
+        assertThat(roomService.getRoom(roomId).perkActivations.map { it.perkCode })
+            .containsExactly(PERK_NIGHT1_IMMUNITY)
+    }
+
+    @Test
+    fun `liveRolePicks and myRolePick expose the caller's own pick only`() {
+        ensureRolePickPerks()
+        val a = newUser("a")
+        val b = newUser("b")
+        val roomId = newRoom(a)
+        join(roomId, b)
+        pick(roomId, a, "ROLE_PICK_GOD")
+        assertThat(perkService.liveRolePicks(roomId)).isEqualTo(mapOf(a to RolePickChoice.GOD))
+
+        val gameId = 895_000 + seq
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(
+                GamePlayer(gameId = gameId, userId = a, seatIndex = 0, role = PlayerRole.SEER),
+                GamePlayer(gameId = gameId, userId = b, seatIndex = 1, role = PlayerRole.VILLAGER),
+            ),
+        )
+
+        assertThat(perkService.myRolePick(gameId, a))
+            .isEqualTo(mapOf("choice" to "GOD", "tookEffect" to true, "price" to 20))
+        assertThat(perkService.myRolePick(gameId, b)).isNull()
     }
 }

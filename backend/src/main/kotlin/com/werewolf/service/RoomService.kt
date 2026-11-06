@@ -392,6 +392,7 @@ class RoomService(
         val perkNames = perkRepository.findAll().associate { it.perkCode to it.name }
         val perkActivations = perkActivationRepository
             .findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)
+            .filterNot { isRolePickCode(it.perkCode) }
             .map { PerkActivationDto(it.userId, it.perkCode, perkNames[it.perkCode] ?: it.perkCode) }
 
         return RoomDto(
