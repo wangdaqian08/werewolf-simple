@@ -86,6 +86,8 @@ interface RoomPlayerRepository : JpaRepository<RoomPlayer, Int> {
     fun existsByRoomIdAndUserId(roomId: Int, userId: String): Boolean
     fun existsByRoomIdAndSeatIndex(roomId: Int, seatIndex: Int): Boolean
 
+    fun existsByRoomIdAndUserIdAndRolePickIsNull(roomId: Int, userId: String): Boolean
+
     @Modifying
     @Query("UPDATE RoomPlayer rp SET rp.status = :status WHERE rp.roomId = :roomId AND rp.userId = :userId")
     fun updateStatus(roomId: Int, userId: String, status: ReadyStatus): Int

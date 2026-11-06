@@ -45,7 +45,11 @@ export async function grantCredits(page: Page, userId: string, amount: number): 
     async ([uid, amt]) => {
       const res = await fetch('/api/test-support/wallet/grant', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // /api/** requires a JWT (SecurityConfig); ride the page's session like cleanupRoomData.
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('jwt')}`,
+        },
         body: JSON.stringify({ userId: uid, amount: amt }),
       })
       return { status: res.status, body: res.ok ? await res.json() : null }

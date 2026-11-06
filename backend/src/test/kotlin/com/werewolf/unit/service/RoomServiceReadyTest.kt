@@ -118,7 +118,7 @@ class RoomServiceReadyTest {
     @Test
     fun `ready rejected with RolePickRequiredException when perks allowed and rolePick null`() {
         whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(waitingRoom()))
-        whenever(roomPlayerRepository.findByRoomIdAndUserId(roomId, userId)).thenReturn(Optional.of(seatedPlayer()))
+        whenever(roomPlayerRepository.existsByRoomIdAndUserIdAndRolePickIsNull(roomId, userId)).thenReturn(true)
 
         assertThatThrownBy { roomService.setReady(userId, roomId, true) }
             .isInstanceOf(RolePickRequiredException::class.java)
@@ -131,7 +131,7 @@ class RoomServiceReadyTest {
     fun `ready allowed with rolePick NONE`() {
         whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(waitingRoom()))
         val player = seatedPlayer().also { it.rolePick = RolePickChoice.NONE }
-        whenever(roomPlayerRepository.findByRoomIdAndUserId(roomId, userId)).thenReturn(Optional.of(player))
+        whenever(roomPlayerRepository.existsByRoomIdAndUserIdAndRolePickIsNull(roomId, userId)).thenReturn(false)
         whenever(roomPlayerRepository.setReadyIfSeated(roomId, userId)).thenReturn(1)
         whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(listOf(player))
         whenever(userRepository.findAllById(any())).thenReturn(emptyList())
@@ -164,7 +164,7 @@ class RoomServiceReadyTest {
         roomService.setReady(userId, roomId, ready = false)
 
         verify(roomPlayerRepository).updateStatus(roomId, userId, ReadyStatus.NOT_READY)
-        verify(roomPlayerRepository, never()).findByRoomIdAndUserId(any(), any())
+        verify(roomPlayerRepository, never()).existsByRoomIdAndUserIdAndRolePickIsNull(any(), any())
     }
 
     // ── claimSeat ─────────────────────────────────────────────────────────────

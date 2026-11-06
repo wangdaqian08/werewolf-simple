@@ -258,8 +258,9 @@ class RoomService(
     fun setReady(userId: String, roomId: Int, ready: Boolean) {
         val room = roomRepository.findById(roomId).orElse(null) ?: throw RoomNotFoundException("Room not found")
         if (room.status != RoomStatus.WAITING) throw RoomNotOpenException("Room is not open")
+        // An exists query, not an entity load: a cached RoomPlayer would make the broadcast below show the stale status.
         if (ready && room.config?.perksAllowed != false &&
-            roomPlayerRepository.findByRoomIdAndUserId(roomId, userId).orElse(null)?.let { it.rolePick == null } == true
+            roomPlayerRepository.existsByRoomIdAndUserIdAndRolePickIsNull(roomId, userId)
         ) throw RolePickRequiredException("Choose a role-pick card before getting ready")
 
         val affected = if (ready) {

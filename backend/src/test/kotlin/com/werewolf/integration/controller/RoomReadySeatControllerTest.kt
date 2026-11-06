@@ -15,6 +15,7 @@ import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.ReadyStatus
 import com.werewolf.repository.RoomPlayerRepository
+import com.werewolf.service.RoomService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -27,6 +28,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.transaction.support.TransactionTemplate
 
 @AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
@@ -35,6 +37,8 @@ class RoomReadySeatControllerTest {
 
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var roomPlayerRepository: RoomPlayerRepository
+    @Autowired lateinit var roomService: RoomService
+    @Autowired lateinit var transactionTemplate: TransactionTemplate
 
     companion object {
         const val READY_URL = "/api/room/ready"
@@ -169,6 +173,32 @@ class RoomReadySeatControllerTest {
         assertThat(response.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
         assertThat(response.body!![FIELD_ERROR] as String).isEqualTo("Choose a role-pick card before getting ready")
         assertThat(roomPlayerRepository.findByRoomId(roomId).first { !it.host }.status).isEqualTo(ReadyStatus.NOT_READY)
+    }
+
+    // The ROOM_UPDATE that setReady broadcasts is built inside its transaction. A
+    // RoomPlayer loaded before the bulk READY update stayed cached there, so the
+    // broadcast showed the player NOT_READY (the host never saw the last guest ready).
+    @Test
+    fun `room read in the ready transaction shows the player READY when perks are allowed`() {
+        val (_, guestToken, roomId) = createAndJoin("HostR5", "GuestR5", perksAllowed = true)
+        restTemplate.postForEntity(
+            SEAT_URL,
+            HttpEntity(mapOf("seatIndex" to 1, "roomId" to roomId), authHeaders(guestToken)),
+            Map::class.java,
+        )
+        val guestId = roomPlayerRepository.findByRoomId(roomId).first { !it.host }.userId
+        restTemplate.postForEntity(
+            "/api/room/role-pick",
+            HttpEntity(mapOf("roomId" to roomId, "choice" to "NONE"), authHeaders(guestToken)),
+            Map::class.java,
+        )
+
+        val status = transactionTemplate.execute {
+            roomService.setReady(guestId, roomId, ready = true)
+            roomService.getRoom(roomId).players.first { it.userId == guestId }.status
+        }
+
+        assertThat(status).isEqualTo(ReadyStatus.READY.name)
     }
 
     @Test
