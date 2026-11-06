@@ -31,6 +31,8 @@
       </div>
     </div>
 
+    <slot />
+
     <!-- Buttons -->
     <template v-if="!revealed">
       <button class="btn btn-gold" data-testid="reveal-role-btn" @click="$emit('reveal')">

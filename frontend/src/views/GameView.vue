@@ -40,22 +40,23 @@
         @reveal="isRoleRevealed = true"
         @hide="isRoleRevealed = false"
         @confirm="handleRoleConfirm"
-      />
-      <p
-        v-if="gameStore.state.myRolePick && !hasConfirmedRole"
-        class="role-pick-result"
-        data-testid="role-pick-result"
       >
-        {{
-          $t(
-            gameStore.state.myRolePick.tookEffect
-              ? 'game.rolePickTookEffect'
-              : 'game.rolePickMissed',
-            { price: gameStore.state.myRolePick.price },
-          )
-        }}
-      </p>
-      <div v-if="hasConfirmedRole" class="waiting-screen">
+        <p
+          v-if="gameStore.state.myRolePick"
+          class="role-pick-result"
+          data-testid="role-pick-result"
+        >
+          {{
+            $t(
+              gameStore.state.myRolePick.tookEffect
+                ? 'game.rolePickTookEffect'
+                : 'game.rolePickMissed',
+              { price: gameStore.state.myRolePick.price },
+            )
+          }}
+        </p>
+      </RoleRevealCard>
+      <div v-else class="waiting-screen">
         <div class="waiting-icon">⏳</div>
         <div class="waiting-title">{{ $t('game.waitingOthers') }}</div>
         <div class="waiting-count">
@@ -1393,6 +1394,13 @@ function normalizePhaseName(phase: string | undefined): string {
   background: var(--bg);
   padding: 2rem 1.5rem;
   text-align: center;
+}
+
+.role-pick-result {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+  text-align: center;
+  color: var(--gold);
 }
 
 .waiting-icon {

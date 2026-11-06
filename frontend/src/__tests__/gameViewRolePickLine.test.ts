@@ -71,7 +71,12 @@ async function mountWith(state: GameState) {
   const wrapper = mount(GameView, {
     global: {
       plugins: [pinia, router],
-      stubs: { PlayerSlot: true, VolumeControl: true, RoleRevealCard: true, ActionMenu: true },
+      stubs: {
+        PlayerSlot: true,
+        VolumeControl: true,
+        RoleRevealCard: { template: '<div><slot /></div>' },
+        ActionMenu: true,
+      },
     },
   })
   await flushPromises()
