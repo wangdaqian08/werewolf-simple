@@ -27,13 +27,17 @@
     <div class="camps">
       <div data-testid="stats-wolf">
         🐺 {{ $t('account.stats.wolf') }}
-        <span class="win">{{ stats.wolf.wins }}{{ $t('account.stats.win') }}</span> ·
-        <span class="lose">{{ stats.wolf.losses }}{{ $t('account.stats.loss') }}</span>
+        <div class="rec">
+          <span class="win">{{ stats.wolf.wins }}{{ $t('account.stats.win') }}</span> ·
+          <span class="lose">{{ stats.wolf.losses }}{{ $t('account.stats.loss') }}</span>
+        </div>
       </div>
       <div data-testid="stats-good">
         🌾 {{ $t('account.stats.good') }}
-        <span class="win">{{ stats.good.wins }}{{ $t('account.stats.win') }}</span> ·
-        <span class="lose">{{ stats.good.losses }}{{ $t('account.stats.loss') }}</span>
+        <div class="rec">
+          <span class="win">{{ stats.good.wins }}{{ $t('account.stats.win') }}</span> ·
+          <span class="lose">{{ stats.good.losses }}{{ $t('account.stats.loss') }}</span>
+        </div>
       </div>
     </div>
     <p class="lbl">{{ $t('account.stats.recent') }}</p>
@@ -113,6 +117,10 @@ defineProps<{ stats: UserStats }>()
   background: var(--paper);
   border-radius: 0.375rem;
   padding: 0.375rem 0.5rem;
+}
+.rec {
+  white-space: nowrap;
+  margin-top: 0.125rem;
 }
 .lbl {
   font-size: 0.75rem;

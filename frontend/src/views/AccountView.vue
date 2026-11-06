@@ -471,6 +471,10 @@ onMounted(async () => {
   color: var(--green);
 }
 
+.account-card > .guest-note {
+  margin: -0.5rem 0 1rem;
+}
+
 .guest-note,
 .empty {
   font-size: 0.75rem;
