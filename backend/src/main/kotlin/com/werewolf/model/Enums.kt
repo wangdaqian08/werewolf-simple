@@ -39,6 +39,21 @@ enum class PlayerRole(val isWolf: Boolean = false) {
         }
 }
 
+enum class RolePickChoice(val perkCode: String?) {
+    NONE(null), WOLF("ROLE_PICK_WOLF"), GOD("ROLE_PICK_GOD"), VILLAGER("ROLE_PICK_VILLAGER");
+
+    fun matches(role: PlayerRole): Boolean = this != NONE && campOf(role) == this
+
+    companion object {
+        fun fromPerkCode(code: String): RolePickChoice? = entries.firstOrNull { it.perkCode != null && it.perkCode == code }
+        fun campOf(role: PlayerRole): RolePickChoice = when {
+            role.isWolf -> WOLF
+            role.isGod -> GOD
+            else -> VILLAGER
+        }
+    }
+}
+
 enum class LearnedSkill { NONE, CHECK_ROLE, CHECK_ALIGNMENT, POISON, PROTECT, SHOOT }
 
 
