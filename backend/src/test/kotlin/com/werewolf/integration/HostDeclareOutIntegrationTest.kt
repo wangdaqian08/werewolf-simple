@@ -82,7 +82,7 @@ class HostDeclareOutIntegrationTest {
         val room = restTemplate.postForEntity(
             CREATE_ROOM_URL,
             HttpEntity(
-                mapOf(FIELD_CONFIG to mapOf(
+                mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, 
                     FIELD_TOTAL_PLAYERS to 6, "wolfCount" to 2,
                     "roles" to listOf("WEREWOLF", "SEER", "HUNTER", "VILLAGER", "VILLAGER"),
                     "hasSheriff" to true,

@@ -102,7 +102,7 @@ class NightAudioSequenceGuaranteeIntegrationTest {
         val roomBody = restTemplate.postForEntity(
             CREATE_ROOM_URL,
             HttpEntity(
-                mapOf(FIELD_CONFIG to mapOf(
+                mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, 
                     FIELD_TOTAL_PLAYERS to 4,
                     "roles" to emptyList<String>(),
                     "hasSheriff" to false,
@@ -309,7 +309,7 @@ class NightAudioSequenceGuaranteeIntegrationTest {
         val roomBody = restTemplate.postForEntity(
             CREATE_ROOM_URL,
             HttpEntity(
-                mapOf(FIELD_CONFIG to mapOf(
+                mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, 
                     FIELD_TOTAL_PLAYERS to 6,
                     "roles" to listOf("SEER", "WITCH", "GUARD"),
                     "hasSheriff" to false,

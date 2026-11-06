@@ -66,7 +66,7 @@ class OneWaitingRoomIntegrationTest {
         rest.postForEntity(url, HttpEntity(body, headers(token)), Map::class.java)
 
     private fun create(token: String, seats: Int = 6, wolves: Int = 2, roles: List<PlayerRole> = ROLES): Room {
-        val body = post(CREATE_ROOM_URL, mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to seats, "wolfCount" to wolves, FIELD_ROLES to roles)), token).body!!
+        val body = post(CREATE_ROOM_URL, mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, FIELD_TOTAL_PLAYERS to seats, "wolfCount" to wolves, FIELD_ROLES to roles)), token).body!!
         return Room((body[FIELD_ROOM_ID] as String).toInt(), body[FIELD_ROOM_CODE] as String)
     }
 

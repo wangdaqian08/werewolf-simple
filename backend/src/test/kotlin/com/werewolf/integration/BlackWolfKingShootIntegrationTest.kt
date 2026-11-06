@@ -105,7 +105,7 @@ class BlackWolfKingShootIntegrationTest {
             CREATE_ROOM_URL,
             HttpEntity(
                 mapOf(
-                    FIELD_CONFIG to mapOf(
+                    FIELD_CONFIG to mapOf("perksAllowed" to false, 
                         FIELD_TOTAL_PLAYERS to 6,
                         "wolfCount" to 2,
                         "roles" to listOf("BLACK_WOLF_KING", "HUNTER", "GUARD"),

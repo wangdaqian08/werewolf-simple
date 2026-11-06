@@ -127,7 +127,7 @@ class MechWolfMediumNightIntegrationTest {
         val roomBody = restTemplate.postForEntity(
             CREATE_ROOM_URL,
             HttpEntity(
-                mapOf(FIELD_CONFIG to mapOf(
+                mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, 
                     FIELD_TOTAL_PLAYERS to 10,
                     "wolfCount" to 3,
                     "roles" to listOf("MECHANICAL_WOLF", "WITCH", "GUARD", "MEDIUM", "HUNTER", "IDIOT"),
