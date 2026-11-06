@@ -34,3 +34,25 @@ export async function cleanupRoomData(hostPage: Page, roomCode: string): Promise
     console.warn(`[test-support] cleanup room=${roomCode} failed: ${(e as Error).message}`)
   }
 }
+
+/**
+ * Top up [userId]'s wallet by [amount] credits through the e2e-only
+ * POST /api/test-support/wallet/grant. Throws on failure: a spec that buys a
+ * perk cannot proceed without the credits. Returns the new balance.
+ */
+export async function grantCredits(page: Page, userId: string, amount: number): Promise<number> {
+  const result = await page.evaluate(
+    async ([uid, amt]) => {
+      const res = await fetch('/api/test-support/wallet/grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: uid, amount: amt }),
+      })
+      return { status: res.status, body: res.ok ? await res.json() : null }
+    },
+    [userId, amount] as const,
+  )
+  if (result.status !== 200)
+    throw new Error(`grantCredits ${userId} +${amount}: HTTP ${result.status}`)
+  return (result.body as { balance: number }).balance
+}

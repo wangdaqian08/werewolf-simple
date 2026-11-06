@@ -149,6 +149,7 @@ if [ "$PLAYER_NUM" -eq 0 ]; then
     [ -z "$VIEW_TOKEN" ] && VIEW_TOKEN=$TOKEN
 
     if should_ready "$SEAT"; then
+      post "$TOKEN" "/room/role-pick" "{\"roomId\":$ROOM_ID,\"choice\":\"NONE\"}" > /dev/null
       READY_RESP=$(post "$TOKEN" "/room/ready" "{\"ready\":true,\"roomId\":$ROOM_ID}")
       OK=$(echo "$READY_RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("success",False))')
       [ "$OK" = "True" ] \
@@ -203,6 +204,7 @@ else
 
     STATUS="NOT_READY"
     if should_ready "$SEAT"; then
+      post "$TOKEN" "/room/role-pick" "{\"roomId\":$ROOM_ID,\"choice\":\"NONE\"}" > /dev/null
       READY_RESP=$(post "$TOKEN" "/room/ready" "{\"ready\":true,\"roomId\":$ROOM_ID}")
       OK=$(echo "$READY_RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("success",False))')
       [ "$OK" = "True" ] && STATUS="READY" || fail "$NICK ready failed: $READY_RESP"

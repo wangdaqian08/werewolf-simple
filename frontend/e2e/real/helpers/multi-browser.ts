@@ -389,6 +389,9 @@ export async function setupGame(
   const emptySlot = hostPage.locator('.slot-selectable').first()
   await emptySlot.click()
 
+  // 点将卡: Start stays disabled until the host has chosen a card (bots chose NONE in join-room.sh).
+  await hostPage.getByTestId('role-pick-NONE').click()
+
   // Host has no Ready button (only guests do). Claiming the seat auto-readies the host.
   // Wait for Start Game to become enabled.
   const startBtn = hostPage.getByRole('button', { name: /Start Game|開始遊戲/i })

@@ -79,6 +79,8 @@ test.describe('Room board — grow a full room, share the link', () => {
     await expect(host.getByTestId('room-seat-1')).toContainText('BoardHost', {
       timeout: UI_TIMEOUT,
     })
+    // 点将卡: Start stays disabled until the host has chosen a card.
+    await host.getByTestId('role-pick-NONE').click()
     joinBots(code, 5, true)
     await expect(host.getByTestId('start-game-btn')).toBeEnabled({ timeout: UI_TIMEOUT })
     await shot(host, '3-room-full')
