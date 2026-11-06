@@ -522,7 +522,7 @@ export default {
     balance: 'Balance ◈{n}',
     frozen: '(frozen {n})',
     none: 'None',
-    noneDesc: 'Random deal',
+    noneDesc: 'Random deal (fearless — great at any role)',
     free: 'Free',
     wolf: 'Wolf',
     wolfDesc: 'Werewolf / Wolf King / Mech Wolf',

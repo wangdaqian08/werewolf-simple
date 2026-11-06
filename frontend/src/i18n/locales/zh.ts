@@ -516,7 +516,7 @@ export default {
     balance: '餘額 ◈{n}',
     frozen: '（凍結 {n}）',
     none: '不使用',
-    noneDesc: '隨機發牌',
+    noneDesc: '隨機發牌（無所畏懼，哪個角色都玩得好）',
     free: '免費',
     wolf: '狼人',
     wolfDesc: '狼人 / 狼王 / 機械狼',

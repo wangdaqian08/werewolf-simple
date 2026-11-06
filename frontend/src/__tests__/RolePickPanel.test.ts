@@ -53,6 +53,7 @@ describe('RolePickPanel', () => {
     expect(card(w, 'WOLF').text()).toContain('◈20')
     expect(card(w, 'WOLF').text()).toContain('本局 3 個名額')
     expect(card(w, 'NONE').text()).not.toContain('個名額')
+    expect(card(w, 'NONE').text()).toContain('無所畏懼，哪個角色都玩得好')
   })
 
   it('disables a card whose camp has 0 seats', async () => {
