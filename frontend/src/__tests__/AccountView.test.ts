@@ -262,6 +262,19 @@ describe('AccountView', () => {
     expect(rows[1]!.text()).not.toContain('結算')
   })
 
+  it('settled perk row shows one separator dot, and each date as its own unbreakable piece', async () => {
+    h.getMyPerksMock.mockResolvedValue([perk('CONSUMED', '2026-06-09T22:00:00')])
+    const { wrapper } = await mountAccount()
+    const row = wrapper.find('[data-testid="perk-row"]')
+    expect(row.text().match(/·/g)).toHaveLength(1)
+    const created = row.find('[data-testid="perk-created"]')
+    const settled = row.find('[data-testid="perk-settled"]')
+    expect(created.classes()).toContain('nowrap')
+    expect(settled.classes()).toContain('nowrap')
+    expect(created.text()).not.toContain('結算')
+    expect(settled.text()).toContain('結算')
+  })
+
   it('not logged in: shows the sign-in prompt and fetches nothing', async () => {
     localStorage.clear()
     const pinia = createPinia()

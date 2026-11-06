@@ -87,12 +87,14 @@
               </div>
               <div class="row-sub">
                 <span>◈{{ perk.pricePaid }}</span>
-                <span
-                  >{{ fmtDate(perk.createdAt)
-                  }}<template v-if="perk.settledAt">
-                    · {{ $t('account.settled', { date: fmtDate(perk.settledAt) }) }}</template
-                  ></span
-                >
+                <span class="dates">
+                  <span class="nowrap" data-testid="perk-created">{{
+                    fmtDate(perk.createdAt)
+                  }}</span>
+                  <span v-if="perk.settledAt" class="nowrap" data-testid="perk-settled">{{
+                    $t('account.settled', { date: fmtDate(perk.settledAt) })
+                  }}</span>
+                </span>
               </div>
             </li>
           </ul>
@@ -451,6 +453,19 @@ onMounted(async () => {
   font-size: 0.75rem;
   color: var(--muted);
   margin-top: 0.125rem;
+}
+
+/* Created + settled dates: each date stays on one line; the pair may wrap between them. */
+.dates {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  column-gap: 0.375rem;
+  text-align: right;
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 .status-badge {
