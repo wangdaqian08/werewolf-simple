@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.transaction.annotation.Transactional
 import java.util.*
 
@@ -118,6 +119,16 @@ interface GamePlayerRepository : JpaRepository<GamePlayer, Int> {
     fun findByGameIdAndUserId(gameId: Int, userId: String): Optional<GamePlayer>
     fun existsByGameIdAndUserId(gameId: Int, userId: String): Boolean
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long
+
+    /** Counted games only: ended with a winner (cancelled and running games excluded). */
+    @Query("select new com.werewolf.service.FinishedResult(gp.userId, gp.role, g.winner, g.endedAt) " +
+        "from GamePlayer gp, Game g where gp.gameId = g.gameId and g.endedAt is not null and g.winner is not null")
+    fun findFinishedResults(): List<com.werewolf.service.FinishedResult>
+
+    @Query("select new com.werewolf.service.FinishedResult(gp.userId, gp.role, g.winner, g.endedAt) " +
+        "from GamePlayer gp, Game g where gp.gameId = g.gameId and gp.userId = :userId " +
+        "and g.endedAt is not null and g.winner is not null")
+    fun findFinishedResultsFor(@Param("userId") userId: String): List<com.werewolf.service.FinishedResult>
 }
 
 interface NightPhaseRepository : JpaRepository<NightPhase, Int> {
