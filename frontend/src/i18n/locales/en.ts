@@ -515,6 +515,8 @@ export default {
     campWolf: 'wolf',
     campGod: 'a good role',
     campVillager: 'villager',
+    loadFailed: 'Failed to load role card',
+    retry: 'Retry',
     immunityHint:
       'Note: First Night Immunity has no effect if you draw wolf; its {price}◈ is refunded when the game ends.',
     status: 'Pick a role card first (you can choose "None")',

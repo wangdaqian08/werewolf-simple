@@ -199,4 +199,17 @@ describe('RoomView role-pick gate', () => {
     await flushPromises()
     expect(w.find('[data-testid="role-pick-error"]').text()).toContain('Insufficient credits')
   })
+
+  it('a failed load shows a retry control, keeps Ready gated, and recovers on retry', async () => {
+    h.getRolePickMock.mockRejectedValueOnce(new Error('boom'))
+    const w = await mountRoom('u2', room({ u2Ready: false }))
+    expect(w.find('[data-testid="role-pick-retry"]').exists()).toBe(true)
+    expect(readyBtn(w).disabled).toBe(true)
+    await w.find('[data-testid="role-pick-retry"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="role-pick-retry"]').exists()).toBe(false)
+    await w.find('[data-testid="role-pick-NONE"]').trigger('click')
+    await flushPromises()
+    expect(readyBtn(w).disabled).toBe(false)
+  })
 })

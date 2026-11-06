@@ -508,6 +508,8 @@ export default {
     campWolf: '狼',
     campGod: '神',
     campVillager: '村民',
+    loadFailed: '點將卡載入失敗',
+    retry: '重試',
     immunityHint: '提示：拿到狼人時首夜免死無效，它的 {price}◈ 會在遊戲結束時退回。',
     status: '請先選擇點將卡（可選「不使用」）',
   },

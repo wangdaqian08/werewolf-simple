@@ -128,6 +128,17 @@
         :immunity-price="immunityPrice"
         @choose="handleChooseRolePick"
       />
+      <div v-if="perksEnabled && !rolePick" class="perk-error" data-testid="role-pick-load-error">
+        {{ $t('rolePick.loadFailed') }}
+        <button
+          type="button"
+          class="btn btn-outline perk-btn"
+          data-testid="role-pick-retry"
+          @click="loadRolePick"
+        >
+          {{ $t('rolePick.retry') }}
+        </button>
+      </div>
       <p v-if="rolePickError" class="perk-error" data-testid="role-pick-error">
         {{ rolePickError }}
       </p>
@@ -409,7 +420,7 @@ async function loadRolePick() {
   try {
     rolePick.value = await roomService.getRolePick(roomStore.room.roomId)
   } catch {
-    /* panel stays hidden; backend still gates Ready/Start */
+    /* gate stays closed; the load-error row offers a retry */
   }
 }
 
