@@ -1,6 +1,7 @@
 package com.werewolf.service
 
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.model.CreditTxType
 import com.werewolf.repository.CreditTransactionRepository
 import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GameEventRepository
@@ -52,6 +53,7 @@ class TestSupportService(
     private val creditTransactionRepository: CreditTransactionRepository,
     private val gameSettlementRepository: GameSettlementRepository,
     private val nightOrchestrator: NightOrchestrator,
+    private val walletService: WalletService,
 ) {
 
     private val log = LoggerFactory.getLogger(TestSupportService::class.java)
@@ -111,5 +113,12 @@ class TestSupportService(
 
         log.info("[TestSupport] deleteRoomCascade code={} -> {}", roomCode, counts)
         return counts
+    }
+
+    /** Credit [userId] [amount] credits (e2e specs that buy perks); returns the new balance. */
+    @Transactional
+    fun grantCredits(userId: String, amount: Int): Int {
+        walletService.credit(userId, amount, CreditTxType.ADMIN_GRANT, note = "e2e")
+        return walletService.balance(userId)
     }
 }

@@ -353,4 +353,39 @@ class PerkControllerTest {
         assertThat(perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)).isEmpty()
     }
 
+
+    private fun ensureWolfCard() {
+        if (perkRepository.findById("ROLE_PICK_WOLF").isEmpty)
+            perkRepository.save(Perk(perkCode = "ROLE_PICK_WOLF", name = "w", description = "d", priceCredits = 20))
+    }
+
+    private fun rolePick(token: String, roomId: Int, choice: String) =
+        restTemplate.postForEntity(
+            "/api/room/role-pick", HttpEntity(mapOf("roomId" to roomId, "choice" to choice), headers(token)), Map::class.java,
+        )
+
+    @Test
+    fun `POST role-pick returns the caller's view`() {
+        ensureWolfCard()
+        val (token, userId) = login("RolePick")
+        val (roomId, _) = createRoom(token)
+        walletService.credit(userId, 50, com.werewolf.model.CreditTxType.GAME_REWARD)
+
+        val resp = rolePick(token, roomId, "WOLF")
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        @Suppress("UNCHECKED_CAST")
+        val body = resp.body!! as Map<String, Any?>
+        assertThat(body["choice"]).isEqualTo("WOLF")
+        assertThat(body["frozenCredits"]).isEqualTo(20)
+        assertThat((body["prices"] as Map<*, *>)["WOLF"]).isEqualTo(20)
+        assertThat((body["seats"] as Map<*, *>)["WOLF"]).isNotNull()
+    }
+
+    @Test
+    fun `POST role-pick with an unknown choice returns 400`() {
+        val (token, _) = login("RolePickBad")
+        val (roomId, _) = createRoom(token)
+        assertThat(rolePick(token, roomId, "DRAGON").statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+    }
 }

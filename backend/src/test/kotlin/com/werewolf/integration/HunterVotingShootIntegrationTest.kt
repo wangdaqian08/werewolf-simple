@@ -106,7 +106,7 @@ class HunterVotingShootIntegrationTest {
             CREATE_ROOM_URL,
             HttpEntity(
                 mapOf(
-                    FIELD_CONFIG to mapOf(
+                    FIELD_CONFIG to mapOf("perksAllowed" to false, 
                         FIELD_TOTAL_PLAYERS to 6,
                         "roles" to listOf("WEREWOLF", "SEER", "HUNTER", "VILLAGER", "VILLAGER"),
                         "hasSheriff" to false,

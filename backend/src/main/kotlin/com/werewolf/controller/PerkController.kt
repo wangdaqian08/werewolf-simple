@@ -6,16 +6,21 @@ import com.werewolf.service.PerkService
 import com.werewolf.service.PerkTakenException
 import com.werewolf.service.PerksDisabledException
 import com.werewolf.service.PlayerNotInRoomException
+import com.werewolf.service.RolePickLockedException
+import com.werewolf.service.RolePickService
+import com.werewolf.service.RolePickUnavailableException
 import com.werewolf.service.RoomNotFoundException
 import com.werewolf.service.RoomNotOpenException
+import com.werewolf.model.RolePickChoice
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 
 data class PerkActionRequest(val roomId: Int, val perkCode: String)
+data class RolePickRequest(val roomId: Int, val choice: RolePickChoice)
 
 @RestController
-class PerkController(private val perkService: PerkService) {
+class PerkController(private val perkService: PerkService, private val rolePickService: RolePickService) {
 
     @GetMapping("/api/perks")
     fun catalog(): ResponseEntity<Any> = ResponseEntity.ok(perkService.catalog())
@@ -67,6 +72,27 @@ class PerkController(private val perkService: PerkService) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         } catch (e: PerkNotFoundException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        }
+    }
+
+    @GetMapping("/api/room/{roomId}/role-pick")
+    fun myRolePick(@PathVariable roomId: Int, authentication: Authentication): ResponseEntity<Any> =
+        rolePickResponse { rolePickService.myPick(authentication.principal as String, roomId) }
+
+    @PostMapping("/api/room/role-pick")
+    fun chooseRolePick(@RequestBody body: RolePickRequest, authentication: Authentication): ResponseEntity<Any> =
+        rolePickResponse { rolePickService.choose(authentication.principal as String, body.roomId, body.choice) }
+
+    // Every domain failure is a 400 {"error": message}; unparseable bodies are already 400 from Spring.
+    private fun rolePickResponse(block: () -> Any): ResponseEntity<Any> = try {
+        ResponseEntity.ok(block())
+    } catch (e: RuntimeException) {
+        when (e) {
+            is RoomNotFoundException, is RoomNotOpenException, is PerksDisabledException,
+            is PlayerNotInRoomException, is InsufficientCreditsException,
+            is RolePickLockedException, is RolePickUnavailableException ->
+                ResponseEntity.badRequest().body(mapOf("error" to e.message))
+            else -> throw e
         }
     }
 }

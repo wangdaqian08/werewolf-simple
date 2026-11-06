@@ -54,7 +54,7 @@ class PerkSettlementService(
 
     /** Generic verdict per perk type; unknown perks fail safe to refund. */
     private fun tookEffect(a: PerkActivation): Boolean = when (a.perkCode) {
-        PERK_NIGHT1_IMMUNITY -> a.status == PerkActivationStatus.ACTIVE && a.triggeredAt != null
+        PERK_NIGHT1_IMMUNITY, PERK_ROLE_PICK_WOLF, PERK_ROLE_PICK_GOD, PERK_ROLE_PICK_VILLAGER -> a.status == PerkActivationStatus.ACTIVE && a.triggeredAt != null
         else -> false
     }
 }

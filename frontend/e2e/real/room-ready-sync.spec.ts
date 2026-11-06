@@ -59,10 +59,19 @@ async function createWaitingRoom(browser: Browser): Promise<{
   // Host claims a seat (auto-readies the host): 5 of the 6 seats stay free.
   await host.locator('.slot-selectable').first().click()
   await expect(host.locator('.slot-selectable')).toHaveCount(5, { timeout: 10_000 })
+  // 点将卡: Start stays disabled until the host has chosen a card.
+  await host.getByTestId('role-pick-NONE').click()
   return { hctx, host, roomId, roomCode }
 }
 
 async function setReady(token: string, roomId: string, ready: boolean) {
+  // Ready is rejected without a role-pick choice (a no-op when NONE is already held).
+  if (ready)
+    await fetch(`${API}/room/role-pick`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ roomId: Number(roomId), choice: 'NONE' }),
+    })
   await fetch(`${API}/room/ready`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

@@ -209,6 +209,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useScrollLock } from '@/composables/useScrollLock'
 import { gameService } from '@/services/gameService'
 import type {
   ActionLogEntry,
@@ -221,6 +222,7 @@ import type {
 } from '@/types'
 
 const props = defineProps<{ gameId: number; open: boolean }>()
+useScrollLock(() => props.open)
 defineEmits<{ close: [] }>()
 
 interface Round {

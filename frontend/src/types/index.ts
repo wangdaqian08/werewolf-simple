@@ -83,6 +83,16 @@ export interface Perk {
   priceCredits: number
 }
 
+/** 点将卡 — pre-ready camp pick (private to the caller). */
+export type RolePickChoice = 'NONE' | 'WOLF' | 'GOD' | 'VILLAGER'
+export type PaidRolePick = Exclude<RolePickChoice, 'NONE'>
+export interface RolePickView {
+  choice: RolePickChoice | null
+  frozenCredits: number
+  prices: Partial<Record<PaidRolePick, number>>
+  seats: Record<PaidRolePick, number>
+}
+
 /** A live perk activation in the room — visible to every room member. */
 export interface PerkActivation {
   userId: string
@@ -318,12 +328,20 @@ export interface ReviewReward {
   amount: number
 }
 
+/** A 点将卡 bought for this game; [tookEffect] false = the deal did not give the player the camp. */
+export interface ReviewRolePick {
+  player: ReviewPlayer
+  choice: 'WOLF' | 'GOD' | 'VILLAGER'
+  tookEffect: boolean
+}
+
 export interface GameReview {
   winner: 'WEREWOLF' | 'VILLAGER' | null
   players: ReviewPlayer[]
   rounds: ReviewRound[]
   /** Empty when the game was never settled. */
   rewards: ReviewReward[]
+  rolePicks: ReviewRolePick[]
 }
 
 // ── Player review (玩家视角复盘) ───────────────────────────────────────────────
@@ -528,6 +546,8 @@ export interface GameState {
   dayNumber: number
   players: GamePlayer[]
   myRole?: PlayerRole
+  /** Requesting user's own role-pick card outcome; null/absent when none held. */
+  myRolePick?: { choice: PaidRolePick; tookEffect: boolean; price: number } | null
   /** Other wolves' userIds — sent only to wolves (empty for everyone else). */
   wolfTeammates?: string[]
   // The backend response key is `sheriffUserId` (see GameService.getGameState).

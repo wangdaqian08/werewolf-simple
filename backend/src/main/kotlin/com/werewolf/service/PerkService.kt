@@ -12,6 +12,13 @@ import org.springframework.transaction.annotation.Transactional
 /** First-night immunity perk: wolf attack on the holder fails on night 1. */
 const val PERK_NIGHT1_IMMUNITY = "NIGHT1_IMMUNITY"
 
+const val PERK_ROLE_PICK_WOLF = "ROLE_PICK_WOLF"
+const val PERK_ROLE_PICK_GOD = "ROLE_PICK_GOD"
+const val PERK_ROLE_PICK_VILLAGER = "ROLE_PICK_VILLAGER"
+
+/** Role-pick cards are private: never listed in catalog, DTOs or broadcasts. */
+fun isRolePickCode(code: String): Boolean = code.startsWith("ROLE_PICK_")
+
 /**
  * Perk purchase/lifecycle. Activation is charge-at-click and strictly
  * first-come-first-served: the pessimistic room lock serializes concurrent
@@ -37,7 +44,7 @@ class PerkService(
     private val log = LoggerFactory.getLogger(PerkService::class.java)
 
     @Transactional(readOnly = true)
-    fun catalog() = perkRepository.findByActiveTrue().map {
+    fun catalog() = perkRepository.findByActiveTrue().filterNot { isRolePickCode(it.perkCode) }.map {
         mapOf(
             "perkCode" to it.perkCode,
             "name" to it.name,
@@ -68,6 +75,7 @@ class PerkService(
     fun activate(userId: String, roomId: Int, perkCode: String) {
         // Pessimistic lock serializes all perk activations for this room —
         // the FCFS check below is race-free even on H2 (no partial index).
+        if (isRolePickCode(perkCode)) throw PerkNotFoundException("Unknown perk: $perkCode")
         val room = roomRepository.findByIdForUpdate(roomId).orElse(null)
             ?: throw RoomNotFoundException("Room not found")
         if (room.status != RoomStatus.WAITING)
@@ -98,6 +106,7 @@ class PerkService(
 
     @Transactional
     fun withdraw(userId: String, roomId: Int, perkCode: String) {
+        if (isRolePickCode(perkCode)) throw PerkNotFoundException("Unknown perk: $perkCode")
         val room = roomRepository.findByIdForUpdate(roomId).orElse(null)
             ?: throw RoomNotFoundException("Room not found")
         if (room.status != RoomStatus.WAITING)
@@ -108,7 +117,7 @@ class PerkService(
             .firstOrNull { it.userId == userId && it.perkCode == perkCode }
             ?: throw PerkNotFoundException("No active perk to withdraw")
 
-        refund(activation)
+        refundActivation(activation)
         broadcastPerkUpdate(roomId)
     }
 
@@ -128,9 +137,14 @@ class PerkService(
     @Transactional
     fun onGameStart(roomId: Int, gameId: Int, players: List<GamePlayer>) {
         if (perkActivationRepository.bindToGame(roomId, gameId) == 0) return
+        // Role picks that came true are marked now so settlement CONSUMES them.
+        RolePickChoice.entries.mapNotNull { choice -> choice.perkCode?.let { choice to it } }.forEach { (choice, code) ->
+            val winners = players.filter { choice.matches(it.role) }.map { it.userId }
+            if (winners.isNotEmpty()) perkActivationRepository.markTriggered(gameId, code, winners)
+        }
         val wolfUserIds = players.filter { it.role.isWolf }.map { it.userId }
         if (wolfUserIds.isEmpty()) return
-        if (perkActivationRepository.voidWolfHolders(gameId, wolfUserIds) > 0) {
+        if (perkActivationRepository.voidWolfHolders(gameId, PERK_NIGHT1_IMMUNITY, wolfUserIds) > 0) {
             perkActivationRepository.findByGameId(gameId)
                 .filter { it.status == PerkActivationStatus.VOID }
                 .forEach {
@@ -170,7 +184,7 @@ class PerkService(
     fun refundActiveForUser(roomId: Int, userId: String) {
         perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)
             .filter { it.userId == userId && it.gameId == null }
-            .forEach { refund(it) }
+            .forEach { refundActivation(it) }
     }
 
     /**
@@ -180,7 +194,7 @@ class PerkService(
      * NOTE: settleIfLive clears the persistence context — [activation] is
      * detached after the gate; only plain fields may be read from it.
      */
-    private fun refund(activation: PerkActivation) {
+    internal fun refundActivation(activation: PerkActivation) {
         val id = activation.id ?: error("activation has no id")
         if (perkActivationRepository.settleIfLive(id, PerkActivationStatus.REFUNDED) == 0) return
         walletService.credit(
@@ -191,10 +205,28 @@ class PerkService(
             activation.roomId, activation.userId, activation.perkCode, activation.pricePaid)
     }
 
+    /** ACTIVE unbound role-pick cards in the room: userId -> choice. */
+    @Transactional(readOnly = true)
+    fun liveRolePicks(roomId: Int): Map<String, RolePickChoice> =
+        perkActivationRepository.findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)
+            .filter { it.gameId == null && isRolePickCode(it.perkCode) }
+            .mapNotNull { a -> RolePickChoice.fromPerkCode(a.perkCode)?.let { a.userId to it } }
+            .toMap()
+
+    /** The caller's own role-pick row for [gameId] (any status), or null. Owner-only data. */
+    @Transactional(readOnly = true)
+    fun myRolePick(gameId: Int, userId: String): Map<String, Any>? {
+        val a = perkActivationRepository.findByGameId(gameId)
+            .firstOrNull { it.userId == userId && isRolePickCode(it.perkCode) } ?: return null
+        val choice = RolePickChoice.fromPerkCode(a.perkCode) ?: return null
+        return mapOf("choice" to choice.name, "tookEffect" to (a.triggeredAt != null), "price" to a.pricePaid)
+    }
+
     private fun broadcastPerkUpdate(roomId: Int) {
         val perkNames = perkRepository.findAll().associate { it.perkCode to it.name }
         val activations = perkActivationRepository
             .findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)
+            .filterNot { isRolePickCode(it.perkCode) }
             .map {
                 mapOf(
                     "userId" to it.userId,

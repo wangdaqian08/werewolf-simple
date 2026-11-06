@@ -4,7 +4,9 @@
       <div class="role-card-sheet">
         <div class="role-card-header">
           <span>{{ title ?? $t('roleCard.title') }}</span>
-          <button class="history-close" @click="emit('close')">✕</button>
+          <button class="history-close" data-testid="role-card-close" @click="emit('close')">
+            ✕
+          </button>
         </div>
         <div class="role-card-body">
           <div class="rc-emoji">{{ roleDefinition(role)?.emoji }}</div>
@@ -40,6 +42,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
+import { useScrollLock } from '@/composables/useScrollLock'
 import { t } from '@/i18n'
 import type { GamePlayer, RoleHistory as RoleHistoryData } from '@/types'
 import {
@@ -61,6 +64,7 @@ const props = defineProps<{
   history?: RoleHistoryData | null
 }>()
 const emit = defineEmits<{ close: [] }>()
+useScrollLock(() => true)
 
 const team = computed(() =>
   isWolfRole(props.role) ? 'wolf' : props.role === 'VILLAGER' ? 'village' : 'special',

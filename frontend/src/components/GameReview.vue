@@ -42,6 +42,25 @@
         >
       </div>
     </template>
+    <template v-if="review.rolePicks.length">
+      <div class="rv-line rv-title">{{ $t('rv.rolePicksTitle') }}</div>
+      <div class="rv-rewards" data-testid="review-role-picks">
+        <div
+          v-for="p in review.rolePicks"
+          :key="p.player.userId"
+          class="rv-reward-row"
+          :data-testid="`review-role-pick-${p.player.seatIndex}`"
+        >
+          <span :class="{ 'rv-wolf': isWolfRole(p.player.role) }">
+            {{ $t('common.seatNick', { n: p.player.seatIndex, name: p.player.nickname }) }}
+            · {{ $t(`rv.rolePickCamp.${p.choice}`) }}
+          </span>
+          <span class="rv-reward-amount">{{
+            $t(p.tookEffect ? 'rv.rolePickHit' : 'rv.rolePickMiss')
+          }}</span>
+        </div>
+      </div>
+    </template>
     <template v-if="review.rewards.length">
       <div class="rv-line rv-title">{{ $t('rv.rewardsTitle') }}</div>
       <div class="rv-rewards" data-testid="review-rewards">

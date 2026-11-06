@@ -11,6 +11,7 @@ import type {
   ReviewNight,
   ReviewPlayer,
   ReviewReward,
+  ReviewRolePick,
   ReviewRound,
   ReviewVote,
 } from '@/types'
@@ -61,8 +62,11 @@ function render(
   winner: GameReviewData['winner'] = 'WEREWOLF',
   roster: ReviewPlayer[] = players,
   rewards: ReviewReward[] = [],
+  rolePicks: ReviewRolePick[] = [],
 ) {
-  return mount(GameReview, { props: { review: { winner, players: roster, rounds, rewards } } })
+  return mount(GameReview, {
+    props: { review: { winner, players: roster, rounds, rewards, rolePicks } },
+  })
 }
 const lines = (wrapper: ReturnType<typeof render>) =>
   wrapper.findAll('.rv-line').map((l) => l.text())
@@ -93,6 +97,29 @@ const turn = (
 })
 
 describe('GameReview', () => {
+  it('role picks: one row per pick with camp and whether it took effect', () => {
+    const w = render(
+      [],
+      'VILLAGER',
+      players,
+      [],
+      [
+        { player: w1, choice: 'WOLF', tookEffect: true },
+        { player: vil, choice: 'GOD', tookEffect: false },
+      ],
+    )
+
+    expect(w.find('[data-testid="review-role-picks"]').exists()).toBe(true)
+    expect(w.find('[data-testid="review-role-pick-1"]').text()).toContain('生效')
+    expect(w.find('[data-testid="review-role-pick-1"]').text()).toContain('狼人')
+    expect(w.find('[data-testid="review-role-pick-9"]').text()).toContain('未抽中')
+    expect(w.find('[data-testid="review-role-pick-9"]').text()).toContain('神')
+  })
+
+  it('role picks: no section when nobody picked', () => {
+    expect(render([]).find('[data-testid="review-role-picks"]').exists()).toBe(false)
+  })
+
   it('points: every player who earned is listed with their amount', () => {
     const w = render([], 'VILLAGER', players, [
       { player: w1, amount: 12 },

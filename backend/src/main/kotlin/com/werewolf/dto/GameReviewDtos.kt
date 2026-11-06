@@ -3,6 +3,7 @@ package com.werewolf.dto
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.werewolf.model.PlayerRole
+import com.werewolf.model.RolePickChoice
 import com.werewolf.model.WinnerSide
 
 /** God's-eye replay (上帝视角复盘) of a finished game, every player's true role shown. */
@@ -11,10 +12,14 @@ data class GameReview(
     val players: List<ReviewPlayer>,
     val rounds: List<ReviewRound>,
     val rewards: List<ReviewReward>,
+    /** Every 点将卡 bought, by seat; players with no card are absent. */
+    val rolePicks: List<ReviewRolePick>,
 )
 
 /** Credits a player earned from this game, read back from the ledger. Empty when the game was never settled. */
 data class ReviewReward(val player: ReviewPlayer, val amount: Int)
+
+data class ReviewRolePick(val player: ReviewPlayer, val choice: RolePickChoice, val tookEffect: Boolean)
 
 data class ReviewPlayer(val userId: String, val nickname: String, val seatIndex: Int, val role: PlayerRole)
 

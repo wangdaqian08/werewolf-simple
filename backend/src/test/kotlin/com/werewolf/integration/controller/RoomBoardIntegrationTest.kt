@@ -70,7 +70,7 @@ class RoomBoardIntegrationTest {
         val host = login("${prefix}Host")
         val body = post(
             CREATE_ROOM_URL,
-            mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to seats, "wolfCount" to 2, FIELD_ROLES to ROLES)),
+            mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, FIELD_TOTAL_PLAYERS to seats, "wolfCount" to 2, FIELD_ROLES to ROLES)),
             host,
         ).body!!
         val room = Room((body[FIELD_ROOM_ID] as String).toInt(), body[FIELD_ROOM_CODE] as String, host)

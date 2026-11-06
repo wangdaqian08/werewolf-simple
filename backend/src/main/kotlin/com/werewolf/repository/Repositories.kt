@@ -86,6 +86,8 @@ interface RoomPlayerRepository : JpaRepository<RoomPlayer, Int> {
     fun existsByRoomIdAndUserId(roomId: Int, userId: String): Boolean
     fun existsByRoomIdAndSeatIndex(roomId: Int, seatIndex: Int): Boolean
 
+    fun existsByRoomIdAndUserIdAndRolePickIsNull(roomId: Int, userId: String): Boolean
+
     @Modifying
     @Query("UPDATE RoomPlayer rp SET rp.status = :status WHERE rp.roomId = :roomId AND rp.userId = :userId")
     fun updateStatus(roomId: Int, userId: String, status: ReadyStatus): Int
@@ -243,14 +245,14 @@ interface PerkActivationRepository : JpaRepository<PerkActivation, Int> {
     )
     fun bindToGame(roomId: Int, gameId: Int): Int
 
-    /** Race-proof VOID for wolf-dealt holders: only flips bound ACTIVE rows. */
+    /** Race-proof VOID of [perkCode] for wolf-dealt holders: only flips bound ACTIVE rows. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
         "UPDATE PerkActivation a SET a.status = com.werewolf.model.PerkActivationStatus.VOID " +
-            "WHERE a.gameId = :gameId AND a.userId IN :wolfUserIds " +
+            "WHERE a.gameId = :gameId AND a.perkCode = :perkCode AND a.userId IN :wolfUserIds " +
             "AND a.status = com.werewolf.model.PerkActivationStatus.ACTIVE",
     )
-    fun voidWolfHolders(gameId: Int, wolfUserIds: Collection<String>): Int
+    fun voidWolfHolders(gameId: Int, perkCode: String, wolfUserIds: Collection<String>): Int
 
     /** Self-heal: live activations bound to already-ended games. */
     @Query(

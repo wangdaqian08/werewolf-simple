@@ -152,7 +152,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blob-report-${{ matrix.shard }}
+          name: blob-report-ui-${{ matrix.shard }}
           path: frontend/blob-report/
           retention-days: 1
 
@@ -180,7 +180,7 @@ jobs:
       - name: Download blob reports
         uses: actions/download-artifact@v4
         with:
-          pattern: blob-report-*
+          pattern: blob-report-ui-*  # not blob-report-integration-*, which may already be uploaded
           path: frontend/blob-report
           merge-multiple: true
 
@@ -307,7 +307,7 @@ jobs:
             specs: e2e/real/mech-wolf-rules-flow.spec.ts e2e/real/game-flow.spec.ts
             grep: ''
           - id: 9
-            specs: e2e/real/revote-flow.spec.ts e2e/real/game-flow-d1-outcomes.spec.ts e2e/real/host-declare-out-flow.spec.ts
+            specs: e2e/real/revote-flow.spec.ts e2e/real/game-flow-d1-outcomes.spec.ts e2e/real/host-declare-out-flow.spec.ts e2e/real/role-pick-card.spec.ts
             grep: ''
           - id: 10
             specs: e2e/real/idiot-flow.spec.ts e2e/real/self-destruct-rules-flow.spec.ts e2e/real/dead-role-audio.spec.ts e2e/real/hunter-night-death-flow.spec.ts e2e/real/reconnect-rejoin.spec.ts e2e/real/white-wolf-king-flow.spec.ts

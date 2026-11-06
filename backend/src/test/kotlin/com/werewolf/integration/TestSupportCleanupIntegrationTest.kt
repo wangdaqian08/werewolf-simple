@@ -1,5 +1,6 @@
 package com.werewolf.integration
 
+import com.werewolf.controller.GrantCreditsRequest
 import com.werewolf.controller.TestSupportController
 import com.werewolf.model.CreditTransaction
 import com.werewolf.model.CreditTxType
@@ -210,5 +211,24 @@ class TestSupportCleanupIntegrationTest {
         assertThat(body["rooms"]).isEqualTo(1)
         assertThat(body["games"]).isEqualTo(1)
         assertThat(body["room_players"]).isEqualTo(2)
+    }
+
+    @Test
+    fun `wallet grant credits the user as an ADMIN_GRANT and returns the new balance`() {
+        val u = newUser() // balance 70
+        val response = controller.grantCredits(GrantCreditsRequest(userId = u, amount = 100))
+        assertThat(response.statusCode.value()).isEqualTo(200)
+        assertThat(response.body?.get("balance")).isEqualTo(170)
+        assertThat(walletRepository.findById(u).map { it.balance }).contains(170)
+        assertThat(creditTransactionRepository.findAll().filter { it.userId == u })
+            .singleElement()
+            .satisfies({ assertThat(it.type).isEqualTo(CreditTxType.ADMIN_GRANT) })
+    }
+
+    @Test
+    fun `wallet grant rejects a non-positive amount`() {
+        val u = newUser()
+        assertThat(controller.grantCredits(GrantCreditsRequest(userId = u, amount = 0)).statusCode.value()).isEqualTo(400)
+        assertThat(walletRepository.findById(u).map { it.balance }).contains(70)
     }
 }

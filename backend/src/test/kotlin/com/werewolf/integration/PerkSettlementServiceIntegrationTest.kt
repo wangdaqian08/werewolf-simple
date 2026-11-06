@@ -410,4 +410,95 @@ class PerkSettlementServiceIntegrationTest {
         assertThat(ledger.filter { it.type == CreditTxType.GAME_REWARD && it.gameId != null }).isEmpty()
         assertBalanceChain(ledger)
     }
+
+    private fun ensureRolePickPerk() {
+        if (perkRepository.findById("ROLE_PICK_WOLF").isEmpty)
+            perkRepository.save(Perk(perkCode = "ROLE_PICK_WOLF", name = "pick", description = "test", priceCredits = 20))
+    }
+
+    /** Fund 100, pay 20 for a WOLF pick, then bind + deal [role]. */
+    private fun pickAndBind(userId: String, roomId: Int, gameId: Int, role: PlayerRole): PerkActivation {
+        fund(userId, 100)
+        val a = perkActivationRepository.save(
+            PerkActivation(roomId = roomId, userId = userId, perkCode = "ROLE_PICK_WOLF", pricePaid = 20),
+        )
+        walletService.debit(userId, 20, CreditTxType.PERK_SPEND, perkActivationId = a.id, note = "ROLE_PICK_WOLF")
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(GamePlayer(gameId = gameId, userId = userId, seatIndex = 0, role = role)),
+        )
+        return perkActivationRepository.findByGameId(gameId).single { it.perkCode == "ROLE_PICK_WOLF" }
+    }
+
+    @Test
+    fun `triggered role-pick is CONSUMED, no credit`() {
+        ensureRolePickPerk()
+        val user = newUser("rp")
+        val roomId = newRoom(user)
+        val gameId = nextGameId()
+        pickAndBind(user, roomId, gameId, PlayerRole.WEREWOLF)
+
+        perkSettlementService.settleForGame(gameId, cancelled = false)
+
+        assertThat(perkActivationRepository.findByGameId(gameId).single().status).isEqualTo(PerkActivationStatus.CONSUMED)
+        assertThat(walletService.balance(user)).isEqualTo(80)
+        assertThat(refundRows(user)).isEmpty()
+    }
+
+    @Test
+    fun `untriggered role-pick is REFUNDED with +20 and a REFUND ledger row`() {
+        ensureRolePickPerk()
+        val user = newUser("rp")
+        val roomId = newRoom(user)
+        val gameId = nextGameId()
+        val a = pickAndBind(user, roomId, gameId, PlayerRole.VILLAGER)
+
+        perkSettlementService.settleForGame(gameId, cancelled = false)
+
+        assertThat(perkActivationRepository.findByGameId(gameId).single().status).isEqualTo(PerkActivationStatus.REFUNDED)
+        assertThat(walletService.balance(user)).isEqualTo(100)
+        val refund = refundRows(user).single()
+        assertThat(refund.amount).isEqualTo(20)
+        assertThat(refund.perkActivationId).isEqualTo(a.id)
+    }
+
+    @Test
+    fun `cancelled game refunds a triggered role-pick`() {
+        ensureRolePickPerk()
+        val user = newUser("rp")
+        val roomId = newRoom(user)
+        val gameId = nextGameId()
+        pickAndBind(user, roomId, gameId, PlayerRole.WEREWOLF)
+
+        perkSettlementService.settleForGame(gameId, cancelled = true)
+
+        assertThat(perkActivationRepository.findByGameId(gameId).single().status).isEqualTo(PerkActivationStatus.REFUNDED)
+        assertThat(walletService.balance(user)).isEqualTo(100)
+    }
+
+    @Test
+    fun `wolf pick that took effect plus wolf-voided immunity - pick CONSUMED, immunity REFUNDED +30`() {
+        ensurePerk(); ensureRolePickPerk()
+        val user = newUser("rp")
+        val roomId = newRoom(user)
+        val gameId = nextGameId()
+        fund(user, 100)
+        perkService.activate(user, roomId, PERK_NIGHT1_IMMUNITY) // -30
+        val pick = perkActivationRepository.save(
+            PerkActivation(roomId = roomId, userId = user, perkCode = "ROLE_PICK_WOLF", pricePaid = 20),
+        )
+        walletService.debit(user, 20, CreditTxType.PERK_SPEND, perkActivationId = pick.id, note = "ROLE_PICK_WOLF")
+        perkService.onGameStart(
+            roomId, gameId,
+            listOf(GamePlayer(gameId = gameId, userId = user, seatIndex = 0, role = PlayerRole.WEREWOLF)),
+        )
+
+        perkSettlementService.settleForGame(gameId, cancelled = false)
+
+        val rows = perkActivationRepository.findByGameId(gameId).associateBy { it.perkCode }
+        assertThat(rows.getValue("ROLE_PICK_WOLF").status).isEqualTo(PerkActivationStatus.CONSUMED)
+        assertThat(rows.getValue(PERK_NIGHT1_IMMUNITY).status).isEqualTo(PerkActivationStatus.REFUNDED)
+        assertThat(walletService.balance(user)).isEqualTo(80) // 100 -30 -20 +30
+        assertThat(refundRows(user).single().amount).isEqualTo(30)
+    }
 }

@@ -26,6 +26,8 @@ type GameStateMinimal = {
   sheriffElection?: { subPhase?: string } | null
   players?: { seatIndex?: number; isAlive?: boolean }[]
   timer?: { remainingMs?: number; durationMs?: number; running?: boolean }
+  myRole?: string | null
+  myRolePick?: { choice: string; tookEffect: boolean; price: number } | null
 }
 
 export async function fetchGameState(hostPage: Page, gameId: string): Promise<GameStateMinimal | null> {

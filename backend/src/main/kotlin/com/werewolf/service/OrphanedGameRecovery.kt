@@ -100,13 +100,12 @@ class OrphanedGameRecovery(
             room.status = RoomStatus.WAITING
             roomRepository.save(room)
             val roomId = room.roomId ?: return@ifPresent
-            // Reset every seated player's ready flag — a fresh game requires a
-            // fresh ready check, mirroring the post-game flow.
+            // Reset every seated player's ready flag and role-pick choice — a fresh
+            // game requires a fresh ready check (the cancelled game's cards were refunded above).
             roomPlayerRepository.findByRoomId(roomId).forEach { rp ->
-                if (!rp.host && rp.status != ReadyStatus.NOT_READY) {
-                    rp.status = ReadyStatus.NOT_READY
-                    roomPlayerRepository.save(rp)
-                }
+                if (!rp.host) rp.status = ReadyStatus.NOT_READY
+                rp.rolePick = null
+                roomPlayerRepository.save(rp)
             }
         }
 

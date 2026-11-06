@@ -258,6 +258,10 @@ class RoomService(
     fun setReady(userId: String, roomId: Int, ready: Boolean) {
         val room = roomRepository.findById(roomId).orElse(null) ?: throw RoomNotFoundException("Room not found")
         if (room.status != RoomStatus.WAITING) throw RoomNotOpenException("Room is not open")
+        // An exists query, not an entity load: a cached RoomPlayer would make the broadcast below show the stale status.
+        if (ready && room.config?.perksAllowed != false &&
+            roomPlayerRepository.existsByRoomIdAndUserIdAndRolePickIsNull(roomId, userId)
+        ) throw RolePickRequiredException("Choose a role-pick card before getting ready")
 
         val affected = if (ready) {
             roomPlayerRepository.setReadyIfSeated(roomId, userId)
@@ -392,6 +396,7 @@ class RoomService(
         val perkNames = perkRepository.findAll().associate { it.perkCode to it.name }
         val perkActivations = perkActivationRepository
             .findByRoomIdAndStatus(roomId, PerkActivationStatus.ACTIVE)
+            .filterNot { isRolePickCode(it.perkCode) }
             .map { PerkActivationDto(it.userId, it.perkCode, perkNames[it.perkCode] ?: it.perkCode) }
 
         return RoomDto(
@@ -522,3 +527,4 @@ class CannotKickHostException(message: String) : RuntimeException(message)
 class InvalidBgmTrackException(message: String) : RuntimeException(message)
 class InvalidRoleCompositionException(message: String) : RuntimeException(message)
 class RoomTooSmallException(message: String) : RuntimeException(message)
+class RolePickRequiredException(message: String) : RuntimeException(message)

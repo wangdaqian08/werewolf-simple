@@ -62,7 +62,7 @@ class GameStartControllerTest {
     @Suppress("UNCHECKED_CAST")
     private fun setupReadyRoom(prefix: String, guestCount: Int): Triple<String, Int, List<String>> {
         val hostToken = login("${prefix}Host")
-        val createBody = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to DEFAULT_TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES))
+        val createBody = mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, FIELD_TOTAL_PLAYERS to DEFAULT_TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES))
         val room = restTemplate.postForEntity(
             CREATE_ROOM_URL, HttpEntity(createBody, authHeaders(hostToken)), Map::class.java
         ).body!! as Map<String, Any?>
@@ -105,7 +105,7 @@ class GameStartControllerTest {
     fun `start game fails when a guest is NOT_READY`() {
         // Create a room but do NOT set any guest ready
         val hostToken = login("Start2Host")
-        val createBody = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to DEFAULT_TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES))
+        val createBody = mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, FIELD_TOTAL_PLAYERS to DEFAULT_TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES))
         @Suppress("UNCHECKED_CAST")
         val room = restTemplate.postForEntity(
             CREATE_ROOM_URL, HttpEntity(createBody, authHeaders(hostToken)), Map::class.java

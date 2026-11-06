@@ -71,6 +71,8 @@ class RoomController(private val roomService: RoomService) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         } catch (e: PlayerNotInRoomException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: RolePickRequiredException) {
+            ResponseEntity.badRequest().body(mapOf("error" to e.message))
         }
     }
 

@@ -97,7 +97,7 @@ class SheriffElectionIntegrationTest {
         val roomBody = restTemplate.postForEntity(
             CREATE_ROOM_URL,
             HttpEntity(
-                mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to 6, "roles" to listOf("WEREWOLF", "SEER", "WITCH", "VILLAGER", "VILLAGER"), "hasSheriff" to true)),
+                mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, FIELD_TOTAL_PLAYERS to 6, "roles" to listOf("WEREWOLF", "SEER", "WITCH", "VILLAGER", "VILLAGER"), "hasSheriff" to true)),
                 headers(host.token)
             ),
             Map::class.java

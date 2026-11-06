@@ -1,7 +1,9 @@
 package com.werewolf.unit.service
 
 import com.werewolf.auth.AuthService
+import com.werewolf.model.GameConfig
 import com.werewolf.model.ReadyStatus
+import com.werewolf.model.RolePickChoice
 import com.werewolf.model.Room
 import com.werewolf.model.RoomPlayer
 import com.werewolf.model.RoomStatus
@@ -109,6 +111,60 @@ class RoomServiceReadyTest {
             .isInstanceOf(RoomNotOpenException::class.java)
 
         verifyNoInteractions(roomPlayerRepository)
+    }
+
+    // ── role-pick gate ────────────────────────────────────────────────────────
+
+    @Test
+    fun `ready rejected with RolePickRequiredException when perks allowed and rolePick null`() {
+        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(waitingRoom()))
+        whenever(roomPlayerRepository.existsByRoomIdAndUserIdAndRolePickIsNull(roomId, userId)).thenReturn(true)
+
+        assertThatThrownBy { roomService.setReady(userId, roomId, true) }
+            .isInstanceOf(RolePickRequiredException::class.java)
+
+        verify(roomPlayerRepository, never()).setReadyIfSeated(any(), any())
+        verifyNoInteractions(stompPublisher)
+    }
+
+    @Test
+    fun `ready allowed with rolePick NONE`() {
+        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(waitingRoom()))
+        val player = seatedPlayer().also { it.rolePick = RolePickChoice.NONE }
+        whenever(roomPlayerRepository.existsByRoomIdAndUserIdAndRolePickIsNull(roomId, userId)).thenReturn(false)
+        whenever(roomPlayerRepository.setReadyIfSeated(roomId, userId)).thenReturn(1)
+        whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(listOf(player))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.setReady(userId, roomId, ready = true)
+
+        verify(roomPlayerRepository).setReadyIfSeated(roomId, userId)
+    }
+
+    @Test
+    fun `ready allowed with rolePick null when perksAllowed=false`() {
+        val room = waitingRoom().also { it.config = GameConfig(perksAllowed = false) }
+        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.setReadyIfSeated(roomId, userId)).thenReturn(1)
+        whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(listOf(seatedPlayer()))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.setReady(userId, roomId, ready = true)
+
+        verify(roomPlayerRepository).setReadyIfSeated(roomId, userId)
+    }
+
+    @Test
+    fun `undo ready is never gated`() {
+        whenever(roomRepository.findById(roomId)).thenReturn(Optional.of(waitingRoom()))
+        whenever(roomPlayerRepository.updateStatus(roomId, userId, ReadyStatus.NOT_READY)).thenReturn(1)
+        whenever(roomPlayerRepository.findByRoomId(roomId)).thenReturn(listOf(seatedPlayer()))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.setReady(userId, roomId, ready = false)
+
+        verify(roomPlayerRepository).updateStatus(roomId, userId, ReadyStatus.NOT_READY)
+        verify(roomPlayerRepository, never()).existsByRoomIdAndUserIdAndRolePickIsNull(any(), any())
     }
 
     // ── claimSeat ─────────────────────────────────────────────────────────────

@@ -119,7 +119,7 @@ class Scenario09HardModeWinIntegrationTest {
             CREATE_ROOM_URL,
             HttpEntity(
                 mapOf(
-                    FIELD_CONFIG to mapOf(
+                    FIELD_CONFIG to mapOf("perksAllowed" to false, 
                         FIELD_TOTAL_PLAYERS to TOTAL_PLAYERS,
                         "roles" to listOf(counterplayRole.name),
                         "hasSheriff" to false,

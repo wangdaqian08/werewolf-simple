@@ -48,6 +48,12 @@ vi.mock('@/services/roomService', () => ({
     setReady: vi.fn(),
     leaveRoom: vi.fn(),
     kickPlayer: vi.fn(),
+    getRolePick: vi.fn().mockResolvedValue({
+      choice: 'NONE',
+      frozenCredits: 0,
+      prices: {},
+      seats: { WOLF: 0, GOD: 0, VILLAGER: 0 },
+    }),
   },
 }))
 vi.mock('@/services/gameService', () => ({ gameService: { startGame: vi.fn() } }))

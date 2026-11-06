@@ -140,12 +140,14 @@
 <script lang="ts" setup>
 import { i18n, t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
+import { useScrollLock } from '@/composables/useScrollLock'
 import type { GameSettings, RewardRule } from '@/types'
 import { ROLE_DEFINITIONS, roleName } from '@/utils/roleDefinitions'
 import { walletService } from '@/services/walletService'
 import RoleCardSheet from '@/components/RoleCardSheet.vue'
 
 const props = defineProps<{ settings: GameSettings | null | undefined; open: boolean }>()
+useScrollLock(() => props.open)
 defineEmits<{ close: [] }>()
 const openRole = ref<string | null>(null)
 

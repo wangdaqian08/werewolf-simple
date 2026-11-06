@@ -87,7 +87,7 @@ class GameStartAfterCommitIntegrationTest {
     @Suppress("UNCHECKED_CAST")
     private fun setupReadyRoom(prefix: String): Pair<Login, Int> {
         val host = login("${prefix}Host")
-        val createBody = mapOf(FIELD_CONFIG to mapOf(FIELD_TOTAL_PLAYERS to TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES))
+        val createBody = mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, FIELD_TOTAL_PLAYERS to TOTAL_PLAYERS, FIELD_ROLES to DEFAULT_ROLES))
         val room = restTemplate.postForEntity(
             CREATE_ROOM_URL, HttpEntity(createBody, authHeaders(host.token)), Map::class.java
         ).body!! as Map<String, Any?>

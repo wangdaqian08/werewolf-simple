@@ -231,6 +231,20 @@ export function setupMocks() {
   })
   mock.onPost('/room/leave').reply(200)
   mock.onPost('/room/ready').reply(200)
+
+  // 点将卡: keep the caller's pick in memory; paid picks need no wallet bookkeeping in the mock.
+  let mockRolePick: string | null = null
+  const rolePickView = () => ({
+    choice: mockRolePick,
+    frozenCredits: mockRolePick && mockRolePick !== 'NONE' ? 20 : 0,
+    prices: { WOLF: 20, GOD: 20, VILLAGER: 20 },
+    seats: { WOLF: 3, GOD: 3, VILLAGER: 3 },
+  })
+  mock.onGet(/\/room\/[^/]+\/role-pick$/).reply(() => [200, rolePickView()])
+  mock.onPost('/room/role-pick').reply((config) => {
+    mockRolePick = JSON.parse(config.data ?? '{}').choice ?? null
+    return [200, rolePickView()]
+  })
   mock.onPost('/room/seat').reply((config) => {
     const body = JSON.parse(config.data ?? '{}')
     mockPlayers = mockPlayers.map((p) =>

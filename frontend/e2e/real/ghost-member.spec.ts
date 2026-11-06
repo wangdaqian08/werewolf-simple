@@ -61,6 +61,8 @@ async function roomWithOneFreeSeat(
   const code = (await host.getByTestId('room-code').textContent())!.trim()
   await host.getByTestId('room-seat-1').click()
   await expect(host.getByTestId('room-seat-1')).toContainText(hostNick, { timeout: UI_TIMEOUT })
+  // 点将卡: Start stays disabled until the host has chosen a card.
+  await host.getByTestId('role-pick-NONE').click()
 
   joinBots(code, SEATS - 2, true)
   return { hctx, host, roomId, code }
@@ -118,6 +120,7 @@ test.describe('Ghost member (joined, closed the app before sitting) — real-bac
     await expect(host.getByTestId(`room-seat-${seat}`)).toContainText('GhostLast', {
       timeout: UI_TIMEOUT,
     })
+    await last.getByTestId('role-pick-NONE').click()
     await last.getByTestId('ready-btn').click()
     await expect(host.getByTestId('start-game-btn')).toBeEnabled({ timeout: UI_TIMEOUT })
 

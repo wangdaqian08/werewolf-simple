@@ -39,6 +39,11 @@ class RoomPlayer(
      */
     @Column(name = "display_name", length = 50)
     var displayName: String? = null,
+
+    /** 点将卡 choice; null = never chosen. Private: never serialized into room DTOs. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role_pick", length = 10)
+    var rolePick: RolePickChoice? = null,
 ) {
     init {
         require(roomId > 0) { "roomId must be a valid ID, got $roomId" }

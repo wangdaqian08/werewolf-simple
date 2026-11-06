@@ -1327,6 +1327,7 @@ const R12 = RP(12, 'Lia', 'IDIOT')
 
 export const MOCK_GAME_REVIEW: GameReview = {
   winner: 'VILLAGER',
+  rolePicks: [],
   players: [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12],
   // 好人胜: every surviving villager-side player takes the win bonus, and each losing
   // wolf 4 per day they lasted — Ivy exiled day 1, Kim poisoned night 2.

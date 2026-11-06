@@ -2,6 +2,7 @@ package com.werewolf.service
 
 import com.werewolf.audio.AudioReplayCache
 import com.werewolf.game.DomainEvent
+import com.werewolf.game.RoleDealer
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.role.RoleRules
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
+import kotlin.random.Random
 
 @Service
 class GameService(
@@ -58,19 +60,25 @@ class GameService(
         if (notReady.isNotEmpty())
             return GameActionResult.Rejected("Not all players are ready")
 
-        val roles = buildRoleList(room, roomPlayers.size)
-        roles.shuffle()
+        val perksOn = room.config?.perksAllowed != false
+        if (perksOn && roomPlayers.any { it.rolePick == null })
+            return GameActionResult.Rejected("Every player must choose a role-pick card")
+
+        val dealt = RoleDealer.deal(
+            RoleDealer.roleList(room, roomPlayers.size), roomPlayers.map { it.userId },
+            if (perksOn) perkService.liveRolePicks(roomId) else emptyMap(), Random.Default,
+        )
 
         val game = Game(roomId = roomId, hostUserId = hostUserId)
         gameRepository.save(game)
         val gameId = game.gameId ?: error("Failed to persist game")
 
-        val gamePlayers = roomPlayers.mapIndexed { idx, rp ->
+        val gamePlayers = roomPlayers.map { rp ->
             GamePlayer(
                 gameId = gameId,
                 userId = rp.userId,
                 seatIndex = rp.seatIndex ?: error("Player ${rp.userId} has no seat"),
-                role = roles[idx],
+                role = dealt.getValue(rp.userId),
             )
         }
         gamePlayerRepository.saveAll(gamePlayers)
@@ -463,7 +471,7 @@ class GameService(
                 "roomCode" to room.roomCode,
                 "totalPlayers" to room.totalPlayers,
                 "wolfCount" to room.wolfCount,
-                "roles" to buildRoleList(room, players.size).map { it.name },
+                "roles" to RoleDealer.roleList(room, players.size).map { it.name },
                 "hasSheriff" to room.hasSheriff,
                 "witchSelfSaveAllowed" to (room.config?.witchSelfSaveAllowed ?: true),
                 "noKillAllowed" to (room.config?.noKillAllowed ?: false),
@@ -473,6 +481,7 @@ class GameService(
             "winner" to game.winner?.name,
             "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
+            "myRolePick" to perkService.myRolePick(gameId, requestingUserId),
             // Wolves know each other all game (role card); everyone else gets an empty list.
             "wolfTeammates" to if (myPlayer?.role?.isPackWolf == true) {
                 players.filter { it.role.isPackWolf && it.userId != requestingUserId }.sortedBy { it.seatIndex }.map { it.userId }
@@ -512,21 +521,5 @@ class GameService(
                 )
             },
         )
-    }
-
-    private fun buildRoleList(room: Room, playerCount: Int): MutableList<PlayerRole> {
-        val roles = mutableListOf<PlayerRole>()
-        if (room.hasWhiteWolfKing) roles.add(PlayerRole.WHITE_WOLF_KING)
-        if (room.hasBlackWolfKing) roles.add(PlayerRole.BLACK_WOLF_KING)
-        if (room.hasMechanicalWolf) roles.add(PlayerRole.MECHANICAL_WOLF)
-        while (roles.size < room.wolfCount) roles.add(PlayerRole.WEREWOLF)
-        if (room.hasSeer) roles.add(PlayerRole.SEER)
-        if (room.hasWitch) roles.add(PlayerRole.WITCH)
-        if (room.hasHunter) roles.add(PlayerRole.HUNTER)
-        if (room.hasGuard) roles.add(PlayerRole.GUARD)
-        if (room.hasIdiot) roles.add(PlayerRole.IDIOT)
-        if (room.hasMedium) roles.add(PlayerRole.MEDIUM)
-        while (roles.size < playerCount) roles.add(PlayerRole.VILLAGER)
-        return roles
     }
 }

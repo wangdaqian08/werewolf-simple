@@ -30,6 +30,7 @@ object GameReviewBuilder {
         events: List<GameEvent>,
         night1PerkSaved: Set<String>,
         rewards: Map<String, Int>,
+        rolePicks: Map<String, Pair<RolePickChoice, Boolean>> = emptyMap(),
         displayNameFor: (String) -> String,
     ): GameReview {
         val refs = players.associate { it.userId to ReviewPlayer(it.userId, displayNameFor(it.userId), it.seatIndex, it.role) }
@@ -61,6 +62,7 @@ object GameReviewBuilder {
             bySeat.map { refs.getValue(it.userId) },
             rounds,
             bySeat.mapNotNull { p -> rewards[p.userId]?.let { ReviewReward(refs.getValue(p.userId), it) } },
+            bySeat.mapNotNull { p -> rolePicks[p.userId]?.let { (c, took) -> ReviewRolePick(refs.getValue(p.userId), c, took) } },
         )
     }
 
