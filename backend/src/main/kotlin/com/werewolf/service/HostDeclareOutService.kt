@@ -113,7 +113,7 @@ class HostDeclareOutService(
             alivePlayers = alive,
             mode = context.room.winCondition,
             trigger = WinCheckTrigger.POST_VOTE,
-            counterplay = HardModeCounterplay.of(alive, context.allNightPhases),
+            counterplay = HardModeCounterplay.of(alive, context.allNightPhases, knightDuelUsed = context.game.knightDuelTargetUserId != null),
             roster = context.players,
         )
         if (winner != null) {

@@ -923,5 +923,5 @@ class NightOrchestrator(
     }
 
     private fun buildCounterplay(context: GameContext): HardModeCounterplay =
-        HardModeCounterplay.of(context.alivePlayers, context.allNightPhases)
+        HardModeCounterplay.of(context.alivePlayers, context.allNightPhases, knightDuelUsed = context.game.knightDuelTargetUserId != null)
 }

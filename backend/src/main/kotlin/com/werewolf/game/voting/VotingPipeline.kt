@@ -672,7 +672,7 @@ class VotingPipeline(
     }
 
     private fun buildCounterplay(context: GameContext, alive: List<GamePlayer> = context.alivePlayers): HardModeCounterplay =
-        HardModeCounterplay.of(alive, context.allNightPhases)
+        HardModeCounterplay.of(alive, context.allNightPhases, knightDuelUsed = context.game.knightDuelTargetUserId != null)
 
     companion object {
         /** Where a pending shot may be taken: after the tally, or after the night reveal. */

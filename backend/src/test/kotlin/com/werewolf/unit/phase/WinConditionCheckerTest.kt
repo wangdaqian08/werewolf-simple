@@ -265,14 +265,47 @@ class WinConditionCheckerTest {
     // whatever other shots (e.g. a BLACK_WOLF_KING's) the game has seen.
     @Test
     fun `HardModeCounterplay of - a living hunter always holds the bullet`() {
-        val counterplay = HardModeCounterplay.of(listOf(player("h", 1, PlayerRole.HUNTER), wolf(2)), emptyList())
+        val counterplay = HardModeCounterplay.of(listOf(player("h", 1, PlayerRole.HUNTER), wolf(2)), emptyList(), knightDuelUsed = false)
         assertThat(counterplay.hasHunterWithBullet).isTrue()
     }
 
     @Test
     fun `HardModeCounterplay of - a living BLACK_WOLF_KING is no good-side counterplay`() {
-        val counterplay = HardModeCounterplay.of(listOf(player("k", 1, PlayerRole.BLACK_WOLF_KING), villager(2)), emptyList())
+        val counterplay = HardModeCounterplay.of(listOf(player("k", 1, PlayerRole.BLACK_WOLF_KING), villager(2)), emptyList(), knightDuelUsed = false)
         assertThat(counterplay.any).isFalse()
+    }
+
+    // ── Knight (K7) ───────────────────────────────────────────────────────────
+
+    private fun knight(seat: Int) = player("k$seat", seat, PlayerRole.KNIGHT)
+
+    private fun hardModePostVote(alive: List<GamePlayer>, knightDuelUsed: Boolean) = check(
+        alivePlayers = alive,
+        mode = WinConditionMode.HARD_MODE,
+        trigger = WinCheckTrigger.POST_VOTE,
+        counterplay = HardModeCounterplay.of(alive, emptyList(), knightDuelUsed),
+    )
+
+    @Test
+    fun `HARD_MODE - living knight with unused duel blocks the logical wolf win`() {
+        val alive = listOf(wolf(1), wolf(2), knight(3), villager(4))
+        assertThat(HardModeCounterplay.of(alive, emptyList(), knightDuelUsed = false).hasKnightWithDuel).isTrue()
+        assertThat(hardModePostVote(alive, knightDuelUsed = false)).isNull()
+    }
+
+    @Test
+    fun `HARD_MODE - knight whose duel is used does not block it`() {
+        val alive = listOf(wolf(1), wolf(2), knight(3), villager(4))
+        assertThat(HardModeCounterplay.of(alive, emptyList(), knightDuelUsed = true).hasKnightWithDuel).isFalse()
+        assertThat(hardModePostVote(alive, knightDuelUsed = true)).isEqualTo(WinnerSide.WEREWOLF)
+    }
+
+    @Test
+    fun `HARD_MODE - dead knight does not block it`() {
+        // The knight is not in the alive list: its unused duel is gone with it.
+        val alive = listOf(wolf(1), wolf(2), villager(3), villager(4))
+        assertThat(HardModeCounterplay.of(alive, emptyList(), knightDuelUsed = false).hasKnightWithDuel).isFalse()
+        assertThat(hardModePostVote(alive, knightDuelUsed = false)).isEqualTo(WinnerSide.WEREWOLF)
     }
 
 

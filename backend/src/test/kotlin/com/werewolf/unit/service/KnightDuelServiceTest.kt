@@ -4,12 +4,15 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
+import com.werewolf.game.phase.DayRevealAdvancer
+import com.werewolf.game.phase.WinConditionChecker
 import com.werewolf.model.*
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.UserRepository
 import com.werewolf.service.ActionLogService
 import com.werewolf.service.KnightDuelService
+import com.werewolf.service.RewardSettlementService
 import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -34,18 +37,29 @@ class KnightDuelServiceTest {
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var actionLogService: ActionLogService
+    @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
+    @Mock lateinit var rewardSettlementService: RewardSettlementService
 
     private lateinit var service: KnightDuelService
 
     @BeforeEach
     fun setUp() {
-        service = KnightDuelService(gameRepository, gamePlayerRepository, userRepository, stompPublisher, actionLogService)
+        service = KnightDuelService(
+            gameRepository, gamePlayerRepository, userRepository, stompPublisher, actionLogService,
+            dayRevealAdvancer, WinConditionChecker(), rewardSettlementService,
+        )
         // Mirror the DB: the service re-reads the rows it mutates.
         whenever(gamePlayerRepository.findByGameIdAndUserId(eq(gameId), any())).thenAnswer { inv ->
             Optional.ofNullable(players.find { it.userId == inv.getArgument<String>(1) })
         }
         whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
         whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        // Mirror the real advancer: a dead sitting sheriff owes the handover.
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenAnswer {
+            val sheriff = currentGame.sheriffUserId
+            if (sheriff != null && players.find { it.userId == sheriff }?.alive == false) DaySubPhase.BADGE_HANDOVER
+            else DaySubPhase.RESULT_REVEALED
+        }
     }
 
     private val gameId = 10
@@ -57,6 +71,7 @@ class KnightDuelServiceTest {
     private val day = 2
 
     private lateinit var players: List<GamePlayer>
+    private lateinit var currentGame: Game
 
     private fun player(userId: String, seat: Int, role: PlayerRole, alive: Boolean = true) =
         GamePlayer(gameId = gameId, userId = userId, seatIndex = seat, role = role, alive = alive)
@@ -71,23 +86,38 @@ class KnightDuelServiceTest {
         it.dayNumber = day
     }
 
-    /** Two pack wolves stay alive, so a wolf duel never ends the game (Task 3 adds the win check). */
+    /** Two pack wolves stay alive by default, so a wolf duel does not end the game. */
     private fun context(
         game: Game = game(),
         knightAlive: Boolean = true,
+        wolf2Alive: Boolean = true,
         extra: List<GamePlayer> = emptyList(),
         nightPhases: List<NightPhase> = emptyList(),
+        winCondition: WinConditionMode = WinConditionMode.CLASSIC,
     ): GameContext {
+        currentGame = game
         players = listOf(
             player(knightId, 1, PlayerRole.KNIGHT, knightAlive),
             player(wolfId, 2, PlayerRole.WEREWOLF),
-            player(wolf2Id, 3, PlayerRole.WEREWOLF),
+            player(wolf2Id, 3, PlayerRole.WEREWOLF, wolf2Alive),
             player(villagerId, 4, PlayerRole.VILLAGER),
         ) + extra
         return GameContext(
-            game, Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 8), players,
+            game, Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 8, winCondition = winCondition), players,
             allNightPhases = nightPhases,
         )
+    }
+
+    /** [ctx] with [sheriffId] holding the badge (game field and player flag, as in production). */
+    private fun withSheriff(ctx: GameContext, sheriffId: String) = ctx.also {
+        it.game.sheriffUserId = sheriffId
+        players.first { p -> p.userId == sheriffId }.sheriff = true
+    }
+
+    private fun broadcastEvents(): List<DomainEvent> {
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
+        return captor.allValues
     }
 
     private fun req(actor: String = knightId, target: String? = wolfId) =
@@ -251,5 +281,84 @@ class KnightDuelServiceTest {
         assertThat(captor.allValues[0]).isEqualTo(DomainEvent.KnightDuel(gameId, knightId, 1, wolfId, 2, true))
         assertThat(captor.allValues[1])
             .isEqualTo(DomainEvent.PhaseChanged(gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.RESULT_REVEALED.name))
+    }
+
+    // ── Game end (K6) ────────────────────────────────────────────────────────
+
+    @Test
+    fun `duel on the last wolf ends the game, villagers win`() {
+        val ctx = context(wolf2Alive = false)
+
+        val result = service.duel(req(target = wolfId), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(ctx.game.winner).isEqualTo(WinnerSide.VILLAGER)
+        assertThat(ctx.game.endedAt).isNotNull()
+        verify(rewardSettlementService).settle(gameId, WinnerSide.VILLAGER)
+        assertThat(broadcastEvents().last()).isEqualTo(DomainEvent.GameOver(gameId, WinnerSide.VILLAGER))
+    }
+
+    @Test
+    fun `HARD_MODE - failed duel kills the last god, wolves win`() {
+        // The knight is the only god; once it dies 2 wolves face 1 villager with no counterplay.
+        val ctx = context(winCondition = WinConditionMode.HARD_MODE)
+
+        service.duel(req(target = villagerId), ctx)
+
+        assertThat(players.first { it.userId == knightId }.alive).isFalse()
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(ctx.game.winner).isEqualTo(WinnerSide.WEREWOLF)
+        verify(rewardSettlementService).settle(gameId, WinnerSide.WEREWOLF)
+        assertThat(broadcastEvents().last()).isEqualTo(DomainEvent.GameOver(gameId, WinnerSide.WEREWOLF))
+    }
+
+    @Test
+    fun `a duel that ends nothing does not settle the game`() {
+        val ctx = context()
+
+        service.duel(req(target = wolfId), ctx)
+
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(ctx.game.winner).isNull()
+        verifyNoInteractions(rewardSettlementService)
+    }
+
+    // ── Sheriff badge (K5) ───────────────────────────────────────────────────
+
+    @Test
+    fun `knight sheriff dies → BADGE_HANDOVER, sheriff kept for handover`() {
+        val ctx = withSheriff(context(), knightId)
+
+        service.duel(req(target = villagerId), ctx)
+
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(ctx.game.sheriffUserId).isEqualTo(knightId)
+        assertThat(players.first { it.userId == knightId }.sheriff).isTrue()
+        assertThat(broadcastEvents())
+            .contains(DomainEvent.PhaseChanged(gameId, GamePhase.DAY_DISCUSSION, DaySubPhase.BADGE_HANDOVER.name))
+    }
+
+    @Test
+    fun `duelled wolf sheriff hands the badge over, not destroyed`() {
+        val ctx = withSheriff(context(), wolfId)
+
+        service.duel(req(target = wolfId), ctx)
+
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(ctx.game.sheriffUserId).isEqualTo(wolfId)
+        assertThat(players.first { it.userId == wolfId }.sheriff).isTrue()
+        assertThat(ctx.game.daySkipVoting).isTrue()
+        assertThat(broadcastEvents()).noneMatch { it is DomainEvent.BadgeHandover }
+    }
+
+    @Test
+    fun `a non-sheriff death leaves the day on RESULT_REVEALED`() {
+        val ctx = withSheriff(context(), villagerId)
+
+        service.duel(req(target = wolfId), ctx)
+
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(ctx.game.sheriffUserId).isEqualTo(villagerId)
     }
 }

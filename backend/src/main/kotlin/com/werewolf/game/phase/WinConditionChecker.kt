@@ -27,21 +27,24 @@ enum class WinCheckTrigger { POST_VOTE, POST_NIGHT }
  *   hasWitchWithPotions — a living WITCH holding antidote or poison.
  *   hasHunterWithBullet — a living HUNTER. A hunter only fires once dead, so a living
  *   one always holds the bullet (other shooters, e.g. BLACK_WOLF_KING, never count).
+ *   hasKnightWithDuel — a living KNIGHT whose once-per-game duel is unused.
  */
 data class HardModeCounterplay(
     val hasGuard: Boolean,
     val hasWitchWithPotions: Boolean,
     val hasHunterWithBullet: Boolean,
+    val hasKnightWithDuel: Boolean = false,
 ) {
-    val any: Boolean get() = hasGuard || hasWitchWithPotions || hasHunterWithBullet
+    val any: Boolean get() = hasGuard || hasWitchWithPotions || hasHunterWithBullet || hasKnightWithDuel
 
     companion object {
         /** Counterplay held by [alive]. */
-        fun of(alive: List<GamePlayer>, allNightPhases: List<NightPhase>) = HardModeCounterplay(
+        fun of(alive: List<GamePlayer>, allNightPhases: List<NightPhase>, knightDuelUsed: Boolean) = HardModeCounterplay(
             hasGuard = alive.any { it.role == PlayerRole.GUARD },
             hasWitchWithPotions = alive.any { it.role == PlayerRole.WITCH } &&
                     (allNightPhases.none { it.witchAntidoteUsed } || allNightPhases.none { it.witchPoisonTargetUserId != null }),
             hasHunterWithBullet = alive.any { it.role == PlayerRole.HUNTER },
+            hasKnightWithDuel = alive.any { it.role == PlayerRole.KNIGHT } && !knightDuelUsed,
         )
     }
 }
