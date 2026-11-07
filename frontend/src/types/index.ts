@@ -919,6 +919,7 @@ export interface ActionLogEntry {
     | 'IDIOT_REVEAL'
     | 'SHERIFF_RESULT'
     | 'SELF_DESTRUCT'
+    | 'KNIGHT_DUEL'
     | 'BADGE_HANDOVER'
     | 'DECLARED_OUT'
   message: string // raw JSON — parse per eventType
@@ -998,6 +999,17 @@ export interface SelfDestructPayload {
   takenUserId?: string
   takenNickname?: string
   takenSeatIndex?: number
+}
+
+export interface KnightDuelPayload {
+  dayNumber: number
+  knightUserId: string
+  knightNickname: string
+  knightSeatIndex: number
+  targetUserId: string
+  targetNickname: string
+  targetSeatIndex: number
+  targetIsWolf: boolean
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

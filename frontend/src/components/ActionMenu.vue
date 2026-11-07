@@ -32,6 +32,17 @@
               </button>
             </template>
 
+            <!-- Knight + alive + revealed day, before voting → duel (once per game) -->
+            <button
+              v-if="canKnightDuel"
+              class="action-menu-item action-menu-item-danger"
+              data-testid="action-menu-knight-duel"
+              @click="onKnightDuelClick"
+            >
+              <span class="ami-icon">⚔️</span>
+              <span class="ami-label">{{ $t('actionMenu.knightDuel') }}</span>
+            </button>
+
             <!-- Host: declare a player out (they had to leave the game) -->
             <button
               v-if="canDeclareOut"
@@ -44,7 +55,7 @@
             </button>
 
             <!-- No action available → empty state -->
-            <template v-if="!canSelfDestruct && !canDeclareOut">
+            <template v-if="!canSelfDestruct && !canKnightDuel && !canDeclareOut">
               <div class="action-menu-empty" data-testid="action-menu-empty">
                 <span class="ami-icon">🌙</span>
                 <span class="ami-label">{{ $t('actionMenu.none') }}</span>
@@ -90,6 +101,56 @@
                 class="btn btn-danger"
                 data-testid="action-menu-confirm"
                 @click="confirmSelfDestruct"
+              >
+                {{ $t('common.confirm') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Knight: pick the duel target, then confirm (irreversible) -->
+      <Transition name="fade">
+        <div v-if="duelOpen" class="action-confirm-overlay" @click.self="cancelDuel">
+          <div class="action-confirm-sheet">
+            <div class="action-confirm-title">{{ $t('actionMenu.knightDuelTitle') }}</div>
+            <div class="action-confirm-body">
+              {{
+                duelTarget
+                  ? $t('actionMenu.knightDuelConfirm', {
+                      seat: $t('common.seatDot', {
+                        n: duelTarget.seatIndex,
+                        name: duelTarget.nickname,
+                      }),
+                    })
+                  : $t('actionMenu.knightDuelPick')
+              }}
+            </div>
+            <div class="action-take-list action-take">
+              <button
+                v-for="p in duelCandidates"
+                :key="p.userId"
+                class="action-take-item"
+                :class="{ 'action-take-item-selected': duelTargetId === p.userId }"
+                :data-testid="`action-menu-duel-${p.userId}`"
+                @click="duelTargetId = p.userId"
+              >
+                {{ $t('common.seatDot', { n: p.seatIndex, name: p.nickname }) }}
+              </button>
+            </div>
+            <div class="action-confirm-btns">
+              <button
+                class="btn btn-secondary"
+                data-testid="action-menu-duel-cancel"
+                @click="cancelDuel"
+              >
+                {{ $t('common.cancel') }}
+              </button>
+              <button
+                class="btn btn-danger"
+                data-testid="action-menu-duel-confirm"
+                :disabled="!duelTarget"
+                @click="confirmDuel"
               >
                 {{ $t('common.confirm') }}
               </button>
@@ -166,11 +227,13 @@ const props = defineProps<{
   myUserId?: string
   daySkipVoting?: boolean
   isHost?: boolean
+  knightDuelUsed?: boolean
 }>()
 
 const emit = defineEmits<{
   'self-destruct': [targetUserId?: string]
   'declare-out': [targetUserId: string]
+  'knight-duel': [targetUserId: string]
 }>()
 
 const menuOpen = ref(false)
@@ -199,6 +262,40 @@ const canSelfDestruct = computed(
     !props.daySkipVoting,
 )
 
+// Mirrors the server's duel window; the server decides. knightDuelUsed is server
+// state, so the item stays hidden after a refresh.
+const canKnightDuel = computed(
+  () =>
+    props.myRole === 'KNIGHT' &&
+    props.isAlive &&
+    props.phase === 'DAY_DISCUSSION' &&
+    props.subPhase === 'RESULT_REVEALED' &&
+    !props.daySkipVoting &&
+    !props.knightDuelUsed,
+)
+const duelCandidates = computed(() =>
+  (props.players ?? []).filter((p) => p.isAlive && p.userId !== props.myUserId),
+)
+const duelOpen = ref(false)
+const duelTargetId = ref<string | undefined>()
+const duelTarget = computed(() => duelCandidates.value.find((p) => p.userId === duelTargetId.value))
+
+function onKnightDuelClick() {
+  menuOpen.value = false
+  duelTargetId.value = undefined
+  duelOpen.value = true
+}
+
+function cancelDuel() {
+  duelOpen.value = false
+}
+
+function confirmDuel() {
+  if (!duelTarget.value) return
+  duelOpen.value = false
+  emit('knight-duel', duelTarget.value.userId)
+}
+
 // Mirrors the server's declare-out window (it validates); before the night reveal the host reveals first.
 const canDeclareOut = computed(
   () => !!props.isHost && !(props.phase === 'DAY_DISCUSSION' && props.subPhase === 'RESULT_HIDDEN'),
@@ -212,7 +309,7 @@ const declareCandidates = computed(() =>
   ),
 )
 const declareOpen = ref(false)
-useScrollLock(() => menuOpen.value || confirmOpen.value || declareOpen.value)
+useScrollLock(() => menuOpen.value || confirmOpen.value || declareOpen.value || duelOpen.value)
 const declareTargetId = ref<string | undefined>()
 const declareTarget = computed(() =>
   declareCandidates.value.find((p) => p.userId === declareTargetId.value),

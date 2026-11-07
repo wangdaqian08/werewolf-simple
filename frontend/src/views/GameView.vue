@@ -204,6 +204,7 @@
           gameStore.state?.players.find((p) => p.userId === userStore.userId)?.isAlive ?? false
         "
         :day-skip-voting="gameStore.state?.daySkipVoting ?? false"
+        :knight-duel-used="gameStore.state?.knightDuelUsed ?? false"
         :sheriff-user-id="gameStore.state?.sheriffUserId ?? null"
         :action-pending="actionPending"
         :game-settings="gameStore.state?.gameSettings ?? null"
@@ -213,6 +214,7 @@
         @skip="handleDaySkip"
         @select-player="handleDaySelectPlayer"
         @self-destruct="handleSelfDestruct"
+        @knight-duel="handleKnightDuel"
         @declare-out="handleDeclareOut"
         @continue-to-night="handleVotingContinue"
         @pass-badge="handlePassBadge"
@@ -999,6 +1001,10 @@ async function handleDestroyBadge() {
 }
 async function handleSelfDestruct(targetId?: string) {
   await action({ actionType: 'WOLF_SELF_DESTRUCT', targetId })
+}
+
+async function handleKnightDuel(targetId: string) {
+  await action({ actionType: 'KNIGHT_DUEL', targetId })
 }
 
 async function handleDeclareOut(targetId: string) {

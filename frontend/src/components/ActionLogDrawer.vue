@@ -190,6 +190,25 @@
                 </div>
               </div>
 
+              <!-- Knight duel (camp only, never which wolf) -->
+              <div
+                v-if="round.knightDuels.length > 0"
+                class="log-section"
+                data-testid="log-knight-duel"
+              >
+                <div class="section-title">{{ $t('log.knightDuel') }}</div>
+                <div v-for="d in round.knightDuels" :key="d.knightUserId" class="log-row">
+                  <span class="seat-badge">{{ $t('common.seat', { n: d.knightSeatIndex }) }}</span>
+                  <span class="log-name">{{ d.knightNickname }}</span>
+                  <span class="muted">{{ $t('actionMenu.knightDuel') }}</span>
+                  <span class="seat-badge">{{ $t('common.seat', { n: d.targetSeatIndex }) }}</span>
+                  <span class="log-name">{{ d.targetNickname }}</span>
+                  <span class="log-tag tag-red">{{
+                    d.targetIsWolf ? $t('day.knightDuelWolf') : $t('day.knightDuelGood')
+                  }}</span>
+                </div>
+              </div>
+
               <!-- Declared out by the host (the player left the game) -->
               <div v-if="round.declaredOuts.length > 0" class="log-section">
                 <div class="section-title">{{ $t('log.declaredOut') }}</div>
@@ -215,6 +234,7 @@ import type {
   ActionLogEntry,
   HunterShotPayload,
   IdiotRevealPayload,
+  KnightDuelPayload,
   NightDeathPayload,
   SelfDestructPayload,
   SheriffResultPayload,
@@ -233,6 +253,7 @@ interface Round {
   hunterShots: HunterShotPayload[]
   idiotReveals: IdiotRevealPayload[]
   selfDestructs: SelfDestructPayload[]
+  knightDuels: KnightDuelPayload[]
   declaredOuts: NightDeathPayload[] // same payload shape: day, userId, nickname, seat
 }
 
@@ -252,6 +273,7 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         hunterShots: [],
         idiotReveals: [],
         selfDestructs: [],
+        knightDuels: [],
         declaredOuts: [],
       })
     }
@@ -280,6 +302,9 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         break
       case 'SELF_DESTRUCT':
         getOrCreate(day).selfDestructs.push(payload as SelfDestructPayload)
+        break
+      case 'KNIGHT_DUEL':
+        getOrCreate(day).knightDuels.push(payload as KnightDuelPayload)
         break
       case 'DECLARED_OUT':
         getOrCreate(day).declaredOuts.push(payload as NightDeathPayload)

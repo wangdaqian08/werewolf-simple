@@ -379,3 +379,122 @@ describe('ActionMenu — host declares a player out', () => {
     expect(document.body.style.position).toBe('')
   })
 })
+
+describe('ActionMenu — knight duel', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const players: GamePlayer[] = [
+    { userId: 'k1', nickname: 'Kay', seatIndex: 1, isAlive: true, isSheriff: false },
+    { userId: 'p2', nickname: 'Pat', seatIndex: 2, isAlive: true, isSheriff: false },
+    { userId: 'd3', nickname: 'Dead', seatIndex: 3, isAlive: false, isSheriff: false },
+    { userId: 'p4', nickname: 'Pam', seatIndex: 4, isAlive: true, isSheriff: false },
+  ]
+
+  const q = (id: string) => document.querySelector(`[data-testid="${id}"]`) as HTMLElement | null
+
+  async function openMenu(props: {
+    phase?: GamePhase
+    subPhase?: string
+    myRole?: PlayerRole
+    isAlive?: boolean
+    daySkipVoting?: boolean
+    knightDuelUsed?: boolean
+  }) {
+    const wrapper = mount(ActionMenu, {
+      props: {
+        phase: 'DAY_DISCUSSION',
+        subPhase: 'RESULT_REVEALED',
+        myRole: 'KNIGHT',
+        isAlive: true,
+        players,
+        myUserId: 'k1',
+        ...props,
+      },
+      attachTo: document.body,
+    })
+    await wrapper.find('[data-testid="action-menu-btn"]').trigger('click')
+    return wrapper
+  }
+
+  it('knight sees 決鬥 in DAY_DISCUSSION/RESULT_REVEALED', async () => {
+    const wrapper = await openMenu({})
+    expect(q('action-menu-knight-duel')?.textContent).toContain('決鬥')
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['SHERIFF_ELECTION', 'SIGNUP'],
+    ['SHERIFF_ELECTION', 'SPEECH'],
+    ['SHERIFF_ELECTION', 'VOTING'],
+    ['SHERIFF_ELECTION', 'RESULT'],
+    ['SHERIFF_ELECTION', 'TIED'],
+    ['DAY_DISCUSSION', 'RESULT_HIDDEN'],
+    ['DAY_VOTING', 'VOTING'],
+  ] as const)('no 決鬥 in %s/%s', async (phase, subPhase) => {
+    const wrapper = await openMenu({ phase, subPhase })
+    expect(q('action-menu-knight-duel')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('no 決鬥 when daySkipVoting', async () => {
+    const wrapper = await openMenu({ daySkipVoting: true })
+    expect(q('action-menu-knight-duel')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('chip hidden when knightDuelUsed is true', async () => {
+    const wrapper = await openMenu({ knightDuelUsed: true })
+    expect(q('action-menu-knight-duel')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('no 決鬥 for a dead knight or a non-knight', async () => {
+    const dead = await openMenu({ isAlive: false })
+    expect(q('action-menu-knight-duel')).toBeNull()
+    dead.unmount()
+    const villager = await openMenu({ myRole: 'VILLAGER' })
+    expect(q('action-menu-knight-duel')).toBeNull()
+    villager.unmount()
+  })
+
+  it('target list excludes me and dead players', async () => {
+    const wrapper = await openMenu({})
+    q('action-menu-knight-duel')?.click()
+    await wrapper.vm.$nextTick()
+    expect(q('action-menu-duel-p2')).toBeTruthy()
+    expect(q('action-menu-duel-p4')).toBeTruthy()
+    expect(q('action-menu-duel-k1')).toBeNull()
+    expect(q('action-menu-duel-d3')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('pick target → confirm emits knight-duel with the userId', async () => {
+    const wrapper = await openMenu({})
+    q('action-menu-knight-duel')?.click()
+    await wrapper.vm.$nextTick()
+    expect((q('action-menu-duel-confirm') as HTMLButtonElement).disabled).toBe(true)
+    q('action-menu-duel-p2')?.click()
+    await wrapper.vm.$nextTick()
+    expect(q('action-menu-duel-confirm')?.parentElement?.parentElement?.textContent).toContain(
+      '不可撤銷',
+    )
+    q('action-menu-duel-confirm')?.click()
+    expect(wrapper.emitted('knight-duel')?.[0]).toEqual(['p2'])
+    wrapper.unmount()
+  })
+
+  it('cancel emits nothing', async () => {
+    const wrapper = await openMenu({})
+    q('action-menu-knight-duel')?.click()
+    await wrapper.vm.$nextTick()
+    q('action-menu-duel-p2')?.click()
+    await wrapper.vm.$nextTick()
+    q('action-menu-duel-cancel')?.click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('knight-duel')).toBeUndefined()
+    expect(q('action-menu-duel-confirm')).toBeNull()
+    wrapper.unmount()
+  })
+})

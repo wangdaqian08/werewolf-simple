@@ -439,6 +439,25 @@ describe('GameReview', () => {
     ])
   })
 
+  it('KNIGHT_DUEL day event renders, wolf and good outcomes', () => {
+    const knight = P(12, 'Kay', 'KNIGHT')
+    const wrapper = render([
+      {
+        day: 2,
+        night: null,
+        events: [
+          { type: 'KNIGHT_DUEL', knight, target: w1, targetIsWolf: true },
+          { type: 'KNIGHT_DUEL', knight, target: vil, targetIsWolf: false },
+        ],
+      },
+    ])
+    expect(lines(wrapper)).toEqual([
+      '第2天',
+      '⚔️ 12號 Kay〔騎士〕 翻牌決鬥 1號 Wolf1〔狼人〕，是狼人，出局',
+      '⚔️ 12號 Kay〔騎士〕 翻牌決鬥 9號 Val〔村民〕，是好人，騎士出局',
+    ])
+  })
+
   it('a badge handover names the old and new sheriff; a destroyed badge has none', () => {
     const wrapper = render([
       {

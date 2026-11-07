@@ -680,3 +680,59 @@ describe('DayPhase — role card history', () => {
     wrapper.unmount()
   })
 })
+
+describe('DayPhase — knight duel', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const duelDay = (targetIsWolf: boolean): DayPhaseState => ({
+    ...makeDay('RESULT_REVEALED'),
+    knightDuel: {
+      knightSeatIndex: 4,
+      knightNickname: 'Kay',
+      targetSeatIndex: 6,
+      targetNickname: 'Tom',
+      targetIsWolf,
+    },
+  })
+
+  it('knight duel banner, wolf outcome', () => {
+    const banner = mount(DayPhase, { props: { ...BASE_PROPS, dayPhase: duelDay(true) } }).find(
+      '[data-testid="day-banner-knight-duel"]',
+    )
+    expect(banner.exists()).toBe(true)
+    expect(banner.find('[data-testid="day-knight-duel-knight-seat-4"]').text()).toContain('Kay')
+    expect(banner.find('[data-testid="day-knight-duel-target-seat-6"]').text()).toContain('Tom')
+    expect(banner.text()).toContain('翻牌騎士，決鬥')
+    expect(banner.text()).toContain('是狼人，出局')
+    expect(banner.text()).not.toContain('騎士出局')
+  })
+
+  it('knight duel banner, good outcome', () => {
+    const banner = mount(DayPhase, { props: { ...BASE_PROPS, dayPhase: duelDay(false) } }).find(
+      '[data-testid="day-banner-knight-duel"]',
+    )
+    expect(banner.text()).toContain('是好人，騎士出局')
+    expect(banner.text()).not.toContain('是狼人')
+  })
+
+  it('no banner when knightDuel is null', () => {
+    const day = { ...makeDay('RESULT_REVEALED'), knightDuel: null }
+    const wrapper = mount(DayPhase, { props: { ...BASE_PROPS, dayPhase: day } })
+    expect(wrapper.find('[data-testid="day-banner-knight-duel"]').exists()).toBe(false)
+  })
+
+  it('forwards knight-duel', () => {
+    const wrapper = mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        dayPhase: makeDay('RESULT_REVEALED'),
+        myRole: 'KNIGHT',
+        isAlive: true,
+      },
+    })
+    wrapper.findComponent(ActionMenu).vm.$emit('knight-duel', 'u2')
+    expect(wrapper.emitted('knight-duel')?.[0]).toEqual(['u2'])
+  })
+})
