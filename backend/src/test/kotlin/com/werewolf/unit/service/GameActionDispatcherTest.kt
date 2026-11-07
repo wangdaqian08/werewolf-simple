@@ -12,6 +12,7 @@ import com.werewolf.game.role.RoleHandler
 import com.werewolf.game.voting.VotingPipeline
 import com.werewolf.model.*
 import com.werewolf.service.GameContextLoader
+import com.werewolf.service.KnightDuelService
 import com.werewolf.service.SelfDestructService
 import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
@@ -33,6 +34,7 @@ class GameActionDispatcherTest {
     @Mock lateinit var contextLoader: GameContextLoader
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var selfDestructService: SelfDestructService
+    @Mock lateinit var knightDuelService: KnightDuelService
     @Mock lateinit var hostDeclareOutService: com.werewolf.service.HostDeclareOutService
 
     private val gameId = 1
@@ -74,6 +76,7 @@ class GameActionDispatcherTest {
         contextLoader = contextLoader,
         stompPublisher = stompPublisher,
         selfDestructService = selfDestructService,
+        knightDuelService = knightDuelService,
         hostDeclareOutService = hostDeclareOutService,
     )
 

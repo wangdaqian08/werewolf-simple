@@ -79,6 +79,16 @@ sealed class DomainEvent {
         val nickname: String,
     ) : DomainEvent()
 
+    @JsonTypeName("KnightDuel")
+    data class KnightDuel(
+        val gameId: Int,
+        val knightUserId: String,
+        val knightSeatIndex: Int,
+        val targetUserId: String,
+        val targetSeatIndex: Int,
+        val targetIsWolf: Boolean,
+    ) : DomainEvent()
+
     @JsonTypeName("PlayerDeclaredOut")
     data class PlayerDeclaredOut(
         val gameId: Int,
