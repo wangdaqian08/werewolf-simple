@@ -19,7 +19,7 @@ import tools.jackson.module.kotlin.jacksonObjectMapper
 object GameReviewBuilder {
 
     private val mapper = jacksonObjectMapper()
-    private val DAY_EVENT_TYPES = setOf("SHERIFF_RESULT", "VOTE_RESULT", "HUNTER_SHOT", "SELF_DESTRUCT", "IDIOT_REVEAL", "BADGE_HANDOVER", "DECLARED_OUT")
+    private val DAY_EVENT_TYPES = setOf("SHERIFF_RESULT", "VOTE_RESULT", "HUNTER_SHOT", "SELF_DESTRUCT", "KNIGHT_DUEL", "IDIOT_REVEAL", "BADGE_HANDOVER", "DECLARED_OUT")
 
     private class LoggedEvent(val type: String, val day: Int, val payload: Map<String, Any?>)
 
@@ -161,6 +161,9 @@ object GameReviewBuilder {
                 "VOTE_RESULT" -> vote(VoteKind.EXILE, p, p["eliminatedUserId"])
                 "HUNTER_SHOT" -> ref(p["hunterUserId"])?.let { h -> ref(p["targetUserId"])?.let { ReviewDayEvent.HunterShot(h, it) } }
                 "SELF_DESTRUCT" -> ref(p["userId"])?.let { ReviewDayEvent.SelfDestruct(it, ref(p["takenUserId"])) }
+                "KNIGHT_DUEL" -> ref(p["knightUserId"])?.let { k ->
+                    ref(p["targetUserId"])?.let { ReviewDayEvent.KnightDuel(k, it, p["targetIsWolf"] == true) }
+                }
                 "IDIOT_REVEAL" -> ref(p["userId"])?.let { ReviewDayEvent.IdiotReveal(it) }
                 "DECLARED_OUT" -> ref(p["userId"])?.let { ReviewDayEvent.DeclaredOut(it) }
                 "BADGE_HANDOVER" -> ref(p["fromUserId"])?.let { ReviewDayEvent.BadgeHandover(it, ref(p["toUserId"])) }

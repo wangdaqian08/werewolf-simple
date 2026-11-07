@@ -88,6 +88,9 @@ sealed interface ReviewDayEvent {
     @JsonTypeName("SELF_DESTRUCT")
     data class SelfDestruct(val player: ReviewPlayer, val taken: ReviewPlayer?) : ReviewDayEvent
 
+    @JsonTypeName("KNIGHT_DUEL")
+    data class KnightDuel(val knight: ReviewPlayer, val target: ReviewPlayer, val targetIsWolf: Boolean) : ReviewDayEvent
+
     @JsonTypeName("IDIOT_REVEAL")
     data class IdiotReveal(val player: ReviewPlayer) : ReviewDayEvent
 

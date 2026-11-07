@@ -95,6 +95,7 @@ class GameStateLogger(
             val aliveCount = players.count { it.alive }
             "votes=${votes.size}/$aliveCount"
         }
+        GamePhase.DAY_DISCUSSION -> "knightDuel=${game.knightDuelTargetUserId ?: "null"} skipVoting=${game.daySkipVoting}"
         else -> ""
     }
 

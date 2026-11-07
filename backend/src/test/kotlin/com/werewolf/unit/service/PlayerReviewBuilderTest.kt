@@ -316,6 +316,51 @@ class PlayerReviewBuilderTest {
         assertThat(review.seats.first { it.userId == "seer" }.camp).isNull()
     }
 
+    private fun knightDuel(day: Int, knight: String, target: String, targetIsWolf: Boolean) = event(
+        "KNIGHT_DUEL",
+        mapOf(
+            "dayNumber" to day, "knightUserId" to knight, "knightNickname" to "stale", "knightSeatIndex" to 10,
+            "targetUserId" to target, "targetNickname" to "stale", "targetSeatIndex" to 1, "targetIsWolf" to targetIsWolf,
+        ),
+    )
+
+    private fun knightBoard(diedDay: Map<String, Int> = emptyMap()) =
+        board(diedDay) + GamePlayer(gameId = gameId, userId = "kn", seatIndex = 10, role = PlayerRole.KNIGHT)
+            .also { p -> diedDay["kn"]?.let { p.alive = false; p.diedDay = it } }
+
+    @Test
+    fun `player review shows the duel to every viewer`() {
+        val duel = knightDuel(1, "kn", "w1", targetIsWolf = true)
+        for (viewer in listOf("v", "w2", "kn")) {
+            val review = build(viewer, knightBoard(), listOf(night(1)), listOf(duel))
+
+            val shown = review.rounds.single().events.single() as PlayerDayEvent.KnightDuel
+            assertThat(shown.knight.userId).isEqualTo("kn")
+            assertThat(shown.target.userId).isEqualTo("w1")
+            assertThat(shown.targetIsWolf).isTrue()
+        }
+    }
+
+    @Test
+    fun `knownCamps marks a duelled wolf as WOLF and the knight as good`() {
+        val wolf = build("v", knightBoard(), listOf(night(1)), listOf(knightDuel(1, "kn", "w1", targetIsWolf = true)))
+        assertThat(wolf.seats.first { it.userId == "w1" }.camp).isEqualTo(KnownCamp.WOLF)
+        assertThat(wolf.seats.first { it.userId == "kn" }.camp).isEqualTo(KnownCamp.GOOD)
+
+        val good = build("v", knightBoard(), listOf(night(1)), listOf(knightDuel(1, "kn", "seer", targetIsWolf = false)))
+        assertThat(good.seats.first { it.userId == "seer" }.camp).isEqualTo(KnownCamp.GOOD)
+    }
+
+    @Test
+    fun `a duel that kills the viewer ends their replay on that duel`() {
+        val review = build(
+            "w1", knightBoard(mapOf("w1" to 1)), listOf(night(1)),
+            listOf(knightDuel(1, "kn", "w1", targetIsWolf = true), selfDestruct(1, "w2")),
+        )
+
+        assertThat(review.rounds.single().events.map { it::class.simpleName }).containsExactly("KnightDuel")
+    }
+
     @Test
     fun `a player still alive at the end sees every round`() {
         val review = build(
