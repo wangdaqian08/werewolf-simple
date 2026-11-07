@@ -151,7 +151,16 @@ async function makeHostTheKnight(ctx: GameContext): Promise<void> {
     ctx.isHostRole = (role) => role === 'KNIGHT'
 
     await knightBotPage!.reload()
-    await knightBotPage!.locator('.game-wrap').waitFor({ state: 'visible', timeout: 15_000 })
+    // The reload brings the role card back; it must show the page's NEW role.
+    const revealBtn = knightBotPage!.getByTestId('reveal-role-btn')
+    await revealBtn.waitFor({ state: 'visible', timeout: 15_000 })
+    await revealBtn.click()
+    await expect(knightBotPage!.getByTestId('role-reveal-card')).toHaveAttribute(
+      'data-role',
+      oldHostRole!,
+    )
+    // Re-confirm (idempotent on the backend) so the page is back on the waiting screen.
+    await knightBotPage!.getByTestId('confirm-role-btn').click()
   }
 
   const state = await fetchGameState(ctx.hostPage, ctx.gameId)
