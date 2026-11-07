@@ -484,6 +484,20 @@ class RoomServiceTest {
     }
 
     @Test
+    fun `update toggles hasKnight`() {
+        val room = room().also { it.hasKnight = true }
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(listOf(RoomPlayer(roomId = 1, userId = hostId, host = true)))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.updateBoard(hostId, 1, 9, 2, listOf(PlayerRole.WITCH))
+        assertThat(room.hasKnight).isFalse()
+
+        roomService.updateBoard(hostId, 1, 9, 2, listOf(PlayerRole.WITCH, PlayerRole.KNIGHT))
+        assertThat(room.hasKnight).isTrue()
+    }
+
+    @Test
     fun `updateBoard - rejects seer and medium together without saving`() {
         whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(room()))
 
@@ -536,6 +550,16 @@ class RoomServiceTest {
         assertThat(roomService.getRoom(1).config.roles)
             .contains(PlayerRole.BLACK_WOLF_KING)
             .doesNotContain(PlayerRole.WHITE_WOLF_KING)
+    }
+
+    @Test
+    fun `room role list includes KNIGHT when on`() {
+        val room = Room(roomId = 1, roomCode = "ABCD", hostUserId = hostId, totalPlayers = 6, hasKnight = true)
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        assertThat(roomService.getRoom(1).config.roles).contains(PlayerRole.KNIGHT)
     }
 
     // ── findActiveRoomForUser (reconnect / quick-rejoin) ───────────────────────
@@ -816,5 +840,16 @@ class RoomServiceTest {
 
         verify(roomRepository).save(argThat<Room> { hasMechanicalWolf && hasMedium && !hasSeer })
         assertThat(dto.config.roles).contains(PlayerRole.MECHANICAL_WOLF, PlayerRole.MEDIUM)
+    }
+
+    @Test
+    fun `create sets hasKnight`() {
+        stubCreate()
+        val cfg = RoomConfigRequest(totalPlayers = 9, wolfCount = 2, roles = listOf(PlayerRole.KNIGHT, PlayerRole.WITCH))
+
+        val dto = roomService.createRoom(hostId, "Host", null, cfg)
+
+        verify(roomRepository).save(argThat<Room> { hasKnight })
+        assertThat(dto.config.roles).contains(PlayerRole.KNIGHT)
     }
 }

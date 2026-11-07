@@ -18,6 +18,9 @@ import org.springframework.web.bind.annotation.RestController
  *
  * POST /api/test-support/wallet/grant tops up a wallet so specs can buy perks.
  *
+ * POST /api/test-support/games/{gameId}/swap-roles swaps two players' dealt roles
+ * during ROLE_REVEAL so a spec can pin a role (e.g. host = KNIGHT) deterministically.
+ *
  * Registered only under the e2e/test profiles and never alongside prod —
  * pinned by TestSupportControllerProfileTest.
  */
@@ -37,6 +40,18 @@ class TestSupportController(private val testSupportService: TestSupportService) 
     fun grantCredits(@RequestBody body: GrantCreditsRequest): ResponseEntity<Map<String, Int>> =
         if (body.amount <= 0) ResponseEntity.badRequest().build()
         else ResponseEntity.ok(mapOf("balance" to testSupportService.grantCredits(body.userId, body.amount)))
+
+    @PostMapping("/games/{gameId}/swap-roles")
+    fun swapRoles(
+        @PathVariable gameId: Int,
+        @RequestBody body: SwapRolesRequest,
+    ): ResponseEntity<Map<String, String>> {
+        val roles = testSupportService.swapRoles(gameId, body.userIdA, body.userIdB)
+            ?: return ResponseEntity.badRequest().build()
+        return ResponseEntity.ok(roles)
+    }
 }
+
+data class SwapRolesRequest(val userIdA: String, val userIdB: String)
 
 data class GrantCreditsRequest(val userId: String, val amount: Int)

@@ -71,6 +71,7 @@ class RoomService(
                 hasBlackWolfKing = PlayerRole.BLACK_WOLF_KING in cfg.roles,
                 hasMechanicalWolf = PlayerRole.MECHANICAL_WOLF in cfg.roles,
                 hasMedium = PlayerRole.MEDIUM in cfg.roles,
+                hasKnight = PlayerRole.KNIGHT in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
                 config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed, cfg.noKillAllowed, cfg.guardSkipAllowed),
@@ -240,6 +241,7 @@ class RoomService(
         room.hasBlackWolfKing = PlayerRole.BLACK_WOLF_KING in roles
         room.hasMechanicalWolf = PlayerRole.MECHANICAL_WOLF in roles
         room.hasMedium = PlayerRole.MEDIUM in roles
+        room.hasKnight = PlayerRole.KNIGHT in roles
         roomRepository.save(room)
         members.filter { !it.host }.forEach { it.status = ReadyStatus.NOT_READY }
         roomPlayerRepository.saveAll(members)
@@ -386,6 +388,7 @@ class RoomService(
             if (room.hasGuard) add(PlayerRole.GUARD)
             if (room.hasIdiot) add(PlayerRole.IDIOT)
             if (room.hasMedium) add(PlayerRole.MEDIUM)
+            if (room.hasKnight) add(PlayerRole.KNIGHT)
         }
 
         val activeGameId = if (room.status == RoomStatus.IN_GAME) {

@@ -60,7 +60,9 @@
           :players="players"
           :my-user-id="myUserId"
           :is-host="isHost"
+          :knight-duel-used="knightDuelUsed"
           @self-destruct="(target) => emit('self-destruct', target)"
+          @knight-duel="(target) => emit('knight-duel', target)"
           @declare-out="(target) => emit('declare-out', target)"
         />
       </div>
@@ -95,6 +97,37 @@
               }}</span
             >
           </template>
+        </div>
+      </div>
+
+      <!-- Knight duel (決鬥): public, camp only — never which wolf (K9). -->
+      <div v-if="knightDuel" class="banner banner-kill" data-testid="day-banner-knight-duel">
+        <span class="banner-avatar">⚔️</span>
+        <div class="banner-kill-text">
+          <span
+            class="banner-kill-red"
+            :data-testid="`day-knight-duel-knight-seat-${knightDuel.knightSeatIndex}`"
+            >{{
+              $t('common.seatDot', {
+                n: knightDuel.knightSeatIndex,
+                name: knightDuel.knightNickname,
+              })
+            }}</span
+          >
+          <span class="banner-kill-muted">{{ $t('day.knightDuel') }}</span>
+          <span
+            class="banner-kill-red"
+            :data-testid="`day-knight-duel-target-seat-${knightDuel.targetSeatIndex}`"
+            >{{
+              $t('common.seatDot', {
+                n: knightDuel.targetSeatIndex,
+                name: knightDuel.targetNickname,
+              })
+            }}</span
+          >
+          <span class="banner-kill-muted">{{
+            knightDuel.targetIsWolf ? $t('day.knightDuelWolf') : $t('day.knightDuelGood')
+          }}</span>
         </div>
       </div>
 
@@ -440,6 +473,7 @@ const props = defineProps<{
   myRole?: PlayerRole
   isAlive?: boolean
   daySkipVoting?: boolean
+  knightDuelUsed?: boolean
   sheriffUserId?: string | null
   actionPending?: boolean
   gameSettings?: GameSettings | null
@@ -483,6 +517,7 @@ const emit = defineEmits<{
   selectPlayer: [userId: string]
   'self-destruct': [targetUserId?: string]
   'declare-out': [targetUserId: string]
+  'knight-duel': [targetUserId: string]
   continueToNight: []
   passBadge: [userId: string]
   destroyBadge: []
@@ -523,6 +558,8 @@ const killedPlayers = computed(() => props.dayPhase.nightResult?.killedPlayers ?
 // The wolf who self-destructed (自爆) this day — surfaced in the death-banner
 // area alongside any night kills. Cleared server-side at night-init.
 const selfDestruct = computed(() => props.dayPhase.selfDestruct ?? null)
+// The knight's duel this day (public, camp only). Cleared server-side at night-init.
+const knightDuel = computed(() => props.dayPhase.knightDuel ?? null)
 
 function isKilledAndVisible(player: GamePlayer) {
   return killedIds.value.includes(player.userId) && props.dayPhase.subPhase === 'RESULT_REVEALED'

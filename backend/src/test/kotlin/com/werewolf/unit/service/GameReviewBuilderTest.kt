@@ -343,6 +343,24 @@ class GameReviewBuilderTest {
     }
 
     @Test
+    fun `game review lists the KNIGHT_DUEL day event`() {
+        val knight = GamePlayer(gameId = gameId, userId = "kn", seatIndex = 10, role = PlayerRole.KNIGHT)
+        val duel = event("KNIGHT_DUEL", mapOf(
+            "dayNumber" to 1, "knightUserId" to "kn", "knightNickname" to "stale", "knightSeatIndex" to 10,
+            "targetUserId" to "w1", "targetNickname" to "stale", "targetSeatIndex" to 1, "targetIsWolf" to true,
+        ))
+        val review = build(board() + knight, listOf(night(1)), listOf(duel))
+
+        assertThat(review.rounds.first { it.day == 1 }.events).containsExactly(
+            ReviewDayEvent.KnightDuel(ReviewPlayer("kn", "N-kn", 10, PlayerRole.KNIGHT), ref("w1"), targetIsWolf = true),
+        )
+        // The wire tag the frontend switches on.
+        val json = mapper.readTree(mapper.writeValueAsString(review.rounds.first { it.day == 1 }.events.single()))
+        assertThat(json["type"].asText()).isEqualTo("KNIGHT_DUEL")
+        assertThat(json["targetIsWolf"].asBoolean()).isTrue()
+    }
+
+    @Test
     fun `a badge handover names the old and new sheriff, a destroyed badge has none`() {
         val review = build(board(), listOf(night(1), night(2)), listOf(
             voteResult(1, mapOf("seer" to listOf("w1", "w2")), eliminated = "seer"),

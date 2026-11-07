@@ -251,6 +251,37 @@ class ActionLogService(
         )
     }
 
+    fun recordKnightDuel(
+        gameId: Int,
+        dayNumber: Int,
+        knightUserId: String,
+        knightNickname: String,
+        knightSeatIndex: Int,
+        targetUserId: String,
+        targetNickname: String,
+        targetSeatIndex: Int,
+        targetIsWolf: Boolean,
+    ) {
+        val payload = mapOf(
+            "dayNumber" to dayNumber,
+            "knightUserId" to knightUserId,
+            "knightNickname" to knightNickname,
+            "knightSeatIndex" to knightSeatIndex,
+            "targetUserId" to targetUserId,
+            "targetNickname" to targetNickname,
+            "targetSeatIndex" to targetSeatIndex,
+            "targetIsWolf" to targetIsWolf,
+        )
+        gameEventRepository.save(
+            GameEvent(
+                gameId       = gameId,
+                eventType    = "KNIGHT_DUEL",
+                message      = mapper.writeValueAsString(payload),
+                targetUserId = knightUserId,
+            )
+        )
+    }
+
     fun recordIdiotReveal(gameId: Int, dayNumber: Int, userId: String) {
         val user = userRepository.findById(userId).orElse(null)
         val player = gamePlayerRepository.findByGameIdAndUserId(gameId, userId).orElse(null)

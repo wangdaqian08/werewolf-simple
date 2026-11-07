@@ -27,9 +27,19 @@ class PlayerRoleTest {
     }
 
     @Test
-    fun `the gods are SEER, WITCH, HUNTER, GUARD, IDIOT and MEDIUM - the villager is not a god`() {
+    fun `the gods are SEER, WITCH, HUNTER, GUARD, IDIOT, MEDIUM and KNIGHT - the villager is not a god`() {
         assertThat(PlayerRole.entries.filter { it.isGod })
-            .containsExactlyInAnyOrder(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER, PlayerRole.GUARD, PlayerRole.IDIOT, PlayerRole.MEDIUM)
+            .containsExactlyInAnyOrder(PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER, PlayerRole.GUARD, PlayerRole.IDIOT, PlayerRole.MEDIUM, PlayerRole.KNIGHT)
+    }
+
+    @Test
+    fun `KNIGHT is a god with no learned skill`() {
+        val knight = PlayerRole.KNIGHT
+        assertThat(knight.isGod).isTrue()
+        assertThat(knight.isWolf).isFalse()
+        assertThat(knight.isPackWolf).isFalse()
+        assertThat(knight.shootsOnDeath).isFalse()
+        assertThat(knight.learnedSkill).isEqualTo(LearnedSkill.NONE)
     }
 
     @Test

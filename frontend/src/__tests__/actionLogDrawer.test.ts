@@ -186,3 +186,41 @@ describe('ActionLogDrawer — shots (hunter / 黑狼王)', () => {
     wrapper.unmount()
   })
 })
+
+describe('ActionLogDrawer — KNIGHT_DUEL entry', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('KNIGHT_DUEL event renders', async () => {
+    vi.mocked(gameService.getActionLog).mockResolvedValue([
+      makeEntry('KNIGHT_DUEL', {
+        dayNumber: 2,
+        knightUserId: 'u-k',
+        knightNickname: 'Kay',
+        knightSeatIndex: 4,
+        targetUserId: 'u-t',
+        targetNickname: 'Tom',
+        targetSeatIndex: 6,
+        targetIsWolf: true,
+      }),
+    ])
+    const wrapper = mount(ActionLogDrawer, {
+      props: { gameId: 42, open: false },
+      attachTo: document.body,
+    })
+    await wrapper.setProps({ open: true })
+    await new Promise((r) => setTimeout(r, 0))
+    await wrapper.vm.$nextTick()
+
+    const section = document.body.querySelector('[data-testid="log-knight-duel"]')
+    expect(section?.textContent).toContain('騎士決鬥')
+    expect(section?.textContent).toContain('4號')
+    expect(section?.textContent).toContain('Kay')
+    expect(section?.textContent).toContain('6號')
+    expect(section?.textContent).toContain('Tom')
+    expect(section?.textContent).toContain('是狼人，出局')
+    wrapper.unmount()
+  })
+})

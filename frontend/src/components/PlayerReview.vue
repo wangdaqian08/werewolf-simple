@@ -267,6 +267,14 @@ function eventSegs(e: Exclude<PlayerDayEvent, PlayerVote>): Seg[] {
         seg(t('rv.selfDestruct')),
         ...(e.taken ? [seg(t('rv.tookAlong')), ...withTag(e.taken)] : []),
       ]
+    case 'KNIGHT_DUEL':
+      return [
+        seg('⚔️ '),
+        ...withTag(e.knight),
+        seg(t('rv.knightDuel')),
+        ...withTag(e.target),
+        seg(t(e.targetIsWolf ? 'rv.knightDuelWolf' : 'rv.knightDuelGood')),
+      ]
     case 'IDIOT_REVEAL':
       return [seg('🃏 '), name(e.player), seg(t('rv.idiotReveal'))]
     case 'DECLARED_OUT':

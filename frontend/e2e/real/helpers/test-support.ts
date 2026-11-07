@@ -60,3 +60,32 @@ export async function grantCredits(page: Page, userId: string, amount: number): 
     throw new Error(`grantCredits ${userId} +${amount}: HTTP ${result.status}`)
   return (result.body as { balance: number }).balance
 }
+
+/**
+ * Swap the dealt roles of two players through the e2e-only
+ * POST /api/test-support/games/{gameId}/swap-roles (ROLE_REVEAL only), so a spec
+ * can pin a role onto a given player. Throws on failure: the spec depends on it.
+ */
+export async function swapRoles(
+  hostPage: Page,
+  gameId: number,
+  userIdA: string,
+  userIdB: string,
+): Promise<void> {
+  const status = await hostPage.evaluate(
+    async ([gid, a, b]) => {
+      const res = await fetch(`/api/test-support/games/${gid}/swap-roles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('jwt')}`,
+        },
+        body: JSON.stringify({ userIdA: a, userIdB: b }),
+      })
+      return res.status
+    },
+    [gameId, userIdA, userIdB] as const,
+  )
+  if (status !== 200)
+    throw new Error(`swapRoles game=${gameId} ${userIdA}<->${userIdB}: HTTP ${status}`)
+}

@@ -129,6 +129,9 @@ class JsonWireFormatTest {
                 """{"type":"CloseEyes","gameId":1,"role":"WITCH","phase":"NIGHT","nightNumber":2}""",
         DomainEvent.WolfSelfDestructed(1, "u3", 4, "Wolfie") to
                 """{"type":"WolfSelfDestructed","gameId":1,"userId":"u3","seatIndex":4,"nickname":"Wolfie"}""",
+        DomainEvent.KnightDuel(1, "u8", 3, "u9", 6, true) to
+                """{"type":"KnightDuel","gameId":1,"knightUserId":"u8","knightSeatIndex":3,""" +
+                """"targetUserId":"u9","targetSeatIndex":6,"targetIsWolf":true}""",
         DomainEvent.PlayerDeclaredOut(1, "u5", 2, "Leaver") to
                 """{"type":"PlayerDeclaredOut","gameId":1,"userId":"u5","seatIndex":2,"nickname":"Leaver"}""",
         DomainEvent.RoleAction(1, "u7", PlayerRole.WITCH, "WITCH_ACT", listOf("u2"), canHeal = true, timeoutMs = 30_000L) to

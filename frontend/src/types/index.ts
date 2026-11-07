@@ -323,6 +323,7 @@ export type ReviewDayEvent =
   | ReviewVote
   | { type: 'HUNTER_SHOT'; hunter: ReviewPlayer; target: ReviewPlayer }
   | { type: 'SELF_DESTRUCT'; player: ReviewPlayer; taken: ReviewPlayer | null }
+  | { type: 'KNIGHT_DUEL'; knight: ReviewPlayer; target: ReviewPlayer; targetIsWolf: boolean }
   | { type: 'IDIOT_REVEAL'; player: ReviewPlayer }
   | { type: 'DECLARED_OUT'; player: ReviewPlayer }
   /** to = null: the badge was destroyed */
@@ -426,6 +427,7 @@ export type PlayerDayEvent =
   | PlayerVote
   | { type: 'HUNTER_SHOT'; hunter: PlayerSeat; target: PlayerSeat }
   | { type: 'SELF_DESTRUCT'; player: PlayerSeat; taken: PlayerSeat | null }
+  | { type: 'KNIGHT_DUEL'; knight: PlayerSeat; target: PlayerSeat; targetIsWolf: boolean }
   | { type: 'IDIOT_REVEAL'; player: PlayerSeat }
   | { type: 'DECLARED_OUT'; player: PlayerSeat }
   /** to = null: the badge was destroyed; points is set when the viewer receives it */
@@ -517,6 +519,7 @@ export type PlayerRole =
   | 'BLACK_WOLF_KING'
   | 'MECHANICAL_WOLF'
   | 'MEDIUM'
+  | 'KNIGHT'
 
 export interface GamePlayer {
   userId: string
@@ -576,6 +579,7 @@ export interface GameState {
   bgmTrack?: string | null
   /** Whether the witch may use her antidote to save herself (room config). */
   witchSelfSaveAllowed?: boolean
+  knightDuelUsed?: boolean // the knight's one duel is spent (server state; survives a refresh)
   noKillAllowed?: boolean // room toggle: wolves may choose 空刀
   guardSkipAllowed?: boolean // room toggle: guard may choose 空守
   roleHistory?: RoleHistory | null
@@ -733,6 +737,15 @@ export interface SelfDestructResult {
   takenNickname?: string | null
 }
 
+// The knight's duel (決鬥) this day, shown in the day banner. Cleared at night-init.
+export interface KnightDuelResult {
+  knightSeatIndex: number
+  knightNickname: string
+  targetSeatIndex: number
+  targetNickname: string
+  targetIsWolf: boolean
+}
+
 export interface DayPhaseState {
   subPhase: DaySubPhase
   dayNumber: number
@@ -740,6 +753,7 @@ export interface DayPhaseState {
   phaseStarted: number // epoch ms when phase started
   nightResult?: NightResult // always present for host; present for others only after RESULT_REVEALED
   selfDestruct?: SelfDestructResult | null // the wolf who self-destructed this day, if any
+  knightDuel?: KnightDuelResult | null // the knight's duel this day, if any
   canVote: boolean
   myVote?: string
   selectedPlayerId?: string
@@ -905,6 +919,7 @@ export interface ActionLogEntry {
     | 'IDIOT_REVEAL'
     | 'SHERIFF_RESULT'
     | 'SELF_DESTRUCT'
+    | 'KNIGHT_DUEL'
     | 'BADGE_HANDOVER'
     | 'DECLARED_OUT'
   message: string // raw JSON — parse per eventType
@@ -984,6 +999,17 @@ export interface SelfDestructPayload {
   takenUserId?: string
   takenNickname?: string
   takenSeatIndex?: number
+}
+
+export interface KnightDuelPayload {
+  dayNumber: number
+  knightUserId: string
+  knightNickname: string
+  knightSeatIndex: number
+  targetUserId: string
+  targetNickname: string
+  targetSeatIndex: number
+  targetIsWolf: boolean
 }
 
 // ── WebSocket STOMP ───────────────────────────────────────────────────────────

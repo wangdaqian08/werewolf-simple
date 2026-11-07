@@ -173,7 +173,7 @@ class SelfDestructService(
             alivePlayers = freshAlivePlayers,
             mode = context.room.winCondition,
             trigger = WinCheckTrigger.POST_VOTE,
-            counterplay = com.werewolf.game.phase.HardModeCounterplay.of(freshAlivePlayers, context.allNightPhases),
+            counterplay = com.werewolf.game.phase.HardModeCounterplay.of(freshAlivePlayers, context.allNightPhases, knightDuelUsed = context.game.knightDuelTargetUserId != null),
             roster = context.players,
         )
         if (winner != null) {

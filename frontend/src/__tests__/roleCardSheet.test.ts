@@ -24,6 +24,22 @@ describe('RoleCardSheet', () => {
     expect(rules[2]?.textContent).toBe('不能連續兩晚守護同一名玩家。')
   })
 
+  it('role card shows the knight rules', () => {
+    mount(RoleCardSheet, { props: { role: 'KNIGHT' }, attachTo: document.body })
+    expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('騎士')
+    const rules = [...document.body.querySelectorAll('[data-testid="rc-rules"] li')]
+    expect(rules).toHaveLength(6)
+    expect(rules[0]?.textContent).toBe('陣營：好人陣營（神職）。')
+    expect(rules[5]?.textContent).toBe('死者是警長時照常移交警徽。')
+  })
+
+  it('black wolf king rules mention 被騎士決鬥', () => {
+    mount(RoleCardSheet, { props: { role: 'BLACK_WOLF_KING' }, attachTo: document.body })
+    expect(document.body.querySelector('[data-testid="rc-rules"]')?.textContent).toContain(
+      '被女巫毒死、自爆、被白狼王帶走或被騎士決鬥時不能開槍',
+    )
+  })
+
   it('shows wolf teammates, a dead one struck through', () => {
     mount(RoleCardSheet, {
       props: { role: 'WEREWOLF', teammates: [mate('u3', 3, 'Cat'), mate('u5', 5, 'Eve', false)] },

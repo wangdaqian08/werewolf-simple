@@ -153,3 +153,48 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
     expect(disabled(w, 'role-toggle-BLACK_WOLF_KING')).toBe(true) // 2 wolves = 2 specials
   })
 })
+
+describe('RoomSetupPanel — 騎士', () => {
+  beforeEach(() => h.updateBoardMock.mockReset().mockResolvedValue({ config: {}, players: [] }))
+  afterEach(() => vi.clearAllMocks())
+
+  const savedRoles = async (w: Awaited<ReturnType<typeof mountSetup>>) => {
+    await w.find('[data-testid="room-setup-done"]').trigger('click')
+    await flushPromises()
+    return h.updateBoardMock.mock.lastCall?.[1].roles as string[]
+  }
+
+  it('KNIGHT toggle shows in room setup and is sent in roles', async () => {
+    const w = await mountSetup()
+    await w.find('[data-testid="role-toggle-KNIGHT"]').trigger('click')
+    expect(chipCount(w, 'KNIGHT')).toBe(1)
+    expect(await savedRoles(w)).toContain('KNIGHT')
+  })
+
+  it('default board for each player count is unchanged', async () => {
+    const boards: Record<number, string[]> = {}
+    for (const n of [6, 7, 8, 9, 10, 11, 12, 13, 14, 15]) {
+      h.updateBoardMock.mockClear()
+      const w = await mountSetup()
+      for (let c = 9; c < n; c++)
+        await w.find('[data-testid="player-count-increment"]').trigger('click')
+      for (let c = 9; c > n; c--)
+        await w.find('[data-testid="player-count-decrement"]').trigger('click')
+      boards[n] = await savedRoles(w)
+    }
+    const base = ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER']
+    // Recorded before KNIGHT existed: KNIGHT is appended last, so no default board gains it.
+    expect(boards).toEqual({
+      6: base,
+      7: base,
+      8: base,
+      9: base,
+      10: base,
+      11: base,
+      12: base,
+      13: base,
+      14: base,
+      15: [...base, 'GUARD'],
+    })
+  })
+})

@@ -319,6 +319,17 @@ class GameService(
                     "takenNickname"  to takenId?.let { displayNameFor(it) },
                 )
             }
+            // Public: the knight's duel, for its own day's banner only.
+            val knightDuel = game.knightDuelTargetUserId?.takeIf { game.knightDuelDay == game.dayNumber }?.let { targetId ->
+                val knightId = players.firstOrNull { it.role == PlayerRole.KNIGHT }?.userId
+                mapOf(
+                    "knightSeatIndex"  to (knightId?.let { playerMap[it]?.seatIndex } ?: 0),
+                    "knightNickname"   to (knightId?.let { displayNameFor(it) } ?: ""),
+                    "targetSeatIndex"  to (playerMap[targetId]?.seatIndex ?: 0),
+                    "targetNickname"   to displayNameFor(targetId),
+                    "targetIsWolf"     to (playerMap[targetId]?.role?.isWolf == true),
+                )
+            }
             mapOf(
                 "subPhase"      to (game.subPhase ?: DaySubPhase.RESULT_HIDDEN.name),
                 "dayNumber"     to game.dayNumber,
@@ -326,6 +337,7 @@ class GameService(
                 "phaseStarted"  to 0L,
                 "nightResult"   to nightResult,
                 "selfDestruct"  to selfDestruct,
+                "knightDuel"    to knightDuel,
                 "canVote"       to (myPlayer != null && myPlayer.alive && myPlayer.canVote),
                 // Private: true only on the pending shooter's own state.
                 "canShoot"      to (game.pendingShooterUserId == requestingUserId),
@@ -450,6 +462,7 @@ class GameService(
             "subPhase" to game.subPhase,
             "dayNumber" to game.dayNumber,
             "sheriffUserId" to game.sheriffUserId,
+            "knightDuelUsed" to (game.knightDuelTargetUserId != null),
             "hasSheriff" to room?.hasSheriff,
             // bgmTrack lives in Room.config (JSONB GameConfig). roomStore on
             // the frontend is in-memory only, so a mid-game page reload loses

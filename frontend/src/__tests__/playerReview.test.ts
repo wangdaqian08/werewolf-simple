@@ -235,6 +235,34 @@ describe('PlayerReview', () => {
     expect(mount(PlayerReview, { props: { review: r } }).text()).toContain('被投出 +3')
   })
 
+  it('KNIGHT_DUEL day event renders, wolf and good outcomes', () => {
+    const r = review({
+      rounds: [
+        {
+          day: 2,
+          night: null,
+          events: [
+            {
+              type: 'KNIGHT_DUEL',
+              knight: seat(3, 'Kay', 'KNIGHT'),
+              target: seat(1, 'Alice', null, 'WOLF'),
+              targetIsWolf: true,
+            },
+            {
+              type: 'KNIGHT_DUEL',
+              knight: seat(3, 'Kay', 'KNIGHT'),
+              target: seat(2, 'Bob'),
+              targetIsWolf: false,
+            },
+          ],
+        },
+      ],
+    })
+    const text = mount(PlayerReview, { props: { review: r } }).text()
+    expect(text).toContain('3號 Kay〔騎士〕 翻牌決鬥 1號 Alice〔狼人〕，是狼人，出局')
+    expect(text).toContain('3號 Kay〔騎士〕 翻牌決鬥 2號 Bob，是好人，騎士出局')
+  })
+
   it('points: no block at all when the game was never settled', () => {
     expect(mount(PlayerReview, { props: { review: review() } }).text()).not.toContain('本局積分')
   })

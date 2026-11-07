@@ -121,6 +121,43 @@ class GameServiceDayPhaseTest {
         assertThat(dayPhase["subPhase"]).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
     }
 
+    // ── knight duel ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `day state carries knightDuel on its day only`() {
+        val players = listOf(player(hostId, 0), player("kn", 1, PlayerRole.KNIGHT), player("w1", 2, PlayerRole.WEREWOLF))
+        val users = listOf(user(hostId, "Host"), user("kn", "Knight"), user("w1", "Wolf"))
+        val g = game(DaySubPhase.RESULT_REVEALED.name).also { it.knightDuelTargetUserId = "w1"; it.knightDuelDay = day }
+        setupGameAndPlayers(g, players, users)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(nightPhase()))
+
+        assertThat(dayResult(gameService.getGameState(gameId, hostId))["knightDuel"]).isEqualTo(
+            mapOf(
+                "knightSeatIndex" to 1, "knightNickname" to "Knight",
+                "targetSeatIndex" to 2, "targetNickname" to "Wolf", "targetIsWolf" to true,
+            ),
+        )
+
+        g.dayNumber = day + 1
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day + 1)).thenReturn(Optional.of(nightPhase()))
+        assertThat(dayResult(gameService.getGameState(gameId, hostId))["knightDuel"]).isNull()
+    }
+
+    @Test
+    fun `knightDuelUsed false before, true after`() {
+        val players = listOf(player(hostId, 0), player("kn", 1, PlayerRole.KNIGHT), player("v", 2))
+        val users = listOf(user(hostId, "Host"), user("kn", "Knight"), user("v", "V"))
+        val g = game(DaySubPhase.RESULT_REVEALED.name)
+        setupGameAndPlayers(g, players, users)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(nightPhase()))
+
+        assertThat(gameService.getGameState(gameId, hostId)["knightDuelUsed"]).isEqualTo(false)
+
+        g.knightDuelTargetUserId = "v"
+        g.knightDuelDay = day
+        assertThat(gameService.getGameState(gameId, hostId)["knightDuelUsed"]).isEqualTo(true)
+    }
+
     // ── nightResult — wolf kill ──────────────────────────────────────────────
 
     @Test
