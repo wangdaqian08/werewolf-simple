@@ -97,6 +97,26 @@ test('the host reopens players & roles from the room', async ({page}) => {
     await expect(page.getByTestId('room-setup-panel')).toBeVisible()
 })
 
+// 机械狼 and 骑士 come from different boards, so one blocks the other (spec D4).
+test('the mechanical wolf and the knight block each other in players & roles', async ({page}, testInfo) => {
+    await openSetup(page)
+    const mech = page.getByTestId('role-toggle-MECHANICAL_WOLF')
+    const knight = page.getByTestId('role-toggle-KNIGHT')
+    const exclusive = /機械狼與騎士不能同時選|Mechanical Wolf or Knight, not both/
+
+    await knight.click()
+    await expect(mech).toBeDisabled()
+    await expect(page.getByTestId('role-hint-MECHANICAL_WOLF')).toContainText(exclusive)
+    await page.getByTestId('room-setup-panel').screenshot({path: testInfo.outputPath('knight-blocks-mech.png')})
+
+    await knight.click() // off again: the mechanical wolf is free
+    await expect(mech).toBeEnabled()
+    await mech.click()
+    await expect(knight).toBeDisabled()
+    await expect(page.getByTestId('role-hint-KNIGHT')).toContainText(exclusive)
+    await page.getByTestId('room-setup-panel').screenshot({path: testInfo.outputPath('mech-blocks-knight.png')})
+})
+
 // ── Host waiting room ─────────────────────────────────────────────────────────
 
 test('waiting room shows room code', async ({page}) => {

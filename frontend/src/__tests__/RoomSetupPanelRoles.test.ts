@@ -154,6 +154,45 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
   })
 })
 
+describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
+  beforeEach(() => h.updateBoardMock.mockReset())
+  afterEach(() => vi.clearAllMocks())
+
+  const click = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
+    w.find(`[data-testid="${id}"]`).trigger('click')
+  const disabled = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
+    w.find(`[data-testid="${id}"]`).attributes('disabled') !== undefined
+  const hint = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
+    w.find(`[data-testid="role-hint-${id}"]`)
+
+  it('KNIGHT is blocked while MECHANICAL_WOLF is on, with a hint', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-MECHANICAL_WOLF')
+    expect(disabled(w, 'role-toggle-KNIGHT')).toBe(true)
+    expect(hint(w, 'KNIGHT').text()).toContain('機械狼與騎士不能同時選')
+    await click(w, 'role-toggle-KNIGHT')
+    expect(chipCount(w, 'KNIGHT')).toBe(0)
+  })
+
+  it('MECHANICAL_WOLF is blocked while KNIGHT is on, with a hint', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-KNIGHT')
+    expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(true)
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toContain('機械狼與騎士不能同時選')
+    await click(w, 'role-toggle-MECHANICAL_WOLF')
+    expect(chipCount(w, 'MECHANICAL_WOLF')).toBe(0)
+  })
+
+  it('turning one off frees the other', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-KNIGHT')
+    await click(w, 'role-toggle-KNIGHT') // off again
+    expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(false)
+    expect(hint(w, 'KNIGHT').exists()).toBe(false)
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toContain('9 人及以上')
+  })
+})
+
 describe('RoomSetupPanel — 騎士', () => {
   beforeEach(() => h.updateBoardMock.mockReset().mockResolvedValue({ config: {}, players: [] }))
   afterEach(() => vi.clearAllMocks())

@@ -449,6 +449,8 @@ class RoomService(
      *      King shares the gate (owner's call: one rule for both). The mechanical
      *      wolf is not part of the pack, so it needs a pack wolf to act with
      *   4. SEER and MEDIUM are mutually exclusive
+     *   5. MECHANICAL_WOLF and KNIGHT are mutually exclusive: they come from different boards, and no
+     *      rule says what a mechanical wolf gains by learning the knight
      *
      * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
      * for the host-facing stepper — they intentionally do NOT gate the API,
@@ -476,6 +478,9 @@ class RoomService(
         // The seer and the medium both open the same night slot; the board takes one.
         if (PlayerRole.SEER in roles && PlayerRole.MEDIUM in roles) {
             throw InvalidRoleCompositionException("Seer and Medium cannot be on the same board")
+        }
+        if (PlayerRole.MECHANICAL_WOLF in roles && PlayerRole.KNIGHT in roles) {
+            throw InvalidRoleCompositionException("Mechanical Wolf and Knight cannot be on the same board")
         }
         val specials = roles.filter {
             it == PlayerRole.WHITE_WOLF_KING || it == PlayerRole.BLACK_WOLF_KING || it == PlayerRole.MECHANICAL_WOLF

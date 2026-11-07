@@ -17,6 +17,7 @@ for any of them.
 |---|---|---|
 | D1 | **骑士只能在非警上环节发动决斗.** The knight can never duel during the sheriff campaign, in any sub-phase. A knight killed at night cannot duel even before its death is announced. | [游民岛: 骑士被刀了可以用技能吗](https://www.youmindao.com/langrensha/216.html): "首轮有上警环节，该环节虽然法官还没有宣布骑士出局，但其实无法在该阶段发动决斗"; "骑士只能在非警上环节发动决斗". [游民岛: 骑士决斗规则](https://www.youmindao.com/langrensha/215.html): the duel happens after the campaign and before the exile vote. |
 | D2 | **A duelled wolf has no death skill.** 黑狼王 does not shoot, 白狼王 does not take anyone. | [游民岛: 狼王被骑士戳了可以开枪吗](https://www.youmindao.com/langrensha/247.html); [维基学院: 骑士](https://zh.wikiversity.org/wiki/%E7%8B%BC%E4%BA%BA%E6%AE%BA/%E9%81%8A%E6%88%B2%E8%A7%92%E8%89%B2/%E9%A8%8E%E5%A3%AB): "決鬥死亡的狼王、白狼王和狼美人技能不能發動". |
+| D4 | **机械狼 never shares a board with 骑士 or 守墓人** (owner, 2026-11-08; replaces the earlier Q11 "learns them as no skill"). The room setup blocks the second role while the first is on, and the server rejects the combination. The knight ships this in its own PR; the gravekeeper PR adds 守墓人 to the same rule. | No source defines it. Every 机械狼 rule page lists only the roles of its own board, 机械狼通灵师 (通灵师, 女巫, 猎人, 守卫, 平民, 狼人): [游民星空 测评](https://shouyou.gamersky.com/news/202409/1811620.shtml), [langrensha.net](https://www.langrensha.net/strategy/meachanical_wolf.html), [werewolves.games](https://werewolves.games/ji-xie-lang/). 骑士 and 守墓人 come from other boards (白狼王骑士; 石像鬼守墓人). |
 | D3 | **No duel after a 自爆 the same day.** | Inferred, no explicit text found: a self-destruct ends the day at once and skips the remaining speeches ([当游网](https://www.3h3.com/news/238158.html)). The duel only exists during day speeches. |
 
 ## Balance (summary for the owner)
@@ -47,7 +48,7 @@ for any of them.
   screen is unverified.
 - Recommended-board presets.
 - A sound effect for the duel. The knight has no narration.
-- Mechanical-wolf skills for the new roles. It learns them as "no skill".
+- Mechanical-wolf skills for the new roles. They never share a board with it (D4).
 - Fixing the existing host declare-out case where the current sheriff speaker is declared out. The speech does not
   auto-advance and the host must press next (`SheriffService.kt:511-526`). The knight cannot hit this case (D1), so it
   is tracked separately.
@@ -127,8 +128,9 @@ for any of them.
 
 - **Seer** sees both roles as good.
 - **Medium** sees the exact role, `KNIGHT` / `GRAVEKEEPER`.
-- **Mechanical wolf** that learns either role gets no skill. The W5 table gains them in the "no skill" row.
-- **Room setup:** neither role excludes another, and neither has a minimum player count.
+- **Mechanical wolf:** never on the same board as either role (D4), so it can never learn them.
+- **Room setup:** both are blocked while the mechanical wolf is on, and the mechanical wolf is blocked while either is
+  on (D4). Neither has a minimum player count.
 
 ## Role descriptions (rules text) to change
 
@@ -138,9 +140,8 @@ zh is Traditional Chinese. en mirrors it line for line; the builder translates.
 
 - `BLACK_WOLF_KING`: add `被騎士決鬥` to the "不能開槍" sentence.
 - `WHITE_WOLF_KING`: add `被騎士決鬥` to the "…後沒有技能" sentence.
-- `MECHANICAL_WOLF`:
-  - append `（被騎士決鬥除外）` after `獵人、黑狼王出局時可開槍（學習當晚起）`;
-  - add the line `學到騎士、守墓人沒有技能。`.
+- `MECHANICAL_WOLF` (D4): add the line `機械狼和騎士不能同時出現在同一個房間。`. The gravekeeper PR changes it to
+  `機械狼和騎士、守墓人不能同時出現在同一個房間。`
 
 **Unchanged roles:**
 
@@ -152,10 +153,11 @@ zh is Traditional Chinese. en mirrors it line for line; the builder translates.
 ```
 陣營：好人陣營（神職）。
 白天公布夜晚結果後、開始投票前，可以翻牌決鬥一名存活玩家（不能是自己），整局一次；警長競選期間不能決鬥。
-對方是狼人（含白狼王、黑狼王、機械狼）：對方出局，本日不再投票，直接進入黑夜；被決鬥的狼不能開槍或帶人。
+對方是狼人（含白狼王、黑狼王）：對方出局，本日不再投票，直接進入黑夜；被決鬥的狼不能開槍或帶人。
 對方是好人：你出局，當天照常進行。
 當天已有狼人自爆時不能決鬥。決鬥成功會立即入夜，建議等開槍結束後再決鬥。
 死者是警長時照常移交警徽。
+機械狼和騎士不能同時出現在同一個房間。
 ```
 
 **New `GRAVEKEEPER` rules:**
@@ -164,6 +166,7 @@ zh is Traditional Chinese. en mirrors it line for line; the builder translates.
 陣營：好人陣營（神職）。
 每晚得知前一天被投票放逐的玩家是好人還是狼人（白狼王、黑狼王、機械狼都算狼人）；第一晚沒有信息。
 只算投票放逐；被開槍、被決鬥、被白狼王帶走、被房主判定出局、白痴翻牌都不算，此時顯示「昨日無人被放逐」。
+機械狼和守墓人不能同時出現在同一個房間。
 ```
 
 Also add `desc` / `descShort` lines in the same style as the other roles. The wording is the builder's call.
