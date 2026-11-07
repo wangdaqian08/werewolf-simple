@@ -163,6 +163,7 @@ ROLE_HINTS='{
   "GUARD":    "← use for GUARD_PROTECT",
   "HUNTER":   "← use for HUNTER_SHOOT",
   "IDIOT":    "← use for IDIOT_REVEAL",
+  "KNIGHT":   "← use for KNIGHT_DUEL",
   "VILLAGER": ""
 }'
 
