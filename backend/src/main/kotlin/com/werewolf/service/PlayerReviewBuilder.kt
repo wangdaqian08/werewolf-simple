@@ -115,8 +115,8 @@ object PlayerReviewBuilder {
         }
         days.flatMap(::visibleEvents).forEach { e ->
             if (e.type == "KNIGHT_DUEL") {
-                // Public: the table saw the knight challenge and who fell.
-                (e.payload["knightUserId"] as? String)?.let { knownCamps[it] = KnownCamp.GOOD }
+                // Public: the table saw the knight flip face up and challenge, and who fell.
+                (e.payload["knightUserId"] as? String)?.let { knownRoles[it] = PlayerRole.KNIGHT }
                 (e.payload["targetUserId"] as? String)?.let { knownCamps[it] = if (e.payload["targetIsWolf"] == true) KnownCamp.WOLF else KnownCamp.GOOD }
                 return@forEach
             }

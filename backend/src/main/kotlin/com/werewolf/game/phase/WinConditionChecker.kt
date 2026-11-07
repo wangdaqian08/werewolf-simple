@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component
 enum class WinCheckTrigger { POST_VOTE, POST_NIGHT }
 
 /**
- * Active counterplay tokens at a HARD_MODE win check. All three must be false for the
+ * Active counterplay tokens at a HARD_MODE win check. All four must be false for the
  * wolves to claim a logical (numeric-parity) win.
  *
  *   hasGuard — a living GUARD (can still protect tomorrow night).

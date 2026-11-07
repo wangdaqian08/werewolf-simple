@@ -314,6 +314,23 @@ class KnightDuelServiceTest {
     }
 
     @Test
+    fun `HARD_MODE - a duelled wolf leaves parity and the spent duel is no counterplay, wolves win`() {
+        // 3 wolves + knight + villager: the duel kills one wolf -> 2 wolves vs 2 humans, and the
+        // living knight's duel is now used, so the wolves hold parity with no counterplay.
+        val ctx = context(
+            winCondition = WinConditionMode.HARD_MODE,
+            extra = listOf(player("wolf:003", 5, PlayerRole.WEREWOLF)),
+        )
+
+        service.duel(req(target = wolfId), ctx)
+
+        assertThat(players.first { it.userId == knightId }.alive).isTrue()
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(ctx.game.winner).isEqualTo(WinnerSide.WEREWOLF)
+        verify(rewardSettlementService).settle(gameId, WinnerSide.WEREWOLF)
+    }
+
+    @Test
     fun `a duel that ends nothing does not settle the game`() {
         val ctx = context()
 

@@ -196,7 +196,8 @@ const roomStore = useRoomStore()
 const openRole = ref<string | null>(null)
 
 const MIN_PLAYERS = 6
-// 15 = 5 wolves / 5 gods / 5 villagers, the largest board the current roles balance.
+// 15 = 5 wolves / 5 gods / 5 villagers, the largest board the current roles balance
+// (up to 6 gods are possible: GOD_IDS.length - 1, as SEER/MEDIUM are mutually exclusive).
 // Above 12 the day/night seat grids get a 4th row and scroll on 417×614 (accepted).
 const MAX_PLAYERS = 15
 
@@ -227,7 +228,7 @@ function decrement() {
   if (totalPlayers.value > minPlayers.value) totalPlayers.value--
 }
 
-// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (only 5 exist) and
+// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (at most 6: GOD_IDS.length - 1, SEER/MEDIUM exclusive) and
 // always leave ≥ 1 villager seat, and a special wolf (白狼王 / 黑狼王 / 機械狼, any
 // may be on) needs 9+ players and each a plain fellow wolf: wolves ≥ specials + 1
 // (the backend enforces these rules too).

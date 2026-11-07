@@ -342,10 +342,14 @@ class PlayerReviewBuilderTest {
     }
 
     @Test
-    fun `knownCamps marks a duelled wolf as WOLF and the knight as good`() {
+    fun `a duel reveals the knight's role to every viewer and the target only as a camp`() {
         val wolf = build("v", knightBoard(), listOf(night(1)), listOf(knightDuel(1, "kn", "w1", targetIsWolf = true)))
-        assertThat(wolf.seats.first { it.userId == "w1" }.camp).isEqualTo(KnownCamp.WOLF)
-        assertThat(wolf.seats.first { it.userId == "kn" }.camp).isEqualTo(KnownCamp.GOOD)
+        val knight = wolf.seats.first { it.userId == "kn" }
+        assertThat(knight.role).isEqualTo(PlayerRole.KNIGHT)
+        assertThat(knight.camp).isNull()
+        val target = wolf.seats.first { it.userId == "w1" }
+        assertThat(target.role).isNull()
+        assertThat(target.camp).isEqualTo(KnownCamp.WOLF)
 
         val good = build("v", knightBoard(), listOf(night(1)), listOf(knightDuel(1, "kn", "seer", targetIsWolf = false)))
         assertThat(good.seats.first { it.userId == "seer" }.camp).isEqualTo(KnownCamp.GOOD)
