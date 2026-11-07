@@ -16,7 +16,7 @@
     </div>
 
     <!-- Revealed card -->
-    <div v-else class="role-card">
+    <div v-else class="role-card" data-testid="role-reveal-card" :data-role="role">
       <div class="role-emoji">{{ meta.emoji }}</div>
       <div class="role-name-zh">{{ roleName(role) }}</div>
       <div :class="`role-label-${meta.team}`" class="role-label">{{ roleTag(role) }}</div>

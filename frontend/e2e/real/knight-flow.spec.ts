@@ -8,14 +8,18 @@
  *     遊戲記錄 drawer has the duel entry.
  *  3. In a second game the knight duels a good player: the knight dies and the
  *     host can still start the vote.
+ *  4. In a third game the host is made the knight (test-only role swap): the host's
+ *     menu has 宣布玩家出局 but no 決鬥 during the campaign, both after the reveal,
+ *     and the host's duel against a wolf ends the day's vote.
  *
  *  Same conventions as self-destruct-flow.spec.ts: testid locators, condition
  *  polling, assertions on observable DOM + backend state.
  */
 import { expect, type Page, test } from '@playwright/test'
 import { type GameContext, setupGame } from './helpers/multi-browser'
-import { type BotInfo, type RoleName, sheriff } from './helpers/shell-runner'
+import { type BotInfo, getRoles, type RoleName, sheriff } from './helpers/shell-runner'
 import { verifyAllBrowsersPhase } from './helpers/assertions'
+import { swapRoles } from './helpers/test-support'
 import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-screenshot'
 import { driveMinimalNight1ViaDom, waitForDayDiscussionAfterSheriff } from './helpers/night-driver'
 import { advanceAllSheriffSpeeches, waitForSheriffSubPhase } from './helpers/flow-drivers'
@@ -63,6 +67,11 @@ async function revealNightResult(ctx: GameContext): Promise<void> {
 /** The knight opens 決鬥, picks `target` and confirms. */
 async function duel(page: Page, target: BotInfo): Promise<void> {
   await page.getByTestId('action-menu-btn').click()
+  await duelFromOpenMenu(page, target)
+}
+
+/** With the Action menu open: 決鬥 → `target` → confirm. */
+async function duelFromOpenMenu(page: Page, target: BotInfo): Promise<void> {
   await page.getByTestId('action-menu-knight-duel').click()
   const targetBtn = page.getByTestId(`action-menu-duel-${target.userId}`)
   await expect(targetBtn).toBeVisible({ timeout: 5_000 })
@@ -81,6 +90,84 @@ async function expectNoDuelItem(page: Page, isHost: boolean): Promise<void> {
   await expect(page.getByTestId('action-menu-knight-duel')).toHaveCount(0)
   await page.getByTestId('action-menu-backdrop').click({ position: { x: 5, y: 5 } })
   await expect(content).toBeHidden({ timeout: 5_000 })
+}
+
+/** SIGNUP → SPEECH: `campaigner` runs, every other alive player (the host included) passes. */
+async function campaignToSpeech(ctx: GameContext, campaigner: BotInfo): Promise<void> {
+  sheriff('campaign', { player: campaigner.nick, room: ctx.roomCode })
+  const hostUserId = await readHostUserId(ctx.hostPage)
+  const everyone = Object.values(ctx.roleMap).flatMap((b) => b ?? [])
+  for (const userId of await readAlivePlayerIds(ctx.hostPage, ctx.gameId)) {
+    if (userId === campaigner.userId) continue
+    const nick = userId === hostUserId ? 'HOST' : everyone.find((b) => b.userId === userId)?.nick
+    if (nick) sheriff('pass', { player: nick, room: ctx.roomCode })
+  }
+  expect(await waitForSheriffSubPhase(ctx.hostPage, ctx.gameId, 'SPEECH', 15_000)).toBe(true)
+}
+
+/** SPEECH → badge to `campaigner` → night result revealed (DAY_DISCUSSION/RESULT_REVEALED). */
+async function electAndReveal(ctx: GameContext, campaigner: BotInfo): Promise<void> {
+  // Bots vote for the candidate, the candidate and the host abstain.
+  await advanceAllSheriffSpeeches(ctx.hostPage, ctx.gameId)
+  expect(await waitForSheriffSubPhase(ctx.hostPage, ctx.gameId, 'VOTING', 15_000)).toBe(true)
+  sheriff('vote', { target: campaigner.nick, room: ctx.roomCode })
+  sheriff('abstain', { player: campaigner.nick, room: ctx.roomCode })
+  const abstainBtn = ctx.hostPage.getByTestId('sheriff-abstain')
+  await expect(abstainBtn).toBeVisible({ timeout: 10_000 })
+  await abstainBtn.click()
+  const sheriffReveal = ctx.hostPage.getByTestId('sheriff-reveal-result')
+  await expect(sheriffReveal).toBeEnabled({ timeout: 15_000 })
+  await sheriffReveal.click()
+  await waitForDayDiscussionAfterSheriff(ctx)
+  await revealNightResult(ctx)
+}
+
+/**
+ * Hand the host the KNIGHT (still ROLE_REVEAL — setupGame leaves the game there
+ * until the host starts the night; confirmation is role-independent). The host
+ * re-reveals and re-confirms its card on reload, which also proves the card shows
+ * the knight; the former knight's page reloads onto its new role. ctx is rewritten
+ * so the night drivers find the right pages.
+ */
+async function makeHostTheKnight(ctx: GameContext): Promise<void> {
+  const hostUserId = await readHostUserId(ctx.hostPage)
+  expect(hostUserId, 'host userId').toBeTruthy()
+  const oldHostRole = ctx.hostRole
+  expect(oldHostRole, 'host role must be known').toBeTruthy()
+  if (oldHostRole !== 'KNIGHT') {
+    const knightBot = ctx.roleMap.KNIGHT?.[0]
+    const knightBotPage = ctx.pages.get('KNIGHT')
+    expect(knightBot, 'need the dealt knight').toBeDefined()
+    expect(knightBotPage, 'knight browser must exist').toBeTruthy()
+    await swapRoles(ctx.hostPage, Number(ctx.gameId), hostUserId!, knightBot!.userId)
+
+    // Every role is in BROWSER_ROLES, so the host's old role had the host page.
+    ctx.pages.set('KNIGHT', ctx.hostPage)
+    ctx.pages.set(oldHostRole!, knightBotPage!)
+    ctx.bots.delete('KNIGHT')
+    ctx.bots.set(oldHostRole!, knightBot!)
+    ctx.roleMap = getRoles(ctx.roomCode)
+    ctx.hostRole = 'KNIGHT'
+    ctx.isHostRole = (role) => role === 'KNIGHT'
+
+    await knightBotPage!.reload()
+    await knightBotPage!.locator('.game-wrap').waitFor({ state: 'visible', timeout: 15_000 })
+  }
+
+  const state = await fetchGameState(ctx.hostPage, ctx.gameId)
+  expect(state?.phase).toBe('ROLE_REVEAL')
+  expect(state?.myRole, 'backend: the host holds KNIGHT').toBe('KNIGHT')
+  expect(
+    ctx.roleMap.KNIGHT?.map((b) => b.userId),
+    'roles.sh: the host is the only knight',
+  ).toEqual([hostUserId])
+
+  // GameView's confirmed flag is local, so a reload brings the role card back.
+  await ctx.hostPage.reload()
+  await ctx.hostPage.getByTestId('reveal-role-btn').click()
+  await expect(ctx.hostPage.getByTestId('role-reveal-card')).toHaveAttribute('data-role', 'KNIGHT')
+  await ctx.hostPage.getByTestId('confirm-role-btn').click()
+  await expect(ctx.hostPage.getByTestId('start-night')).toBeVisible({ timeout: 15_000 })
 }
 
 test.describe('Knight duel during the sheriff campaign and against a wolf', () => {
@@ -129,35 +216,15 @@ test.describe('Knight duel during the sheriff campaign and against a wolf', () =
     await waitForUiSubPhase(kp, 'SIGNUP')
     await expectNoDuelItem(kp, kp === ctx.hostPage)
 
-    // SIGNUP → SPEECH fires once every alive player has decided: one candidate, everyone else passes.
-    sheriff('campaign', { player: campaigner.nick, room: ctx.roomCode })
-    const hostUserId = await readHostUserId(ctx.hostPage)
-    const everyone = Object.values(ctx.roleMap).flatMap((b) => b ?? [])
-    for (const userId of await readAlivePlayerIds(ctx.hostPage, ctx.gameId)) {
-      if (userId === campaigner.userId) continue
-      const nick = userId === hostUserId ? 'HOST' : everyone.find((b) => b.userId === userId)?.nick
-      if (nick) sheriff('pass', { player: nick, room: ctx.roomCode })
-    }
-    expect(await waitForSheriffSubPhase(ctx.hostPage, ctx.gameId, 'SPEECH', 15_000)).toBe(true)
+    // SIGNUP → SPEECH fires once every alive player has decided.
+    await campaignToSpeech(ctx, campaigner)
 
     await waitForUiSubPhase(kp, 'SPEECH')
     await expectNoDuelItem(kp, kp === ctx.hostPage)
   })
 
   test('knight duels a wolf after the reveal', async ({}, testInfo) => {
-    // Finish the election: bots vote for the candidate, the candidate and the host abstain.
-    await advanceAllSheriffSpeeches(ctx.hostPage, ctx.gameId)
-    expect(await waitForSheriffSubPhase(ctx.hostPage, ctx.gameId, 'VOTING', 15_000)).toBe(true)
-    sheriff('vote', { target: campaigner.nick, room: ctx.roomCode })
-    sheriff('abstain', { player: campaigner.nick, room: ctx.roomCode })
-    const abstainBtn = ctx.hostPage.getByTestId('sheriff-abstain')
-    await expect(abstainBtn).toBeVisible({ timeout: 10_000 })
-    await abstainBtn.click()
-    const sheriffReveal = ctx.hostPage.getByTestId('sheriff-reveal-result')
-    await expect(sheriffReveal).toBeEnabled({ timeout: 15_000 })
-    await sheriffReveal.click()
-    await waitForDayDiscussionAfterSheriff(ctx)
-    await revealNightResult(ctx)
+    await electAndReveal(ctx, campaigner)
 
     // Before the duel the host's footer is the vote-starter.
     await expect(ctx.hostPage.getByTestId('day-start-vote')).toBeVisible({ timeout: 10_000 })
@@ -259,5 +326,84 @@ test.describe('Knight duel against a good player', () => {
       await waitForPhase(ctx.hostPage, ctx.gameId, 'DAY_VOTING', 15_000),
       'host started the vote after the good-player duel',
     ).toBe(true)
+  })
+})
+
+test.describe('host is the knight', () => {
+  test.describe.configure({ mode: 'serial' })
+  test.setTimeout(process.env.CI ? 360_000 : 180_000)
+
+  let ctx: GameContext
+  let victim: BotInfo
+  let campaigner: BotInfo
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(120_000)
+    ctx = await setupGame(browser, {
+      totalPlayers: 9,
+      hasSheriff: true,
+      roles: ROLES,
+      browserRoles: BROWSER_ROLES,
+    })
+  })
+
+  test.afterAll(async () => {
+    await ctx?.cleanup()
+  })
+
+  test.afterEach(async ({}, testInfo) => {
+    if (testInfo.status === 'failed' && ctx?.pages) {
+      await attachCompositeOnFailure(ctx.pages, testInfo)
+    }
+  })
+
+  test('host knight: 宣布玩家出局 but no 決鬥 during the campaign', async () => {
+    await makeHostTheKnight(ctx)
+    // Picked after the swap: the host's old role may have been a villager.
+    const villagers = nonHost(ctx, 'VILLAGER')
+    expect(villagers.length, 'need two non-host villagers').toBeGreaterThanOrEqual(2)
+    ;[victim, campaigner] = villagers as [BotInfo, BotInfo]
+
+    await night1(ctx, victim)
+    expect(
+      await waitForPhase(ctx.hostPage, ctx.gameId, 'SHERIFF_ELECTION', 15_000),
+      'Day 1 + sheriff on → SHERIFF_ELECTION',
+    ).toBe(true)
+
+    await waitForUiSubPhase(ctx.hostPage, 'SIGNUP')
+    await expectNoDuelItem(ctx.hostPage, true)
+    await campaignToSpeech(ctx, campaigner)
+    await waitForUiSubPhase(ctx.hostPage, 'SPEECH')
+    await expectNoDuelItem(ctx.hostPage, true)
+  })
+
+  test('host knight duels a wolf after the reveal', async ({}, testInfo) => {
+    await electAndReveal(ctx, campaigner)
+    const hp = ctx.hostPage
+    const hostUserId = await readHostUserId(hp)
+    const wolf = nonHost(ctx, 'WEREWOLF')[0]
+    expect(wolf, 'need a non-host wolf to duel').toBeDefined()
+
+    await hp.getByTestId('action-menu-btn').click()
+    await expect(hp.getByTestId('action-menu-declare-out')).toBeVisible({ timeout: 5_000 })
+    await expect(hp.getByTestId('action-menu-knight-duel')).toBeVisible()
+    await duelFromOpenMenu(hp, wolf!)
+
+    expect(
+      await waitForDaySkipVoting(hp, ctx.gameId, 10_000),
+      'backend daySkipVoting=true after the host knight duels a wolf',
+    ).toBe(true)
+    const alive = await readAlivePlayerIds(hp, ctx.gameId)
+    expect(alive.has(wolf!.userId), 'the dueled wolf is dead').toBe(false)
+    expect(alive.has(hostUserId!), 'the host knight survives a wolf duel').toBe(true)
+
+    const seerPage = ctx.pages.get('SEER')
+    expect(seerPage, 'seer browser must exist').toBeTruthy()
+    for (const page of [hp, seerPage!]) {
+      await expect(page.getByTestId('day-banner-knight-duel')).toBeVisible({ timeout: 10_000 })
+    }
+    await expect(hp.getByTestId('day-enter-night')).toBeVisible({ timeout: 10_000 })
+    await expect(hp.getByTestId('day-start-vote')).toHaveCount(0)
+    await captureSnapshot(ctx.pages, testInfo, 'host-knight-duel-wolf')
   })
 })
