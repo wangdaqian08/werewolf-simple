@@ -14,10 +14,10 @@ and not only in a chat transcript.
  |---|---|
 | Step 0: camp concept (`PlayerRole.isWolf` / `isGod`), replace `role == WEREWOLF` checks | ✅ Done (`Enums.kt`, PR #149) |
 | 白狼王 `WHITE_WOLF_KING` | ✅ Done (PR #149) |
-| `MAX_PLAYERS` | ⚠️ 15 now (`CreateRoomView.vue`). Target 16, max 18 |
-| 骑士 | ❌ Not started |
+| `MAX_PLAYERS` | ⚠️ 15 now (`RoomSetupPanel.vue`). Target 16, max 18 |
+| 骑士 | 📝 Rules settled 2026-11-07 (`docs/superpowers/specs/2026-11-07-knight-gravekeeper-design.md`), not built |
 | 狼王 (黑狼王) `BLACK_WOLF_KING` | ✅ Done (rules: `docs/black-wolf-king.md`) |
-| 守墓人 | ❌ Not started |
+| 守墓人 | 📝 Rules settled 2026-11-07 (`docs/superpowers/specs/2026-11-07-knight-gravekeeper-design.md`), not built |
 
 ## Roles
 
@@ -60,30 +60,21 @@ villagers at about 1/3 each. Every board below stays inside the existing `floor(
 
 Rule details vary between platforms. Do not pick these silently.
 
-**骑士**
-- When can the knight duel: only during day speeches, or also during the sheriff speeches and voting?
-- If the wolf dies, does night start with no vote that day? The sheriff badge: what happens if the duelled
-  wolf or the knight holds it?
-- If the duelled wolf is 狼王, can it shoot? If it is 白狼王, can it still take someone?
-- One duel per game, and only while alive?
+**骑士** — ✅ settled 2026-11-07, see `docs/superpowers/specs/2026-11-07-knight-gravekeeper-design.md`
 
 **狼王** — ✅ settled 2026-10-21, see `docs/black-wolf-king.md`
 - Shot on: vote-out, wolf night kill, hunter shot (chain both ways). No shot: poison, 自爆.
-  白狼王 can coexist (2026-11-01; needs ≥ 3 wolves; a 黑狼王 taken by 白狼王 does not shoot). A knight duel is still open — decide it with the knight.
+  白狼王 can coexist (2026-11-01; needs ≥ 3 wolves; a 黑狼王 taken by 白狼王 does not shoot). Knight duel: no shot (settled 2026-11-07).
 - It can self-destruct like a normal wolf (no take), and then it cannot shoot.
 - The shot is anonymous in-game ("X号 开枪"); the post-game review names the role.
 
-**守墓人**
-- No one voted out (tie, idiot revealed, wolf self-destruct): what does the step show?
-- Is the result camp only (good / wolf), and is 白狼王/狼王 shown as "wolf"?
-- Where does the step go in the night order? It needs open/close narration audio even when the
-  gravekeeper is dead (dead-role audio rule, ADR-010).
+**守墓人** — ✅ settled 2026-11-07, see `docs/superpowers/specs/2026-11-07-knight-gravekeeper-design.md`
 
 ## Per-role touchpoints (from PR #149, 白狼王)
 
 Backend
 - `model/Enums.kt`: `PlayerRole` entry (set `isWolf` for wolf roles); new `ActionType` / `NightSubPhase` if needed
-- `model/Room.kt` `has<Role>` flag + Flyway `V27__<role>.sql` (V26 is the latest now) + `FlywayMigrationsIntegrationTest`
+- `model/Room.kt` `has<Role>` flag + Flyway `V<n>__<role>.sql` (V31 is the latest on 2026-11-07) + `FlywayMigrationsIntegrationTest`
 - `service/RoomService.kt`: create mapping, room role list, `validateRoleComposition` rules (wolves ≥ kings + 1)
 - `service/GameService.kt`: role list used for dealing
 - `game/role/<Role>Handler.kt` + `game/action/GameActionDispatcher.kt`
