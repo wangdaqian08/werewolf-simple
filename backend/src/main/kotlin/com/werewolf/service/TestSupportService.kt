@@ -2,6 +2,7 @@ package com.werewolf.service
 
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.CreditTxType
+import com.werewolf.model.GamePhase
 import com.werewolf.repository.CreditTransactionRepository
 import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GameEventRepository
@@ -15,6 +16,7 @@ import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.SheriffCandidateRepository
 import com.werewolf.repository.SheriffElectionRepository
 import com.werewolf.repository.VoteRepository
+import jakarta.persistence.EntityManager
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
@@ -54,6 +56,7 @@ class TestSupportService(
     private val gameSettlementRepository: GameSettlementRepository,
     private val nightOrchestrator: NightOrchestrator,
     private val walletService: WalletService,
+    private val entityManager: EntityManager,
 ) {
 
     private val log = LoggerFactory.getLogger(TestSupportService::class.java)
@@ -120,5 +123,27 @@ class TestSupportService(
     fun grantCredits(userId: String, amount: Int): Int {
         walletService.credit(userId, amount, CreditTxType.ADMIN_GRANT, note = "e2e")
         return walletService.balance(userId)
+    }
+
+    /**
+     * Swap the dealt roles of [userIdA] and [userIdB] in [gameId] so an e2e spec can
+     * pin a role onto a given player. ROLE_REVEAL only: nothing derived from the role
+     * exists yet (canVote/idiotRevealed/learnedRole are role-independent defaults at
+     * deal time). Perk activations are left alone; e2e rooms run with perks off.
+     * Returns userId -> role after the swap, or null when the request is invalid.
+     */
+    @Transactional
+    fun swapRoles(gameId: Int, userIdA: String, userIdB: String): Map<String, String>? {
+        if (userIdA == userIdB) return null
+        val game = gameRepository.findByIdForUpdate(gameId).orElse(null) ?: return null
+        if (game.phase != GamePhase.ROLE_REVEAL) return null
+        val a = gamePlayerRepository.findByGameIdAndUserId(gameId, userIdA).orElse(null) ?: return null
+        val b = gamePlayerRepository.findByGameIdAndUserId(gameId, userIdB).orElse(null) ?: return null
+        // GamePlayer.role is immutable in product code; a bulk update keeps it that way.
+        val update = "UPDATE GamePlayer gp SET gp.role = :role WHERE gp.id = :id"
+        entityManager.createQuery(update).setParameter("role", b.role).setParameter("id", a.id).executeUpdate()
+        entityManager.createQuery(update).setParameter("role", a.role).setParameter("id", b.id).executeUpdate()
+        log.info("[TestSupport] swapRoles game={} {}:{}->{} {}:{}->{}", gameId, userIdA, a.role, b.role, userIdB, b.role, a.role)
+        return mapOf(userIdA to b.role.name, userIdB to a.role.name)
     }
 }

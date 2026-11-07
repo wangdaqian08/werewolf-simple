@@ -1,6 +1,7 @@
 package com.werewolf.integration
 
 import com.werewolf.controller.GrantCreditsRequest
+import com.werewolf.controller.SwapRolesRequest
 import com.werewolf.controller.TestSupportController
 import com.werewolf.model.CreditTransaction
 import com.werewolf.model.CreditTxType
@@ -9,6 +10,7 @@ import com.werewolf.model.EliminationHistory
 import com.werewolf.model.Game
 import com.werewolf.model.GameConfig
 import com.werewolf.model.GameEvent
+import com.werewolf.model.GamePhase
 import com.werewolf.model.GamePlayer
 import com.werewolf.model.GameSettlement
 import com.werewolf.model.NightPhase
@@ -230,5 +232,60 @@ class TestSupportCleanupIntegrationTest {
         val u = newUser()
         assertThat(controller.grantCredits(GrantCreditsRequest(userId = u, amount = 0)).statusCode.value()).isEqualTo(400)
         assertThat(walletRepository.findById(u).map { it.balance }).contains(70)
+    }
+
+    private data class Dealt(val gameId: Int, val knight: String, val wolf: String)
+
+    /** A fresh game in ROLE_REVEAL (the default phase) with a KNIGHT and a WEREWOLF. */
+    private fun seedDealtGame(): Dealt {
+        val knight = newUser()
+        val wolf = newUser()
+        val room = roomRepository.save(
+            Room(roomCode = TestConstants.nextSeededRoomCode(), hostUserId = knight, totalPlayers = 6, config = GameConfig()),
+        )
+        val game = gameRepository.save(Game(roomId = room.roomId ?: error("room not persisted"), hostUserId = knight))
+        val gameId = game.gameId ?: error("game not persisted")
+        gamePlayerRepository.save(GamePlayer(gameId = gameId, userId = knight, seatIndex = 1, role = PlayerRole.KNIGHT))
+        gamePlayerRepository.save(GamePlayer(gameId = gameId, userId = wolf, seatIndex = 2, role = PlayerRole.WEREWOLF))
+        return Dealt(gameId, knight, wolf)
+    }
+
+    private fun roleOf(gameId: Int, userId: String) =
+        gamePlayerRepository.findByGameIdAndUserId(gameId, userId).map { it.role }.orElse(null)
+
+    @Test
+    fun `swap-roles in ROLE_REVEAL swaps the two players' roles`() {
+        val d = seedDealtGame()
+        val response = controller.swapRoles(d.gameId, SwapRolesRequest(userIdA = d.knight, userIdB = d.wolf))
+        assertThat(response.statusCode.value()).isEqualTo(200)
+        assertThat(response.body).isEqualTo(mapOf(d.knight to "WEREWOLF", d.wolf to "KNIGHT"))
+        assertThat(roleOf(d.gameId, d.knight)).isEqualTo(PlayerRole.WEREWOLF)
+        assertThat(roleOf(d.gameId, d.wolf)).isEqualTo(PlayerRole.KNIGHT)
+    }
+
+    @Test
+    fun `swap-roles outside ROLE_REVEAL is rejected with 400 and changes nothing`() {
+        val d = seedDealtGame()
+        gameRepository.findById(d.gameId).ifPresent { it.phase = GamePhase.NIGHT; gameRepository.save(it) }
+        val response = controller.swapRoles(d.gameId, SwapRolesRequest(userIdA = d.knight, userIdB = d.wolf))
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(roleOf(d.gameId, d.knight)).isEqualTo(PlayerRole.KNIGHT)
+    }
+
+    @Test
+    fun `swap-roles with a player not in the game is rejected with 400`() {
+        val d = seedDealtGame()
+        val outsider = newUser()
+        val response = controller.swapRoles(d.gameId, SwapRolesRequest(userIdA = d.knight, userIdB = outsider))
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(roleOf(d.gameId, d.knight)).isEqualTo(PlayerRole.KNIGHT)
+    }
+
+    @Test
+    fun `swap-roles with the same user twice is rejected with 400`() {
+        val d = seedDealtGame()
+        val response = controller.swapRoles(d.gameId, SwapRolesRequest(userIdA = d.knight, userIdB = d.knight))
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(roleOf(d.gameId, d.knight)).isEqualTo(PlayerRole.KNIGHT)
     }
 }
