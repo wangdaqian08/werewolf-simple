@@ -1,5 +1,7 @@
 # 守墓人 (Gravekeeper) Implementation Plan
 
+> **Status (2026-11-08): PAUSED, awaiting owner review.** Nothing is implemented. Resume by having the owner review this plan, then execute it subagent-driven on branch `feat/gravekeeper`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add the `GRAVEKEEPER` god role end to end (backend, frontend, tests), per the spec's G1–G4. This is PR 2 of 2; the knight shipped in #179.
