@@ -70,13 +70,17 @@ async function duel(page: Page, target: BotInfo): Promise<void> {
   await page.getByTestId('action-menu-duel-confirm').click()
 }
 
-/** Open the Action menu, assert there is no 決鬥 item, close it again. */
-async function expectNoDuelItem(page: Page): Promise<void> {
+/**
+ * Open the Action menu, assert there is no 決鬥 item, close it again. The menu has
+ * rendered once its content shows: the empty state for a guest, 宣布玩家出局 for the host.
+ */
+async function expectNoDuelItem(page: Page, isHost: boolean): Promise<void> {
   await page.getByTestId('action-menu-btn').click()
-  await expect(page.locator('.action-menu-sheet')).toBeVisible({ timeout: 5_000 })
+  const content = page.getByTestId(isHost ? 'action-menu-declare-out' : 'action-menu-empty')
+  await expect(content).toBeVisible({ timeout: 5_000 })
   await expect(page.getByTestId('action-menu-knight-duel')).toHaveCount(0)
-  await page.locator('.action-menu-backdrop').click({ position: { x: 5, y: 5 } })
-  await expect(page.locator('.action-menu-sheet')).toBeHidden({ timeout: 5_000 })
+  await page.getByTestId('action-menu-backdrop').click({ position: { x: 5, y: 5 } })
+  await expect(content).toBeHidden({ timeout: 5_000 })
 }
 
 test.describe('Knight duel during the sheriff campaign and against a wolf', () => {
@@ -123,7 +127,7 @@ test.describe('Knight duel during the sheriff campaign and against a wolf', () =
     ).toBe(true)
 
     await waitForUiSubPhase(kp, 'SIGNUP')
-    await expectNoDuelItem(kp)
+    await expectNoDuelItem(kp, kp === ctx.hostPage)
 
     // SIGNUP → SPEECH fires once every alive player has decided: one candidate, everyone else passes.
     sheriff('campaign', { player: campaigner.nick, room: ctx.roomCode })
@@ -137,7 +141,7 @@ test.describe('Knight duel during the sheriff campaign and against a wolf', () =
     expect(await waitForSheriffSubPhase(ctx.hostPage, ctx.gameId, 'SPEECH', 15_000)).toBe(true)
 
     await waitForUiSubPhase(kp, 'SPEECH')
-    await expectNoDuelItem(kp)
+    await expectNoDuelItem(kp, kp === ctx.hostPage)
   })
 
   test('knight duels a wolf after the reveal', async ({}, testInfo) => {

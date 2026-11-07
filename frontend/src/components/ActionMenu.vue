@@ -10,7 +10,12 @@
     <Teleport to="body">
       <!-- Backdrop -->
       <Transition name="fade">
-        <div v-if="menuOpen" class="action-menu-backdrop" @click="closeMenu" />
+        <div
+          v-if="menuOpen"
+          class="action-menu-backdrop"
+          data-testid="action-menu-backdrop"
+          @click="closeMenu"
+        />
       </Transition>
 
       <!-- Sheet -->
