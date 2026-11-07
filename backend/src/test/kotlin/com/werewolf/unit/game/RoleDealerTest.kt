@@ -3,6 +3,7 @@ package com.werewolf.unit.game
 import com.werewolf.game.RoleDealer
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.PlayerRole.*
+import com.werewolf.model.Room
 import com.werewolf.model.RolePickChoice
 import org.junit.jupiter.api.Test
 import kotlin.random.Random
@@ -81,6 +82,17 @@ class RoleDealerTest {
             seen.merge(role, 1, Int::plus)
         }
         listOf(SEER, WITCH, HUNTER).forEach { assertTrue((seen[it] ?: 0) >= 120, "$it seen ${seen[it]}") }
+    }
+
+    @Test
+    fun `deals exactly one KNIGHT as a god seat`() {
+        val room = Room(roomCode = "123", hostUserId = "h", totalPlayers = 9, wolfCount = 3, hasKnight = true)
+        val roles = RoleDealer.roleList(room, 9)
+
+        assertEquals(1, roles.count { it == KNIGHT })
+        assertEquals(room.wolfCount, roles.count { it.isWolf })
+        assertEquals(RolePickChoice.GOD, RolePickChoice.campOf(KNIGHT))
+        assertEquals(9, roles.size)
     }
 
     @Test

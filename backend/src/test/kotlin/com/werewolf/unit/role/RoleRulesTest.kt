@@ -89,6 +89,14 @@ class RoleRulesTest {
     }
 
     @Test
+    fun `mechanical wolf learning KNIGHT gets no skill`() {
+        val mech = player(PlayerRole.MECHANICAL_WOLF, learned = PlayerRole.KNIGHT)
+        val n1 = night(1, learn = "u5")
+        assertThat(RoleRules.mechNightSkill(mech, 2, listOf(n1, night(2)))).isEqualTo(MechNightSkill.NONE)
+        assertThat(RoleRules.shootsOnDeath(mech)).isFalse()
+    }
+
+    @Test
     fun `mechNightSkill fails loudly when a learned role has no learn night`() {
         val mech = player(PlayerRole.MECHANICAL_WOLF, learned = PlayerRole.WITCH)
         org.junit.jupiter.api.assertThrows<IllegalStateException> {

@@ -56,6 +56,14 @@ class Game(
     @Column(name = "self_destruct_taken_user_id", length = 128)
     var selfDestructTakenUserId: String? = null,
 
+    // The knight's duel target (one per game) and the day it was fired. The target is
+    // kept so a dueled wolf's death can be told apart from a self-destruct.
+    @Column(name = "knight_duel_target_user_id", length = 128)
+    var knightDuelTargetUserId: String? = null,
+
+    @Column(name = "knight_duel_day")
+    var knightDuelDay: Int? = null,
+
     // The dead shooter (hunter / black wolf king) who may fire now. Private: only
     // that player's state shows it. Set at the night reveal, a vote-out or a
     // chained shot; cleared by the shot or pass, or when the host moves on

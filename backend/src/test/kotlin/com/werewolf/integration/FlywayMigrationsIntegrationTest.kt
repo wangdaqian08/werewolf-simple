@@ -197,6 +197,41 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V32 stores KNIGHT roles, the room flag and the duel columns`() {
+        flyway().migrate()
+
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('host', 'host'), ('k', 'k'), ('w', 'w')")
+            exec("INSERT INTO rooms (room_id, room_code, host_user_id, total_players, has_knight) VALUES (1, '101', 'host', 9, TRUE)")
+            // Both duel columns are nullable: a game without a duel inserts without them.
+            exec("INSERT INTO games (game_id, room_id, host_user_id, phase, day_number) VALUES (1, 1, 'host', 'DAY_DISCUSSION', 1)")
+            exec("UPDATE games SET knight_duel_target_user_id = 'w', knight_duel_day = 1 WHERE game_id = 1")
+            exec("INSERT INTO game_players (game_id, user_id, seat_index, role) VALUES (1, 'k', 1, 'KNIGHT'), (1, 'w', 2, 'WEREWOLF')")
+            exec(
+                "INSERT INTO elimination_history (game_id, day_number, eliminated_user_id, eliminated_role, hunter_shot_user_id, hunter_shot_role) " +
+                        "VALUES (1, 1, 'w', 'WEREWOLF', 'k', 'KNIGHT')"
+            )
+            val nullable = createStatement().use { st ->
+                st.executeQuery(
+                    "SELECT column_name, is_nullable FROM information_schema.columns " +
+                            "WHERE table_schema = '$schema' AND table_name = 'games' " +
+                            "AND column_name IN ('knight_duel_target_user_id', 'knight_duel_day')"
+                ).use { rs -> buildMap { while (rs.next()) put(rs.getString(1), rs.getString(2)) } }
+            }
+            assertThat(nullable).containsEntry("knight_duel_target_user_id", "YES").containsEntry("knight_duel_day", "YES")
+            // Old rooms keep working: the flag defaults to FALSE.
+            exec("INSERT INTO rooms (room_id, room_code, host_user_id, total_players) VALUES (2, '102', 'host', 9)")
+            val flag = createStatement().use { st ->
+                st.executeQuery("SELECT has_knight FROM rooms WHERE room_id = 2").use { rs -> rs.next(); rs.getBoolean(1) }
+            }
+            assertThat(flag).isFalse()
+        }
+        // The role CHECK still rejects unknown roles.
+        assertThatThrownBy { sql { exec("INSERT INTO game_players (game_id, user_id, seat_index, role) VALUES (1, 'host', 3, 'NOT_A_ROLE')") } }
+            .hasMessageContaining("game_players_role_check")
+    }
+
+    @Test
     fun `V28 accepts ADMIN_GRANT ledger rows and still rejects unknown types`() {
         flyway().migrate()
 

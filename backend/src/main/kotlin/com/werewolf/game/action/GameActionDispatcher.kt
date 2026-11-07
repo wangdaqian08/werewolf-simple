@@ -126,6 +126,9 @@ class GameActionDispatcher(
             // ── Wolf self-destruction (day action) ─────────────────────────────
             ActionType.WOLF_SELF_DESTRUCT -> selfDestructService.selfDestruct(request, context)
 
+            // ── Knight duel (day action) — the duel service lands in a later task ─
+            ActionType.KNIGHT_DUEL -> GameActionResult.Rejected("Knight duel is not available yet")
+
             // ── Host declares a player out (they left the game) ─────────────────
             ActionType.HOST_DECLARE_OUT -> hostDeclareOutService.declareOut(request, context)
         }

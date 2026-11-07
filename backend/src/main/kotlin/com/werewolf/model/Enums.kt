@@ -23,7 +23,7 @@ enum class GamePhase {
 // learnedSkill = what a mechanical wolf gains by learning this role (NONE = nothing).
 enum class PlayerRole(val isWolf: Boolean = false) {
     WEREWOLF(isWolf = true), VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT,
-    WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true), MECHANICAL_WOLF(isWolf = true), MEDIUM;
+    WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true), MECHANICAL_WOLF(isWolf = true), MEDIUM, KNIGHT;
 
     val isGod: Boolean get() = !isWolf && this != VILLAGER
     val shootsOnDeath: Boolean get() = this == HUNTER || this == BLACK_WOLF_KING
@@ -126,6 +126,9 @@ enum class ActionType {
 
     // Wolf self-destruction (day action)
     WOLF_SELF_DESTRUCT,
+
+    // The knight's one-shot duel (day action)
+    KNIGHT_DUEL,
 
     // Host declares a player out (they had to leave the game)
     HOST_DECLARE_OUT,
