@@ -97,6 +97,79 @@
       </div>
     </template>
 
+    <!-- ── SPEECH - host draws the first speaker, then picks a direction ── -->
+    <template v-else-if="election.subPhase === 'SPEECH' && !election.currentSpeakerId">
+      <template v-if="isHost">
+        <div class="section-label">{{ $t('sheriff.order.candidates') }}</div>
+        <div class="order-chips">
+          <span
+            v-for="c in runningCandidates"
+            :key="c.userId"
+            class="order-chip"
+            :class="{ 'order-chip-on': c.userId === drawnId }"
+          >
+            {{ seatText(c.userId) }} {{ c.nickname }}
+          </span>
+        </div>
+        <div class="draw-box">
+          <div class="section-label">{{ $t('sheriff.order.startLabel') }}</div>
+          <div class="draw-num" :class="`draw-${drawState}`" data-testid="sheriff-order-number">
+            {{ drawn ? seatByUserId.get(drawn.userId) : '?' }}
+          </div>
+          <div class="draw-nick">{{ drawn?.nickname ?? '' }}</div>
+          <div class="draw-hint">{{ $t(`sheriff.order.hint.${drawState}`) }}</div>
+        </div>
+        <div v-if="drawQuitSeat != null" class="draw-error" data-testid="sheriff-order-quit-notice">
+          {{ $t('sheriff.order.drawnQuit', { n: drawQuitSeat }) }}
+        </div>
+      </template>
+      <div v-else class="order-wait" data-testid="sheriff-order-waiting">
+        <div class="order-wait-title">{{ $t('sheriff.order.waiting') }}</div>
+        <div class="order-wait-sub">{{ $t('sheriff.order.waitingSub') }}</div>
+      </div>
+
+      <div class="spacer" />
+      <div class="action-footer">
+        <template v-if="isHost">
+          <button
+            class="btn"
+            :class="drawState === 'spinning' ? 'btn-primary' : 'btn-gold'"
+            data-testid="sheriff-order-spin"
+            @click="toggleDraw"
+          >
+            {{ $t(`sheriff.order.spin.${drawState}`) }}
+          </button>
+          <div class="vote-btn-row">
+            <button
+              v-for="dir in ['CLOCKWISE', 'COUNTER_CLOCKWISE'] as const"
+              :key="dir"
+              class="btn btn-secondary dir-btn"
+              :data-testid="`sheriff-order-${dir.toLowerCase()}`"
+              :class="{ 'is-loading': actionPending }"
+              :disabled="drawState !== 'stopped' || !drawnId || actionPending"
+              @click="drawnId && emit('setSpeechOrder', drawnId, dir)"
+            >
+              {{ $t(`sheriff.order.${dir}`) }}
+              <small>{{ $t(`sheriff.order.${dir}_HINT`) }}</small>
+            </button>
+          </div>
+        </template>
+        <template v-if="iAmCandidate">
+          <div v-if="isHost" class="host-divider" />
+          <div class="quit-warning">{{ $t('sheriff.quitWarning') }}</div>
+          <button
+            class="btn btn-danger-outline"
+            data-testid="sheriff-quit"
+            :class="{ 'is-loading': actionPending }"
+            :disabled="actionPending"
+            @click="emit('quit')"
+          >
+            {{ $t('sheriff.quitCampaign') }}
+          </button>
+        </template>
+      </div>
+    </template>
+
     <!-- ── SPEECH - My Turn ── -->
     <template v-else-if="election.subPhase === 'SPEECH' && election.currentSpeakerId === myUserId">
       <div class="your-turn-box">
@@ -112,6 +185,7 @@
           :key="uid"
           :class="speakingRowClass(uid, idx)"
           class="speaking-row"
+          data-testid="sheriff-speaking-row"
         >
           <span class="speak-icon-cell">{{ speakingIcon(uid) }}</span>
           <span
@@ -186,6 +260,7 @@
           :key="uid"
           :class="speakingRowClass(uid, idx)"
           class="speaking-row"
+          data-testid="sheriff-speaking-row"
         >
           <span class="speak-icon-cell">{{ speakingIcon(uid) }}</span>
           <span
@@ -631,7 +706,7 @@
 
 <script lang="ts" setup>
 import { t as tr } from '@/i18n'
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import Avatar from '@/components/Avatar.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
 import CountdownArc from '@/components/CountdownArc.vue'
@@ -664,6 +739,7 @@ const emit = defineEmits<{
   vote: [userId: string]
   abstain: []
   advanceSpeech: []
+  setSpeechOrder: [startUserId: string, direction: 'CLOCKWISE' | 'COUNTER_CLOCKWISE']
   revealResult: []
   endResult: []
   appoint: [userId: string]
@@ -707,6 +783,55 @@ const seatByUserId = computed(() => {
   props.players?.forEach((p) => m.set(p.userId, p.seatIndex))
   return m
 })
+
+// ── Speech order draw (host only, presentation): the number jumps between the
+// running candidates until the host stops it; the backend validates the pick.
+const drawState = ref<'idle' | 'spinning' | 'stopped'>('idle')
+const drawnId = ref<string | null>(null)
+const drawQuitSeat = ref<number | null>(null)
+let drawTimer: ReturnType<typeof setInterval> | null = null
+const drawn = computed(() => (drawnId.value ? candidateMap.value.get(drawnId.value) : undefined))
+
+function seatText(userId: string) {
+  const seat = seatByUserId.value.get(userId)
+  return seat != null ? tr('common.seat', { n: seat }) : ''
+}
+
+function drawNext() {
+  const pool = runningCandidates.value
+  const others = pool.length > 1 ? pool.filter((c) => c.userId !== drawnId.value) : pool
+  if (others.length) drawnId.value = others[Math.floor(Math.random() * others.length)]!.userId
+}
+
+function stopDrawTimer() {
+  if (drawTimer) clearInterval(drawTimer)
+  drawTimer = null
+}
+
+function toggleDraw() {
+  if (drawState.value === 'spinning') {
+    stopDrawTimer()
+    drawState.value = 'stopped'
+    return
+  }
+  drawQuitSeat.value = null
+  drawState.value = 'spinning'
+  drawNext()
+  drawTimer = setInterval(drawNext, 100)
+}
+
+// The drawn player quit before the host picked a direction: start over.
+watch(
+  () => drawn.value?.status,
+  (status) => {
+    if (status !== 'QUIT' || drawState.value !== 'stopped' || !drawnId.value) return
+    drawQuitSeat.value = seatByUserId.value.get(drawnId.value) ?? null
+    drawnId.value = null
+    drawState.value = 'idle'
+  },
+)
+
+onUnmounted(stopDrawTimer)
 
 const maxVotes = computed(() =>
   props.election.result ? Math.max(...props.election.result.tally.map((t) => t.votes)) : 0,
@@ -1327,5 +1452,91 @@ function speakerLabel(uid: string, idx: number) {
 
 .bold {
   font-weight: 700;
+}
+
+/* Speech order draw */
+.order-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.order-chip {
+  font-size: 0.75rem;
+  padding: 0.1875rem 0.5625rem;
+  border-radius: 999px;
+  background: var(--paper);
+  border: 1px solid var(--border-l);
+  color: var(--muted);
+}
+.order-chip-on {
+  border-color: var(--gold);
+  color: var(--gold);
+  font-weight: 700;
+  background: rgba(160, 120, 48, 0.1);
+}
+.draw-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  padding: 1.125rem 0.75rem 0.875rem;
+  text-align: center;
+}
+.draw-num {
+  font-family: 'Noto Serif SC', serif;
+  font-weight: 900;
+  font-size: 4.25rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.draw-idle {
+  color: var(--border);
+}
+.draw-spinning {
+  color: var(--muted);
+}
+.draw-stopped {
+  color: var(--red);
+}
+.draw-nick {
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  min-height: 1.3em;
+}
+.draw-hint {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.draw-error {
+  font-size: 0.75rem;
+  color: var(--red);
+  text-align: center;
+}
+.dir-btn {
+  flex-direction: column;
+  line-height: 1.2;
+  font-family: 'Noto Serif SC', serif;
+}
+.dir-btn small {
+  display: block;
+  font-family: 'Noto Sans SC', sans-serif;
+  font-weight: 400;
+  font-size: 0.6875rem;
+}
+.order-wait {
+  margin-top: 2.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+.order-wait-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.25rem;
+}
+.order-wait-sub {
+  font-size: 0.8125rem;
+  color: var(--muted);
 }
 </style>

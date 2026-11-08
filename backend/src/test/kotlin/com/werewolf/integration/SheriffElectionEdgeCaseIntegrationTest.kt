@@ -13,6 +13,7 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.SheriffElectionRepository
+import com.werewolf.service.SheriffService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -59,11 +60,13 @@ class SheriffElectionEdgeCaseIntegrationTest {
         it.contentType = MediaType.APPLICATION_JSON
     }
 
-    private fun action(token: String, gameId: Int, actionType: String, targetUserId: String? = null) =
+    private fun action(
+        token: String, gameId: Int, actionType: String, targetUserId: String? = null, payload: Map<String, Any?>? = null,
+    ) =
         restTemplate.postForEntity(
             ACTION_URL,
             HttpEntity(
-                mapOf("gameId" to gameId, "actionType" to actionType, "targetUserId" to targetUserId),
+                mapOf("gameId" to gameId, "actionType" to actionType, "targetUserId" to targetUserId, "payload" to payload),
                 headers(token)
             ),
             Map::class.java
@@ -136,8 +139,19 @@ class SheriffElectionEdgeCaseIntegrationTest {
         return gameId
     }
 
-    /** Advance speech until VOTING sub-phase (handles random speaking order). */
+    /** Host sets the speech order (first in seat order, clockwise) if speeches have not started. */
+    private fun setSpeechOrderIfUnset(hostToken: String, gameId: Int) {
+        val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
+        if (election.subPhase != ElectionSubPhase.SPEECH || election.currentSpeakerIdx != SheriffService.NO_SPEAKER) return
+        val first = election.speakingOrder!!.split(",").first()
+        assertThat(
+            action(hostToken, gameId, "SHERIFF_SET_SPEECH_ORDER", first, mapOf("direction" to "CLOCKWISE")).statusCode
+        ).isEqualTo(HttpStatus.OK)
+    }
+
+    /** Advance speech until VOTING sub-phase. */
     private fun advanceSpeechUntilVoting(hostToken: String, gameId: Int) {
+        setSpeechOrderIfUnset(hostToken, gameId)
         for (i in 0..9) { // safety limit
             val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
             if (election.subPhase == ElectionSubPhase.VOTING) return

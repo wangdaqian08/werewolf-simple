@@ -13,6 +13,7 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.SheriffElectionRepository
+import com.werewolf.service.SheriffService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -119,8 +120,19 @@ class SheriffElectionIntegrationTest {
         return Sextuple(host, g1, g2, g3, g4, g5, roomId)
     }
 
-    /** Advance speech until VOTING sub-phase (handles random speaking order). */
+    /** Host sets the speech order (first in seat order, clockwise) if speeches have not started. */
+    private fun setSpeechOrderIfUnset(hostToken: String, gameId: Int) {
+        val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
+        if (election.subPhase != ElectionSubPhase.SPEECH || election.currentSpeakerIdx != SheriffService.NO_SPEAKER) return
+        val first = election.speakingOrder!!.split(",").first()
+        assertThat(
+            action(hostToken, gameId, "SHERIFF_SET_SPEECH_ORDER", first, mapOf("direction" to "CLOCKWISE")).statusCode
+        ).isEqualTo(HttpStatus.OK)
+    }
+
+    /** Advance speech until VOTING sub-phase. */
     private fun advanceSpeechUntilVoting(hostToken: String, gameId: Int) {
+        setSpeechOrderIfUnset(hostToken, gameId)
         for (i in 0..9) {
             val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
             if (election.subPhase == ElectionSubPhase.VOTING) return
@@ -227,7 +239,8 @@ class SheriffElectionIntegrationTest {
         assertThat(sheriffElectionRepository.findByGameId(gameId).orElseThrow().subPhase)
             .isEqualTo(ElectionSubPhase.SPEECH)
 
-        // SPEECH: 2 candidates → 2 advances to reach VOTING
+        // SPEECH: host sets the order, then 2 candidates → 2 advances to reach VOTING
+        setSpeechOrderIfUnset(host.token, gameId)
         assertThat(action(host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
         assertThat(action(host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
 
@@ -308,19 +321,39 @@ class SheriffElectionIntegrationTest {
 
         val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
         assertThat(election.subPhase).isEqualTo(ElectionSubPhase.SPEECH)
-        // Order itself is random (see SheriffServiceTest); here only membership is pinned.
+        // Seat order, nobody speaking until the host sets the order.
         assertThat(election.speakingOrder!!.split(","))
-            .containsExactlyInAnyOrderElementsOf(candidates.map { it.userId })
+            .containsExactlyElementsOf(listOf(r.g1, r.g2, r.g3, r.g4, r.g5).map { it.userId })
+        assertThat(election.currentSpeakerIdx).isEqualTo(SheriffService.NO_SPEAKER)
     }
 
     @Test
-    fun `sheriff speech order - host can no longer set a direction`() {
+    fun `sheriff speech order - host draws seat 3 counter-clockwise, speeches follow that order`() {
         val r = setupSheriffRoom("SOD")
         val gameId = startGameAndOpenSheriffElection(
             r.host, listOf(r.host, r.g1, r.g2, r.g3, r.g4, r.g5), r.roomId
         )
+        listOf(r.g1, r.g3, r.g5).forEach { assertThat(action(it.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK) }
+        listOf(r.host, r.g2, r.g4).forEach { assertThat(action(it.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK) }
+
+        // Speeches cannot start before the order is set
+        assertThat(action(r.host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        // Only the host sets it
         assertThat(
-            action(r.host.token, gameId, "SHERIFF_SET_SPEECH_ORDER", payload = mapOf("direction" to "DESC")).statusCode
+            action(r.g1.token, gameId, "SHERIFF_SET_SPEECH_ORDER", r.g3.userId, mapOf("direction" to "CLOCKWISE")).statusCode
+        ).isEqualTo(HttpStatus.BAD_REQUEST)
+
+        assertThat(
+            action(r.host.token, gameId, "SHERIFF_SET_SPEECH_ORDER", r.g3.userId, mapOf("direction" to "COUNTER_CLOCKWISE")).statusCode
+        ).isEqualTo(HttpStatus.OK)
+
+        val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
+        // seats 1, 3, 5 running; start at 3 going down: 3 → 1 → 5
+        assertThat(election.speakingOrder).isEqualTo(listOf(r.g3, r.g1, r.g5).joinToString(",") { it.userId })
+        assertThat(election.currentSpeakerIdx).isEqualTo(0)
+        // Set once: a second attempt is refused
+        assertThat(
+            action(r.host.token, gameId, "SHERIFF_SET_SPEECH_ORDER", r.g1.userId, mapOf("direction" to "CLOCKWISE")).statusCode
         ).isEqualTo(HttpStatus.BAD_REQUEST)
     }
 }

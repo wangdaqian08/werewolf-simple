@@ -201,7 +201,37 @@ export async function waitForSheriffSubPhase(
  * "Only host can advance speeches" rejections per CI run (see
  * docs/ci-tests-issues.md for the pre-fix rejection breakdown).
  */
+/**
+ * SPEECH opens with nobody speaking until the host draws a first speaker and
+ * picks a direction (SheriffElection.vue order picker → SHERIFF_SET_SPEECH_ORDER).
+ * Drives that through the host's DOM. No-op once speeches have started (a lone
+ * candidate speaks at once). Returns the drawn seat, or null when it was a no-op.
+ */
+export async function setSheriffSpeechOrderViaDom(
+  hostPage: Page,
+  gameId: string,
+  direction: 'CLOCKWISE' | 'COUNTER_CLOCKWISE' = 'CLOCKWISE',
+): Promise<number | null> {
+  if ((await readSheriffSubPhase(hostPage, gameId)) !== 'SPEECH') return null
+  if (await readSheriffSpeaker(hostPage, gameId)) return null
+  const spin = hostPage.getByTestId('sheriff-order-spin')
+  await spin.waitFor({ state: 'visible', timeout: 10_000 })
+  await spin.click() // start the draw
+  await spin.click() // stop it
+  const dirBtn = hostPage.getByTestId(`sheriff-order-${direction.toLowerCase()}`)
+  await expect(dirBtn).toBeEnabled()
+  const seat = Number(await hostPage.getByTestId('sheriff-order-number').textContent())
+  await dirBtn.click()
+  await waitForCondition(
+    async () => (await readSheriffSpeaker(hostPage, gameId)) !== null,
+    'host set the sheriff speech order',
+    10_000,
+  )
+  return seat
+}
+
 export async function advanceAllSheriffSpeeches(hostPage: Page, gameId: string): Promise<void> {
+  await setSheriffSpeechOrderViaDom(hostPage, gameId)
   // Safety cap — 12p games have at most 12 speakers. Real exit condition is
   // the sub-phase leaving SPEECH (backend auto-advances after last speaker).
   const maxIterations = 20
@@ -272,7 +302,10 @@ export async function readTopPhase(hostPage: Page, gameId: string): Promise<stri
 /** The userId of the candidate currently speaking (null outside SPEECH). */
 async function readSheriffSpeaker(hostPage: Page, gameId: string): Promise<string | null> {
   const state = await fetchGameState(hostPage, gameId)
-  return (state?.sheriffElection as { currentSpeakerId?: string } | null | undefined)?.currentSpeakerId ?? null
+  return (
+    (state?.sheriffElection as { currentSpeakerId?: string } | null | undefined)
+      ?.currentSpeakerId ?? null
+  )
 }
 
 export async function readSheriffSubPhase(hostPage: Page, gameId: string): Promise<string | null> {
@@ -458,7 +491,11 @@ export async function runSheriffElection(
     await waitForCondition(
       async () => {
         const sub = await readSheriffSubPhase(hostPage, gameId)
-        return sub === 'RESULT' || sub === 'TIED' || (await readTopPhase(hostPage, gameId)) !== 'SHERIFF_ELECTION'
+        return (
+          sub === 'RESULT' ||
+          sub === 'TIED' ||
+          (await readTopPhase(hostPage, gameId)) !== 'SHERIFF_ELECTION'
+        )
       },
       'sheriff election left VOTING after the reveal',
       15_000,

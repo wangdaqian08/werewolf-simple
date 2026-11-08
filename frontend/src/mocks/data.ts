@@ -372,6 +372,19 @@ export const MOCK_SHERIFF_SPEECH_CANDIDATE: SheriffElectionState = {
   canVote: true,
 }
 
+// SPEECH before the host has drawn the first speaker: seat order, nobody speaking.
+export const MOCK_SHERIFF_SPEECH_ORDER: SheriffElectionState = {
+  subPhase: 'SPEECH',
+  timeRemaining: 0,
+  candidates: [
+    { userId: 'u2', nickname: 'Alice', avatar: '😊', status: 'RUNNING' },
+    { userId: 'u4', nickname: 'Carol', avatar: '🌙', status: 'RUNNING' },
+    { userId: 'u6', nickname: 'Tom', avatar: '🐯', status: 'RUNNING' },
+  ],
+  speakingOrder: ['u2', 'u4', 'u6'],
+  canVote: true,
+}
+
 export const MOCK_SHERIFF_SPEECH_AUDIENCE: SheriffElectionState = {
   subPhase: 'SPEECH',
   timeRemaining: 22,

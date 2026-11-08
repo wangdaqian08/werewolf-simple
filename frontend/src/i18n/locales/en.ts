@@ -785,6 +785,23 @@ export default {
     text: 'Come play Werewolf! Room code {code}',
   },
   sheriff: {
+    order: {
+      candidates: 'Candidates',
+      startLabel: 'Random first speaker',
+      hint: {
+        idle: 'Tap "Draw" to start the numbers',
+        spinning: 'Tap again to stop',
+        stopped: 'Draw again, or pick a direction',
+      },
+      spin: { idle: 'Draw', spinning: 'Stop', stopped: 'Draw again' },
+      CLOCKWISE: 'Clockwise',
+      COUNTER_CLOCKWISE: 'Counter-clockwise',
+      CLOCKWISE_HINT: 'Seats going up',
+      COUNTER_CLOCKWISE_HINT: 'Seats going down',
+      drawnQuit: 'Seat {n} left the race, draw again',
+      waiting: 'The host is choosing the speaking order',
+      waitingSub: 'The order will show here once chosen',
+    },
     abstained: '✓ Abstained',
     appointSheriff: 'Appoint Sheriff',
     appointSheriff2: 'Appoint Sheriff',

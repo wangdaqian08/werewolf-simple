@@ -7,7 +7,10 @@ async function goToSheriffSignup(page: import('@playwright/test').Page) {
   await page.evaluate(() => localStorage.clear())
   await page.goto('/')
   await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('TestHost')
-  await page.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
+  await page
+    .getByRole('button', { name: /創建房間|Create Room/i })
+    .first()
+    .click()
   await page.waitForURL(/\/create-room/, { timeout: 5000 })
   await page.getByRole('button', { name: /創建房間|Create Room/i }).click()
   await page.getByTestId('room-setup-done').click() // players & roles: keep the default board
@@ -16,7 +19,9 @@ async function goToSheriffSignup(page: import('@playwright/test').Page) {
   // Start game with sheriff enabled (default)
   await page.evaluate(() => (window as any).__debug.gameStart())
   await page.waitForURL(/\/game\//, { timeout: 5000 })
-  await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).waitFor({ state: 'visible', timeout: 3000 })
+  await page
+    .getByRole('button', { name: /揭示我的身份|Reveal Role/i })
+    .waitFor({ state: 'visible', timeout: 3000 })
   await page.getByRole('button', { name: /揭示我的身份|Reveal Role/i }).click()
   // Navigate to sheriff SIGNUP phase
   await page.getByRole('button', { name: 'Skip → Sheriff' }).click()
@@ -82,6 +87,37 @@ test('host sees Next Speaker in My Turn view', async ({ page }) => {
 
   // Host also sees "下一位 / Next Speaker" button
   await expect(page.getByRole('button', { name: /(?:下一位|Next Speaker)/i })).toBeVisible()
+})
+
+// ── Host draws the first speaker, picks a direction, the order appears ──────
+
+test('host draws a first speaker and picks counter-clockwise; speeches start from that seat', async ({
+  page,
+}) => {
+  await goToSheriffSignup(page)
+  // SPEECH with 3 campaigners and no speaker yet; the host (u1) is not running
+  await page.evaluate(() => (window as any).__debug.sheriffPhase('SPEECH_ORDER'))
+
+  const spin = page.getByTestId('sheriff-order-spin')
+  const ccw = page.getByTestId('sheriff-order-counter_clockwise')
+  await expect(page.getByTestId('sheriff-order-number')).toHaveText('?')
+  await expect(ccw).toBeDisabled()
+  await expect(page.getByTestId('sheriff-quit')).toHaveCount(0) // host is not a candidate
+
+  await spin.click() // start
+  await expect(ccw).toBeDisabled()
+  await spin.click() // stop
+  await expect(ccw).toBeEnabled()
+  const seat = (await page.getByTestId('sheriff-order-number').textContent())?.trim()
+
+  await ccw.click()
+
+  await expect(spin).toHaveCount(0)
+  await expect(page.getByTestId('sheriff-advance-speech')).toBeVisible()
+  await expect(page.getByTestId('sheriff-speaking-row')).toHaveCount(3)
+  await expect(page.getByTestId('sheriff-speaking-row').first()).toContainText(
+    new RegExp(`(${seat}號|Seat ${seat}) `),
+  )
 })
 
 // ── Test 4: Reveal Result stays visible (disabled) when host quit campaign ────
@@ -270,9 +306,7 @@ test('result tally columns are sorted highest votes first', async ({ page }) => 
   // Collect vote count numbers from tally columns in DOM order.
   // The mock result has Tom(5), Alice(3), Bob(2) — winner first.
   const countTexts = await page.locator('.vote-col-count').allInnerTexts()
-  const numericCounts = countTexts
-    .map((t) => parseInt(t.trim(), 10))
-    .filter((n) => !isNaN(n))
+  const numericCounts = countTexts.map((t) => parseInt(t.trim(), 10)).filter((n) => !isNaN(n))
 
   // Must be in descending order
   for (let i = 0; i < numericCounts.length - 1; i++) {
