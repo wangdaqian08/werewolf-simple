@@ -20,6 +20,7 @@ import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRe
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
 import org.springframework.http.HttpEntity
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -42,6 +43,7 @@ class KnightDuelFlowIntegrationTest {
     @Autowired lateinit var gameRepository: GameRepository
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
+    @Autowired lateinit var jdbcTemplate: JdbcTemplate
 
     companion object {
         const val START_URL = "/api/game/start"
@@ -176,11 +178,15 @@ class KnightDuelFlowIntegrationTest {
 
     @Test
     fun `duelled mech wolf with SHOOT gets no pending shot`() {
-        val g = startGame("KD2", listOf("WEREWOLF", "MECHANICAL_WOLF", "KNIGHT", "SEER", "VILLAGER"))
-        val mech = gamePlayerRepository.save(
-            gamePlayerRepository.findByGameIdAndUserId(g.gameId, g.one(PlayerRole.MECHANICAL_WOLF).userId).orElseThrow()
-                .also { it.learnedRole = PlayerRole.HUNTER },
+        // A room can no longer hold both roles; this is a game created before that rule, so one wolf is made
+        // a mechanical wolf that learned the hunter directly in the DB.
+        val g = startGame("KD2", listOf("WEREWOLF", "KNIGHT", "SEER", "VILLAGER"))
+        val wolfId = g.wolves.first().userId
+        jdbcTemplate.update(
+            "UPDATE game_players SET role = 'MECHANICAL_WOLF', learned_role = 'HUNTER' WHERE game_id = ? AND user_id = ?",
+            g.gameId, wolfId,
         )
+        val mech = gamePlayerRepository.findByGameIdAndUserId(g.gameId, wolfId).orElseThrow()
         arrangeDay2(g)
         assertDuelledWolfOpensNoShot(g, mech)
     }

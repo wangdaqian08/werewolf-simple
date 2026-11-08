@@ -195,6 +195,18 @@ class GameServiceStartTest {
     }
 
     @Test
+    fun `startGame rejects a room stored with both MECHANICAL_WOLF and KNIGHT`() {
+        // A room saved before the two became exclusive can still hold both flags.
+        val room = waitingRoom().also { it.hasMechanicalWolf = true; it.hasKnight = true }
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
+
+        val result = gameService.startGame(hostId, roomId)
+
+        assertThat((result as GameActionResult.Rejected).reason).isEqualTo("Mechanical Wolf and Knight cannot be on the same board")
+        verifyNoInteractions(gameRepository)
+    }
+
+    @Test
     fun `startGame rejects when perks allowed and any player (host included) has rolePick null`() {
         whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(waitingRoom()))
         val players = fourReadyGuests().also { it[0].rolePick = null } // the host

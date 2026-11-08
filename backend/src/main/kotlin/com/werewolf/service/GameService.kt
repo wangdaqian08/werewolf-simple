@@ -44,6 +44,9 @@ class GameService(
             return GameActionResult.Rejected("Only the host can start the game")
         if (room.status != RoomStatus.WAITING)
             return GameActionResult.Rejected("Room is not in WAITING state")
+        // A room saved before the two became exclusive can still hold both; never deal that board.
+        if (room.hasMechanicalWolf && room.hasKnight)
+            return GameActionResult.Rejected("Mechanical Wolf and Knight cannot be on the same board")
 
         val roomPlayers = roomPlayerRepository.findByRoomId(roomId)
         if (roomPlayers.size < 4)

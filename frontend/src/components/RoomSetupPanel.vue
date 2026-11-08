@@ -104,7 +104,14 @@
                 {{ roleName(role.id) }} {{ roleTag(role.id) }}
               </span>
               <span
-                v-if="SPECIAL_WOLF_IDS.includes(role.id)"
+                v-if="blockedBy(role.id)"
+                class="win-cond-desc"
+                :data-testid="`role-hint-${role.id}`"
+              >
+                {{ $t('setup.mechKnightExclusive') }}
+              </span>
+              <span
+                v-else-if="SPECIAL_WOLF_IDS.includes(role.id)"
                 class="win-cond-desc"
                 :data-testid="`role-hint-${role.id}`"
               >
@@ -237,6 +244,19 @@ const SPECIAL_WOLF_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).m
 const SPECIAL_WOLF_MIN_PLAYERS = 9
 // The seer and the medium are mutually exclusive: turning one on turns the other off.
 const EXCLUSIVE_WITH: Record<string, string> = { SEER: 'MEDIUM', MEDIUM: 'SEER' }
+// Roles from different boards that never share a room: while one is on, the other is blocked.
+// The mechanical wolf's learn table covers only its own board (机械狼通灵师), so no rule says what it gains from 騎士.
+const BLOCKED_WITH: Record<string, string[]> = {
+  MECHANICAL_WOLF: ['KNIGHT'],
+  KNIGHT: ['MECHANICAL_WOLF'],
+}
+function blockedBy(roleId: string): boolean {
+  return (BLOCKED_WITH[roleId] ?? []).some((id) => enabledOptional.value.has(id))
+}
+// Off and blocked: it cannot be turned on. (Both can be on only in a room saved before the rule.)
+function isBlocked(roleId: string): boolean {
+  return !enabledOptional.value.has(roleId) && blockedBy(roleId)
+}
 
 const enabledSpecialWolfCount = computed(
   () => SPECIAL_WOLF_IDS.filter((id) => enabledOptional.value.has(id)).length,
@@ -248,8 +268,12 @@ const enabledGodCount = computed(
 )
 const godRange = computed(() => ({
   min: Math.max(0, wolfCount.value - 1),
-  // -1: the seer and the medium are exclusive, so one god id is never available.
-  max: Math.min(GOD_IDS.length - 1, wolfCount.value + 1, totalPlayers.value - wolfCount.value - 1),
+  // -1: the seer and the medium are exclusive, so one god id is never available; a blocked god is not either.
+  max: Math.min(
+    GOD_IDS.filter((id) => !isBlocked(id)).length - 1,
+    wolfCount.value + 1,
+    totalPlayers.value - wolfCount.value - 1,
+  ),
 }))
 
 // One wolf more/less must keep the gods inside the new range.
@@ -284,7 +308,7 @@ function fitRolesToBoard(n: number) {
   }
   for (const id of GOD_IDS) {
     if (enabledGods().length >= godRange.value.min) break
-    if (!roles.has(EXCLUSIVE_WITH[id] ?? '')) roles.add(id)
+    if (!roles.has(EXCLUSIVE_WITH[id] ?? '') && !isBlocked(id)) roles.add(id)
   }
 }
 
@@ -296,6 +320,7 @@ function isEnabled(roleId: string): boolean {
 
 function canToggle(roleId: string): boolean {
   const on = enabledOptional.value.has(roleId)
+  if (isBlocked(roleId)) return false
   if (SPECIAL_WOLF_IDS.includes(roleId))
     return (
       on ||
@@ -311,6 +336,7 @@ function canToggle(roleId: string): boolean {
 
 function toggleHint(roleId: string): string {
   if (canToggle(roleId)) return ''
+  if (isBlocked(roleId)) return t('setup.mechKnightExclusive')
   if (SPECIAL_WOLF_IDS.includes(roleId))
     return totalPlayers.value < SPECIAL_WOLF_MIN_PLAYERS
       ? t('setup.needPlayers', { n: SPECIAL_WOLF_MIN_PLAYERS })
