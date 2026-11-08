@@ -14,7 +14,10 @@ vi.mock('@/services/roomService', () => ({
   roomService: { updateBoard: h.updateBoardMock },
 }))
 
-async function mountSetup(players = 1) {
+async function mountSetup(
+  players = 1,
+  roles: string[] = ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER'],
+) {
   const pinia = createPinia()
   setActivePinia(pinia)
   const room: Room = {
@@ -25,7 +28,7 @@ async function mountSetup(players = 1) {
     config: {
       totalPlayers: 9,
       wolfCount: 3,
-      roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'HUNTER'],
+      roles,
     },
     players: Array.from({ length: players }, (_, i) => ({
       userId: `u${i + 1}`,
@@ -181,6 +184,24 @@ describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
     expect(hint(w, 'MECHANICAL_WOLF').text()).toContain('機械狼與騎士不能同時選')
     await click(w, 'role-toggle-MECHANICAL_WOLF')
     expect(chipCount(w, 'MECHANICAL_WOLF')).toBe(0)
+  })
+
+  it('the god maximum leaves out KNIGHT while MECHANICAL_WOLF is on', async () => {
+    const w = await mountSetup()
+    for (let i = 0; i < 6; i++) await click(w, 'player-count-increment') // 15 players, 5 wolves
+    expect(w.find('[data-testid="god-range"]').text()).toContain('4–6')
+    await click(w, 'role-toggle-MECHANICAL_WOLF')
+    expect(w.find('[data-testid="god-range"]').text()).toContain('4–5')
+  })
+
+  it('a stored room with both: an ON KNIGHT at the god minimum gets the minimum tooltip', async () => {
+    // Saved before the two became exclusive: gods SEER + KNIGHT = the minimum for 3 wolves.
+    const w = await mountSetup(1, ['WEREWOLF', 'VILLAGER', 'MECHANICAL_WOLF', 'SEER', 'KNIGHT'])
+    expect(disabled(w, 'role-toggle-KNIGHT')).toBe(true)
+    expect(w.find('[data-testid="role-toggle-KNIGHT"]').attributes('title')).toBe(
+      '神職不能少於 2 個',
+    )
+    expect(hint(w, 'KNIGHT').text()).toContain('機械狼與騎士不能同時選') // the board itself is still flagged
   })
 
   it('turning one off frees the other', async () => {
