@@ -65,9 +65,9 @@ const NEW_ACTIONS = [
 
 // Stands in for NightPhase: exposes the rejection count; the test emits night-action on it.
 const NightPhaseStub = defineComponent({
-  props: { rejectionCount: { type: Number, default: 0 } },
+  props: { rejectionCount: { type: Number, default: 0 }, narration: { type: String, default: '' } },
   emits: ['night-action'],
-  template: `<div data-testid="night-stub" :data-rejections="rejectionCount" />`,
+  template: `<div data-testid="night-stub" :data-rejections="rejectionCount" :data-narration="narration" />`,
 })
 
 const nightState = (): GameState =>
@@ -156,5 +156,41 @@ describe('GameView — mechanical wolf + medium night turns', () => {
     h.getStateMock.mockClear()
     await onPrivate({ body: JSON.stringify({ type }) })
     expect(h.getStateMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('the host gets the narration line of the newest audio; other players get none', async () => {
+    const withAudio = (hostId: string): GameState =>
+      ({
+        ...nightState(),
+        hostId,
+        audioReplayBuffer: [
+          {
+            id: 'a',
+            phase: 'NIGHT',
+            subPhase: null,
+            audioFiles: ['medium_open_eyes.mp3'],
+            priority: 5,
+            timestamp: 1,
+          },
+        ],
+        audioSequence: {
+          id: 'b',
+          phase: 'NIGHT',
+          subPhase: 'MEDIUM_PICK',
+          audioFiles: ['medium_close_eyes.mp3'],
+          priority: 5,
+          timestamp: 2,
+        },
+      }) as GameState
+
+    h.getStateMock.mockResolvedValue(withAudio('u1'))
+    let wrapper = await mountGame()
+    expect(wrapper.find('[data-testid="night-stub"]').attributes('data-narration')).toBe(
+      'mediumClose',
+    )
+
+    h.getStateMock.mockResolvedValue(withAudio('someone-else'))
+    wrapper = await mountGame()
+    expect(wrapper.find('[data-testid="night-stub"]').attributes('data-narration')).toBe('')
   })
 })

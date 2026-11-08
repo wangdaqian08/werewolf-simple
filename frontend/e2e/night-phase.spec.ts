@@ -288,8 +288,9 @@ test('night: WAITING — sleep emoji and messages visible', async ({ page }) => 
   await setup(page)
   await loadNight(page, 'WAITING')
 
-  await expect(page.getByText('夜晚即將開始')).toBeVisible()
-  await expect(page.getByText(/Night is beginning/i)).toBeVisible()
+  // The host sees the narration line (天黑請閉眼) in place of 夜晚即將開始.
+  await expect(page.getByTestId('night-narration')).toHaveText('天黑請閉眼')
+  await expect(page.locator('.ss-en')).toHaveText(/Night falls, everyone close your eyes/)
   await expect(page.getByText(/所有人請閉眼/i)).toBeVisible()
   // No role badge for WAITING
   await expect(page.locator('.rb')).not.toBeVisible()
@@ -385,4 +386,21 @@ test('night: debug panel Dead Night button loads dead player screen', async ({ p
 
   // Should NOT see role badge (dead players can't take turns)
   await expect(page.locator('.rb')).not.toBeVisible()
+})
+
+// ── Host narration line (the room creator is the host) ─────────────────────────
+
+test('night: host sees the narration line on the sleep screen', async ({ page }) => {
+  await setup(page)
+  await loadNight(page, 'SEER_IDLE') // the seer host sleeps through the wolf turn
+
+  await expect(page.getByTestId('night-narration')).toHaveText('狼人請睜眼')
+})
+
+test("night: host's own turn keeps the narration line as a strip", async ({ page }) => {
+  await setup(page)
+  await loadNight(page, 'WEREWOLF')
+
+  await expect(page.getByTestId('wolf-confirm-kill')).toBeVisible()
+  await expect(page.getByTestId('night-narration')).toHaveText('狼人請睜眼')
 })

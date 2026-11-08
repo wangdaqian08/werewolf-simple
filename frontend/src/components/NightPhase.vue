@@ -25,6 +25,15 @@
       </div>
     </div>
 
+    <!-- ── Host narration strip, on the host's own turn ─────────────────── -->
+    <div
+      v-if="narration && isMyTurn && !hasActed"
+      class="narration-strip"
+      data-testid="night-narration"
+    >
+      {{ $t(`night.narration.${narration}`) }}
+    </div>
+
     <!-- ── Dead player banner ─────────────────────────────────────────── -->
     <div v-if="me && !me.isAlive" class="banner-area">
       <div class="banner banner-info">
@@ -440,13 +449,20 @@
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
         <div class="ss-title" data-testid="sleep-screen-title">
-          {{ me && !me.isAlive ? $t('night.falls') : $t('night.closeEyes') }}
+          <span v-if="narration" data-testid="night-narration">{{
+            $t(`night.narration.${narration}`)
+          }}</span>
+          <template v-else>{{
+            me && !me.isAlive ? $t('night.falls') : $t('night.closeEyes')
+          }}</template>
         </div>
         <div v-if="$i18n.locale === 'zh'" class="ss-en">
           {{
-            me && !me.isAlive
-              ? $t('night.comingEn', {}, { locale: 'en' })
-              : $t('night.inProgressEn', {}, { locale: 'en' })
+            narration
+              ? $t(`night.narration.${narration}`, {}, { locale: 'en' })
+              : me && !me.isAlive
+                ? $t('night.comingEn', {}, { locale: 'en' })
+                : $t('night.inProgressEn', {}, { locale: 'en' })
           }}
         </div>
         <div class="ss-sub">
@@ -459,9 +475,18 @@
     <template v-else-if="subPhase === 'WAITING'">
       <div class="sleep-screen">
         <div class="ss-emoji">🌙</div>
-        <div class="ss-title" data-testid="sleep-screen-title">{{ $t('night.beginning') }}</div>
+        <div class="ss-title" data-testid="sleep-screen-title">
+          <span v-if="narration" data-testid="night-narration">{{
+            $t(`night.narration.${narration}`)
+          }}</span>
+          <template v-else>{{ $t('night.beginning') }}</template>
+        </div>
         <div v-if="$i18n.locale === 'zh'" class="ss-en">
-          {{ $t('night.beginningEn', {}, { locale: 'en' }) }}
+          {{
+            narration
+              ? $t(`night.narration.${narration}`, {}, { locale: 'en' })
+              : $t('night.beginningEn', {}, { locale: 'en' })
+          }}
         </div>
         <div class="ss-sub">{{ $t('night.everyoneClose') }}</div>
       </div>
@@ -501,6 +526,8 @@ const props = withDefaults(
     guardSkipAllowed?: boolean
     // Bumped by the parent when the backend rejects this player's night action.
     rejectionCount?: number
+    // Host only: `night.narration.*` key of the line being narrated (see nightNarration.ts).
+    narration?: string
   }>(),
   {
     // Vue 3 coerces a missing boolean prop to `false`, but the safe default
@@ -1154,6 +1181,19 @@ const isPoisonTargetFn = (p: GamePlayer) => isPoisonTarget(p, props.myUserId)
   font-size: 4rem;
   line-height: 1;
   margin-bottom: 0.375rem;
+}
+
+.narration-strip {
+  margin: 0.375rem 0.875rem 0;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.625rem;
+  background: rgba(160, 120, 48, 0.18);
+  border: 1px solid rgba(160, 120, 48, 0.45);
+  color: var(--paper);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .ss-title {
