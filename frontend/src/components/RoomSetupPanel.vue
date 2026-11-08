@@ -191,6 +191,8 @@ const emit = defineEmits<{ done: [] }>()
 const roomStore = useRoomStore()
 const openRole = ref<string | null>(null)
 const view = ref<'main' | 'roles'>('main')
+// The pages swap with v-show, so the document keeps its scroll: start each page at the top.
+watch(view, () => window.scrollTo(0, 0))
 
 const MIN_PLAYERS = 6
 // 15 = 5 wolves / 5 gods / 5 villagers, the largest board the current roles balance

@@ -286,6 +286,16 @@ describe('RoomSetupPanel — 選擇角色 page', () => {
     expect(page(w, 'role-select-page').style.display).toBe('none')
   })
 
+  it('each page opens scrolled to the top', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const w = await mountSetup()
+    await w.find('[data-testid="open-role-select"]').trigger('click')
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 0)
+    scrollTo.mockClear()
+    await w.find('[data-testid="role-select-done"]').trigger('click')
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 0)
+  })
+
   it('a card turns from grey to colour when tapped on, and back when tapped again', async () => {
     const w = await mountSetup()
     expect(cardClasses(w, 'GUARD')).toContain('card-off')
