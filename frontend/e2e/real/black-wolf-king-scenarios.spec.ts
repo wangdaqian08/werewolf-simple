@@ -393,9 +393,10 @@ test('create room: both wolf kings allowed together, 9+ players', async ({ brows
     const black = page.getByTestId('role-toggle-BLACK_WOLF_KING')
     const white = page.getByTestId('role-toggle-WHITE_WOLF_KING')
     await expect(page.getByTestId('player-count-value')).toHaveText('9')
-    await expect(page.getByTestId('role-hint-BLACK_WOLF_KING')).toBeVisible()
+    await page.getByTestId('open-role-select').click() // roles live on 選擇角色
+    await expect(black).toBeEnabled()
     await black.click()
-    await expect(black).toHaveClass(/toggle-on/)
+    await expect(black).toHaveAttribute('aria-pressed', 'true')
     await expect(white, '白狼王 can join 黑狼王 (9p default = 3 wolves)').toBeEnabled()
     await page.screenshot({
       path: path.join(dir, '9p-black-on.png'),
@@ -403,9 +404,11 @@ test('create room: both wolf kings allowed together, 9+ players', async ({ brows
       animations: 'disabled',
     })
 
+    await page.getByTestId('role-select-done').click() // back to the steppers
     await page.getByTestId('player-count-decrement').click()
     await expect(page.getByTestId('player-count-value')).toHaveText('8')
-    await expect(black, '8 players switches the king off').toHaveClass(/toggle-off/)
+    await page.getByTestId('open-role-select').click()
+    await expect(black, '8 players switches the king off').toHaveAttribute('aria-pressed', 'false')
     await expect(black).toBeDisabled()
     await expect(black).toHaveAttribute('title', /9 人及以上才能開啟/)
     await page.screenshot({

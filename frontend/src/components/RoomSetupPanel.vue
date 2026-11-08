@@ -1,6 +1,7 @@
 <template>
   <div class="create-wrap" data-testid="room-setup-panel">
-    <div class="create-card">
+    <!-- Both pages stay mounted (v-show): one draft board, kept while the host switches pages. -->
+    <div v-show="view === 'main'" class="create-card">
       <button class="back-btn" @click="emit('done')">{{ $t('setup.backRoom') }}</button>
       <div class="create-header">
         <div class="section-lbl">{{ $t('common.host') }}</div>
@@ -73,94 +74,22 @@
         </div>
       </div>
 
-      <!-- Role configuration -->
+      <!-- Role configuration: summary here, the full list on its own page -->
       <div class="field-lbl">{{ $t('setup.roleConfig') }}</div>
-      <div class="balance-note">
-        {{ $t('setup.remaining') }}
-      </div>
-      <div class="balance-note" data-testid="god-range">
-        {{ $t('setup.gods', { min: godRange.min, max: godRange.max }) }}
-      </div>
-
-      <div class="role-list">
-        <div
-          v-for="role in ROLE_DEFINITIONS"
-          :key="role.id"
-          :class="roleRowClass(role)"
-          class="role-row"
-        >
-          <button
-            type="button"
-            class="role-info-btn"
-            :data-testid="`role-info-${role.id}`"
-            @click="openRole = role.id"
-          >
-            <span class="role-emoji">{{ role.emoji }}</span>
-            <span class="role-names">
-              <span
-                :class="{ 'role-name-muted': !role.required && !isEnabled(role.id) }"
-                class="role-name"
-              >
-                {{ roleName(role.id) }} {{ roleTag(role.id) }}
-              </span>
-              <span
-                v-if="blockedBy(role.id)"
-                class="win-cond-desc"
-                :data-testid="`role-hint-${role.id}`"
-              >
-                {{ $t('setup.mechKnightExclusive') }}
-              </span>
-              <span
-                v-else-if="SPECIAL_WOLF_IDS.includes(role.id)"
-                class="win-cond-desc"
-                :data-testid="`role-hint-${role.id}`"
-              >
-                {{ $t('setup.specialWolfMinPlayers', { n: SPECIAL_WOLF_MIN_PLAYERS }) }}
-              </span>
-              <span
-                v-else-if="enabledOptional.has(EXCLUSIVE_WITH[role.id] ?? '')"
-                class="win-cond-desc"
-                :data-testid="`role-hint-${role.id}`"
-              >
-                {{ $t('setup.mediumSeerExclusive') }}
-              </span>
-            </span>
-          </button>
-          <!-- Required roles: label only -->
-          <span
-            v-if="role.required"
-            :class="role.id === 'WEREWOLF' ? 'req-wolf' : 'req-village'"
-            class="req-label"
-          >
-            {{ $t('setup.required') }}
-          </span>
-          <!-- Optional roles: toggle -->
-          <button
-            v-else
-            :class="isEnabled(role.id) ? 'toggle-on' : 'toggle-off'"
-            class="toggle"
-            :data-testid="`role-toggle-${role.id}`"
-            :disabled="!canToggle(role.id)"
-            :title="toggleHint(role.id)"
-            @click="toggleRole(role.id)"
-          >
-            <span class="toggle-thumb" />
-          </button>
-        </div>
-      </div>
-
-      <RoleCardSheet
-        v-if="openRole"
-        :role="openRole"
-        :title="$t('roleCard.info')"
-        @close="openRole = null"
-      />
-
       <RoleComposition
         :total-players="totalPlayers"
         :wolf-count="wolfCount"
         :roles="compositionRoles"
       />
+
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-testid="open-role-select"
+        @click="view = 'roles'"
+      >
+        {{ $t('setup.chooseRoles') }}
+      </button>
 
       <button
         :disabled="saving"
@@ -173,6 +102,72 @@
 
       <p v-if="error" class="error-msg" data-testid="room-setup-error">{{ error }}</p>
     </div>
+
+    <!-- Page 2: choose roles. Grey = off, colour = on; a role that cannot turn on says why when tapped. -->
+    <div v-show="view === 'roles'" class="create-card" data-testid="role-select-page">
+      <button class="back-btn" @click="view = 'main'">{{ $t('setup.back') }}</button>
+      <div class="create-header">
+        <div class="section-lbl">{{ $t('setup.title') }}</div>
+        <h2 class="create-title">{{ $t('setup.rolesTitle') }}</h2>
+      </div>
+
+      <div class="balance-note count-bar" data-testid="role-count-bar">
+        {{ $t('setup.countPlayers', { n: totalPlayers }) }} ·
+        {{ $t('setup.countWolves', { n: wolfCount }) }} ·
+        <span :class="{ 'count-full': enabledGodCount >= godRange.max }" data-testid="god-range">
+          {{ $t('setup.countGods', { n: enabledGodCount, min: godRange.min, max: godRange.max }) }}
+        </span>
+        · {{ $t('setup.countVillagers', { n: villagerCount }) }}
+      </div>
+
+      <template v-for="group in ROLE_GROUPS" :key="group.label">
+        <div class="field-lbl group-lbl">{{ $t(group.label) }}</div>
+        <div class="role-grid">
+          <div v-for="id in group.ids" :key="id" :class="cardClass(id)" class="role-card">
+            <button
+              type="button"
+              class="card-main"
+              :data-testid="`role-toggle-${id}`"
+              :aria-pressed="isEnabled(id)"
+              :aria-disabled="!roleDefinition(id)?.required && !canToggle(id)"
+              :title="toggleHint(id)"
+              @click="onCardTap(id)"
+            >
+              <span class="card-emoji">{{ roleDefinition(id)?.emoji }}</span>
+              <span class="card-name">{{ roleName(id) }}</span>
+              <span v-if="cardNote(id)" class="card-note" :data-testid="`role-hint-${id}`">
+                {{ cardNote(id) }}
+              </span>
+            </button>
+            <button
+              type="button"
+              class="card-info"
+              :data-testid="`role-info-${id}`"
+              :aria-label="$t('roleCard.info')"
+              @click="openRole = id"
+            >
+              i
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="role-select-done"
+        @click="view = 'main'"
+      >
+        {{ $t('setup.confirm') }}
+      </button>
+    </div>
+
+    <RoleCardSheet
+      v-if="openRole"
+      :role="openRole"
+      :title="$t('roleCard.info')"
+      @close="openRole = null"
+    />
   </div>
 </template>
 
@@ -183,24 +178,19 @@ import axios from 'axios'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import type { Room } from '@/types'
-import {
-  ROLE_DEFINITIONS,
-  type RoleDefinition,
-  isWolfRole,
-  roleDefinition,
-  roleName,
-  roleTag,
-} from '@/utils/roleDefinitions'
+import { ROLE_DEFINITIONS, isWolfRole, roleDefinition, roleName } from '@/utils/roleDefinitions'
 import { wolfBounds } from '@/utils/wolfBounds'
 import RoleComposition from '@/components/RoleComposition.vue'
 import ShareButton from '@/components/ShareButton.vue'
 import RoleCardSheet from '@/components/RoleCardSheet.vue'
+import { ElMessage } from 'element-plus'
 
 // Page 2 of room creation, and the host's "edit players & roles" from the room.
 const props = defineProps<{ room: Room }>()
 const emit = defineEmits<{ done: [] }>()
 const roomStore = useRoomStore()
 const openRole = ref<string | null>(null)
+const view = ref<'main' | 'roles'>('main')
 
 const MIN_PLAYERS = 6
 // 15 = 5 wolves / 5 gods / 5 villagers, the largest board the current roles balance
@@ -253,6 +243,9 @@ const BLOCKED_WITH: Record<string, string[]> = {
 function blockedBy(roleId: string): boolean {
   return (BLOCKED_WITH[roleId] ?? []).some((id) => enabledOptional.value.has(id))
 }
+const names = (ids: string[]) => ids.map((id) => roleName(id)).join('、')
+const blockers = (id: string) =>
+  (BLOCKED_WITH[id] ?? []).filter((b) => enabledOptional.value.has(b))
 // Off and blocked: it cannot be turned on. (Both can be on only in a room saved before the rule.)
 function isBlocked(roleId: string): boolean {
   return !enabledOptional.value.has(roleId) && blockedBy(roleId)
@@ -336,7 +329,10 @@ function canToggle(roleId: string): boolean {
 
 function toggleHint(roleId: string): string {
   if (canToggle(roleId)) return ''
-  if (isBlocked(roleId)) return t('setup.mechKnightExclusive')
+  if (isBlocked(roleId)) {
+    const other = names(blockers(roleId))
+    return t('setup.exclusiveReason', { role: roleName(roleId), other })
+  }
   if (SPECIAL_WOLF_IDS.includes(roleId))
     return totalPlayers.value < SPECIAL_WOLF_MIN_PLAYERS
       ? t('setup.needPlayers', { n: SPECIAL_WOLF_MIN_PLAYERS })
@@ -356,9 +352,41 @@ function toggleRole(roleId: string) {
   }
 }
 
-function roleRowClass(role: RoleDefinition) {
-  if (role.required) return role.id === 'WEREWOLF' ? 'row-wolf' : 'row-village'
-  return isEnabled(role.id) ? 'row-on' : 'row-off'
+const ROLE_GROUPS = [
+  { label: 'setup.groupWolves', ids: ['WEREWOLF', ...SPECIAL_WOLF_IDS] },
+  { label: 'setup.groupGods', ids: GOD_IDS },
+  { label: 'setup.groupVillagers', ids: ['VILLAGER'] },
+]
+const villagerCount = computed(() => totalPlayers.value - wolfCount.value - enabledGodCount.value)
+
+// Off and cannot be turned on: blocked by an exclusive role, too few players, or 神職 full.
+function cardLocked(id: string): boolean {
+  return !roleDefinition(id)?.required && !enabledOptional.value.has(id) && !canToggle(id)
+}
+function cardClass(id: string) {
+  if (isEnabled(id)) {
+    const camp = isWolfRole(id) ? 'camp-wolf' : id === 'VILLAGER' ? 'camp-village' : 'camp-god'
+    return ['card-on', camp]
+  }
+  if (isBlocked(id)) return 'card-blocked'
+  return cardLocked(id) ? 'card-locked' : 'card-off'
+}
+function cardNote(id: string): string {
+  if (id === 'VILLAGER') return t('setup.villagerAuto', { n: villagerCount.value })
+  if (id === 'WEREWOLF') return t('setup.required')
+  if (isBlocked(id)) return t('setup.exclusiveTag')
+  const excludes = BLOCKED_WITH[id]
+  if (enabledOptional.value.has(id) && excludes)
+    return t('setup.excludes', { roles: names(excludes) })
+  if (!enabledOptional.value.has(id) && enabledOptional.value.has(EXCLUSIVE_WITH[id] ?? ''))
+    return t('setup.pairSwap')
+  return cardLocked(id) ? '🔒' : ''
+}
+// Tap = on/off. A required role opens its card; a role that cannot change says why.
+function onCardTap(id: string) {
+  if (roleDefinition(id)?.required) openRole.value = id
+  else if (canToggle(id)) toggleRole(id)
+  else ElMessage({ message: toggleHint(id), type: 'warning', duration: 2500, grouping: true })
 }
 
 const compositionRoles = computed(() => [
@@ -406,6 +434,123 @@ async function save() {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+/* Page 2: role cards, three per row */
+.count-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 0.75rem;
+  color: var(--text);
+  background: var(--paper);
+}
+.count-full {
+  color: var(--red);
+  font-weight: 600;
+}
+.group-lbl {
+  margin: 0.5rem 0 0;
+}
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+.role-card {
+  position: relative;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-l);
+  background: var(--paper);
+  transition:
+    filter 0.2s,
+    opacity 0.2s,
+    background 0.2s;
+}
+.card-main {
+  width: 100%;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  padding: 0.5rem 0.25rem;
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+.card-emoji {
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+.card-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.card-note {
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+.card-info {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font:
+    italic 600 0.625rem 'Noto Serif SC',
+    serif;
+  cursor: pointer;
+  padding: 0;
+}
+.card-info::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+/* Selected: full colour, camp border */
+.card-on {
+  background: var(--card);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.camp-wolf {
+  border: 2px solid var(--red);
+  background: rgba(181, 37, 26, 0.06);
+}
+.camp-god {
+  border: 2px solid var(--gold);
+  background: rgba(160, 120, 48, 0.07);
+}
+.camp-village {
+  border: 2px solid var(--green);
+  background: rgba(45, 106, 63, 0.06);
+}
+/* Not selected: grey, still tappable */
+.card-off {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+/* Exclusive / locked: deeper grey */
+.card-blocked,
+.card-locked {
+  filter: grayscale(1);
+  opacity: 0.3;
+}
+.card-blocked {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--paper),
+    var(--paper) 6px,
+    var(--border) 6px,
+    var(--border) 8px
+  );
 }
 
 .invite-row {

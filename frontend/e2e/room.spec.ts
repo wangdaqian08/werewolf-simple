@@ -85,9 +85,24 @@ test('increment is disabled at maximum (15)', async ({page}) => {
     await expect(page.getByTestId('player-count-increment')).toBeDisabled()
 })
 
-test('players & roles shows Werewolf and Villager as REQUIRED', async ({page}) => {
+test('choose roles shows Werewolf as REQUIRED and the villagers left', async ({page}) => {
     await openSetup(page)
-    await expect(page.getByText(/必選|REQUIRED/).first()).toBeVisible()
+    await page.getByTestId('open-role-select').click()
+    await expect(page.getByTestId('role-hint-WEREWOLF')).toHaveText(/必選|REQUIRED/)
+    await expect(page.getByTestId('role-hint-VILLAGER')).toBeVisible()
+})
+
+test('choose roles: a tap turns a role on, a second tap turns it off', async ({page}) => {
+    await openSetup(page)
+    await page.getByTestId('open-role-select').click()
+    const guard = page.getByTestId('role-toggle-GUARD')
+    await expect(guard).toHaveAttribute('aria-pressed', 'false')
+    await guard.click()
+    await expect(guard).toHaveAttribute('aria-pressed', 'true')
+    await guard.click()
+    await expect(guard).toHaveAttribute('aria-pressed', 'false')
+    await page.getByTestId('role-select-done').click()
+    await expect(page.getByTestId('room-setup-done')).toBeVisible()
 })
 
 test('the host reopens players & roles from the room', async ({page}) => {
@@ -98,23 +113,28 @@ test('the host reopens players & roles from the room', async ({page}) => {
 })
 
 // 机械狼 and 骑士 come from different boards, so one blocks the other (spec D4).
-test('the mechanical wolf and the knight block each other in players & roles', async ({page}, testInfo) => {
+test('the mechanical wolf and the knight block each other in choose roles', async ({page}, testInfo) => {
     await openSetup(page)
+    await page.getByTestId('open-role-select').click()
     const mech = page.getByTestId('role-toggle-MECHANICAL_WOLF')
     const knight = page.getByTestId('role-toggle-KNIGHT')
-    const exclusive = /機械狼與騎士不能同時選|Mechanical Wolf or Knight, not both/
+    const excluded = /⛓ (互斥|Excluded)/
 
     await knight.click()
-    await expect(mech).toBeDisabled()
-    await expect(page.getByTestId('role-hint-MECHANICAL_WOLF')).toContainText(exclusive)
-    await page.getByTestId('room-setup-panel').screenshot({path: testInfo.outputPath('knight-blocks-mech.png')})
+    await expect(mech).toBeDisabled() // aria-disabled
+    await expect(page.getByTestId('role-hint-MECHANICAL_WOLF')).toHaveText(excluded)
+    // The card still takes the tap, to say why (force: Playwright never clicks a disabled element).
+    await mech.click({force: true})
+    await expect(page.getByRole('alert')).toContainText(/請先關閉騎士|Turn Knight off first/)
+    await expect(mech).toHaveAttribute('aria-pressed', 'false')
+    await page.screenshot({path: testInfo.outputPath('knight-blocks-mech.png'), fullPage: true, animations: 'disabled'})
 
     await knight.click() // off again: the mechanical wolf is free
     await expect(mech).toBeEnabled()
     await mech.click()
     await expect(knight).toBeDisabled()
-    await expect(page.getByTestId('role-hint-KNIGHT')).toContainText(exclusive)
-    await page.getByTestId('room-setup-panel').screenshot({path: testInfo.outputPath('mech-blocks-knight.png')})
+    await expect(page.getByTestId('role-hint-KNIGHT')).toHaveText(excluded)
+    await page.screenshot({path: testInfo.outputPath('mech-blocks-knight.png'), fullPage: true, animations: 'disabled'})
 })
 
 // ── Host waiting room ─────────────────────────────────────────────────────────

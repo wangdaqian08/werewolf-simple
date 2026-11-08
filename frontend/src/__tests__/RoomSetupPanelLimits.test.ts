@@ -50,8 +50,13 @@ const click = (w: Wrapper, testId: string, times = 1) =>
     (p) => p.then(() => w.find(`[data-testid="${testId}"]`).trigger('click')),
     Promise.resolve(),
   )
-const disabled = (w: Wrapper, testId: string) =>
-  w.find(`[data-testid="${testId}"]`).attributes('disabled') !== undefined
+// Steppers use disabled; a role card that cannot change says so with aria-disabled.
+const disabled = (w: Wrapper, testId: string) => {
+  const el = w.find(`[data-testid="${testId}"]`)
+  return el.attributes('disabled') !== undefined || el.attributes('aria-disabled') === 'true'
+}
+const title = (w: Wrapper, testId: string) =>
+  w.find(`[data-testid="${testId}"]`).attributes('title')
 const chip = (w: Wrapper, role: string) => {
   const el = w.find(`[data-testid="role-composition"] [data-role="${role}"]`)
   return el.exists() ? Number(el.attributes('data-count')) : 0
@@ -141,12 +146,11 @@ describe('RoomSetupPanel — role limits', () => {
     expect(disabled(w, 'role-toggle-WHITE_WOLF_KING')).toBe(true)
   })
 
-  it('白狼王 row tells the host it needs 9 or more players', async () => {
+  it('白狼王 card is locked below 9 players and gives the reason', async () => {
     const w = await mountSetup()
-    await click(w, 'player-count-decrement') // 8 players: the toggle is disabled
-    expect(w.find('[data-testid="role-hint-WHITE_WOLF_KING"]').text()).toContain(
-      '9 人及以上才能開啟',
-    )
+    await click(w, 'player-count-decrement') // 8 players: the card is locked
+    expect(w.find('[data-testid="role-hint-WHITE_WOLF_KING"]').text()).toBe('🔒')
+    expect(title(w, 'role-toggle-WHITE_WOLF_KING')).toBe('9 人及以上才能開啟')
   })
 
   it('白狼王 switches off when the board drops below 9 players', async () => {
@@ -164,9 +168,7 @@ describe('RoomSetupPanel — role limits', () => {
     await click(w, 'player-count-decrement')
     expect(chip(w, 'BLACK_WOLF_KING')).toBe(0)
     expect(disabled(w, 'role-toggle-BLACK_WOLF_KING')).toBe(true)
-    expect(w.find('[data-testid="role-hint-BLACK_WOLF_KING"]').text()).toContain(
-      '9 人及以上才能開啟',
-    )
+    expect(title(w, 'role-toggle-BLACK_WOLF_KING')).toBe('9 人及以上才能開啟')
   })
 
   it('both wolf kings can be on together (needs 3+ wolves)', async () => {
@@ -184,9 +186,7 @@ describe('RoomSetupPanel — role limits', () => {
     await click(w, 'wolf-count-decrement')
     await click(w, 'role-toggle-BLACK_WOLF_KING')
     expect(disabled(w, 'role-toggle-WHITE_WOLF_KING')).toBe(true)
-    expect(w.find('[data-testid="role-toggle-WHITE_WOLF_KING"]').attributes('title')).toContain(
-      '特殊狼需要至少 3 匹狼',
-    )
+    expect(title(w, 'role-toggle-WHITE_WOLF_KING')).toBe('特殊狼需要至少 3 匹狼')
   })
 
   it('tapping a role in the list opens its info and rules', async () => {

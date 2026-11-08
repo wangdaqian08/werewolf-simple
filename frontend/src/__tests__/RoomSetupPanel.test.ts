@@ -59,8 +59,8 @@ describe('RoomSetupPanel', () => {
     )
     expect(text(w, 'player-count-value')).toBe('12')
     expect(text(w, 'wolf-count-value')).toBe('4')
-    expect(w.find('[data-testid="role-toggle-GUARD"]').classes()).toContain('toggle-on')
-    expect(w.find('[data-testid="role-toggle-HUNTER"]').classes()).toContain('toggle-off')
+    expect(w.find('[data-testid="role-toggle-GUARD"]').attributes('aria-pressed')).toBe('true')
+    expect(w.find('[data-testid="role-toggle-HUNTER"]').attributes('aria-pressed')).toBe('false')
   })
 
   it('shows the room code, how many have joined, and a share button', async () => {
