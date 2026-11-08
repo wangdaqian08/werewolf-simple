@@ -97,17 +97,14 @@ test('no-sheriff: host clicks Start Night shows WAITING screen then advances to 
   // Click "Start Night"
   await page.getByTestId('start-night').click()
 
-  // Should show WAITING screen (night is beginning)
-  await expect(page.getByText('夜晚即將開始')).toBeVisible({ timeout: 2000 })
+  // Should show WAITING screen — the host reads 天黑請閉眼 there
+  await expect(page.getByTestId('night-narration')).toHaveText('天黑請閉眼', { timeout: 2000 })
 
   // Sheriff Election must NOT appear
   await expect(page.getByText(/Sign Up for Sheriff/i)).not.toBeVisible()
 
-  // After 5 seconds, mock advances to WEREWOLF_PICK
-  await page.waitForFunction(
-      () => !document.body.textContent?.includes('夜晚即將開始'),
-      { timeout: 8000 },
-  )
+  // After 5 seconds, mock advances to WEREWOLF_PICK and plays wolf_open_eyes
+  await expect(page.getByTestId('night-narration')).toHaveText('狼人請睜眼', { timeout: 8000 })
   // Night phase should now show werewolf pick UI (or still night)
   await expect(page.getByText(/黑夜|夜晚降臨|Night Falls/i).first()).toBeVisible()
 })
@@ -152,8 +149,8 @@ test('no-sheriff: Skip → Night debug button shows WAITING screen', async ({ pa
 
   await page.getByRole('button', { name: 'Skip → Night' }).click()
 
-  // Should show WAITING countdown screen
-  await expect(page.getByText('夜晚即將開始')).toBeVisible({ timeout: 2000 })
+  // Should show WAITING countdown screen — the host reads 天黑請閉眼 there
+  await expect(page.getByTestId('night-narration')).toHaveText('天黑請閉眼', { timeout: 2000 })
   // Should not show sheriff election
   await expect(page.getByText(/警長競選|Sheriff Election/i)).not.toBeVisible()
 })

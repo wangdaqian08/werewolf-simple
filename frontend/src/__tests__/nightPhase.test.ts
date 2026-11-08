@@ -535,3 +535,82 @@ describe('NightPhase - 空守 (guard protects no one)', () => {
     expect(wrapper.find('[data-testid="guard-confirm-protect"]').exists()).toBe(false)
   })
 })
+
+describe('NightPhase - host narration line', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  const players: GamePlayer[] = [
+    { userId: 'h1', nickname: 'Host', seatIndex: 1, isAlive: true, isSheriff: false },
+    { userId: 'w1', nickname: 'Wolf', seatIndex: 2, isAlive: true, isSheriff: false },
+  ]
+  const narrationOf = (w: ReturnType<typeof mount>) => w.find('[data-testid="night-narration"]')
+
+  it('replaces the sleep-screen title with the line, English line below', () => {
+    const w = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'SEER_PICK', dayNumber: 1 },
+        players,
+        myUserId: 'h1',
+        myRole: 'VILLAGER',
+        narration: 'seerOpen',
+      },
+    })
+    expect(narrationOf(w).text()).toBe('預言家請睜眼')
+    expect(w.find('[data-testid="sleep-screen-title"]').text()).toBe('預言家請睜眼')
+    expect(w.find('.ss-en').text()).toBe('Seer, open your eyes')
+  })
+
+  it('shows 天黑請閉眼 on the WAITING screen', () => {
+    const w = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'WAITING', dayNumber: 1 },
+        players,
+        myUserId: 'h1',
+        myRole: 'VILLAGER',
+        narration: 'dark',
+      },
+    })
+    expect(narrationOf(w).text()).toBe('天黑請閉眼')
+  })
+
+  it('shows a dead host the line too', () => {
+    const w = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'WITCH_ACT', dayNumber: 2 },
+        players: [{ ...players[0]!, isAlive: false }, players[1]!],
+        myUserId: 'h1',
+        myRole: 'VILLAGER',
+        narration: 'witchClose',
+      },
+    })
+    expect(narrationOf(w).text()).toBe('女巫請閉眼')
+  })
+
+  it("keeps the line as a strip above the host's own action screen", () => {
+    const w = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'WEREWOLF_PICK', dayNumber: 1, wolfKiller: true },
+        players,
+        myUserId: 'h1',
+        myRole: 'WEREWOLF',
+        narration: 'wolfOpen',
+      },
+    })
+    expect(w.find('[data-testid="wolf-confirm-kill"]').exists()).toBe(true)
+    expect(w.find('.narration-strip').text()).toBe('狼人請睜眼')
+    expect(w.findAll('[data-testid="night-narration"]')).toHaveLength(1)
+  })
+
+  it('shows no line without the prop (every non-host player)', () => {
+    const w = mount(NightPhase, {
+      props: {
+        nightPhase: { subPhase: 'SEER_PICK', dayNumber: 1 },
+        players,
+        myUserId: 'w1',
+        myRole: 'WEREWOLF',
+      },
+    })
+    expect(narrationOf(w).exists()).toBe(false)
+    expect(w.find('[data-testid="sleep-screen-title"]').text()).toBe('請閉眼')
+  })
+})

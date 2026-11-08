@@ -139,6 +139,7 @@
         :no-kill-allowed="gameStore.state.noKillAllowed ?? false"
         :guard-skip-allowed="gameStore.state.guardSkipAllowed ?? false"
         :rejection-count="nightRejections"
+        :narration="nightNarration"
         @select-player="handleNightSelect"
         @confirm="handleNightConfirm"
         @wolf-skip="handleWolfSkip"
@@ -551,6 +552,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
+import { nightNarrationKey } from '@/utils/nightNarration'
 import { useGameStore } from '@/stores/gameStore'
 import { useRoomStore } from '@/stores/roomStore'
 import { gameService } from '@/services/gameService'
@@ -646,6 +648,16 @@ async function action(req: Omit<import('@/types').GameActionRequest, 'gameId'>) 
     actionPending.value = false
   }
 }
+
+// The host's phone is the room's speaker; the narration line lets the host read the night aloud without sound.
+const nightNarration = computed(() =>
+  isHost.value
+    ? nightNarrationKey([
+        ...(gameStore.state?.audioReplayBuffer ?? []),
+        gameStore.state?.audioSequence,
+      ])
+    : undefined,
+)
 
 const isHost = computed(() => {
   const hostId = gameStore.state?.hostId ?? roomStore.room?.hostId
