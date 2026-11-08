@@ -296,41 +296,37 @@ export async function setupGame(
     // assignment (observed failure: "IDIOT bots not found" across all
     // idiot-flow tests when the IDIOT toggle stayed off).
     //
-    // The screen enforces board limits (gods within wolves ± 1), so a toggle
-    // can be disabled until another one moves first — e.g. 獵人 off only after
-    // 守衛 on. Make passes, skipping disabled toggles, until nothing changes.
+    // Roles live on their own page (選擇角色): one card per role, tap = on/off,
+    // aria-pressed = on, aria-disabled = cannot change right now.
+    await hostPage.getByTestId('open-role-select').click()
+    await hostPage.getByTestId('role-select-page').waitFor({ state: 'visible' })
+
+    // The screen enforces board limits (gods within wolves ± 1), so a card
+    // can be locked until another one moves first — e.g. 獵人 off only after
+    // 守衛 on. Make passes, skipping locked cards, until nothing changes.
     for (let pass = 0; pass < allOptionalRoles.length; pass++) {
       let changed = false
       for (const role of allOptionalRoles) {
         const shouldBeEnabled = opts.roles.includes(role as RoleName)
-
-        // Rows read "白狼王 White Wolf King": match WHITE_WOLF_KING as words, anchored
-        // at the end of the name so "女巫自救 Witch Self-Save" is not the WITCH row.
-        // (The two kings are mutually exclusive: the multi-pass loop handles it.)
-        const roleRow = hostPage.locator('.role-row').filter({
-          has: hostPage.locator('.role-name', {
-            hasText: new RegExp(`${role.replace(/_/g, ' ')}\\s*$`, 'i'),
-          }),
-        })
+        const roleCard = hostPage.getByTestId(`role-toggle-${role}`)
 
         for (let attempt = 0; attempt < 3; attempt++) {
-          const isEnabled = (await roleRow.locator('.toggle-on').count()) > 0
+          const isEnabled = (await roleCard.getAttribute('aria-pressed')) === 'true'
           if (isEnabled === shouldBeEnabled) break
+          if ((await roleCard.getAttribute('aria-disabled')) === 'true') break
 
-          const toggle = isEnabled ? roleRow.locator('.toggle-on') : roleRow.locator('.toggle-off')
-          if ((await toggle.count()) === 0 || (await toggle.isDisabled())) break
-
-          await toggle.click()
+          await roleCard.click()
           changed = true
-          // The toggle may legitimately refuse (mutually exclusive kings): the
-          // attempt loop re-reads the row either way.
-          await expect(roleRow.locator('.toggle-on'))
-            .toHaveCount(shouldBeEnabled ? 1 : 0, { timeout: 3_000 })
+          // The card may legitimately refuse (a limit moved): the attempt loop
+          // re-reads it either way.
+          await expect(roleCard)
+            .toHaveAttribute('aria-pressed', String(shouldBeEnabled), { timeout: 3_000 })
             .catch(() => {})
         }
       }
       if (!changed) break
     }
+    await hostPage.getByTestId('role-select-done').click()
   }
 
   // Save the board; the panel closes onto the seat grid.

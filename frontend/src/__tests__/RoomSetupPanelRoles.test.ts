@@ -1,6 +1,7 @@
 /**
- * RoomSetupPanel role toggles: 白狼王 takes one of the wolf seats, so enabling
- * it never costs a villager seat and is sent in the createRoom roles.
+ * RoomSetupPanel role cards (page 2, 選擇角色): tap = on/off, grey = off, colour = on.
+ * 白狼王 takes one of the wolf seats, so enabling it never costs a villager seat.
+ * A card that cannot change is aria-disabled, and tapping it shows the reason.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
@@ -8,10 +9,14 @@ import { flushPromises, mount } from '@vue/test-utils'
 import RoomSetupPanel from '@/components/RoomSetupPanel.vue'
 import type { Room } from '@/types'
 
-const h = vi.hoisted(() => ({ updateBoardMock: vi.fn() }))
+const h = vi.hoisted(() => ({ updateBoardMock: vi.fn(), messageMock: vi.fn() }))
 
 vi.mock('@/services/roomService', () => ({
   roomService: { updateBoard: h.updateBoardMock },
+}))
+vi.mock('element-plus', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('element-plus')>()),
+  ElMessage: h.messageMock,
 }))
 
 async function mountSetup(
@@ -42,6 +47,12 @@ async function mountSetup(
   await flushPromises()
   return wrapper
 }
+
+type Wrapper = Awaited<ReturnType<typeof mountSetup>>
+const card = (w: Wrapper, id: string) => w.find(`[data-testid="role-toggle-${id}"]`)
+const disabled = (w: Wrapper, id: string) =>
+  w.find(`[data-testid="${id}"]`).attributes('aria-disabled') === 'true'
+const lastMessage = () => h.messageMock.mock.lastCall?.[0].message
 
 function chipCount(wrapper: Awaited<ReturnType<typeof mountSetup>>, role: string) {
   const chip = wrapper.find(`[data-testid="role-composition"] [data-role="${role}"]`)
@@ -77,7 +88,7 @@ describe('RoomSetupPanel — 白狼王 toggle', () => {
     const wrapper = await mountSetup()
     await wrapper.find('[data-testid="role-toggle-GUARD"]').trigger('click') // 3 wolves, 4 gods (max)
     const kingToggle = wrapper.find('[data-testid="role-toggle-WHITE_WOLF_KING"]')
-    expect(kingToggle.attributes('disabled')).toBeUndefined()
+    expect(kingToggle.attributes('aria-disabled')).toBe('false')
     await kingToggle.trigger('click')
     expect(chipCount(wrapper, 'WHITE_WOLF_KING')).toBe(1)
   })
@@ -102,8 +113,6 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
 
   const click = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
     w.find(`[data-testid="${id}"]`).trigger('click')
-  const disabled = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
-    w.find(`[data-testid="${id}"]`).attributes('disabled') !== undefined
 
   it('enabling MEDIUM turns SEER off, and the reverse', async () => {
     const w = await mountSetup() // SEER is on
@@ -124,13 +133,13 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
     expect(chipCount(w, 'SEER')).toBe(0)
   })
 
-  it('the seer/medium exclusivity hint shows only under a row whose partner is enabled', async () => {
+  it('the seer/medium "one of two" note shows only on the card whose partner is on', async () => {
     const w = await mountSetup() // SEER on, MEDIUM off
     expect(w.find('[data-testid="role-hint-SEER"]').exists()).toBe(false)
-    expect(w.find('[data-testid="role-hint-MEDIUM"]').text()).toContain('不能同時選')
+    expect(w.find('[data-testid="role-hint-MEDIUM"]').text()).toBe('⇄ 二選一')
     await click(w, 'role-toggle-MEDIUM') // swaps SEER off
     expect(w.find('[data-testid="role-hint-MEDIUM"]').exists()).toBe(false)
-    expect(w.find('[data-testid="role-hint-SEER"]').text()).toContain('不能同時選')
+    expect(w.find('[data-testid="role-hint-SEER"]').text()).toBe('⇄ 二選一')
   })
 
   it('mechanical wolf needs 9+ players', async () => {
@@ -142,9 +151,8 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
     await click(w, 'player-count-decrement') // 8 players: dropped
     expect(chipCount(w, 'MECHANICAL_WOLF')).toBe(0)
     expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(true)
-    expect(w.find('[data-testid="role-hint-MECHANICAL_WOLF"]').text()).toContain(
-      '9 人及以上才能開啟',
-    )
+    expect(w.find('[data-testid="role-hint-MECHANICAL_WOLF"]').text()).toBe('🔒')
+    expect(card(w, 'MECHANICAL_WOLF').attributes('title')).toBe('9 人及以上才能開啟')
   })
 
   it('mechanical wolf is allowed with 2 wolves, and counts toward the special-wolf limit', async () => {
@@ -163,27 +171,28 @@ describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
 
   const click = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
     w.find(`[data-testid="${id}"]`).trigger('click')
-  const disabled = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
-    w.find(`[data-testid="${id}"]`).attributes('disabled') !== undefined
-  const hint = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
-    w.find(`[data-testid="role-hint-${id}"]`)
+  const hint = (w: Wrapper, id: string) => w.find(`[data-testid="role-hint-${id}"]`)
 
-  it('KNIGHT is blocked while MECHANICAL_WOLF is on, with a hint', async () => {
+  it('KNIGHT is blocked while MECHANICAL_WOLF is on; tapping it shows why', async () => {
     const w = await mountSetup()
     await click(w, 'role-toggle-MECHANICAL_WOLF')
     expect(disabled(w, 'role-toggle-KNIGHT')).toBe(true)
-    expect(hint(w, 'KNIGHT').text()).toContain('機械狼與騎士不能同時選')
+    expect(card(w, 'KNIGHT').element.parentElement?.classList).toContain('card-blocked')
+    expect(hint(w, 'KNIGHT').text()).toBe('⛓ 互斥')
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士')
     await click(w, 'role-toggle-KNIGHT')
     expect(chipCount(w, 'KNIGHT')).toBe(0)
+    expect(lastMessage()).toBe('騎士與機械狼不能同時選，請先關閉機械狼')
   })
 
-  it('MECHANICAL_WOLF is blocked while KNIGHT is on, with a hint', async () => {
+  it('MECHANICAL_WOLF is blocked while KNIGHT is on; tapping it shows why', async () => {
     const w = await mountSetup()
     await click(w, 'role-toggle-KNIGHT')
     expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(true)
-    expect(hint(w, 'MECHANICAL_WOLF').text()).toContain('機械狼與騎士不能同時選')
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('⛓ 互斥')
     await click(w, 'role-toggle-MECHANICAL_WOLF')
     expect(chipCount(w, 'MECHANICAL_WOLF')).toBe(0)
+    expect(lastMessage()).toBe('機械狼與騎士不能同時選，請先關閉騎士')
   })
 
   it('the god maximum leaves out KNIGHT while MECHANICAL_WOLF is on', async () => {
@@ -201,7 +210,9 @@ describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
     expect(w.find('[data-testid="role-toggle-KNIGHT"]').attributes('title')).toBe(
       '神職不能少於 2 個',
     )
-    expect(hint(w, 'KNIGHT').text()).toContain('機械狼與騎士不能同時選') // the board itself is still flagged
+    // The board itself is still flagged: each card names the role it excludes.
+    expect(hint(w, 'KNIGHT').text()).toBe('排除 機械狼')
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士')
   })
 
   it('turning one off frees the other', async () => {
@@ -210,7 +221,7 @@ describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
     await click(w, 'role-toggle-KNIGHT') // off again
     expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(false)
     expect(hint(w, 'KNIGHT').exists()).toBe(false)
-    expect(hint(w, 'MECHANICAL_WOLF').text()).toContain('9 人及以上')
+    expect(hint(w, 'MECHANICAL_WOLF').exists()).toBe(false)
   })
 })
 
@@ -256,5 +267,77 @@ describe('RoomSetupPanel — 騎士', () => {
       14: base,
       15: [...base, 'GUARD'],
     })
+  })
+})
+
+describe('RoomSetupPanel — 選擇角色 page', () => {
+  beforeEach(() => h.updateBoardMock.mockReset())
+  afterEach(() => vi.clearAllMocks())
+
+  const page = (w: Wrapper, id: string) => w.find(`[data-testid="${id}"]`).element as HTMLElement
+  const cardClasses = (w: Wrapper, id: string) => card(w, id).element.parentElement?.classList
+
+  it('opens from players & roles and returns with 確定', async () => {
+    const w = await mountSetup()
+    expect(page(w, 'role-select-page').style.display).toBe('none')
+    await w.find('[data-testid="open-role-select"]').trigger('click')
+    expect(page(w, 'role-select-page').style.display).toBe('')
+    await w.find('[data-testid="role-select-done"]').trigger('click')
+    expect(page(w, 'role-select-page').style.display).toBe('none')
+  })
+
+  it('each page opens scrolled to the top', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const w = await mountSetup()
+    await w.find('[data-testid="open-role-select"]').trigger('click')
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 0)
+    scrollTo.mockClear()
+    await w.find('[data-testid="role-select-done"]').trigger('click')
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 0)
+  })
+
+  it('a card turns from grey to colour when tapped on, and back when tapped again', async () => {
+    const w = await mountSetup()
+    expect(cardClasses(w, 'GUARD')).toContain('card-off')
+    await card(w, 'GUARD').trigger('click')
+    expect(cardClasses(w, 'GUARD')).toContain('card-on')
+    expect(cardClasses(w, 'GUARD')).toContain('camp-god')
+    expect(card(w, 'GUARD').attributes('aria-pressed')).toBe('true')
+    await card(w, 'GUARD').trigger('click')
+    expect(cardClasses(w, 'GUARD')).toContain('card-off')
+    expect(card(w, 'GUARD').attributes('aria-pressed')).toBe('false')
+  })
+
+  it('a locked card is deeper grey, and tapping it shows the reason', async () => {
+    const w = await mountSetup()
+    await w.find('[data-testid="player-count-decrement"]').trigger('click') // 8 players
+    expect(cardClasses(w, 'WHITE_WOLF_KING')).toContain('card-locked')
+    await card(w, 'WHITE_WOLF_KING').trigger('click')
+    expect(lastMessage()).toBe('9 人及以上才能開啟')
+    expect(chipCount(w, 'WHITE_WOLF_KING')).toBe(0)
+  })
+
+  it('a selected god at the minimum stays on and says why', async () => {
+    const w = await mountSetup()
+    await card(w, 'HUNTER').trigger('click') // 2 gods: the minimum for 3 wolves
+    await card(w, 'WITCH').trigger('click')
+    expect(chipCount(w, 'WITCH')).toBe(1)
+    expect(lastMessage()).toBe('神職不能少於 2 個')
+  })
+
+  it('a required card opens its role info instead of toggling', async () => {
+    const w = await mountSetup()
+    await card(w, 'WEREWOLF').trigger('click')
+    expect(document.body.querySelector('[data-testid="role-card-sheet"]')).not.toBeNull()
+    expect(h.messageMock).not.toHaveBeenCalled()
+    w.unmount()
+  })
+
+  it('the count bar shows players, wolves, gods and the villagers left', async () => {
+    const w = await mountSetup() // 9 players, 3 wolves, 3 gods
+    expect(w.find('[data-testid="role-count-bar"]').text().replace(/\s+/g, ' ')).toBe(
+      '9 人 · 狼人 3 · 神職 3（2–4） · 村民 3',
+    )
+    expect(w.find('[data-testid="role-hint-VILLAGER"]').text()).toBe('×3 自動補')
   })
 })
