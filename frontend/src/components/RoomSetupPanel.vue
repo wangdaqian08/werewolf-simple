@@ -423,20 +423,12 @@ async function save() {
 <style scoped src="../assets/room-form.css"></style>
 
 <style scoped>
-.role-info-btn {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0;
-  background: none;
-  border: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
 /* Page 2: role cards, three per row */
+/* The page scrolls, not .create-wrap (it only has a min-height): without this the
+   shared overflow-y: auto makes .create-wrap the sticky container and the bar never pins. */
+.create-wrap {
+  overflow: visible;
+}
 .count-bar {
   position: sticky;
   top: 0;
@@ -513,7 +505,7 @@ async function save() {
 .card-info::after {
   content: '';
   position: absolute;
-  inset: -10px;
+  inset: -13px; /* 18px + 2 × 13px = 44px tap area */
 }
 /* Selected: full colour, camp border */
 .card-on {
