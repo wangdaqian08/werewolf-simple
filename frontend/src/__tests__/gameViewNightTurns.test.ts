@@ -61,6 +61,7 @@ const NEW_ACTIONS = [
   'MECH_CONFIRM',
   'MEDIUM_CHECK',
   'MEDIUM_CONFIRM',
+  'GRAVEKEEPER_CONFIRM',
 ]
 
 // Stands in for NightPhase: exposes the rejection count; the test emits night-action on it.

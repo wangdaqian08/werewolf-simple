@@ -296,6 +296,86 @@ describe('NightPhase - mechanical wolf and medium turns', () => {
   })
 })
 
+describe('NightPhase - gravekeeper turn', () => {
+  const pl = (userId: string, seatIndex: number, isAlive = true): GamePlayer => ({
+    userId,
+    nickname: userId,
+    seatIndex,
+    isAlive,
+    isSheriff: false,
+  })
+  const night = (over: Partial<NightPhaseState> = {}): NightPhaseState => ({
+    subPhase: 'GRAVEKEEPER_RESULT',
+    dayNumber: 2,
+    gravekeeperResult: {
+      result: 'WOLF',
+      exiledPlayerId: 'w1',
+      exiledNickname: 'w1',
+      exiledSeatIndex: 3,
+      history: [{ round: 2, nickname: 'w1', isWerewolf: true }],
+    },
+    ...over,
+  })
+  const mountAs = (myUserId: string, myRole: PlayerRole, nightPhase = night(), alive = true) =>
+    mount(NightPhase, {
+      props: {
+        nightPhase,
+        players: [pl('g1', 1, myUserId !== 'g1' || alive), pl('v1', 2), pl('w1', 3, false)],
+        myUserId,
+        myRole,
+      },
+    })
+  const result = (w: ReturnType<typeof mountAs>) => w.find('[data-testid="gravekeeper-result"]')
+  const confirm = (w: ReturnType<typeof mountAs>) =>
+    w.find('[data-testid="gravekeeper-result-confirm"]')
+  const sleeping = (w: ReturnType<typeof mountAs>) =>
+    w.find('[data-testid="sleep-screen-title"]').exists()
+
+  it('living gravekeeper sees the result screen in GRAVEKEEPER_RESULT', async () => {
+    const wrapper = mountAs('g1', 'GRAVEKEEPER')
+    expect(result(wrapper).attributes('data-verdict')).toBe('WOLF')
+    expect(result(wrapper).attributes('data-exiled-seat')).toBe('3')
+    expect(wrapper.find('.rb-sub').text()).toBe('昨日放逐者的陣營')
+    expect(sleeping(wrapper)).toBe(false)
+    await confirm(wrapper).trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['GRAVEKEEPER_CONFIRM', undefined]])
+    expect(sleeping(wrapper)).toBe(true)
+  })
+
+  it('night 1 reads 首夜無信息 from the night number, not from a stored value', () => {
+    const none = {
+      result: 'NONE' as const,
+      exiledPlayerId: null,
+      exiledNickname: null,
+      exiledSeatIndex: null,
+      history: [],
+    }
+    const first = mountAs('g1', 'GRAVEKEEPER', night({ dayNumber: 1, gravekeeperResult: none }))
+    expect(result(first).attributes('data-verdict')).toBe('FIRST_NIGHT')
+    const later = mountAs('g1', 'GRAVEKEEPER', night({ dayNumber: 3, gravekeeperResult: none }))
+    expect(result(later).attributes('data-verdict')).toBe('NO_EXILE')
+  })
+
+  it('a living gravekeeper without a result can still end the turn', () => {
+    const wrapper = mountAs('g1', 'GRAVEKEEPER', night({ gravekeeperResult: undefined }))
+    expect(result(wrapper).exists()).toBe(false)
+    expect(confirm(wrapper).exists()).toBe(true)
+  })
+
+  it('dead gravekeeper sees the sleep screen', () => {
+    const wrapper = mountAs('g1', 'GRAVEKEEPER', night({ gravekeeperResult: undefined }), false)
+    expect(sleeping(wrapper)).toBe(true)
+    expect(confirm(wrapper).exists()).toBe(false)
+  })
+
+  it('other roles see the sleep screen in GRAVEKEEPER_RESULT', () => {
+    const wrapper = mountAs('v1', 'VILLAGER', night({ gravekeeperResult: undefined }))
+    expect(sleeping(wrapper)).toBe(true)
+    expect(result(wrapper).exists()).toBe(false)
+    expect(confirm(wrapper).exists()).toBe(false)
+  })
+})
+
 describe('NightPhase - pick actions keep the screen until the result arrives', () => {
   const pl = (userId: string, seatIndex: number): GamePlayer => ({
     userId,

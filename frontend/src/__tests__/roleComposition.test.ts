@@ -61,6 +61,23 @@ describe('RoleComposition', () => {
     expect(chipMap(wrapper)).toEqual({ WEREWOLF: 3, SEER: 1, WITCH: 1, KNIGHT: 1, VILLAGER: 3 })
   })
 
+  it('RoleComposition counts GRAVEKEEPER as a god', () => {
+    const wrapper = mount(RoleComposition, {
+      props: {
+        totalPlayers: 9,
+        wolfCount: 3,
+        roles: ['WEREWOLF', 'VILLAGER', 'SEER', 'WITCH', 'GRAVEKEEPER'],
+      },
+    })
+    expect(chipMap(wrapper)).toEqual({
+      WEREWOLF: 3,
+      SEER: 1,
+      WITCH: 1,
+      GRAVEKEEPER: 1,
+      VILLAGER: 3,
+    })
+  })
+
   it('renders 6p Classic-ish: 2 wolves + Seer + Witch + 2 villagers', () => {
     const wrapper = mount(RoleComposition, {
       props: {

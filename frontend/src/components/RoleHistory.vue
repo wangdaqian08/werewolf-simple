@@ -49,6 +49,11 @@ function describe(e: RoleHistoryEntry): string {
       return t('roleHistory.learn', { who: who(e.target), role: roleName(e.role) })
     case 'PROTECT':
       return t('roleHistory.protect', { who: who(e.target) })
+    case 'GRAVE':
+      return t('roleHistory.grave', {
+        who: who(e.target),
+        result: e.isWerewolf ? t('roleHistory.wolf') : t('roleHistory.good'),
+      })
     case 'GUARD':
       return e.target ? t('roleHistory.guard', { who: who(e.target) }) : t('roleHistory.guardNone')
     case 'KILL':

@@ -237,17 +237,26 @@ export interface RoleHistoryPlayer {
 
 export interface RoleHistoryEntry {
   round: number
-  action: 'CHECK' | 'GUARD' | 'KILL' | 'ATTACKED' | 'ANTIDOTE' | 'POISON' | 'LEARN' | 'PROTECT'
+  action:
+    | 'CHECK'
+    | 'GUARD'
+    | 'KILL'
+    | 'ATTACKED'
+    | 'ANTIDOTE'
+    | 'POISON'
+    | 'LEARN'
+    | 'PROTECT'
+    | 'GRAVE'
   /** null = 空守 (guard) / 空刀 (wolf KILL, WITCH attacked) */
   target: RoleHistoryPlayer | null
-  /** SEER, and the mechanical wolf's learned alignment check */
+  /** SEER, the mechanical wolf's learned alignment check, and GRAVE (the exiled player's camp) */
   isWerewolf?: boolean
   /** MEDIUM / mechanical-wolf role check: the role told; LEARN: the role learned */
   role?: PlayerRole | null
 }
 
 export interface RoleHistory {
-  role: 'WITCH' | 'SEER' | 'GUARD' | 'WOLF' | 'MEDIUM' | 'MECHANICAL_WOLF'
+  role: 'WITCH' | 'SEER' | 'GUARD' | 'WOLF' | 'MEDIUM' | 'MECHANICAL_WOLF' | 'GRAVEKEEPER'
   entries: RoleHistoryEntry[]
 }
 // ── Game review (上帝视角复盘) ────────────────────────────────────────────────
@@ -265,7 +274,7 @@ export interface ReviewNight {
     action: 'KILL' | 'SKIP' | 'SELF_KILL'
     target: ReviewPlayer | null
   }
-  /** seer / mech / medium / witch / guard: null when the role is not in the game */
+  /** seer / mech / medium / gravekeeper / witch / guard: null when the role is not in the game */
   seer: {
     actor: ReviewPlayer
     dead: boolean
@@ -290,6 +299,13 @@ export interface ReviewNight {
     dead: boolean
     target: ReviewPlayer | null
     role: PlayerRole | null
+  } | null
+  /** exiled: the player voted out the day before, null when there was none (always on night 1) */
+  gravekeeper: {
+    actor: ReviewPlayer
+    dead: boolean
+    exiled: ReviewPlayer | null
+    result: GravekeeperResult | null
   } | null
   witch: {
     actor: ReviewPlayer
@@ -387,6 +403,7 @@ export type MyNightAction =
     }
   | { type: 'GUARD'; target: PlayerSeat | null }
   | { type: 'MEDIUM'; target: PlayerSeat | null; role: PlayerRole | null }
+  | { type: 'GRAVEKEEPER'; exiled: PlayerSeat | null; result: GravekeeperResult | null }
   /** checkRole is set only for a learned role check; an alignment check is read off check.camp */
   | {
       type: 'MECHANICAL_WOLF'
@@ -520,6 +537,7 @@ export type PlayerRole =
   | 'MECHANICAL_WOLF'
   | 'MEDIUM'
   | 'KNIGHT'
+  | 'GRAVEKEEPER'
 
 export interface GamePlayer {
   userId: string
@@ -833,6 +851,7 @@ export type NightSubPhase =
   | 'MECH_WOLF_RESULT' // mechanical wolf sees the outcome
   | 'MEDIUM_PICK' // medium chooses a player to check
   | 'MEDIUM_RESULT' // medium sees the exact role
+  | 'GRAVEKEEPER_RESULT' // gravekeeper sees the camp of yesterday's exiled player
   | 'WAITING' // villagers / hunters / dead — eyes closed
 
 export interface SeerHistoryEntry {
@@ -845,6 +864,15 @@ export interface MediumHistoryEntry {
   round: number
   nickname: string
   role: PlayerRole
+}
+
+/** NONE: nobody was voted out the day before (always on night 1). */
+export type GravekeeperResult = 'GOOD' | 'WOLF' | 'NONE'
+
+export interface GravekeeperHistoryEntry {
+  round: number
+  nickname: string
+  isWerewolf: boolean
 }
 
 export type MechNightSkill =
@@ -886,6 +914,14 @@ export interface NightPhaseState {
     checkedSeatIndex: number
     role: PlayerRole
     history: MediumHistoryEntry[]
+  }
+  // Gravekeeper result (private; computed by the server at night-init)
+  gravekeeperResult?: {
+    result: GravekeeperResult
+    exiledPlayerId: string | null
+    exiledNickname: string | null
+    exiledSeatIndex: number | null
+    history: GravekeeperHistoryEntry[]
   }
   // Mechanical wolf (private)
   mechWolf?: {

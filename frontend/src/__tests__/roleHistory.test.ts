@@ -105,6 +105,17 @@ describe('RoleHistory', () => {
     expect(rows(wrapper)).toEqual(['第1夜 · 查驗 2號 Amy → 獵人'])
   })
 
+  it('gravekeeper: GRAVE entry reads "{seat} 是狼人" or "是好人"', async () => {
+    const wrapper = await openPanel({
+      role: 'GRAVEKEEPER',
+      entries: [
+        { round: 2, action: 'GRAVE', target: ref('Amy', 2), isWerewolf: true },
+        { round: 4, action: 'GRAVE', target: ref('Bob', 4), isWerewolf: false },
+      ],
+    })
+    expect(rows(wrapper)).toEqual(['第2夜 · 2號 Amy 是狼人', '第4夜 · 4號 Bob 是好人'])
+  })
+
   it('shows 暫無記錄 when there are no entries yet', async () => {
     const wrapper = await openPanel({ role: 'SEER', entries: [] })
     expect(wrapper.find('[data-testid="role-history"]').text()).toContain('暫無記錄')

@@ -34,10 +34,21 @@ describe('RoleCardSheet', () => {
     expect(rules[6]?.textContent).toBe('機械狼和騎士不能同時出現在同一個房間。')
   })
 
-  it('mechanical wolf rules say it never shares a room with the knight', () => {
+  it('gravekeeper role card shows the rules text', () => {
+    mount(RoleCardSheet, { props: { role: 'GRAVEKEEPER' }, attachTo: document.body })
+    expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('守墓人')
+    const rules = [...document.body.querySelectorAll('[data-testid="rc-rules"] li')]
+    expect(rules).toHaveLength(4)
+    expect(rules[0]?.textContent).toBe('陣營：好人陣營（神職）。')
+    expect(rules[1]?.textContent).toContain('第一晚沒有信息')
+    expect(rules[2]?.textContent).toContain('昨日無人被放逐')
+    expect(rules[3]?.textContent).toBe('機械狼和守墓人不能同時出現在同一個房間。')
+  })
+
+  it('mechanical wolf rules say it never shares a room with the knight or the gravekeeper', () => {
     mount(RoleCardSheet, { props: { role: 'MECHANICAL_WOLF' }, attachTo: document.body })
     const text = document.body.querySelector('[data-testid="rc-rules"]')?.textContent
-    expect(text).toContain('機械狼和騎士不能同時出現在同一個房間。')
+    expect(text).toContain('機械狼不能和騎士、守墓人同時出現在同一個房間。')
     expect(text).not.toContain('學到騎士')
     expect(text).not.toContain('被騎士決鬥除外')
   })

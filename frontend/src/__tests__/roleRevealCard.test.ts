@@ -45,4 +45,11 @@ describe('RoleRevealCard — 机械狼 and 通灵师', () => {
     expect(wrapper.find('.role-label-special').exists()).toBe(true)
     expect(wrapper.find('[data-testid="role-reveal-desc"]').text()).toContain('確切身份')
   })
+
+  it('gravekeeper card shows the gravekeeper name, special styling and its rule', () => {
+    const wrapper = mount(RoleRevealCard, { props: { role: 'GRAVEKEEPER', revealed: true } })
+    expect(wrapper.text()).toContain('守墓人')
+    expect(wrapper.find('.role-label-special').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="role-reveal-desc"]').text()).toContain('被投票放逐')
+  })
 })

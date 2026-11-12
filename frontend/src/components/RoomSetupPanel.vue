@@ -203,7 +203,7 @@ watch(view, () => window.scrollTo(0, 0))
 
 const MIN_PLAYERS = 6
 // 15 = 5 wolves / 5 gods / 5 villagers, the largest board the current roles balance
-// (up to 6 gods are possible: GOD_IDS.length - 1, as SEER/MEDIUM are mutually exclusive).
+// (up to 7 gods are possible: GOD_IDS.length - 1, as SEER/MEDIUM are mutually exclusive).
 // Above 12 the day/night seat grids get a 4th row and scroll on 417×614 (accepted).
 const MAX_PLAYERS = 15
 
@@ -234,7 +234,7 @@ function decrement() {
   if (totalPlayers.value > minPlayers.value) totalPlayers.value--
 }
 
-// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (at most 6: GOD_IDS.length - 1, SEER/MEDIUM exclusive) and
+// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (at most 7: GOD_IDS.length - 1, SEER/MEDIUM exclusive) and
 // always leave ≥ 1 villager seat, and a special wolf (白狼王 / 黑狼王 / 機械狼, any
 // may be on) needs 9+ players and each a plain fellow wolf: wolves ≥ specials + 1
 // (the backend enforces these rules too).
@@ -244,10 +244,11 @@ const SPECIAL_WOLF_MIN_PLAYERS = 9
 // The seer and the medium are mutually exclusive: turning one on turns the other off.
 const EXCLUSIVE_WITH: Record<string, string> = { SEER: 'MEDIUM', MEDIUM: 'SEER' }
 // Roles from different boards that never share a room: while one is on, the other is blocked.
-// The mechanical wolf's learn table covers only its own board (机械狼通灵师), so no rule says what it gains from 騎士.
+// The mechanical wolf's learn table covers only its own board (机械狼通灵师), so no rule says what it gains from 騎士 or 守墓人.
 const BLOCKED_WITH: Record<string, string[]> = {
-  MECHANICAL_WOLF: ['KNIGHT'],
+  MECHANICAL_WOLF: ['KNIGHT', 'GRAVEKEEPER'],
   KNIGHT: ['MECHANICAL_WOLF'],
+  GRAVEKEEPER: ['MECHANICAL_WOLF'],
 }
 function blockedBy(roleId: string): boolean {
   return (BLOCKED_WITH[roleId] ?? []).some((id) => enabledOptional.value.has(id))

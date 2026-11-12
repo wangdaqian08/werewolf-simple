@@ -56,6 +56,8 @@ export const KNOWN_NARRATION_FILES: readonly string[] = [
   'mech_wolf_close_eyes.mp3',
   'medium_open_eyes.mp3',
   'medium_close_eyes.mp3',
+  'gravekeeper_open_eyes.mp3',
+  'gravekeeper_close_eyes.mp3',
   'rooster_crowing.mp3',
   'day_time.mp3',
   'countdown_warning.mp3',

@@ -16,6 +16,8 @@ const NARRATION: Record<string, string> = {
   'mech_wolf_close_eyes.mp3': 'mechWolfClose',
   'medium_open_eyes.mp3': 'mediumOpen',
   'medium_close_eyes.mp3': 'mediumClose',
+  'gravekeeper_open_eyes.mp3': 'gravekeeperOpen',
+  'gravekeeper_close_eyes.mp3': 'gravekeeperClose',
 }
 
 // Dawn cues: anything older belongs to the previous night.

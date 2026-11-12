@@ -33,6 +33,7 @@ const idiot = P(8, 'Ida', 'IDIOT')
 const vil = P(9, 'Val', 'VILLAGER')
 const mech = P(10, 'Mia', 'MECHANICAL_WOLF')
 const medium = P(11, 'Meg', 'MEDIUM')
+const gravekeeper = P(12, 'Gia', 'GRAVEKEEPER')
 const players = [w1, w2, king, seer, witch, guard, hunter, idiot, vil]
 
 const night = (over: Partial<ReviewNight> = {}): ReviewNight => ({
@@ -40,6 +41,7 @@ const night = (over: Partial<ReviewNight> = {}): ReviewNight => ({
   seer: { actor: seer, dead: false, target: null, isWerewolf: false },
   mech: null,
   medium: null,
+  gravekeeper: null,
   witch: { actor: witch, dead: false, antidote: null, poison: null },
   guard: { actor: guard, dead: false, target: null },
   dawn: { deaths: [], saved: null },
@@ -226,6 +228,39 @@ describe('GameReview', () => {
     // learned the medium's role check, so the check reads out the role
     expect(text).toContain('⚙ 機械狼 10號 驗 7號 Hal〔獵人〕，毒 9號 Val〔村民〕，守 4號 Sia')
     expect(text).toContain('👻 通靈師 11號 已出局')
+  })
+
+  it('game review lists the gravekeeper turn: exiled camp, no exile, dead', () => {
+    const turn = (over: Partial<NonNullable<ReviewNight['gravekeeper']>>) => ({
+      actor: gravekeeper,
+      dead: false,
+      exiled: null,
+      result: null,
+      ...over,
+    })
+    const wrapper = render([
+      { day: 1, night: night({ gravekeeper: turn({ result: 'NONE' }) }), events: [] },
+      { day: 2, night: night({ gravekeeper: turn({ exiled: king, result: 'WOLF' }) }), events: [] },
+      { day: 3, night: night({ gravekeeper: turn({ exiled: vil, result: 'GOOD' }) }), events: [] },
+      { day: 4, night: night({ gravekeeper: turn({ dead: true }) }), events: [] },
+    ])
+    expect(lines(wrapper).filter((l) => l.includes('守墓人'))).toEqual([
+      '⚰ 守墓人 12號 無人被放逐',
+      // the camp it was told, never the exiled wolf's exact role
+      '⚰ 守墓人 12號 得知 3號 King → 狼人',
+      '⚰ 守墓人 12號 得知 9號 Val → 好人',
+      '⚰ 守墓人 12號 已出局',
+    ])
+    // After the medium's line, before the witch's.
+    const first = lines(render([{ day: 1, night: night({ gravekeeper: turn({}) }), events: [] }]))
+    expect(first.findIndex((l) => l.includes('守墓人'))).toBe(
+      first.findIndex((l) => l.includes('女巫')) - 1,
+    )
+  })
+
+  it('no gravekeeper line when the role is not in the game', () => {
+    const wrapper = render([{ day: 1, night: night(), events: [] }])
+    expect(lines(wrapper).join('')).not.toContain('守墓人')
   })
 
   it('a learned alignment check shows wolf or good, never a role name', () => {

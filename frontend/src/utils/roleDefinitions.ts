@@ -33,6 +33,7 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   { id: 'IDIOT', emoji: '🃏', required: false },
   // Appended last: fitRolesToBoard turns gods on from the front, so default boards stay unchanged.
   { id: 'KNIGHT', emoji: '⚔️', required: false },
+  { id: 'GRAVEKEEPER', emoji: '⚰️', required: false },
 ] as const
 
 export function roleDefinition(id: string): RoleDefinition | undefined {
