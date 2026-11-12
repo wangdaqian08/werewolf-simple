@@ -759,7 +759,6 @@ export default {
     groupWolves: 'Wolves',
     joined: '{n} joined',
     needPlayers: 'Needs {n}+ players',
-    pairSwap: '⇄ One of two',
     players: 'Players (incl. host)',
     required: 'REQUIRED',
     roleConfig: 'Role Configuration',

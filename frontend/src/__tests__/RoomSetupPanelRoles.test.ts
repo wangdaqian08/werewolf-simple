@@ -114,32 +114,37 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
   const click = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
     w.find(`[data-testid="${id}"]`).trigger('click')
 
-  it('enabling MEDIUM turns SEER off, and the reverse', async () => {
+  // The seer and the medium exclude each other like every other pair: grey out, no auto-swap.
+  it('MEDIUM is blocked while SEER is on; tapping it shows why and changes nothing', async () => {
     const w = await mountSetup() // SEER is on
+    expect(disabled(w, 'role-toggle-MEDIUM')).toBe(true)
+    expect(w.find('[data-testid="role-hint-MEDIUM"]').text()).toBe('⛓ 互斥')
+    expect(w.find('[data-testid="role-hint-SEER"]').text()).toBe('排除 通靈師')
     await click(w, 'role-toggle-MEDIUM')
-    expect(chipCount(w, 'MEDIUM')).toBe(1)
-    expect(chipCount(w, 'SEER')).toBe(0)
-    await click(w, 'role-toggle-SEER')
-    expect(chipCount(w, 'SEER')).toBe(1)
     expect(chipCount(w, 'MEDIUM')).toBe(0)
+    expect(chipCount(w, 'SEER')).toBe(1)
+    expect(lastMessage()).toBe('通靈師與預言家不能同時選，請先關閉預言家')
   })
 
-  it('swapping SEER for MEDIUM is allowed at the god maximum', async () => {
+  it('turning SEER off frees MEDIUM; with MEDIUM on, SEER is the blocked one', async () => {
     const w = await mountSetup()
-    await click(w, 'role-toggle-GUARD') // 4 gods: the maximum for 3 wolves
+    await click(w, 'role-toggle-SEER') // off
     expect(disabled(w, 'role-toggle-MEDIUM')).toBe(false)
+    expect(w.find('[data-testid="role-hint-MEDIUM"]').exists()).toBe(false)
     await click(w, 'role-toggle-MEDIUM')
     expect(chipCount(w, 'MEDIUM')).toBe(1)
-    expect(chipCount(w, 'SEER')).toBe(0)
+    expect(disabled(w, 'role-toggle-SEER')).toBe(true)
+    expect(w.find('[data-testid="role-hint-SEER"]').text()).toBe('⛓ 互斥')
   })
 
-  it('the seer/medium "one of two" note shows only on the card whose partner is on', async () => {
-    const w = await mountSetup() // SEER on, MEDIUM off
-    expect(w.find('[data-testid="role-hint-SEER"]').exists()).toBe(false)
-    expect(w.find('[data-testid="role-hint-MEDIUM"]').text()).toBe('⇄ 二選一')
-    await click(w, 'role-toggle-MEDIUM') // swaps SEER off
-    expect(w.find('[data-testid="role-hint-MEDIUM"]').exists()).toBe(false)
-    expect(w.find('[data-testid="role-hint-SEER"]').text()).toBe('⇄ 二選一')
+  it('with neither on, the god maximum still counts the seer and the medium as one', async () => {
+    const w = await mountSetup()
+    for (let i = 0; i < 6; i++) await click(w, 'player-count-increment') // 15 players, 5 wolves
+    await click(w, 'role-toggle-GUARD')
+    await click(w, 'role-toggle-IDIOT') // 5 gods, so the seer may leave (minimum 4)
+    await click(w, 'role-toggle-SEER')
+    expect(chipCount(w, 'SEER')).toBe(0)
+    expect(w.find('[data-testid="god-range"]').text()).toContain('4–6')
   })
 
   it('mechanical wolf needs 9+ players', async () => {

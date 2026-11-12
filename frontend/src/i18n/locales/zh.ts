@@ -748,7 +748,6 @@ export default {
     groupWolves: '狼人陣營',
     joined: '已加入 {n} 人',
     needPlayers: '{n} 人及以上才能開啟',
-    pairSwap: '⇄ 二選一',
     players: '玩家人數（含房主）',
     required: '必選',
     roleConfig: '角色配置',

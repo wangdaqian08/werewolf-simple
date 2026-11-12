@@ -36,20 +36,20 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   { id: 'GRAVEKEEPER', emoji: '⚰️', required: false },
 ] as const
 
-// The seer and the medium fill the same slot: turning one on turns the other off.
-export const EXCLUSIVE_WITH: Record<string, string> = { SEER: 'MEDIUM', MEDIUM: 'SEER' }
-// Roles from different boards that never share a room: while one is on, the other is blocked.
+// Roles that never share a room: while one is on, the other is blocked (the backend rejects the same pairs).
+// The seer and the medium fill the same night slot.
 // The mechanical wolf's learn table covers only its own board (机械狼通灵师), so no rule says what it gains from 騎士 or 守墓人.
 // 騎士 (预女骑守) and 守墓人 (预女猎墓) each give the good camp confirmed information; no standard board has both.
 export const BLOCKED_WITH: Record<string, string[]> = {
+  SEER: ['MEDIUM'],
+  MEDIUM: ['SEER'],
   MECHANICAL_WOLF: ['KNIGHT', 'GRAVEKEEPER'],
   KNIGHT: ['MECHANICAL_WOLF', 'GRAVEKEEPER'],
   GRAVEKEEPER: ['MECHANICAL_WOLF', 'KNIGHT'],
 }
-/** Every role that can never be on a board with [id] (the backend enforces the same pairs). */
+/** Every role that can never be on a board with [id]. */
 export function excludedRoles(id: string): string[] {
-  const swap = EXCLUSIVE_WITH[id]
-  return [...(swap ? [swap] : []), ...(BLOCKED_WITH[id] ?? [])]
+  return BLOCKED_WITH[id] ?? []
 }
 
 export function roleDefinition(id: string): RoleDefinition | undefined {
