@@ -89,3 +89,31 @@ export async function swapRoles(
   if (status !== 200)
     throw new Error(`swapRoles game=${gameId} ${userIdA}<->${userIdB}: HTTP ${status}`)
 }
+
+/**
+ * Pin one seat's 单局任务 through the e2e-only
+ * POST /api/test-support/games/{gameId}/set-task. The backend only accepts a task
+ * that seat's role can draw, so a spec can never stage an impossible one.
+ */
+export async function setTask(
+  hostPage: Page,
+  gameId: number,
+  userId: string,
+  task: string,
+): Promise<void> {
+  const status = await hostPage.evaluate(
+    async ([gid, uid, tk]) => {
+      const res = await fetch(`/api/test-support/games/${gid}/set-task`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('jwt')}`,
+        },
+        body: JSON.stringify({ userId: uid, task: tk }),
+      })
+      return res.status
+    },
+    [gameId, userId, task] as const,
+  )
+  if (status !== 200) throw new Error(`setTask game=${gameId} ${userId}=${task}: HTTP ${status}`)
+}
