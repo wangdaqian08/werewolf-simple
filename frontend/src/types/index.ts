@@ -69,6 +69,19 @@ export interface UserStats {
   score: number
 }
 
+export interface LeaderboardEntry {
+  rank: number
+  nickname: string
+  score: number
+  me: boolean
+}
+
+/** Top three by 戰績分; `me` is the viewer's own row, null while they have no score. */
+export interface Leaderboard {
+  top: LeaderboardEntry[]
+  me: LeaderboardEntry | null
+}
+
 export interface Wallet {
   balance: number
   recent: CreditTransaction[]

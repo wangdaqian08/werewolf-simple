@@ -427,5 +427,26 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     await expect(hostPage.getByTestId('stats-score-value')).toHaveText(String(score))
     console.log(`[score-vs-coins] earned=${earned} score=${score} coins(after +100)=${coins}`)
     await captureSnapshot(new Map([['HOST', hostPage]]), testInfo, '03-account-score-vs-coins')
+
+    // ── Lobby leaderboard: top three by 戰績分, and the host's own row ──
+    await hostPage.goto('/')
+    await expect(hostPage.getByTestId('leaderboard-row').first()).toBeVisible({ timeout: 15_000 })
+    const board = await hostPage.getByTestId('leaderboard-row').evaluateAll((els) =>
+      els.map((el) => {
+        const d = (el as HTMLElement).dataset
+        return { rank: Number(d.rank), score: Number(d.score), me: d.me === 'true' }
+      }),
+    )
+    console.log(`[leaderboard] ${JSON.stringify(board)}`)
+    // All nine players of this game earned something, so the top three are full.
+    expect(board.slice(0, 3).map((r) => r.rank)).toEqual([1, 2, 3])
+    const top = board.slice(0, 3).map((r) => r.score)
+    expect(top, 'top three are in score order').toEqual([...top].sort((a, b) => b - a))
+    const mine = board.filter((r) => r.me)
+    expect(mine, 'exactly one row is the host').toHaveLength(1)
+    expect(mine[0]?.score, 'my row shows my 戰績分, not my coins').toBe(score)
+    // 3 rows when the host is in the top three, otherwise a 4th row with a lower rank.
+    expect(board).toHaveLength(mine[0] && mine[0].rank <= 3 ? 3 : 4)
+    await captureSnapshot(new Map([['HOST', hostPage]]), testInfo, '04-lobby-leaderboard')
   })
 })

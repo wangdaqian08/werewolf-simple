@@ -206,6 +206,10 @@ export default {
   },
   lobby: {
     account: 'Account',
+    board: {
+      title: 'Score leaderboard',
+      unranked: 'Not ranked yet — finish a game to get on the board',
+    },
     buy: 'Buy',
     connectFailed: 'Failed to connect. Try again.',
     continueGuest: 'Continue as guest',

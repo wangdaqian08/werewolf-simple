@@ -219,6 +219,11 @@ interface CreditTransactionRepository : JpaRepository<CreditTransaction, Int> {
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM CreditTransaction t WHERE t.userId = :userId AND t.type = :type")
     fun sumAmount(@Param("userId") userId: String, @Param("type") type: CreditTxType): Long
 
+    /** One row per user holding ledger rows of [type]: their total, and the id of the row that completed it. */
+    @Query("select new com.werewolf.service.ScoreRow(t.userId, sum(t.amount), max(t.id)) " +
+        "from CreditTransaction t where t.type = :type group by t.userId")
+    fun findScoreRows(@Param("type") type: CreditTxType): List<com.werewolf.service.ScoreRow>
+
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long
     fun deleteByPerkActivationIdIn(perkActivationIds: Collection<Int>): Long
 }

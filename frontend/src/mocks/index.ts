@@ -165,6 +165,14 @@ export function setupMocks() {
   mock.onPost('/user/login').reply(200, MOCK_LOGIN)
   mock.onGet('/user/profile').reply(200, MOCK_LOGIN.user)
   mock.onGet('/user/stats').reply(200, MOCK_USER_STATS)
+  mock.onGet('/user/leaderboard').reply(200, {
+    top: [
+      { rank: 1, nickname: 'Alice', score: 1320, me: false },
+      { rank: 2, nickname: 'Bob', score: 980, me: false },
+      { rank: 3, nickname: 'Carol', score: 760, me: false },
+    ],
+    me: { rank: 12, nickname: MOCK_LOGIN.user.nickname, score: MOCK_USER_STATS.score, me: true },
+  })
   mock.onPost('/user/logout').reply(200)
 
   // ── Wallet / Perks / Payments (account page) ──────────────────────────────────

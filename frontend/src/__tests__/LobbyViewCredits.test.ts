@@ -10,7 +10,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import LobbyView from '@/views/LobbyView.vue'
 
-const h = vi.hoisted(() => ({ getWalletMock: vi.fn() }))
+const h = vi.hoisted(() => ({ getWalletMock: vi.fn(), getLeaderboard: vi.fn() }))
 
 vi.mock('@/services/userService', () => ({
   userService: {
@@ -19,6 +19,7 @@ vi.mock('@/services/userService', () => ({
     loginWithWechat: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     getProviders: vi.fn().mockResolvedValue({ google: null, wechat: null, guest: true }),
+    getLeaderboard: h.getLeaderboard,
   },
 }))
 vi.mock('@/services/roomService', () => ({
@@ -65,6 +66,8 @@ describe('LobbyView credits chip', () => {
     localStorage.clear()
     sessionStorage.clear()
     h.getWalletMock.mockReset()
+    h.getLeaderboard.mockReset()
+    h.getLeaderboard.mockResolvedValue({ top: [], me: null })
   })
   afterEach(() => vi.clearAllMocks())
 
@@ -115,5 +118,20 @@ describe('LobbyView account menu (☰)', () => {
     await wrapper.find('[data-testid="account-menu-btn"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/account')
+  })
+
+  it('shows the leaderboard to a logged-in player', async () => {
+    h.getLeaderboard.mockResolvedValue({
+      top: [{ rank: 1, nickname: 'Alice', score: 320, me: false }],
+      me: null,
+    })
+    const { wrapper } = await mountLobby()
+    expect(wrapper.find('[data-testid="leaderboard"]').text()).toContain('Alice')
+  })
+
+  it('shows no leaderboard, and asks for none, before login', async () => {
+    const { wrapper } = await mountLobby({ loggedIn: false })
+    expect(wrapper.find('[data-testid="leaderboard"]').exists()).toBe(false)
+    expect(h.getLeaderboard).not.toHaveBeenCalled()
   })
 })
