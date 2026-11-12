@@ -164,6 +164,7 @@ ROLE_HINTS='{
   "HUNTER":   "← use for HUNTER_SHOOT",
   "IDIOT":    "← use for IDIOT_REVEAL",
   "KNIGHT":   "← use for KNIGHT_DUEL",
+  "GRAVEKEEPER": "← use for GRAVEKEEPER_CONFIRM",
   "VILLAGER": ""
 }'
 
