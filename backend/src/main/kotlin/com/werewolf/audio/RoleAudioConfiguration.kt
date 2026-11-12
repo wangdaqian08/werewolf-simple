@@ -26,7 +26,8 @@ class RoleAudioConfiguration {
             BlackWolfKingAudioConfig(),
             MechanicalWolfAudioConfig(),
             MediumAudioConfig(),
-            KnightAudioConfig()
+            KnightAudioConfig(),
+            GravekeeperAudioConfig()
         )
 
         RoleRegistry.registerAll(configs)

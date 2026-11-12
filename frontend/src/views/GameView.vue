@@ -619,6 +619,7 @@ const NIGHT_TURN_ACTIONS = new Set([
   'MECH_CONFIRM',
   'MEDIUM_CHECK',
   'MEDIUM_CONFIRM',
+  'GRAVEKEEPER_CONFIRM',
 ])
 
 // Wraps gameService.submitAction to always include the gameId from the route

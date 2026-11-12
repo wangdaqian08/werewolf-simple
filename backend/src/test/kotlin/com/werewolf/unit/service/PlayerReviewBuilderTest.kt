@@ -456,4 +456,35 @@ class PlayerReviewBuilderTest {
         assertThat(review.rounds.single().night!!.action)
             .isEqualTo(MyNightAction.Medium(mseat("v", PlayerRole.VILLAGER), PlayerRole.VILLAGER))
     }
+
+    private fun graveBoard(diedDay: Map<String, Int> = emptyMap()) = board(diedDay) +
+        GamePlayer(gameId = gameId, userId = "grave", seatIndex = 10, role = PlayerRole.GRAVEKEEPER)
+
+    private val graveNights = listOf(
+        night(1) { gravekeeperResult = GravekeeperResult.NONE },
+        night(2) { gravekeeperResult = GravekeeperResult.WOLF; gravekeeperExiledUserId = "w1" },
+        night(3) { gravekeeperResult = GravekeeperResult.GOOD; gravekeeperExiledUserId = "v" },
+    )
+
+    @Test
+    fun `gravekeeper night action carries the exiled seat and result`() {
+        val review = build("grave", graveBoard(mapOf("w1" to 1, "v" to 2)), graveNights)
+
+        assertThat(review.rounds.map { it.night!!.action }).containsExactly(
+            MyNightAction.Gravekeeper(null, GravekeeperResult.NONE),
+            MyNightAction.Gravekeeper(seat("w1", camp = KnownCamp.WOLF), GravekeeperResult.WOLF),
+            MyNightAction.Gravekeeper(seat("v", camp = KnownCamp.GOOD), GravekeeperResult.GOOD),
+        )
+        assertThat(mapper.writeValueAsString(review.rounds[1].night!!.action)).contains("\"type\":\"GRAVEKEEPER\"")
+    }
+
+    @Test
+    fun `gravekeeper learns the exiled player's camp`() {
+        val review = build("grave", graveBoard(mapOf("w1" to 1, "v" to 2)), graveNights)
+
+        assertThat(review.seats.filter { it.camp != null })
+            .containsExactly(seat("w1", camp = KnownCamp.WOLF), seat("v", camp = KnownCamp.GOOD))
+        // Camp only: the gravekeeper is never told a role.
+        assertThat(review.seats.filter { it.role != null }.map { it.userId }).containsExactly("grave")
+    }
 }

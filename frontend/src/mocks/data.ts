@@ -1356,6 +1356,7 @@ export const MOCK_GAME_REVIEW: GameReview = {
         guard: { actor: R7, dead: false, target: R2 },
         mech: null,
         medium: null,
+        gravekeeper: null,
         dawn: { deaths: [], saved: { player: R3, by: 'ANTIDOTE' } },
       },
       events: [
@@ -1409,6 +1410,7 @@ export const MOCK_GAME_REVIEW: GameReview = {
         guard: { actor: R7, dead: false, target: R8 },
         mech: null,
         medium: null,
+        gravekeeper: null,
         dawn: {
           deaths: [
             { player: R2, cause: 'WOLF' },
@@ -1444,6 +1446,7 @@ export const MOCK_GAME_REVIEW: GameReview = {
         guard: { actor: R7, dead: false, target: R10 },
         mech: null,
         medium: null,
+        gravekeeper: null,
         dawn: { deaths: [{ player: R8, cause: 'WOLF' }], saved: null },
       },
       events: [

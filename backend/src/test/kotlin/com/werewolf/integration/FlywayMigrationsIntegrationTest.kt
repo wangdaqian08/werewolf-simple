@@ -232,6 +232,44 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V33 stores GRAVEKEEPER roles, the room flag and the night result columns`() {
+        flyway().migrate()
+
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('host', 'host'), ('g', 'g'), ('w', 'w')")
+            exec("INSERT INTO rooms (room_id, room_code, host_user_id, total_players, has_gravekeeper) VALUES (1, '101', 'host', 9, TRUE)")
+            exec("INSERT INTO games (game_id, room_id, host_user_id, phase, day_number) VALUES (1, 1, 'host', 'NIGHT', 2)")
+            exec("INSERT INTO game_players (game_id, user_id, seat_index, role) VALUES (1, 'g', 1, 'GRAVEKEEPER'), (1, 'w', 2, 'WEREWOLF')")
+            exec(
+                "INSERT INTO elimination_history (game_id, day_number, eliminated_user_id, eliminated_role, hunter_shot_user_id, hunter_shot_role) " +
+                        "VALUES (1, 1, 'g', 'GRAVEKEEPER', 'g', 'GRAVEKEEPER')"
+            )
+            exec(
+                "INSERT INTO night_phases (game_id, day_number, sub_phase, gravekeeper_result, gravekeeper_exiled_user_id) " +
+                        "VALUES (1, 2, 'GRAVEKEEPER_RESULT', 'WOLF', 'w')"
+            )
+            // Both result columns are nullable: a night without a gravekeeper inserts without them.
+            exec("INSERT INTO night_phases (game_id, day_number, sub_phase) VALUES (1, 3, 'WEREWOLF_PICK')")
+            val stored = createStatement().use { st ->
+                st.executeQuery("SELECT gravekeeper_result, gravekeeper_exiled_user_id FROM night_phases WHERE game_id = 1 AND day_number = 2")
+                    .use { rs -> rs.next(); rs.getString(1) to rs.getString(2) }
+            }
+            assertThat(stored).isEqualTo("WOLF" to "w")
+            // Old rooms keep working: the flag defaults to FALSE.
+            exec("INSERT INTO rooms (room_id, room_code, host_user_id, total_players) VALUES (2, '102', 'host', 9)")
+            val flag = createStatement().use { st ->
+                st.executeQuery("SELECT has_gravekeeper FROM rooms WHERE room_id = 2").use { rs -> rs.next(); rs.getBoolean(1) }
+            }
+            assertThat(flag).isFalse()
+        }
+        // The role CHECK still rejects unknown roles, and the sub-phase CHECK unknown sub-phases.
+        assertThatThrownBy { sql { exec("INSERT INTO game_players (game_id, user_id, seat_index, role) VALUES (1, 'host', 3, 'NOT_A_ROLE')") } }
+            .hasMessageContaining("game_players_role_check")
+        assertThatThrownBy { sql { exec("INSERT INTO night_phases (game_id, day_number, sub_phase) VALUES (1, 4, 'NOT_A_SUB_PHASE')") } }
+            .hasMessageContaining("night_phases_sub_phase_check")
+    }
+
+    @Test
     fun `V28 accepts ADMIN_GRANT ledger rows and still rejects unknown types`() {
         flyway().migrate()
 

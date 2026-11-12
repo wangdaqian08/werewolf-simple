@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { isPackWolfRole, isWolfRole, roleDefinition, roleName } from '@/utils/roleDefinitions'
+import {
+  ROLE_DEFINITIONS,
+  isPackWolfRole,
+  isWolfRole,
+  roleDefinition,
+  roleName,
+} from '@/utils/roleDefinitions'
 
 describe('roleDefinitions', () => {
   it('isWolfRole is true only for wolf-camp roles', () => {
@@ -34,5 +40,12 @@ describe('roleDefinitions', () => {
     expect(isWolfRole('MEDIUM')).toBe(false)
     expect(roleName('MECHANICAL_WOLF')).toBe('機械狼')
     expect(roleName('MEDIUM')).toBe('通靈師')
+  })
+
+  it('GRAVEKEEPER is defined last, as a non-wolf optional role', () => {
+    expect(ROLE_DEFINITIONS[ROLE_DEFINITIONS.length - 1]?.id).toBe('GRAVEKEEPER')
+    expect(roleDefinition('GRAVEKEEPER')).toMatchObject({ required: false })
+    expect(isWolfRole('GRAVEKEEPER')).toBe(false)
+    expect(roleName('GRAVEKEEPER')).toBe('守墓人')
   })
 })

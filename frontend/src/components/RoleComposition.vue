@@ -41,7 +41,16 @@ const props = defineProps<{
 
 const openRole = ref<string | null>(null)
 
-const GOD_IDS = new Set(['SEER', 'MEDIUM', 'WITCH', 'HUNTER', 'GUARD', 'IDIOT', 'KNIGHT'])
+const GOD_IDS = new Set([
+  'SEER',
+  'MEDIUM',
+  'WITCH',
+  'HUNTER',
+  'GUARD',
+  'IDIOT',
+  'KNIGHT',
+  'GRAVEKEEPER',
+])
 
 const chips = computed(() => {
   const enabledGods = props.roles.filter((r) => GOD_IDS.has(r))

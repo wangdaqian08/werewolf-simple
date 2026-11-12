@@ -26,6 +26,8 @@ describe('nightNarrationKey', () => {
     expect(nightNarrationKey([dark, open])).toBe('wolfOpen')
     expect(nightNarrationKey([dark, open, close])).toBe('wolfClose')
     expect(nightNarrationKey([dark, open, close, seq('medium_open_eyes.mp3')])).toBe('mediumOpen')
+    expect(nightNarrationKey([dark, seq('gravekeeper_open_eyes.mp3')])).toBe('gravekeeperOpen')
+    expect(nightNarrationKey([dark, seq('gravekeeper_close_eyes.mp3')])).toBe('gravekeeperClose')
   })
 
   it('orders by timestamp, not array order, and ignores duplicate ids', () => {

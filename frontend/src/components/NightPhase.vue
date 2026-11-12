@@ -414,7 +414,7 @@
       </footer>
     </template>
 
-    <!-- ── MECH_WOLF_* / MEDIUM_* ─────────────────────────────────────── -->
+    <!-- ── MECH_WOLF_* / MEDIUM_* / GRAVEKEEPER_RESULT ────────────────── -->
     <MechWolfTurn
       v-else-if="
         (subPhase === 'MECH_WOLF_PICK' || subPhase === 'MECH_WOLF_RESULT') &&
@@ -440,6 +440,15 @@
       :medium-result="nightPhase.mediumResult"
       :players="players"
       :my-user-id="myUserId"
+      :action-pending="actionPending"
+      @action="sendNightAction"
+    />
+    <GravekeeperTurn
+      v-else-if="
+        subPhase === 'GRAVEKEEPER_RESULT' && myRole === 'GRAVEKEEPER' && me?.isAlive && !hasActed
+      "
+      :gravekeeper-result="nightPhase.gravekeeperResult"
+      :day-number="nightPhase.dayNumber"
       :action-pending="actionPending"
       @action="sendNightAction"
     />
@@ -503,6 +512,7 @@ import type { GamePlayer, NightPhaseState, PlayerRole } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import MechWolfTurn from '@/components/MechWolfTurn.vue'
 import MediumTurn from '@/components/MediumTurn.vue'
+import GravekeeperTurn from '@/components/GravekeeperTurn.vue'
 import {
   guardVariant,
   isGuardTarget,
@@ -605,7 +615,8 @@ function confirmGuardSkip() {
 }
 function sendNightAction(type: string, targetUserId?: string) {
   // Only the CONFIRM actions end the turn; a pick advances to the RESULT screen, so (like the seer) it must not flash eyes-closed.
-  if (type === 'MECH_CONFIRM' || type === 'MEDIUM_CONFIRM') hasActed.value = true
+  if (type === 'MECH_CONFIRM' || type === 'MEDIUM_CONFIRM' || type === 'GRAVEKEEPER_CONFIRM')
+    hasActed.value = true
   emit('nightAction', type, targetUserId)
 }
 function confirmWitchSkip() {
@@ -653,6 +664,7 @@ const isMyTurn = computed(() => {
   if (sp === 'GUARD_PICK') return role === 'GUARD'
   if (sp === 'MECH_WOLF_PICK' || sp === 'MECH_WOLF_RESULT') return role === 'MECHANICAL_WOLF'
   if (sp === 'MEDIUM_PICK' || sp === 'MEDIUM_RESULT') return role === 'MEDIUM'
+  if (sp === 'GRAVEKEEPER_RESULT') return role === 'GRAVEKEEPER'
   return false
 })
 
@@ -702,6 +714,7 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
   MECHANICAL_WOLF: { emoji: '🤖', team: 'wolf' },
   MEDIUM: { emoji: '👁️', team: 'special' },
   KNIGHT: { emoji: '⚔️', team: 'special' },
+  GRAVEKEEPER: { emoji: '⚰️', team: 'special' },
 }
 
 const meta = computed(() => (props.myRole ? ROLE_META[props.myRole] : null))
@@ -727,6 +740,8 @@ const badgeSub = computed(() => {
       return role === 'MEDIUM' ? t('night.badge.medium') : t('night.badge.closed')
     case 'MEDIUM_RESULT':
       return role === 'MEDIUM' ? t('night.badge.mediumDone') : t('night.badge.closed')
+    case 'GRAVEKEEPER_RESULT':
+      return role === 'GRAVEKEEPER' ? t('night.badge.gravekeeper') : t('night.badge.closed')
     default:
       return ''
   }

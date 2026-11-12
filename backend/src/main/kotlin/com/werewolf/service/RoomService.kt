@@ -72,6 +72,7 @@ class RoomService(
                 hasMechanicalWolf = PlayerRole.MECHANICAL_WOLF in cfg.roles,
                 hasMedium = PlayerRole.MEDIUM in cfg.roles,
                 hasKnight = PlayerRole.KNIGHT in cfg.roles,
+                hasGravekeeper = PlayerRole.GRAVEKEEPER in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
                 config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed, cfg.noKillAllowed, cfg.guardSkipAllowed),
@@ -242,6 +243,7 @@ class RoomService(
         room.hasMechanicalWolf = PlayerRole.MECHANICAL_WOLF in roles
         room.hasMedium = PlayerRole.MEDIUM in roles
         room.hasKnight = PlayerRole.KNIGHT in roles
+        room.hasGravekeeper = PlayerRole.GRAVEKEEPER in roles
         roomRepository.save(room)
         members.filter { !it.host }.forEach { it.status = ReadyStatus.NOT_READY }
         roomPlayerRepository.saveAll(members)
@@ -389,6 +391,7 @@ class RoomService(
             if (room.hasIdiot) add(PlayerRole.IDIOT)
             if (room.hasMedium) add(PlayerRole.MEDIUM)
             if (room.hasKnight) add(PlayerRole.KNIGHT)
+            if (room.hasGravekeeper) add(PlayerRole.GRAVEKEEPER)
         }
 
         val activeGameId = if (room.status == RoomStatus.IN_GAME) {
@@ -449,8 +452,10 @@ class RoomService(
      *      King shares the gate (owner's call: one rule for both). The mechanical
      *      wolf is not part of the pack, so it needs a pack wolf to act with
      *   4. SEER and MEDIUM are mutually exclusive
-     *   5. MECHANICAL_WOLF and KNIGHT are mutually exclusive: they come from different boards, and no
-     *      rule says what a mechanical wolf gains by learning the knight
+     *   5. MECHANICAL_WOLF is mutually exclusive with KNIGHT and with GRAVEKEEPER: they come from different
+     *      boards, and no rule says what a mechanical wolf gains by learning the knight or the gravekeeper
+     *   6. KNIGHT and GRAVEKEEPER are mutually exclusive: each gives the good camp confirmed information,
+     *      and no standard board has both
      *
      * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
      * for the host-facing stepper — they intentionally do NOT gate the API,
@@ -481,6 +486,12 @@ class RoomService(
         }
         if (PlayerRole.MECHANICAL_WOLF in roles && PlayerRole.KNIGHT in roles) {
             throw InvalidRoleCompositionException("Mechanical Wolf and Knight cannot be on the same board")
+        }
+        if (PlayerRole.MECHANICAL_WOLF in roles && PlayerRole.GRAVEKEEPER in roles) {
+            throw InvalidRoleCompositionException("Mechanical Wolf and Gravekeeper cannot be on the same board")
+        }
+        if (PlayerRole.KNIGHT in roles && PlayerRole.GRAVEKEEPER in roles) {
+            throw InvalidRoleCompositionException("Knight and Gravekeeper cannot be on the same board")
         }
         val specials = roles.filter {
             it == PlayerRole.WHITE_WOLF_KING || it == PlayerRole.BLACK_WOLF_KING || it == PlayerRole.MECHANICAL_WOLF
@@ -513,6 +524,7 @@ class RoomService(
                 PlayerRole.GUARD to timing.applyTo(PlayerRole.GUARD),
                 PlayerRole.MECHANICAL_WOLF to timing.applyTo(PlayerRole.MECHANICAL_WOLF),
                 PlayerRole.MEDIUM to timing.applyTo(PlayerRole.MEDIUM),
+                PlayerRole.GRAVEKEEPER to timing.applyTo(PlayerRole.GRAVEKEEPER),
             ),
             bgmTrack = bgmTrack,
             witchSelfSaveAllowed = witchSelfSaveAllowed,

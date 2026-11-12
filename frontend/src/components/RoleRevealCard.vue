@@ -131,6 +131,10 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
     emoji: '⚔️',
     team: 'special',
   },
+  GRAVEKEEPER: {
+    emoji: '⚰️',
+    team: 'special',
+  },
 }
 
 const meta = computed(() => ROLE_META[props.role])

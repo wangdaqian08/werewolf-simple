@@ -102,6 +102,9 @@ class GameActionDispatcher(
 
             ActionType.MEDIUM_CONFIRM -> nightTurn(request, context, PlayerRole.MEDIUM)
 
+            // ── Night: gravekeeper ────────────────────────────────────────────
+            ActionType.GRAVEKEEPER_CONFIRM -> nightTurn(request, context, PlayerRole.GRAVEKEEPER)
+
             // ── Night: mechanical wolf ────────────────────────────────────────
             ActionType.MECH_LEARN, ActionType.MECH_CHECK, ActionType.MECH_POISON, ActionType.MECH_PROTECT,
             ActionType.MECH_SKIP,
@@ -145,6 +148,7 @@ class GameActionDispatcher(
             ActionType.SEER_CONFIRM to NightSubPhase.SEER_RESULT,
             ActionType.MEDIUM_CHECK to NightSubPhase.MEDIUM_PICK,
             ActionType.MEDIUM_CONFIRM to NightSubPhase.MEDIUM_RESULT,
+            ActionType.GRAVEKEEPER_CONFIRM to NightSubPhase.GRAVEKEEPER_RESULT,
             ActionType.MECH_LEARN to NightSubPhase.MECH_WOLF_PICK,
             ActionType.MECH_CHECK to NightSubPhase.MECH_WOLF_PICK,
             ActionType.MECH_POISON to NightSubPhase.MECH_WOLF_PICK,

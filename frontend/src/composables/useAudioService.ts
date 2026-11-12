@@ -19,6 +19,7 @@ const HIGH_VOL_NIGHT_SUBPHASES: ReadonlySet<string> = new Set([
   'SEER_RESULT',
   'MEDIUM_PICK',
   'MEDIUM_RESULT',
+  'GRAVEKEEPER_RESULT',
   'WITCH_ACT',
   'GUARD_PICK',
 ])

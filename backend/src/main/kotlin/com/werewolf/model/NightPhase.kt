@@ -67,6 +67,14 @@ class NightPhase(
     @Enumerated(EnumType.STRING)
     @Column(name = "medium_result_role", length = 20)
     var mediumResultRole: PlayerRole? = null,
+
+    // Gravekeeper: yesterday's vote-out and its camp, stored at night-init (NULL = no living gravekeeper)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gravekeeper_result", length = 10)
+    var gravekeeperResult: GravekeeperResult? = null,
+
+    @Column(name = "gravekeeper_exiled_user_id", length = 128)
+    var gravekeeperExiledUserId: String? = null,
 ) {
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }

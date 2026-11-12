@@ -63,6 +63,9 @@ data class RoleDelayConfig(
         /** 通灵师默认配置：同预言家 */
         val MEDIUM_DEFAULT = SEER_DEFAULT
 
+        /** 守墓人默认配置：15秒操作窗口，8秒死亡模拟（只有一个结果子阶段，约为预言家的一半） */
+        val GRAVEKEEPER_DEFAULT = RoleDelayConfig(15000L, 8000L)
+
         /**
          * 获取角色的默认配置
          */
@@ -74,6 +77,7 @@ data class RoleDelayConfig(
                 PlayerRole.GUARD -> GUARD_DEFAULT
                 PlayerRole.MECHANICAL_WOLF -> MECHANICAL_WOLF_DEFAULT
                 PlayerRole.MEDIUM -> MEDIUM_DEFAULT
+                PlayerRole.GRAVEKEEPER -> GRAVEKEEPER_DEFAULT
                 else -> RoleDelayConfig(30000L, 25000L) // 默认值
             }
         }
@@ -95,7 +99,8 @@ data class GameConfig(
         PlayerRole.WITCH to RoleDelayConfig.WITCH_DEFAULT,
         PlayerRole.GUARD to RoleDelayConfig.GUARD_DEFAULT,
         PlayerRole.MECHANICAL_WOLF to RoleDelayConfig.MECHANICAL_WOLF_DEFAULT,
-        PlayerRole.MEDIUM to RoleDelayConfig.MEDIUM_DEFAULT
+        PlayerRole.MEDIUM to RoleDelayConfig.MEDIUM_DEFAULT,
+        PlayerRole.GRAVEKEEPER to RoleDelayConfig.GRAVEKEEPER_DEFAULT
     ),
 
     /**

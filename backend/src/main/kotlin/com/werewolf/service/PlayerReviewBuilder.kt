@@ -107,6 +107,10 @@ object PlayerReviewBuilder {
             val told = n.mediumResultRole
             if (checked != null && told != null) knownRoles[checked] = told
         }
+        if (me.role == PlayerRole.GRAVEKEEPER) days.mapNotNull(completed::get).forEach { n ->
+            // An exile is stored only with its camp: WOLF or GOOD, never NONE.
+            n.gravekeeperExiledUserId?.let { knownCamps[it] = if (n.gravekeeperResult == GravekeeperResult.WOLF) KnownCamp.WOLF else KnownCamp.GOOD }
+        }
         if (me.role == PlayerRole.MECHANICAL_WOLF) days.mapNotNull(completed::get).forEach { n ->
             n.mechLearnTargetUserId?.let { id -> byId[id]?.let { knownRoles[id] = it.role } }
             val checked = n.mechCheckTargetUserId ?: return@forEach
@@ -191,6 +195,7 @@ object PlayerReviewBuilder {
                 kill = target?.takeIf { loneKiller }?.let(seat),
             )
             me.role == PlayerRole.MEDIUM -> MyNightAction.Medium(n.mediumCheckedUserId?.let(seat), n.mediumResultRole)
+            me.role == PlayerRole.GRAVEKEEPER -> MyNightAction.Gravekeeper(n.gravekeeperExiledUserId?.let(seat), n.gravekeeperResult)
             me.role.isPackWolf -> MyNightAction.Wolf(
                 teammates = players.filter { it.role.isPackWolf && !deadAt(it) }.sortedBy { it.seatIndex }.mapNotNull { seat(it.userId) },
                 target = target?.let(seat),

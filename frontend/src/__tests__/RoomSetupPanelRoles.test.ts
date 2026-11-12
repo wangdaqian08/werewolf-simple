@@ -114,32 +114,37 @@ describe('RoomSetupPanel — 机械狼 and 通灵师', () => {
   const click = (w: Awaited<ReturnType<typeof mountSetup>>, id: string) =>
     w.find(`[data-testid="${id}"]`).trigger('click')
 
-  it('enabling MEDIUM turns SEER off, and the reverse', async () => {
+  // The seer and the medium exclude each other like every other pair: grey out, no auto-swap.
+  it('MEDIUM is blocked while SEER is on; tapping it shows why and changes nothing', async () => {
     const w = await mountSetup() // SEER is on
+    expect(disabled(w, 'role-toggle-MEDIUM')).toBe(true)
+    expect(w.find('[data-testid="role-hint-MEDIUM"]').text()).toBe('⛓ 互斥')
+    expect(w.find('[data-testid="role-hint-SEER"]').text()).toBe('排除 通靈師')
     await click(w, 'role-toggle-MEDIUM')
-    expect(chipCount(w, 'MEDIUM')).toBe(1)
-    expect(chipCount(w, 'SEER')).toBe(0)
-    await click(w, 'role-toggle-SEER')
-    expect(chipCount(w, 'SEER')).toBe(1)
     expect(chipCount(w, 'MEDIUM')).toBe(0)
+    expect(chipCount(w, 'SEER')).toBe(1)
+    expect(lastMessage()).toBe('通靈師與預言家不能同時選，請先關閉預言家')
   })
 
-  it('swapping SEER for MEDIUM is allowed at the god maximum', async () => {
+  it('turning SEER off frees MEDIUM; with MEDIUM on, SEER is the blocked one', async () => {
     const w = await mountSetup()
-    await click(w, 'role-toggle-GUARD') // 4 gods: the maximum for 3 wolves
+    await click(w, 'role-toggle-SEER') // off
     expect(disabled(w, 'role-toggle-MEDIUM')).toBe(false)
+    expect(w.find('[data-testid="role-hint-MEDIUM"]').exists()).toBe(false)
     await click(w, 'role-toggle-MEDIUM')
     expect(chipCount(w, 'MEDIUM')).toBe(1)
-    expect(chipCount(w, 'SEER')).toBe(0)
+    expect(disabled(w, 'role-toggle-SEER')).toBe(true)
+    expect(w.find('[data-testid="role-hint-SEER"]').text()).toBe('⛓ 互斥')
   })
 
-  it('the seer/medium "one of two" note shows only on the card whose partner is on', async () => {
-    const w = await mountSetup() // SEER on, MEDIUM off
-    expect(w.find('[data-testid="role-hint-SEER"]').exists()).toBe(false)
-    expect(w.find('[data-testid="role-hint-MEDIUM"]').text()).toBe('⇄ 二選一')
-    await click(w, 'role-toggle-MEDIUM') // swaps SEER off
-    expect(w.find('[data-testid="role-hint-MEDIUM"]').exists()).toBe(false)
-    expect(w.find('[data-testid="role-hint-SEER"]').text()).toBe('⇄ 二選一')
+  it('with neither on, the god maximum still counts the seer and the medium as one', async () => {
+    const w = await mountSetup()
+    for (let i = 0; i < 6; i++) await click(w, 'player-count-increment') // 15 players, 5 wolves
+    await click(w, 'role-toggle-GUARD')
+    await click(w, 'role-toggle-IDIOT') // 5 gods, so the seer may leave (minimum 4)
+    await click(w, 'role-toggle-SEER')
+    expect(chipCount(w, 'SEER')).toBe(0)
+    expect(w.find('[data-testid="god-range"]').text()).toContain('4–6')
   })
 
   it('mechanical wolf needs 9+ players', async () => {
@@ -179,7 +184,7 @@ describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
     expect(disabled(w, 'role-toggle-KNIGHT')).toBe(true)
     expect(card(w, 'KNIGHT').element.parentElement?.classList).toContain('card-blocked')
     expect(hint(w, 'KNIGHT').text()).toBe('⛓ 互斥')
-    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士')
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士、守墓人')
     await click(w, 'role-toggle-KNIGHT')
     expect(chipCount(w, 'KNIGHT')).toBe(0)
     expect(lastMessage()).toBe('騎士與機械狼不能同時選，請先關閉機械狼')
@@ -211,8 +216,8 @@ describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
       '神職不能少於 2 個',
     )
     // The board itself is still flagged: each card names the role it excludes.
-    expect(hint(w, 'KNIGHT').text()).toBe('排除 機械狼')
-    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士')
+    expect(hint(w, 'KNIGHT').text()).toBe('排除 機械狼、守墓人')
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士、守墓人')
   })
 
   it('turning one off frees the other', async () => {
@@ -222,6 +227,76 @@ describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
     expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(false)
     expect(hint(w, 'KNIGHT').exists()).toBe(false)
     expect(hint(w, 'MECHANICAL_WOLF').exists()).toBe(false)
+  })
+})
+
+describe('RoomSetupPanel — 机械狼 and 守墓人 never share a board', () => {
+  beforeEach(() => h.updateBoardMock.mockReset())
+  afterEach(() => vi.clearAllMocks())
+
+  const click = (w: Wrapper, id: string) => w.find(`[data-testid="${id}"]`).trigger('click')
+  const hint = (w: Wrapper, id: string) => w.find(`[data-testid="role-hint-${id}"]`)
+
+  it('GRAVEKEEPER is blocked while MECHANICAL_WOLF is on', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-MECHANICAL_WOLF')
+    expect(disabled(w, 'role-toggle-GRAVEKEEPER')).toBe(true)
+    expect(card(w, 'GRAVEKEEPER').element.parentElement?.classList).toContain('card-blocked')
+    expect(hint(w, 'GRAVEKEEPER').text()).toBe('⛓ 互斥')
+    await click(w, 'role-toggle-GRAVEKEEPER')
+    expect(chipCount(w, 'GRAVEKEEPER')).toBe(0)
+    expect(lastMessage()).toBe('守墓人與機械狼不能同時選，請先關閉機械狼')
+  })
+
+  it('MECHANICAL_WOLF is blocked while GRAVEKEEPER is on', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-GRAVEKEEPER')
+    expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(true)
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('⛓ 互斥')
+    expect(hint(w, 'GRAVEKEEPER').text()).toBe('排除 機械狼、騎士')
+    await click(w, 'role-toggle-MECHANICAL_WOLF')
+    expect(chipCount(w, 'MECHANICAL_WOLF')).toBe(0)
+    expect(lastMessage()).toBe('機械狼與守墓人不能同時選，請先關閉守墓人')
+  })
+
+  it('a stored room with KNIGHT and GRAVEKEEPER both on: the MECHANICAL_WOLF hint names both', async () => {
+    // Saved before the knight and the gravekeeper became exclusive.
+    const w = await mountSetup(1, [
+      'WEREWOLF',
+      'VILLAGER',
+      'SEER',
+      'WITCH',
+      'KNIGHT',
+      'GRAVEKEEPER',
+    ])
+    expect(card(w, 'MECHANICAL_WOLF').attributes('title')).toBe(
+      '機械狼與騎士、守墓人不能同時選，請先關閉騎士、守墓人',
+    )
+    await click(w, 'role-toggle-KNIGHT') // off: only the gravekeeper still blocks it
+    expect(card(w, 'MECHANICAL_WOLF').attributes('title')).toBe(
+      '機械狼與守墓人不能同時選，請先關閉守墓人',
+    )
+  })
+
+  it('GRAVEKEEPER is blocked while KNIGHT is on; tapping it shows why', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-KNIGHT')
+    expect(disabled(w, 'role-toggle-GRAVEKEEPER')).toBe(true)
+    expect(hint(w, 'GRAVEKEEPER').text()).toBe('⛓ 互斥')
+    await click(w, 'role-toggle-GRAVEKEEPER')
+    expect(chipCount(w, 'GRAVEKEEPER')).toBe(0)
+    expect(lastMessage()).toBe('守墓人與騎士不能同時選，請先關閉騎士')
+  })
+
+  it('KNIGHT is blocked while GRAVEKEEPER is on; turning the gravekeeper off frees it', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-GRAVEKEEPER')
+    expect(disabled(w, 'role-toggle-KNIGHT')).toBe(true)
+    await click(w, 'role-toggle-KNIGHT')
+    expect(chipCount(w, 'KNIGHT')).toBe(0)
+    expect(lastMessage()).toBe('騎士與守墓人不能同時選，請先關閉守墓人')
+    await click(w, 'role-toggle-GRAVEKEEPER') // off
+    expect(disabled(w, 'role-toggle-KNIGHT')).toBe(false)
   })
 })
 
@@ -240,6 +315,13 @@ describe('RoomSetupPanel — 騎士', () => {
     await w.find('[data-testid="role-toggle-KNIGHT"]').trigger('click')
     expect(chipCount(w, 'KNIGHT')).toBe(1)
     expect(await savedRoles(w)).toContain('KNIGHT')
+  })
+
+  it('the GRAVEKEEPER toggle turns on and is sent in the room config', async () => {
+    const w = await mountSetup()
+    await w.find('[data-testid="role-toggle-GRAVEKEEPER"]').trigger('click')
+    expect(chipCount(w, 'GRAVEKEEPER')).toBe(1)
+    expect(await savedRoles(w)).toContain('GRAVEKEEPER')
   })
 
   it('default board for each player count is unchanged', async () => {

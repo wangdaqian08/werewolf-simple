@@ -23,7 +23,7 @@ enum class GamePhase {
 // learnedSkill = what a mechanical wolf gains by learning this role (NONE = nothing).
 enum class PlayerRole(val isWolf: Boolean = false) {
     WEREWOLF(isWolf = true), VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT,
-    WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true), MECHANICAL_WOLF(isWolf = true), MEDIUM, KNIGHT;
+    WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true), MECHANICAL_WOLF(isWolf = true), MEDIUM, KNIGHT, GRAVEKEEPER;
 
     val isGod: Boolean get() = !isWolf && this != VILLAGER
     val shootsOnDeath: Boolean get() = this == HUNTER || this == BLACK_WOLF_KING
@@ -56,10 +56,13 @@ enum class RolePickChoice(val perkCode: String?) {
 
 enum class LearnedSkill { NONE, CHECK_ROLE, CHECK_ALIGNMENT, POISON, PROTECT, SHOOT }
 
+// What the gravekeeper is told about yesterday's vote-out. NONE = nobody was voted out (always on night 1).
+enum class GravekeeperResult { GOOD, WOLF, NONE }
+
 
 enum class NightSubPhase {
     WAITING, WEREWOLF_PICK, MECH_WOLF_PICK, MECH_WOLF_RESULT, SEER_PICK, SEER_RESULT,
-    MEDIUM_PICK, MEDIUM_RESULT, WITCH_ACT, GUARD_PICK, COMPLETE
+    MEDIUM_PICK, MEDIUM_RESULT, GRAVEKEEPER_RESULT, WITCH_ACT, GUARD_PICK, COMPLETE
 }
 
 enum class ElectionSubPhase { SIGNUP, SPEECH, VOTING, RESULT, TIED }
@@ -110,6 +113,9 @@ enum class ActionType {
     // Night: mechanical wolf (MECH_LEARN once; then the learned skill's action) and medium
     MECH_LEARN, MECH_CHECK, MECH_POISON, MECH_PROTECT, MECH_SKIP, MECH_CONFIRM,
     MEDIUM_CHECK, MEDIUM_CONFIRM,
+
+    // Night: gravekeeper
+    GRAVEKEEPER_CONFIRM,
 
     // Idiot reveal (day)
     IDIOT_REVEAL,

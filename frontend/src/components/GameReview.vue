@@ -203,6 +203,20 @@ function mediumSegs(m: NonNullable<ReviewNight['medium']>): Seg[] {
     : [head, seg(t('rv.noCheck'))]
 }
 
+function gravekeeperSegs(g: NonNullable<ReviewNight['gravekeeper']>): Seg[] {
+  const head = seg(t('rv.gravekeeperHead', { seat: t('common.seat', { n: g.actor.seatIndex }) }))
+  if (g.dead) return [head, seg(t('rv.dead'))]
+  // The camp the gravekeeper was told: it never learns which wolf.
+  return g.exiled
+    ? [
+        head,
+        seg(t('rv.gravekeeperSaw')),
+        name(g.exiled),
+        seg(g.result === 'WOLF' ? t('rv.toWolf') : t('rv.toGood')),
+      ]
+    : [head, seg(t('rv.gravekeeperNone'))]
+}
+
 function witchSegs(w: NonNullable<ReviewNight['witch']>): Seg[] {
   const head = seg(t('rv.witchHead', { seat: t('common.seat', { n: w.actor.seatIndex }) }))
   if (w.dead) return [head, seg(t('rv.dead'))]
@@ -240,6 +254,7 @@ function nightLines(n: ReviewNight): Line[] {
     n.mech && mechSegs(n.mech),
     n.seer && seerSegs(n.seer),
     n.medium && mediumSegs(n.medium),
+    n.gravekeeper && gravekeeperSegs(n.gravekeeper),
     n.witch && witchSegs(n.witch),
     n.guard && guardSegs(n.guard),
     dawnSegs(n.dawn),

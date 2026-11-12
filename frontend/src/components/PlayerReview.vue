@@ -171,6 +171,15 @@ function actionSegs(a: MyNightAction): Seg[] {
             seg(t('rv.roleTag', { role: roleName(a.role) })),
           ]
         : [seg(t('pr.mediumNone'))]
+    case 'GRAVEKEEPER':
+      // The camp the server told the gravekeeper that night, not what the seat is known as now.
+      return a.exiled
+        ? [
+            seg(t('pr.gravekeeperSaw')),
+            name(a.exiled),
+            seg(a.result === 'WOLF' ? t('pr.tagWolf') : t('pr.tagGood')),
+          ]
+        : [seg(t('pr.gravekeeperNone'))]
     case 'MECHANICAL_WOLF': {
       const parts: Seg[][] = []
       if (a.learned) parts.push([seg(t('pr.mechLearn')), ...withTag(a.learned)])

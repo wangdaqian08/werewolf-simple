@@ -6,6 +6,7 @@ import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.model.ActionType
 import com.werewolf.model.GamePhase
+import com.werewolf.model.NightPhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
 
@@ -26,6 +27,12 @@ interface RoleHandler {
 
     /** Ordered night sub-phases owned by this role. Empty = no night action. */
     fun nightSubPhases(): List<NightSubPhase> = emptyList()
+
+    /**
+     * Hook called while a new night's NightPhase row is built, before it is saved.
+     * Mutate [nightPhase] to store per-night facts known at dusk.
+     */
+    fun onNightInit(context: GameContext, nightPhase: NightPhase) {}
 
     /** Hook called when game enters DAY — override to produce day-start events. */
     fun onDayEnter(context: GameContext): List<DomainEvent> = emptyList()

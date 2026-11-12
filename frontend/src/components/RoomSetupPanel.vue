@@ -185,7 +185,13 @@ import axios from 'axios'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import type { Room } from '@/types'
-import { ROLE_DEFINITIONS, isWolfRole, roleDefinition, roleName } from '@/utils/roleDefinitions'
+import {
+  BLOCKED_WITH,
+  ROLE_DEFINITIONS,
+  isWolfRole,
+  roleDefinition,
+  roleName,
+} from '@/utils/roleDefinitions'
 import { wolfBounds } from '@/utils/wolfBounds'
 import RoleComposition from '@/components/RoleComposition.vue'
 import ShareButton from '@/components/ShareButton.vue'
@@ -203,7 +209,7 @@ watch(view, () => window.scrollTo(0, 0))
 
 const MIN_PLAYERS = 6
 // 15 = 5 wolves / 5 gods / 5 villagers, the largest board the current roles balance
-// (up to 6 gods are possible: GOD_IDS.length - 1, as SEER/MEDIUM are mutually exclusive).
+// (up to 6 gods are possible: SEER/MEDIUM and KNIGHT/GRAVEKEEPER each fill one seat at most).
 // Above 12 the day/night seat grids get a 4th row and scroll on 417×614 (accepted).
 const MAX_PLAYERS = 15
 
@@ -234,21 +240,13 @@ function decrement() {
   if (totalPlayers.value > minPlayers.value) totalPlayers.value--
 }
 
-// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (at most 6: GOD_IDS.length - 1, SEER/MEDIUM exclusive) and
+// Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (at most 6, see maxGods) and
 // always leave ≥ 1 villager seat, and a special wolf (白狼王 / 黑狼王 / 機械狼, any
 // may be on) needs 9+ players and each a plain fellow wolf: wolves ≥ specials + 1
 // (the backend enforces these rules too).
 const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)
 const SPECIAL_WOLF_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
 const SPECIAL_WOLF_MIN_PLAYERS = 9
-// The seer and the medium are mutually exclusive: turning one on turns the other off.
-const EXCLUSIVE_WITH: Record<string, string> = { SEER: 'MEDIUM', MEDIUM: 'SEER' }
-// Roles from different boards that never share a room: while one is on, the other is blocked.
-// The mechanical wolf's learn table covers only its own board (机械狼通灵师), so no rule says what it gains from 騎士.
-const BLOCKED_WITH: Record<string, string[]> = {
-  MECHANICAL_WOLF: ['KNIGHT'],
-  KNIGHT: ['MECHANICAL_WOLF'],
-}
 function blockedBy(roleId: string): boolean {
   return (BLOCKED_WITH[roleId] ?? []).some((id) => enabledOptional.value.has(id))
 }
@@ -268,14 +266,15 @@ const enabledSpecialWolfCount = computed(
 const enabledGodCount = computed(
   () => Array.from(enabledOptional.value).filter((id) => !isWolfRole(id)).length,
 )
+// The most gods the board could hold: a blocked god is out, and two free gods that exclude each other count once.
+function maxGods(): number {
+  const free = GOD_IDS.filter((id) => !isBlocked(id))
+  const paired = free.filter((id) => (BLOCKED_WITH[id] ?? []).some((o) => free.includes(o)))
+  return free.length - paired.length / 2
+}
 const godRange = computed(() => ({
   min: Math.max(0, wolfCount.value - 1),
-  // -1: the seer and the medium are exclusive, so one god id is never available; a blocked god is not either.
-  max: Math.min(
-    GOD_IDS.filter((id) => !isBlocked(id)).length - 1,
-    wolfCount.value + 1,
-    totalPlayers.value - wolfCount.value - 1,
-  ),
+  max: Math.min(maxGods(), wolfCount.value + 1, totalPlayers.value - wolfCount.value - 1),
 }))
 
 // One wolf more/less must keep the gods inside the new range.
@@ -310,7 +309,7 @@ function fitRolesToBoard(n: number) {
   }
   for (const id of GOD_IDS) {
     if (enabledGods().length >= godRange.value.min) break
-    if (!roles.has(EXCLUSIVE_WITH[id] ?? '') && !isBlocked(id)) roles.add(id)
+    if (!isBlocked(id)) roles.add(id)
   }
 }
 
@@ -329,8 +328,6 @@ function canToggle(roleId: string): boolean {
       (totalPlayers.value >= SPECIAL_WOLF_MIN_PLAYERS &&
         wolfCount.value >= enabledSpecialWolfCount.value + 2)
     )
-  // Swapping SEER <-> MEDIUM keeps the god count, so it is always allowed.
-  if (!on && enabledOptional.value.has(EXCLUSIVE_WITH[roleId] ?? '')) return true
   return on
     ? enabledGodCount.value > godRange.value.min
     : enabledGodCount.value < godRange.value.max
@@ -355,10 +352,7 @@ function toggleHint(roleId: string): string {
 function toggleRole(roleId: string) {
   if (!canToggle(roleId)) return
   if (enabledOptional.value.has(roleId)) enabledOptional.value.delete(roleId)
-  else {
-    enabledOptional.value.delete(EXCLUSIVE_WITH[roleId] ?? '')
-    enabledOptional.value.add(roleId)
-  }
+  else enabledOptional.value.add(roleId)
 }
 
 const ROLE_GROUPS = [
@@ -387,8 +381,6 @@ function cardNote(id: string): string {
   const excludes = BLOCKED_WITH[id]
   if (enabledOptional.value.has(id) && excludes)
     return t('setup.excludes', { roles: names(excludes) })
-  if (!enabledOptional.value.has(id) && enabledOptional.value.has(EXCLUSIVE_WITH[id] ?? ''))
-    return t('setup.pairSwap')
   return cardLocked(id) ? '🔒' : ''
 }
 // Tap = on/off. A required role opens its card; a role that cannot change says why.
@@ -494,6 +486,8 @@ async function save() {
 .card-note {
   font-size: 0.625rem;
   color: var(--muted);
+  /* A two-role note wraps: break after 、, never inside a role name. */
+  word-break: keep-all;
 }
 .card-info {
   position: absolute;

@@ -2,6 +2,7 @@ package com.werewolf.dto
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
+import com.werewolf.model.GravekeeperResult
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinnerSide
 
@@ -109,6 +110,10 @@ sealed interface MyNightAction {
     /** [role] is what the medium was told about [target]. */
     @JsonTypeName("MEDIUM")
     data class Medium(val target: PlayerSeat?, val role: PlayerRole?) : MyNightAction
+
+    /** [exiled] = yesterday's vote-out, null when there was none; [result] is what the gravekeeper was told. */
+    @JsonTypeName("GRAVEKEEPER")
+    data class Gravekeeper(val exiled: PlayerSeat?, val result: GravekeeperResult?) : MyNightAction
 
     /**
      * The mechanical wolf's own turn. [checkRole] is set only when the learned skill reveals a role;

@@ -55,6 +55,24 @@ class RoleHistoryBuilderTest {
     }
 
     @Test
+    fun `gravekeeper history lists exiles with camp, skips NONE nights and tonight`() {
+        val keeper = player("keeper", 10, PlayerRole.GRAVEKEEPER)
+        val nights = listOf(
+            night(1) { gravekeeperResult = GravekeeperResult.NONE },
+            night(2) { gravekeeperResult = GravekeeperResult.WOLF; gravekeeperExiledUserId = "wolf" },
+            night(3) { gravekeeperResult = GravekeeperResult.GOOD; gravekeeperExiledUserId = "v1" },
+            night(4) { gravekeeperResult = GravekeeperResult.WOLF; gravekeeperExiledUserId = "king" },
+        )
+        val h = build(keeper, game(GamePhase.NIGHT, 4), nights, players + keeper)
+
+        assertThat(h!!["role"]).isEqualTo("GRAVEKEEPER")
+        val e = entries(h)
+        assertThat(e.map { it["round"] to it["action"] }).containsExactly(2 to "GRAVE", 3 to "GRAVE")
+        assertThat(target(e[0])).isEqualTo(mapOf("userId" to "wolf", "nickname" to "N-wolf", "seatIndex" to 4))
+        assertThat(e.map { it["isWerewolf"] }).containsExactly(true, false)
+    }
+
+    @Test
     fun `guard sees who was guarded each night, including a skipped night`() {
         val nights = listOf(night(1) { guardTargetUserId = "v1" }, night(2))
         val e = entries(build(guard, game(GamePhase.DAY_VOTING, 2), nights))

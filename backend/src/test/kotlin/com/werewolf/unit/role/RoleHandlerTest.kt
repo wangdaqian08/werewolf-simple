@@ -442,6 +442,17 @@ class RoleHandlerTest {
         }
 
         @Test
+        fun `seer sees GRAVEKEEPER as good`() {
+            val ctx = seerCtx(targetRole = PlayerRole.GRAVEKEEPER)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("seer", ActionType.SEER_CHECK, "u2"), ctx)
+
+            val seerResult = (result as GameActionResult.Success).events[0] as DomainEvent.SeerResult
+            assertThat(seerResult.isWerewolf).isFalse()
+        }
+
+        @Test
         fun `seer check - rejected when target is dead`() {
             val np = nightPhase(NightSubPhase.SEER_PICK)
             val seer = player("seer", 1, PlayerRole.SEER)

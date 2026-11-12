@@ -98,6 +98,23 @@ describe('PlayerReview', () => {
     ).toContain('⚙ 我毒 2號 Bob，守 4號 Dana，刀 1號 Alice〔狼人〕')
   })
 
+  it('player review shows the gravekeeper night action: the exiled seat with the camp told', () => {
+    const gk = review({ me: seat(12, 'Gia', 'GRAVEKEEPER') })
+    const text = (action: NonNullable<PlayerReviewData['rounds'][number]['night']>['action']) => {
+      gk.rounds[0]!.night!.action = action
+      return mount(PlayerReview, { props: { review: gk } }).text()
+    }
+    expect(
+      text({ type: 'GRAVEKEEPER', exiled: seat(1, 'Alice', null, 'WOLF'), result: 'WOLF' }),
+    ).toContain('⚰ 昨日放逐 1號 Alice〔狼人〕')
+    expect(
+      text({ type: 'GRAVEKEEPER', exiled: seat(2, 'Bob', null, 'GOOD'), result: 'GOOD' }),
+    ).toContain('⚰ 昨日放逐 2號 Bob〔好人〕')
+    expect(text({ type: 'GRAVEKEEPER', exiled: null, result: 'NONE' })).toContain('⚰ 無人被放逐')
+    // A gravekeeper who was already dead that night has nothing stored.
+    expect(text({ type: 'GRAVEKEEPER', exiled: null, result: null })).toContain('⚰ 無人被放逐')
+  })
+
   it('player review: a learned alignment check shows wolf or good, never a role', () => {
     const r = review({ me: seat(10, 'Mia', 'MECHANICAL_WOLF') })
     const base = {

@@ -252,6 +252,7 @@ export default {
     attackedAsk: 'Tonight {who} was attacked by the wolves. Use the antidote?',
     badge: {
       closed: 'Eyes closed',
+      gravekeeper: "Yesterday's exile: good or wolf",
       guard: 'Choose a player to protect',
       mech: 'Learn or use your skill',
       mechDone: 'Result received',
@@ -275,6 +276,15 @@ export default {
     dontUse: "Don't use",
     everyoneClose: 'Everyone please close your eyes',
     falls: 'Night Falls',
+    gravekeeper: {
+      done: 'Done',
+      firstNight: 'No information on the first night',
+      good: 'Good',
+      history: 'Exile history',
+      noExile: 'Nobody was exiled yesterday',
+      noHistory: 'No history yet',
+      wolf: 'Werewolf',
+    },
     histGood: 'Good ✓',
     histRound: 'Night {n}',
     histWolf: 'Wolf ✗',
@@ -310,6 +320,8 @@ export default {
     },
     narration: {
       dark: 'Night falls, everyone close your eyes',
+      gravekeeperClose: 'Gravekeeper, close your eyes',
+      gravekeeperOpen: 'Gravekeeper, open your eyes',
       guardClose: 'Guard, close your eyes',
       guardOpen: 'Guard, open your eyes',
       mechWolfClose: 'Mechanical Wolf, close your eyes',
@@ -373,6 +385,8 @@ export default {
   pr: {
     dawnOut: ' eliminated',
     ended: 'You were eliminated on day {day}; the replay ends here',
+    gravekeeperNone: '⚰ No exile',
+    gravekeeperSaw: '⚰ Exiled yesterday: ',
     guard: '🛡 I guarded ',
     guardNone: '🛡 I guarded no one',
     legend: 'In votes, {seat} red seats are werewolves you know of',
@@ -442,6 +456,7 @@ export default {
   },
   role: {
     BLACK_WOLF_KING: 'Black Wolf King',
+    GRAVEKEEPER: 'Gravekeeper',
     GUARD: 'Guard',
     HUNTER: 'Hunter',
     IDIOT: 'Idiot',
@@ -456,6 +471,8 @@ export default {
     desc: {
       BLACK_WOLF_KING:
         'Attack with the pack at night. When you are eliminated (voted out, killed at night or taken by the hunter) you may shoot one player; you cannot shoot if poisoned by the witch or after self-destructing.',
+      GRAVEKEEPER:
+        'Each night, learn whether the player voted out the day before was good or a werewolf.',
       GUARD:
         'Each night, protect one player from the wolves. You cannot protect the same person two nights in a row.',
       HUNTER:
@@ -477,6 +494,7 @@ export default {
       WITCH: 'You have one antidote and one poison, each usable once.',
     },
     descShort: {
+      GRAVEKEEPER: "Learn the camp of yesterday's exiled player.",
       GUARD: 'Each night, protect one player from the wolves.',
       IDIOT: 'When voted out, reveal yourself: you survive but lose your right to vote.',
       KNIGHT:
@@ -488,6 +506,8 @@ export default {
     rules: {
       BLACK_WOLF_KING:
         'Camp: wolves.\nHunts with the wolves at night; the seer sees you as a wolf.\nWhen you are out (voted out, killed by the wolves at night, or shot by the hunter) you may shoot one player, or hold fire.\nNo shot if the witch poisons you, you self-destruct, the White Wolf King takes you, or the Knight duels you, nor if your death already decides the game.\nShoot before the host moves on, or the shot is lost.',
+      GRAVEKEEPER:
+        'Camp: good (a god role).\nEach night you learn whether the player voted out the day before was good or a wolf (White Wolf King, Black Wolf King and Mechanical Wolf all count as wolves); there is no information on the first night.\nOnly a vote-out counts: a player who was shot, duelled, taken by the White Wolf King or declared out by the host, or an Idiot who revealed, does not count, and you see "Nobody was exiled yesterday".',
       GUARD:
         "Camp: good (a god role).\nEach night protect one living player (yourself included) from the wolves; if the room allows it you may also protect no one.\nYou cannot protect the same player two nights in a row.\nProtection does not stop the witch's poison.\nIf you and the witch's antidote save the same player, that player still dies (unless they hold night-1 immunity).",
       HUNTER:
@@ -495,11 +515,11 @@ export default {
       IDIOT:
         'Camp: good (a god role).\nWhen voted out you reveal your card and stay in, but lose your vote; a sheriff keeps the badge but cannot vote.\nThis works once only; any other death (night kill, poison, a shot, a White Wolf King take) still kills you.',
       KNIGHT:
-        'Camp: good (a god role).\nAfter the night result is shown and before voting starts, you may reveal your card and duel one living player (not yourself), once per game; no duel during the sheriff election.\nIf the target is a wolf (White Wolf King and Black Wolf King included): they are out, there is no vote today and the game goes straight to night; a duelled wolf cannot shoot or take anyone.\nIf the target is good: you are out, and the day carries on as normal.\nNo duel once a wolf has self-destructed that day. A successful duel ends the day at once, so it is best to duel after any shots are done.\nIf the dead player is the sheriff, the badge is handed over as usual.\nThe Mechanical Wolf and the Knight cannot be in the same room.',
+        'Camp: good (a god role).\nAfter the night result is shown and before voting starts, you may reveal your card and duel one living player (not yourself), once per game; no duel during the sheriff election.\nIf the target is a wolf (White Wolf King and Black Wolf King included): they are out, there is no vote today and the game goes straight to night; a duelled wolf cannot shoot or take anyone.\nIf the target is good: you are out, and the day carries on as normal.\nNo duel once a wolf has self-destructed that day. A successful duel ends the day at once, so it is best to duel after any shots are done.\nIf the dead player is the sheriff, the badge is handed over as usual.',
       MECHANICAL_WOLF:
-        "Camp: wolves (not part of the pack).\nYou do not know the other wolves and they do not know you; you never see the pack's picks and are never shown as their teammate, and the wolves may attack you.\nOn any night you may learn one living player (not yourself) to see their role and gain that role's skill, or skip. You learn once per game and the learned role never changes.\nChecks, poison and protection work from the next night: medium or seer checks one player each night; witch has one poison and no antidote; guard protects once per game (yourself included); hunter or Black Wolf King may shoot when out, from the night you learn.\nThe Mechanical Wolf and the Knight cannot be in the same room.\nOnce every other wolf is dead you make the kill alone in the wolf turn.\nYou cannot self-destruct. You count as a wolf: the villagers win only once you are dead too. The seer sees you as a wolf; the medium sees an unlearned you as Mechanical Wolf, and a learned you as the role you learned.",
+        "Camp: wolves (not part of the pack).\nYou do not know the other wolves and they do not know you; you never see the pack's picks and are never shown as their teammate, and the wolves may attack you.\nOn any night you may learn one living player (not yourself) to see their role and gain that role's skill, or skip. You learn once per game and the learned role never changes.\nChecks, poison and protection work from the next night: medium or seer checks one player each night; witch has one poison and no antidote; guard protects once per game (yourself included); hunter or Black Wolf King may shoot when out, from the night you learn.\nOnce every other wolf is dead you make the kill alone in the wolf turn.\nYou cannot self-destruct. You count as a wolf: the villagers win only once you are dead too. The seer sees you as a wolf; the medium sees an unlearned you as Mechanical Wolf, and a learned you as the role you learned.",
       MEDIUM:
-        'Camp: good (a god role).\nEach night check one living player (not yourself) to learn their exact role.\nAn unlearned Mechanical Wolf shows as Mechanical Wolf; a learned one shows as the role it learned.\nThe seer and the medium cannot be in the same room.',
+        'Camp: good (a god role).\nEach night check one living player (not yourself) to learn their exact role.\nAn unlearned Mechanical Wolf shows as Mechanical Wolf; a learned one shows as the role it learned.',
       SEER: 'Camp: good (a god role).\nEach night check one living player: good or wolf (wolf kings count as wolves).\nYou cannot check yourself.',
       VILLAGER:
         'Camp: good (villager).\nNo special ability.\nTalk, reason, and vote out the players you suspect.',
@@ -512,6 +532,8 @@ export default {
     },
   },
   roleCard: {
+    excludes: 'Excluded roles',
+    excludesNote: 'Cannot be in the same room as this role',
     info: 'Role Info',
     rules: 'Rules',
     teammates: 'Wolf teammates',
@@ -528,6 +550,7 @@ export default {
     check: 'Checked {who} → {result}',
     empty: 'No records yet',
     good: 'Good',
+    grave: '{who} was {result}',
     guard: 'Protected {who}',
     guardNone: 'Protected no one',
     kill: 'Killed {who}',
@@ -638,6 +661,9 @@ export default {
     declaredOut: ' was declared out by the host',
     elected: ' elected',
     exile: 'Exile',
+    gravekeeperHead: '⚰ Gravekeeper {seat} ',
+    gravekeeperNone: 'No exile',
+    gravekeeperSaw: 'learned ',
     guard: 'Guard ',
     guardHead: '🛡 Guard {seat} ',
     hunterShot: ' shot and took ',
@@ -733,7 +759,6 @@ export default {
     groupWolves: 'Wolves',
     joined: '{n} joined',
     needPlayers: 'Needs {n}+ players',
-    pairSwap: '⇄ One of two',
     players: 'Players (incl. host)',
     required: 'REQUIRED',
     roleConfig: 'Role Configuration',
