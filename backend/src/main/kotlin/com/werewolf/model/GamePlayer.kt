@@ -51,6 +51,10 @@ class GamePlayer(
     @Column(name = "removed_by_host", nullable = false)
     var removedByHost: Boolean = false,
 
+    // 戰績分 this seat earned when the game was settled; 0 until then, and for cancelled games
+    @Column(name = "score_earned", nullable = false)
+    var scoreEarned: Int = 0,
+
     // Mechanical wolf only: the role it learned from its target (fixed once set)
     @Enumerated(EnumType.STRING)
     @Column(name = "learned_role", length = 20)

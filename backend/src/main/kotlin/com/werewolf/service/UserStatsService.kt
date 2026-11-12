@@ -1,9 +1,7 @@
 package com.werewolf.service
 
-import com.werewolf.model.CreditTxType
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinnerSide
-import com.werewolf.repository.CreditTransactionRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.UserRepository
 import org.springframework.stereotype.Service
@@ -27,8 +25,8 @@ data class FinishedResult(val gameId: Int, val role: PlayerRole, val winner: Win
     val won: Boolean get() = role.isWolf == (winner == WinnerSide.WEREWOLF)
 }
 
-/** One player's 戰績分 and the ledger row that completed it (a lower id reached the score earlier). */
-data class ScoreRow(val userId: String, val score: Long, val reachedAt: Int)
+/** One player's 戰績分 and when the last game that added to it ended (earlier = reached it first). */
+data class ScoreRow(val userId: String, val score: Long, val reachedAt: LocalDateTime)
 
 data class LeaderboardEntry(val rank: Int, val nickname: String, val score: Int, val me: Boolean)
 
@@ -37,9 +35,9 @@ data class Leaderboard(val top: List<LeaderboardEntry>, val me: LeaderboardEntry
 
 private const val LEADERBOARD_SIZE = 3
 
-/** Ranks [rows] by score, an equal score going to whoever reached it first; [nicknameOf] is asked only for shown rows. */
+/** Ranks [rows] by score, an equal score going to whoever reached it first (then by user id, so the order is stable); [nicknameOf] is asked only for shown rows. */
 fun leaderboardOf(rows: List<ScoreRow>, userId: String, nicknameOf: (String) -> String): Leaderboard {
-    val ranked = rows.sortedWith(compareByDescending<ScoreRow> { it.score }.thenBy { it.reachedAt })
+    val ranked = rows.sortedWith(compareByDescending<ScoreRow> { it.score }.thenBy { it.reachedAt }.thenBy { it.userId })
     fun entry(index: Int) = ranked[index].let {
         LeaderboardEntry(index + 1, nicknameOf(it.userId), it.score.toInt(), it.userId == userId)
     }
@@ -67,7 +65,6 @@ fun percentileOf(wins: Int, games: Int, others: List<Pair<Int, Int>>): Int {
 @Service
 class UserStatsService(
     private val gamePlayerRepository: GamePlayerRepository,
-    private val creditTransactionRepository: CreditTransactionRepository,
     private val userRepository: UserRepository,
 ) {
 
@@ -89,13 +86,13 @@ class UserStatsService(
             recent = mine.take(RECENT_LIMIT).map { if (it.won) "W" else "L" },
             percentile = percentile,
             gamesToRank = maxOf(0, MIN_GAMES_TO_RANK - games),
-            score = creditTransactionRepository.sumAmount(userId, CreditTxType.GAME_REWARD).toInt(),
+            score = gamePlayerRepository.sumScore(userId).toInt(),
         )
     }
 
     // shortcut: loads every ranked player's total on each call; cache or rank in SQL when the player base grows.
     fun leaderboardFor(userId: String): Leaderboard =
-        leaderboardOf(creditTransactionRepository.findScoreRows(CreditTxType.GAME_REWARD), userId) { id ->
+        leaderboardOf(gamePlayerRepository.findScoreRows(), userId) { id ->
             userRepository.findById(id).map { it.nickname }.orElse("?")
         }
 

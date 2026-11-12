@@ -84,6 +84,26 @@ class RewardSettlementIntegrationTest {
     }
 
     @Test
+    fun `each seat records the score it earned, the same as its reward`() {
+        val gameId = seed(listOf("seW" to PlayerRole.WEREWOLF, "seV" to PlayerRole.VILLAGER, "seS" to PlayerRole.SEER))
+
+        rewardSettlementService.settle(gameId, WinnerSide.VILLAGER)
+
+        val score = gamePlayerRepository.findByGameId(gameId).associate { it.userId to it.scoreEarned }
+        assertThat(score).isEqualTo(earned(gameId))
+        assertThat(score).containsEntry("seV", 20).containsEntry("seW", 4)
+    }
+
+    @Test
+    fun `a cancelled game records no score`() {
+        val gameId = seed(listOf("scW" to PlayerRole.WEREWOLF, "scV" to PlayerRole.VILLAGER))
+
+        rewardSettlementService.settle(gameId, null)
+
+        assertThat(gamePlayerRepository.findByGameId(gameId).map { it.scoreEarned }).containsOnly(0)
+    }
+
+    @Test
     fun `a wolf is not paid for voting out a teammate`() {
         val gameId = seed(listOf("bsW1" to PlayerRole.WEREWOLF, "bsW2" to PlayerRole.WEREWOLF, "bsV" to PlayerRole.VILLAGER))
         val votes = listOf(vote(gameId, 1, "bsW1", "bsW2"))

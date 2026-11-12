@@ -31,8 +31,15 @@ object TestConstants {
     // API's generateCode). JVM-global so every class sharing the schema draws
     // from ONE sequence — per-class copies emit identical codes, and duplicate
     // codes break findActiveByRoomCode's at-most-one invariant, 500-ing
-    // unrelated createRoom calls. 400-999 avoids RoomControllerTest's fixed
-    // 111/222/333.
+    // unrelated createRoom calls. Letters A-Y only: real codes are 3 digits
+    // (RoomService.generateCode, RoomControllerTest's fixed 111/222/333) and ZZZ is
+    // INVALID_ROOM_CODE. 25^3 codes: the old 400-999 range wrapped after 600 seeds
+    // and handed one code to two rooms.
     private val SEEDED_ROOM_CODE_SEQ = java.util.concurrent.atomic.AtomicInteger(0)
-    fun nextSeededRoomCode(): String = (400 + SEEDED_ROOM_CODE_SEQ.getAndIncrement() % 600).toString()
+    fun nextSeededRoomCode(): String = seededRoomCode(SEEDED_ROOM_CODE_SEQ.getAndIncrement())
+
+    internal fun seededRoomCode(n: Int): String {
+        val i = Math.floorMod(n, 25 * 25 * 25)
+        return charArrayOf('A' + i / 625, 'A' + i / 25 % 25, 'A' + i % 25).concatToString()
+    }
 }
