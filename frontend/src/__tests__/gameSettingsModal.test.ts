@@ -170,7 +170,7 @@ describe('GameSettingsModal — 積分規則', () => {
     expect(text).toContain('+4 / 天')
     expect(text).toContain('+3 / 次')
     expect(text).toContain('−4')
-    expect(text).toContain('本局積分最低 0 分')
+    expect(text).toContain('本局戰績分最低 0 分')
     wrapper.unmount()
   })
 
@@ -196,7 +196,7 @@ describe('GameSettingsModal — 積分規則', () => {
     const wrapper = mountModal()
     await flushPromises()
 
-    expect(bodyEl('settings-rewards')!.textContent).not.toContain('本局積分最低')
+    expect(bodyEl('settings-rewards')!.textContent).not.toContain('本局戰績分最低')
     wrapper.unmount()
   })
 

@@ -45,9 +45,15 @@
           <span>{{ $t('result.rewards') }}</span>
         </div>
         <section class="settlement" data-testid="settlement">
-          <div v-if="settlement.myEarned != null" class="my-earned">
-            +{{ settlement.myEarned }} <span class="earned-label">{{ $t('result.earned') }}</span>
-          </div>
+          <template v-if="settlement.myEarned != null">
+            <div class="my-earned" data-testid="my-earned">
+              +{{ settlement.myEarned }}
+              <span class="earned-label">{{ $t('result.earned') }}</span>
+            </div>
+            <div v-if="settlement.myEarned > 0" class="my-balance my-coins" data-testid="my-coins">
+              {{ $t('result.coins', { n: settlement.myEarned }) }}
+            </div>
+          </template>
           <div v-if="settlement.myBalance != null" class="my-balance">
             {{ $t('pay.balance', { n: settlement.myBalance }) }}
           </div>
@@ -328,6 +334,10 @@ function goLobby() {
   font-size: 0.8rem;
   color: var(--muted);
   margin: 0.25rem 0 0.75rem;
+}
+
+.my-coins {
+  margin-bottom: 0;
 }
 
 .result-wolves .my-balance,

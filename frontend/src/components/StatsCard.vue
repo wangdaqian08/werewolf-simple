@@ -1,6 +1,11 @@
 <template>
   <section class="stats" data-testid="stats-card">
     <h2 class="st">{{ $t('account.stats.title') }}</h2>
+    <div class="score" data-testid="stats-score">
+      <span class="score-name">{{ $t('account.stats.score') }}</span>
+      <b data-testid="stats-score-value">{{ stats.score }}</b>
+      <span class="score-hint">{{ $t('account.stats.scoreHint') }}</span>
+    </div>
     <div class="big">
       <div data-testid="stats-games">
         <b>{{ stats.games }}</b
@@ -75,6 +80,30 @@ defineProps<{ stats: UserStats }>()
   font-size: 1rem;
   color: var(--text);
   margin: 0 0 0.5rem;
+}
+.score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-l);
+}
+.score-name {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.score b {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.75rem;
+  color: var(--red);
+  font-variant-numeric: tabular-nums;
+}
+.score-hint {
+  flex-basis: 100%;
+  font-size: 0.6875rem;
+  color: var(--muted);
 }
 .big {
   display: grid;

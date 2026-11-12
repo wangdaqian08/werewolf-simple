@@ -221,7 +221,7 @@ describe('RoomView role-pick gate', () => {
     await w.find('[data-testid="role-pick-GOD"]').trigger('click')
     await flushPromises()
     const text = w.find('[data-testid="role-pick-error"]').text()
-    expect(text).toBe('積分不足')
+    expect(text).toBe('金幣不足')
     expect(text).not.toContain('Insufficient')
   })
 

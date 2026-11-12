@@ -1615,4 +1615,5 @@ export const MOCK_USER_STATS: UserStats = {
   recent: 'WWLWLLWWWLWLWWLLWLWW'.split('') as ('W' | 'L')[],
   percentile: 72,
   gamesToRank: 0,
+  score: 486,
 }

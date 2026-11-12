@@ -65,6 +65,8 @@ export interface UserStats {
   recent: ('W' | 'L')[]
   percentile: number | null
   gamesToRank: number
+  /** 战绩分: earned by play only — never bought, never spent. */
+  score: number
 }
 
 export interface Wallet {

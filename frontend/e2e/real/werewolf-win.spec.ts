@@ -13,6 +13,7 @@ import {type GameContext, setupGame} from './helpers/multi-browser'
 import {act, actName, type RoleName} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
+import {grantCredits} from './helpers/test-support'
 import {
   fetchGameState,
   readAlivePlayerIds,
@@ -403,5 +404,28 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     expect(await villageCards.count()).toBeGreaterThanOrEqual(1)
 
     await captureSnapshot(ctx.pages, testInfo, '02-result-roles-revealed')
+
+    // ── 戰績分 vs 金幣: the game pays both; granted coins raise only the balance ──
+    const digits = async (testId: string): Promise<number> =>
+      Number(((await hostPage.getByTestId(testId).textContent()) ?? '').replace(/\D/g, ''))
+    const earned = await digits('my-earned')
+    expect(earned, 'the host earned something this game').toBeGreaterThan(0)
+
+    await hostPage.goto('/account')
+    await expect(hostPage.getByTestId('stats-score-value')).toBeVisible({ timeout: 15_000 })
+    const score = await digits('stats-score-value')
+    // A locally reused backend keeps earlier games of guest:host, so >=, not ==.
+    expect(score, 'score includes this game').toBeGreaterThanOrEqual(earned)
+
+    const hostId = await hostPage.evaluate(() => localStorage.getItem('userId'))
+    expect(hostId).toBeTruthy()
+    const coins = await grantCredits(hostPage, hostId as string, 100)
+    await hostPage.reload()
+    await expect(hostPage.getByTestId('account-balance')).toHaveText(`◈ ${coins}`, {
+      timeout: 15_000,
+    })
+    await expect(hostPage.getByTestId('stats-score-value')).toHaveText(String(score))
+    console.log(`[score-vs-coins] earned=${earned} score=${score} coins(after +100)=${coins}`)
+    await captureSnapshot(new Map([['HOST', hostPage]]), testInfo, '03-account-score-vs-coins')
   })
 })
