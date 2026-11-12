@@ -120,6 +120,14 @@ interface GamePlayerRepository : JpaRepository<GamePlayer, Int> {
     fun existsByGameIdAndUserId(gameId: Int, userId: String): Boolean
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long
 
+    /** One row per user with a positive 戰績分: their total, and when the last game that added to it ended. */
+    @Query("select new com.werewolf.service.ScoreRow(gp.userId, sum(gp.scoreEarned), max(g.endedAt)) " +
+        "from GamePlayer gp, Game g where gp.gameId = g.gameId and gp.scoreEarned > 0 group by gp.userId")
+    fun findScoreRows(): List<com.werewolf.service.ScoreRow>
+
+    @Query("select coalesce(sum(gp.scoreEarned), 0) from GamePlayer gp where gp.userId = :userId")
+    fun sumScore(@Param("userId") userId: String): Long
+
     /** One row per ranked player (>= 5 counted games) other than [userId]: games and wins. */
     @Query("select new com.werewolf.service.RankedRecord(gp.userId, count(gp), " +
         "sum(case when (gp.role in :wolves and g.winner = :wolfWin) or (gp.role not in :wolves and g.winner = :goodWin) then 1 else 0 end)) " +
@@ -214,15 +222,6 @@ interface WalletRepository : JpaRepository<Wallet, String> {
 interface CreditTransactionRepository : JpaRepository<CreditTransaction, Int> {
     fun findTop20ByUserIdOrderByCreatedAtDesc(userId: String): List<CreditTransaction>
     fun findByGameIdAndType(gameId: Int, type: CreditTxType): List<CreditTransaction>
-
-    /** Total of one kind of ledger row for a user; 0 when there are none. */
-    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM CreditTransaction t WHERE t.userId = :userId AND t.type = :type")
-    fun sumAmount(@Param("userId") userId: String, @Param("type") type: CreditTxType): Long
-
-    /** One row per user holding ledger rows of [type]: their total, and the id of the row that completed it. */
-    @Query("select new com.werewolf.service.ScoreRow(t.userId, sum(t.amount), max(t.id)) " +
-        "from CreditTransaction t where t.type = :type group by t.userId")
-    fun findScoreRows(@Param("type") type: CreditTxType): List<com.werewolf.service.ScoreRow>
 
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long
     fun deleteByPerkActivationIdIn(perkActivationIds: Collection<Int>): Long

@@ -6,7 +6,6 @@ import com.werewolf.integration.TestConstants.FIELD_USER
 import com.werewolf.integration.TestConstants.FIELD_USER_ID
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.*
-import com.werewolf.repository.CreditTransactionRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomRepository
@@ -40,7 +39,6 @@ class UserStatsIntegrationTest {
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var userStatsService: UserStatsService
     @Autowired lateinit var walletService: WalletService
-    @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
 
     private class Login(val token: String, val userId: String)
 
@@ -53,14 +51,16 @@ class UserStatsIntegrationTest {
 
     private fun seed(
         user: Login, role: PlayerRole, winner: WinnerSide?,
-        endedAt: LocalDateTime? = LocalDateTime.now(),
+        endedAt: LocalDateTime? = LocalDateTime.now(), score: Int = 0,
     ) {
         val room = roomRepository.save(Room(roomCode = TestConstants.nextSeededRoomCode(), hostUserId = user.userId, totalPlayers = 6))
         val gameId = gameRepository.save(Game(roomId = room.roomId!!, hostUserId = user.userId).also {
             it.winner = winner
             it.endedAt = endedAt
         }).gameId!!
-        gamePlayerRepository.save(GamePlayer(gameId = gameId, userId = user.userId, seatIndex = 1, role = role))
+        gamePlayerRepository.save(
+            GamePlayer(gameId = gameId, userId = user.userId, seatIndex = 1, role = role).also { it.scoreEarned = score },
+        )
     }
 
     @Test
@@ -125,30 +125,31 @@ class UserStatsIntegrationTest {
     }
 
     @Test
-    fun `score is the sum of game rewards and nothing else`() {
+    fun `score is the sum of the score each game recorded`() {
         val u = login()
         val other = login()
-        walletService.credit(u.userId, 20, CreditTxType.GAME_REWARD)
-        walletService.credit(u.userId, 5, CreditTxType.GAME_REWARD)
-        walletService.credit(u.userId, 100, CreditTxType.PURCHASE)
-        walletService.credit(u.userId, 50, CreditTxType.ADMIN_GRANT)
-        walletService.debit(u.userId, 30, CreditTxType.PERK_SPEND)
-        walletService.credit(u.userId, 30, CreditTxType.REFUND)
-        walletService.credit(other.userId, 99, CreditTxType.GAME_REWARD)
-        assertThat(userStatsService.statsFor(u.userId).score).isEqualTo(25)
+        seed(u, PlayerRole.SEER, WinnerSide.VILLAGER, score = 20)
+        seed(u, PlayerRole.WEREWOLF, WinnerSide.VILLAGER, score = 4)
+        seed(u, PlayerRole.SEER, WinnerSide.WEREWOLF, score = 0)
+        seed(other, PlayerRole.SEER, WinnerSide.VILLAGER, score = 99)
+        assertThat(userStatsService.statsFor(u.userId).score).isEqualTo(24)
     }
 
     @Test
-    fun `spending coins never lowers the score`() {
+    fun `coin movements never change the score`() {
         val u = login()
-        walletService.credit(u.userId, 20, CreditTxType.GAME_REWARD)
-        walletService.debit(u.userId, 20, CreditTxType.PERK_SPEND)
-        assertThat(walletService.balance(u.userId)).isEqualTo(0)
+        seed(u, PlayerRole.SEER, WinnerSide.VILLAGER, score = 20)
+        walletService.credit(u.userId, 20, CreditTxType.GAME_REWARD) // coins paid for that game
+        walletService.credit(u.userId, 100, CreditTxType.PURCHASE)
+        walletService.credit(u.userId, 50, CreditTxType.ADMIN_GRANT)
+        walletService.debit(u.userId, 170, CreditTxType.PERK_SPEND)
+        walletService.credit(u.userId, 30, CreditTxType.REFUND)
+        assertThat(walletService.balance(u.userId)).isEqualTo(30)
         assertThat(userStatsService.statsFor(u.userId).score).isEqualTo(20)
     }
 
     @Test
-    fun `score is 0 with no rewards, bought coins included`() {
+    fun `score is 0 with no games, bought coins included`() {
         val u = login()
         assertThat(userStatsService.statsFor(u.userId).score).isEqualTo(0)
         walletService.credit(u.userId, 100, CreditTxType.PURCHASE)
@@ -199,20 +200,31 @@ class UserStatsIntegrationTest {
     }
 
     @Test
-    fun `leaderboard rows carry game-reward totals only, and the order two players reached a score`() {
+    fun `leaderboard rows sum recorded scores, and say who reached theirs first`() {
         val first = login()
         val second = login()
-        val buyer = login()
-        walletService.credit(first.userId, 20, CreditTxType.GAME_REWARD)
-        walletService.credit(first.userId, 5, CreditTxType.GAME_REWARD)
-        walletService.credit(first.userId, 100, CreditTxType.PURCHASE)
-        walletService.credit(second.userId, 25, CreditTxType.GAME_REWARD)
-        walletService.credit(buyer.userId, 500, CreditTxType.PURCHASE)
-        val rows = creditTransactionRepository.findScoreRows(CreditTxType.GAME_REWARD).associateBy { it.userId }
+        val zero = login()
+        val t = LocalDateTime.now().minusDays(2)
+        seed(first, PlayerRole.SEER, WinnerSide.VILLAGER, t, score = 20)
+        seed(first, PlayerRole.WEREWOLF, WinnerSide.VILLAGER, t.plusHours(1), score = 5)
+        seed(second, PlayerRole.SEER, WinnerSide.VILLAGER, t.plusHours(2), score = 25)
+        seed(zero, PlayerRole.SEER, WinnerSide.WEREWOLF, t, score = 0)
+        walletService.credit(zero.userId, 500, CreditTxType.PURCHASE)
+        val rows = gamePlayerRepository.findScoreRows().associateBy { it.userId }
         assertThat(rows[first.userId]?.score).isEqualTo(25L)
         assertThat(rows[second.userId]?.score).isEqualTo(25L)
-        assertThat(rows[first.userId]!!.reachedAt).isLessThan(rows[second.userId]!!.reachedAt)
-        assertThat(rows).doesNotContainKey(buyer.userId)
+        assertThat(rows[first.userId]!!.reachedAt).isBefore(rows[second.userId]!!.reachedAt)
+        assertThat(rows).doesNotContainKey(zero.userId)
+    }
+
+    @Test
+    fun `a game that added nothing does not move the time a score was reached`() {
+        val u = login()
+        val t = LocalDateTime.now().minusDays(3)
+        seed(u, PlayerRole.SEER, WinnerSide.VILLAGER, t, score = 20)
+        seed(u, PlayerRole.SEER, WinnerSide.WEREWOLF, t.plusDays(1), score = 0)
+        val row = gamePlayerRepository.findScoreRows().single { it.userId == u.userId }
+        assertThat(row.reachedAt).isEqualToIgnoringNanos(t)
     }
 
     private fun leaderboard(l: Login) = restTemplate.exchange(
@@ -223,11 +235,11 @@ class UserStatsIntegrationTest {
     @Test
     fun `leaderboard endpoint - my row has my score and my rank among all players`() {
         val u = login()
-        walletService.credit(u.userId, 20, CreditTxType.GAME_REWARD)
+        seed(u, PlayerRole.SEER, WinnerSide.VILLAGER, score = 20)
         val body = leaderboard(u)
         val me = body["me"] as Map<String, Any>
         val top = body["top"] as List<Map<String, Any>>
-        val ahead = creditTransactionRepository.findScoreRows(CreditTxType.GAME_REWARD)
+        val ahead = gamePlayerRepository.findScoreRows()
             .count { it.userId != u.userId && it.score >= 20 } // everyone else at 20+ got there before this user
         assertThat(me["score"]).isEqualTo(20)
         assertThat(me["rank"]).isEqualTo(ahead + 1)
@@ -240,7 +252,7 @@ class UserStatsIntegrationTest {
     }
 
     @Test
-    fun `leaderboard endpoint - a player with no game reward is unranked`() {
+    fun `leaderboard endpoint - a player with no score is unranked`() {
         val u = login()
         walletService.credit(u.userId, 100, CreditTxType.PURCHASE)
         assertThat(leaderboard(u)["me"]).isNull()
@@ -262,8 +274,7 @@ class UserStatsIntegrationTest {
     fun `controller returns only the caller's stats`() {
         val x = login()
         val y = login()
-        seed(x, PlayerRole.SEER, WinnerSide.VILLAGER)
-        walletService.credit(x.userId, 20, CreditTxType.GAME_REWARD)
+        seed(x, PlayerRole.SEER, WinnerSide.VILLAGER, score = 20)
         repeat(2) { seed(y, PlayerRole.SEER, WinnerSide.WEREWOLF) }
         fun get(l: Login) = restTemplate.exchange(
             "/api/user/stats", HttpMethod.GET,

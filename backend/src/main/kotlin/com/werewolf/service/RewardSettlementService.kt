@@ -62,6 +62,10 @@ class RewardSettlementService(
         val facts = facts(gameId, game.dayNumber, winner, players)
         val perUser = players.associate { it.userId to RewardBreakdown.totalFor(it, facts, rewards) }
 
+        // 戰績分 and coins are the same amount for now; they diverge once tasks pay score only.
+        players.forEach { it.scoreEarned = perUser[it.userId] ?: 0 }
+        gamePlayerRepository.saveAll(players)
+
         perUser.forEach { (userId, amount) ->
             if (amount > 0) {
                 walletService.credit(userId, amount, CreditTxType.GAME_REWARD, gameId = gameId)

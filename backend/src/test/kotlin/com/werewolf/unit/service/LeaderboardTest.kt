@@ -4,11 +4,13 @@ import com.werewolf.service.ScoreRow
 import com.werewolf.service.leaderboardOf
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import java.time.LocalDateTime
 
 /** The ranking rule of the 戰績分 leaderboard: score first, then whoever got there first. */
 class LeaderboardTest {
 
-    private fun row(user: String, score: Long, reachedAt: Int) = ScoreRow(user, score, reachedAt)
+    private val t0 = LocalDateTime.of(2026, 11, 1, 20, 0)
+    private fun row(user: String, score: Long, reachedAt: Int) = ScoreRow(user, score, t0.plusMinutes(reachedAt.toLong()))
     private fun board(me: String, vararg rows: ScoreRow) = leaderboardOf(rows.toList(), me) { it.uppercase() }
 
     @Test
@@ -24,6 +26,14 @@ class LeaderboardTest {
         val b = board("z", row("late", 30, 9), row("early", 30, 4), row("top", 50, 7))
         assertThat(b.top.map { it.nickname }).containsExactly("TOP", "EARLY", "LATE")
         assertThat(b.top.map { it.rank }).containsExactly(1, 2, 3)
+    }
+
+    @Test
+    fun `same score reached in the same game - the order is stable, whatever order the rows come in`() {
+        val rows = listOf(row("guest:b", 20, 5), row("guest:c", 20, 5), row("guest:a", 20, 5))
+        val orders = listOf(rows, rows.reversed(), rows.shuffled(java.util.Random(7)))
+            .map { leaderboardOf(it, "z") { id -> id }.top.map { e -> e.nickname } }
+        assertThat(orders.toSet()).hasSize(1)
     }
 
     @Test
