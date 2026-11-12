@@ -1,6 +1,6 @@
 # 守墓人 (Gravekeeper) Implementation Plan
 
-> **Status (2026-11-12): RESUMED.** The owner asked to add the role. The branch is rebased onto main (71d1b2a). The section "Changes since the plan was written" below overrides the tasks where they differ.
+> **Status (2026-11-12): IMPLEMENTED on branch `feat/gravekeeper`** (not pushed). The section "Changes since the plan was written" below overrides the tasks where they differ.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
