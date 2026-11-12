@@ -82,7 +82,11 @@ class GameServiceSettlementTest {
 
     @Test
     fun `GAME_OVER - settlement block exposes rewards, myEarned and myBalance`() {
-        val players = listOf(player(hostId, 0, PlayerRole.VILLAGER), player(wolfId, 1, PlayerRole.WEREWOLF))
+        // Settlement recorded each seat's 戰績分 (the same as the reward when no task was done).
+        val players = listOf(
+            player(hostId, 0, PlayerRole.VILLAGER).also { it.scoreEarned = 20 },
+            player(wolfId, 1, PlayerRole.WEREWOLF).also { it.scoreEarned = 8 },
+        )
         whenever(gameRepository.findById(gameId)).thenReturn(Optional.of(game(GamePhase.GAME_OVER)))
         whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(players)
         whenever(creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD))

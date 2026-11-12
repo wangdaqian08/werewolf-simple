@@ -360,6 +360,23 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(wrapper.findAll('.reward-row')).toHaveLength(1)
   })
 
+  it('a done task: 戰績分 includes it, coins do not, and the task says 已完成', async () => {
+    const state: GameState = {
+      gameId: 'g-task',
+      phase: 'GAME_OVER',
+      dayNumber: 3,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Alice', 'VILLAGER')],
+      events: [],
+      myTask: { code: 'VILLAGER_SURVIVE_WIN', score: 10, done: true },
+      settlement: { myEarned: 20, myScore: 30, myBalance: 120, rewards: [] },
+    }
+    const { wrapper } = await mountResultView(state)
+    expect(wrapper.find('[data-testid="my-earned"]').text()).toBe('+30 戰績分')
+    expect(wrapper.find('[data-testid="my-coins"]').text()).toBe('同時獲得 20 金幣')
+    expect(wrapper.get('[data-testid="task-status"]').text()).toBe('已完成')
+  })
+
   it('a game that earned 0 shows +0 戰績分 and no coins line', async () => {
     const state: GameState = {
       gameId: 'g-zero',

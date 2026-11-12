@@ -55,6 +55,7 @@
             )
           }}
         </p>
+        <TaskLine v-if="gameStore.state.myTask" class="role-task" :task="gameStore.state.myTask" />
       </RoleRevealCard>
       <div v-else class="waiting-screen">
         <div class="waiting-icon">⏳</div>
@@ -167,6 +168,7 @@
       <VotingPhase
         :key="`voting-${gameStore.state.votingPhase.subPhase}-${gameStore.state.dayNumber}`"
         :role-history="gameStore.state?.roleHistory ?? null"
+        :my-task="gameStore.state?.myTask ?? null"
         :wolf-teammates="gameStore.state?.wolfTeammates ?? []"
         :game-id="Number(route.params.gameId)"
         :voting-phase="gameStore.state.votingPhase"
@@ -201,6 +203,7 @@
       <DayPhase
         :key="`${gameStore.state.dayPhase.subPhase}-${gameStore.state.dayPhase.dayNumber}`"
         :role-history="gameStore.state?.roleHistory ?? null"
+        :my-task="gameStore.state?.myTask ?? null"
         :wolf-teammates="gameStore.state?.wolfTeammates ?? []"
         :game-id="Number(route.params.gameId)"
         :day-phase="gameStore.state.dayPhase"
@@ -575,6 +578,7 @@ import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import VolumeControl from '@/components/VolumeControl.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
+import TaskLine from '@/components/TaskLine.vue'
 import RoleConfirmList from '@/components/RoleConfirmList.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
 import SheriffElection from '@/components/SheriffElection.vue'

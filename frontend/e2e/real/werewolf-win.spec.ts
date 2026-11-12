@@ -8,12 +8,12 @@
  *   - After enough rounds, wolves outnumber village → GAME_OVER
  *   - Verify result screen shows winner + all roles
  */
-import {expect, test} from '@playwright/test'
-import {type GameContext, setupGame} from './helpers/multi-browser'
-import {act, actName, type RoleName} from './helpers/shell-runner'
-import {verifyAllBrowsersPhase} from './helpers/assertions'
-import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
-import {grantCredits} from './helpers/test-support'
+import { expect, test } from '@playwright/test'
+import { type GameContext, setupGame } from './helpers/multi-browser'
+import { act, actName, type RoleName } from './helpers/shell-runner'
+import { verifyAllBrowsersPhase } from './helpers/assertions'
+import { attachCompositeOnFailure, captureSnapshot } from './helpers/composite-screenshot'
+import { grantCredits } from './helpers/test-support'
 import {
   fetchGameState,
   readAlivePlayerIds,
@@ -104,14 +104,19 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // e2e-ci-vs-local-env-differences item 1. We also bail entirely if the
     // gate returns false (backend already past WEREWOLF_PICK — e.g. all wolves
     // dead, coroutine skipped the sub-phase) so we don't spam rejected actions.
-    const reachedWolf = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'WEREWOLF_PICK', 15_000)
+    const reachedWolf = await waitForNightSubPhase(
+      ctx.hostPage,
+      ctx.gameId,
+      'WEREWOLF_PICK',
+      15_000,
+    )
     const wolfPage = ctx.pages.get('WEREWOLF')
     if (reachedWolf && wolfPage) {
       await wolfPage
-          .locator('.player-grid')
-          .first()
-          .waitFor({ state: 'visible', timeout: 10_000 })
-          .catch(() => {})
+        .locator('.player-grid')
+        .first()
+        .waitFor({ state: 'visible', timeout: 10_000 })
+        .catch(() => {})
     }
     let wolfDone = false
     if (reachedWolf) {
@@ -134,19 +139,19 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // Wait for seer sub-phase (or timeout if dead/skipped)
     if (seerPage) {
       await seerPage
-          .getByText(/選擇查驗目標|Select a player to check/i)
-          .first()
-          .waitFor({ state: 'visible', timeout: 8_000 })
-          .catch(() => {})
+        .getByText(/選擇查驗目標|Select a player to check/i)
+        .first()
+        .waitFor({ state: 'visible', timeout: 8_000 })
+        .catch(() => {})
     }
 
     // Wait for witch sub-phase (or timeout if dead/skipped)
     if (witchPage) {
       await witchPage
-          .locator('.w-section')
-          .first()
-          .waitFor({ state: 'visible', timeout: 8_000 })
-          .catch(() => {})
+        .locator('.w-section')
+        .first()
+        .waitFor({ state: 'visible', timeout: 8_000 })
+        .catch(() => {})
     }
 
     // ── Witch ── (may be dead in later rounds)
@@ -162,7 +167,13 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       }
     }
     if (!witchDone && witchPage) {
-      if (await witchPage.locator('.w-section').first().isVisible().catch(() => false)) {
+      if (
+        await witchPage
+          .locator('.w-section')
+          .first()
+          .isVisible()
+          .catch(() => false)
+      ) {
         const passBtn = witchPage.getByTestId('switch-pass-antidote')
         if (await passBtn.isVisible().catch(() => false)) await passBtn.click()
         const skipBtn = witchPage.getByTestId('witch-skip')
@@ -174,7 +185,12 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // Gate on SEER_PICK before CHECK, SEER_RESULT before CONFIRM. Short-circuit
     // via waitForNightSubPhase returning false if the seer is dead and the
     // coroutine skipped the sub-phase.
-    const reachedSeerPick = await waitForNightSubPhase(ctx.hostPage, ctx.gameId, 'SEER_PICK', 10_000)
+    const reachedSeerPick = await waitForNightSubPhase(
+      ctx.hostPage,
+      ctx.gameId,
+      'SEER_PICK',
+      10_000,
+    )
     let seerDone = false
     if (reachedSeerPick) {
       for (const sb of aliveSeerBots) {
@@ -186,10 +202,10 @@ test.describe('Werewolf win — result screen shows all roles', () => {
             // Wait for seer result before confirming
             if (seerPage) {
               await seerPage
-                  .locator('.sr-wrap')
-                  .first()
-                  .waitFor({ state: 'visible', timeout: 8_000 })
-                  .catch(() => {})
+                .locator('.sr-wrap')
+                .first()
+                .waitFor({ state: 'visible', timeout: 8_000 })
+                .catch(() => {})
             }
             tryAct('SEER_CONFIRM', actName(sb), { room: ctx.roomCode })
             break
@@ -200,11 +216,11 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
     if (!seerDone && seerPage) {
       if (
-          await seerPage
-              .getByText(/選擇查驗目標|Select a player to check/i)
-              .first()
-              .isVisible()
-              .catch(() => false)
+        await seerPage
+          .getByText(/選擇查驗目標|Select a player to check/i)
+          .first()
+          .isVisible()
+          .catch(() => false)
       ) {
         await seerPage.locator('.player-grid .slot-alive').first().click()
         await seerPage.getByTestId('seer-check').click()
@@ -216,10 +232,10 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // Wait for guard sub-phase (or timeout if dead/skipped)
     if (guardPage) {
       await guardPage
-          .getByText(/選擇守護目標|Protect a player/i)
-          .first()
-          .waitFor({ state: 'visible', timeout: 8_000 })
-          .catch(() => {})
+        .getByText(/選擇守護目標|Protect a player/i)
+        .first()
+        .waitFor({ state: 'visible', timeout: 8_000 })
+        .catch(() => {})
     }
 
     // ── Guard ── (may be dead in later rounds)
@@ -237,11 +253,11 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     }
     if (!guardDone && guardPage) {
       if (
-          await guardPage
-              .getByText(/選擇守護目標|Protect a player/i)
-              .first()
-              .isVisible()
-              .catch(() => false)
+        await guardPage
+          .getByText(/選擇守護目標|Protect a player/i)
+          .first()
+          .isVisible()
+          .catch(() => false)
       ) {
         // Pick LAST alive player to avoid protecting the wolf's target (which is first)
         await guardPage.locator('.player-grid .slot-alive').last().click()
@@ -358,8 +374,8 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     // Targets: kill non-wolf, non-host players each round (host must stay alive for game management).
     // 屠邊: wipe a whole side the bots cover; the hunter dies last, so the game ends at dawn (no shot).
     const side = ctx.isHostRole('VILLAGER')
-        ? [...seerBots, ...witchBots, ...hunterBots]
-        : villagerBots
+      ? [...seerBots, ...witchBots, ...hunterBots]
+      : villagerBots
     const targets = side.filter((b) => b.nick !== 'Host').map((b) => b.seat)
 
     const maxRounds = 6
@@ -370,11 +386,16 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       // Night
       const targetSeat = targets[round % targets.length]
       await completeNight(targetSeat)
-      if ((await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['DAY_DISCUSSION', 'GAME_OVER'])) === 'GAME_OVER') break
+      if (
+        (await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['DAY_DISCUSSION', 'GAME_OVER'])) ===
+        'GAME_OVER'
+      )
+        break
 
       // Day
       await completeDay()
-      if ((await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT', 'GAME_OVER'])) === 'GAME_OVER') break
+      if ((await waitForPhaseIn(ctx.hostPage, ctx.gameId, ['NIGHT', 'GAME_OVER'])) === 'GAME_OVER')
+        break
     }
 
     // Game should be over — verify result screen
@@ -388,7 +409,9 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     await expect(hostPage.locator('.outcome-title')).toBeVisible({ timeout: 5_000 })
 
     // "ROLES REVEALED" section
-    await expect(hostPage.getByText(/身份揭曉|身份揭露|ROLES REVEALED/i)).toBeVisible({ timeout: 5_000 })
+    await expect(hostPage.getByText(/身份揭曉|身份揭露|ROLES REVEALED/i)).toBeVisible({
+      timeout: 5_000,
+    })
 
     // All 9 players' roles shown
     const revealCards = hostPage.locator('.reveal-card')
@@ -400,7 +423,9 @@ test.describe('Werewolf win — result screen shows all roles', () => {
     expect(await wolfCards.count()).toBeGreaterThanOrEqual(1)
 
     // Village/god roles visible (everything not .reveal-wolf, filtered by Chinese role text)
-    const villageCards = hostPage.locator('.reveal-card').filter({ hasText: /村民|預言家|女巫|守衛/ })
+    const villageCards = hostPage
+      .locator('.reveal-card')
+      .filter({ hasText: /村民|預言家|女巫|守衛/ })
     expect(await villageCards.count()).toBeGreaterThanOrEqual(1)
 
     await captureSnapshot(ctx.pages, testInfo, '02-result-roles-revealed')
@@ -410,6 +435,23 @@ test.describe('Werewolf win — result screen shows all roles', () => {
       Number(((await hostPage.getByTestId(testId).textContent()) ?? '').replace(/\D/g, ''))
     const earned = await digits('my-earned')
     expect(earned, 'the host earned something this game').toBeGreaterThan(0)
+
+    // ── 单局任务: judged at settlement, paid in 戰績分 only ──
+    // 9 seats ≥ 6, so the host was dealt a task; after the game it is done or not, never pending.
+    const task = hostPage.getByTestId('settlement').getByTestId('task-line')
+    await expect(task).toHaveAttribute('data-done', /^(true|false)$/)
+    const taskDone = (await task.getAttribute('data-done')) === 'true'
+    const taskScore = Number(
+      ((await task.getByTestId('task-score').textContent()) ?? '').replace(/\D/g, ''),
+    )
+    const coinsThisGame = (await hostPage.getByTestId('my-coins').count())
+      ? await digits('my-coins')
+      : 0
+    console.log(
+      `[task] code=${await task.getAttribute('data-task')} done=${taskDone} score=${taskScore} ` +
+        `earned=${earned} coins=${coinsThisGame}`,
+    )
+    expect(earned, '戰績分 = coins + a done task').toBe(coinsThisGame + (taskDone ? taskScore : 0))
 
     await hostPage.goto('/account')
     await expect(hostPage.getByTestId('stats-score-value')).toBeVisible({ timeout: 15_000 })

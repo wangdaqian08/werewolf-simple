@@ -361,6 +361,7 @@
         :player="myPlayer"
         :teammates="teammatePlayers"
         :history="roleHistory ?? null"
+        :task="myTask ?? null"
         @close="showRoleCard = false"
       />
 
@@ -671,6 +672,7 @@ import type {
   VoteRoundHistory,
   VotingState,
   RoleHistory as RoleHistoryData,
+  MyTask,
 } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleCardSheet from '@/components/RoleCardSheet.vue'
@@ -688,6 +690,7 @@ const props = defineProps<{
   isHost: boolean
   myRole?: PlayerRole
   roleHistory?: RoleHistoryData | null
+  myTask?: MyTask | null
   wolfTeammates?: string[]
   isAlive?: boolean
   // userId of the game's current sheriff (null after BADGE_DESTROY).

@@ -55,6 +55,15 @@ class GamePlayer(
     @Column(name = "score_earned", nullable = false)
     var scoreEarned: Int = 0,
 
+    // 单局任务 dealt with the role (null: no task, e.g. under six players); private until the game ends
+    @Enumerated(EnumType.STRING)
+    @Column(name = "task_code", length = 30)
+    var taskCode: GameTask? = null,
+
+    // Judged at settlement; null until then and for cancelled games
+    @Column(name = "task_done")
+    var taskDone: Boolean? = null,
+
     // Mechanical wolf only: the role it learned from its target (fixed once set)
     @Enumerated(EnumType.STRING)
     @Column(name = "learned_role", length = 20)

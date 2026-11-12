@@ -16,6 +16,7 @@
             {{ $t('common.seatDot', { n: player.seatIndex, name: player.nickname }) }}
           </div>
           <p class="rc-desc" data-testid="role-card-desc">{{ roleDescription(role, true) }}</p>
+          <TaskLine v-if="task" class="rc-section" :task="task" />
           <div v-if="teammates?.length" class="rc-section" data-testid="rc-teammates">
             <div class="rc-section-title">{{ $t('roleCard.teammates') }}</div>
             <div
@@ -53,7 +54,7 @@
 import { computed } from 'vue'
 import { useScrollLock } from '@/composables/useScrollLock'
 import { t } from '@/i18n'
-import type { GamePlayer, RoleHistory as RoleHistoryData } from '@/types'
+import type { GamePlayer, RoleHistory as RoleHistoryData, MyTask } from '@/types'
 import {
   excludedRoles,
   isWolfRole,
@@ -63,6 +64,7 @@ import {
   roleTag,
 } from '@/utils/roleDefinitions'
 import RoleHistory from '@/components/RoleHistory.vue'
+import TaskLine from '@/components/TaskLine.vue'
 
 // Role info + rules. Own role (day / voting chip): identity, wolf teammates, history.
 // Any role (composition chips, room info): just the info and rules.
@@ -70,6 +72,8 @@ const props = defineProps<{
   role: string
   title?: string
   player?: GamePlayer
+  /** Own role card only: my 单局任务. */
+  task?: MyTask | null
   teammates?: GamePlayer[]
   history?: RoleHistoryData | null
 }>()

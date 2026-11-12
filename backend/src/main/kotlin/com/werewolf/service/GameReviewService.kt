@@ -3,6 +3,8 @@ package com.werewolf.service
 import com.werewolf.config.RewardProperties
 import com.werewolf.dto.GameReview
 import com.werewolf.dto.PlayerReview
+import com.werewolf.dto.ReviewPlayer
+import com.werewolf.dto.ReviewTask
 import com.werewolf.model.CreditTxType
 import com.werewolf.model.Game
 import com.werewolf.model.GameEvent
@@ -74,6 +76,11 @@ class GameReviewService(
     @Transactional(readOnly = true)
     fun getReview(gameId: Int, userId: String): GameReview = with(load(gameId, userId)) {
         GameReviewBuilder.build(game, players, nights, events, night1PerkSaved, rewards, rolePicks, displayNameFor)
+            .copy(tasks = players.sortedBy { it.seatIndex }.mapNotNull { reviewTask(it, displayNameFor) })
+    }
+
+    private fun reviewTask(p: GamePlayer, nameOf: (String) -> String): ReviewTask? = p.taskCode?.let {
+        ReviewTask(ReviewPlayer(p.userId, nameOf(p.userId), p.seatIndex, p.role), it, it.score, p.taskDone)
     }
 
     /** Only what [userId] themselves knew, and only up to the moment they left the game. */
@@ -91,7 +98,7 @@ class GameReviewService(
         }.orEmpty()
         PlayerReviewBuilder.build(
             game, players, nights, events, night1PerkSaved, userId, rewards, myItems, displayNameFor,
-        )
+        ).copy(task = reviewTask(players.first { it.userId == userId }, displayNameFor))
     }
 }
 

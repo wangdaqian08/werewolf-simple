@@ -47,7 +47,7 @@
         <section class="settlement" data-testid="settlement">
           <template v-if="settlement.myEarned != null">
             <div class="my-earned" data-testid="my-earned">
-              +{{ settlement.myEarned }}
+              +{{ settlement.myScore ?? settlement.myEarned }}
               <span class="earned-label">{{ $t('result.earned') }}</span>
             </div>
             <div v-if="settlement.myEarned > 0" class="my-balance my-coins" data-testid="my-coins">
@@ -57,6 +57,7 @@
           <div v-if="settlement.myBalance != null" class="my-balance">
             {{ $t('pay.balance', { n: settlement.myBalance }) }}
           </div>
+          <TaskLine v-if="gameStore.state?.myTask" class="my-task" :task="gameStore.state.myTask" />
           <div class="reward-list">
             <div v-for="r in sortedRewards" :key="r.userId" class="reward-row">
               <span class="reward-name">
@@ -83,6 +84,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useUserStore } from '@/stores/userStore'
 import { gameService } from '@/services/gameService'
 import type { GamePlayer } from '@/types'
+import TaskLine from '@/components/TaskLine.vue'
 import { isWolfRole, roleName } from '@/utils/roleDefinitions.ts'
 
 const route = useRoute()
@@ -334,6 +336,11 @@ function goLobby() {
   font-size: 0.8rem;
   color: var(--muted);
   margin: 0.25rem 0 0.75rem;
+}
+
+.my-task {
+  margin: 0 0 0.75rem;
+  justify-content: center;
 }
 
 .my-coins {
