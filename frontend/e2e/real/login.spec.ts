@@ -47,7 +47,10 @@ test('repeat login with same nickname returns the same userId (idempotent rejoin
 
 test('joining a non-existent room shows error and stays on lobby', async ({ page }) => {
   await page.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Alice')
-  await page.getByPlaceholder(/房間號|Room code/).fill('000')
+  // Letters: real codes are three digits (RoomService.generateCode), so no room can ever
+  // hold this one. '000' could — an earlier spec's game was live in room 000 on CI and the
+  // lobby rightly said "Room is not open" instead.
+  await page.getByPlaceholder(/房間號|Room code/).fill('ZZZ')
   await page.getByRole('button', { name: /加入|Join/i }).click()
 
   await expect(page.getByText('Room not found. Check the code.')).toBeVisible()
