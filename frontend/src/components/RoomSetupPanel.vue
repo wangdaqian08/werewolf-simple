@@ -245,10 +245,11 @@ const SPECIAL_WOLF_MIN_PLAYERS = 9
 const EXCLUSIVE_WITH: Record<string, string> = { SEER: 'MEDIUM', MEDIUM: 'SEER' }
 // Roles from different boards that never share a room: while one is on, the other is blocked.
 // The mechanical wolf's learn table covers only its own board (机械狼通灵师), so no rule says what it gains from 騎士 or 守墓人.
+// 騎士 (预女骑守) and 守墓人 (预女猎墓) each give the good camp confirmed information; no standard board has both.
 const BLOCKED_WITH: Record<string, string[]> = {
   MECHANICAL_WOLF: ['KNIGHT', 'GRAVEKEEPER'],
-  KNIGHT: ['MECHANICAL_WOLF'],
-  GRAVEKEEPER: ['MECHANICAL_WOLF'],
+  KNIGHT: ['MECHANICAL_WOLF', 'GRAVEKEEPER'],
+  GRAVEKEEPER: ['MECHANICAL_WOLF', 'KNIGHT'],
 }
 function blockedBy(roleId: string): boolean {
   return (BLOCKED_WITH[roleId] ?? []).some((id) => enabledOptional.value.has(id))

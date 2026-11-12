@@ -218,6 +218,17 @@ class GameServiceStartTest {
     }
 
     @Test
+    fun `startGame rejects a room stored with both KNIGHT and GRAVEKEEPER`() {
+        val room = waitingRoom().also { it.hasKnight = true; it.hasGravekeeper = true }
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
+
+        val result = gameService.startGame(hostId, roomId)
+
+        assertThat((result as GameActionResult.Rejected).reason).isEqualTo("Knight and Gravekeeper cannot be on the same board")
+        verifyNoInteractions(gameRepository)
+    }
+
+    @Test
     fun `startGame rejects when perks allowed and any player (host included) has rolePick null`() {
         whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(waitingRoom()))
         val players = fourReadyGuests().also { it[0].rolePick = null } // the host

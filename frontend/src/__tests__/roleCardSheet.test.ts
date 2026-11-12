@@ -31,7 +31,7 @@ describe('RoleCardSheet', () => {
     expect(rules).toHaveLength(7)
     expect(rules[0]?.textContent).toBe('陣營：好人陣營（神職）。')
     expect(rules[5]?.textContent).toBe('死者是警長時照常移交警徽。')
-    expect(rules[6]?.textContent).toBe('機械狼和騎士不能同時出現在同一個房間。')
+    expect(rules[6]?.textContent).toBe('騎士不能和機械狼、守墓人同時出現在同一個房間。')
   })
 
   it('gravekeeper role card shows the rules text', () => {
@@ -42,7 +42,7 @@ describe('RoleCardSheet', () => {
     expect(rules[0]?.textContent).toBe('陣營：好人陣營（神職）。')
     expect(rules[1]?.textContent).toContain('第一晚沒有信息')
     expect(rules[2]?.textContent).toContain('昨日無人被放逐')
-    expect(rules[3]?.textContent).toBe('機械狼和守墓人不能同時出現在同一個房間。')
+    expect(rules[3]?.textContent).toBe('守墓人不能和機械狼、騎士同時出現在同一個房間。')
   })
 
   it('mechanical wolf rules say it never shares a room with the knight or the gravekeeper', () => {

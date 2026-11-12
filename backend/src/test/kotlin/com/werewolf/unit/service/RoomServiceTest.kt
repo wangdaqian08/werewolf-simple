@@ -543,6 +543,17 @@ class RoomServiceTest {
         verify(roomRepository, never()).save(any<Room>())
     }
 
+    @Test
+    fun `updateBoard - rejects knight and gravekeeper together without saving`() {
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(room()))
+
+        assertThatThrownBy {
+            roomService.updateBoard(hostId, 1, 9, 3, listOf(PlayerRole.KNIGHT, PlayerRole.GRAVEKEEPER, PlayerRole.SEER))
+        }.isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessage("Knight and Gravekeeper cannot be on the same board")
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
     // ── getRoom ──────────────────────────────────────────────────────────────
 
     @Test
@@ -867,6 +878,18 @@ class RoomServiceTest {
         assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
             .isInstanceOf(InvalidRoleCompositionException::class.java)
             .hasMessage("Mechanical Wolf and Gravekeeper cannot be on the same board")
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
+    @Test
+    fun `knight and gravekeeper together is rejected`() {
+        val cfg = RoomConfigRequest(
+            totalPlayers = 9, wolfCount = 3,
+            roles = listOf(PlayerRole.KNIGHT, PlayerRole.GRAVEKEEPER, PlayerRole.SEER),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessage("Knight and Gravekeeper cannot be on the same board")
         verify(roomRepository, never()).save(any<Room>())
     }
 

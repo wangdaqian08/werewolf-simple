@@ -454,6 +454,8 @@ class RoomService(
      *   4. SEER and MEDIUM are mutually exclusive
      *   5. MECHANICAL_WOLF is mutually exclusive with KNIGHT and with GRAVEKEEPER: they come from different
      *      boards, and no rule says what a mechanical wolf gains by learning the knight or the gravekeeper
+     *   6. KNIGHT and GRAVEKEEPER are mutually exclusive: each gives the good camp confirmed information,
+     *      and no standard board has both
      *
      * The canonical ±1 bounds (`WolfCountBounds`) are a *frontend UX policy*
      * for the host-facing stepper — they intentionally do NOT gate the API,
@@ -487,6 +489,9 @@ class RoomService(
         }
         if (PlayerRole.MECHANICAL_WOLF in roles && PlayerRole.GRAVEKEEPER in roles) {
             throw InvalidRoleCompositionException("Mechanical Wolf and Gravekeeper cannot be on the same board")
+        }
+        if (PlayerRole.KNIGHT in roles && PlayerRole.GRAVEKEEPER in roles) {
+            throw InvalidRoleCompositionException("Knight and Gravekeeper cannot be on the same board")
         }
         val specials = roles.filter {
             it == PlayerRole.WHITE_WOLF_KING || it == PlayerRole.BLACK_WOLF_KING || it == PlayerRole.MECHANICAL_WOLF

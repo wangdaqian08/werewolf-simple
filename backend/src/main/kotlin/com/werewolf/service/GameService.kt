@@ -49,6 +49,8 @@ class GameService(
             return GameActionResult.Rejected("Mechanical Wolf and Knight cannot be on the same board")
         if (room.hasMechanicalWolf && room.hasGravekeeper)
             return GameActionResult.Rejected("Mechanical Wolf and Gravekeeper cannot be on the same board")
+        if (room.hasKnight && room.hasGravekeeper)
+            return GameActionResult.Rejected("Knight and Gravekeeper cannot be on the same board")
 
         val roomPlayers = roomPlayerRepository.findByRoomId(roomId)
         if (roomPlayers.size < 4)
