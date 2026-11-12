@@ -545,4 +545,21 @@ describe('GameReview', () => {
   it('no task section when no seat had a task', () => {
     expect(render([]).find('[data-testid="review-tasks"]').exists()).toBe(false)
   })
+
+  it('a done per-night task shows what it paid', () => {
+    const tasks: ReviewTask[] = [
+      {
+        player: players[1]!,
+        task: 'SEER_WOLF_EVERY_NIGHT',
+        score: 10,
+        done: true,
+        perNight: true,
+        earned: 30,
+      },
+    ]
+    const w = render([], 'VILLAGER', players, [], [], tasks)
+    expect(w.get('[data-testid="review-task"] [data-testid="task-score"]').text()).toBe(
+      '+30 戰績分',
+    )
+  })
 })

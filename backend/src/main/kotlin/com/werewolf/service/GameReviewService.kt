@@ -80,7 +80,7 @@ class GameReviewService(
     }
 
     private fun reviewTask(p: GamePlayer, nameOf: (String) -> String): ReviewTask? = p.taskCode?.let {
-        ReviewTask(ReviewPlayer(p.userId, nameOf(p.userId), p.seatIndex, p.role), it, it.score, p.taskDone)
+        ReviewTask(ReviewPlayer(p.userId, nameOf(p.userId), p.seatIndex, p.role), it, it.score, p.taskDone, it.perNight, p.taskScore)
     }
 
     /** Only what [userId] themselves knew, and only up to the moment they left the game. */

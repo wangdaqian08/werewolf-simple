@@ -21,8 +21,14 @@ data class GameReview(
     val tasks: List<ReviewTask> = emptyList(),
 )
 
-/** One seat's task; [done] is null when the game was never settled (cancelled). */
-data class ReviewTask(val player: ReviewPlayer, val task: GameTask, val score: Int, val done: Boolean?)
+/**
+ * One seat's task; [done] and [earned] are null when the game was never settled (cancelled).
+ * [score] is per night when [perNight]; [earned] is what it actually paid.
+ */
+data class ReviewTask(
+    val player: ReviewPlayer, val task: GameTask, val score: Int, val done: Boolean?,
+    val perNight: Boolean = false, val earned: Int? = null,
+)
 
 /** Credits a player earned from this game, read back from the ledger. Empty when the game was never settled. */
 data class ReviewReward(val player: ReviewPlayer, val amount: Int)

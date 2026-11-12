@@ -7,9 +7,7 @@
   >
     <span class="task-label">{{ $t('task.title') }}</span>
     <span class="task-name" data-testid="task-name">{{ $t(`task.name.${task.code}`) }}</span>
-    <span class="task-score" data-testid="task-score">{{
-      $t('task.score', { n: task.score })
-    }}</span>
+    <span class="task-score" data-testid="task-score">{{ scoreText }}</span>
     <span
       v-if="task.done !== null"
       class="task-status"
@@ -21,9 +19,18 @@
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue'
+import { t } from '@/i18n'
 import type { MyTask } from '@/types'
 
-defineProps<{ task: MyTask }>()
+const props = defineProps<{ task: MyTask }>()
+
+// Done: what it paid. Otherwise the rate — per night for a per-night task.
+const scoreText = computed(() => {
+  const { done, earned, perNight, score } = props.task
+  if (done && earned != null) return t('task.score', { n: earned })
+  return t(perNight ? 'task.scorePerNight' : 'task.score', { n: score })
+})
 </script>
 
 <style scoped>

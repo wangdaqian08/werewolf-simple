@@ -108,12 +108,19 @@ export type TaskCode =
   | 'WOLF_NEVER_EXILED'
   | 'WOLF_WIN_ALIVE'
   | 'WOLF_FIRST_NIGHT_GOD'
+  | 'SEER_WOLF_EVERY_NIGHT'
+  | 'NEVER_VOTE_GOOD'
 
-/** The viewer's own task: [done] is null until the game is settled. */
+/**
+ * The viewer's own task: [done] and [earned] are null until the game is settled.
+ * [score] is per night when [perNight]; [earned] is what the task actually paid.
+ */
 export interface MyTask {
   code: TaskCode
   score: number
+  perNight?: boolean
   done: boolean | null
+  earned?: number | null
 }
 
 export interface GameSettlement {
@@ -419,6 +426,8 @@ export interface ReviewTask {
   task: TaskCode
   score: number
   done: boolean | null
+  perNight?: boolean
+  earned?: number | null
 }
 
 // ── Player review (玩家视角复盘) ───────────────────────────────────────────────

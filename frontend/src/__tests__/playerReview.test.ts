@@ -310,4 +310,22 @@ describe('PlayerReview', () => {
         .exists(),
     ).toBe(false)
   })
+
+  it('my done per-night task shows what it paid', () => {
+    const w = mount(PlayerReview, {
+      props: {
+        review: review({
+          task: {
+            player: { userId: 'me', nickname: 'Me', seatIndex: 3, role: 'SEER' },
+            task: 'SEER_WOLF_EVERY_NIGHT',
+            score: 10,
+            done: true,
+            perNight: true,
+            earned: 20,
+          },
+        }),
+      },
+    })
+    expect(w.get('[data-testid="my-task"] [data-testid="task-score"]').text()).toBe('+20 戰績分')
+  })
 })

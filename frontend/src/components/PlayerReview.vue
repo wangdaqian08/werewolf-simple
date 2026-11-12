@@ -56,9 +56,7 @@
       </div>
     </template>
     <div v-if="review.task" class="rv-rewards" data-testid="my-task">
-      <TaskLine
-        :task="{ code: review.task.task, score: review.task.score, done: review.task.done }"
-      />
+      <TaskLine :task="{ ...review.task, code: review.task.task }" />
     </div>
   </div>
 </template>

@@ -72,7 +72,8 @@ class RewardSettlementService(
         val tasks = taskFacts(gameId, game.dayNumber, winner, players, facts)
         players.forEach { p ->
             p.taskDone = p.taskCode?.let { GameTasks.isDone(it, p, tasks) }
-            p.scoreEarned = (perUser[p.userId] ?: 0) + (p.taskCode?.score?.takeIf { p.taskDone == true } ?: 0)
+            p.taskScore = p.taskCode?.let { GameTasks.scoreFor(it, p, tasks) }
+            p.scoreEarned = (perUser[p.userId] ?: 0) + (p.taskScore ?: 0)
         }
         gamePlayerRepository.saveAll(players)
 
@@ -89,13 +90,16 @@ class RewardSettlementService(
         gameId: Int, finalDay: Int, winner: WinnerSide,
         players: List<com.werewolf.model.GamePlayer>, reward: RewardBreakdown.Facts,
     ): GameTasks.Facts {
-        val nightDeathDay = gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId)
-            .filter { it.eventType == "NIGHT_DEATH" && it.targetUserId != null }
+        val events = gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId)
+        /** userId → the day of its first [type] event (NIGHT_DEATH, IDIOT_REVEAL). */
+        fun dayOf(type: String): Map<String, Int> = events
+            .filter { it.eventType == type && it.targetUserId != null }
             .associate { e ->
                 @Suppress("UNCHECKED_CAST")
                 val payload = mapper.readValue(e.message, Map::class.java) as Map<String, Any?>
                 (e.targetUserId ?: "") to ((payload["dayNumber"] as? Number)?.toInt() ?: 0)
             }
+        val votes = RewardBreakdown.finalVotes(voteRepository.findByGameIdAndVoteContext(gameId, VoteContext.ELIMINATION), events)
         return GameTasks.Facts(
             winner = winner,
             finalDay = finalDay,
@@ -103,8 +107,11 @@ class RewardSettlementService(
             badgeHolders = reward.badgeHolders,
             wolfVoteDays = reward.wolfVoteDays,
             nights = nightPhaseRepository.findByGameId(gameId),
-            nightDeathDay = nightDeathDay,
+            nightDeathDay = dayOf("NIGHT_DEATH"),
             exiled = eliminationHistoryRepository.findByGameId(gameId).mapNotNull { it.eliminatedUserId }.toSet(),
+            finalVotes = votes.votes,
+            talliedDays = votes.talliedDays,
+            idiotRevealDay = dayOf("IDIOT_REVEAL"),
         )
     }
 

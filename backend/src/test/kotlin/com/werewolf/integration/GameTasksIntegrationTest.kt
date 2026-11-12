@@ -181,4 +181,61 @@ class GameTasksIntegrationTest {
         assertThat(mine?.done).isFalse()
         assertThat(gameReviewService.getPlayerReview(gameId, r[2].first).task).isNull() // no task dealt
     }
+
+    @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
+    @Autowired lateinit var actionLogService: ActionLogService
+
+    @Test
+    fun `the seer found a wolf on both nights alive - paid twice the per-night score, never in coins`() {
+        val r = roster.map { (id, role) -> "$id-${System.nanoTime()}" to role }
+        val (wolf, seer) = r[0].first to r[2].first
+        val gameId = finishedGame(r, mapOf(seer to GameTask.SEER_WOLF_EVERY_NIGHT))
+        // game ended on day 3; the seer died on night 2 after checking the wolf on nights 1 and 2
+        listOf(1, 2).forEach { d ->
+            nightPhaseRepository.save(NightPhase(gameId = gameId, dayNumber = d).also {
+                it.seerCheckedUserId = wolf; it.seerResultIsWerewolf = true
+            })
+        }
+        gamePlayerRepository.findByGameId(gameId).single { it.userId == seer }.let { it.diedDay = 2; gamePlayerRepository.save(it) }
+        actionLogService.recordNightDeaths(gameId, 2, listOf(seer))
+
+        rewardSettlementService.settle(gameId, WinnerSide.VILLAGER)
+
+        val seat = gamePlayerRepository.findByGameId(gameId).single { it.userId == seer }
+        val coins = creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD).single { it.userId == seer }.amount
+        assertThat(seat.taskDone).isTrue()
+        assertThat(seat.taskScore).isEqualTo(2 * GameTask.SEER_WOLF_EVERY_NIGHT.score)
+        assertThat(seat.scoreEarned).isEqualTo(coins + 20)
+
+        @Suppress("UNCHECKED_CAST")
+        val myTask = gameService.getGameState(gameId, seer)["myTask"] as Map<String, Any?>
+        assertThat(myTask["perNight"]).isEqualTo(true)
+        assertThat(myTask["earned"]).isEqualTo(20)
+        val reviewed = gameReviewService.getReview(gameId, seer).tasks.single { it.player.userId == seer }
+        assertThat(reviewed.earned).isEqualTo(20)
+        assertThat(reviewed.perNight).isTrue()
+    }
+
+    @Test
+    fun `never voted good - an abstain fails it, a PK re-vote onto the wolf passes it`() {
+        val r = roster.map { (id, role) -> "$id-${System.nanoTime()}" to role }
+        val (wolf, villager, villager2) = Triple(r[0].first, r[1].first, r[5].first)
+        val gameId = finishedGame(r, mapOf(villager to GameTask.NEVER_VOTE_GOOD, villager2 to GameTask.NEVER_VOTE_GOOD))
+        // Not saved: a real re-vote deletes round 1 first; the judge reads the tallies the log recorded.
+        fun vote(day: Int, voter: String, target: String?) =
+            Vote(gameId = gameId, voteContext = VoteContext.ELIMINATION, dayNumber = day, voterUserId = voter, targetUserId = target)
+        // Day 1: round 1 tie; villager votes the seer, then moves onto the wolf in the PK re-vote.
+        actionLogService.recordVoteResult(gameId, 1, listOf(vote(1, villager, r[2].first), vote(1, villager2, wolf)), mapOf(r[2].first to 1.0, wolf to 1.0), null, null)
+        actionLogService.recordVoteResult(gameId, 1, listOf(vote(1, villager, wolf), vote(1, villager2, wolf)), mapOf(wolf to 2.0), null, wolf)
+        // Day 2: villager votes the wolf again; villager2 abstains.
+        actionLogService.recordVoteResult(gameId, 2, listOf(vote(2, villager, wolf), vote(2, villager2, null)), mapOf(wolf to 1.0), null, null)
+
+        rewardSettlementService.settle(gameId, WinnerSide.VILLAGER)
+
+        val seats = gamePlayerRepository.findByGameId(gameId).associateBy { it.userId }
+        assertThat(seats.getValue(villager).taskDone).isTrue()
+        assertThat(seats.getValue(villager).taskScore).isEqualTo(GameTask.NEVER_VOTE_GOOD.score)
+        assertThat(seats.getValue(villager2).taskDone).isFalse()
+        assertThat(seats.getValue(villager2).taskScore).isEqualTo(0)
+    }
 }
