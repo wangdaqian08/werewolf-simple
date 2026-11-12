@@ -149,6 +149,8 @@ class GameService(
             } else emptyList()
             mapOf(
                 "confirmedCount" to confirmedCount,
+                // Who has confirmed (not their role) — the host's waiting screen names the stragglers.
+                "confirmedUserIds" to players.filter { it.confirmedRole }.map { it.userId },
                 "totalCount" to players.size,
                 "teammates" to teammates,
             )

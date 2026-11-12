@@ -302,6 +302,7 @@ export function setupMocks() {
       roleReveal: {
         ...mockGameState.roleReveal,
         confirmedCount: mockGameState.roleReveal.totalCount,
+        confirmedUserIds: mockGameState.players.map((p) => p.userId),
       },
     }
     pushGameStateUpdate()
@@ -604,7 +605,11 @@ export function setupMocks() {
           const confirmed = confirmedUserIds.size
           mockGameState = {
             ...mockGameState,
-            roleReveal: { ...mockGameState.roleReveal!, confirmedCount: confirmed },
+            roleReveal: {
+              ...mockGameState.roleReveal!,
+              confirmedCount: confirmed,
+              confirmedUserIds: [...confirmedUserIds],
+            },
           }
           if (confirmed >= total && mockGameState.hasSheriff !== false) {
             // All confirmed and sheriff enabled → advance to Sheriff Election

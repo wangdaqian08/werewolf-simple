@@ -34,9 +34,16 @@ async function createWaitingRoom(browser: Browser): Promise<{
   // The real-backend lobby may show OAuth with a collapsed guest section —
   // reveal it before filling the nickname.
   const contAsGuest = host.getByRole('button', { name: /Continue as guest|繼續以訪客/i })
-  if (await contAsGuest.count()) await contAsGuest.first().click().catch(() => {})
+  if (await contAsGuest.count())
+    await contAsGuest
+      .first()
+      .click()
+      .catch(() => {})
   await host.getByPlaceholder(/輸入暱稱|Enter your nickname/).fill('Host')
-  await host.getByRole('button', { name: /創建房間|Create Room/i }).first().click()
+  await host
+    .getByRole('button', { name: /創建房間|Create Room/i })
+    .first()
+    .click()
   await host.waitForURL(/\/create-room/, { timeout: ci ? 60_000 : 30_000 })
 
   // Turn sheriff off to keep setup minimal.
@@ -111,8 +118,9 @@ test.describe('Room ready-sync across a STOMP disconnect — real-backend flow',
     const snapshot = await fetch(`${API}/room/${roomId}`, {
       headers: { Authorization: `Bearer ${bot.token}` },
     }).then((r) => r.json())
-    const botStatus = snapshot.players.find((p: { userId: string }) => p.userId === bot.userId)
-      ?.status
+    const botStatus = snapshot.players.find(
+      (p: { userId: string }) => p.userId === bot.userId,
+    )?.status
     expect(botStatus, 'backend recorded the bot NOT_READY during the offline window').toBe(
       'NOT_READY',
     )
@@ -125,6 +133,103 @@ test.describe('Room ready-sync across a STOMP disconnect — real-backend flow',
       startBtn,
       'after reconnect the host reflects the missed undo-ready (Start disabled)',
     ).toBeDisabled({ timeout: ci ? 30_000 : 15_000 })
+
+    await hctx.close()
+  })
+})
+
+/**
+ * The host must be able to see who is and isn't ready, at both ready points:
+ * the waiting room (each not-ready seat is tagged 「未準備」) and role reveal
+ * (a seat-by-seat 已確認／未確認 list). Asserts test ids and the
+ * data-confirmed attribute only — never seat colours.
+ */
+test.describe('Host sees who is (not) ready — real-backend flow', () => {
+  test.setTimeout(ci ? 240_000 : 120_000)
+
+  async function confirmRole(token: string, gameId: string) {
+    const res = await fetch(`${API}/game/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ gameId: Number(gameId), actionType: 'CONFIRM_ROLE' }),
+    })
+    expect(res.ok, `CONFIRM_ROLE accepted (HTTP ${res.status})`).toBe(true)
+  }
+
+  test('waiting room and role reveal both show each player as ready / not ready', async ({
+    browser,
+  }) => {
+    const { hctx, host, roomId, roomCode } = await createWaitingRoom(browser)
+    const t = ci ? 30_000 : 15_000
+
+    // 5 bots join WITHOUT readying.
+    joinBots(roomCode, 5, false)
+    const bots = readStateFile(roomCode).bots
+    const room = await fetch(`${API}/room/${roomId}`, {
+      headers: { Authorization: `Bearer ${bots[0]!.token}` },
+    }).then((r) => r.json())
+    const seatOf = (userId: string): number =>
+      room.players.find((p: { userId: string }) => p.userId === userId).seatIndex
+    const hostSeat: number = room.players.find((p: { isHost: boolean }) => p.isHost).seatIndex
+    const botSeats = bots.map((b) => seatOf(b.userId))
+    console.log(`[ready-visibility] host seat=${hostSeat} bot seats=${botSeats.join(',')}`)
+
+    // ── Waiting room: every not-ready seat says so in words ──
+    const tags = host.locator('[data-testid^="not-ready-tag-"]')
+    for (const seat of botSeats) {
+      await expect(host.getByTestId(`not-ready-tag-${seat}`), `seat ${seat} tagged`).toBeVisible({
+        timeout: t,
+      })
+    }
+    // The host never readies, so their seat is never tagged.
+    await expect(host.getByTestId(`not-ready-tag-${hostSeat}`)).toHaveCount(0)
+
+    // One bot readies → its tag disappears live; the others keep theirs.
+    await setReady(bots[0]!.token, roomId, true)
+    await expect(host.getByTestId(`not-ready-tag-${botSeats[0]}`)).toHaveCount(0, { timeout: t })
+    await expect(tags).toHaveCount(botSeats.length - 1)
+
+    // Everyone else readies → no tags left and Start enables.
+    for (const b of bots.slice(1)) await setReady(b.token, roomId, true)
+    await expect(tags).toHaveCount(0, { timeout: t })
+    const startBtn = host.getByRole('button', { name: /Start Game|開始遊戲/i })
+    await expect(startBtn).toBeEnabled({ timeout: t })
+
+    // ── Role reveal: host confirms in the UI, then sees who has confirmed ──
+    await startBtn.click()
+    await host.waitForURL(/\/game\/\d+/, { timeout: t })
+    const gameId = host.url().match(/\/game\/(\d+)/)![1]!
+    await host.getByTestId('reveal-role-btn').click({ timeout: t })
+    await host.getByTestId('confirm-role-btn').click()
+    // A bot confirms right behind the host: its RoleConfirmed can land while the host's
+    // post-confirm state fetch is in flight — that fetch must not wipe it out.
+    await confirmRole(bots[0]!.token, gameId)
+
+    await expect(host.getByTestId('role-confirm-list')).toBeVisible({ timeout: t })
+    for (const seat of [hostSeat, botSeats[0]!]) {
+      await expect(host.getByTestId(`role-confirm-row-${seat}`)).toHaveAttribute(
+        'data-confirmed',
+        'true',
+        { timeout: t },
+      )
+    }
+    for (const seat of botSeats.slice(1)) {
+      await expect(host.getByTestId(`role-confirm-row-${seat}`)).toHaveAttribute(
+        'data-confirmed',
+        'false',
+      )
+    }
+
+    // The rest confirm → every row confirmed and Start Night appears.
+    for (const b of bots.slice(1)) await confirmRole(b.token, gameId)
+    for (const seat of botSeats) {
+      await expect(host.getByTestId(`role-confirm-row-${seat}`)).toHaveAttribute(
+        'data-confirmed',
+        'true',
+        { timeout: t },
+      )
+    }
+    await expect(host.getByTestId('start-night')).toBeVisible({ timeout: t })
 
     await hctx.close()
   })

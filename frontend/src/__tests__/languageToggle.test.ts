@@ -72,6 +72,16 @@ describe('LanguageToggle', () => {
     expect(i18n.global.locale.value).toBe('en')
   })
 
+  it.each(['create-room', 'room'])(
+    'the %s page uses its back-row toggle, not the floating one',
+    (name) => {
+      routeName.value = name
+      expect(mount(LanguageToggle).find('[data-testid="lang-toggle"]').exists()).toBe(false)
+      const inline = mount(LanguageToggle, { props: { inline: true } })
+      expect(inline.find('[data-testid="lang-toggle"]').exists()).toBe(true)
+    },
+  )
+
   it('in-game day and sheriff screens use the header toggle, not the floating one', async () => {
     routeName.value = 'game'
     const game = useGameStore()

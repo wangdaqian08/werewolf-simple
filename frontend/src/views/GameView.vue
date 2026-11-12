@@ -59,11 +59,20 @@
       <div v-else class="waiting-screen">
         <div class="waiting-icon">⏳</div>
         <div class="waiting-title">{{ $t('game.waitingOthers') }}</div>
-        <div class="waiting-count">
-          {{ gameStore.state.roleReveal?.confirmedCount ?? 1 }} /
-          {{ gameStore.state.roleReveal?.totalCount ?? '?' }}
-          confirmed
+        <div class="waiting-count" data-testid="role-confirm-count">
+          {{
+            $t('game.roleConfirmCount', {
+              n: gameStore.state.roleReveal?.confirmedCount ?? 1,
+              total: gameStore.state.roleReveal?.totalCount ?? '?',
+            })
+          }}
         </div>
+        <!-- Host: who has / hasn't confirmed, so the host knows whom to wait for -->
+        <RoleConfirmList
+          v-if="isHost"
+          :players="gameStore.state.players"
+          :confirmed-user-ids="gameStore.state.roleReveal?.confirmedUserIds ?? []"
+        />
         <button
           v-if="
             isHost &&
@@ -566,6 +575,7 @@ import http from '@/services/http'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import VolumeControl from '@/components/VolumeControl.vue'
 import RoleRevealCard from '@/components/RoleRevealCard.vue'
+import RoleConfirmList from '@/components/RoleConfirmList.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
 import SheriffElection from '@/components/SheriffElection.vue'
 import DayPhase from '@/components/DayPhase.vue'
@@ -1137,9 +1147,9 @@ onMounted(async () => {
             duration: 4000,
           })
         }
-        // Real backend: a player confirmed their role → increment counter
+        // Real backend: a player confirmed their role → count them and mark them confirmed
         if (data.type === 'RoleConfirmed') {
-          gameStore.incrementConfirmedCount()
+          gameStore.markRoleConfirmed(data.userId)
         }
         // Real backend: phase transition → re-fetch full state (covers ROLE_REVEAL→NIGHT, etc.)
         if (data.type === 'PhaseChanged') {

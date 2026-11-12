@@ -2,7 +2,10 @@
   <div class="create-wrap" data-testid="room-setup-panel">
     <!-- Both pages stay mounted (v-show): one draft board, kept while the host switches pages. -->
     <div v-show="view === 'main'" class="create-card">
-      <button class="back-btn" @click="emit('done')">{{ $t('setup.backRoom') }}</button>
+      <div class="top-row">
+        <button class="back-btn" @click="emit('done')">{{ $t('setup.backRoom') }}</button>
+        <LanguageToggle inline />
+      </div>
       <div class="create-header">
         <div class="section-lbl">{{ $t('common.host') }}</div>
         <h2 class="create-title">{{ $t('setup.title') }}</h2>
@@ -105,7 +108,10 @@
 
     <!-- Page 2: choose roles. Grey = off, colour = on; a role that cannot turn on says why when tapped. -->
     <div v-show="view === 'roles'" class="create-card" data-testid="role-select-page">
-      <button class="back-btn" @click="view = 'main'">{{ $t('setup.back') }}</button>
+      <div class="top-row">
+        <button class="back-btn" @click="view = 'main'">{{ $t('setup.back') }}</button>
+        <LanguageToggle inline />
+      </div>
       <div class="create-header">
         <div class="section-lbl">{{ $t('setup.title') }}</div>
         <h2 class="create-title">{{ $t('setup.rolesTitle') }}</h2>
@@ -173,6 +179,7 @@
 
 <script lang="ts" setup>
 import { t } from '@/i18n'
+import LanguageToggle from '@/components/LanguageToggle.vue'
 import { computed, ref, watch } from 'vue'
 import axios from 'axios'
 import { useRoomStore } from '@/stores/roomStore'

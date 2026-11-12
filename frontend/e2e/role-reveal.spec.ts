@@ -41,7 +41,7 @@ test('confirming role shows waiting screen', async ({ page }) => {
 
   // Should switch to waiting screen
   await expect(page.getByText('等待其他玩家確認')).toBeVisible()
-  await expect(page.getByText(/confirmed/)).toBeVisible()
+  await expect(page.getByTestId('role-confirm-count')).toBeVisible()
 })
 
 test('skip button advances to Sheriff Election', async ({ page }) => {

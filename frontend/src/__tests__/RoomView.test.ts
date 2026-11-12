@@ -398,3 +398,62 @@ describe('RoomView — changing players & roles', () => {
     expect(wrapper.find('[data-testid="room-seat-5"]').exists()).toBe(true)
   })
 })
+
+describe('RoomView — who is not ready', () => {
+  // Bob (3) and Carol (4) not ready; the host never readies and must not be tagged.
+  function roomWithStragglers(): Room {
+    const room = allReadyRoom()
+    return {
+      ...room,
+      players: room.players.map((p) =>
+        p.userId === 'u3' || p.userId === 'u4' ? { ...p, status: 'NOT_READY' } : p,
+      ),
+    }
+  }
+  const tagged = (wrapper: ReturnType<typeof mount>) =>
+    [1, 2, 3, 4].filter((s) => wrapper.find(`[data-testid="not-ready-tag-${s}"]`).exists())
+
+  beforeEach(() => {
+    localStorage.clear()
+    h.fakeClient.onConnect = null
+    h.subscribeToTopicMock.mockReset()
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it.each(['u-host', 'u2'])(
+    'tags only the not-ready seats — never the host or a ready guest (%s)',
+    async (me) => {
+      const { wrapper } = await mountRoom(me, roomWithStragglers())
+      expect(tagged(wrapper)).toEqual([3, 4])
+    },
+  )
+
+  it('tags my own seat while I am not ready', async () => {
+    const { wrapper } = await mountRoom('u3', roomWithStragglers())
+    expect(wrapper.find('[data-testid="not-ready-tag-3"]').exists()).toBe(true)
+  })
+
+  it('drops the tag as soon as that player’s ready ROOM_UPDATE lands', async () => {
+    const { wrapper } = await mountRoom('u-host', roomWithStragglers())
+
+    await fireConnect()
+    const onRoomMsg = h.subscribeToTopicMock.mock.calls[0]![1] as (m: { body: string }) => void
+    const players = roomWithStragglers().players.map((p) =>
+      p.userId === 'u3' ? { ...p, status: 'READY' as const } : p,
+    )
+    onRoomMsg({ body: JSON.stringify({ type: 'ROOM_UPDATE', payload: { players } }) })
+    await flushPromises()
+
+    expect(tagged(wrapper)).toEqual([4])
+  })
+
+  it('shows no tags when everyone is ready', async () => {
+    const { wrapper } = await mountRoom('u-host')
+    expect(tagged(wrapper)).toEqual([])
+  })
+
+  it('puts the language toggle in the back row, not floating over the page', async () => {
+    const { wrapper } = await mountRoom('u2')
+    expect(wrapper.find('.top-row [data-testid="lang-toggle"]').exists()).toBe(true)
+  })
+})

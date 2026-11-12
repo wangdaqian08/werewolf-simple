@@ -536,6 +536,7 @@ export interface GamePlayer {
 
 export interface RoleRevealState {
   confirmedCount: number
+  confirmedUserIds?: string[] // who has confirmed (never their role)
   totalCount: number
   teammates?: string[] // werewolf only: teammate nicknames
 }

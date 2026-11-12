@@ -1,7 +1,10 @@
 <template>
   <div class="room-wrap">
-    <!-- Back -->
-    <button v-if="!showSetup" class="back-btn" @click="handleLeave">{{ $t('room.leave') }}</button>
+    <!-- Back + language, one row inside the page column -->
+    <div v-if="!showSetup" class="top-row">
+      <button class="back-btn" @click="handleLeave">{{ $t('room.leave') }}</button>
+      <LanguageToggle inline />
+    </div>
 
     <!-- Loading -->
     <div v-if="loading" class="loading">{{ $t('room.loading') }}</div>
@@ -66,6 +69,12 @@
           mode="room"
           @click="handleSeatClick(seat)"
         >
+          <!-- Text, not just the seat tint, so a not-ready seat reads without colour -->
+          <template v-if="isNotReadyAt(seat)" #badge>
+            <span class="not-ready-tag" :data-testid="`not-ready-tag-${seat}`">{{
+              $t('room.notReadyTag')
+            }}</span>
+          </template>
           <!--
             Host-only: × button on every occupied non-host seat.
             Stops click propagation so the surrounding seat-click (seat
@@ -296,6 +305,7 @@ import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleComposition from '@/components/RoleComposition.vue'
 import RoomSetupPanel from '@/components/RoomSetupPanel.vue'
 import ShareButton from '@/components/ShareButton.vue'
+import LanguageToggle from '@/components/LanguageToggle.vue'
 import { wolfBounds } from '@/utils/wolfBounds'
 import { useNavigationGuard } from '@/composables/useNavigationGuard'
 import { useRoomStatus } from '@/composables/useRoomStatus'
@@ -344,6 +354,7 @@ const {
   canSelectSeat,
   playerAtSeat,
   slotVariant,
+  isNotReadyAt,
 } = useRoomStatus(room, userId)
 
 // ?setup=1 opens the players & roles panel (host only); replace so Back doesn't reopen it.
@@ -685,6 +696,12 @@ onUnmounted(() => {
   padding: 2rem 1rem 1.5rem;
 }
 
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
 .back-btn {
   background: none;
   border: none;
@@ -778,6 +795,12 @@ onUnmounted(() => {
 }
 .count-wait {
   color: var(--muted);
+}
+.not-ready-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--red);
+  line-height: 1.3;
 }
 
 /* Grid: 4 columns (default) / 3 / 2 based on nickname length */

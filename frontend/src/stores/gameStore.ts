@@ -32,6 +32,21 @@ export const useGameStore = defineStore('game', () => {
     // the backend dropped the field, e.g. mock mode) — useAudioService dedup
     // by sequence id ensures polls do not double-fire still-online audio.
     const audioReplayBuffer = newState.audioReplayBuffer
+    // Role confirmations only grow during ROLE_REVEAL. A fetch whose snapshot predates
+    // a RoleConfirmed event that landed while it was in flight must not drop it — that
+    // left the host one short, without the Start Night button.
+    const prevIds =
+      state.value?.gameId === newState.gameId
+        ? state.value?.roleReveal?.confirmedUserIds
+        : undefined
+    if (newState.roleReveal && prevIds?.length) {
+      const ids = [...new Set([...(newState.roleReveal.confirmedUserIds ?? []), ...prevIds])]
+      newState.roleReveal = {
+        ...newState.roleReveal,
+        confirmedUserIds: ids,
+        confirmedCount: Math.max(newState.roleReveal.confirmedCount, ids.length),
+      }
+    }
     state.value = {
       ...newState,
       events: s.events ?? [],
@@ -45,11 +60,16 @@ export const useGameStore = defineStore('game', () => {
     state.value?.events.push(event)
   }
 
-  function incrementConfirmedCount() {
-    if (!state.value?.roleReveal) return
-    state.value.roleReveal = {
-      ...state.value.roleReveal,
-      confirmedCount: (state.value.roleReveal.confirmedCount ?? 0) + 1,
+  function markRoleConfirmed(userId: string) {
+    const s = state.value
+    const reveal = s?.roleReveal
+    if (!s || !reveal) return
+    const ids = reveal.confirmedUserIds ?? []
+    if (ids.includes(userId)) return // a repeat RoleConfirmed must not count twice
+    s.roleReveal = {
+      ...reveal,
+      confirmedCount: (reveal.confirmedCount ?? 0) + 1,
+      confirmedUserIds: [...ids, userId],
     }
   }
 
@@ -88,7 +108,7 @@ export const useGameStore = defineStore('game', () => {
     timerSeq,
     setState,
     addEvent,
-    incrementConfirmedCount,
+    markRoleConfirmed,
     clearGame,
     updateNightPhaseSelection,
     setMyRole,

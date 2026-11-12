@@ -237,7 +237,7 @@ export const MOCK_GAME_RESULT_WOLVES = {
 }
 
 export function makeRoleRevealState(totalCount: number, teammates?: string[]): RoleRevealState {
-  return { confirmedCount: 0, totalCount, teammates }
+  return { confirmedCount: 0, confirmedUserIds: [], totalCount, teammates }
 }
 
 // ── Day Phase mock states ─────────────────────────────────────────────────────

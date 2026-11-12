@@ -63,7 +63,14 @@ export function useRoomStatus(room: Ref<Room | null>, userId: Ref<string | null>
       // Guest shows ready styling only when READY.
       return p.isHost || p.status === 'READY' ? 'me-ready' : 'me'
     }
-    return p.status === 'READY' ? 'ready' : 'waiting'
+    // The host never readies up (stored NOT_READY), so their seat reads as ready to everyone.
+    return p.isHost || p.status === 'READY' ? 'ready' : 'waiting'
+  }
+
+  // Seated guests still to ready up get a 「未準備」 tag; the host never readies, so never gets one.
+  function isNotReadyAt(seat: number): boolean {
+    const p = playerAtSeat(seat)
+    return !!p && !p.isHost && p.status !== 'READY'
   }
 
   return {
@@ -80,5 +87,6 @@ export function useRoomStatus(room: Ref<Room | null>, userId: Ref<string | null>
     canSelectSeat,
     playerAtSeat,
     slotVariant,
+    isNotReadyAt,
   }
 }
