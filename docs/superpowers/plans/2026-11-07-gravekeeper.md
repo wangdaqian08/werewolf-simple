@@ -1,6 +1,6 @@
 # 守墓人 (Gravekeeper) Implementation Plan
 
-> **Status (2026-11-08): PAUSED, awaiting owner review.** Nothing is implemented. Resume by having the owner review this plan, then execute it subagent-driven on branch `feat/gravekeeper`.
+> **Status (2026-11-12): RESUMED.** The owner asked to add the role. The branch is rebased onto main (71d1b2a). The section "Changes since the plan was written" below overrides the tasks where they differ.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -15,6 +15,23 @@
 **Tech Stack:** Kotlin, Spring Boot 4, JPA, Flyway, JUnit5, Mockito-Kotlin, AssertJ; Vue 3, TypeScript, Pinia, Vitest; Playwright with the real backend.
 
 **Spec:** `docs/superpowers/specs/2026-11-07-knight-gravekeeper-design.md`. Read the GRAVEKEEPER rules (G1–G4), "Interactions with existing roles", "Role descriptions" and the gravekeeper bullets under "Decided parts of the how". Ignore the knight parts: they are done.
+
+## Changes since the plan was written (2026-11-12, these override the tasks)
+
+Main gained #180 (機械狼 and 騎士 never share a board), #181 (roles chosen on their own page) and #182 (the host sees the night narration line). The owner's rule (decision D4): **機械狼 never shares a board with 守墓人 either.** Roles from different boards are blocked, the same way as 機械狼 ↔ 騎士.
+
+1. **Task 1 (backend) also adds the exclusion**, mirroring the KNIGHT one:
+   - `RoomService.validateRoleComposition` rejects `MECHANICAL_WOLF` + `GRAVEKEEPER` with `"Mechanical Wolf and Gravekeeper cannot be on the same board"`. Update the KDoc rule 5.
+   - `GameService.startGame` rejects a room stored with `hasMechanicalWolf && hasGravekeeper`, with the same message.
+   - Tests: mirror the three KNIGHT cases (`RoomServiceTest` create and `updateBoard`, `GameServiceStartTest`).
+2. **Task 4 (frontend) blocks the pair instead of changing the 機械狼 learn text.**
+   - Drop the `學到騎士、守墓人沒有技能` change and its test.
+   - `RoomSetupPanel.vue` `BLOCKED_WITH` becomes `MECHANICAL_WOLF: ['KNIGHT', 'GRAVEKEEPER']`, `KNIGHT: ['MECHANICAL_WOLF']`, `GRAVEKEEPER: ['MECHANICAL_WOLF']`. Update its comment.
+   - Role rules text: in `role.rules.MECHANICAL_WOLF` change `機械狼和騎士不能同時出現在同一個房間。` to `機械狼不能和騎士、守墓人同時出現在同一個房間。` (en to match). Append `機械狼和守墓人不能同時出現在同一個房間。` to `role.rules.GRAVEKEEPER` (en to match). The KNIGHT text stays.
+   - Tests in `RoomSetupPanelRoles.test.ts`, mirroring the KNIGHT cases: `GRAVEKEEPER is blocked while MECHANICAL_WOLF is on`, `MECHANICAL_WOLF is blocked while GRAVEKEEPER is on`, and `with KNIGHT and GRAVEKEEPER both on, the MECHANICAL_WOLF hint names both`.
+   - The "at most 6 gods" comments: recount them from the code (`GOD_IDS.length - 1`), don't trust the plan's "7".
+3. **Task 4 also adds the narration line (#182):** in `utils/nightNarration.ts` add `'gravekeeper_open_eyes.mp3': 'gravekeeperOpen'` and `'gravekeeper_close_eyes.mp3': 'gravekeeperClose'`; i18n `night.narration.gravekeeperOpen` = `守墓人請睜眼`, `gravekeeperClose` = `守墓人請閉眼` (en to match the neighbours). Extend the existing nightNarration test.
+4. **Task 4, role-select page (#181):** the role cards come from `ROLE_DEFINITIONS`; fix whatever `vue-tsc -b` flags, and give GRAVEKEEPER whatever per-role entry the other gods have (colour, icon).
 
 ## Rulings made while planning (deviations from the spec's wording)
 
