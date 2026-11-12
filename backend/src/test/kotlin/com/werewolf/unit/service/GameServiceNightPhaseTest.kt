@@ -360,6 +360,89 @@ class GameServiceNightPhaseTest {
         assertThat(nightPhaseResult(gameService.getGameState(gameId, "u1")).containsKey("mechWolf")).isFalse()
     }
 
+    // ── GRAVEKEEPER: yesterday's vote-out, served from the stored night row ────
+
+    private fun gravekeeperNight(result: GravekeeperResult?, exiled: String?) =
+        nightPhase(subPhase = NightSubPhase.GRAVEKEEPER_RESULT).also {
+            it.gravekeeperResult = result
+            it.gravekeeperExiledUserId = exiled
+        }
+
+    @Test
+    fun `state serves gravekeeperResult to the gravekeeper`() {
+        // A page refresh reads this from GET /state: nothing is pushed and nothing lives in the client.
+        val keeper = player("u1", 1, PlayerRole.GRAVEKEEPER)
+        val exiled = player("u3", 3, PlayerRole.WEREWOLF).also { it.alive = false }
+        setupGameAndPlayers(game(), listOf(keeper, exiled), listOf(user("u1", "Keeper"), user("u3", "Wendy")))
+        val np = gravekeeperNight(GravekeeperResult.WOLF, "u3")
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        val night1 = NightPhase(gameId = gameId, dayNumber = 1).also { it.gravekeeperResult = GravekeeperResult.NONE }
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(np, night1))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night["gravekeeperResult"]).isEqualTo(
+            mapOf(
+                "result" to "WOLF",
+                "exiledPlayerId" to "u3",
+                "exiledNickname" to "Wendy",
+                "exiledSeatIndex" to 3,
+                "history" to listOf(mapOf("round" to 2, "nickname" to "Wendy", "isWerewolf" to true)),
+            ),
+        )
+    }
+
+    @Test
+    fun `gravekeeperResult NONE carries null exile fields and an empty history`() {
+        val keeper = player("u1", 1, PlayerRole.GRAVEKEEPER)
+        setupGameAndPlayers(game(), listOf(keeper), listOf(user("u1", "Keeper")))
+        val np = gravekeeperNight(GravekeeperResult.NONE, null)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night["gravekeeperResult"]).isEqualTo(
+            mapOf(
+                "result" to "NONE",
+                "exiledPlayerId" to null,
+                "exiledNickname" to null,
+                "exiledSeatIndex" to null,
+                "history" to emptyList<Any>(),
+            ),
+        )
+    }
+
+    @Test
+    fun `non-gravekeeper state has no gravekeeperResult`() {
+        // The exiled player's camp is the gravekeeper's alone.
+        val keeper = player("u1", 1, PlayerRole.GRAVEKEEPER)
+        val villager = player("u2", 2, PlayerRole.VILLAGER)
+        val exiled = player("u3", 3, PlayerRole.WEREWOLF).also { it.alive = false }
+        setupGameAndPlayers(game(), listOf(keeper, villager, exiled), listOf(user("u1", "Keeper"), user("u2", "Vic"), user("u3", "Wendy")))
+        val np = gravekeeperNight(GravekeeperResult.WOLF, "u3")
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u2"))
+
+        assertThat(night.containsKey("gravekeeperResult")).isFalse()
+        assertThat(gameService.getGameState(gameId, "u3").toString()).doesNotContain("gravekeeperResult")
+    }
+
+    @Test
+    fun `dead gravekeeper's night state has no gravekeeperResult`() {
+        // Night-init stores nothing for a dead gravekeeper, so there is nothing to serve.
+        val keeper = player("u1", 1, PlayerRole.GRAVEKEEPER).also { it.alive = false }
+        setupGameAndPlayers(game(), listOf(keeper), listOf(user("u1", "Keeper")))
+        val np = gravekeeperNight(null, null)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(np))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night.containsKey("gravekeeperResult")).isFalse()
+    }
+
     @Test
     fun `non-medium never gets mediumResult`() {
         val seer = player("u1", 1, PlayerRole.SEER)

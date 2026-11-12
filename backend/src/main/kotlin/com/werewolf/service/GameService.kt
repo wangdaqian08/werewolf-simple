@@ -47,6 +47,8 @@ class GameService(
         // A room saved before the two became exclusive can still hold both; never deal that board.
         if (room.hasMechanicalWolf && room.hasKnight)
             return GameActionResult.Rejected("Mechanical Wolf and Knight cannot be on the same board")
+        if (room.hasMechanicalWolf && room.hasGravekeeper)
+            return GameActionResult.Rejected("Mechanical Wolf and Gravekeeper cannot be on the same board")
 
         val roomPlayers = roomPlayerRepository.findByRoomId(roomId)
         if (roomPlayers.size < 4)
@@ -220,6 +222,29 @@ class GameService(
                                 "role"     to h.mediumResultRole?.name,
                             )
                         }
+                    )
+                }
+
+                // ── GRAVEKEEPER: yesterday's vote-out and its camp, stored at night-init ──
+                val gravekeeperResult = np.gravekeeperResult
+                if (myPlayer?.role == PlayerRole.GRAVEKEEPER && gravekeeperResult != null) {
+                    val exiled = np.gravekeeperExiledUserId
+                    base["gravekeeperResult"] = mapOf(
+                        "result"          to gravekeeperResult.name,
+                        "exiledPlayerId"  to exiled,
+                        "exiledNickname"  to exiled?.let { displayNameFor(it) },
+                        "exiledSeatIndex" to exiled?.let { playerMap[it]?.seatIndex },
+                        "history"         to nightPhaseRepository.findByGameId(gameId)
+                            .sortedBy { it.dayNumber }
+                            .mapNotNull { h ->
+                                h.gravekeeperExiledUserId?.let { id ->
+                                    mapOf(
+                                        "round"      to h.dayNumber,
+                                        "nickname"   to displayNameFor(id),
+                                        "isWerewolf" to (h.gravekeeperResult == GravekeeperResult.WOLF),
+                                    )
+                                }
+                            },
                     )
                 }
 

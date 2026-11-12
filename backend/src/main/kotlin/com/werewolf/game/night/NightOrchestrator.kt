@@ -144,6 +144,7 @@ class NightOrchestrator(
         if (room.hasMechanicalWolf) add(PlayerRole.MECHANICAL_WOLF)
         if (room.hasSeer) add(PlayerRole.SEER)
         if (room.hasMedium) add(PlayerRole.MEDIUM)
+        if (room.hasGravekeeper) add(PlayerRole.GRAVEKEEPER)
         if (room.hasWitch) add(PlayerRole.WITCH)
         if (room.hasGuard) add(PlayerRole.GUARD)
     }
@@ -807,6 +808,7 @@ class NightOrchestrator(
             subPhase = initialSubPhase,
             prevGuardTargetUserId = previousGuardTarget,
         )
+        handlers.filter { it.role in activeNightRoles(context.room) }.forEach { it.onNightInit(context, nightPhase) }
         nightPhaseRepository.save(nightPhase)
 
         val game = context.game

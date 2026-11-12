@@ -96,6 +96,17 @@ class RoleDealerTest {
     }
 
     @Test
+    fun `deals exactly one GRAVEKEEPER as a god seat`() {
+        val room = Room(roomCode = "123", hostUserId = "h", totalPlayers = 9, wolfCount = 3, hasGravekeeper = true)
+        val roles = RoleDealer.roleList(room, 9)
+
+        assertEquals(1, roles.count { it == GRAVEKEEPER })
+        assertEquals(room.wolfCount, roles.count { it.isWolf })
+        assertEquals(RolePickChoice.GOD, RolePickChoice.campOf(GRAVEKEEPER))
+        assertEquals(9, roles.size)
+    }
+
+    @Test
     fun `campSeats counts each camp`() {
         val seats = RoleDealer.campSeats(listOf(WHITE_WOLF_KING, MECHANICAL_WOLF, WEREWOLF, SEER, MEDIUM, VILLAGER))
         assertEquals(mapOf(RolePickChoice.WOLF to 3, RolePickChoice.GOD to 2, RolePickChoice.VILLAGER to 1), seats)

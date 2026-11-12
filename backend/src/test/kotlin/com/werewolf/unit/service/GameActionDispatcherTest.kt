@@ -620,4 +620,25 @@ class GameActionDispatcherTest {
         verify(stompPublisher, times(if (pushes) 1 else 0)).sendPrivateAfterCommit(actorId, event)
         verify(nightOrchestrator, times(1)).submitAction(gameId)
     }
+
+    @Test
+    fun `GRAVEKEEPER_CONFIRM completes the gravekeeper turn once`() {
+        val actorId = "actor:001"
+        val ctx = GameContext(
+            game(subPhase = NightSubPhase.GRAVEKEEPER_RESULT.name),
+            room(),
+            listOf(player(actorId, 1, PlayerRole.GRAVEKEEPER), player(wolfId, 2, PlayerRole.WEREWOLF)),
+            nightPhase = NightPhase(gameId = gameId, dayNumber = 1).also { it.subPhase = NightSubPhase.GRAVEKEEPER_RESULT },
+        )
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+        val dispatcher = makeDispatcher(listOf(stubHandler(PlayerRole.GRAVEKEEPER, GameActionResult.Success())))
+
+        val first = dispatcher.dispatch(req(actorId, ActionType.GRAVEKEEPER_CONFIRM))
+        val repeat = dispatcher.dispatch(req(actorId, ActionType.GRAVEKEEPER_CONFIRM))
+
+        assertThat(first).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(repeat).isInstanceOf(GameActionResult.Rejected::class.java)
+        verify(stompPublisher, never()).sendPrivateAfterCommit(eq(actorId), any())
+        verify(nightOrchestrator, times(1)).submitAction(gameId)
+    }
 }

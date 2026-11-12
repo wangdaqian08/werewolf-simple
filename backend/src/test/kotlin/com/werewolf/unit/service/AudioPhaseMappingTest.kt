@@ -28,7 +28,8 @@ class AudioPhaseMappingTest {
             IdiotAudioConfig(),
             VillagerAudioConfig(),
             MechanicalWolfAudioConfig(),
-            MediumAudioConfig()
+            MediumAudioConfig(),
+            GravekeeperAudioConfig()
         ))
         
         audioService = AudioService()
@@ -134,6 +135,20 @@ class AudioPhaseMappingTest {
             gameId = 1, oldSubPhase = NightSubPhase.MEDIUM_RESULT, newSubPhase = NightSubPhase.GUARD_PICK,
         )
         assertThat(leaving.audioFiles).contains("medium_close_eyes.mp3")
+    }
+
+    @Test
+    fun `GRAVEKEEPER_RESULT plays gravekeeper open and close audio`() {
+        // A one-sub-phase turn like WITCH_ACT: it opens on entry and closes on exit, despite the RESULT name.
+        assertThat(audioService.calculateOpenEyesAudio(NightSubPhase.GRAVEKEEPER_RESULT)).isEqualTo("gravekeeper_open_eyes.mp3")
+        val entering = audioService.calculateNightSubPhaseTransition(
+            gameId = 1, oldSubPhase = NightSubPhase.SEER_RESULT, newSubPhase = NightSubPhase.GRAVEKEEPER_RESULT,
+        )
+        assertThat(entering.audioFiles).containsExactly("seer_close_eyes.mp3", "gravekeeper_open_eyes.mp3")
+        val leaving = audioService.calculateNightSubPhaseTransition(
+            gameId = 1, oldSubPhase = NightSubPhase.GRAVEKEEPER_RESULT, newSubPhase = NightSubPhase.GUARD_PICK,
+        )
+        assertThat(leaving.audioFiles).containsExactly("gravekeeper_close_eyes.mp3", "guard_open_eyes.mp3")
     }
 
     @Test

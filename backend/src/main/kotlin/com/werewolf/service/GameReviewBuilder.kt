@@ -114,6 +114,9 @@ object GameReviewBuilder {
                 GuardTurn(refs.getValue(it.userId), deadAt(it), n.guardTargetUserId?.let(refs::get))
             },
             dawn = dawn(n, refs, died, night1PerkSaved),
+            gravekeeper = holder(PlayerRole.GRAVEKEEPER)?.let {
+                GravekeeperTurn(refs.getValue(it.userId), deadAt(it), n.gravekeeperExiledUserId?.let(refs::get), n.gravekeeperResult)
+            },
         )
     }
 

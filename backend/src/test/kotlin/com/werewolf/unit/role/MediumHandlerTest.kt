@@ -84,6 +84,19 @@ class MediumHandlerTest {
     }
 
     @Test
+    fun `medium sees GRAVEKEEPER as GRAVEKEEPER`() {
+        val np = nightPhase()
+        val result = handler.handle(
+            req(ActionType.MEDIUM_CHECK),
+            ctx(np, player(mediumId, 1, PlayerRole.MEDIUM), player(targetId, 2, PlayerRole.GRAVEKEEPER)),
+        )
+
+        assertThat(np.mediumResultRole).isEqualTo(PlayerRole.GRAVEKEEPER)
+        assertThat((result as GameActionResult.Success).events)
+            .containsExactly(DomainEvent.MediumResult(gameId, targetId, PlayerRole.GRAVEKEEPER))
+    }
+
+    @Test
     fun `cannot check self`() {
         val np = nightPhase()
         val result = handler.handle(

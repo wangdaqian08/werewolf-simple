@@ -65,6 +65,9 @@ class Room(
     @Column(name = "has_knight", nullable = false)
     var hasKnight: Boolean = false,
 
+    @Column(name = "has_gravekeeper", nullable = false)
+    var hasGravekeeper: Boolean = false,
+
     @Column(name = "has_sheriff", nullable = false)
     val hasSheriff: Boolean = true,
 

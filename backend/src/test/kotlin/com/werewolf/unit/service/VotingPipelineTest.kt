@@ -1132,6 +1132,26 @@ class VotingPipelineTest {
     }
 
     @Test
+    fun `idiot reveal writes no elimination_history`() {
+        // The gravekeeper reads elimination_history: a revealed idiot is not a vote-out (G2).
+        val host = player(hostId, 0)
+        val idiot = player("u1", 1, PlayerRole.IDIOT)
+        val wolf = player("u2", 2, PlayerRole.WEREWOLF)
+        val context = ctx(game(), host, idiot, wolf)
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(listOf(vote("u2", "u1"), vote("u3", "u1")))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "u1")).thenReturn(Optional.of(idiot))
+        stubLoader(host, idiot, wolf)
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        assertThat(idiot.idiotRevealed).isTrue()
+        verify(eliminationHistoryRepository, never()).save(any<EliminationHistory>())
+    }
+
+    @Test
     fun `revealTally - already-revealed Idiot voted out again, eliminated normally`() {
         val host = player(hostId, 0)
         val idiot = player("u1", 1, PlayerRole.IDIOT).also { it.canVote = false; it.idiotRevealed = true }

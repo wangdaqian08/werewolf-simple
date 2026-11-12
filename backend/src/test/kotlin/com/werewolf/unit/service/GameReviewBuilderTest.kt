@@ -440,6 +440,33 @@ class GameReviewBuilderTest {
         assertThat(build(board(), listOf(night(1))).rounds.single().night!!.let { it.mech to it.medium }).isEqualTo(null to null)
     }
 
+    private fun graveBoard(diedDay: Map<String, Int> = emptyMap()) = board(diedDay) +
+        GamePlayer(gameId = gameId, userId = "grave", seatIndex = 10, role = PlayerRole.GRAVEKEEPER)
+            .also { p -> diedDay["grave"]?.let { p.alive = false; p.diedDay = it } }
+
+    private val graveRef = ReviewPlayer("grave", "N-grave", 10, PlayerRole.GRAVEKEEPER)
+
+    @Test
+    fun `review night carries the gravekeeper turn`() {
+        val nights = listOf(
+            night(1) { gravekeeperResult = GravekeeperResult.NONE },
+            night(2) { gravekeeperResult = GravekeeperResult.WOLF; gravekeeperExiledUserId = "w1" },
+            night(3), // the gravekeeper died on day 2: night-init stored nothing
+        )
+        val review = build(graveBoard(mapOf("w1" to 1, "grave" to 2)), nights)
+
+        assertThat(review.rounds.map { it.night!!.gravekeeper }).containsExactly(
+            GravekeeperTurn(graveRef, false, null, GravekeeperResult.NONE),
+            GravekeeperTurn(graveRef, false, ref("w1"), GravekeeperResult.WOLF),
+            GravekeeperTurn(graveRef, true, null, null),
+        )
+    }
+
+    @Test
+    fun `gravekeeper turn is null when the role is not in the game`() {
+        assertThat(build(board(), listOf(night(1))).rounds.single().night!!.gravekeeper).isNull()
+    }
+
     @Test
     fun `mech check carries the told role for a learned role check and wolf-or-not for an alignment check`() {
         val nights = listOf(night(1) { mechCheckTargetUserId = "w1"; mechCheckResultRole = PlayerRole.WEREWOLF })

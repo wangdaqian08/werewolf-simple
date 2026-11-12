@@ -693,6 +693,115 @@ class NightOrchestratorTest {
             .containsExactlyInAnyOrder(PlayerRole.WEREWOLF, PlayerRole.MECHANICAL_WOLF, PlayerRole.MEDIUM)
     }
 
+    // ── Gravekeeper ──────────────────────────────────────────────────────────
+
+    private val eliminationHistoryRepository: com.werewolf.repository.EliminationHistoryRepository = mock()
+
+    /** The real handlers, shuffled, then ordered the way Spring injects them: by @Order. */
+    private fun realHandlers(vararg extra: RoleHandler): List<RoleHandler> = (
+        listOf(
+            com.werewolf.game.role.GuardHandler(nightPhaseRepository),
+            com.werewolf.game.role.GravekeeperHandler(eliminationHistoryRepository),
+            com.werewolf.game.role.WitchHandler(nightPhaseRepository),
+            com.werewolf.game.role.WerewolfHandler(nightPhaseRepository),
+        ) + extra
+    ).sortedWith(org.springframework.core.annotation.AnnotationAwareOrderComparator.INSTANCE)
+
+    private fun gravekeeperRoom(hasSeer: Boolean = true, hasMedium: Boolean = false, hasSheriff: Boolean = false) = Room(
+        roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
+        hasSeer = hasSeer, hasMedium = hasMedium, hasWitch = true, hasGuard = true, hasGravekeeper = true, hasSheriff = hasSheriff,
+    ).also { it.config = GameConfig.createDefault() }
+
+    @Test
+    fun `sequence puts GRAVEKEEPER_RESULT after the seer and before the guard`() {
+        val orchestrator = makeOrchestrator(realHandlers(com.werewolf.game.role.SeerHandler(nightPhaseRepository)))
+
+        assertThat(orchestrator.nightSequence(GameContext(game(), gravekeeperRoom(), emptyList()))).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
+            NightSubPhase.GRAVEKEEPER_RESULT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    @Test
+    fun `sequence puts GRAVEKEEPER_RESULT after the medium`() {
+        val orchestrator = makeOrchestrator(realHandlers(com.werewolf.game.role.MediumHandler(nightPhaseRepository)))
+        val r = gravekeeperRoom(hasSeer = false, hasMedium = true)
+
+        assertThat(orchestrator.nightSequence(GameContext(game(), r, emptyList()))).containsExactly(
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.MEDIUM_PICK,
+            NightSubPhase.MEDIUM_RESULT,
+            NightSubPhase.GRAVEKEEPER_RESULT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    @Test
+    fun `sequence is identical with or without an exile and with a dead gravekeeper`() {
+        val orchestrator = makeOrchestrator(realHandlers(com.werewolf.game.role.SeerHandler(nightPhaseRepository)))
+        val r = gravekeeperRoom()
+        val wolf = player("w", 2, PlayerRole.WEREWOLF)
+        val day2 = game().also { it.dayNumber = 2 }
+
+        val noExile = orchestrator.nightSequence(GameContext(day2, r, listOf(player("g", 1, PlayerRole.GRAVEKEEPER), wolf)))
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(
+            Optional.of(EliminationHistory(gameId = gameId, dayNumber = 1, eliminatedUserId = "w", eliminatedRole = PlayerRole.WEREWOLF)),
+        )
+        val withExile = orchestrator.nightSequence(GameContext(day2, r, listOf(player("g", 1, PlayerRole.GRAVEKEEPER), wolf)))
+        val deadKeeper = orchestrator.nightSequence(GameContext(day2, r, listOf(player("g", 1, PlayerRole.GRAVEKEEPER, alive = false), wolf)))
+
+        assertThat(noExile).contains(NightSubPhase.GRAVEKEEPER_RESULT)
+        assertThat(withExile).isEqualTo(noExile)
+        assertThat(deadKeeper).isEqualTo(noExile)
+    }
+
+    @Test
+    fun `initNight stores the result on the new night row`() {
+        val orchestrator = makeOrchestrator(realHandlers())
+        val r = gravekeeperRoom(hasSeer = false)
+        val context = GameContext(game(), r, listOf(player("g", 1, PlayerRole.GRAVEKEEPER), player("w", 2, PlayerRole.WEREWOLF, alive = false)))
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(
+            Optional.of(EliminationHistory(gameId = gameId, dayNumber = 1, eliminatedUserId = "w", eliminatedRole = PlayerRole.WEREWOLF)),
+        )
+        mockAudioServiceForNightTransition(r, NightSubPhase.WEREWOLF_PICK)
+
+        orchestrator.initNight(gameId, newDayNumber = 2)
+
+        val captor = argumentCaptor<NightPhase>()
+        verify(nightPhaseRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.firstValue.dayNumber).isEqualTo(2)
+        assertThat(captor.firstValue.gravekeeperResult).isEqualTo(GravekeeperResult.WOLF)
+        assertThat(captor.firstValue.gravekeeperExiledUserId).isEqualTo("w")
+    }
+
+    @Test
+    fun `night-init with WAITING still stores NONE for a living gravekeeper`() {
+        // Night 1 of a sheriff game: the row is created in WAITING, before any role turn opens.
+        val orchestrator = makeOrchestrator(realHandlers())
+        val r = gravekeeperRoom(hasSeer = false, hasSheriff = true)
+        val context = GameContext(game(), r, listOf(player("g", 1, PlayerRole.GRAVEKEEPER), player("w", 2, PlayerRole.WEREWOLF)))
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        mockAudioServiceForNightTransition(r, NightSubPhase.WAITING)
+
+        orchestrator.initNight(gameId, newDayNumber = 1, withWaiting = true)
+
+        val captor = argumentCaptor<NightPhase>()
+        verify(nightPhaseRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.firstValue.subPhase).isEqualTo(NightSubPhase.WAITING)
+        assertThat(captor.firstValue.gravekeeperResult).isEqualTo(GravekeeperResult.NONE)
+        assertThat(captor.firstValue.gravekeeperExiledUserId).isNull()
+    }
+
     @Test
     fun `firstSubPhase - returns WEREWOLF_PICK by default`() {
         val ctx = GameContext(game(), room(), emptyList())

@@ -4,6 +4,7 @@ import com.werewolf.game.role.RoleRules
 import com.werewolf.model.Game
 import com.werewolf.model.GamePhase
 import com.werewolf.model.GamePlayer
+import com.werewolf.model.GravekeeperResult
 import com.werewolf.model.LearnedSkill
 import com.werewolf.model.NightPhase
 import com.werewolf.model.PlayerRole
@@ -18,6 +19,7 @@ import com.werewolf.model.PlayerRole
  *  - MECHANICAL_WOLF: its own learn / check / poison / protect, and the kills of the nights
  *           it was the lone killer; never the pack's kills
  *  - MEDIUM: every check with the role it was told
+ *  - GRAVEKEEPER: every vote-out it was told the camp of (a night with no vote-out has no entry)
  *  - WITCH: every night's wolf victim (null target = 空刀) she was told while
  *           holding the antidote, then the antidote save + poison (round, player)
  *
@@ -59,6 +61,12 @@ object RoleHistoryBuilder {
                 "role" to "MEDIUM",
                 "entries" to done.filter { it.mediumCheckedUserId != null }.map {
                     entry(it.dayNumber, "CHECK", it.mediumCheckedUserId) + ("role" to it.mediumResultRole)
+                },
+            )
+            me.role == PlayerRole.GRAVEKEEPER -> mapOf(
+                "role" to "GRAVEKEEPER",
+                "entries" to done.filter { it.gravekeeperExiledUserId != null }.map {
+                    entry(it.dayNumber, "GRAVE", it.gravekeeperExiledUserId) + ("isWerewolf" to (it.gravekeeperResult == GravekeeperResult.WOLF))
                 },
             )
             me.role == PlayerRole.MECHANICAL_WOLF -> mapOf(

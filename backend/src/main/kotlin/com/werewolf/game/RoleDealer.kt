@@ -20,6 +20,7 @@ object RoleDealer {
         if (room.hasIdiot) roles.add(PlayerRole.IDIOT)
         if (room.hasMedium) roles.add(PlayerRole.MEDIUM)
         if (room.hasKnight) roles.add(PlayerRole.KNIGHT)
+        if (room.hasGravekeeper) roles.add(PlayerRole.GRAVEKEEPER)
         while (roles.size < playerCount) roles.add(PlayerRole.VILLAGER)
         return roles
     }

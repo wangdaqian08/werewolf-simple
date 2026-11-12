@@ -36,6 +36,7 @@ class AudioService {
             NightSubPhase.SEER_RESULT -> PlayerRole.SEER
             NightSubPhase.MECH_WOLF_PICK, NightSubPhase.MECH_WOLF_RESULT -> PlayerRole.MECHANICAL_WOLF
             NightSubPhase.MEDIUM_PICK, NightSubPhase.MEDIUM_RESULT -> PlayerRole.MEDIUM
+            NightSubPhase.GRAVEKEEPER_RESULT -> PlayerRole.GRAVEKEEPER
             NightSubPhase.WITCH_ACT -> PlayerRole.WITCH
             NightSubPhase.GUARD_PICK -> PlayerRole.GUARD
             else -> null
