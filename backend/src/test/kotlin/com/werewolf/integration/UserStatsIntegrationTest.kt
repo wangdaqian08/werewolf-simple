@@ -6,6 +6,7 @@ import com.werewolf.integration.TestConstants.FIELD_USER
 import com.werewolf.integration.TestConstants.FIELD_USER_ID
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.*
+import com.werewolf.repository.CreditTransactionRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomRepository
@@ -39,6 +40,7 @@ class UserStatsIntegrationTest {
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var userStatsService: UserStatsService
     @Autowired lateinit var walletService: WalletService
+    @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
 
     private class Login(val token: String, val userId: String)
 
@@ -194,6 +196,60 @@ class UserStatsIntegrationTest {
         val expected = percentileOf(5, 5, rows.map { it.wins.toInt() to it.games.toInt() })
         assertThat(userStatsService.statsFor(caller.userId).percentile).isEqualTo(expected)
         assertThat(expected).isGreaterThanOrEqualTo(1) // beats the 0/5 loser
+    }
+
+    @Test
+    fun `leaderboard rows carry game-reward totals only, and the order two players reached a score`() {
+        val first = login()
+        val second = login()
+        val buyer = login()
+        walletService.credit(first.userId, 20, CreditTxType.GAME_REWARD)
+        walletService.credit(first.userId, 5, CreditTxType.GAME_REWARD)
+        walletService.credit(first.userId, 100, CreditTxType.PURCHASE)
+        walletService.credit(second.userId, 25, CreditTxType.GAME_REWARD)
+        walletService.credit(buyer.userId, 500, CreditTxType.PURCHASE)
+        val rows = creditTransactionRepository.findScoreRows(CreditTxType.GAME_REWARD).associateBy { it.userId }
+        assertThat(rows[first.userId]?.score).isEqualTo(25L)
+        assertThat(rows[second.userId]?.score).isEqualTo(25L)
+        assertThat(rows[first.userId]!!.reachedAt).isLessThan(rows[second.userId]!!.reachedAt)
+        assertThat(rows).doesNotContainKey(buyer.userId)
+    }
+
+    private fun leaderboard(l: Login) = restTemplate.exchange(
+        "/api/user/leaderboard", HttpMethod.GET,
+        HttpEntity<Void>(HttpHeaders().also { it.setBearerAuth(l.token) }), Map::class.java,
+    ).body!!
+
+    @Test
+    fun `leaderboard endpoint - my row has my score and my rank among all players`() {
+        val u = login()
+        walletService.credit(u.userId, 20, CreditTxType.GAME_REWARD)
+        val body = leaderboard(u)
+        val me = body["me"] as Map<String, Any>
+        val top = body["top"] as List<Map<String, Any>>
+        val ahead = creditTransactionRepository.findScoreRows(CreditTxType.GAME_REWARD)
+            .count { it.userId != u.userId && it.score >= 20 } // everyone else at 20+ got there before this user
+        assertThat(me["score"]).isEqualTo(20)
+        assertThat(me["rank"]).isEqualTo(ahead + 1)
+        assertThat(me["me"]).isEqualTo(true)
+        assertThat(me["nickname"]).isEqualTo(u.userId.removePrefix("guest:")) // the display name, never the id
+        assertThat(top.size).isBetween(1, 3)
+        assertThat(top.map { it["rank"] }).isEqualTo((1..top.size).toList())
+        assertThat(top.map { it["score"] as Int }).isSortedAccordingTo(Comparator.reverseOrder())
+        assertThat(top.all { it.keys == setOf("rank", "nickname", "score", "me") }).isTrue() // no user ids
+    }
+
+    @Test
+    fun `leaderboard endpoint - a player with no game reward is unranked`() {
+        val u = login()
+        walletService.credit(u.userId, 100, CreditTxType.PURCHASE)
+        assertThat(leaderboard(u)["me"]).isNull()
+    }
+
+    @Test
+    fun `leaderboard endpoint needs a login`() {
+        val status = restTemplate.getForEntity("/api/user/leaderboard", Map::class.java).statusCode
+        assertThat(status.is4xxClientError).isTrue()
     }
 
     @Test

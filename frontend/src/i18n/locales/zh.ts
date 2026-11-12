@@ -205,6 +205,10 @@ export default {
   },
   lobby: {
     account: '我的賬戶',
+    board: {
+      title: '戰績分排行榜',
+      unranked: '暫無排名，完成一局即可上榜',
+    },
     buy: '充值',
     connectFailed: '連接失敗，請重試',
     continueGuest: '繼續以訪客身份',

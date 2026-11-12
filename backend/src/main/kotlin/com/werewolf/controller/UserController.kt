@@ -36,6 +36,9 @@ class UserController(private val authService: AuthService, private val userStats
     @GetMapping("/stats")
     fun stats(authentication: Authentication) = userStatsService.statsFor(authentication.principal as String)
 
+    @GetMapping("/leaderboard")
+    fun leaderboard(authentication: Authentication) = userStatsService.leaderboardFor(authentication.principal as String)
+
     @PostMapping("/login")
     fun login(@Valid @RequestBody request: UserLoginRequest): ResponseEntity<Any> {
         val nickname = displayNickname(request.nickname)

@@ -256,6 +256,8 @@
       </div>
 
       <p v-if="error" class="error-msg" data-testid="lobby-error">{{ error }}</p>
+
+      <Leaderboard v-if="userStore.isLoggedIn" />
     </div>
   </div>
 </template>
@@ -274,6 +276,7 @@ import { paymentService, type CreditProduct } from '@/services/paymentService'
 import { buildGoogleAuthUrl, generateOAuthState } from '@/utils/oauth'
 import type { JoinRoomRequest, ProvidersResponse, Room } from '@/types'
 import InstallToHomeScreenPrompt from '@/components/InstallToHomeScreenPrompt.vue'
+import Leaderboard from '@/components/Leaderboard.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
