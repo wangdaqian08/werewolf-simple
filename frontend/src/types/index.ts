@@ -95,9 +95,32 @@ export interface SettlementReward {
   amount: number
 }
 
+/** A 单局任务 code; names live in i18n task.name.<code>. */
+export type TaskCode =
+  | 'SURVIVE_TO_DAY3'
+  | 'HOLD_BADGE'
+  | 'VOTE_WOLF_TWICE'
+  | 'VILLAGER_SURVIVE_WIN'
+  | 'SEER_FIND_TWO_WOLVES'
+  | 'WITCH_POISON_WOLF'
+  | 'WITCH_SAVE_GOOD'
+  | 'GUARD_BLOCK_KILL'
+  | 'WOLF_NEVER_EXILED'
+  | 'WOLF_WIN_ALIVE'
+  | 'WOLF_FIRST_NIGHT_GOD'
+
+/** The viewer's own task: [done] is null until the game is settled. */
+export interface MyTask {
+  code: TaskCode
+  score: number
+  done: boolean | null
+}
+
 export interface GameSettlement {
   rewards: SettlementReward[]
   myEarned?: number | null
+  /** 戰績分 this game: the coin reward plus a done task's score. */
+  myScore?: number | null
   myBalance?: number | null
 }
 
@@ -386,6 +409,16 @@ export interface GameReview {
   /** Empty when the game was never settled. */
   rewards: ReviewReward[]
   rolePicks: ReviewRolePick[]
+  /** Every seat's task, by seat; seats dealt none are absent. */
+  tasks?: ReviewTask[]
+}
+
+/** One seat's task in a review; [done] is null when the game was never settled. */
+export interface ReviewTask {
+  player: ReviewPlayer
+  task: TaskCode
+  score: number
+  done: boolean | null
 }
 
 // ── Player review (玩家视角复盘) ───────────────────────────────────────────────
@@ -480,6 +513,8 @@ export interface PlayerReview {
   diedOnDay: number | null
   /** null when the game was never settled */
   reward: MyReward | null
+  /** My own task; absent or null when I was dealt none. */
+  task?: ReviewTask | null
 }
 
 /** Why the viewer earned what they did. */
@@ -597,6 +632,8 @@ export interface GameState {
   myRole?: PlayerRole
   /** Requesting user's own role-pick card outcome; null/absent when none held. */
   myRolePick?: { choice: PaidRolePick; tookEffect: boolean; price: number } | null
+  /** Private: my own 单局任务, null when I was dealt none. */
+  myTask?: MyTask | null
   /** Other wolves' userIds — sent only to wolves (empty for everyone else). */
   wolfTeammates?: string[]
   // The backend response key is `sheriffUserId` (see GameService.getGameState).

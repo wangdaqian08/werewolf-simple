@@ -72,6 +72,23 @@
         </div>
       </div>
     </template>
+    <template v-if="review.tasks?.length">
+      <div class="rv-line rv-title">{{ $t('task.title') }}</div>
+      <div class="rv-rewards" data-testid="review-tasks">
+        <div
+          v-for="tk in review.tasks"
+          :key="tk.player.userId"
+          class="rv-task-row"
+          data-testid="review-task"
+          :data-seat="tk.player.seatIndex"
+        >
+          <span :class="{ 'rv-wolf': isWolfRole(tk.player.role) }">
+            {{ $t('common.seatNick', { n: tk.player.seatIndex, name: tk.player.nickname }) }}
+          </span>
+          <TaskLine :task="{ code: tk.task, score: tk.score, done: tk.done }" />
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -87,6 +104,7 @@ import type {
 } from '@/types'
 import { t } from '@/i18n'
 import { isWolfRole, roleName } from '@/utils/roleDefinitions'
+import TaskLine from '@/components/TaskLine.vue'
 
 const props = defineProps<{ review: GameReview }>()
 
@@ -380,6 +398,13 @@ const hasTally = computed(() => lines.value.some((l) => l.kind === 'tally'))
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
+.rv-task-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.25rem 0;
+}
+
 .rv-title {
   margin-top: 0.875rem;
   padding-bottom: 0.25rem;

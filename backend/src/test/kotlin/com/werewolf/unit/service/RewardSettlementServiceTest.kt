@@ -55,6 +55,7 @@ class RewardSettlementServiceTest {
             gameSettlementRepository, gamePlayerRepository, gameRepository,
             walletService, stompPublisher, rewards, perkSettlementService,
             voteRepository, sheriffElectionRepository, gameEventRepository,
+            mock(), mock(),
         )
         whenever(gameSettlementRepository.tryInsert(gameId)).thenReturn(1)
         whenever(walletService.credit(any(), any(), any(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull()))

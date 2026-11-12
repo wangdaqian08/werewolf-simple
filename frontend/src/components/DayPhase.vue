@@ -436,6 +436,7 @@
       :player="myPlayer"
       :teammates="teammatePlayers"
       :history="roleHistory ?? null"
+      :task="myTask ?? null"
       @close="showRoleCard = false"
     />
   </div>
@@ -451,6 +452,7 @@ import type {
   PlayerRole,
   TimerState,
   RoleHistory as RoleHistoryData,
+  MyTask,
 } from '@/types'
 import PlayerSlot from '@/components/PlayerSlot.vue'
 import RoleCardSheet from '@/components/RoleCardSheet.vue'
@@ -468,6 +470,7 @@ const props = defineProps<{
   isHost: boolean
   timer?: TimerState | null
   roleHistory?: RoleHistoryData | null
+  myTask?: MyTask | null
   wolfTeammates?: string[]
   timerPresets?: number[]
   myRole?: PlayerRole

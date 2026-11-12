@@ -281,6 +281,33 @@ describe('PlayerReview', () => {
   })
 
   it('points: no block at all when the game was never settled', () => {
-    expect(mount(PlayerReview, { props: { review: review() } }).text()).not.toContain('本局戰績分')
+    expect(mount(PlayerReview, { props: { review: review() } }).text()).not.toContain('對局獎勵')
+  })
+
+  it('shows my task and its outcome', () => {
+    const w = mount(PlayerReview, {
+      props: {
+        review: review({
+          task: {
+            player: { userId: 'me', nickname: 'Me', seatIndex: 3, role: 'SEER' },
+            task: 'HOLD_BADGE',
+            score: 10,
+            done: true,
+          },
+        }),
+      },
+    })
+    expect(w.get('[data-testid="my-task"] [data-testid="task-name"]').text()).toBe(
+      '當選警長或接過警徽',
+    )
+    expect(w.get('[data-testid="my-task"] [data-testid="task-status"]').text()).toBe('已完成')
+  })
+
+  it('no task block when I had none', () => {
+    expect(
+      mount(PlayerReview, { props: { review: review() } })
+        .find('[data-testid="my-task"]')
+        .exists(),
+    ).toBe(false)
   })
 })

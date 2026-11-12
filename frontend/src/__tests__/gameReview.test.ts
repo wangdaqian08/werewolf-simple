@@ -12,6 +12,7 @@ import type {
   ReviewPlayer,
   ReviewReward,
   ReviewRolePick,
+  ReviewTask,
   ReviewRound,
   ReviewVote,
 } from '@/types'
@@ -65,9 +66,10 @@ function render(
   roster: ReviewPlayer[] = players,
   rewards: ReviewReward[] = [],
   rolePicks: ReviewRolePick[] = [],
+  tasks: ReviewTask[] = [],
 ) {
   return mount(GameReview, {
-    props: { review: { winner, players: roster, rounds, rewards, rolePicks } },
+    props: { review: { winner, players: roster, rounds, rewards, rolePicks, tasks } },
   })
 }
 const lines = (wrapper: ReturnType<typeof render>) =>
@@ -523,5 +525,24 @@ describe('GameReview', () => {
       '🐺 狼人（1·2·3號）',
       '1號 Wolf1',
     ])
+  })
+
+  it('lists every seat task and whether it was done', () => {
+    const tasks: ReviewTask[] = [
+      { player: players[1]!, task: 'SEER_FIND_TWO_WOLVES', score: 10, done: true },
+      { player: players[0]!, task: 'WOLF_WIN_ALIVE', score: 20, done: false },
+    ]
+    const w = render([], 'VILLAGER', players, [], [], tasks)
+    const rows = w.findAll('[data-testid="review-task"]')
+    expect(rows.map((r) => r.attributes('data-seat'))).toEqual([
+      String(players[1]!.seatIndex),
+      String(players[0]!.seatIndex),
+    ])
+    expect(rows[0]!.get('[data-testid="task-status"]').text()).toBe('已完成')
+    expect(rows[1]!.get('[data-testid="task-status"]').text()).toBe('未完成')
+  })
+
+  it('no task section when no seat had a task', () => {
+    expect(render([]).find('[data-testid="review-tasks"]').exists()).toBe(false)
   })
 })

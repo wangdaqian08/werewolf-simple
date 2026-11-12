@@ -5,13 +5,16 @@ import com.werewolf.game.DomainEvent
 import com.werewolf.model.CreditTxType
 import com.werewolf.model.VoteContext
 import com.werewolf.model.WinnerSide
+import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GameEventRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.GameSettlementRepository
+import com.werewolf.repository.NightPhaseRepository
 import com.werewolf.repository.SheriffElectionRepository
 import com.werewolf.repository.VoteRepository
 import org.slf4j.LoggerFactory
+import tools.jackson.module.kotlin.jacksonObjectMapper
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
@@ -42,8 +45,11 @@ class RewardSettlementService(
     private val voteRepository: VoteRepository,
     private val sheriffElectionRepository: SheriffElectionRepository,
     private val gameEventRepository: GameEventRepository,
+    private val nightPhaseRepository: NightPhaseRepository,
+    private val eliminationHistoryRepository: EliminationHistoryRepository,
 ) {
     private val log = LoggerFactory.getLogger(RewardSettlementService::class.java)
+    private val mapper = jacksonObjectMapper()
 
     @Transactional(propagation = Propagation.REQUIRED)
     fun settle(gameId: Int, winner: WinnerSide?) {
@@ -62,8 +68,12 @@ class RewardSettlementService(
         val facts = facts(gameId, game.dayNumber, winner, players)
         val perUser = players.associate { it.userId to RewardBreakdown.totalFor(it, facts, rewards) }
 
-        // 戰績分 and coins are the same amount for now; they diverge once tasks pay score only.
-        players.forEach { it.scoreEarned = perUser[it.userId] ?: 0 }
+        // 戰績分 = the coin reward plus a done task's score; the task pays no coins.
+        val tasks = taskFacts(gameId, game.dayNumber, winner, players, facts)
+        players.forEach { p ->
+            p.taskDone = p.taskCode?.let { GameTasks.isDone(it, p, tasks) }
+            p.scoreEarned = (perUser[p.userId] ?: 0) + (p.taskCode?.score?.takeIf { p.taskDone == true } ?: 0)
+        }
         gamePlayerRepository.saveAll(players)
 
         perUser.forEach { (userId, amount) ->
@@ -73,6 +83,29 @@ class RewardSettlementService(
         }
         log.info("[settle] game={} winner={} rewards={}", gameId, winner, perUser)
         stompPublisher.broadcastGameAfterCommit(gameId, DomainEvent.GameSettled(gameId, perUser))
+    }
+
+    private fun taskFacts(
+        gameId: Int, finalDay: Int, winner: WinnerSide,
+        players: List<com.werewolf.model.GamePlayer>, reward: RewardBreakdown.Facts,
+    ): GameTasks.Facts {
+        val nightDeathDay = gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId)
+            .filter { it.eventType == "NIGHT_DEATH" && it.targetUserId != null }
+            .associate { e ->
+                @Suppress("UNCHECKED_CAST")
+                val payload = mapper.readValue(e.message, Map::class.java) as Map<String, Any?>
+                (e.targetUserId ?: "") to ((payload["dayNumber"] as? Number)?.toInt() ?: 0)
+            }
+        return GameTasks.Facts(
+            winner = winner,
+            finalDay = finalDay,
+            roleOf = players.associate { it.userId to it.role },
+            badgeHolders = reward.badgeHolders,
+            wolfVoteDays = reward.wolfVoteDays,
+            nights = nightPhaseRepository.findByGameId(gameId),
+            nightDeathDay = nightDeathDay,
+            exiled = eliminationHistoryRepository.findByGameId(gameId).mapNotNull { it.eliminatedUserId }.toSet(),
+        )
     }
 
     /** Everything the per-player amounts depend on, read once per settlement. */

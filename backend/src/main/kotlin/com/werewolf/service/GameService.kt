@@ -88,6 +88,7 @@ class GameService(
                 role = dealt.getValue(rp.userId),
             )
         }
+        GameTasks.assign(gamePlayers, room.hasSheriff, Random.Default)
         gamePlayerRepository.saveAll(gamePlayers)
 
         // Bind room perk activations to this game; activations held by a
@@ -464,18 +465,20 @@ class GameService(
         // Game-end credit rewards, rebuilt from the ledger (the durable record)
         // so a page refresh on the Result screen still shows earnings.
         val settlement = if (game.phase == GamePhase.GAME_OVER) {
-            val playerMap = players.associateBy { it.userId }
             val rewardRows = creditTransactionRepository.findByGameIdAndType(gameId, CreditTxType.GAME_REWARD)
             if (rewardRows.isEmpty()) null else mapOf(
-                "rewards" to rewardRows.map { tx ->
+                // Each player's 戰績分 this game (reward + a done task); tasks are public once it is over.
+                "rewards" to players.filter { it.scoreEarned > 0 }.map { p ->
                     mapOf(
-                        "userId" to tx.userId,
-                        "nickname" to displayNameFor(tx.userId),
-                        "seatIndex" to (playerMap[tx.userId]?.seatIndex ?: 0),
-                        "amount" to tx.amount,
+                        "userId" to p.userId,
+                        "nickname" to displayNameFor(p.userId),
+                        "seatIndex" to p.seatIndex,
+                        "amount" to p.scoreEarned,
                     )
                 },
                 "myEarned" to rewardRows.firstOrNull { it.userId == requestingUserId }?.amount,
+                // 戰績分 can exceed the coins: a done task pays score only.
+                "myScore" to myPlayer?.scoreEarned,
                 "myBalance" to walletService.balance(requestingUserId),
             )
         } else null
@@ -526,6 +529,8 @@ class GameService(
             "winner" to game.winner?.name,
             "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
+            // Private: the requester's own 单局任务; done is set once the game is settled.
+            "myTask" to myPlayer?.taskCode?.let { mapOf("code" to it.name, "score" to it.score, "done" to myPlayer.taskDone) },
             "myRolePick" to perkService.myRolePick(gameId, requestingUserId),
             // Wolves know each other all game (role card); everyone else gets an empty list.
             "wolfTeammates" to if (myPlayer?.role?.isPackWolf == true) {

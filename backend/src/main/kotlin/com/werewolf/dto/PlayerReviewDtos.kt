@@ -22,6 +22,8 @@ data class PlayerReview(
     val rounds: List<PlayerRound>,
     val diedOnDay: Int?,
     val reward: MyReward?,
+    /** The viewer's own 单局任务; null when they were dealt none. */
+    val task: ReviewTask? = null,
 )
 
 /** Why the viewer earned what they did — the lines of [RewardBreakdown]. */

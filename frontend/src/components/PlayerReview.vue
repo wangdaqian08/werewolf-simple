@@ -55,6 +55,11 @@
         </div>
       </div>
     </template>
+    <div v-if="review.task" class="rv-rewards" data-testid="my-task">
+      <TaskLine
+        :task="{ code: review.task.task, score: review.task.score, done: review.task.done }"
+      />
+    </div>
   </div>
 </template>
 
@@ -73,6 +78,7 @@ import type {
 } from '@/types'
 import { t } from '@/i18n'
 import { isWolfRole, roleName } from '@/utils/roleDefinitions'
+import TaskLine from '@/components/TaskLine.vue'
 
 const props = defineProps<{ review: PlayerReview }>()
 

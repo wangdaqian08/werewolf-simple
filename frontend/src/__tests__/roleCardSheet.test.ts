@@ -118,4 +118,19 @@ describe('RoleCardSheet', () => {
     w.unmount()
     expect(document.body.style.position).toBe('')
   })
+
+  it('my own role card shows my task', () => {
+    mount(RoleCardSheet, {
+      props: { role: 'WITCH', task: { code: 'WITCH_SAVE_GOOD', score: 5, done: null } },
+      attachTo: document.body,
+    })
+    expect(document.body.querySelector('[data-testid="task-name"]')?.textContent).toBe(
+      '用解藥救下一名好人',
+    )
+  })
+
+  it('a role card with no task shows no task line', () => {
+    mount(RoleCardSheet, { props: { role: 'WITCH' }, attachTo: document.body })
+    expect(document.body.querySelector('[data-testid="task-line"]')).toBeNull()
+  })
 })

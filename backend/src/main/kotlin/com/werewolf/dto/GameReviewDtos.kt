@@ -1,5 +1,7 @@
 package com.werewolf.dto
 
+import com.werewolf.model.GameTask
+
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.werewolf.model.GravekeeperResult
@@ -15,7 +17,12 @@ data class GameReview(
     val rewards: List<ReviewReward>,
     /** Every 点将卡 bought, by seat; players with no card are absent. */
     val rolePicks: List<ReviewRolePick>,
+    /** Every seat's 单局任务, by seat; seats dealt no task are absent. */
+    val tasks: List<ReviewTask> = emptyList(),
 )
+
+/** One seat's task; [done] is null when the game was never settled (cancelled). */
+data class ReviewTask(val player: ReviewPlayer, val task: GameTask, val score: Int, val done: Boolean?)
 
 /** Credits a player earned from this game, read back from the ledger. Empty when the game was never settled. */
 data class ReviewReward(val player: ReviewPlayer, val amount: Int)
