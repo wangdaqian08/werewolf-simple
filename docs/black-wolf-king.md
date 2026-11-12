@@ -11,9 +11,10 @@ seats, not a god seat. Rules settled with the owner on 2026-10-21.
 
 | Rule | Where |
 |---|---|
-| One wolf king per room: 白狼王 and 黑狼王 are mutually exclusive | `RoomService.validateRoleComposition`; the create-room toggles disable the other king |
-| Needs `wolfCount ≥ 2` (same gate as 白狼王) | `RoomService.validateRoleComposition` |
-| Offered at 9+ players (`KING_MIN_PLAYERS`); switched off when the board drops below 9 | `CreateRoomView.vue` |
+| 白狼王 and 黑狼王 may be in the same room (since #169; the owner confirmed it again on 2026-11-12) | `RoomService.validateRoleComposition`; the 選擇角色 page does not block either king |
+| Each special wolf needs a plain fellow wolf: `wolfCount ≥ special wolves + 1`, so both kings need 3+ wolves | `RoomService.validateRoleComposition` |
+| Offered at 9+ players (`SPECIAL_WOLF_MIN_PLAYERS`); switched off when the board drops below 9 | `RoomSetupPanel.vue` |
+| A 黑狼王 taken by a 白狼王 self-destruct dies without a shot, like a taken hunter | `SelfDestructService` |
 
 Suggested board: the 12-player 狼王守卫 (3 wolves + 黑狼王 · seer, witch, hunter, guard · 4 villagers).
 
