@@ -185,7 +185,14 @@ import axios from 'axios'
 import { useRoomStore } from '@/stores/roomStore'
 import { roomService } from '@/services/roomService'
 import type { Room } from '@/types'
-import { ROLE_DEFINITIONS, isWolfRole, roleDefinition, roleName } from '@/utils/roleDefinitions'
+import {
+  BLOCKED_WITH,
+  EXCLUSIVE_WITH,
+  ROLE_DEFINITIONS,
+  isWolfRole,
+  roleDefinition,
+  roleName,
+} from '@/utils/roleDefinitions'
 import { wolfBounds } from '@/utils/wolfBounds'
 import RoleComposition from '@/components/RoleComposition.vue'
 import ShareButton from '@/components/ShareButton.vue'
@@ -241,16 +248,6 @@ function decrement() {
 const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)
 const SPECIAL_WOLF_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && r.wolf).map((r) => r.id)
 const SPECIAL_WOLF_MIN_PLAYERS = 9
-// The seer and the medium are mutually exclusive: turning one on turns the other off.
-const EXCLUSIVE_WITH: Record<string, string> = { SEER: 'MEDIUM', MEDIUM: 'SEER' }
-// Roles from different boards that never share a room: while one is on, the other is blocked.
-// The mechanical wolf's learn table covers only its own board (机械狼通灵师), so no rule says what it gains from 騎士 or 守墓人.
-// 騎士 (预女骑守) and 守墓人 (预女猎墓) each give the good camp confirmed information; no standard board has both.
-const BLOCKED_WITH: Record<string, string[]> = {
-  MECHANICAL_WOLF: ['KNIGHT', 'GRAVEKEEPER'],
-  KNIGHT: ['MECHANICAL_WOLF', 'GRAVEKEEPER'],
-  GRAVEKEEPER: ['MECHANICAL_WOLF', 'KNIGHT'],
-}
 function blockedBy(roleId: string): boolean {
   return (BLOCKED_WITH[roleId] ?? []).some((id) => enabledOptional.value.has(id))
 }
@@ -496,6 +493,8 @@ async function save() {
 .card-note {
   font-size: 0.625rem;
   color: var(--muted);
+  /* A two-role note wraps: break after 、, never inside a role name. */
+  word-break: keep-all;
 }
 .card-info {
   position: absolute;

@@ -27,6 +27,15 @@
               {{ $t('common.seatDot', { n: mate.seatIndex, name: mate.nickname }) }}
             </div>
           </div>
+          <div v-if="excludes.length" class="rc-section" data-testid="rc-excludes">
+            <div class="rc-section-title">{{ $t('roleCard.excludes') }}</div>
+            <div class="rc-excludes">
+              <span v-for="id in excludes" :key="id" :data-role="id" class="rc-exclude">
+                {{ roleDefinition(id)?.emoji }} {{ roleName(id) }}
+              </span>
+            </div>
+            <div class="rc-exclude-note">{{ $t('roleCard.excludesNote') }}</div>
+          </div>
           <div class="rc-section" data-testid="rc-rules">
             <div class="rc-section-title">{{ $t('roleCard.rules') }}</div>
             <ul class="rc-rules">
@@ -46,6 +55,7 @@ import { useScrollLock } from '@/composables/useScrollLock'
 import { t } from '@/i18n'
 import type { GamePlayer, RoleHistory as RoleHistoryData } from '@/types'
 import {
+  excludedRoles,
   isWolfRole,
   roleDefinition,
   roleDescription,
@@ -69,6 +79,7 @@ useScrollLock(() => true)
 const team = computed(() =>
   isWolfRole(props.role) ? 'wolf' : props.role === 'VILLAGER' ? 'village' : 'special',
 )
+const excludes = computed(() => excludedRoles(props.role))
 const rules = computed(() => t(`role.rules.${props.role}`).split('\n'))
 </script>
 
@@ -189,6 +200,20 @@ const rules = computed(() => t(`role.rules.${props.role}`).split('\n'))
 .rc-mate-dead {
   color: var(--muted);
   text-decoration: line-through;
+}
+.rc-excludes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+}
+.rc-exclude {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--red);
+}
+.rc-exclude-note {
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 .rc-rules {
   margin: 0;
