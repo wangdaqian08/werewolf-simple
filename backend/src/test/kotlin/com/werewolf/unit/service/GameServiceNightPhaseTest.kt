@@ -572,6 +572,7 @@ class GameServiceNightPhaseTest {
         val roleReveal = result["roleReveal"] as Map<String, Any?>
         assertThat(roleReveal["confirmedCount"]).isEqualTo(1)
         assertThat(roleReveal["totalCount"]).isEqualTo(3)
+        assertThat(roleReveal["confirmedUserIds"]).isEqualTo(listOf("u1"))
     }
 
     @Test

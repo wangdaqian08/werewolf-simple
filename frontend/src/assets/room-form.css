@@ -40,6 +40,12 @@
   margin: 0;
 }
 
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .back-btn {
   background: none;
   border: none;

@@ -220,3 +220,60 @@ describe('gameStore', () => {
     expect(store.state?.timer).toEqual(IDLE)
   })
 })
+
+describe('gameStore.markRoleConfirmed', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function revealState(): GameState {
+    return {
+      ...freshState(),
+      phase: 'ROLE_REVEAL',
+      roleReveal: { confirmedCount: 1, confirmedUserIds: ['u1'], totalCount: 2 },
+    }
+  }
+
+  it('marks the player confirmed and bumps the count', () => {
+    const store = useGameStore()
+    store.setState(revealState())
+    store.markRoleConfirmed('u2')
+    expect(store.state?.roleReveal).toMatchObject({
+      confirmedCount: 2,
+      confirmedUserIds: ['u1', 'u2'],
+    })
+  })
+
+  it('ignores a repeat RoleConfirmed for someone already confirmed', () => {
+    const store = useGameStore()
+    store.setState(revealState())
+    store.markRoleConfirmed('u1')
+    expect(store.state?.roleReveal).toMatchObject({ confirmedCount: 1, confirmedUserIds: ['u1'] })
+  })
+})
+
+describe('gameStore.setState — role confirmations survive a racing fetch', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  const reveal = (ids: string[]): GameState => ({
+    ...freshState(),
+    phase: 'ROLE_REVEAL',
+    roleReveal: { confirmedCount: ids.length, confirmedUserIds: ids, totalCount: 3 },
+  })
+
+  it('keeps a confirmation that arrived over STOMP while an older fetch was in flight', () => {
+    const store = useGameStore()
+    store.setState(reveal(['u1']))
+    store.markRoleConfirmed('u2') // RoleConfirmed lands first…
+    store.setState(reveal(['u1'])) // …then the fetch taken before it resolves
+    expect(store.state?.roleReveal).toMatchObject({
+      confirmedCount: 2,
+      confirmedUserIds: ['u1', 'u2'],
+    })
+  })
+
+  it('does not carry confirmations over into a different game', () => {
+    const store = useGameStore()
+    store.setState(reveal(['u1', 'u2']))
+    store.setState({ ...reveal([]), gameId: 'game-002' })
+    expect(store.state?.roleReveal).toMatchObject({ confirmedCount: 0, confirmedUserIds: [] })
+  })
+})

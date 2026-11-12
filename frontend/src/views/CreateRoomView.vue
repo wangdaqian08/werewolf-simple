@@ -1,10 +1,13 @@
 <template>
   <div class="create-wrap">
     <div class="create-card">
-      <!-- Back button -->
-      <button class="back-btn" @click="router.push({ name: 'lobby' })">
-        {{ $t('common.back') }}
-      </button>
+      <!-- Back + language, one row inside the card -->
+      <div class="top-row">
+        <button class="back-btn" @click="router.push({ name: 'lobby' })">
+          {{ $t('common.back') }}
+        </button>
+        <LanguageToggle inline />
+      </div>
       <!-- Header -->
       <div class="create-header">
         <div class="section-lbl">{{ $t('common.host') }}</div>
@@ -176,6 +179,7 @@
 
 <script lang="ts" setup>
 import { t } from '@/i18n'
+import LanguageToggle from '@/components/LanguageToggle.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/roomStore'

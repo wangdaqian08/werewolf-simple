@@ -378,4 +378,30 @@ describe('slotVariant', () => {
     const { slotVariant } = setup(room, 'u1')
     expect(slotVariant(3)).toBe('waiting')
   })
+
+  it("ready for the host's slot seen by a guest (host is stored NOT_READY but never readies)", () => {
+    const room = makeRoom({ players: [p('host', 1, { isHost: true, status: 'NOT_READY' })] })
+    const { slotVariant } = setup(room, 'u1')
+    expect(slotVariant(1)).toBe('ready')
+  })
+})
+
+// ── isNotReadyAt ──────────────────────────────────────────────────────────────
+
+describe('isNotReadyAt', () => {
+  const room = makeRoom({
+    players: [p('host', 1, { isHost: true }), p('u2', 2, { status: 'READY' }), p('u3', 3)],
+  })
+
+  it('true only for a seated guest who has not readied', () => {
+    const { isNotReadyAt } = setup(room, 'u3')
+    expect(isNotReadyAt(3)).toBe(true)
+    expect(isNotReadyAt(2)).toBe(false)
+  })
+
+  it('false for the host seat (never readies) and for an empty seat', () => {
+    const { isNotReadyAt } = setup(room, 'u3')
+    expect(isNotReadyAt(1)).toBe(false)
+    expect(isNotReadyAt(4)).toBe(false)
+  })
 })
