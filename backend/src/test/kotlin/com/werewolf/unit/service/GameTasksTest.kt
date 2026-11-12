@@ -52,8 +52,44 @@ class GameTasksTest {
     fun `every wolf, special wolves included, draws wolf tasks and never the good-side vote task`() {
         for (wolf in PlayerRole.entries.filter { it.isWolf }) {
             assertThat(GameTasks.eligible(wolf, hasSheriff = true)).`as`(wolf.name)
-                .contains(GameTask.WOLF_NEVER_EXILED, GameTask.WOLF_WIN_ALIVE, GameTask.WOLF_FIRST_NIGHT_GOD)
+                .contains(GameTask.WOLF_NEVER_EXILED, GameTask.WOLF_WIN_ALIVE)
                 .doesNotContain(GameTask.VOTE_WOLF_TWICE, GameTask.SEER_FIND_TWO_WOLVES)
+        }
+    }
+
+    @Test
+    fun `the night-1 knife task goes only to wolves that knife with the pack, never the mechanical wolf`() {
+        for (wolf in PlayerRole.entries.filter { it.isWolf }) {
+            val tasks = GameTasks.eligible(wolf, hasSheriff = true)
+            if (wolf.isPackWolf) assertThat(tasks).`as`(wolf.name).contains(GameTask.WOLF_FIRST_NIGHT_GOD)
+            else assertThat(tasks).`as`(wolf.name).doesNotContain(GameTask.WOLF_FIRST_NIGHT_GOD)
+        }
+    }
+
+    /**
+     * No task may ask for a skill the role does not have (owner rule, 2026-11-13): a villager can
+     * never be asked to check a wolf. Each task names the only roles that can ever complete it.
+     */
+    @Test
+    fun `no role is ever dealt a task beyond its own skills`() {
+        val canDoIt: Map<GameTask, (PlayerRole) -> Boolean> = mapOf(
+            GameTask.SURVIVE_TO_DAY3 to { _ -> true },
+            GameTask.HOLD_BADGE to { _ -> true },
+            GameTask.VOTE_WOLF_TWICE to { r -> !r.isWolf }, // a wolf voting a wolf is never counted
+            GameTask.VILLAGER_SURVIVE_WIN to { r -> r == VILLAGER },
+            GameTask.SEER_FIND_TWO_WOLVES to { r -> r == SEER },
+            GameTask.WITCH_POISON_WOLF to { r -> r == WITCH },
+            GameTask.WITCH_SAVE_GOOD to { r -> r == WITCH },
+            GameTask.GUARD_BLOCK_KILL to { r -> r == GUARD },
+            GameTask.WOLF_NEVER_EXILED to { r -> r.isWolf },
+            GameTask.WOLF_WIN_ALIVE to { r -> r.isWolf },
+            GameTask.WOLF_FIRST_NIGHT_GOD to { r -> r.isPackWolf },
+        )
+        assertThat(canDoIt.keys).containsExactlyInAnyOrder(*GameTask.entries.toTypedArray()) // a new task must be listed here
+        for (role in PlayerRole.entries) for (sheriff in listOf(true, false)) {
+            GameTasks.eligible(role, sheriff).forEach { task ->
+                assertThat(canDoIt.getValue(task)(role)).`as`("$role must not be dealt $task").isTrue()
+            }
         }
     }
 
