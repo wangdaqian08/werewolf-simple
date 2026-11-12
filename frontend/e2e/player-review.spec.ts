@@ -113,5 +113,5 @@ test('積分規則 separates the one-of base rules from what stacks on them', as
   await expect(rules).toContainText('+3 / 次')
   // Nothing costs points yet, so neither the penalty group nor the floor note appears.
   await expect(page.getByTestId('settings-reward-group-PENALTY')).toHaveCount(0)
-  await expect(rules).not.toContainText('本局積分最低')
+  await expect(rules).not.toContainText('本局戰績分最低')
 })

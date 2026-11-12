@@ -20,6 +20,17 @@ describe('StatsCard', () => {
     expect(text(w, 'stats-good')).toContain('10')
   })
 
+  it('shows the score under its own name, apart from coins', () => {
+    const w = mountCard({ ...MOCK_USER_STATS, score: 1280 })
+    expect(text(w, 'stats-score')).toContain('1280')
+    expect(text(w, 'stats-score')).toContain('戰績分')
+    expect(text(w, 'stats-score')).not.toContain('◈')
+  })
+
+  it('shows a score of 0 before the first rewarded game', () => {
+    expect(text(mountCard({ ...MOCK_USER_STATS, score: 0 }), 'stats-score')).toContain('0')
+  })
+
   it('renders 20 recent cells in order', () => {
     const cells = mountCard(MOCK_USER_STATS).findAll('[data-testid="stats-recent-cell"]')
     expect(cells.map((c) => c.attributes('data-result')).join('')).toBe('WWLWLLWWWLWLWWLLWLWW')
@@ -48,6 +59,7 @@ describe('StatsCard', () => {
       recent: [],
       percentile: null,
       gamesToRank: 5,
+      score: 0,
     })
     expect(text(w, 'stats-games')).toContain('0')
     expect(text(w, 'stats-winrate')).toContain('0%')

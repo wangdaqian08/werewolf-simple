@@ -313,7 +313,9 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     const settlement = wrapper.find('[data-testid="settlement"]')
     expect(settlement.exists()).toBe(true)
     expect(settlement.text()).toContain('+50')
-    expect(settlement.text()).toContain('積分')
+    expect(wrapper.find('[data-testid="my-earned"]').text()).toBe('+50 戰績分')
+    // the same reward is also paid out as spendable coins
+    expect(wrapper.find('[data-testid="my-coins"]').text()).toBe('同時獲得 50 金幣')
     expect(settlement.text()).toContain('500')
     // rewards sorted by seatIndex ascending regardless of input order
     const rows = wrapper.findAll('.reward-row').map((r) => r.text())
@@ -354,7 +356,23 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     const { wrapper } = await mountResultView(state, { authedUserId: 'spectator' })
     expect(wrapper.find('[data-testid="settlement"]').exists()).toBe(true)
     expect(wrapper.find('.my-earned').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="my-coins"]').exists()).toBe(false)
     expect(wrapper.findAll('.reward-row')).toHaveLength(1)
+  })
+
+  it('a game that earned 0 shows +0 戰績分 and no coins line', async () => {
+    const state: GameState = {
+      gameId: 'g-zero',
+      phase: 'GAME_OVER',
+      dayNumber: 1,
+      winner: 'VILLAGER',
+      players: [makePlayer(1, 'user-1', 'Alice', 'WEREWOLF')],
+      events: [],
+      settlement: { myEarned: 0, myBalance: 200, rewards: [] },
+    }
+    const { wrapper } = await mountResultView(state)
+    expect(wrapper.find('[data-testid="my-earned"]').text()).toBe('+0 戰績分')
+    expect(wrapper.find('[data-testid="my-coins"]').exists()).toBe(false)
   })
 
   it('📜 上帝視角復盤 opens the review page of this game', async () => {

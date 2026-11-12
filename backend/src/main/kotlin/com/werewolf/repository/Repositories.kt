@@ -215,6 +215,10 @@ interface CreditTransactionRepository : JpaRepository<CreditTransaction, Int> {
     fun findTop20ByUserIdOrderByCreatedAtDesc(userId: String): List<CreditTransaction>
     fun findByGameIdAndType(gameId: Int, type: CreditTxType): List<CreditTransaction>
 
+    /** Total of one kind of ledger row for a user; 0 when there are none. */
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM CreditTransaction t WHERE t.userId = :userId AND t.type = :type")
+    fun sumAmount(@Param("userId") userId: String, @Param("type") type: CreditTxType): Long
+
     fun deleteByGameIdIn(gameIds: Collection<Int>): Long
     fun deleteByPerkActivationIdIn(perkActivationIds: Collection<Int>): Long
 }

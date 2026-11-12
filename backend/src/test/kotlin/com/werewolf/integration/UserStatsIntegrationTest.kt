@@ -10,6 +10,7 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.service.UserStatsService
+import com.werewolf.service.WalletService
 import com.werewolf.service.percentileOf
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -37,6 +38,7 @@ class UserStatsIntegrationTest {
     @Autowired lateinit var gameRepository: GameRepository
     @Autowired lateinit var gamePlayerRepository: GamePlayerRepository
     @Autowired lateinit var userStatsService: UserStatsService
+    @Autowired lateinit var walletService: WalletService
 
     private class Login(val token: String, val userId: String)
 
@@ -121,6 +123,37 @@ class UserStatsIntegrationTest {
     }
 
     @Test
+    fun `score is the sum of game rewards and nothing else`() {
+        val u = login()
+        val other = login()
+        walletService.credit(u.userId, 20, CreditTxType.GAME_REWARD)
+        walletService.credit(u.userId, 5, CreditTxType.GAME_REWARD)
+        walletService.credit(u.userId, 100, CreditTxType.PURCHASE)
+        walletService.credit(u.userId, 50, CreditTxType.ADMIN_GRANT)
+        walletService.debit(u.userId, 30, CreditTxType.PERK_SPEND)
+        walletService.credit(u.userId, 30, CreditTxType.REFUND)
+        walletService.credit(other.userId, 99, CreditTxType.GAME_REWARD)
+        assertThat(userStatsService.statsFor(u.userId).score).isEqualTo(25)
+    }
+
+    @Test
+    fun `spending coins never lowers the score`() {
+        val u = login()
+        walletService.credit(u.userId, 20, CreditTxType.GAME_REWARD)
+        walletService.debit(u.userId, 20, CreditTxType.PERK_SPEND)
+        assertThat(walletService.balance(u.userId)).isEqualTo(0)
+        assertThat(userStatsService.statsFor(u.userId).score).isEqualTo(20)
+    }
+
+    @Test
+    fun `score is 0 with no rewards, bought coins included`() {
+        val u = login()
+        assertThat(userStatsService.statsFor(u.userId).score).isEqualTo(0)
+        walletService.credit(u.userId, 100, CreditTxType.PURCHASE)
+        assertThat(userStatsService.statsFor(u.userId).score).isEqualTo(0)
+    }
+
+    @Test
     fun `percentile is wired for a player with 5 games`() {
         val u = login()
         repeat(5) { seed(u, PlayerRole.SEER, WinnerSide.VILLAGER) }
@@ -174,6 +207,7 @@ class UserStatsIntegrationTest {
         val x = login()
         val y = login()
         seed(x, PlayerRole.SEER, WinnerSide.VILLAGER)
+        walletService.credit(x.userId, 20, CreditTxType.GAME_REWARD)
         repeat(2) { seed(y, PlayerRole.SEER, WinnerSide.WEREWOLF) }
         fun get(l: Login) = restTemplate.exchange(
             "/api/user/stats", HttpMethod.GET,
@@ -182,9 +216,11 @@ class UserStatsIntegrationTest {
         val bx = get(x)
         assertThat(bx["games"]).isEqualTo(1)
         assertThat(bx["wins"]).isEqualTo(1)
+        assertThat(bx["score"]).isEqualTo(20)
         val by = get(y)
         assertThat(by["games"]).isEqualTo(2)
         assertThat(by["losses"]).isEqualTo(2)
+        assertThat(by["score"]).isEqualTo(0)
         assertThat((by["good"] as Map<String, Any>)["losses"]).isEqualTo(2)
     }
 }

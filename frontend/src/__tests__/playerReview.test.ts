@@ -281,6 +281,6 @@ describe('PlayerReview', () => {
   })
 
   it('points: no block at all when the game was never settled', () => {
-    expect(mount(PlayerReview, { props: { review: review() } }).text()).not.toContain('本局積分')
+    expect(mount(PlayerReview, { props: { review: review() } }).text()).not.toContain('本局戰績分')
   })
 })

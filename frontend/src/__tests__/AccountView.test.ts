@@ -210,7 +210,7 @@ describe('AccountView', () => {
     h.getWalletMock.mockRejectedValue(new Error('network'))
     const { wrapper } = await mountAccount()
     expect(wrapper.find('[data-testid="account-wallet"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="account-wallet"]').text()).toContain('無法加載積分記錄')
+    expect(wrapper.find('[data-testid="account-wallet"]').text()).toContain('無法加載金幣記錄')
     // Balance line is hidden on error so stale credits from userStore are not shown.
     expect(wrapper.find('[data-testid="account-balance"]').exists()).toBe(false)
     // Other sections are unaffected.
@@ -444,7 +444,7 @@ describe('AccountView money formatting and status fallbacks', () => {
   it('shows the guest note only for guests', async () => {
     const guest = await mountAccount('guest:abc')
     expect(guest.wrapper.find('[data-testid="account-guest-note"]').text()).toBe(
-      '訪客帳號跟隨暱稱，更換暱稱會看不到原來的戰績和積分',
+      '訪客帳號跟隨暱稱，更換暱稱會看不到原來的戰績和金幣',
     )
     const google = await mountAccount('google:abc')
     expect(google.wrapper.find('[data-testid="account-guest-note"]').exists()).toBe(false)

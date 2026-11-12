@@ -1,7 +1,9 @@
 package com.werewolf.service
 
+import com.werewolf.model.CreditTxType
 import com.werewolf.model.PlayerRole
 import com.werewolf.model.WinnerSide
+import com.werewolf.repository.CreditTransactionRepository
 import com.werewolf.repository.GamePlayerRepository
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
@@ -12,6 +14,8 @@ data class UserStats(
     val games: Int, val wins: Int, val losses: Int, val winRate: Int,
     val wolf: CampRecord, val good: CampRecord, val recent: List<String>,
     val percentile: Int?, val gamesToRank: Int,
+    /** 战绩分: earned by play only — never bought, never spent. */
+    val score: Int,
 )
 
 /** One ranked player's counted games and wins; the aggregate JPQL target (count/sum are Long). */
@@ -37,7 +41,10 @@ fun percentileOf(wins: Int, games: Int, others: List<Pair<Int, Int>>): Int {
 }
 
 @Service
-class UserStatsService(private val gamePlayerRepository: GamePlayerRepository) {
+class UserStatsService(
+    private val gamePlayerRepository: GamePlayerRepository,
+    private val creditTransactionRepository: CreditTransactionRepository,
+) {
 
     fun statsFor(userId: String): UserStats {
         val mine = gamePlayerRepository.findFinishedResultsFor(userId).sortedWith(compareByDescending<FinishedResult> { it.endedAt }.thenByDescending { it.gameId })
@@ -57,6 +64,7 @@ class UserStatsService(private val gamePlayerRepository: GamePlayerRepository) {
             recent = mine.take(RECENT_LIMIT).map { if (it.won) "W" else "L" },
             percentile = percentile,
             gamesToRank = maxOf(0, MIN_GAMES_TO_RANK - games),
+            score = creditTransactionRepository.sumAmount(userId, CreditTxType.GAME_REWARD).toInt(),
         )
     }
 

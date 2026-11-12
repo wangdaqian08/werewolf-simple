@@ -46,6 +46,11 @@ describe('i18n catalogs', () => {
     expect(Object.values(Z).filter((v) => simplified.test(v))).toEqual([])
   })
 
+  it('names the two numbers apart: 戰績分 (earned by play) and 金幣 (spendable), never 積分 / credits', () => {
+    expect(Object.entries(Z).filter(([, v]) => v.includes('積分'))).toEqual([])
+    expect(Object.entries(E).filter(([, v]) => /credit/i.test(v))).toEqual([])
+  })
+
   it('every literal message key used in the source exists in the catalog', () => {
     const roots = Object.keys(en)
     const keyLiteral = new RegExp(

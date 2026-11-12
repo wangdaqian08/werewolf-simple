@@ -74,7 +74,7 @@ describe('LobbyView credits chip', () => {
     const chip = wrapper.find('[data-testid="credits-chip"]')
     expect(chip.exists()).toBe(true)
     expect(chip.text()).toContain('250')
-    expect(chip.text()).toContain('積分')
+    expect(chip.text()).toContain('金幣')
   })
 
   it('renders the chip even at a zero balance', async () => {
