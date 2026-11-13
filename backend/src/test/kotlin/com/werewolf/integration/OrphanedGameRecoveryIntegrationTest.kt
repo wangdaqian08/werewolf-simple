@@ -59,6 +59,7 @@ class OrphanedGameRecoveryIntegrationTest {
     @Autowired lateinit var roomRepository: RoomRepository
     @Autowired lateinit var roomPlayerRepository: RoomPlayerRepository
     @Autowired lateinit var orphanedGameRecovery: OrphanedGameRecovery
+    @Autowired lateinit var abandonedGameSweep: com.werewolf.service.AbandonedGameSweep
     @Autowired lateinit var perkActivationRepository: PerkActivationRepository
     @Autowired lateinit var walletService: WalletService
     @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
@@ -247,5 +248,38 @@ class OrphanedGameRecoveryIntegrationTest {
         val view = rolePickService.choose(picker, roomId, RolePickChoice.WOLF)
         assertThat(view.choice).isEqualTo(RolePickChoice.WOLF)
         assertThat(walletService.balance(picker)).isEqualTo(80)
+    }
+
+    // ── Abandoned live games (no restart needed) ─────────────────────────────
+
+    @Test
+    fun `a live game nobody touched for two hours is cancelled like a restart would`() {
+        val (_, roomId, gameId) = setupRoomAndStartGame("Abandon1")
+        org.mockito.Mockito.clearInvocations(stompPublisher)
+
+        assertThat(abandonedGameSweep.cancelAbandoned(java.time.LocalDateTime.now().plusMinutes(121))).contains(gameId)
+
+        val game = gameRepository.findById(gameId).orElseThrow()
+        assertThat(game.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(game.endedAt).isNotNull
+        assertThat(game.winner).isNull()
+        assertThat(roomRepository.findById(roomId).orElseThrow().status).isEqualTo(RoomStatus.WAITING)
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher).broadcastGame(eq(gameId), captor.capture())
+        assertThat((captor.firstValue as DomainEvent.GameOver).winner).isNull()
+    }
+
+    @Test
+    fun `a live game with a recent action is left alone`() {
+        val (hostToken, _, gameId) = setupRoomAndStartGame("Abandon2")
+        val confirm = restTemplate.postForEntity(
+            "/api/game/action",
+            HttpEntity(mapOf("gameId" to gameId, "actionType" to "CONFIRM_ROLE"), authHeaders(hostToken)),
+            Map::class.java,
+        )
+        assertThat(confirm.statusCode).isEqualTo(HttpStatus.OK)
+
+        assertThat(abandonedGameSweep.cancelAbandoned(java.time.LocalDateTime.now().plusMinutes(119))).doesNotContain(gameId)
+        assertThat(gameRepository.findById(gameId).orElseThrow().endedAt).isNull()
     }
 }
