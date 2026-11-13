@@ -1,5 +1,7 @@
 package com.werewolf.service
 
+import com.werewolf.model.GameTask
+
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.model.CreditTxType
 import com.werewolf.model.GamePhase
@@ -145,5 +147,19 @@ class TestSupportService(
         entityManager.createQuery(update).setParameter("role", a.role).setParameter("id", b.id).executeUpdate()
         log.info("[TestSupport] swapRoles game={} {}:{}->{} {}:{}->{}", gameId, userIdA, a.role, b.role, userIdB, b.role, a.role)
         return mapOf(userIdA to b.role.name, userIdB to a.role.name)
+    }
+
+    /** Pins [userId]'s task while the game runs; false when over, not a player, or beyond the seat's role. */
+    @Transactional
+    fun setTask(gameId: Int, userId: String, task: GameTask): Boolean {
+        val game = gameRepository.findById(gameId).orElse(null) ?: return false
+        if (game.phase == GamePhase.GAME_OVER) return false
+        val seat = gamePlayerRepository.findByGameIdAndUserId(gameId, userId).orElse(null) ?: return false
+        val hasSheriff = roomRepository.findById(game.roomId).map { it.hasSheriff }.orElse(false)
+        if (task !in GameTasks.eligible(seat.role, hasSheriff)) return false
+        seat.taskCode = task
+        gamePlayerRepository.save(seat)
+        log.info("[TestSupport] setTask game={} {} -> {}", gameId, userId, task)
+        return true
     }
 }

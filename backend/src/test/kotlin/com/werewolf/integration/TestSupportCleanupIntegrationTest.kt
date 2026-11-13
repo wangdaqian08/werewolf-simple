@@ -1,9 +1,11 @@
 package com.werewolf.integration
 
 import com.werewolf.controller.GrantCreditsRequest
+import com.werewolf.controller.SetTaskRequest
 import com.werewolf.controller.SwapRolesRequest
 import com.werewolf.controller.TestSupportController
 import com.werewolf.model.CreditTransaction
+import com.werewolf.model.GameTask
 import com.werewolf.model.CreditTxType
 import com.werewolf.model.ElectionSubPhase
 import com.werewolf.model.EliminationHistory
@@ -252,6 +254,36 @@ class TestSupportCleanupIntegrationTest {
 
     private fun roleOf(gameId: Int, userId: String) =
         gamePlayerRepository.findByGameIdAndUserId(gameId, userId).map { it.role }.orElse(null)
+
+    private fun taskOf(gameId: Int, userId: String) =
+        gamePlayerRepository.findByGameIdAndUserId(gameId, userId).map { it.taskCode }.orElse(null)
+
+    @Test
+    fun `set-task pins a seat's task while the game runs`() {
+        val d = seedDealtGame()
+        gameRepository.findById(d.gameId).ifPresent { it.phase = GamePhase.NIGHT; gameRepository.save(it) }
+        val response = controller.setTask(d.gameId, SetTaskRequest(userId = d.wolf, task = "WOLF_WIN_ALIVE"))
+        assertThat(response.statusCode.value()).isEqualTo(200)
+        assertThat(taskOf(d.gameId, d.wolf)).isEqualTo(GameTask.WOLF_WIN_ALIVE)
+    }
+
+    @Test
+    fun `set-task refuses a task beyond the seat's role - a knight cannot be asked to win as a wolf`() {
+        val d = seedDealtGame()
+        val response = controller.setTask(d.gameId, SetTaskRequest(userId = d.knight, task = "WOLF_WIN_ALIVE"))
+        assertThat(response.statusCode.value()).isEqualTo(400)
+        assertThat(taskOf(d.gameId, d.knight)).isNull()
+    }
+
+    @Test
+    fun `set-task is refused once the game is over, for an unknown task, and for a player not in the game`() {
+        val d = seedDealtGame()
+        assertThat(controller.setTask(d.gameId, SetTaskRequest(d.wolf, "NO_SUCH_TASK")).statusCode.value()).isEqualTo(400)
+        assertThat(controller.setTask(d.gameId, SetTaskRequest(newUser(), "SURVIVE_TO_DAY3")).statusCode.value()).isEqualTo(400)
+        gameRepository.findById(d.gameId).ifPresent { it.phase = GamePhase.GAME_OVER; gameRepository.save(it) }
+        assertThat(controller.setTask(d.gameId, SetTaskRequest(d.wolf, "SURVIVE_TO_DAY3")).statusCode.value()).isEqualTo(400)
+        assertThat(taskOf(d.gameId, d.wolf)).isNull()
+    }
 
     @Test
     fun `swap-roles in ROLE_REVEAL swaps the two players' roles`() {

@@ -1,5 +1,7 @@
 package com.werewolf.controller
 
+import com.werewolf.model.GameTask
+
 import com.werewolf.service.TestSupportService
 import org.springframework.context.annotation.Profile
 import org.springframework.http.ResponseEntity
@@ -20,6 +22,9 @@ import org.springframework.web.bind.annotation.RestController
  *
  * POST /api/test-support/games/{gameId}/swap-roles swaps two players' dealt roles
  * during ROLE_REVEAL so a spec can pin a role (e.g. host = KNIGHT) deterministically.
+ *
+ * POST /api/test-support/games/{gameId}/set-task pins one seat's 单局任务 while the game
+ * runs; only a task that seat's role can draw, so a spec can never stage an impossible one.
  *
  * Registered only under the e2e/test profiles and never alongside prod —
  * pinned by TestSupportControllerProfileTest.
@@ -50,8 +55,17 @@ class TestSupportController(private val testSupportService: TestSupportService) 
             ?: return ResponseEntity.badRequest().build()
         return ResponseEntity.ok(roles)
     }
+
+    @PostMapping("/games/{gameId}/set-task")
+    fun setTask(@PathVariable gameId: Int, @RequestBody body: SetTaskRequest): ResponseEntity<Map<String, String>> {
+        val task = GameTask.entries.firstOrNull { it.name == body.task } ?: return ResponseEntity.badRequest().build()
+        if (!testSupportService.setTask(gameId, body.userId, task)) return ResponseEntity.badRequest().build()
+        return ResponseEntity.ok(mapOf(body.userId to task.name))
+    }
 }
 
 data class SwapRolesRequest(val userIdA: String, val userIdB: String)
+
+data class SetTaskRequest(val userId: String, val task: String)
 
 data class GrantCreditsRequest(val userId: String, val amount: Int)
