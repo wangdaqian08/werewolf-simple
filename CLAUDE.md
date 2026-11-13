@@ -401,6 +401,17 @@ Wait for the thing the next step needs:
 
 `locator.isVisible()` never waits (its `timeout` option is ignored) — use it only for a probe after a `waitFor`, never as the gate. The only poll intervals are inside `waitForCondition` and `waitForBackendLog`; a new helper builds on them. See the `write-real-e2e-test` skill.
 
+## Backend configuration values live in application.yml
+
+Tunable values — limits, timeouts, intervals, thresholds, amounts — go in `backend/src/main/resources/application.yml` under `werewolf.*`, not in Kotlin code. Reference them with no fallback default, so a missing key fails at startup instead of silently using a hidden value:
+
+```kotlin
+@Value("\${werewolf.games.abandon-after-minutes}") private val abandonAfterMinutes: Long   // right
+@Value("\${werewolf.games.abandon-after-minutes:120}") private val abandonAfterMinutes: Long // wrong: value hidden in code
+```
+
+When a key's meaning or unit is not obvious from its name, add one short comment above it in the yml (e.g. `# How often to check (10 min)`). Profile files (`application-e2e.yml`, test `application-test.yml`) override only what differs.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
