@@ -12,11 +12,11 @@ import java.time.Duration
 import java.time.LocalDateTime
 
 /**
- * Cancels in-flight games nobody has acted in for [abandonAfterMinutes] (default 2 hours,
- * owner decision 2026-11-14). Before this, a game the players walked away from hung until
- * the next restart — on production that was 4–6 days, half of all games — holding its
- * room and its players' perk coins. Activity = the last accepted action
- * ([GameActivityTracker]), or the game's start when there has been none.
+ * Cancels in-flight games nobody has acted in for [abandonAfterMinutes] (2 hours, owner
+ * decision 2026-11-14; set in application.yml under `werewolf.games`). Before this, a game
+ * the players walked away from hung until the next restart — on production that was 4–6
+ * days, half of all games — holding its room and its players' perk coins. Activity = the
+ * last accepted action ([GameActivityTracker]), or the game's start when there has been none.
  */
 @Component
 class AbandonedGameSweep(
@@ -25,13 +25,13 @@ class AbandonedGameSweep(
     private val gameCanceller: GameCanceller,
     private val nightOrchestrator: NightOrchestrator,
     private val hostTimerService: HostTimerService,
-    @Value("\${werewolf.games.abandon-after-minutes:120}") private val abandonAfterMinutes: Long,
+    @Value("\${werewolf.games.abandon-after-minutes}") private val abandonAfterMinutes: Long,
 ) {
     private val log = LoggerFactory.getLogger(AbandonedGameSweep::class.java)
 
     @Scheduled(
-        fixedDelayString = "\${werewolf.games.abandon-sweep-interval-ms:600000}",
-        initialDelayString = "\${werewolf.games.abandon-sweep-interval-ms:600000}",
+        fixedDelayString = "\${werewolf.games.abandon-sweep-interval-ms}",
+        initialDelayString = "\${werewolf.games.abandon-sweep-interval-ms}",
     )
     fun sweep() {
         cancelAbandoned(LocalDateTime.now())

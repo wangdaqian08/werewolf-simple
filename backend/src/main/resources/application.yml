@@ -72,3 +72,9 @@ werewolf:
   # Admin credit grants: 4-digit PIN from env; unset = grants disabled (503)
   admin:
     pin: ${ADMIN_PIN:}
+  # Abandoned in-flight games (see AbandonedGameSweep)
+  games:
+    # Cancel a game after this long with no accepted action
+    abandon-after-minutes: 120
+    # How often to check (10 min)
+    abandon-sweep-interval-ms: 600000
