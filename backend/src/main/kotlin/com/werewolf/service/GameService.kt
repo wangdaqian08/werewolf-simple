@@ -530,7 +530,12 @@ class GameService(
             "settlement" to settlement,
             "myRole" to myPlayer?.role?.name,
             // Private: the requester's own 单局任务; done is set once the game is settled.
-            "myTask" to myPlayer?.taskCode?.let { mapOf("code" to it.name, "score" to it.score, "done" to myPlayer.taskDone) },
+            "myTask" to myPlayer?.taskCode?.let {
+                mapOf(
+                    "code" to it.name, "score" to it.score, "perNight" to it.perNight,
+                    "done" to myPlayer.taskDone, "earned" to myPlayer.taskScore,
+                )
+            },
             "myRolePick" to perkService.myRolePick(gameId, requestingUserId),
             // Wolves know each other all game (role card); everyone else gets an empty list.
             "wolfTeammates" to if (myPlayer?.role?.isPackWolf == true) {

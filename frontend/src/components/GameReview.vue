@@ -85,7 +85,7 @@
           <span :class="{ 'rv-wolf': isWolfRole(tk.player.role) }">
             {{ $t('common.seatNick', { n: tk.player.seatIndex, name: tk.player.nickname }) }}
           </span>
-          <TaskLine :task="{ code: tk.task, score: tk.score, done: tk.done }" />
+          <TaskLine :task="{ ...tk, code: tk.task }" />
         </div>
       </div>
     </template>

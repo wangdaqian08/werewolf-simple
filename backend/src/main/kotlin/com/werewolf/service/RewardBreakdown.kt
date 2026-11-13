@@ -80,11 +80,10 @@ object RewardBreakdown {
      * for those who could not. A day that never reached a tally has no event, and there the
      * rows that were never cleared are all there is.
      */
-    fun wolfVoteDays(
-        votes: List<Vote>,
-        events: List<GameEvent>,
-        roleOf: (String) -> PlayerRole?,
-    ): Map<String, List<Int>> {
+    /** Each voter's final exile vote per tallied day (null = abstained), and which days were tallied. */
+    class FinalVotes(val votes: Map<Pair<String, Int>, String?>, val talliedDays: Set<Int>)
+
+    fun finalVotes(votes: List<Vote>, events: List<GameEvent>): FinalVotes {
         val finalVote = mutableMapOf<Pair<String, Int>, String?>()
         val daysTallied = mutableSetOf<Int>()
         events.filter { it.eventType == "VOTE_RESULT" }.forEach { e ->
@@ -107,6 +106,17 @@ object RewardBreakdown {
                 (v["userId"] as? String)?.let { finalVote[it to day] = null }
             }
         }
+        return FinalVotes(finalVote, daysTallied)
+    }
+
+    fun wolfVoteDays(
+        votes: List<Vote>,
+        events: List<GameEvent>,
+        roleOf: (String) -> PlayerRole?,
+    ): Map<String, List<Int>> {
+        val tallied = finalVotes(votes, events)
+        val finalVote = tallied.votes.toMutableMap()
+        val daysTallied = tallied.talliedDays
         votes.filter { it.dayNumber !in daysTallied }
             .forEach { finalVote[it.voterUserId to it.dayNumber] = it.targetUserId }
 

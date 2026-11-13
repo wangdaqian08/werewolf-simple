@@ -136,6 +136,21 @@ class RewardBreakdownTest {
     }
 
     @Test
+    fun `final votes - a PK re-vote replaces round 1, a barred PK candidate keeps round 1, abstains are null`() {
+        val events = listOf(
+            voteResult(1, listOf("v" to listOf("seer"), "king" to listOf("v")), abstain = listOf("w1")),
+            voteResult(1, listOf("king" to listOf("seer"))), // re-vote: seer moves onto the wolf; v is a PK candidate
+            voteResult(2, emptyList(), abstain = listOf("seer")),
+        )
+        val final = RewardBreakdown.finalVotes(emptyList(), events)
+        assertThat(final.talliedDays).containsExactlyInAnyOrder(1, 2)
+        assertThat(final.votes[("seer" to 1)]).isEqualTo("king")
+        assertThat(final.votes[("v" to 1)]).isEqualTo("king")
+        assertThat(final.votes).containsEntry(("w1" to 1), null).containsEntry(("seer" to 2), null)
+        assertThat(final.votes).doesNotContainKey("v" to 2) // never cast a vote on day 2
+    }
+
+    @Test
     fun `every reason a player can be paid for is in the table players can read`() {
         // A rule that pays but is not listed is a rule nobody can find out about.
         assertThat(RewardBreakdown.catalog(rewards).map { it.reason })

@@ -64,6 +64,10 @@ class GamePlayer(
     @Column(name = "task_done")
     var taskDone: Boolean? = null,
 
+    // 戰績分 the task paid (0 when not done); null until judged
+    @Column(name = "task_score")
+    var taskScore: Int? = null,
+
     // Mechanical wolf only: the role it learned from its target (fixed once set)
     @Enumerated(EnumType.STRING)
     @Column(name = "learned_role", length = 20)

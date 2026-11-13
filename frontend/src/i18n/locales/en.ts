@@ -841,10 +841,12 @@ export default {
     done: 'Done',
     name: {
       SURVIVE_TO_DAY3: 'Be alive when day 3 dawns',
+      NEVER_VOTE_GOOD: 'Never vote for a good player or abstain in an exile vote',
       HOLD_BADGE: 'Be elected sheriff or receive the badge',
       VOTE_WOLF_TWICE: 'Vote out a wolf on at least 2 days',
       VILLAGER_SURVIVE_WIN: 'Survive to the end of a village win',
       SEER_FIND_TWO_WOLVES: 'Check at least 2 different wolves',
+      SEER_WOLF_EVERY_NIGHT: 'Check a wolf on every night you are alive',
       WITCH_POISON_WOLF: 'Poison a wolf',
       WITCH_SAVE_GOOD: 'Save a good player with the antidote',
       GUARD_BLOCK_KILL: "Guard the wolves' target once",
@@ -854,6 +856,7 @@ export default {
     },
     notDone: 'Not done',
     score: '+{n} score',
+    scorePerNight: '+{n} score per night',
     title: 'Your task',
   },
   unsupported: {

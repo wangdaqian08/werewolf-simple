@@ -32,7 +32,13 @@ class GameTasksTest {
         nights: List<NightPhase> = emptyList(),
         nightDeathDay: Map<String, Int> = emptyMap(),
         exiled: Set<String> = emptySet(),
-    ) = GameTasks.Facts(winner, finalDay, roles, badgeHolders, wolfVoteDays, nights, nightDeathDay, exiled)
+        finalVotes: Map<Pair<String, Int>, String?> = emptyMap(),
+        talliedDays: Set<Int> = finalVotes.keys.map { it.second }.toSet(),
+        idiotRevealDay: Map<String, Int> = emptyMap(),
+    ) = GameTasks.Facts(
+        winner, finalDay, roles, badgeHolders, wolfVoteDays, nights, nightDeathDay, exiled,
+        finalVotes, talliedDays, idiotRevealDay,
+    )
 
     private fun done(task: GameTask, p: GamePlayer, f: GameTasks.Facts) = GameTasks.isDone(task, p, f)
 
@@ -78,6 +84,8 @@ class GameTasksTest {
             GameTask.VOTE_WOLF_TWICE to { r -> !r.isWolf }, // a wolf voting a wolf is never counted
             GameTask.VILLAGER_SURVIVE_WIN to { r -> r == VILLAGER },
             GameTask.SEER_FIND_TWO_WOLVES to { r -> r == SEER },
+            GameTask.SEER_WOLF_EVERY_NIGHT to { r -> r == SEER },
+            GameTask.NEVER_VOTE_GOOD to { r -> !r.isWolf }, // only the good side votes for "the wolves"
             GameTask.WITCH_POISON_WOLF to { r -> r == WITCH },
             GameTask.WITCH_SAVE_GOOD to { r -> r == WITCH },
             GameTask.GUARD_BLOCK_KILL to { r -> r == GUARD },
@@ -129,6 +137,14 @@ class GameTasksTest {
         val seats = (1..10).map { seat("v$it", VILLAGER) }
         GameTasks.assign(seats, hasSheriff = false, random = Random(3))
         assertThat(seats.map { it.taskCode }.toSet().size).isLessThan(10)
+    }
+
+    @Test
+    fun `the seer can draw the every-night task, every good seat the never-vote-good task`() {
+        assertThat(GameTasks.eligible(SEER, hasSheriff = false)).contains(GameTask.SEER_WOLF_EVERY_NIGHT)
+        for (role in PlayerRole.entries.filter { !it.isWolf }) {
+            assertThat(GameTasks.eligible(role, hasSheriff = false)).`as`(role.name).contains(GameTask.NEVER_VOTE_GOOD)
+        }
     }
 
     @Test
@@ -236,5 +252,101 @@ class GameTasksTest {
         assertThat(done(GameTask.WOLF_FIRST_NIGHT_GOD, seat("w1", WEREWOLF), godSaved)).isFalse()
         assertThat(done(GameTask.WOLF_FIRST_NIGHT_GOD, seat("w1", WEREWOLF), villagerKilled)).isFalse()
         assertThat(done(GameTask.WOLF_FIRST_NIGHT_GOD, seat("w1", WEREWOLF), godKilledNight2)).isFalse()
+    }
+
+    // ── 活著的每一晚都查驗到狼人: per night, nights after death do not count ──
+
+    private fun checks(vararg wolfEachNight: Boolean?) = wolfEachNight.mapIndexed { i, wolf ->
+        night(i + 1) {
+            if (wolf != null) { seerCheckedUserId = if (wolf) "w1" else "v1"; seerResultIsWerewolf = wolf }
+        }
+    }
+
+    private fun score(task: GameTask, p: GamePlayer, f: GameTasks.Facts) = GameTasks.scoreFor(task, p, f)
+
+    @Test
+    fun `seer alive two nights, a wolf both nights - done, the score doubles`() {
+        val f = facts(nights = checks(true, true))
+        assertThat(done(GameTask.SEER_WOLF_EVERY_NIGHT, seat("seer", SEER, diedDay = 2), f)).isTrue()
+        assertThat(score(GameTask.SEER_WOLF_EVERY_NIGHT, seat("seer", SEER, diedDay = 2), f))
+            .isEqualTo(2 * GameTask.SEER_WOLF_EVERY_NIGHT.score)
+    }
+
+    @Test
+    fun `seer - nights after the seer died do not count`() {
+        // died on night 2 (diedDay 2): nights 1 and 2 count; night 3 had no seer
+        val f = facts(nights = checks(true, true, null), nightDeathDay = mapOf("seer" to 2))
+        assertThat(done(GameTask.SEER_WOLF_EVERY_NIGHT, seat("seer", SEER, diedDay = 2), f)).isTrue()
+        assertThat(score(GameTask.SEER_WOLF_EVERY_NIGHT, seat("seer", SEER, diedDay = 2), f)).isEqualTo(20)
+    }
+
+    @Test
+    fun `seer alive three nights, a wolf every night - three times the score`() {
+        val f = facts(nights = checks(true, true, true))
+        assertThat(score(GameTask.SEER_WOLF_EVERY_NIGHT, seat("seer", SEER), f)).isEqualTo(30)
+    }
+
+    @Test
+    fun `seer - one night that found no wolf, or no check at all, fails the task`() {
+        assertThat(done(GameTask.SEER_WOLF_EVERY_NIGHT, seat("seer", SEER), facts(nights = checks(true, false)))).isFalse()
+        assertThat(done(GameTask.SEER_WOLF_EVERY_NIGHT, seat("seer", SEER), facts(nights = checks(true, null)))).isFalse()
+        assertThat(score(GameTask.SEER_WOLF_EVERY_NIGHT, seat("seer", SEER), facts(nights = checks(true, false)))).isEqualTo(0)
+    }
+
+    @Test
+    fun `fixed tasks score their base when done and 0 when not`() {
+        assertThat(score(GameTask.HOLD_BADGE, seat("v1", VILLAGER), facts(badgeHolders = setOf("v1")))).isEqualTo(10)
+        assertThat(score(GameTask.HOLD_BADGE, seat("v1", VILLAGER), facts())).isEqualTo(0)
+    }
+
+    // ── 每一輪放逐投票都不投好人: abstaining fails, a PK re-vote counts ──
+
+    @Test
+    fun `a wolf in every round I could vote in - done`() {
+        val f = facts(finalVotes = mapOf(("v1" to 1) to "w1", ("v1" to 2) to "w2"))
+        assertThat(done(GameTask.NEVER_VOTE_GOOD, seat("v1", VILLAGER), f)).isTrue()
+        assertThat(score(GameTask.NEVER_VOTE_GOOD, seat("v1", VILLAGER), f)).isEqualTo(GameTask.NEVER_VOTE_GOOD.score)
+    }
+
+    @Test
+    fun `abstaining in a round fails the task`() {
+        val f = facts(finalVotes = mapOf(("v1" to 1) to "w1", ("v1" to 2) to null))
+        assertThat(done(GameTask.NEVER_VOTE_GOOD, seat("v1", VILLAGER), f)).isFalse()
+    }
+
+    @Test
+    fun `not voting at all in a round I could vote in fails the task`() {
+        val f = facts(finalVotes = mapOf(("v1" to 1) to "w1", ("v2" to 2) to "w1"), talliedDays = setOf(1, 2))
+        assertThat(done(GameTask.NEVER_VOTE_GOOD, seat("v1", VILLAGER), f)).isFalse()
+    }
+
+    @Test
+    fun `voting for a good player fails the task`() {
+        val f = facts(finalVotes = mapOf(("v1" to 1) to "w1", ("v1" to 2) to "seer"))
+        assertThat(done(GameTask.NEVER_VOTE_GOOD, seat("v1", VILLAGER), f)).isFalse()
+    }
+
+    @Test
+    fun `rounds after I died do not count`() {
+        // killed on night 2: day 2 and 3 votes are not mine to cast
+        val f = facts(finalVotes = mapOf(("v1" to 1) to "w1", ("v2" to 2) to "seer"), talliedDays = setOf(1, 2, 3), nightDeathDay = mapOf("v1" to 2))
+        assertThat(done(GameTask.NEVER_VOTE_GOOD, seat("v1", VILLAGER, diedDay = 2), f)).isTrue()
+    }
+
+    @Test
+    fun `voted out on a day after voting for a wolf that day - done`() {
+        val f = facts(finalVotes = mapOf(("v1" to 1) to "w1", ("v1" to 2) to "w2"), talliedDays = setOf(1, 2, 3))
+        assertThat(done(GameTask.NEVER_VOTE_GOOD, seat("v1", VILLAGER, diedDay = 2), f)).isTrue()
+    }
+
+    @Test
+    fun `an idiot does not vote after the reveal - those rounds do not count`() {
+        val f = facts(finalVotes = mapOf(("idiot" to 1) to "w1"), talliedDays = setOf(1, 2, 3), idiotRevealDay = mapOf("idiot" to 1))
+        assertThat(done(GameTask.NEVER_VOTE_GOOD, seat("idiot", IDIOT), f)).isTrue()
+    }
+
+    @Test
+    fun `no round to vote in - not done`() {
+        assertThat(done(GameTask.NEVER_VOTE_GOOD, seat("v1", VILLAGER), facts())).isFalse()
     }
 }

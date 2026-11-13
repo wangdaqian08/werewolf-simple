@@ -27,6 +27,41 @@ describe('TaskLine', () => {
     expect(line(false).get('[data-testid="task-line"]').attributes('data-done')).toBe('false')
   })
 
+  it('a per-night task says so while the game is running', () => {
+    const w = mount(TaskLine, {
+      props: {
+        task: {
+          code: 'SEER_WOLF_EVERY_NIGHT',
+          score: 10,
+          perNight: true,
+          done: null,
+          earned: null,
+        },
+      },
+    })
+    expect(w.get('[data-testid="task-name"]').text()).toBe('活著的每一晚都查驗到狼人')
+    expect(w.get('[data-testid="task-score"]').text()).toBe('每晚 +10 戰績分')
+  })
+
+  it('once done, it shows what the task actually paid', () => {
+    const w = mount(TaskLine, {
+      props: {
+        task: { code: 'SEER_WOLF_EVERY_NIGHT', score: 10, perNight: true, done: true, earned: 30 },
+      },
+    })
+    expect(w.get('[data-testid="task-score"]').text()).toBe('+30 戰績分')
+  })
+
+  it('a missed per-night task still shows the per-night rate', () => {
+    const w = mount(TaskLine, {
+      props: {
+        task: { code: 'SEER_WOLF_EVERY_NIGHT', score: 10, perNight: true, done: false, earned: 0 },
+      },
+    })
+    expect(w.get('[data-testid="task-score"]').text()).toBe('每晚 +10 戰績分')
+    expect(w.get('[data-testid="task-status"]').text()).toBe('未完成')
+  })
+
   it('every task code has a name in both languages', async () => {
     const zh = (await import('@/i18n/locales/zh')).default as unknown as {
       task: { name: Record<string, string> }
@@ -46,6 +81,8 @@ describe('TaskLine', () => {
       'WOLF_NEVER_EXILED',
       'WOLF_WIN_ALIVE',
       'WOLF_FIRST_NIGHT_GOD',
+      'SEER_WOLF_EVERY_NIGHT',
+      'NEVER_VOTE_GOOD',
     ]
     for (const c of codes) {
       expect(zh.task.name[c], c).toBeTruthy()

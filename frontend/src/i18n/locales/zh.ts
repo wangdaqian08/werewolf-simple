@@ -830,10 +830,12 @@ export default {
     done: '已完成',
     name: {
       SURVIVE_TO_DAY3: '活到第 3 天天亮',
+      NEVER_VOTE_GOOD: '每一輪放逐投票都不投好人，也不棄票',
       HOLD_BADGE: '當選警長或接過警徽',
       VOTE_WOLF_TWICE: '放逐投票投中狼人至少 2 次',
       VILLAGER_SURVIVE_WIN: '活到遊戲結束且好人獲勝',
       SEER_FIND_TWO_WOLVES: '查驗到至少 2 隻狼人',
+      SEER_WOLF_EVERY_NIGHT: '活著的每一晚都查驗到狼人',
       WITCH_POISON_WOLF: '用毒藥毒死一隻狼人',
       WITCH_SAVE_GOOD: '用解藥救下一名好人',
       GUARD_BLOCK_KILL: '守中一次被狼人刀的人',
@@ -843,6 +845,7 @@ export default {
     },
     notDone: '未完成',
     score: '+{n} 戰績分',
+    scorePerNight: '每晚 +{n} 戰績分',
     title: '本局任務',
   },
   unsupported: {

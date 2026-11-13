@@ -32,6 +32,12 @@ object GameTasks {
         val nightDeathDay: Map<String, Int>,
         /** Everyone voted out by the table. */
         val exiled: Set<String>,
+        /** (voter, day) → their final exile vote that day, null = abstained; tallied days only. */
+        val finalVotes: Map<Pair<String, Int>, String?>,
+        /** Days whose exile vote reached a tally. */
+        val talliedDays: Set<Int>,
+        /** userId → the day an idiot was revealed; it cannot vote after that. */
+        val idiotRevealDay: Map<String, Int>,
     )
 
     fun eligible(role: PlayerRole, hasSheriff: Boolean): List<GameTask> = buildList {
@@ -43,10 +49,10 @@ object GameTasks {
             // The mechanical wolf never knifes on night 1: the pack does (RoleRules.wolfKillers).
             if (role.isPackWolf) add(WOLF_FIRST_NIGHT_GOD)
         } else {
-            add(VOTE_WOLF_TWICE)
+            addAll(listOf(VOTE_WOLF_TWICE, NEVER_VOTE_GOOD))
             when (role) {
                 PlayerRole.VILLAGER -> add(VILLAGER_SURVIVE_WIN)
-                PlayerRole.SEER -> add(SEER_FIND_TWO_WOLVES)
+                PlayerRole.SEER -> addAll(listOf(SEER_FIND_TWO_WOLVES, SEER_WOLF_EVERY_NIGHT))
                 PlayerRole.WITCH -> addAll(listOf(WITCH_POISON_WOLF, WITCH_SAVE_GOOD))
                 PlayerRole.GUARD -> add(GUARD_BLOCK_KILL)
                 else -> {}
@@ -58,6 +64,28 @@ object GameTasks {
     fun assign(players: List<GamePlayer>, hasSheriff: Boolean, random: Random) {
         if (players.size < MIN_PLAYERS) return
         players.forEach { it.taskCode = eligible(it.role, hasSheriff).random(random) }
+    }
+
+    /** The 戰績分 this task pays: 0 when not done; a per-night task pays once for every night it counted. */
+    fun scoreFor(task: GameTask, player: GamePlayer, f: Facts): Int = when {
+        !isDone(task, player, f) -> 0
+        task == SEER_WOLF_EVERY_NIGHT -> task.score * seerNights(player, f).size
+        else -> task.score
+    }
+
+    /** The nights the seer was alive to check: night N comes before day N, so a seer dead on day N still checked on night N. */
+    private fun seerNights(player: GamePlayer, f: Facts): List<NightPhase> =
+        f.nights.filter { it.dayNumber <= (player.diedDay ?: Int.MAX_VALUE) }
+
+    /** The tallied days this player could vote on: alive, and not an idiot past its reveal. */
+    private fun votingDays(player: GamePlayer, f: Facts): List<Int> = f.talliedDays.sorted().filter { d ->
+        val me = player.userId
+        val diedOnDayD = player.diedDay == d && (f.nightDeathDay[me] ?: Int.MAX_VALUE) > d
+        (f.nightDeathDay[me] ?: Int.MAX_VALUE) > d &&
+            (player.diedDay ?: Int.MAX_VALUE) >= d &&
+            // died by day on day d without a vote: shot or taken before the vote, not an abstain
+            !(diedOnDayD && (me to d) !in f.finalVotes) &&
+            (f.idiotRevealDay[me] ?: Int.MAX_VALUE) >= d
     }
 
     fun isDone(task: GameTask, player: GamePlayer, f: Facts): Boolean {
@@ -81,6 +109,13 @@ object GameTasks {
             }
             WOLF_NEVER_EXILED -> me !in f.exiled
             WOLF_WIN_ALIVE -> alive && f.winner == WinnerSide.WEREWOLF
+            SEER_WOLF_EVERY_NIGHT -> seerNights(player, f).let { nights ->
+                nights.isNotEmpty() && nights.all { it.seerResultIsWerewolf == true }
+            }
+            // A missing vote is an abstain, and abstaining fails; a PK re-vote is the final word.
+            NEVER_VOTE_GOOD -> votingDays(player, f).let { days ->
+                days.isNotEmpty() && days.all { d -> isWolf(f.finalVotes[me to d]) }
+            }
             WOLF_FIRST_NIGHT_GOD -> f.nights.firstOrNull { it.dayNumber == 1 }?.wolfTargetUserId?.let { target ->
                 f.roleOf[target]?.isGod == true && f.nightDeathDay[target] == 1
             } ?: false
