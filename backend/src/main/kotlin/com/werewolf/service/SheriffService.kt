@@ -469,11 +469,17 @@ class SheriffService(
     }
 
     /**
-     * Enter SPEECH with the candidates in seat order. One candidate speaks at once;
-     * with more, nobody speaks until the host sets the order (SHERIFF_SET_SPEECH_ORDER).
+     * Enter SPEECH. A RANDOM room shuffles the candidates and the first speaks at once.
+     * A HOST_DRAW room lists them in seat order: one candidate speaks at once; with more,
+     * nobody speaks until the host sets the order (SHERIFF_SET_SPEECH_ORDER).
      */
     private fun openSpeech(election: SheriffElection, running: List<SheriffCandidate>, context: GameContext) {
         election.subPhase = ElectionSubPhase.SPEECH
+        if (context.room.speechOrder() == SheriffSpeechOrder.RANDOM) {
+            election.speakingOrder = running.shuffled().joinToString(",") { it.userId }
+            election.currentSpeakerIdx = 0
+            return
+        }
         election.speakingOrder = running.map { it.userId }
             .sortedBy { context.playerById(it)?.seatIndex ?: Int.MAX_VALUE }
             .joinToString(",")
@@ -486,6 +492,8 @@ class SheriffService(
      * the host was drawing stay in the order, so advanceSpeech skips them as before.
      */
     private fun setSpeechOrder(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (context.room.speechOrder() == SheriffSpeechOrder.RANDOM)
+            return GameActionResult.Rejected("This room uses a random speech order")
         if (request.actorUserId != context.game.hostUserId)
             return GameActionResult.Rejected("Only host can set the speech order")
         val election = context.election ?: return GameActionResult.Rejected("No election in progress")
@@ -808,3 +816,5 @@ class SheriffService(
         const val NO_SPEAKER = -1
     }
 }
+
+private fun Room.speechOrder(): SheriffSpeechOrder = config?.sheriffSpeechOrder ?: SheriffSpeechOrder.RANDOM

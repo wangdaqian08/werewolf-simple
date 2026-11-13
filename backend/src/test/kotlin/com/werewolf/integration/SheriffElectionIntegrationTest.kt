@@ -86,7 +86,7 @@ class SheriffElectionIntegrationTest {
      * Set up a 4-player room with hasSheriff=true.
      * Returns (host, g1, g2, g3, roomId).
      */
-    private fun setupSheriffRoom(prefix: String): Sextuple {
+    private fun setupSheriffRoom(prefix: String, speechOrder: String = "HOST_DRAW"): Sextuple {
         val host = login("${prefix}H")
         val g1   = login("${prefix}G1")
         val g2   = login("${prefix}G2")
@@ -98,7 +98,7 @@ class SheriffElectionIntegrationTest {
         val roomBody = restTemplate.postForEntity(
             CREATE_ROOM_URL,
             HttpEntity(
-                mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, FIELD_TOTAL_PLAYERS to 6, "roles" to listOf("WEREWOLF", "SEER", "WITCH", "VILLAGER", "VILLAGER"), "hasSheriff" to true)),
+                mapOf(FIELD_CONFIG to mapOf("perksAllowed" to false, FIELD_TOTAL_PLAYERS to 6, "roles" to listOf("WEREWOLF", "SEER", "WITCH", "VILLAGER", "VILLAGER"), "hasSheriff" to true, "sheriffSpeechOrder" to speechOrder)),
                 headers(host.token)
             ),
             Map::class.java
@@ -355,5 +355,25 @@ class SheriffElectionIntegrationTest {
         assertThat(
             action(r.host.token, gameId, "SHERIFF_SET_SPEECH_ORDER", r.g1.userId, mapOf("direction" to "CLOCKWISE")).statusCode
         ).isEqualTo(HttpStatus.BAD_REQUEST)
+    }
+
+    @Test
+    fun `sheriff speech order - a RANDOM room starts the first speech at once and refuses a host draw`() {
+        val r = setupSheriffRoom("SOR", speechOrder = "RANDOM")
+        val gameId = startGameAndOpenSheriffElection(
+            r.host, listOf(r.host, r.g1, r.g2, r.g3, r.g4, r.g5), r.roomId
+        )
+        listOf(r.g1, r.g3, r.g5).forEach { assertThat(action(it.token, gameId, "SHERIFF_CAMPAIGN").statusCode).isEqualTo(HttpStatus.OK) }
+        listOf(r.host, r.g2, r.g4).forEach { assertThat(action(it.token, gameId, "SHERIFF_PASS").statusCode).isEqualTo(HttpStatus.OK) }
+
+        val election = sheriffElectionRepository.findByGameId(gameId).orElseThrow()
+        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.SPEECH)
+        assertThat(election.speakingOrder!!.split(",")).containsExactlyInAnyOrder(r.g1.userId, r.g3.userId, r.g5.userId)
+        assertThat(election.currentSpeakerIdx).isEqualTo(0)
+        assertThat(
+            action(r.host.token, gameId, "SHERIFF_SET_SPEECH_ORDER", r.g3.userId, mapOf("direction" to "CLOCKWISE")).statusCode
+        ).isEqualTo(HttpStatus.BAD_REQUEST)
+        // Speeches run straight away.
+        assertThat(action(r.host.token, gameId, "SHERIFF_ADVANCE_SPEECH").statusCode).isEqualTo(HttpStatus.OK)
     }
 }

@@ -38,6 +38,8 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: true,
+      // The room lets the host draw the first speaker (default is a random order).
+      sheriffSpeechOrder: 'HOST_DRAW',
       // Variant B: each role's Night 1 action is DOM-driven from its own
       // browser context. driveMinimalNight1ViaDom drives WEREWOLF_PICK →
       // WITCH_ACT → SEER_PICK → SEER_RESULT → GUARD_PICK in order, so the

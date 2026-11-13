@@ -123,6 +123,9 @@ data class GameConfig(
     val noKillAllowed: Boolean = false,
 
     val guardSkipAllowed: Boolean = false,
+
+    /** Sheriff speaking order; rooms saved before this setting existed read as RANDOM. */
+    val sheriffSpeechOrder: SheriffSpeechOrder = SheriffSpeechOrder.RANDOM,
 ) {
     /**
      * 获取指定角色的延迟配置

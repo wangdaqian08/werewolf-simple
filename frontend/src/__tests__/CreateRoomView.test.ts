@@ -201,3 +201,67 @@ describe('CreateRoomView 空守 (guard skip) toggle', () => {
     )
   })
 })
+
+describe('CreateRoomView 警長發言順序 toggle', () => {
+  beforeEach(() => {
+    h.createRoomMock.mockReset().mockResolvedValue({
+      roomId: '1',
+      roomCode: '123',
+      hostId: 'u1',
+      status: 'WAITING',
+      config: { totalPlayers: 9, roles: [] },
+      players: [],
+    })
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  const toggle = (w: Awaited<ReturnType<typeof mountCreateRoom>>) =>
+    w.find('[data-testid="speechOrder-toggle"]')
+
+  it('defaults to 隨機 and sends sheriffSpeechOrder RANDOM', async () => {
+    const wrapper = await mountCreateRoom()
+    expect(toggle(wrapper).attributes('data-speech-order')).toBe('RANDOM')
+    expect(wrapper.find('[data-testid="speechOrder-desc"]').text()).toBe('隨機')
+
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(h.createRoomMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ sheriffSpeechOrder: 'RANDOM' }),
+      }),
+    )
+  })
+
+  it('switched on, the host draws the order: sends HOST_DRAW', async () => {
+    const wrapper = await mountCreateRoom()
+    await toggle(wrapper).trigger('click')
+    expect(toggle(wrapper).attributes('data-speech-order')).toBe('HOST_DRAW')
+    expect(wrapper.find('[data-testid="speechOrder-desc"]').text()).toBe('房主抽號，選順／逆時針')
+
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(h.createRoomMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ sheriffSpeechOrder: 'HOST_DRAW' }),
+      }),
+    )
+  })
+
+  it('is hidden without a sheriff, and then sends the default', async () => {
+    const wrapper = await mountCreateRoom()
+    await toggle(wrapper).trigger('click') // HOST_DRAW…
+    await wrapper.find('[data-testid="sheriff-toggle"]').trigger('click') // …then no sheriff
+    expect(toggle(wrapper).exists()).toBe(false)
+
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(h.createRoomMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ hasSheriff: false, sheriffSpeechOrder: 'RANDOM' }),
+      }),
+    )
+  })
+})

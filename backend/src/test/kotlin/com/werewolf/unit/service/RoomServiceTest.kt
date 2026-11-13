@@ -770,6 +770,26 @@ class RoomServiceTest {
         assertThat(enabledDto.config.guardSkipAllowed).isTrue()
     }
 
+    @Test
+    fun `createRoom - sheriff speech order defaults to RANDOM and persists HOST_DRAW when chosen`() {
+        val captor = argumentCaptor<Room>()
+        whenever(roomRepository.save(any<Room>())).thenAnswer {
+            val r = it.arguments[0] as Room
+            val f = Room::class.java.getDeclaredField("roomId"); f.isAccessible = true; f.set(r, 1)
+            r
+        }
+        whenever(roomPlayerRepository.save(any<RoomPlayer>())).thenAnswer { it.arguments[0] }
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest())
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest(sheriffSpeechOrder = SheriffSpeechOrder.HOST_DRAW))
+
+        verify(roomRepository, times(2)).save(captor.capture())
+        assertThat(captor.firstValue.config?.sheriffSpeechOrder).isEqualTo(SheriffSpeechOrder.RANDOM)
+        assertThat(captor.secondValue.config?.sheriffSpeechOrder).isEqualTo(SheriffSpeechOrder.HOST_DRAW)
+    }
+
     // ── perks: room config + DTO exposure ──────────────────────────────────────
 
     @Test
