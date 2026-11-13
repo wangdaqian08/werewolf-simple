@@ -1,5 +1,7 @@
 package com.werewolf.game.action
 
+import com.werewolf.game.GameActivityTracker
+
 import com.werewolf.game.night.NightOrchestrator
 import com.werewolf.game.GameContext
 import com.werewolf.game.night.NightTurnLedger
@@ -33,9 +35,14 @@ class GameActionDispatcher(
     private val selfDestructService: SelfDestructService,
     private val knightDuelService: KnightDuelService,
     private val hostDeclareOutService: HostDeclareOutService,
+    private val activityTracker: GameActivityTracker,
 ) {
+    /** Routes [request]; an accepted action marks the game as active (see AbandonedGameSweep). */
     @Transactional
-    fun dispatch(request: GameActionRequest): GameActionResult {
+    fun dispatch(request: GameActionRequest): GameActionResult =
+        route(request).also { if (it is GameActionResult.Success) activityTracker.touch(request.gameId) }
+
+    private fun route(request: GameActionRequest): GameActionResult {
         val context = try {
             contextLoader.loadForUpdate(request.gameId)
         } catch (e: GameNotFoundException) {

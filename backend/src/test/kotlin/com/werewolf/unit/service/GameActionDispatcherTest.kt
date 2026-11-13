@@ -78,7 +78,35 @@ class GameActionDispatcherTest {
         selfDestructService = selfDestructService,
         knightDuelService = knightDuelService,
         hostDeclareOutService = hostDeclareOutService,
+        activityTracker = activityTracker,
     )
+
+    private val activityTracker = com.werewolf.game.GameActivityTracker()
+
+    // ── Activity: what keeps a game from being cancelled as abandoned ─────────
+
+    @Test
+    fun `an accepted action marks the game as active`() {
+        val ctx = GameContext(game(), room(), emptyList())
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+        val before = java.time.LocalDateTime.now()
+
+        makeDispatcher(listOf(stubHandler(PlayerRole.WEREWOLF, GameActionResult.Success())))
+            .dispatch(req(wolfId, ActionType.WOLF_KILL, "u2"))
+
+        assertThat(activityTracker.lastActivity(gameId)).isNotNull().isAfterOrEqualTo(before)
+    }
+
+    @Test
+    fun `a rejected action does not count as activity`() {
+        val ctx = GameContext(game(), room(), emptyList())
+        whenever(contextLoader.loadForUpdate(gameId)).thenReturn(ctx)
+
+        makeDispatcher(listOf(stubHandler(PlayerRole.WEREWOLF, GameActionResult.Rejected("no"))))
+            .dispatch(req(wolfId, ActionType.WOLF_KILL, "u2"))
+
+        assertThat(activityTracker.lastActivity(gameId)).isNull()
+    }
 
     // ── WOLF_KILL routing ─────────────────────────────────────────────────────
 
