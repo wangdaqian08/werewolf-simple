@@ -212,6 +212,8 @@ export interface RoomConfig {
   noKillAllowed?: boolean
   /** Whether the guard may choose 空守 (no protect) at night. Default false. */
   guardSkipAllowed?: boolean
+  /** Sheriff speaking order: shuffled, or drawn by the host. Default RANDOM. */
+  sheriffSpeechOrder?: 'RANDOM' | 'HOST_DRAW'
 }
 
 /**

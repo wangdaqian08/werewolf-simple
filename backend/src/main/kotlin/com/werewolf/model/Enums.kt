@@ -141,3 +141,11 @@ enum class ActionType {
     // Host declares a player out (they had to leave the game)
     HOST_DECLARE_OUT,
 }
+
+/** How the sheriff campaign's speaking order is decided (host's choice at room creation). */
+enum class SheriffSpeechOrder {
+    /** The candidates are shuffled and the first speaks at once. */
+    RANDOM,
+    /** The host draws the first speaker, then picks clockwise or counter-clockwise. */
+    HOST_DRAW,
+}

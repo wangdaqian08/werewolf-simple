@@ -8,6 +8,7 @@ import com.werewolf.dto.RoomConfigDto
 import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.dto.RoomDto
 import com.werewolf.dto.RoomPlayerDto
+import com.werewolf.model.SheriffSpeechOrder
 import com.werewolf.model.GameConfig
 import com.werewolf.model.PerkActivationStatus
 import com.werewolf.model.PlayerRole
@@ -75,7 +76,7 @@ class RoomService(
                 hasGravekeeper = PlayerRole.GRAVEKEEPER in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
-                config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed, cfg.noKillAllowed, cfg.guardSkipAllowed),
+                config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed, cfg.noKillAllowed, cfg.guardSkipAllowed, cfg.sheriffSpeechOrder),
             )
         )
         val roomId = room.roomId ?: error("Failed to persist room")
@@ -515,7 +516,10 @@ class RoomService(
      * overrides. Production leaves the properties unset and gets the compile-time
      * role defaults; the test profile sets small values so CI completes quickly.
      */
-    private fun buildGameConfig(bgmTrack: String?, witchSelfSaveAllowed: Boolean, perksAllowed: Boolean, noKillAllowed: Boolean, guardSkipAllowed: Boolean): GameConfig =
+    private fun buildGameConfig(
+        bgmTrack: String?, witchSelfSaveAllowed: Boolean, perksAllowed: Boolean, noKillAllowed: Boolean, guardSkipAllowed: Boolean,
+        sheriffSpeechOrder: SheriffSpeechOrder,
+    ): GameConfig =
         GameConfig(
             roleDelays = mapOf(
                 PlayerRole.WEREWOLF to timing.applyTo(PlayerRole.WEREWOLF),
@@ -531,6 +535,7 @@ class RoomService(
             perksAllowed = perksAllowed,
             noKillAllowed = noKillAllowed,
             guardSkipAllowed = guardSkipAllowed,
+            sheriffSpeechOrder = sheriffSpeechOrder,
         )
 }
 

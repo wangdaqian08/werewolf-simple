@@ -25,7 +25,27 @@
           <button
             :class="hasSheriff ? 'toggle-on' : 'toggle-off'"
             class="toggle"
+            data-testid="sheriff-toggle"
             @click="hasSheriff = !hasSheriff"
+          >
+            <span class="toggle-thumb" />
+          </button>
+        </div>
+        <!-- Only matters when a sheriff is elected -->
+        <div v-if="hasSheriff" class="role-row" :class="speechOrderDraw ? 'row-on' : 'row-off'">
+          <span class="role-emoji">🎙️</span>
+          <div class="role-names">
+            <span class="role-name">{{ $t('create.speechOrder') }}</span>
+            <span class="win-cond-desc" data-testid="speechOrder-desc">
+              {{ speechOrderDraw ? t('create.speechOrderDraw') : t('create.speechOrderRandom') }}
+            </span>
+          </div>
+          <button
+            :class="speechOrderDraw ? 'toggle-on' : 'toggle-off'"
+            class="toggle"
+            data-testid="speechOrder-toggle"
+            :data-speech-order="speechOrderDraw ? 'HOST_DRAW' : 'RANDOM'"
+            @click="speechOrderDraw = !speechOrderDraw"
           >
             <span class="toggle-thumb" />
           </button>
@@ -205,6 +225,8 @@ const witchSelfSaveAllowed = ref(true)
 const perksAllowed = ref(true)
 const noKillAllowed = ref(false)
 const guardSkipAllowed = ref(false)
+// Off = 隨機 (the default); on = the host draws the first speaker, then picks a direction.
+const speechOrderDraw = ref(false)
 const winCondition = ref<WinConditionMode>('CLASSIC')
 
 const bgmTracks = ref<AudioTrack[]>([{ id: null, filename: null, displayName: 'None' }])
@@ -265,6 +287,7 @@ async function handleCreate() {
         perksAllowed: perksAllowed.value,
         noKillAllowed: noKillAllowed.value,
         guardSkipAllowed: guardSkipAllowed.value,
+        sheriffSpeechOrder: hasSheriff.value && speechOrderDraw.value ? 'HOST_DRAW' : 'RANDOM',
       },
     }
     // Carry the per-room display-name override that the lobby may have set.

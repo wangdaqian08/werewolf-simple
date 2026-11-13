@@ -95,6 +95,9 @@ export interface GameSetupOptions {
    *  CreateRoom DOM toggle so the wolves may skip the kill. */
   noKillAllowed?: boolean
   guardSkipAllowed?: boolean
+  /** 警長發言順序. Defaults to RANDOM (room default); HOST_DRAW flips the CreateRoom
+   *  toggle so the host draws the first speaker. Needs hasSheriff: true. */
+  sheriffSpeechOrder?: 'RANDOM' | 'HOST_DRAW'
   /**
    * Optional BGM track filename (e.g. 'suspicion.mp3'). When set, the host
    * picks the matching option from the BGM dropdown on the CreateRoom page
@@ -209,6 +212,17 @@ export async function setupGame(
     if ((await guardSkipToggle.getAttribute('data-guard-skip')) !== 'true') {
       await guardSkipToggle.click()
       await expect(guardSkipToggle).toHaveAttribute('data-guard-skip', 'true', { timeout: 5_000 })
+    }
+  }
+
+  if (opts.sheriffSpeechOrder === 'HOST_DRAW') {
+    const speechOrderToggle = hostPage.getByTestId('speechOrder-toggle')
+    await speechOrderToggle.waitFor({ state: 'visible', timeout: 5_000 })
+    if ((await speechOrderToggle.getAttribute('data-speech-order')) !== 'HOST_DRAW') {
+      await speechOrderToggle.click()
+      await expect(speechOrderToggle).toHaveAttribute('data-speech-order', 'HOST_DRAW', {
+        timeout: 5_000,
+      })
     }
   }
 

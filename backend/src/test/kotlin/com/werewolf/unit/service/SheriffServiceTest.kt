@@ -55,7 +55,10 @@ class SheriffServiceTest {
         it.phase = GamePhase.SHERIFF_ELECTION
     }
 
-    private fun room() = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 4, hasSheriff = true)
+    // HOST_DRAW by default here: most speech tests cover the host-drawn order; RANDOM tests pass it explicitly.
+    private fun room(speechOrder: SheriffSpeechOrder = SheriffSpeechOrder.HOST_DRAW) =
+        Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 4, hasSheriff = true,
+            config = GameConfig(sheriffSpeechOrder = speechOrder))
 
     private fun player(userId: String, seat: Int = 0) =
         GamePlayer(gameId = gameId, userId = userId, seatIndex = seat, role = PlayerRole.VILLAGER)
@@ -71,9 +74,10 @@ class SheriffServiceTest {
     private fun context(
         election: SheriffElection? = election(),
         players: List<GamePlayer> = listOf(player(hostId, 0), player(guestId, 1)),
+        speechOrder: SheriffSpeechOrder = SheriffSpeechOrder.HOST_DRAW,
     ): GameContext {
         val game = game()
-        return GameContext(game, room(), players, election = election)
+        return GameContext(game, room(speechOrder), players, election = election)
     }
 
     // ── Group 1: pass() action ─────────────────────────────────────────────────
@@ -277,6 +281,54 @@ class SheriffServiceTest {
 
         assertThat(election.speakingOrder).isEqualTo(guestId)
         assertThat(election.currentSpeakerIdx).isEqualTo(0)
+    }
+
+    @Test
+    fun `startSpeech - a RANDOM room shuffles the candidates and the first one speaks at once`() {
+        val players = listOf(player(hostId, 0), player("c:10", 10), player("c:2", 2), player("c:7", 7))
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(
+            listOf("c:10", "c:2", "c:7").map { SheriffCandidate(electionId = electionId, userId = it, status = CandidateStatus.RUNNING) }
+        )
+        val election = election(subPhase = ElectionSubPhase.SIGNUP)
+
+        val result = sheriffService.handle(
+            GameActionRequest(gameId, hostId, ActionType.SHERIFF_START_SPEECH),
+            context(election = election, players = players, speechOrder = SheriffSpeechOrder.RANDOM),
+        )
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(election.speakingOrder!!.split(",")).containsExactlyInAnyOrder("c:2", "c:7", "c:10")
+        assertThat(election.currentSpeakerIdx).isEqualTo(0)
+    }
+
+    @Test
+    fun `startSpeech - a RANDOM room really shuffles - not always seat order`() {
+        val ids = (1..8).map { "c:$it" }
+        val players = listOf(player(hostId, 0)) + ids.mapIndexed { i, id -> player(id, i + 1) }
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(
+            ids.map { SheriffCandidate(electionId = electionId, userId = it, status = CandidateStatus.RUNNING) }
+        )
+        val orders = (1..20).map {
+            val election = election(subPhase = ElectionSubPhase.SIGNUP)
+            sheriffService.handle(
+                GameActionRequest(gameId, hostId, ActionType.SHERIFF_START_SPEECH),
+                context(election = election, players = players, speechOrder = SheriffSpeechOrder.RANDOM),
+            )
+            election.speakingOrder
+        }
+        // 20 shuffles of 8 all landing in seat order has odds of (1/40320)^20.
+        assertThat(orders.toSet().size).isGreaterThan(1)
+    }
+
+    @Test
+    fun `setSpeechOrder - refused in a RANDOM room`() {
+        val election = undecided()
+        val result = sheriffService.handle(
+            GameActionRequest(gameId, hostId, ActionType.SHERIFF_SET_SPEECH_ORDER, "c:5", mapOf("direction" to "CLOCKWISE")),
+            context(election = election, players = orderPlayers, speechOrder = SheriffSpeechOrder.RANDOM),
+        )
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(election.currentSpeakerIdx).isEqualTo(SheriffService.NO_SPEAKER)
     }
 
     // ── Group 2b: setSpeechOrder() — host draws the first speaker + direction ──

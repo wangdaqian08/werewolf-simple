@@ -1,6 +1,7 @@
 package com.werewolf.dto
 
 import com.werewolf.model.PlayerRole
+import com.werewolf.model.SheriffSpeechOrder
 import com.werewolf.model.WinConditionMode
 import jakarta.validation.constraints.Size
 
@@ -21,6 +22,7 @@ data class RoomConfigRequest(
     val perksAllowed: Boolean = true,
     val noKillAllowed: Boolean = false,
     val guardSkipAllowed: Boolean = false,
+    val sheriffSpeechOrder: SheriffSpeechOrder = SheriffSpeechOrder.RANDOM,
 )
 
 data class CreateRoomRequest(
