@@ -32,6 +32,7 @@ import {
   MOCK_SHERIFF_SIGNUP,
   MOCK_SHERIFF_SPEECH_AUDIENCE,
   MOCK_SHERIFF_SPEECH_CANDIDATE,
+  MOCK_SHERIFF_SPEECH_ORDER,
   MOCK_SHERIFF_VOTING,
   MOCK_SHERIFF_VOTING_HOST_QUIT,
   MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
@@ -133,6 +134,7 @@ const SHERIFF_PRESETS: Record<string, SheriffElectionState> = {
   SIGNUP: MOCK_SHERIFF_SIGNUP,
   SPEECH_CANDIDATE: MOCK_SHERIFF_SPEECH_CANDIDATE,
   SPEECH_AUDIENCE: MOCK_SHERIFF_SPEECH_AUDIENCE,
+  SPEECH_ORDER: MOCK_SHERIFF_SPEECH_ORDER,
   VOTING: MOCK_SHERIFF_VOTING,
   VOTING_HOST_QUIT: MOCK_SHERIFF_VOTING_HOST_QUIT,
   VOTING_WITH_HOST_CANDIDATE: MOCK_SHERIFF_VOTING_WITH_HOST_CANDIDATE,
@@ -729,6 +731,18 @@ export function setupMocks() {
             hasPassed: false,
             timeRemaining: 60,
           },
+        }
+        pushGameStateUpdate()
+      } else if (actionType === 'SHERIFF_SET_SPEECH_ORDER') {
+        const seat = (id: string) =>
+          mockGameState.players.find((p) => p.userId === id)?.seatIndex ?? 0
+        const seats = [...(e.speakingOrder ?? [])].sort((a, b) => seat(a) - seat(b))
+        const ring = payload?.direction === 'COUNTER_CLOCKWISE' ? seats.reverse() : seats
+        const i = Math.max(0, ring.indexOf(targetId))
+        const order = [...ring.slice(i), ...ring.slice(0, i)]
+        mockGameState = {
+          ...mockGameState,
+          sheriffElection: { ...e, speakingOrder: order, currentSpeakerId: order[0] },
         }
         pushGameStateUpdate()
       } else if (actionType === 'SHERIFF_ADVANCE_SPEECH') {

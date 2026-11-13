@@ -10,6 +10,7 @@ import {actName, type RoleName, sheriff} from './helpers/shell-runner'
 import {verifyAllBrowsersPhase,} from './helpers/assertions'
 import {attachCompositeOnFailure, captureSnapshot} from './helpers/composite-screenshot'
 import {waitForCondition} from './helpers/state-polling'
+import {setSheriffSpeechOrderViaDom} from './helpers/flow-drivers'
 import {driveMinimalNight1ViaDom} from './helpers/night-driver'
 
 let ctx: GameContext
@@ -274,9 +275,12 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
         15_000,
     )
 
-    // Speaking order is a random shuffle of the campaigners. Read order + seats
-    // in one state fetch: every entry must map to a seated player and the
-    // first current speaker must be the head of that order.
+    // Nobody speaks until the host draws a first speaker and picks a direction.
+    const drawnSeat = await setSheriffSpeechOrderViaDom(ctx.hostPage, ctx.gameId, 'COUNTER_CLOCKWISE')
+    expect(drawnSeat, 'host draws the first speaker (2+ campaigners)').not.toBeNull()
+
+    // Read order + seats in one state fetch: every entry maps to a seated player,
+    // the order starts at the drawn seat and goes down the seats, wrapping round.
     const { orderSeats } = await ctx.hostPage.evaluate(async (id: string) => {
       const token = localStorage.getItem('jwt')
       const res = await fetch(`/api/game/${id}/state`, {
@@ -295,6 +299,12 @@ test.describe('Sheriff election — multi-browser STOMP verification', () => {
     expect(orderSeats.length, 'speaking order must not be empty').toBeGreaterThan(1)
     expect(orderSeats, 'no unmapped userIds in speaking order').not.toContain(-1)
     expect(new Set(orderSeats).size, 'no duplicate speakers').toBe(orderSeats.length)
+    const down = [...orderSeats].sort((a, b) => b - a)
+    const at = down.indexOf(drawnSeat as number)
+    expect(orderSeats, 'counter-clockwise from the drawn seat').toEqual([
+      ...down.slice(at),
+      ...down.slice(0, at),
+    ])
 
     // And the first current speaker shown must be the head of the order.
     const firstSpeakerSeat = await ctx.hostPage.evaluate(async (id: string) => {

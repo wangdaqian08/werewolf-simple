@@ -249,27 +249,145 @@ class SheriffServiceTest {
     // ── Group 2c: advanceSpeech() action ──────────────────────────────────────
 
     @Test
-    fun `startSpeech - speaking order is a random shuffle of the running candidates`() {
-        val candidateIds = (1..5).map { "cand:00$it" }
-        val players = listOf(player(hostId, 0)) + candidateIds.mapIndexed { i, id -> player(id, i + 1) }
+    fun `startSpeech - candidates wait in seat order with nobody speaking`() {
+        val players = listOf(player(hostId, 0), player("c:10", 10), player("c:2", 2), player("c:7", 7))
         whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(
-            candidateIds.map { SheriffCandidate(electionId = electionId, userId = it, status = CandidateStatus.RUNNING) }
+            listOf("c:10", "c:2", "c:7").map { SheriffCandidate(electionId = electionId, userId = it, status = CandidateStatus.RUNNING) }
+        )
+        val election = election(subPhase = ElectionSubPhase.SIGNUP)
+
+        val result = sheriffService.handle(
+            GameActionRequest(gameId, hostId, ActionType.SHERIFF_START_SPEECH),
+            context(election = election, players = players),
+        )
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(election.speakingOrder).isEqualTo("c:2,c:7,c:10")
+        assertThat(election.currentSpeakerIdx).isEqualTo(SheriffService.NO_SPEAKER)
+    }
+
+    @Test
+    fun `startSpeech - a lone candidate speaks at once`() {
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(
+            listOf(SheriffCandidate(electionId = electionId, userId = guestId, status = CandidateStatus.RUNNING))
+        )
+        val election = election(subPhase = ElectionSubPhase.SIGNUP)
+
+        sheriffService.handle(GameActionRequest(gameId, hostId, ActionType.SHERIFF_START_SPEECH), context(election = election))
+
+        assertThat(election.speakingOrder).isEqualTo(guestId)
+        assertThat(election.currentSpeakerIdx).isEqualTo(0)
+    }
+
+    // ── Group 2b: setSpeechOrder() — host draws the first speaker + direction ──
+
+    private val orderPlayers = listOf(player(hostId, 0), player("c:2", 2), player("c:5", 5), player("c:7", 7), player("c:10", 10))
+
+    private fun undecided(running: List<String> = listOf("c:2", "c:5", "c:7", "c:10"), quit: List<String> = emptyList()): SheriffElection {
+        whenever(sheriffCandidateRepository.findByElectionId(electionId)).thenReturn(
+            running.map { SheriffCandidate(electionId = electionId, userId = it, status = CandidateStatus.RUNNING) } +
+                quit.map { SheriffCandidate(electionId = electionId, userId = it, status = CandidateStatus.QUIT) }
         )
         whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+        return election(
+            subPhase = ElectionSubPhase.SPEECH,
+            speakingOrder = "c:2,c:5,c:7,c:10",
+            currentSpeakerIdx = SheriffService.NO_SPEAKER,
+        )
+    }
 
-        // 30 runs × 5! = 120 orders: a deterministic (seat-sorted) order would give 1 distinct result.
-        val orders = (1..30).map {
-            val election = election(subPhase = ElectionSubPhase.SIGNUP)
-            val result = sheriffService.handle(
-                GameActionRequest(gameId, hostId, ActionType.SHERIFF_START_SPEECH),
-                context(election = election, players = players),
-            )
-            assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
-            election.speakingOrder!!.split(",")
-        }
+    private fun setOrder(election: SheriffElection, start: String, direction: String?, actor: String = hostId) =
+        sheriffService.handle(
+            GameActionRequest(gameId, actor, ActionType.SHERIFF_SET_SPEECH_ORDER, start,
+                if (direction == null) emptyMap() else mapOf("direction" to direction)),
+            context(election = election, players = orderPlayers),
+        )
 
-        orders.forEach { assertThat(it).containsExactlyInAnyOrderElementsOf(candidateIds) }
-        assertThat(orders.toSet().size).isGreaterThan(1)
+    @Test
+    fun `setSpeechOrder - clockwise starts at the drawn seat and wraps round rising seats`() {
+        val election = undecided()
+
+        assertThat(setOrder(election, "c:7", "CLOCKWISE")).isInstanceOf(GameActionResult.Success::class.java)
+
+        assertThat(election.speakingOrder).isEqualTo("c:7,c:10,c:2,c:5")
+        assertThat(election.currentSpeakerIdx).isEqualTo(0)
+        val event = argumentCaptor<DomainEvent>().also { verify(stompPublisher).broadcastGame(eq(gameId), it.capture()) }
+            .firstValue as DomainEvent.PhaseChanged
+        assertThat(event.subPhase).isEqualTo(ElectionSubPhase.SPEECH.name)
+    }
+
+    @Test
+    fun `setSpeechOrder - counter-clockwise goes down the seats and wraps round`() {
+        val election = undecided()
+
+        setOrder(election, "c:7", "COUNTER_CLOCKWISE")
+
+        assertThat(election.speakingOrder).isEqualTo("c:7,c:5,c:2,c:10")
+        assertThat(election.currentSpeakerIdx).isEqualTo(0)
+    }
+
+    @Test
+    fun `setSpeechOrder - a candidate who quit meanwhile keeps a slot so advanceSpeech skips them`() {
+        val election = undecided(running = listOf("c:2", "c:7", "c:10"), quit = listOf("c:5"))
+
+        setOrder(election, "c:2", "CLOCKWISE")
+
+        assertThat(election.speakingOrder).isEqualTo("c:2,c:5,c:7,c:10")
+    }
+
+    @Test
+    fun `setSpeechOrder - rejected when the drawn player has quit`() {
+        val election = undecided(running = listOf("c:2", "c:5", "c:10"), quit = listOf("c:7"))
+
+        val result = setOrder(election, "c:7", "CLOCKWISE")
+
+        assertThat((result as GameActionResult.Rejected).reason).contains("no longer running")
+        assertThat(election.currentSpeakerIdx).isEqualTo(SheriffService.NO_SPEAKER)
+    }
+
+    @Test
+    fun `setSpeechOrder - rejected for a non-host, a bad direction, and once speeches started`() {
+        assertThat((setOrder(undecided(), "c:7", "CLOCKWISE", actor = "c:2") as GameActionResult.Rejected).reason)
+            .contains("host")
+        assertThat((setOrder(undecided(), "c:7", "ASC") as GameActionResult.Rejected).reason).contains("direction")
+        assertThat((setOrder(undecided(), "c:7", null) as GameActionResult.Rejected).reason).contains("direction")
+        val started = undecided().also { it.currentSpeakerIdx = 0 }
+        assertThat((setOrder(started, "c:7", "CLOCKWISE") as GameActionResult.Rejected).reason).contains("before the first speech")
+        assertThat(started.speakingOrder).isEqualTo("c:2,c:5,c:7,c:10")
+    }
+
+    @Test
+    fun `advanceSpeech - rejected until the host has set the order`() {
+        val election = undecided()
+
+        val result = sheriffService.handle(
+            GameActionRequest(gameId, hostId, ActionType.SHERIFF_ADVANCE_SPEECH),
+            context(election = election, players = orderPlayers),
+        )
+
+        assertThat((result as GameActionResult.Rejected).reason).contains("Speech order not set")
+        assertThat(election.subPhase).isEqualTo(ElectionSubPhase.SPEECH)
+    }
+
+    @Test
+    fun `quitCampaign - before the order is set, the last candidate left speaks at once`() {
+        val election = election(subPhase = ElectionSubPhase.SPEECH, speakingOrder = "c:2,c:5", currentSpeakerIdx = SheriffService.NO_SPEAKER)
+        whenever(sheriffCandidateRepository.findByElectionId(electionId))
+            .thenReturn(listOf("c:2", "c:5").map { SheriffCandidate(electionId = electionId, userId = it, status = CandidateStatus.RUNNING) })
+            .thenReturn(listOf(
+                SheriffCandidate(electionId = electionId, userId = "c:2", status = CandidateStatus.QUIT),
+                SheriffCandidate(electionId = electionId, userId = "c:5", status = CandidateStatus.RUNNING),
+            ))
+        whenever(sheriffCandidateRepository.save(any<SheriffCandidate>())).thenAnswer { it.arguments[0] }
+        whenever(sheriffElectionRepository.save(any<SheriffElection>())).thenAnswer { it.arguments[0] }
+
+        val result = sheriffService.handle(
+            GameActionRequest(gameId, "c:2", ActionType.SHERIFF_QUIT_CAMPAIGN),
+            context(election = election, players = orderPlayers),
+        )
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(election.currentSpeakerIdx).isEqualTo(1)
     }
 
     @Test

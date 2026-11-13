@@ -774,6 +774,23 @@ export default {
     text: '來玩狼人殺！房間號 {code}',
   },
   sheriff: {
+    order: {
+      candidates: '上警玩家',
+      startLabel: '隨機起始號碼',
+      hint: {
+        idle: '點「開始抽號」，號碼開始跳動',
+        spinning: '再點一次停住',
+        stopped: '不滿意可以重抽；滿意就選方向',
+      },
+      spin: { idle: '開始抽號', spinning: '停', stopped: '重抽' },
+      CLOCKWISE: '順時針',
+      COUNTER_CLOCKWISE: '逆時針',
+      CLOCKWISE_HINT: '座位號從小到大',
+      COUNTER_CLOCKWISE_HINT: '座位號從大到小',
+      drawnQuit: '{n}號已退出競選，請重抽',
+      waiting: '房主正在決定發言順序',
+      waitingSub: '順序決定後會顯示在這裡',
+    },
     abstained: '✓ 已棄票',
     appointSheriff: '指定警長',
     appointSheriff2: '確認任命',

@@ -21,11 +21,12 @@ class SheriffElection(
     @Column(name = "sub_phase", nullable = false, length = 10)
     var subPhase: ElectionSubPhase = ElectionSubPhase.SIGNUP,
 
-    // Comma-separated userIds in a random (shuffled) order;
-    // set once at SPEECH start
+    // Comma-separated userIds of the SPEECH candidates: seat order until the host
+    // sets the speech order, then rotated to the host's start + direction
     @Column(name = "speaking_order", columnDefinition = "TEXT")
     var speakingOrder: String? = null,
 
+    // SheriffService.NO_SPEAKER until the host sets the speech order
     @Column(name = "current_speaker_idx", nullable = false)
     var currentSpeakerIdx: Int = 0,
 

@@ -49,6 +49,7 @@ class SheriffService(
         ActionType.SHERIFF_VOTE -> vote(request, context)
         ActionType.SHERIFF_ABSTAIN -> abstain(request, context)
         ActionType.SHERIFF_END_RESULT -> endResult(request, context)
+        ActionType.SHERIFF_SET_SPEECH_ORDER -> setSpeechOrder(request, context)
         else -> GameActionResult.Rejected("Unknown sheriff action: ${request.actionType}")
     }
 
@@ -242,9 +243,7 @@ class SheriffService(
             return GameActionResult.Success()
         }
 
-        election.subPhase = ElectionSubPhase.SPEECH
-        election.speakingOrder = buildSpeakingOrder(running)
-        election.currentSpeakerIdx = 0
+        openSpeech(election, running, context)
         sheriffElectionRepository.save(election)
         broadcastAfterCommit(
             context.gameId,
@@ -295,9 +294,7 @@ class SheriffService(
             return GameActionResult.Success()
         }
 
-        election.subPhase = ElectionSubPhase.SPEECH
-        election.speakingOrder = buildSpeakingOrder(candidates)
-        election.currentSpeakerIdx = 0
+        openSpeech(election, candidates, context)
         sheriffElectionRepository.save(election)
         broadcastAfterCommit(
             context.gameId,
@@ -312,6 +309,9 @@ class SheriffService(
         val election = context.election ?: return GameActionResult.Rejected("No election in progress")
         if (election.subPhase != ElectionSubPhase.SPEECH)
             return GameActionResult.Rejected("Not in SPEECH sub-phase")
+
+        if (election.currentSpeakerIdx == NO_SPEAKER)
+            return GameActionResult.Rejected("Speech order not set yet")
 
         // Cancel any running timer for the departing candidate before advancing
         hostTimerService.cancel(context.gameId)
@@ -468,9 +468,65 @@ class SheriffService(
         return tally.filterValues { it == max }.keys.toList()
     }
 
-    /** Speaking order = running candidates in a random (shuffled) order. */
-    private fun buildSpeakingOrder(running: List<SheriffCandidate>): String =
-        running.shuffled().joinToString(",") { it.userId }
+    /**
+     * Enter SPEECH with the candidates in seat order. One candidate speaks at once;
+     * with more, nobody speaks until the host sets the order (SHERIFF_SET_SPEECH_ORDER).
+     */
+    private fun openSpeech(election: SheriffElection, running: List<SheriffCandidate>, context: GameContext) {
+        election.subPhase = ElectionSubPhase.SPEECH
+        election.speakingOrder = running.map { it.userId }
+            .sortedBy { context.playerById(it)?.seatIndex ?: Int.MAX_VALUE }
+            .joinToString(",")
+        election.currentSpeakerIdx = if (running.size == 1) 0 else NO_SPEAKER
+    }
+
+    /**
+     * The host drew the first speaker and picked a direction. Clockwise = rising seat
+     * numbers, wrapping round; counter-clockwise = falling. Candidates who quit while
+     * the host was drawing stay in the order, so advanceSpeech skips them as before.
+     */
+    private fun setSpeechOrder(request: GameActionRequest, context: GameContext): GameActionResult {
+        if (request.actorUserId != context.game.hostUserId)
+            return GameActionResult.Rejected("Only host can set the speech order")
+        val election = context.election ?: return GameActionResult.Rejected("No election in progress")
+        if (context.game.phase != GamePhase.SHERIFF_ELECTION || election.subPhase != ElectionSubPhase.SPEECH ||
+            election.currentSpeakerIdx != NO_SPEAKER
+        ) return GameActionResult.Rejected("Speech order can only be set before the first speech")
+        val clockwise = when (request.payload["direction"]) {
+            "CLOCKWISE" -> true
+            "COUNTER_CLOCKWISE" -> false
+            else -> return GameActionResult.Rejected("direction must be CLOCKWISE or COUNTER_CLOCKWISE")
+        }
+        val startId = request.targetUserId ?: return GameActionResult.Rejected("targetUserId required")
+        val order = election.speakingOrder?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        val running = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
+            .filter { it.status == CandidateStatus.RUNNING }.map { it.userId }.toSet()
+        if (startId !in order || startId !in running)
+            return GameActionResult.Rejected("That player is no longer running")
+
+        val seats = order.sortedBy { context.playerById(it)?.seatIndex ?: Int.MAX_VALUE }
+        val ring = if (clockwise) seats else seats.reversed()
+        val i = ring.indexOf(startId)
+        election.speakingOrder = (ring.drop(i) + ring.take(i)).joinToString(",")
+        election.currentSpeakerIdx = 0
+        sheriffElectionRepository.save(election)
+        broadcastAfterCommit(
+            context.gameId,
+            DomainEvent.PhaseChanged(context.gameId, GamePhase.SHERIFF_ELECTION, ElectionSubPhase.SPEECH.name)
+        )
+        return GameActionResult.Success()
+    }
+
+    /** A quit left one candidate before the host set the order: that one speaks now, as with a lone candidate. */
+    private fun startIfOneRunning(election: SheriffElection) {
+        if (election.currentSpeakerIdx != NO_SPEAKER) return
+        val order = election.speakingOrder?.split(",")?.filter { it.isNotBlank() } ?: return
+        val running = sheriffCandidateRepository.findByElectionId(election.id ?: error("Election has no ID"))
+            .filter { it.status == CandidateStatus.RUNNING }.map { it.userId }
+        if (running.size != 1) return
+        election.currentSpeakerIdx = order.indexOf(running.single())
+        sheriffElectionRepository.save(election)
+    }
 
     private fun electSheriff(winnerUserId: String, context: GameContext) {
         context.game.sheriffUserId = winnerUserId
@@ -495,6 +551,7 @@ class SheriffService(
         candidate.status = CandidateStatus.QUIT
         sheriffCandidateRepository.save(candidate)
         if (endCampaignIfNoneRunning(context, election)) return GameActionResult.Success()
+        startIfOneRunning(election)
 
         broadcastAfterCommit(
             context.gameId,
@@ -521,7 +578,8 @@ class SheriffService(
         ).ifPresent { voteRepository.delete(it) }
         // Past SIGNUP, losing the last running candidate would leave nobody to vote for or appoint.
         if (election.subPhase == ElectionSubPhase.SIGNUP) finishSignupDecision(election, candidates, context)
-        else endCampaignIfNoneRunning(context, election)
+        else if (!endCampaignIfNoneRunning(context, election) && election.subPhase == ElectionSubPhase.SPEECH)
+            startIfOneRunning(election)
     }
 
     /** No running candidate left in the speaking order → straight to DAY_DISCUSSION/RESULT_HIDDEN. */
@@ -743,5 +801,10 @@ class SheriffService(
         } else {
             stompPublisher.broadcastGame(gameId, event)
         }
+    }
+
+    companion object {
+        /** currentSpeakerIdx while the host has not yet set the speech order. */
+        const val NO_SPEAKER = -1
     }
 }

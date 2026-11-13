@@ -46,7 +46,8 @@
 #     SHERIFF_ADVANCE_SPEECH    host advances to next speaker
 #     SHERIFF_REVEAL_RESULT     host reveals election result
 #     SHERIFF_APPOINT           host appoints sheriff after tied vote  (requires --target)
-#     SHERIFF_SET_SPEECH_ORDER  host sets speaking order direction (requires --payload '{"direction":"ASC"}' or DESC; SIGNUP phase)
+#     SHERIFF_SET_SPEECH_ORDER  host sets the first speaker + direction before the first speech
+#                               (requires --target and --payload '{"direction":"CLOCKWISE"}' or COUNTER_CLOCKWISE)
 #
 # PSEUDO-ACTIONS:
 #   STATUS            print phase/subPhase/dayNumber for the current game and exit
@@ -107,7 +108,7 @@
 #   ./scripts/act.sh SHERIFF_QUIT <nick>                          # candidate drops out (SIGNUP)
 #   ./scripts/act.sh SHERIFF_QUIT_CAMPAIGN <nick>                 # candidate quits mid-speech (SPEECH)
 #   ./scripts/act.sh SHERIFF_APPOINT --target 3                   # host appoints seat 3 after tie
-#   ./scripts/act.sh SHERIFF_SET_SPEECH_ORDER --payload '{"direction":"DESC"}'   # host: speak in descending seat order
+#   ./scripts/act.sh SHERIFF_SET_SPEECH_ORDER HOST --target 7 --payload '{"direction":"COUNTER_CLOCKWISE"}'   # host: seat 7 first, seats going down
 # =============================================================================
 
 set -euo pipefail
@@ -203,7 +204,7 @@ esac
 
 # Actions that require --target
 case "$ACTION_TYPE" in
-  WOLF_SELECT|WOLF_KILL|SEER_CHECK|GUARD_PROTECT|HUNTER_SHOOT|BADGE_PASS|KNIGHT_DUEL|SHERIFF_VOTE|SHERIFF_APPOINT)
+  WOLF_SELECT|WOLF_KILL|SEER_CHECK|GUARD_PROTECT|HUNTER_SHOOT|BADGE_PASS|KNIGHT_DUEL|SHERIFF_VOTE|SHERIFF_APPOINT|SHERIFF_SET_SPEECH_ORDER)
     [ -z "$TARGET_SEL" ] && fail "'$ACTION_TYPE' requires --target <seat|nick|userId>" ;;
 esac
 
@@ -216,7 +217,7 @@ esac
 # SHERIFF_SET_SPEECH_ORDER requires --payload
 case "$ACTION_TYPE" in
   SHERIFF_SET_SPEECH_ORDER)
-    [ -z "$PAYLOAD_JSON" ] && fail "'SHERIFF_SET_SPEECH_ORDER' requires --payload (e.g. {\"direction\":\"DESC\"})" ;;
+    [ -z "$PAYLOAD_JSON" ] && fail "'SHERIFF_SET_SPEECH_ORDER' requires --payload (e.g. {\"direction\":\"CLOCKWISE\"})" ;;
 esac
 
 # ── Resolve state file ────────────────────────────────────────────────────────

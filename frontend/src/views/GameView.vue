@@ -126,6 +126,7 @@
         @vote="handleSheriffVote"
         @abstain="handleSheriffAbstain"
         @advance-speech="handleSheriffAdvanceSpeech"
+        @set-speech-order="handleSheriffSetSpeechOrder"
         @reveal-result="handleSheriffRevealResult"
         @end-result="handleSheriffEndResult"
         @appoint="handleSheriffAppoint"
@@ -827,6 +828,13 @@ async function handleSheriffAbstain() {
 }
 async function handleSheriffAdvanceSpeech() {
   await action({ actionType: 'SHERIFF_ADVANCE_SPEECH' })
+}
+async function handleSheriffSetSpeechOrder(startUserId: string, direction: string) {
+  await action({
+    actionType: 'SHERIFF_SET_SPEECH_ORDER',
+    targetId: startUserId,
+    payload: { direction },
+  })
 }
 async function handleSheriffRevealResult() {
   await action({ actionType: 'SHERIFF_REVEAL_RESULT' })
