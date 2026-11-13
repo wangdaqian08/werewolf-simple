@@ -249,7 +249,7 @@ export function setupMocks() {
   const rolePickView = () => ({
     choice: mockRolePick,
     frozenCredits: mockRolePick && mockRolePick !== 'NONE' ? 20 : 0,
-    prices: { WOLF: 20, GOD: 20, VILLAGER: 20 },
+    prices: { WOLF: 30, GOD: 25, VILLAGER: 10 },
     seats: { WOLF: 3, GOD: 3, VILLAGER: 3 },
   })
   mock.onGet(/\/room\/[^/]+\/role-pick$/).reply(() => [200, rolePickView()])

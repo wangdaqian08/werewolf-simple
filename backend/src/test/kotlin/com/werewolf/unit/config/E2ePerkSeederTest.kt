@@ -16,7 +16,7 @@ import org.springframework.boot.DefaultApplicationArguments
 class E2ePerkSeederTest {
 
     @Test
-    fun `inserts only the missing catalog rows, with the V19 and V31 prices`() {
+    fun `inserts only the missing catalog rows, with the production prices (V19, V36)`() {
         val repo = mock<PerkRepository> {
             on { existsById(any()) } doReturn false
             on { existsById("NIGHT1_IMMUNITY") } doReturn true
@@ -27,7 +27,7 @@ class E2ePerkSeederTest {
         val saved = argumentCaptor<Perk>()
         verify(repo, times(3)).save(saved.capture())
         assertThat(saved.allValues.associate { it.perkCode to it.priceCredits }).isEqualTo(
-            mapOf("ROLE_PICK_WOLF" to 20, "ROLE_PICK_GOD" to 20, "ROLE_PICK_VILLAGER" to 20),
+            mapOf("ROLE_PICK_WOLF" to 30, "ROLE_PICK_GOD" to 25, "ROLE_PICK_VILLAGER" to 10),
         )
     }
 }

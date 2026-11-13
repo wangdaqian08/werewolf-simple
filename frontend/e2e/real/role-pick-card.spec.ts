@@ -1,7 +1,7 @@
 /**
  * Real-backend E2E: 点将卡 (role-pick card).
  *
- * The host buys the WOLF card (20 credits, frozen until game end), five bots
+ * The host buys the WOLF card (30 coins, frozen until game end), five bots
  * choose NONE and ready up (join-room.sh), the host starts, and the dealer
  * honours the card: the host is a wolf and the role-reveal card says the
  * card took effect. A bot's own game state carries no role-pick data
@@ -72,7 +72,7 @@ test.describe('Role-pick card', () => {
     await expect(host.getByTestId('room-seat-1')).toContainText('PickHost', { timeout: UI_TIMEOUT })
 
     await host.getByTestId('role-pick-WOLF').click()
-    await expect(host.getByTestId('role-pick-frozen')).toContainText('20', { timeout: UI_TIMEOUT })
+    await expect(host.getByTestId('role-pick-frozen')).toContainText('30', { timeout: UI_TIMEOUT })
     await expect(host.getByTestId('role-pick-draw-note')).toBeVisible()
   })
 
@@ -92,7 +92,7 @@ test.describe('Role-pick card', () => {
 
     const state = await fetchGameState(host, gameId)
     expect(WOLF_ROLES, `host role ${state?.myRole}`).toContain(state?.myRole)
-    expect(state?.myRolePick).toEqual({ choice: 'WOLF', tookEffect: true, price: 20 })
+    expect(state?.myRolePick).toEqual({ choice: 'WOLF', tookEffect: true, price: 30 })
 
     await host.getByTestId('reveal-role-btn').click()
     await expect(host.getByTestId('role-pick-result')).toBeVisible({ timeout: UI_TIMEOUT })
