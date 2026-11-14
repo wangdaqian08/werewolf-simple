@@ -50,8 +50,12 @@ export default defineConfig({
       // surface only the frontend assertion — no visibility into what the
       // backend coroutine actually did, which actions it accepted or
       // rejected, or where it got stuck.
-      command:
-        "bash -c 'cd ../backend && SPRING_PROFILES_ACTIVE=e2e ./gradlew bootRun -q --console=plain 2>&1 | tee /tmp/werewolf-e2e-backend.log'",
+      //
+      // CI sets E2E_BACKEND_JAR to the jar the "Backend Jar" job built once,
+      // so the shards skip compiling the backend; locally bootRun builds it.
+      command: process.env.E2E_BACKEND_JAR
+        ? `bash -c 'cd ../backend && SPRING_PROFILES_ACTIVE=e2e java -jar "$E2E_BACKEND_JAR" 2>&1 | tee /tmp/werewolf-e2e-backend.log'`
+        : "bash -c 'cd ../backend && SPRING_PROFILES_ACTIVE=e2e ./gradlew bootRun -q --console=plain 2>&1 | tee /tmp/werewolf-e2e-backend.log'",
       url: 'http://localhost:8080/api/health',
       timeout: 120_000,
       reuseExistingServer: true,
