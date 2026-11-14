@@ -1,0 +1,31 @@
+name: Frontend dependencies
+description: Node 24 + frontend/node_modules, restored from cache while package-lock.json is unchanged
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+
+    - name: Restore node_modules
+      id: cache
+      uses: actions/cache/restore@v4
+      with:
+        path: frontend/node_modules
+        key: node-modules-${{ runner.os }}-${{ runner.arch }}-node24-${{ hashFiles('frontend/package-lock.json') }}
+
+    - name: Install dependencies
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: frontend
+      run: npm ci
+
+    # Saved straight after `npm ci`, not at job end: later steps write vite /
+    # tsc build state into node_modules, which must never be shared.
+    - name: Save node_modules
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: frontend/node_modules
+        key: ${{ steps.cache.outputs.cache-primary-key }}
