@@ -315,7 +315,7 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     expect(settlement.text()).toContain('+50')
     expect(wrapper.find('[data-testid="my-earned"]').text()).toBe('+50 戰績分')
     // the same reward is also paid out as spendable coins
-    expect(wrapper.find('[data-testid="my-coins"]').text()).toBe('同時獲得 50 金幣')
+    expect(wrapper.find('[data-testid="my-coins"]').text()).toBe('限時特惠：同時獲得 50 金幣')
     expect(settlement.text()).toContain('500')
     // rewards sorted by seatIndex ascending regardless of input order
     const rows = wrapper.findAll('.reward-row').map((r) => r.text())
@@ -373,7 +373,7 @@ describe('ResultView - new dashboard-style gameover screen', () => {
     }
     const { wrapper } = await mountResultView(state)
     expect(wrapper.find('[data-testid="my-earned"]').text()).toBe('+30 戰績分')
-    expect(wrapper.find('[data-testid="my-coins"]').text()).toBe('同時獲得 20 金幣')
+    expect(wrapper.find('[data-testid="my-coins"]').text()).toBe('限時特惠：同時獲得 20 金幣')
     expect(wrapper.get('[data-testid="task-status"]').text()).toBe('已完成')
   })
 

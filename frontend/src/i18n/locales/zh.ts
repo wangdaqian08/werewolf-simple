@@ -433,7 +433,7 @@ export default {
   result: {
     cancelled: '比賽取消',
     cancelledSub: 'Game Cancelled',
-    coins: '同時獲得 {n} 金幣',
+    coins: '限時特惠：同時獲得 {n} 金幣',
     earned: '戰績分',
     gameOver: '遊戲結束',
     goodWin: '好人勝',
@@ -726,7 +726,7 @@ export default {
     empty: '暫無數據',
     firstNight: '僅首夜',
     floor: '本局戰績分最低 0 分，不會扣除已有的戰績分和金幣',
-    groupBase: '基礎分（三者取其一）',
+    groupBase: '基礎分（按勝負結果只得一項）',
     groupBonus: '加分項（可疊加）',
     groupPenalty: '扣分項（可疊加）',
     hard: '屠城',
@@ -735,7 +735,7 @@ export default {
     roles: '角色配置',
     roomCode: '房間號',
     rules: '規則',
-    scoring: '戰績分規則（同時獲得等額金幣）',
+    scoring: '戰績分規則（限時特惠：同時獲得等額金幣）',
     yes: '有',
   },
   setup: {

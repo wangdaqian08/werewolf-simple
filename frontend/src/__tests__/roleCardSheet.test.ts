@@ -72,6 +72,12 @@ describe('RoleCardSheet', () => {
     expect(rules).not.toContain('被騎士決鬥除外')
   })
 
+  it('in a running game the excluded roles are not shown (the board is already set)', () => {
+    mount(RoleCardSheet, { props: { role: 'SEER', inGame: true }, attachTo: document.body })
+    expect(document.body.querySelector('[data-testid="rc-excludes"]')).toBeNull()
+    expect(document.body.querySelector('[data-testid="rc-rules"]')).not.toBeNull()
+  })
+
   it('a role with no excluded roles has no such section', () => {
     mount(RoleCardSheet, { props: { role: 'WITCH' }, attachTo: document.body })
     expect(document.body.querySelector('[data-testid="rc-excludes"]')).toBeNull()

@@ -28,7 +28,7 @@
               {{ $t('common.seatDot', { n: mate.seatIndex, name: mate.nickname }) }}
             </div>
           </div>
-          <div v-if="excludes.length" class="rc-section" data-testid="rc-excludes">
+          <div v-if="excludes.length && !inGame" class="rc-section" data-testid="rc-excludes">
             <div class="rc-section-title">{{ $t('roleCard.excludes') }}</div>
             <div class="rc-excludes">
               <span v-for="id in excludes" :key="id" :data-role="id" class="rc-exclude">
@@ -76,6 +76,8 @@ const props = defineProps<{
   task?: MyTask | null
   teammates?: GamePlayer[]
   history?: RoleHistoryData | null
+  /** In a running game the role set is fixed, so which roles cannot share a room is noise. */
+  inGame?: boolean
 }>()
 const emit = defineEmits<{ close: [] }>()
 useScrollLock(() => true)

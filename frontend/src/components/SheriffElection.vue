@@ -8,6 +8,15 @@
       <div class="phase-chip">{{ phaseChipLabel }}</div>
       <LanguageToggle inline />
       <div class="header-actions">
+        <button
+          v-if="myRole"
+          class="toolbar-btn my-role-chip my-role-locked"
+          data-testid="my-role-chip"
+          @click="showRoleCard = true"
+        >
+          <span class="toolbar-icon" aria-hidden="true">🔒</span>
+          <span>{{ $t('day.tapToReveal') }}</span>
+        </button>
         <ActionMenu
           phase="SHERIFF_ELECTION"
           :sub-phase="election.subPhase"
@@ -701,6 +710,16 @@
         <button class="btn btn-secondary" disabled>{{ $t('sheriff.waitingForHost2') }}</button>
       </div>
     </template>
+    <RoleCardSheet
+      v-if="showRoleCard && myRole"
+      :role="myRole"
+      :player="myPlayer"
+      :teammates="teammatePlayers"
+      :history="roleHistory ?? null"
+      :task="myTask ?? null"
+      in-game
+      @close="showRoleCard = false"
+    />
   </div>
 </template>
 
@@ -711,9 +730,12 @@ import Avatar from '@/components/Avatar.vue'
 import ActionMenu from '@/components/ActionMenu.vue'
 import CountdownArc from '@/components/CountdownArc.vue'
 import LanguageToggle from '@/components/LanguageToggle.vue'
+import RoleCardSheet from '@/components/RoleCardSheet.vue'
 import type {
   GamePlayer,
+  MyTask,
   PlayerRole,
+  RoleHistory as RoleHistoryData,
   SheriffCandidate,
   SheriffElectionState,
   TimerState,
@@ -729,6 +751,9 @@ const props = defineProps<{
   myRole?: PlayerRole
   isAlive?: boolean
   actionPending?: boolean
+  roleHistory?: RoleHistoryData | null
+  myTask?: MyTask | null
+  wolfTeammates?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -748,6 +773,12 @@ const emit = defineEmits<{
   'start-timer': [seconds: number]
   'stop-timer': []
 }>()
+
+const showRoleCard = ref(false)
+const myPlayer = computed(() => props.players?.find((p) => p.userId === props.myUserId))
+const teammatePlayers = computed(() =>
+  (props.players ?? []).filter((p) => props.wolfTeammates?.includes(p.userId)),
+)
 
 const iAmCandidate = computed(() =>
   props.election.candidates.some((c) => c.userId === props.myUserId && c.status === 'RUNNING'),
