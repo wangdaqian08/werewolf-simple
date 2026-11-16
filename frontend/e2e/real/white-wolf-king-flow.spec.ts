@@ -2,7 +2,7 @@
  * Real-backend E2E: White Wolf King (白狼王).
  *
  *  1. At night the king's browser makes the wolf kill (it acts with the wolves).
- *  2. By day the king opens the Action chip → 自爆 → picks a player to take → confirms.
+ *  2. By day the king opens the Action chip → 自爆 → picks a player → 帶走 N號.
  *  3. Every viewer's death banner names the king and the taken player; the host
  *     sees 進入夜晚 (no vote); the 遊戲記錄 drawer shows the take.
  *  4. The host ends the day and the game reaches the next night.
@@ -89,8 +89,11 @@ test.describe('White Wolf King (白狼王) — real-backend flow', () => {
         await kp.getByTestId('action-menu-self-destruct').click()
         const takeBtn = kp.getByTestId(`action-menu-take-${taken!.userId}`)
         await expect(takeBtn).toBeVisible({ timeout: 5_000 })
+        const takeConfirm = kp.getByTestId('action-menu-take-confirm')
+        await expect(takeConfirm, 'take stays disabled until a player is picked').toBeDisabled()
         await takeBtn.click()
-        await kp.getByTestId('action-menu-confirm').click()
+        await expect(takeConfirm).toContainText(`${taken!.seat}號`)
+        await takeConfirm.click()
 
         expect(
             await waitForDaySkipVoting(ctx.hostPage, ctx.gameId, 10_000),

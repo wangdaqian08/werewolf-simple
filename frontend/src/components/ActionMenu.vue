@@ -76,7 +76,7 @@
           <div class="action-confirm-sheet">
             <div class="action-confirm-title">{{ $t('actionMenu.confirmTitle') }}</div>
             <div class="action-confirm-body">{{ $t('actionMenu.confirmBody') }}</div>
-            <!-- 白狼王: may take one alive player along (optional) -->
+            <!-- 白狼王: must choose explicitly — take a player, or take nobody -->
             <div v-if="canTake" class="action-take">
               <div class="action-take-hint">
                 {{ $t('actionMenu.take') }}
@@ -94,7 +94,37 @@
                 </button>
               </div>
             </div>
-            <div class="action-confirm-btns">
+            <template v-if="canTake">
+              <div class="action-confirm-btns">
+                <button
+                  class="btn btn-secondary"
+                  data-testid="action-menu-no-take"
+                  @click="confirmSelfDestruct(undefined)"
+                >
+                  {{ $t('actionMenu.noTake') }}
+                </button>
+                <button
+                  class="btn btn-danger"
+                  data-testid="action-menu-take-confirm"
+                  :disabled="!takeTarget"
+                  @click="confirmSelfDestruct(takeTarget?.userId)"
+                >
+                  {{
+                    takeTarget
+                      ? $t('actionMenu.takeConfirm', { n: takeTarget.seatIndex })
+                      : $t('actionMenu.takePickFirst')
+                  }}
+                </button>
+              </div>
+              <button
+                class="action-take-cancel"
+                data-testid="action-menu-cancel"
+                @click="cancelConfirm"
+              >
+                {{ $t('common.cancel') }}
+              </button>
+            </template>
+            <div v-else class="action-confirm-btns">
               <button
                 class="btn btn-secondary"
                 data-testid="action-menu-cancel"
@@ -105,7 +135,7 @@
               <button
                 class="btn btn-danger"
                 data-testid="action-menu-confirm"
-                @click="confirmSelfDestruct"
+                @click="confirmSelfDestruct(undefined)"
               >
                 {{ $t('common.confirm') }}
               </button>
@@ -342,6 +372,7 @@ const takeCandidates = computed(() =>
   (props.players ?? []).filter((p) => p.isAlive && p.userId !== props.myUserId),
 )
 const takeTargetId = ref<string | undefined>()
+const takeTarget = computed(() => takeCandidates.value.find((p) => p.userId === takeTargetId.value))
 
 function toggleTake(userId: string) {
   takeTargetId.value = takeTargetId.value === userId ? undefined : userId
@@ -365,9 +396,9 @@ function cancelConfirm() {
   confirmOpen.value = false
 }
 
-function confirmSelfDestruct() {
+function confirmSelfDestruct(targetUserId: string | undefined) {
   confirmOpen.value = false
-  emit('self-destruct', takeTargetId.value)
+  emit('self-destruct', targetUserId)
 }
 </script>
 
@@ -384,7 +415,7 @@ function confirmSelfDestruct() {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-height: 160px;
+  max-height: 40vh;
   overflow-y: auto;
 }
 .action-take-item {
@@ -400,6 +431,18 @@ function confirmSelfDestruct() {
   border-color: var(--red, #b5251a);
   background: var(--red, #b5251a);
   color: #fff;
+}
+.action-take-cancel {
+  margin-top: 12px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--muted, #8a7a65);
+  cursor: pointer;
+}
+.btn-danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Backdrop */

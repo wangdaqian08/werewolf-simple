@@ -64,7 +64,10 @@ export default {
     knightDuelTitle: '確認決鬥？',
     none: '暫無操作',
     selfDestruct: '自爆',
-    take: '可選擇帶走一名玩家（可不選）',
+    take: '選一名玩家帶走，或選擇不帶人',
+    noTake: '不帶人',
+    takeConfirm: '帶走 {n}號',
+    takePickFirst: '選人帶走',
     title: '行動菜單',
   },
   admin: {
