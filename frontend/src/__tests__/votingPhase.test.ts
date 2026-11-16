@@ -788,7 +788,9 @@ describe('VotingPhase — hunter role card', () => {
       },
     })
     await wrapper.find('.my-role-chip').trigger('click')
-    expect(document.body.querySelector('.rc-desc')?.textContent).toContain('被女巫毒死時無法開槍')
+    expect(document.body.querySelector('.rc-desc')?.textContent).toContain(
+      '被黑狼王開槍帶走時也可以',
+    )
     wrapper.unmount()
   })
 })
