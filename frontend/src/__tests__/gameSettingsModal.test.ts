@@ -144,6 +144,26 @@ describe('GameSettingsModal — 空守 rule', () => {
   })
 })
 
+describe('GameSettingsModal — settings of roles not in this game', () => {
+  it('hides 女巫自救 without a witch and 空守 without a guard; 空刀 always shows', () => {
+    const roles = SETTINGS.roles.filter((r) => r !== 'WITCH' && r !== 'GUARD')
+    const wrapper = mountModal({ settings: { ...SETTINGS, roles } })
+    expect(bodyEl('settings-witch-self-save')).toBeNull()
+    expect(bodyEl('settings-guard-skip')).toBeNull()
+    expect(bodyEl('settings-no-kill')).not.toBeNull()
+    wrapper.unmount()
+  })
+
+  it('the room-info role card hides the excluded roles', async () => {
+    const wrapper = mountModal()
+    ;(bodyEl('settings-role-SEER') as HTMLElement).click()
+    await flushPromises()
+    expect(bodyEl('role-card-sheet')).not.toBeNull()
+    expect(bodyEl('rc-excludes')).toBeNull()
+    wrapper.unmount()
+  })
+})
+
 describe('GameSettingsModal — 積分規則', () => {
   const rule = (
     reason: RewardRule['reason'],

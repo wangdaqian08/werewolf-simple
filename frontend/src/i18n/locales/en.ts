@@ -434,7 +434,7 @@ export default {
   result: {
     cancelled: 'Game cancelled',
     cancelledSub: 'Game Cancelled',
-    coins: 'Also paid as {n} coins',
+    coins: 'Limited time: also paid as {n} coins',
     earned: 'Score',
     gameOver: 'GAME OVER',
     goodWin: 'Village wins',
@@ -746,7 +746,7 @@ export default {
     roles: 'Roles',
     roomCode: 'Room Code',
     rules: 'Rules',
-    scoring: 'Scoring (the same amount is paid in coins)',
+    scoring: 'Scoring (limited time: the same amount is paid in coins)',
     yes: 'Yes',
   },
   setup: {

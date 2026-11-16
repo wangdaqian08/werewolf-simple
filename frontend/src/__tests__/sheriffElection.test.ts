@@ -461,3 +461,44 @@ describe('SheriffElection — abstain column is always shown on reveal', () => {
     },
   )
 })
+
+describe('SheriffElection — my role chip', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const players = [
+    { userId: 'u1', nickname: 'Me', seatIndex: 1, isAlive: true, isSheriff: false },
+    { userId: 'u4', nickname: 'Mate', seatIndex: 4, isAlive: true, isSheriff: false },
+  ]
+
+  it('opens my role card (rules, wolf teammates, no excluded roles) in every sub-phase', async () => {
+    for (const sub of ['SIGNUP', 'SPEECH', 'VOTING', 'RESULT', 'TIED'] as const) {
+      const wrapper = mount(SheriffElection, {
+        props: {
+          election: makeElection({ subPhase: sub }),
+          ...DEFAULT_PROPS,
+          players,
+          myRole: 'WEREWOLF',
+          isAlive: true,
+          wolfTeammates: ['u4'],
+        },
+        attachTo: document.body,
+      })
+      await wrapper.find('.sheriff-header [data-testid="my-role-chip"]').trigger('click')
+      const q = (id: string) => document.body.querySelector(`[data-testid="${id}"]`)
+      expect(q('role-card-sheet'), sub).not.toBeNull()
+      expect(q('rc-rules')).not.toBeNull()
+      expect(q('rc-teammates')?.textContent).toContain('Mate')
+      expect(q('rc-excludes')).toBeNull()
+      wrapper.unmount()
+    }
+  })
+
+  it('no chip before my role is known', () => {
+    const wrapper = mount(SheriffElection, {
+      props: { election: makeElection({ subPhase: 'SIGNUP' }), ...DEFAULT_PROPS },
+    })
+    expect(wrapper.find('[data-testid="my-role-chip"]').exists()).toBe(false)
+  })
+})

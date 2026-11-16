@@ -108,6 +108,9 @@
     >
       <SheriffElection
         :key="`sheriff-${gameStore.state.sheriffElection.subPhase}`"
+        :role-history="gameStore.state?.roleHistory ?? null"
+        :my-task="gameStore.state?.myTask ?? null"
+        :wolf-teammates="gameStore.state?.wolfTeammates ?? []"
         :election="gameStore.state.sheriffElection"
         :my-user-id="userStore.userId ?? ''"
         :is-host="isHost"

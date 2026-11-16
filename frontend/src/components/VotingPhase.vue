@@ -362,6 +362,7 @@
         :teammates="teammatePlayers"
         :history="roleHistory ?? null"
         :task="myTask ?? null"
+        in-game
         @close="showRoleCard = false"
       />
 

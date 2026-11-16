@@ -64,7 +64,7 @@
                   settings.hasSheriff ? $t('settings.yes') : $t('settings.no')
                 }}</span>
               </div>
-              <div class="rule-row" data-testid="settings-witch-self-save">
+              <div v-if="hasRole('WITCH')" class="rule-row" data-testid="settings-witch-self-save">
                 <span class="rule-label">{{ $t('create.witchSelfSave') }}</span>
                 <span class="rule-value">{{
                   settings.witchSelfSaveAllowed
@@ -78,7 +78,7 @@
                   settings.noKillAllowed ? $t('settings.allowed') : $t('settings.disallowed')
                 }}</span>
               </div>
-              <div class="rule-row" data-testid="settings-guard-skip">
+              <div v-if="hasRole('GUARD')" class="rule-row" data-testid="settings-guard-skip">
                 <span class="rule-label">{{ $t('create.noProtect') }}</span>
                 <span class="rule-value">{{
                   settings.guardSkipAllowed ? $t('settings.allowed') : $t('settings.disallowed')
@@ -133,6 +133,7 @@
     v-if="open && openRole"
     :role="openRole"
     :title="$t('roleCard.info')"
+    in-game
     @close="openRole = null"
   />
 </template>
@@ -172,7 +173,7 @@ const hasPenalty = computed(() => rules.value.some((r) => r.amount < 0))
 // A player gets exactly one BASE rule, so listing all five flat read as though a
 // winning wolf collected both the win bonus and the survival score. An empty group
 // renders nothing, so 扣分项 stays hidden until a penalty exists.
-// NOTE: 三者取其一 names the three BASE rules; update it if a fourth is ever added.
+// NOTE: groupBase says only one BASE rule applies, picked by the result; keep it true if one is added.
 const RULE_GROUPS = [
   { key: 'BASE', title: 'settings.groupBase' },
   { key: 'BONUS', title: 'settings.groupBonus' },
@@ -210,6 +211,9 @@ interface RoleCount {
 // Aggregate the per-seat multiset (["WEREWOLF","WEREWOLF","SEER",...]) into
 // display rows, ordered by ROLE_DEFINITIONS; unknown ids appended raw so a
 // future backend role never renders as a blank row.
+// A setting that belongs to a role only matters when the role is in this game.
+const hasRole = (id: string) => props.settings?.roles?.includes(id) ?? false
+
 const roleCounts = computed<RoleCount[]>(() => {
   const counts = new Map<string, number>()
   for (const r of props.settings?.roles ?? []) counts.set(r, (counts.get(r) ?? 0) + 1)
