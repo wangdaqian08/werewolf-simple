@@ -84,7 +84,7 @@ object GameReviewBuilder {
                 actors = wolfActors,
                 action = when {
                     target == null -> WolfAction.SKIP
-                    // 自刀 = the pack hit its own; the mechanical wolf is not on the pack's side of the table.
+                    // 自刀 = the killers hit their own; a lone wolf (mechanical wolf, gargoyle) is not on the pack's side of the table.
                     target.role.isPackWolf || target in wolfActors -> WolfAction.SELF_KILL
                     else -> WolfAction.KILL
                 },
@@ -116,6 +116,9 @@ object GameReviewBuilder {
             dawn = dawn(n, refs, died, night1PerkSaved),
             gravekeeper = holder(PlayerRole.GRAVEKEEPER)?.let {
                 GravekeeperTurn(refs.getValue(it.userId), deadAt(it), n.gravekeeperExiledUserId?.let(refs::get), n.gravekeeperResult)
+            },
+            gargoyle = holder(PlayerRole.GARGOYLE)?.let {
+                GargoyleTurn(refs.getValue(it.userId), deadAt(it), n.gargoyleCheckedUserId?.let(refs::get), n.gargoyleResultRole)
             },
         )
     }

@@ -25,6 +25,8 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   },
   // Kept apart from the pack: it takes a wolf seat but wolves and it never see each other.
   { id: 'MECHANICAL_WOLF', emoji: '🤖', required: false, wolf: true },
+  // Also kept apart from the pack; checks one player's exact role each night.
+  { id: 'GARGOYLE', emoji: '🗿', required: false, wolf: true },
   { id: 'SEER', emoji: '🔮', required: false },
   { id: 'MEDIUM', emoji: '👁️', required: false },
   { id: 'WITCH', emoji: '🧙‍♀️', required: false },
@@ -40,10 +42,12 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
 // The seer and the medium fill the same night slot.
 // The mechanical wolf's learn table covers only its own board (机械狼通灵师), so no rule says what it gains from 騎士 or 守墓人.
 // 騎士 (预女骑守) and 守墓人 (预女猎墓) each give the good camp confirmed information; no standard board has both.
+// 機械狼 and 石像鬼 are both lone wolves; no rule says what a mechanical wolf learns from a gargoyle.
 export const BLOCKED_WITH: Record<string, string[]> = {
   SEER: ['MEDIUM'],
   MEDIUM: ['SEER'],
-  MECHANICAL_WOLF: ['KNIGHT', 'GRAVEKEEPER'],
+  MECHANICAL_WOLF: ['KNIGHT', 'GRAVEKEEPER', 'GARGOYLE'],
+  GARGOYLE: ['MECHANICAL_WOLF'],
   KNIGHT: ['MECHANICAL_WOLF', 'GRAVEKEEPER'],
   GRAVEKEEPER: ['MECHANICAL_WOLF', 'KNIGHT'],
 }
@@ -60,9 +64,9 @@ export function isWolfRole(id: string | null | undefined): boolean {
   return !!id && roleDefinition(id)?.wolf === true
 }
 
-/** Wolf camp excluding the mechanical wolf, which is not part of the wolf pack (mirrors backend). */
+/** Wolf camp excluding the mechanical wolf and the gargoyle, which are not part of the wolf pack (mirrors backend). */
 export function isPackWolfRole(id: string | null | undefined): boolean {
-  return isWolfRole(id) && id !== 'MECHANICAL_WOLF'
+  return isWolfRole(id) && id !== 'MECHANICAL_WOLF' && id !== 'GARGOYLE'
 }
 
 /** Localised role name for the active language (e.g. 狼人 / Werewolf). */

@@ -61,6 +61,25 @@ describe('RoleComposition', () => {
     expect(chipMap(wrapper)).toEqual({ WEREWOLF: 3, SEER: 1, WITCH: 1, KNIGHT: 1, VILLAGER: 3 })
   })
 
+  it('RoleComposition counts GARGOYLE as one of the wolf seats', () => {
+    const wrapper = mount(RoleComposition, {
+      props: {
+        totalPlayers: 12,
+        wolfCount: 4,
+        roles: ['WEREWOLF', 'VILLAGER', 'GARGOYLE', 'SEER', 'WITCH', 'HUNTER', 'GRAVEKEEPER'],
+      },
+    })
+    expect(chipMap(wrapper)).toEqual({
+      WEREWOLF: 3,
+      GARGOYLE: 1,
+      SEER: 1,
+      WITCH: 1,
+      HUNTER: 1,
+      GRAVEKEEPER: 1,
+      VILLAGER: 4,
+    })
+  })
+
   it('RoleComposition counts GRAVEKEEPER as a god', () => {
     const wrapper = mount(RoleComposition, {
       props: {

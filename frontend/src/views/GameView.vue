@@ -628,6 +628,9 @@ const NIGHT_TURN_ACTIONS = new Set([
   'MEDIUM_CHECK',
   'MEDIUM_CONFIRM',
   'GRAVEKEEPER_CONFIRM',
+  'GARGOYLE_CHECK',
+  'GARGOYLE_SKIP',
+  'GARGOYLE_CONFIRM',
 ])
 
 // Wraps gameService.submitAction to always include the gameId from the route
@@ -1293,7 +1296,8 @@ onMounted(async () => {
         } else if (
           data.type === 'SeerResult' ||
           data.type === 'MediumResult' ||
-          data.type === 'MechWolfResult'
+          data.type === 'MechWolfResult' ||
+          data.type === 'GargoyleResult'
         ) {
           // Refetch picks up nightPhase.seerCheckedUserId + seerResultIsWerewolf
           await refreshState()

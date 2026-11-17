@@ -138,8 +138,9 @@ class NightOrchestrator(
 
     // ── Public API ──────────────────────────────────────────────────────────
 
-    /** The roles that act tonight, in wake order (only those present in the room). */
+    /** The roles that act tonight (only those present in the room); the wake order is the handlers' @Order. */
     fun activeNightRoles(room: Room): List<PlayerRole> = buildList {
+        if (room.hasGargoyle) add(PlayerRole.GARGOYLE)
         add(PlayerRole.WEREWOLF)
         if (room.hasMechanicalWolf) add(PlayerRole.MECHANICAL_WOLF)
         if (room.hasSeer) add(PlayerRole.SEER)
@@ -269,7 +270,8 @@ class NightOrchestrator(
     }
 
     /**
-     * Advance from WAITING sub-phase to the first real sub-phase (WEREWOLF_PICK).
+     * Advance from WAITING sub-phase to the first real sub-phase ([firstSubPhase]: GARGOYLE_PICK
+     * when the room has a gargoyle, else WEREWOLF_PICK).
      * Called by the debug endpoint or NightWaitingScheduler as a fallback.
      * In normal flow the night coroutine handles the WAITING delay automatically.
      */
@@ -646,8 +648,9 @@ class NightOrchestrator(
         val job = coroutineScope.launch {
             try {
                 // Wait for night init audio (goes_dark_close_eyes + wolf_howl) to finish
-                // before role audio starts. Without this, wolf_open_eyes AudioSequence arrives
-                // immediately and overrides the init AudioSequence on the frontend.
+                // before role audio starts. Without this, the first role's open-eyes AudioSequence
+                // (gargoyle_open_eyes or wolf_open_eyes) arrives immediately and overrides the init
+                // AudioSequence on the frontend.
                 delay(nightInitAudioDelayMs.milliseconds)
                 nightRoleLoop(gameId, dayNumber, withWaiting)
             } catch (e: Exception) {
@@ -886,7 +889,7 @@ class NightOrchestrator(
         np: NightPhase,
     ) {
         log.info(
-            "[race] {} game={} day={} subPhase={} thread={} -> wolfTarget={} seerChecked={} seerIsWolf={} witchAntidoteUsed={} witchPoisonTarget={} guardTarget={} mechLearn={} mechCheck={} mechPoison={} mechGuard={} mediumChecked={} mediumResultRole={}",
+            "[race] {} game={} day={} subPhase={} thread={} -> wolfTarget={} seerChecked={} seerIsWolf={} witchAntidoteUsed={} witchPoisonTarget={} guardTarget={} mechLearn={} mechCheck={} mechPoison={} mechGuard={} mediumChecked={} mediumResultRole={} gargoyleChecked={} gargoyleResultRole={}",
             tag,
             gameId,
             dayNumber,
@@ -904,6 +907,8 @@ class NightOrchestrator(
             np.mechGuardTargetUserId,
             np.mediumCheckedUserId,
             np.mediumResultRole,
+            np.gargoyleCheckedUserId,
+            np.gargoyleResultRole,
         )
     }
 

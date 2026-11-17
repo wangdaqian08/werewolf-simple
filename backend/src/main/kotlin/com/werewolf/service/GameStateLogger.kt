@@ -124,6 +124,8 @@ class GameStateLogger(
             .orElse(null) ?: return emptyList()
         return when (np.subPhase) {
             NightSubPhase.WAITING, NightSubPhase.COMPLETE -> emptyList()  // auto-advance
+            NightSubPhase.GARGOYLE_PICK, NightSubPhase.GARGOYLE_RESULT ->
+                alivePlayers.filter { it.role == PlayerRole.GARGOYLE }.map { it.userId }
             NightSubPhase.WEREWOLF_PICK -> RoleRules.wolfKillers(alivePlayers).map { it.userId }
             NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT ->
                 alivePlayers.filter { it.role == PlayerRole.SEER }.map { it.userId }

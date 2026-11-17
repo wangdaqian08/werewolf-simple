@@ -27,6 +27,7 @@ type GameStateMinimal = {
   players?: { seatIndex?: number; isAlive?: boolean }[]
   timer?: { remainingMs?: number; durationMs?: number; running?: boolean }
   myRole?: string | null
+  wolfTeammates?: string[]
   myRolePick?: { choice: string; tookEffect: boolean; price: number } | null
 }
 

@@ -802,6 +802,156 @@ class NightOrchestratorTest {
         assertThat(captor.firstValue.gravekeeperExiledUserId).isNull()
     }
 
+    // ── Gargoyle: the first turn of the night ────────────────────────────────
+
+    private fun gargoyleRoom(hasSheriff: Boolean = false) = Room(
+        roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12,
+        hasSeer = true, hasWitch = true, hasHunter = true, hasGravekeeper = true, hasGargoyle = true, hasSheriff = hasSheriff,
+    ).also { it.config = GameConfig.createDefault() }
+
+    @Test
+    fun `G9 - full night order puts the gargoyle first, then wolves, witch, seer, gravekeeper, guard`() {
+        val orchestrator = makeOrchestrator(
+            realHandlers(
+                com.werewolf.game.role.SeerHandler(nightPhaseRepository),
+                com.werewolf.game.role.GargoyleHandler(nightPhaseRepository),
+            ),
+        )
+        val r = gargoyleRoom().also { it.hasGuard = true }
+
+        assertThat(orchestrator.nightSequence(GameContext(game(), r, emptyList()))).containsExactly(
+            NightSubPhase.GARGOYLE_PICK,
+            NightSubPhase.GARGOYLE_RESULT,
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
+            NightSubPhase.GRAVEKEEPER_RESULT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    @Test
+    fun `G9 - the gargoyle's turn is before the medium's and the guard's`() {
+        val orchestrator = makeOrchestrator(
+            realHandlers(
+                com.werewolf.game.role.MediumHandler(nightPhaseRepository),
+                com.werewolf.game.role.GargoyleHandler(nightPhaseRepository),
+            ),
+        )
+        val r = gargoyleRoom().also { it.hasSeer = false; it.hasMedium = true; it.hasGravekeeper = false; it.hasGuard = true }
+
+        assertThat(orchestrator.nightSequence(GameContext(game(), r, emptyList()))).containsExactly(
+            NightSubPhase.GARGOYLE_PICK,
+            NightSubPhase.GARGOYLE_RESULT,
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.MEDIUM_PICK,
+            NightSubPhase.MEDIUM_RESULT,
+            NightSubPhase.GUARD_PICK,
+        )
+    }
+
+    @Test
+    fun `a room without the gargoyle still opens on WEREWOLF_PICK`() {
+        val orchestrator = makeOrchestrator(realHandlers(com.werewolf.game.role.GargoyleHandler(nightPhaseRepository)))
+        val r = gargoyleRoom().also { it.hasGargoyle = false }
+
+        assertThat(orchestrator.firstSubPhase(GameContext(game(), r, emptyList()))).isEqualTo(NightSubPhase.WEREWOLF_PICK)
+        assertThat(orchestrator.nightSequence(GameContext(game(), r, emptyList()))).doesNotContain(NightSubPhase.GARGOYLE_PICK)
+    }
+
+    @Test
+    fun `G11 - the sequence is identical with a dead gargoyle`() {
+        val orchestrator = makeOrchestrator(realHandlers(com.werewolf.game.role.GargoyleHandler(nightPhaseRepository)))
+        val r = gargoyleRoom()
+        val wolf = player("w", 2, PlayerRole.WEREWOLF)
+        val alive = orchestrator.nightSequence(GameContext(game(), r, listOf(player("g", 1, PlayerRole.GARGOYLE), wolf)))
+        val dead = orchestrator.nightSequence(GameContext(game(), r, listOf(player("g", 1, PlayerRole.GARGOYLE, alive = false), wolf)))
+        assertThat(dead).isEqualTo(alive)
+    }
+
+    @Test
+    fun `G9 - initNight opens the night on GARGOYLE_PICK and the entry audio names it`() {
+        val orchestrator = makeOrchestrator(realHandlers(com.werewolf.game.role.GargoyleHandler(nightPhaseRepository)))
+        val r = gargoyleRoom()
+        val context = GameContext(game(), r, listOf(player("g", 1, PlayerRole.GARGOYLE), player("w", 2, PlayerRole.WEREWOLF)))
+        whenever(contextLoader.load(gameId)).thenReturn(context)
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        mockAudioServiceForNightTransition(r, NightSubPhase.GARGOYLE_PICK)
+
+        orchestrator.initNight(gameId, newDayNumber = 1)
+
+        val captor = argumentCaptor<NightPhase>()
+        verify(nightPhaseRepository, atLeastOnce()).save(captor.capture())
+        assertThat(captor.firstValue.subPhase).isEqualTo(NightSubPhase.GARGOYLE_PICK)
+        val events = argumentCaptor<DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), events.capture())
+        assertThat(events.allValues.filterIsInstance<DomainEvent.PhaseChanged>().single().subPhase)
+            .isEqualTo(NightSubPhase.GARGOYLE_PICK.name)
+        // Night entry still carries only the darkness cue; the gargoyle's own open-eyes comes from the role loop.
+        val entry = events.allValues.filterIsInstance<DomainEvent.AudioSequence>().single().audioSequence
+        assertThat(entry.audioFiles).doesNotContain("gargoyle_open_eyes.mp3", "wolf_open_eyes.mp3")
+    }
+
+    /** Runs night 1 with stub gargoyle + wolf handlers and returns the sub-phase and audio broadcasts in order. */
+    private fun runGargoyleNight(gargoyleAlive: Boolean): List<String> {
+        com.werewolf.audio.RoleRegistry.registerAll(listOf(com.werewolf.audio.impl.GargoyleAudioConfig()))
+        val cfg = RoleDelayConfig(actionWindowMs = 100L, deadRoleDelayMs = 100L, audioWarmupMs = 10L, audioCooldownMs = 10L, interRoleGapMs = 10L)
+        val orchestrator = makeOrchestrator(
+            listOf(
+                stubHandler(PlayerRole.GARGOYLE, NightSubPhase.GARGOYLE_PICK, NightSubPhase.GARGOYLE_RESULT),
+                stubHandler(PlayerRole.WEREWOLF, NightSubPhase.WEREWOLF_PICK),
+            ),
+        )
+        val r = Room(roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12, hasGargoyle = true, hasSheriff = false).also {
+            it.config = GameConfig(mapOf(PlayerRole.WEREWOLF to cfg, PlayerRole.GARGOYLE to cfg))
+        }
+        val players = listOf(player("g", 1, PlayerRole.GARGOYLE, alive = gargoyleAlive), player("w", 2, PlayerRole.WEREWOLF), player("v", 3))
+        whenever(contextLoader.load(gameId)).thenReturn(GameContext(game(), r, players))
+        whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1)).thenReturn(Optional.of(NightPhase(gameId = gameId, dayNumber = 1)))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(winConditionChecker.check(any(), any(), any(), any(), any())).thenReturn(null)
+        mockAudioServiceForNightTransition(r, NightSubPhase.GARGOYLE_PICK)
+        mockAudioServiceForDayTransition(r)
+
+        runBlocking {
+            val job = orchestrator.startNightPhase(gameId, newDayNumber = 1)
+            launch { while (job.isActive) { delay(Duration.ofMillis(30)); orchestrator.submitAction(gameId) } }
+            job.join()
+        }
+        val captor = argumentCaptor<DomainEvent>()
+        verify(stompPublisher, atLeastOnce()).broadcastGame(eq(gameId), captor.capture())
+        return captor.allValues.mapNotNull {
+            when (it) {
+                is DomainEvent.NightSubPhaseChanged -> it.subPhase.name
+                is DomainEvent.AudioSequence -> it.audioSequence.audioFiles.joinToString().takeIf { f -> "open_eyes" in f || "close_eyes" in f }
+                else -> null
+            }
+        }
+    }
+
+    @Test
+    fun `G9 - the role loop runs the gargoyle's turn before the wolves' turn`() {
+        val seen = runGargoyleNight(gargoyleAlive = true)
+        assertThat(seen).containsSubsequence(
+            "gargoyle_open_eyes.mp3", "GARGOYLE_PICK", "GARGOYLE_RESULT", "gargoyle_close_eyes.mp3",
+            "wolf_open_eyes.mp3", "WEREWOLF_PICK", "wolf_close_eyes.mp3",
+        )
+    }
+
+    @Test
+    fun `G11 - a dead gargoyle's turn still plays its sub-phases and audio before the wolves`() {
+        val seen = runGargoyleNight(gargoyleAlive = false)
+        assertThat(seen).containsSubsequence(
+            "gargoyle_open_eyes.mp3", "GARGOYLE_PICK", "GARGOYLE_RESULT", "gargoyle_close_eyes.mp3",
+            "wolf_open_eyes.mp3", "WEREWOLF_PICK", "wolf_close_eyes.mp3",
+        )
+        assertThat(seen.count { it == "gargoyle_open_eyes.mp3" }).isEqualTo(1)
+    }
+
     @Test
     fun `firstSubPhase - returns WEREWOLF_PICK by default`() {
         val ctx = GameContext(game(), room(), emptyList())

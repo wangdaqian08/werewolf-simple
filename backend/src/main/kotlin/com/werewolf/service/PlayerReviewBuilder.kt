@@ -97,7 +97,7 @@ object PlayerReviewBuilder {
         // Knowledge is gathered over exactly the rounds the viewer lived through.
         val knownRoles = mutableMapOf(me.userId to me.role)
         val knownCamps = mutableMapOf<String, KnownCamp>()
-        // The pack never meets the mechanical wolf, and it never meets them.
+        // The pack never meets the lone wolves (mechanical wolf, gargoyle), and they never meet it.
         if (me.role.isPackWolf) players.filter { it.role.isPackWolf }.forEach { knownRoles[it.userId] = it.role }
         if (me.role == PlayerRole.SEER) days.mapNotNull(completed::get).forEach { n ->
             n.seerCheckedUserId?.let { knownCamps[it] = if (n.seerResultIsWerewolf == true) KnownCamp.WOLF else KnownCamp.GOOD }
@@ -105,6 +105,11 @@ object PlayerReviewBuilder {
         if (me.role == PlayerRole.MEDIUM) days.mapNotNull(completed::get).forEach { n ->
             val checked = n.mediumCheckedUserId
             val told = n.mediumResultRole
+            if (checked != null && told != null) knownRoles[checked] = told
+        }
+        if (me.role == PlayerRole.GARGOYLE) days.mapNotNull(completed::get).forEach { n ->
+            val checked = n.gargoyleCheckedUserId
+            val told = n.gargoyleResultRole
             if (checked != null && told != null) knownRoles[checked] = told
         }
         if (me.role == PlayerRole.GRAVEKEEPER) days.mapNotNull(completed::get).forEach { n ->
@@ -181,8 +186,8 @@ object PlayerReviewBuilder {
         // Dying during night N (diedDay == N) still means they acted that night.
         fun deadAt(p: GamePlayer) = (p.diedDay ?: Int.MAX_VALUE) < n.dayNumber
         val target = n.wolfTargetUserId
-        // The mechanical wolf makes the kill only once every pack wolf is gone.
-        val loneKiller = me.role == PlayerRole.MECHANICAL_WOLF &&
+        // A lone wolf (mechanical wolf, gargoyle) makes the kill only once every pack wolf is gone.
+        val loneKiller = (me.role == PlayerRole.MECHANICAL_WOLF || me.role == PlayerRole.GARGOYLE) &&
             RoleRules.wolfKillers(players.filter { !deadAt(it) }).any { it.userId == me.userId }
         val action = when {
             me.role == PlayerRole.MECHANICAL_WOLF -> MyNightAction.MechWolf(
@@ -192,6 +197,11 @@ object PlayerReviewBuilder {
                 checkRole = n.mechCheckResultRole.takeIf { me.learnedRole?.learnedSkill == LearnedSkill.CHECK_ROLE },
                 poison = n.mechPoisonTargetUserId?.let(seat),
                 protect = n.mechGuardTargetUserId?.let(seat),
+                kill = target?.takeIf { loneKiller }?.let(seat),
+            )
+            me.role == PlayerRole.GARGOYLE -> MyNightAction.Gargoyle(
+                target = n.gargoyleCheckedUserId?.let(seat),
+                role = n.gargoyleResultRole,
                 kill = target?.takeIf { loneKiller }?.let(seat),
             )
             me.role == PlayerRole.MEDIUM -> MyNightAction.Medium(n.mediumCheckedUserId?.let(seat), n.mediumResultRole)

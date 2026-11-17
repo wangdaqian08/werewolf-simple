@@ -565,6 +565,7 @@ const ROLE_LABELS: Record<PlayerRole, string> = {
   MEDIUM: '通灵师',
   KNIGHT: '骑士',
   GRAVEKEEPER: '守墓人',
+  GARGOYLE: '石像鬼',
 }
 const SHERIFF_SUBPHASES: SheriffSubPhase[] = ['SIGNUP', 'SPEECH', 'VOTING', 'RESULT']
 const DAY_SUBPHASES: DaySubPhase[] = ['RESULT_HIDDEN', 'RESULT_REVEALED']

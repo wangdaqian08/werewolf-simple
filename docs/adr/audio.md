@@ -64,6 +64,8 @@ Computed by `AudioService.kt` (`calculatePhaseTransition`,
 | Event / sub-phase                                      | File(s)                                  |
 |--------------------------------------------------------|------------------------------------------|
 | Enter `NIGHT` (any night)                              | `goes_dark_close_eyes.mp3`, `wolf_howl.mp3` |
+| `GARGOYLE_PICK` opens (first turn, when on the board)  | `gargoyle_open_eyes.mp3`                 |
+| `GARGOYLE_RESULT` close (after the gargoyle confirms)  | `gargoyle_close_eyes.mp3`                |
 | `WEREWOLF_PICK` opens                                  | `wolf_open_eyes.mp3`                     |
 | `WEREWOLF_PICK` → `SEER_PICK` close                    | `wolf_close_eyes.mp3`                    |
 | `SEER_PICK` opens                                      | `seer_open_eyes.mp3`                     |

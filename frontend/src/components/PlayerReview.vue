@@ -175,6 +175,19 @@ function actionSegs(a: MyNightAction): Seg[] {
             seg(t('rv.roleTag', { role: roleName(a.role) })),
           ]
         : [seg(t('pr.mediumNone'))]
+    case 'GARGOYLE': {
+      const check = a.target
+        ? [
+            seg(t('pr.gargoyleCheck')),
+            name(a.target),
+            seg(t('rv.roleTag', { role: roleName(a.role) })),
+          ]
+        : [seg(t('pr.gargoyleNone'))]
+      // 先驗後刀: as the lone wolf it checks, then knifes.
+      return a.kill
+        ? [...check, seg(t('common.comma')), seg(t('rv.kill')), ...withTag(a.kill)]
+        : check
+    }
     case 'GRAVEKEEPER':
       // The camp the server told the gravekeeper that night, not what the seat is known as now.
       return a.exiled

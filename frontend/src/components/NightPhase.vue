@@ -414,7 +414,21 @@
       </footer>
     </template>
 
-    <!-- ── MECH_WOLF_* / MEDIUM_* / GRAVEKEEPER_RESULT ────────────────── -->
+    <!-- ── GARGOYLE_* / MECH_WOLF_* / MEDIUM_* / GRAVEKEEPER_RESULT ───── -->
+    <GargoyleTurn
+      v-else-if="
+        (subPhase === 'GARGOYLE_PICK' || subPhase === 'GARGOYLE_RESULT') &&
+        myRole === 'GARGOYLE' &&
+        me?.isAlive &&
+        !hasActed
+      "
+      :sub-phase="subPhase"
+      :gargoyle="nightPhase.gargoyle"
+      :players="players"
+      :my-user-id="myUserId"
+      :action-pending="actionPending"
+      @action="sendNightAction"
+    />
     <MechWolfTurn
       v-else-if="
         (subPhase === 'MECH_WOLF_PICK' || subPhase === 'MECH_WOLF_RESULT') &&
@@ -513,6 +527,7 @@ import PlayerSlot from '@/components/PlayerSlot.vue'
 import MechWolfTurn from '@/components/MechWolfTurn.vue'
 import MediumTurn from '@/components/MediumTurn.vue'
 import GravekeeperTurn from '@/components/GravekeeperTurn.vue'
+import GargoyleTurn from '@/components/GargoyleTurn.vue'
 import {
   guardVariant,
   isGuardTarget,
@@ -582,7 +597,7 @@ const poisonMode = ref(false)
 // GameView.vue includes subPhase + dayNumber), so hasActed resets naturally.
 // Intentionally NOT applied to SEER_PICK (the click advances to SEER_RESULT,
 // which is a different screen on the same component — showing sleep in between
-// would flash for the seer). The mechanical wolf's and the medium's picks are
+// would flash for the seer). The gargoyle's, the mechanical wolf's and the medium's picks are
 // exempt for the same reason; only their CONFIRM clicks set it.
 const hasActed = ref(false)
 // A rejected action did not use up the turn: show the controls again.
@@ -615,7 +630,12 @@ function confirmGuardSkip() {
 }
 function sendNightAction(type: string, targetUserId?: string) {
   // Only the CONFIRM actions end the turn; a pick advances to the RESULT screen, so (like the seer) it must not flash eyes-closed.
-  if (type === 'MECH_CONFIRM' || type === 'MEDIUM_CONFIRM' || type === 'GRAVEKEEPER_CONFIRM')
+  if (
+    type === 'GARGOYLE_CONFIRM' ||
+    type === 'MECH_CONFIRM' ||
+    type === 'MEDIUM_CONFIRM' ||
+    type === 'GRAVEKEEPER_CONFIRM'
+  )
     hasActed.value = true
   emit('nightAction', type, targetUserId)
 }
@@ -665,6 +685,7 @@ const isMyTurn = computed(() => {
   if (sp === 'MECH_WOLF_PICK' || sp === 'MECH_WOLF_RESULT') return role === 'MECHANICAL_WOLF'
   if (sp === 'MEDIUM_PICK' || sp === 'MEDIUM_RESULT') return role === 'MEDIUM'
   if (sp === 'GRAVEKEEPER_RESULT') return role === 'GRAVEKEEPER'
+  if (sp === 'GARGOYLE_PICK' || sp === 'GARGOYLE_RESULT') return role === 'GARGOYLE'
   return false
 })
 
@@ -715,6 +736,7 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
   MEDIUM: { emoji: '👁️', team: 'special' },
   KNIGHT: { emoji: '⚔️', team: 'special' },
   GRAVEKEEPER: { emoji: '⚰️', team: 'special' },
+  GARGOYLE: { emoji: '🗿', team: 'wolf' },
 }
 
 const meta = computed(() => (props.myRole ? ROLE_META[props.myRole] : null))
@@ -742,6 +764,10 @@ const badgeSub = computed(() => {
       return role === 'MEDIUM' ? t('night.badge.mediumDone') : t('night.badge.closed')
     case 'GRAVEKEEPER_RESULT':
       return role === 'GRAVEKEEPER' ? t('night.badge.gravekeeper') : t('night.badge.closed')
+    case 'GARGOYLE_PICK':
+      return role === 'GARGOYLE' ? t('night.badge.gargoyle') : t('night.badge.closed')
+    case 'GARGOYLE_RESULT':
+      return role === 'GARGOYLE' ? t('night.badge.gargoyleDone') : t('night.badge.closed')
     default:
       return ''
   }

@@ -21,13 +21,15 @@ const PLAYER_ROLES = new Set([
   'MEDIUM',
   'KNIGHT',
   'GRAVEKEEPER',
+  'GARGOYLE',
 ])
 // The owner's own night results legitimately pair another player's id with a role;
 // on any other viewer's page they are a leak. Ownership is by role: one MEDIUM and one
-// MECHANICAL_WOLF per board.
+// MECHANICAL_WOLF and one GARGOYLE per board.
 const OWN_RESULT_OWNER = new Map([
   ['mediumResult', 'MEDIUM'],
   ['mechWolf', 'MECHANICAL_WOLF'],
+  ['gargoyle', 'GARGOYLE'],
 ])
 const ID_KEY = /(user|player)Id$/i
 const ROLE_KEY = /role$/i
@@ -97,6 +99,7 @@ export function findRoleLeaks(
     const o = v as Record<string, unknown>
     // The medium's private MediumResult push carries the same own result as `mediumResult`.
     if (o.type === 'MediumResult' && myRole === 'MEDIUM') return
+    if (o.type === 'GargoyleResult' && myRole === 'GARGOYLE') return
     const ids = Object.entries(o).filter(
       ([k, x]) => ID_KEY.test(k) && typeof x === 'string' && x !== me,
     )

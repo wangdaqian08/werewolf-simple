@@ -302,6 +302,7 @@ export async function setupGame(
       'MEDIUM',
       'KNIGHT',
       'GRAVEKEEPER',
+      'GARGOYLE',
     ]
 
     // For each optional role, toggle to match desired state. Retry up to

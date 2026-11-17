@@ -12,6 +12,7 @@ object RoleDealer {
         if (room.hasWhiteWolfKing) roles.add(PlayerRole.WHITE_WOLF_KING)
         if (room.hasBlackWolfKing) roles.add(PlayerRole.BLACK_WOLF_KING)
         if (room.hasMechanicalWolf) roles.add(PlayerRole.MECHANICAL_WOLF)
+        if (room.hasGargoyle) roles.add(PlayerRole.GARGOYLE)
         while (roles.size < room.wolfCount) roles.add(PlayerRole.WEREWOLF)
         if (room.hasSeer) roles.add(PlayerRole.SEER)
         if (room.hasWitch) roles.add(PlayerRole.WITCH)

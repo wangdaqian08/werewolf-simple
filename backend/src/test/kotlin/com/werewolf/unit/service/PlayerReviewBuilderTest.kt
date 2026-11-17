@@ -487,4 +487,53 @@ class PlayerReviewBuilderTest {
         // Camp only: the gravekeeper is never told a role.
         assertThat(review.seats.filter { it.role != null }.map { it.userId }).containsExactly("grave")
     }
+
+    // ── Gargoyle ──────────────────────────────────────────────────────────────
+
+    private fun gargoyleBoard(diedDay: Map<String, Int> = emptyMap()) = board(diedDay) +
+        GamePlayer(gameId = gameId, userId = "garg", seatIndex = 10, role = PlayerRole.GARGOYLE)
+
+    private fun gseat(id: String, role: PlayerRole? = null, camp: KnownCamp? = null) =
+        gargoyleBoard().first { it.userId == id }.let { PlayerSeat(id, "N-$id", it.seatIndex, role, camp) }
+
+    @Test
+    fun `G15 - gargoyle night action carries its check and the exact role it was told`() {
+        val review = build("garg", gargoyleBoard(), listOf(
+            night(1) { wolfTargetUserId = "v"; gargoyleCheckedUserId = "w1"; gargoyleResultRole = PlayerRole.WEREWOLF },
+            night(2) { wolfTargetUserId = "hunter" },
+        ))
+
+        assertThat(review.rounds.map { it.night!!.action }).containsExactly(
+            MyNightAction.Gargoyle(gseat("w1", PlayerRole.WEREWOLF), PlayerRole.WEREWOLF, null),
+            MyNightAction.Gargoyle(null, null, null),
+        )
+        // The pack lived: the gargoyle was never told of the attack.
+        assertThat(review.rounds[0].night!!.dawn.saved).isNull()
+        assertThat(mapper.writeValueAsString(review.rounds[0].night!!.action)).contains("\"type\":\"GARGOYLE\"")
+    }
+
+    @Test
+    fun `G13 G2 - the gargoyle knows only the roles it checked, and the pack never learns it`() {
+        val nights = listOf(night(1) { wolfTargetUserId = "v"; gargoyleCheckedUserId = "w1"; gargoyleResultRole = PlayerRole.WEREWOLF })
+        val gargoyleReview = build("garg", gargoyleBoard(), nights)
+        assertThat(gargoyleReview.seats.filter { it.role != null }.map { it.userId }).containsExactlyInAnyOrder("garg", "w1")
+
+        val packReview = build("w1", gargoyleBoard(), nights)
+        assertThat(packReview.seats.filter { it.role != null }.map { it.userId }).containsExactlyInAnyOrder("w1", "w2", "king")
+        assertThat((packReview.rounds.single().night!!.action as MyNightAction.Wolf).teammates.map { it.userId })
+            .containsExactly("w1", "w2", "king")
+    }
+
+    @Test
+    fun `G8 - the lone gargoyle holds the kill and is told of the attack`() {
+        val dead = mapOf("w1" to 1, "w2" to 1, "king" to 1)
+        val review = build("garg", gargoyleBoard(dead), listOf(
+            night(1),
+            night(2) { wolfTargetUserId = "v"; guardTargetUserId = "v" },
+        ))
+
+        val n2 = review.rounds[1].night!!
+        assertThat((n2.action as MyNightAction.Gargoyle).kill).isEqualTo(gseat("v"))
+        assertThat(n2.dawn.saved).isEqualTo(gseat("v"))
+    }
 }

@@ -408,6 +408,17 @@ class RoleHandlerTest {
         }
 
         @Test
+        fun `G7 - seer sees the GARGOYLE as a werewolf`() {
+            val ctx = seerCtx(targetRole = PlayerRole.GARGOYLE)
+            whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }
+
+            val result = handler.handle(req("seer", ActionType.SEER_CHECK, "u2"), ctx)
+
+            val seerResult = (result as GameActionResult.Success).events[0] as DomainEvent.SeerResult
+            assertThat(seerResult.isWerewolf).isTrue()
+        }
+
+        @Test
         fun `seer check - WHITE_WOLF_KING reads as werewolf`() {
             val ctx = seerCtx(targetRole = PlayerRole.WHITE_WOLF_KING)
             whenever(nightPhaseRepository.save(any<NightPhase>())).thenAnswer { it.arguments[0] }

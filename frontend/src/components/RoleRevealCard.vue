@@ -135,6 +135,10 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
     emoji: '⚰️',
     team: 'special',
   },
+  GARGOYLE: {
+    emoji: '🗿',
+    team: 'wolf',
+  },
 }
 
 const meta = computed(() => ROLE_META[props.role])

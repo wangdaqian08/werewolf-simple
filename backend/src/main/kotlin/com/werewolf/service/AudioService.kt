@@ -16,13 +16,16 @@ class AudioService {
 
     private companion object {
         /** Result-display sub-phases: no open-eyes audio, and entering one plays no close-eyes audio. */
-        val RESULT_SUB_PHASES = setOf(NightSubPhase.SEER_RESULT, NightSubPhase.MECH_WOLF_RESULT, NightSubPhase.MEDIUM_RESULT)
+        val RESULT_SUB_PHASES = setOf(
+            NightSubPhase.SEER_RESULT, NightSubPhase.MECH_WOLF_RESULT, NightSubPhase.MEDIUM_RESULT, NightSubPhase.GARGOYLE_RESULT,
+        )
 
         /** Each PICK sub-phase paired with the RESULT sub-phase that closes the same role's turn. */
         val PICK_TO_RESULT = mapOf(
             NightSubPhase.SEER_PICK to NightSubPhase.SEER_RESULT,
             NightSubPhase.MECH_WOLF_PICK to NightSubPhase.MECH_WOLF_RESULT,
             NightSubPhase.MEDIUM_PICK to NightSubPhase.MEDIUM_RESULT,
+            NightSubPhase.GARGOYLE_PICK to NightSubPhase.GARGOYLE_RESULT,
         )
     }
 
@@ -31,6 +34,7 @@ class AudioService {
      */
     private fun mapSubPhaseToRole(subPhase: NightSubPhase): PlayerRole? {
         return when (subPhase) {
+            NightSubPhase.GARGOYLE_PICK, NightSubPhase.GARGOYLE_RESULT -> PlayerRole.GARGOYLE
             NightSubPhase.WEREWOLF_PICK -> PlayerRole.WEREWOLF
             NightSubPhase.SEER_PICK -> PlayerRole.SEER
             NightSubPhase.SEER_RESULT -> PlayerRole.SEER
@@ -60,8 +64,9 @@ class AudioService {
             when (newPhase) {
                 GamePhase.NIGHT -> {
                     // Night entry audio: darkness + wolf howl. The first role's open-eyes
-                    // audio (wolf_open_eyes.mp3) is broadcast separately when the night
-                    // coroutine's role loop reaches WEREWOLF_PICK, after
+                    // audio (gargoyle_open_eyes.mp3 when the room has a gargoyle, else
+                    // wolf_open_eyes.mp3) is broadcast separately when the night
+                    // coroutine's role loop reaches that role's turn, after
                     // NIGHT_INIT_AUDIO_DELAY_MS has elapsed client-side — that delay
                     // guarantees goes_dark_close_eyes + wolf_howl have finished playing
                     // before the next sequence arrives (which would clear the client
@@ -268,7 +273,7 @@ class AudioService {
             for (skippedRole in skippedRoles) {
                 if (skippedRole == NightSubPhase.WAITING) continue
                 
-                // PICK/RESULT pairs (seer, mech wolf, medium) form one open → close sequence
+                // PICK/RESULT pairs (gargoyle, seer, mech wolf, medium) form one open → close sequence
                 val resultPhase = PICK_TO_RESULT[skippedRole]
                 if (resultPhase != null) {
                     if (skippedRoles.contains(resultPhase)) {

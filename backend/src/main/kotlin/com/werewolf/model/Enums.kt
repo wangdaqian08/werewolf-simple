@@ -19,15 +19,16 @@ enum class GamePhase {
 // isWolf = wolf camp: wakes with the wolves, seer sees "wolf", counts as a wolf for win checks.
 // isGod = 神职: every good-camp role except the plain villager (the 屠边 "gods" side).
 // shootsOnDeath = fires one shot when killed (not poisoned) — the shared HUNTER_SHOOT flow.
-// isPackWolf = wolf camp minus the mechanical wolf: it wakes with the wolves, the mechanical wolf does not.
+// isPackWolf = wolf camp minus the lone wolves (mechanical wolf, gargoyle): they never wake with the pack.
 // learnedSkill = what a mechanical wolf gains by learning this role (NONE = nothing).
 enum class PlayerRole(val isWolf: Boolean = false) {
     WEREWOLF(isWolf = true), VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT,
-    WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true), MECHANICAL_WOLF(isWolf = true), MEDIUM, KNIGHT, GRAVEKEEPER;
+    WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true), MECHANICAL_WOLF(isWolf = true), MEDIUM, KNIGHT, GRAVEKEEPER,
+    GARGOYLE(isWolf = true);
 
     val isGod: Boolean get() = !isWolf && this != VILLAGER
     val shootsOnDeath: Boolean get() = this == HUNTER || this == BLACK_WOLF_KING
-    val isPackWolf: Boolean get() = isWolf && this != MECHANICAL_WOLF
+    val isPackWolf: Boolean get() = isWolf && this != MECHANICAL_WOLF && this != GARGOYLE
     val learnedSkill: LearnedSkill
         get() = when (this) {
             MEDIUM -> LearnedSkill.CHECK_ROLE
@@ -61,7 +62,7 @@ enum class GravekeeperResult { GOOD, WOLF, NONE }
 
 
 enum class NightSubPhase {
-    WAITING, WEREWOLF_PICK, MECH_WOLF_PICK, MECH_WOLF_RESULT, SEER_PICK, SEER_RESULT,
+    WAITING, GARGOYLE_PICK, GARGOYLE_RESULT, WEREWOLF_PICK, MECH_WOLF_PICK, MECH_WOLF_RESULT, SEER_PICK, SEER_RESULT,
     MEDIUM_PICK, MEDIUM_RESULT, GRAVEKEEPER_RESULT, WITCH_ACT, GUARD_PICK, COMPLETE
 }
 
@@ -116,6 +117,9 @@ enum class ActionType {
 
     // Night: gravekeeper
     GRAVEKEEPER_CONFIRM,
+
+    // Night: gargoyle (CHECK or SKIP in GARGOYLE_PICK, then CONFIRM in GARGOYLE_RESULT)
+    GARGOYLE_CHECK, GARGOYLE_SKIP, GARGOYLE_CONFIRM,
 
     // Idiot reveal (day)
     IDIOT_REVEAL,

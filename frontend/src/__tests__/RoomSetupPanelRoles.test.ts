@@ -184,7 +184,7 @@ describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
     expect(disabled(w, 'role-toggle-KNIGHT')).toBe(true)
     expect(card(w, 'KNIGHT').element.parentElement?.classList).toContain('card-blocked')
     expect(hint(w, 'KNIGHT').text()).toBe('⛓ 互斥')
-    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士、守墓人')
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士、守墓人、石像鬼')
     await click(w, 'role-toggle-KNIGHT')
     expect(chipCount(w, 'KNIGHT')).toBe(0)
     expect(lastMessage()).toBe('騎士與機械狼不能同時選，請先關閉機械狼')
@@ -217,7 +217,7 @@ describe('RoomSetupPanel — 机械狼 and 騎士 never share a board', () => {
     )
     // The board itself is still flagged: each card names the role it excludes.
     expect(hint(w, 'KNIGHT').text()).toBe('排除 機械狼、守墓人')
-    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士、守墓人')
+    expect(hint(w, 'MECHANICAL_WOLF').text()).toBe('排除 騎士、守墓人、石像鬼')
   })
 
   it('turning one off frees the other', async () => {
@@ -297,6 +297,58 @@ describe('RoomSetupPanel — 机械狼 and 守墓人 never share a board', () =>
     expect(lastMessage()).toBe('騎士與守墓人不能同時選，請先關閉守墓人')
     await click(w, 'role-toggle-GRAVEKEEPER') // off
     expect(disabled(w, 'role-toggle-KNIGHT')).toBe(false)
+  })
+})
+
+describe('RoomSetupPanel — 石像鬼', () => {
+  beforeEach(() => h.updateBoardMock.mockReset().mockResolvedValue({ config: {}, players: [] }))
+  afterEach(() => vi.clearAllMocks())
+
+  const click = (w: Wrapper, id: string) => w.find(`[data-testid="${id}"]`).trigger('click')
+  const hint = (w: Wrapper, id: string) => w.find(`[data-testid="role-hint-${id}"]`)
+
+  it('takes a wolf seat, needs 9+ players and is sent in the room config', async () => {
+    const w = await mountSetup() // 9 players, 3 wolves
+    await click(w, 'role-toggle-GARGOYLE')
+    expect(chipCount(w, 'GARGOYLE')).toBe(1)
+    expect(chipCount(w, 'WEREWOLF')).toBe(2)
+    await w.find('[data-testid="room-setup-done"]').trigger('click')
+    await flushPromises()
+    expect(h.updateBoardMock.mock.lastCall?.[1].roles).toContain('GARGOYLE')
+    await click(w, 'player-count-decrement') // 8 players: dropped
+    expect(chipCount(w, 'GARGOYLE')).toBe(0)
+    expect(card(w, 'GARGOYLE').attributes('title')).toBe('9 人及以上才能開啟')
+  })
+
+  it('counts toward the special-wolf limit (wolves ≥ specials + 1)', async () => {
+    const w = await mountSetup() // 3 wolves
+    await click(w, 'role-toggle-GARGOYLE')
+    await click(w, 'role-toggle-WHITE_WOLF_KING')
+    expect(disabled(w, 'role-toggle-BLACK_WOLF_KING')).toBe(true) // 3 wolves = 2 specials + 1
+  })
+
+  it('GARGOYLE is blocked while MECHANICAL_WOLF is on, and the other way round', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-MECHANICAL_WOLF')
+    expect(disabled(w, 'role-toggle-GARGOYLE')).toBe(true)
+    expect(hint(w, 'GARGOYLE').text()).toBe('⛓ 互斥')
+    await click(w, 'role-toggle-GARGOYLE')
+    expect(chipCount(w, 'GARGOYLE')).toBe(0)
+    expect(lastMessage()).toBe('石像鬼與機械狼不能同時選，請先關閉機械狼')
+    await click(w, 'role-toggle-MECHANICAL_WOLF') // off
+    await click(w, 'role-toggle-GARGOYLE')
+    expect(hint(w, 'GARGOYLE').text()).toBe('排除 機械狼')
+    expect(disabled(w, 'role-toggle-MECHANICAL_WOLF')).toBe(true)
+    await click(w, 'role-toggle-MECHANICAL_WOLF')
+    expect(lastMessage()).toBe('機械狼與石像鬼不能同時選，請先關閉石像鬼')
+  })
+
+  it('shares a board with 守墓人 (the 石像鬼守墓人 board)', async () => {
+    const w = await mountSetup()
+    await click(w, 'role-toggle-GARGOYLE')
+    await click(w, 'role-toggle-GRAVEKEEPER')
+    expect(chipCount(w, 'GARGOYLE')).toBe(1)
+    expect(chipCount(w, 'GRAVEKEEPER')).toBe(1)
   })
 })
 

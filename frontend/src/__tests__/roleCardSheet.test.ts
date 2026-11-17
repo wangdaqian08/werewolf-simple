@@ -43,6 +43,16 @@ describe('RoleCardSheet', () => {
     expect(rules[2]?.textContent).toContain('昨日無人被放逐')
   })
 
+  it('gargoyle role card shows the rules text', () => {
+    mount(RoleCardSheet, { props: { role: 'GARGOYLE' }, attachTo: document.body })
+    expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('石像鬼')
+    const rules = [...document.body.querySelectorAll('[data-testid="rc-rules"] li')]
+    expect(rules[0]?.textContent).toBe('陣營：狼人陣營（不屬於狼隊）。')
+    expect(document.body.querySelector('[data-testid="rc-rules"]')?.textContent).toContain(
+      '不能重複查驗',
+    )
+  })
+
   // Which roles can never share a board: its own section, from the same table the setup page enforces.
   const excluded = () =>
     [...document.body.querySelectorAll('[data-testid="rc-excludes"] [data-role]')].map((el) =>
@@ -50,7 +60,8 @@ describe('RoleCardSheet', () => {
     )
 
   it.each([
-    ['MECHANICAL_WOLF', ['KNIGHT', 'GRAVEKEEPER']],
+    ['MECHANICAL_WOLF', ['KNIGHT', 'GRAVEKEEPER', 'GARGOYLE']],
+    ['GARGOYLE', ['MECHANICAL_WOLF']],
     ['KNIGHT', ['MECHANICAL_WOLF', 'GRAVEKEEPER']],
     ['GRAVEKEEPER', ['MECHANICAL_WOLF', 'KNIGHT']],
     ['SEER', ['MEDIUM']],

@@ -32,17 +32,19 @@ export interface NightBoard {
   mechanicalWolf?: boolean
   medium?: boolean
   gravekeeper?: boolean
+  gargoyle?: boolean
   /** The guard is on the board (default true). */
   guard?: boolean
 }
 
 /**
  * Per-night role broadcast order, pinned by the handlers' Spring @Order:
- * Werewolf → [Mechanical wolf] → Witch → Seer or Medium (exclusive) → [Gravekeeper] → [Guard].
+ * [Gargoyle] → Werewolf → [Mechanical wolf] → Witch → Seer or Medium (exclusive) → [Gravekeeper] → [Guard].
  * Each role emits open then close, dead or alive (dead-role masking).
  */
 export function nightRoleOrder(board: NightBoard = {}): string[] {
   const roles = [
+    ...(board.gargoyle ? ['gargoyle'] : []),
     'wolf',
     ...(board.mechanicalWolf ? ['mech_wolf'] : []),
     'witch',

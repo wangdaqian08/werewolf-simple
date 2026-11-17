@@ -64,6 +64,13 @@ class GameTasksTest {
     }
 
     @Test
+    fun `the gargoyle is never dealt the night-1 knife task`() {
+        val tasks = GameTasks.eligible(PlayerRole.GARGOYLE, hasSheriff = true)
+        assertThat(tasks).doesNotContain(GameTask.WOLF_FIRST_NIGHT_GOD)
+        assertThat(tasks).contains(GameTask.WOLF_NEVER_EXILED, GameTask.WOLF_WIN_ALIVE)
+    }
+
+    @Test
     fun `the night-1 knife task goes only to wolves that knife with the pack, never the mechanical wolf`() {
         for (wolf in PlayerRole.entries.filter { it.isWolf }) {
             val tasks = GameTasks.eligible(wolf, hasSheriff = true)

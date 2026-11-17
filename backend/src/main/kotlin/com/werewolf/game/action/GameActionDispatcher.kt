@@ -112,6 +112,14 @@ class GameActionDispatcher(
             // ── Night: gravekeeper ────────────────────────────────────────────
             ActionType.GRAVEKEEPER_CONFIRM -> nightTurn(request, context, PlayerRole.GRAVEKEEPER)
 
+            // ── Night: gargoyle ───────────────────────────────────────────────
+            ActionType.GARGOYLE_CHECK, ActionType.GARGOYLE_SKIP -> nightTurn(request, context, PlayerRole.GARGOYLE) { result ->
+                // Same after-commit private push as SEER_CHECK: the client refetches state on GargoyleResult.
+                result.events.forEach { stompPublisher.sendPrivateAfterCommit(request.actorUserId, it) }
+            }
+
+            ActionType.GARGOYLE_CONFIRM -> nightTurn(request, context, PlayerRole.GARGOYLE)
+
             // ── Night: mechanical wolf ────────────────────────────────────────
             ActionType.MECH_LEARN, ActionType.MECH_CHECK, ActionType.MECH_POISON, ActionType.MECH_PROTECT,
             ActionType.MECH_SKIP,
@@ -157,6 +165,9 @@ class GameActionDispatcher(
             ActionType.MEDIUM_CHECK to NightSubPhase.MEDIUM_PICK,
             ActionType.MEDIUM_CONFIRM to NightSubPhase.MEDIUM_RESULT,
             ActionType.GRAVEKEEPER_CONFIRM to NightSubPhase.GRAVEKEEPER_RESULT,
+            ActionType.GARGOYLE_CHECK to NightSubPhase.GARGOYLE_PICK,
+            ActionType.GARGOYLE_SKIP to NightSubPhase.GARGOYLE_PICK,
+            ActionType.GARGOYLE_CONFIRM to NightSubPhase.GARGOYLE_RESULT,
             ActionType.MECH_LEARN to NightSubPhase.MECH_WOLF_PICK,
             ActionType.MECH_CHECK to NightSubPhase.MECH_WOLF_PICK,
             ActionType.MECH_POISON to NightSubPhase.MECH_WOLF_PICK,

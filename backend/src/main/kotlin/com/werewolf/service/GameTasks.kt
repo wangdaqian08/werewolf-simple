@@ -46,7 +46,7 @@ object GameTasks {
         // Never a task beyond the role's own skills: a villager is never asked to check a wolf.
         if (role.isWolf) {
             addAll(listOf(WOLF_NEVER_EXILED, WOLF_WIN_ALIVE))
-            // The mechanical wolf never knifes on night 1: the pack does (RoleRules.wolfKillers).
+            // The lone wolves (mechanical wolf, gargoyle) never knife on night 1: the pack does (RoleRules.wolfKillers).
             if (role.isPackWolf) add(WOLF_FIRST_NIGHT_GOD)
         } else {
             addAll(listOf(VOTE_WOLF_TWICE, NEVER_VOTE_GOOD))

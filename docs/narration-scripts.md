@@ -16,6 +16,11 @@ are shown on the role's own screen, never read aloud.
 |---|---|---|
 | 守墓人 | `gravekeeper_open_eyes.mp3` | 守墓人请睁眼 |
 | 守墓人 | `gravekeeper_close_eyes.mp3` | 守墓人请闭眼 |
+| 石像鬼 | `gargoyle_open_eyes.mp3` | 石像鬼请睁眼 |
+| 石像鬼 | `gargoyle_close_eyes.mp3` | 石像鬼请闭眼 |
+
+The 石像鬼 files are committed as 0-byte placeholders until the owner records
+them; the client skips a cue whose `play()` fails, so the night does not stall.
 
 骑士 needs no narration: the duel happens during the day, like 白狼王 and 白痴,
 which have no lines either.

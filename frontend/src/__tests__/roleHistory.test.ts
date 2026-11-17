@@ -105,6 +105,17 @@ describe('RoleHistory', () => {
     expect(rows(wrapper)).toEqual(['第1夜 · 查驗 2號 Amy → 獵人'])
   })
 
+  it('gargoyle: each check shows the exact role it was told', async () => {
+    const wrapper = await openPanel({
+      role: 'GARGOYLE',
+      entries: [
+        { round: 1, action: 'CHECK', target: ref('Amy', 2), role: 'SEER' },
+        { round: 2, action: 'CHECK', target: ref('Bob', 4), role: 'WEREWOLF' },
+      ],
+    })
+    expect(rows(wrapper)).toEqual(['第1夜 · 查驗 2號 Amy → 預言家', '第2夜 · 查驗 4號 Bob → 狼人'])
+  })
+
   it('gravekeeper: GRAVE entry reads "{seat} 是狼人" or "是好人"', async () => {
     const wrapper = await openPanel({
       role: 'GRAVEKEEPER',
