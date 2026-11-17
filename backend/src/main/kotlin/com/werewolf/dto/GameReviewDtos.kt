@@ -40,7 +40,7 @@ data class ReviewPlayer(val userId: String, val nickname: String, val seatIndex:
 /** One day number: the night that opens it (null when not completed) and that day's events in order. */
 data class ReviewRound(val day: Int, val night: ReviewNight?, val events: List<ReviewDayEvent>)
 
-/** [seer], [mech], [medium], [witch], [guard] and [gravekeeper] are null when the role is not in the game. */
+/** [seer], [mech], [medium], [witch], [guard], [gravekeeper] and [gargoyle] are null when the role is not in the game. */
 data class ReviewNight(
     val wolf: WolfTurn,
     val seer: SeerTurn?,
@@ -50,6 +50,7 @@ data class ReviewNight(
     val guard: GuardTurn?,
     val dawn: Dawn,
     val gravekeeper: GravekeeperTurn? = null,
+    val gargoyle: GargoyleTurn? = null,
 )
 
 enum class WolfAction { KILL, SKIP, SELF_KILL }
@@ -59,6 +60,8 @@ data class SeerTurn(val actor: ReviewPlayer, val dead: Boolean, val target: Revi
 data class MediumTurn(val actor: ReviewPlayer, val dead: Boolean, val target: ReviewPlayer?, val role: PlayerRole?)
 /** [exiled] = yesterday's vote-out, null when there was none; [result] is null for a dead gravekeeper. */
 data class GravekeeperTurn(val actor: ReviewPlayer, val dead: Boolean, val exiled: ReviewPlayer?, val result: GravekeeperResult?)
+/** [target] null = the gargoyle skipped or was dead; [role] is the exact role it was told. */
+data class GargoyleTurn(val actor: ReviewPlayer, val dead: Boolean, val target: ReviewPlayer?, val role: PlayerRole?)
 data class MechWolfTurn(
     val actor: ReviewPlayer, val dead: Boolean, val learned: ReviewPlayer?, val learnedRole: PlayerRole?,
     val check: ReviewPlayer?, val poison: ReviewPlayer?, val protect: ReviewPlayer?,

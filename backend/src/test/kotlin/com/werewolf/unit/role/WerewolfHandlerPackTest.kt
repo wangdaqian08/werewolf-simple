@@ -62,6 +62,47 @@ class WerewolfHandlerPackTest {
     }
 
     @Test
+    fun `G8 - the gargoyle cannot WOLF_KILL while a pack wolf lives`() {
+        val c = ctx(player("w", 1, PlayerRole.WEREWOLF), player("g", 2, PlayerRole.GARGOYLE), player("v", 3, PlayerRole.VILLAGER))
+
+        val result = WerewolfHandler(nightPhaseRepository).handle(kill("g"), c)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).doesNotContain("mechanical")
+        assertThat(c.nightPhase?.wolfTargetUserId).isNull()
+    }
+
+    @Test
+    fun `G8 - the gargoyle cannot WOLF_KILL while a wolf king lives`() {
+        val c = ctx(player("k", 1, PlayerRole.BLACK_WOLF_KING), player("g", 2, PlayerRole.GARGOYLE), player("v", 3, PlayerRole.VILLAGER))
+
+        assertThat(WerewolfHandler(nightPhaseRepository).handle(kill("g"), c)).isInstanceOf(GameActionResult.Rejected::class.java)
+    }
+
+    @Test
+    fun `G8 - the lone gargoyle kills once every other wolf is gone`() {
+        val c = ctx(
+            player("w", 1, PlayerRole.WEREWOLF, alive = false), player("g", 2, PlayerRole.GARGOYLE),
+            player("v", 3, PlayerRole.VILLAGER),
+        )
+
+        val result = WerewolfHandler(nightPhaseRepository).handle(kill("g"), c)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(c.nightPhase?.wolfTargetUserId).isEqualTo("v")
+    }
+
+    @Test
+    fun `G2 - pack wolf may pick the living gargoyle as the kill target`() {
+        val c = ctx(player("w", 1, PlayerRole.WEREWOLF), player("g", 2, PlayerRole.GARGOYLE), player("v", 3, PlayerRole.VILLAGER))
+
+        val result = WerewolfHandler(nightPhaseRepository).handle(kill("w", target = "g"), c)
+
+        assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
+        assertThat(c.nightPhase?.wolfTargetUserId).isEqualTo("g")
+    }
+
+    @Test
     fun `pack wolf still kills`() {
         val c = ctx(player("w", 1, PlayerRole.WEREWOLF), player("m", 2, PlayerRole.MECHANICAL_WOLF), player("v", 3, PlayerRole.VILLAGER))
 

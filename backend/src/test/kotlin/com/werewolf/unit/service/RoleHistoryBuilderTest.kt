@@ -189,6 +189,37 @@ class RoleHistoryBuilderTest {
     }
 
     @Test
+    fun `gargoyle history lists its checks with the exact role and its lone-kill nights, never tonight`() {
+        val gargoyle = player("garg", 10, PlayerRole.GARGOYLE)
+        val roster = listOf(
+            witch, seer, guard, v1, v2, gargoyle,
+            player("wolf", 4, PlayerRole.WEREWOLF).also { it.alive = false; it.diedDay = 2 },
+            player("king", 5, PlayerRole.WHITE_WOLF_KING).also { it.alive = false; it.diedDay = 1 },
+        )
+        val nights = listOf(
+            night(1) { wolfTargetUserId = "v1"; gargoyleCheckedUserId = "wolf"; gargoyleResultRole = PlayerRole.WEREWOLF },
+            night(2) { wolfTargetUserId = "witch" },
+            night(3) { wolfTargetUserId = "v2"; gargoyleCheckedUserId = "seer"; gargoyleResultRole = PlayerRole.SEER },
+            night(4) { gargoyleCheckedUserId = "guard"; gargoyleResultRole = PlayerRole.GUARD },
+        )
+        val h = build(gargoyle, game(GamePhase.NIGHT, 4), nights, roster)
+
+        assertThat(h!!["role"]).isEqualTo("GARGOYLE")
+        val e = entries(h)
+        assertThat(e.map { it["round"] to it["action"] }).containsExactly(1 to "CHECK", 3 to "CHECK", 3 to "KILL")
+        assertThat(e[0]["role"]).isEqualTo(PlayerRole.WEREWOLF)
+        assertThat(target(e[2])!!["userId"]).isEqualTo("v2")
+    }
+
+    @Test
+    fun `pack history never shows the gargoyle's checks`() {
+        val gargoyle = player("garg", 10, PlayerRole.GARGOYLE)
+        val nights = listOf(night(1) { wolfTargetUserId = "v1"; gargoyleCheckedUserId = "wolf"; gargoyleResultRole = PlayerRole.WEREWOLF })
+        val e = entries(build(wolf, game(GamePhase.DAY_DISCUSSION, 1), nights, players + gargoyle))
+        assertThat(e.map { it["action"] }).containsExactly("KILL")
+    }
+
+    @Test
     fun `medium history carries roles`() {
         val nights = listOf(
             night(1),

@@ -598,6 +598,18 @@ class SelfDestructServiceTest {
     }
 
     @Test
+    fun `G6 - the gargoyle cannot self-destruct`() {
+        val gargoyle = GamePlayer(gameId = gameId, userId = wolfId, seatIndex = 1, role = PlayerRole.GARGOYLE)
+        val ctx = context(players = listOf(gargoyle, wolfPlayer("wolf:002", seat = 3), villagePlayer()))
+        stubCanSucceed(ctx)
+
+        val result = selfDestructService.selfDestruct(req(), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(gargoyle.alive).isTrue()
+    }
+
+    @Test
     fun `last-wolf rule counts only the pack`() {
         val king = kingPlayer()
         val taken = villagePlayer()

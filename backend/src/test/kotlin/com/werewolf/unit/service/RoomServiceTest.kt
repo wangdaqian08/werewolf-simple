@@ -930,6 +930,94 @@ class RoomServiceTest {
     }
 
     @Test
+    fun `G1 - the gargoyle counts as a special wolf and needs a plain wolf`() {
+        val rejected = RoomConfigRequest(
+            totalPlayers = 12, wolfCount = 1,
+            roles = listOf(PlayerRole.GARGOYLE, PlayerRole.WITCH),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, rejected) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("Gargoyle")
+
+        // With both wolf kings it is the third special: 3 wolves are not enough, 4 are.
+        val withKings = RoomConfigRequest(
+            totalPlayers = 12, wolfCount = 3,
+            roles = listOf(PlayerRole.GARGOYLE, PlayerRole.WHITE_WOLF_KING, PlayerRole.BLACK_WOLF_KING, PlayerRole.WITCH),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, withKings) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+
+        stubCreate()
+        roomService.createRoom(hostId, "Host", null, rejected.copy(wolfCount = 2))
+        verify(roomRepository).save(argThat<Room> { hasGargoyle && wolfCount == 2 })
+    }
+
+    @Test
+    fun `G10 - mechanical wolf and gargoyle together is rejected`() {
+        val cfg = RoomConfigRequest(
+            totalPlayers = 12, wolfCount = 4,
+            roles = listOf(PlayerRole.MECHANICAL_WOLF, PlayerRole.GARGOYLE, PlayerRole.SEER),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, cfg) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessage("Mechanical Wolf and Gargoyle cannot be on the same board")
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
+    @Test
+    fun `G10 - updateBoard rejects mechanical wolf and gargoyle together without saving`() {
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(room()))
+
+        assertThatThrownBy {
+            roomService.updateBoard(hostId, 1, 12, 4, listOf(PlayerRole.MECHANICAL_WOLF, PlayerRole.GARGOYLE, PlayerRole.SEER))
+        }.isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessage("Mechanical Wolf and Gargoyle cannot be on the same board")
+        verify(roomRepository, never()).save(any<Room>())
+    }
+
+    @Test
+    fun `G10 - the gargoyle may share a board with the gravekeeper, knight and medium`() {
+        stubCreate()
+        val cfg = RoomConfigRequest(
+            totalPlayers = 12, wolfCount = 4,
+            roles = listOf(PlayerRole.GARGOYLE, PlayerRole.SEER, PlayerRole.WITCH, PlayerRole.HUNTER, PlayerRole.GRAVEKEEPER),
+        )
+        val dto = roomService.createRoom(hostId, "Host", null, cfg)
+        assertThat(dto.config.roles).contains(PlayerRole.GARGOYLE, PlayerRole.GRAVEKEEPER)
+    }
+
+    @Test
+    fun `update toggles hasGargoyle`() {
+        val room = room().also { it.hasGargoyle = true }
+        whenever(roomRepository.findByIdForUpdate(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(listOf(RoomPlayer(roomId = 1, userId = hostId, host = true)))
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        roomService.updateBoard(hostId, 1, 12, 4, listOf(PlayerRole.WITCH))
+        assertThat(room.hasGargoyle).isFalse()
+
+        roomService.updateBoard(hostId, 1, 12, 4, listOf(PlayerRole.WITCH, PlayerRole.GARGOYLE))
+        assertThat(room.hasGargoyle).isTrue()
+    }
+
+    @Test
+    fun `room role list includes GARGOYLE when on`() {
+        val room = Room(roomId = 1, roomCode = "ABCD", hostUserId = hostId, totalPlayers = 12, hasGargoyle = true)
+        whenever(roomRepository.findById(1)).thenReturn(Optional.of(room))
+        whenever(roomPlayerRepository.findByRoomId(1)).thenReturn(emptyList())
+        whenever(userRepository.findAllById(any())).thenReturn(emptyList())
+
+        assertThat(roomService.getRoom(1).config.roles).contains(PlayerRole.GARGOYLE)
+    }
+
+    @Test
+    fun `create gives the gargoyle a role delay`() {
+        stubCreate()
+        roomService.createRoom(hostId, "Host", null, RoomConfigRequest(totalPlayers = 12, wolfCount = 4, roles = listOf(PlayerRole.GARGOYLE)))
+        verify(roomRepository).save(argThat<Room> { config?.roleDelays?.containsKey(PlayerRole.GARGOYLE) == true })
+    }
+
+    @Test
     fun `mech + both kings needs 4 wolves`() {
         val roles = listOf(PlayerRole.MECHANICAL_WOLF, PlayerRole.WHITE_WOLF_KING, PlayerRole.BLACK_WOLF_KING, PlayerRole.WITCH)
         assertThatThrownBy {

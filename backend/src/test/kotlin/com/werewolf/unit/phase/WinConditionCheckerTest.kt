@@ -334,6 +334,33 @@ class WinConditionCheckerTest {
     }
 
     @Test
+    fun `G12 - villagers do not win while the gargoyle lives, in CLASSIC and HARD_MODE`() {
+        for (mode in WinConditionMode.entries) {
+            val result = check(
+                alivePlayers = listOf(player("g", 1, PlayerRole.GARGOYLE), villager(2), villager(3)),
+                mode = mode,
+                trigger = WinCheckTrigger.POST_VOTE,
+                counterplay = noCounterplay,
+            )
+            assertThat(result).`as`(mode.name).isNull()
+        }
+    }
+
+    @Test
+    fun `G12 - the gargoyle counts as a wolf for the wolves' win`() {
+        // A lone gargoyle and one villager left, every god dead: wolves win.
+        val roster = listOf(player("g", 1, PlayerRole.GARGOYLE), seer(2), villager(3))
+        val result = check(
+            alivePlayers = listOf(player("g", 1, PlayerRole.GARGOYLE), villager(3)),
+            mode = WinConditionMode.CLASSIC,
+            trigger = WinCheckTrigger.POST_VOTE,
+            counterplay = noCounterplay,
+            roster = roster,
+        )
+        assertThat(result).isEqualTo(WinnerSide.WEREWOLF)
+    }
+
+    @Test
     fun `wolves win (屠边) when every god incl MEDIUM is dead`() {
         val roster = listOf(wolf(1), player("m", 2, PlayerRole.MEDIUM), seer(3), villager(4))
         val result = check(

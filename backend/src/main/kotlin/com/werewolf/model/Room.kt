@@ -68,6 +68,10 @@ class Room(
     @Column(name = "has_gravekeeper", nullable = false)
     var hasGravekeeper: Boolean = false,
 
+    // Takes one of the wolfCount seats, like the mechanical wolf.
+    @Column(name = "has_gargoyle", nullable = false)
+    var hasGargoyle: Boolean = false,
+
     @Column(name = "has_sheriff", nullable = false)
     val hasSheriff: Boolean = true,
 

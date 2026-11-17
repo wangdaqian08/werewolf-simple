@@ -117,6 +117,10 @@ sealed interface MyNightAction {
     @JsonTypeName("GRAVEKEEPER")
     data class Gravekeeper(val exiled: PlayerSeat?, val result: GravekeeperResult?) : MyNightAction
 
+    /** The gargoyle's own turn: [role] is what it was told about [target]; [kill] only on nights it was the lone killer. */
+    @JsonTypeName("GARGOYLE")
+    data class Gargoyle(val target: PlayerSeat?, val role: PlayerRole?, val kill: PlayerSeat?) : MyNightAction
+
     /**
      * The mechanical wolf's own turn. [checkRole] is set only when the learned skill reveals a role;
      * [kill] only on nights it was the lone killer.

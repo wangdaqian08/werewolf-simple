@@ -443,6 +443,128 @@ class GameServiceNightPhaseTest {
         assertThat(night.containsKey("gravekeeperResult")).isFalse()
     }
 
+    // ── GARGOYLE: private check state, served from the night rows ──────────────
+
+    private fun gargoyleNights(tonight: NightPhase, vararg earlier: NightPhase) {
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(tonight))
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(tonight, *earlier))
+    }
+
+    private fun gargoyleCheck(dayNumber: Int, sub: NightSubPhase, target: String?, role: PlayerRole?) =
+        NightPhase(gameId = gameId, dayNumber = dayNumber, subPhase = sub).also {
+            it.gargoyleCheckedUserId = target
+            it.gargoyleResultRole = role
+        }
+
+    private val gargoyleBoard = listOf(
+        player("u1", 1, PlayerRole.GARGOYLE), player("u2", 2, PlayerRole.WEREWOLF),
+        player("u3", 3, PlayerRole.SEER), player("u4", 4, PlayerRole.VILLAGER), player("u5", 5, PlayerRole.WHITE_WOLF_KING),
+    )
+    private val gargoyleUsers = listOf(user("u1", "Gary"), user("u2", "Wolf"), user("u3", "Sage"), user("u4", "Vic"), user("u5", "King"))
+
+    @Test
+    fun `G14 - before tonight's check the gargoyle sees earlier checks and no result`() {
+        setupGameAndPlayers(game(), gargoyleBoard, gargoyleUsers)
+        gargoyleNights(gargoyleCheck(day, NightSubPhase.GARGOYLE_PICK, null, null), gargoyleCheck(1, NightSubPhase.COMPLETE, "u3", PlayerRole.SEER))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night["gargoyle"]).isEqualTo(
+            mapOf(
+                "checkedPlayerIds" to listOf("u3"),
+                "result" to null,
+                "history" to listOf(mapOf("round" to 1, "nickname" to "Sage", "seatIndex" to 3, "role" to "SEER")),
+            ),
+        )
+    }
+
+    @Test
+    fun `G3 - after a check the gargoyle sees the exact role, and checkedPlayerIds includes tonight's`() {
+        setupGameAndPlayers(game(), gargoyleBoard, gargoyleUsers)
+        gargoyleNights(
+            gargoyleCheck(day, NightSubPhase.GARGOYLE_RESULT, "u5", PlayerRole.WHITE_WOLF_KING),
+            gargoyleCheck(1, NightSubPhase.COMPLETE, "u3", PlayerRole.SEER),
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val gargoyle = nightPhaseResult(gameService.getGameState(gameId, "u1"))["gargoyle"] as Map<String, Any?>
+
+        assertThat(gargoyle["checkedPlayerIds"] as List<*>).containsExactly("u3", "u5")
+        assertThat(gargoyle["result"]).isEqualTo(
+            mapOf("kind" to "CHECK", "targetPlayerId" to "u5", "targetNickname" to "King", "targetSeatIndex" to 5, "role" to "WHITE_WOLF_KING"),
+        )
+        assertThat(gargoyle["history"] as List<*>).hasSize(2)
+    }
+
+    @Test
+    fun `G5 - a skip shows as SKIP in GARGOYLE_RESULT`() {
+        setupGameAndPlayers(game(), gargoyleBoard, gargoyleUsers)
+        gargoyleNights(gargoyleCheck(day, NightSubPhase.GARGOYLE_RESULT, null, null))
+
+        @Suppress("UNCHECKED_CAST")
+        val gargoyle = nightPhaseResult(gameService.getGameState(gameId, "u1"))["gargoyle"] as Map<String, Any?>
+
+        assertThat(gargoyle["result"]).isEqualTo(mapOf("kind" to "SKIP"))
+        assertThat(gargoyle["checkedPlayerIds"] as List<*>).isEmpty()
+    }
+
+    @Test
+    fun `G14 - the gargoyle state is served in every night sub-phase, e g during the witch's turn`() {
+        setupGameAndPlayers(game(), gargoyleBoard, gargoyleUsers)
+        gargoyleNights(gargoyleCheck(day, NightSubPhase.WITCH_ACT, "u4", PlayerRole.VILLAGER))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night).containsKey("gargoyle")
+    }
+
+    @Test
+    fun `G2 - nobody but the gargoyle gets the gargoyle state`() {
+        setupGameAndPlayers(game(), gargoyleBoard, gargoyleUsers)
+        gargoyleNights(gargoyleCheck(day, NightSubPhase.GARGOYLE_RESULT, "u2", PlayerRole.WEREWOLF))
+
+        for (viewer in listOf("u2", "u3", "u4", "u5")) {
+            val state = gameService.getGameState(gameId, viewer)
+            assertThat(nightPhaseResult(state)).`as`(viewer).doesNotContainKey("gargoyle")
+            assertThat(state.toString()).`as`(viewer).doesNotContain("gargoyle")
+        }
+    }
+
+    @Test
+    fun `G2 G13 - the gargoyle and the pack are not teammates, even after it checked a wolf`() {
+        setupGameAndPlayers(game(), gargoyleBoard, gargoyleUsers)
+        // Tonight it checked the werewolf u2; the pack still does not list it, and it lists no one.
+        gargoyleNights(gargoyleCheck(day, NightSubPhase.WEREWOLF_PICK, "u2", PlayerRole.WEREWOLF).also { it.wolfTargetUserId = "u4" })
+
+        val gargoyleState = gameService.getGameState(gameId, "u1")
+        val gargoyleNight = nightPhaseResult(gargoyleState)
+        assertThat(gargoyleNight).doesNotContainKeys("teammates", "selectedTargetId")
+        assertThat(gargoyleNight["wolfKiller"]).isEqualTo(false)
+        assertThat(gargoyleState["wolfTeammates"] as List<*>).isEmpty()
+
+        val packState = gameService.getGameState(gameId, "u2")
+        @Suppress("UNCHECKED_CAST")
+        assertThat(nightPhaseResult(packState)["teammates"] as List<String>).containsExactly("5·King")
+        @Suppress("UNCHECKED_CAST")
+        assertThat(packState["wolfTeammates"] as List<String>).containsExactly("u5")
+    }
+
+    @Test
+    fun `G8 - the lone gargoyle is the wolf killer and sees the pick`() {
+        val board = listOf(
+            player("u1", 1, PlayerRole.GARGOYLE), player("u2", 2, PlayerRole.WEREWOLF).also { it.alive = false },
+            player("u4", 4, PlayerRole.VILLAGER),
+        )
+        setupGameAndPlayers(game(), board, gargoyleUsers)
+        gargoyleNights(gargoyleCheck(day, NightSubPhase.WEREWOLF_PICK, null, null).also { it.wolfTargetUserId = "u4" })
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+
+        assertThat(night["wolfKiller"]).isEqualTo(true)
+        assertThat(night["selectedTargetId"]).isEqualTo("u4")
+        assertThat(night).doesNotContainKey("teammates")
+    }
+
     @Test
     fun `non-medium never gets mediumResult`() {
         val seer = player("u1", 1, PlayerRole.SEER)

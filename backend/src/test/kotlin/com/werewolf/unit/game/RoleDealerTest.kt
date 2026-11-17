@@ -107,6 +107,18 @@ class RoleDealerTest {
     }
 
     @Test
+    fun `G1 - deals exactly one GARGOYLE in a wolf seat`() {
+        val room = Room(roomCode = "123", hostUserId = "h", totalPlayers = 12, wolfCount = 4, hasGargoyle = true)
+        val roles = RoleDealer.roleList(room, 12)
+
+        assertEquals(1, roles.count { it == GARGOYLE })
+        assertEquals(room.wolfCount, roles.count { it.isWolf })
+        assertEquals(3, roles.count { it == WEREWOLF })
+        assertEquals(RolePickChoice.WOLF, RolePickChoice.campOf(GARGOYLE))
+        assertEquals(12, roles.size)
+    }
+
+    @Test
     fun `campSeats counts each camp`() {
         val seats = RoleDealer.campSeats(listOf(WHITE_WOLF_KING, MECHANICAL_WOLF, WEREWOLF, SEER, MEDIUM, VILLAGER))
         assertEquals(mapOf(RolePickChoice.WOLF to 3, RolePickChoice.GOD to 2, RolePickChoice.VILLAGER to 1), seats)

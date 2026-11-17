@@ -43,6 +43,17 @@ class RoleRulesTest {
     }
 
     @Test
+    fun `G8 - wolfKillers is the gargoyle only once it is the only wolf alive`() {
+        val gargoyle = player(PlayerRole.GARGOYLE, 1)
+        val wolf = player(PlayerRole.WEREWOLF, 2)
+        val king = player(PlayerRole.WHITE_WOLF_KING, 3)
+        val good = player(PlayerRole.SEER, 4)
+        assertThat(RoleRules.wolfKillers(listOf(gargoyle, wolf, good))).containsExactly(wolf)
+        assertThat(RoleRules.wolfKillers(listOf(gargoyle, king, good))).containsExactly(king)
+        assertThat(RoleRules.wolfKillers(listOf(gargoyle, good))).containsExactly(gargoyle)
+    }
+
+    @Test
     fun `mechNightSkill is LEARN until a role is learned`() {
         assertThat(RoleRules.mechNightSkill(player(PlayerRole.MECHANICAL_WOLF), 1, emptyList())).isEqualTo(MechNightSkill.LEARN)
     }

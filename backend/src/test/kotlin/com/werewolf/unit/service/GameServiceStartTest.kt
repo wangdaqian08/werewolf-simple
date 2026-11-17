@@ -218,6 +218,17 @@ class GameServiceStartTest {
     }
 
     @Test
+    fun `G10 - startGame rejects a room stored with both MECHANICAL_WOLF and GARGOYLE`() {
+        val room = waitingRoom().also { it.hasMechanicalWolf = true; it.hasGargoyle = true }
+        whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))
+
+        val result = gameService.startGame(hostId, roomId)
+
+        assertThat((result as GameActionResult.Rejected).reason).isEqualTo("Mechanical Wolf and Gargoyle cannot be on the same board")
+        verifyNoInteractions(gameRepository)
+    }
+
+    @Test
     fun `startGame rejects a room stored with both KNIGHT and GRAVEKEEPER`() {
         val room = waitingRoom().also { it.hasKnight = true; it.hasGravekeeper = true }
         whenever(roomRepository.findByIdForUpdate(roomId)).thenReturn(Optional.of(room))

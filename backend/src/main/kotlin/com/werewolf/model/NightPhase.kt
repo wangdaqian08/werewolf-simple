@@ -75,6 +75,14 @@ class NightPhase(
 
     @Column(name = "gravekeeper_exiled_user_id", length = 128)
     var gravekeeperExiledUserId: String? = null,
+
+    // Gargoyle: whom it checked tonight and the exact role it saw (both NULL = skipped or dead)
+    @Column(name = "gargoyle_checked_user_id", length = 128)
+    var gargoyleCheckedUserId: String? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gargoyle_result_role", length = 20)
+    var gargoyleResultRole: PlayerRole? = null,
 ) {
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }

@@ -97,6 +97,19 @@ class MediumHandlerTest {
     }
 
     @Test
+    fun `G7 - medium sees GARGOYLE as GARGOYLE`() {
+        val np = nightPhase()
+        val result = handler.handle(
+            req(ActionType.MEDIUM_CHECK),
+            ctx(np, player(mediumId, 1, PlayerRole.MEDIUM), player(targetId, 2, PlayerRole.GARGOYLE)),
+        )
+
+        assertThat(np.mediumResultRole).isEqualTo(PlayerRole.GARGOYLE)
+        assertThat((result as GameActionResult.Success).events)
+            .containsExactly(DomainEvent.MediumResult(gameId, targetId, PlayerRole.GARGOYLE))
+    }
+
+    @Test
     fun `cannot check self`() {
         val np = nightPhase()
         val result = handler.handle(

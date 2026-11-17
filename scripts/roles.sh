@@ -165,6 +165,7 @@ ROLE_HINTS='{
   "IDIOT":    "← use for IDIOT_REVEAL",
   "KNIGHT":   "← use for KNIGHT_DUEL",
   "GRAVEKEEPER": "← use for GRAVEKEEPER_CONFIRM",
+  "GARGOYLE": "← use for GARGOYLE_CHECK / GARGOYLE_SKIP / GARGOYLE_CONFIRM",
   "VILLAGER": ""
 }'
 

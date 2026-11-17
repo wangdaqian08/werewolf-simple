@@ -82,7 +82,7 @@ class GravekeeperHandlerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = PlayerRole::class, names = ["WEREWOLF", "WHITE_WOLF_KING", "BLACK_WOLF_KING", "MECHANICAL_WOLF"])
+    @EnumSource(value = PlayerRole::class, names = ["WEREWOLF", "WHITE_WOLF_KING", "BLACK_WOLF_KING", "MECHANICAL_WOLF", "GARGOYLE"])
     fun `wolf exiled yesterday reads WOLF`(role: PlayerRole) {
         exile(day = 2, role = role)
         val np = night(3)

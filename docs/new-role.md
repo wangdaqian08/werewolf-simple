@@ -15,9 +15,10 @@ and not only in a chat transcript.
 | Step 0: camp concept (`PlayerRole.isWolf` / `isGod`), replace `role == WEREWOLF` checks | ✅ Done (`Enums.kt`, PR #149) |
 | 白狼王 `WHITE_WOLF_KING` | ✅ Done (PR #149) |
 | `MAX_PLAYERS` | ⚠️ 15 now (`RoomSetupPanel.vue`). Target 16, max 18 |
-| 骑士 | 📝 Rules settled 2026-11-07 (`docs/superpowers/specs/2026-11-07-knight-gravekeeper-design.md`), not built |
+| 骑士 `KNIGHT` | ✅ Done (PR #179) |
 | 狼王 (黑狼王) `BLACK_WOLF_KING` | ✅ Done (rules: `docs/black-wolf-king.md`) |
-| 守墓人 | 📝 Rules settled 2026-11-07 (`docs/superpowers/specs/2026-11-07-knight-gravekeeper-design.md`), not built |
+| 守墓人 `GRAVEKEEPER` | ✅ Done (PR #186) |
+| 石像鬼 `GARGOYLE` | ✅ Done (rules: `docs/superpowers/specs/2026-11-17-gargoyle-design.md`), board partner of 守墓人; narration files are 0-byte placeholders |
 
 ## Roles
 

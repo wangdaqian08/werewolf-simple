@@ -51,6 +51,8 @@ class GameService(
             return GameActionResult.Rejected("Mechanical Wolf and Gravekeeper cannot be on the same board")
         if (room.hasKnight && room.hasGravekeeper)
             return GameActionResult.Rejected("Knight and Gravekeeper cannot be on the same board")
+        if (room.hasMechanicalWolf && room.hasGargoyle)
+            return GameActionResult.Rejected("Mechanical Wolf and Gargoyle cannot be on the same board")
 
         val roomPlayers = roomPlayerRepository.findByRoomId(roomId)
         if (roomPlayers.size < 4)
@@ -248,6 +250,40 @@ class GameService(
                                     )
                                 }
                             },
+                    )
+                }
+
+                // ── GARGOYLE: tonight's check or skip, every player checked so far, and the history ──
+                // Served in every night sub-phase so the client can grey out checked players.
+                if (myPlayer?.role == PlayerRole.GARGOYLE) {
+                    val checks = nightPhaseRepository.findByGameId(gameId)
+                        .filter { it.dayNumber <= np.dayNumber && it.gargoyleCheckedUserId != null }
+                        .sortedBy { it.dayNumber }
+                    val checkedId = np.gargoyleCheckedUserId
+                    base["gargoyle"] = mapOf(
+                        "checkedPlayerIds" to checks.mapNotNull { it.gargoyleCheckedUserId },
+                        "result" to when {
+                            checkedId != null -> mapOf(
+                                "kind"            to "CHECK",
+                                "targetPlayerId"  to checkedId,
+                                "targetNickname"  to displayNameFor(checkedId),
+                                "targetSeatIndex" to playerMap[checkedId]?.seatIndex,
+                                "role"            to np.gargoyleResultRole?.name,
+                            )
+                            // No field records a skip: reaching the result sub-phase with no check means it skipped.
+                            np.subPhase == NightSubPhase.GARGOYLE_RESULT -> mapOf("kind" to "SKIP")
+                            else -> null
+                        },
+                        "history" to checks.mapNotNull { h ->
+                            h.gargoyleCheckedUserId?.let { id ->
+                                mapOf(
+                                    "round"     to h.dayNumber,
+                                    "nickname"  to displayNameFor(id),
+                                    "seatIndex" to playerMap[id]?.seatIndex,
+                                    "role"      to h.gargoyleResultRole?.name,
+                                )
+                            }
+                        },
                     )
                 }
 

@@ -18,6 +18,8 @@ import com.werewolf.model.PlayerRole
  *  - WOLF:  every wolf-team kill (null target = 空刀), for the pack incl. 白狼王
  *  - MECHANICAL_WOLF: its own learn / check / poison / protect, and the kills of the nights
  *           it was the lone killer; never the pack's kills
+ *  - GARGOYLE: every check with the exact role it was told, and the kills of the nights it was
+ *           the lone killer; never the pack's kills
  *  - MEDIUM: every check with the role it was told
  *  - GRAVEKEEPER: every vote-out it was told the camp of (a night with no vote-out has no entry)
  *  - WITCH: every night's wolf victim (null target = 空刀) she was told while
@@ -67,6 +69,16 @@ object RoleHistoryBuilder {
                 "role" to "GRAVEKEEPER",
                 "entries" to done.filter { it.gravekeeperExiledUserId != null }.map {
                     entry(it.dayNumber, "GRAVE", it.gravekeeperExiledUserId) + ("isWerewolf" to (it.gravekeeperResult == GravekeeperResult.WOLF))
+                },
+            )
+            me.role == PlayerRole.GARGOYLE -> mapOf(
+                "role" to "GARGOYLE",
+                "entries" to done.flatMap { n ->
+                    val loneKiller = RoleRules.wolfKillers(players.filter { !deadAt(it, n.dayNumber) }).any { it.userId == me.userId }
+                    listOfNotNull(
+                        n.gargoyleCheckedUserId?.let { entry(n.dayNumber, "CHECK", it) + ("role" to n.gargoyleResultRole) },
+                        if (loneKiller) entry(n.dayNumber, "KILL", n.wolfTargetUserId) else null,
+                    )
                 },
             )
             me.role == PlayerRole.MECHANICAL_WOLF -> mapOf(

@@ -14,9 +14,12 @@ object RoleRules {
     /** What the medium sees: the mechanical wolf shows its learned role once it has one. */
     fun mediumSees(p: GamePlayer): PlayerRole = p.learnedRole ?: p.role
 
-    /** The wolves that make tonight's kill: the pack, or the mechanical wolf once it is the only wolf left. */
+    /**
+     * The wolves that make tonight's kill: the pack, or the lone wolf (mechanical wolf or gargoyle)
+     * once it is the only wolf left. The two lone wolves never share a board.
+     */
     fun wolfKillers(alive: List<GamePlayer>): List<GamePlayer> =
-        alive.filter { it.role.isPackWolf }.ifEmpty { alive.filter { it.role == PlayerRole.MECHANICAL_WOLF } }
+        alive.filter { it.role.isPackWolf }.ifEmpty { alive.filter { it.role.isWolf } }
 
     /** LEARN until learned, else the skill usable tonight or NONE (SHOOT is never a night action). */
     fun mechNightSkill(mech: GamePlayer, tonight: Int, allNights: List<NightPhase>): MechNightSkill {

@@ -29,7 +29,8 @@ class AudioPhaseMappingTest {
             VillagerAudioConfig(),
             MechanicalWolfAudioConfig(),
             MediumAudioConfig(),
-            GravekeeperAudioConfig()
+            GravekeeperAudioConfig(),
+            GargoyleAudioConfig()
         ))
         
         audioService = AudioService()
@@ -149,6 +150,35 @@ class AudioPhaseMappingTest {
             gameId = 1, oldSubPhase = NightSubPhase.GRAVEKEEPER_RESULT, newSubPhase = NightSubPhase.GUARD_PICK,
         )
         assertThat(leaving.audioFiles).containsExactly("gravekeeper_close_eyes.mp3", "guard_open_eyes.mp3")
+    }
+
+    @Test
+    fun `GARGOYLE_PICK opens with gargoyle audio and GARGOYLE_RESULT closes it`() {
+        assertThat(audioService.calculateOpenEyesAudio(NightSubPhase.GARGOYLE_PICK)).isEqualTo("gargoyle_open_eyes.mp3")
+        assertThat(audioService.calculateOpenEyesAudio(NightSubPhase.GARGOYLE_RESULT)).isNull()
+        val entering = audioService.calculateNightSubPhaseTransition(
+            gameId = 1, oldSubPhase = NightSubPhase.GARGOYLE_PICK, newSubPhase = NightSubPhase.GARGOYLE_RESULT,
+        )
+        assertThat(entering.audioFiles).isEmpty()
+        val leaving = audioService.calculateNightSubPhaseTransition(
+            gameId = 1, oldSubPhase = NightSubPhase.GARGOYLE_RESULT, newSubPhase = NightSubPhase.WEREWOLF_PICK,
+        )
+        assertThat(leaving.audioFiles).containsExactly("gargoyle_close_eyes.mp3", "wolf_open_eyes.mp3")
+        // The night's first turn after WAITING opens with the gargoyle.
+        val fromWaiting = audioService.calculateNightSubPhaseTransition(
+            gameId = 1, oldSubPhase = NightSubPhase.WAITING, newSubPhase = NightSubPhase.GARGOYLE_PICK,
+        )
+        assertThat(fromWaiting.audioFiles).containsExactly("gargoyle_open_eyes.mp3")
+    }
+
+    @Test
+    fun `dead gargoyle plays one open-close pair`() {
+        val sequence = audioService.calculateDeadRoleAudioSequence(
+            gameId = 1,
+            skippedRoles = listOf(NightSubPhase.GARGOYLE_PICK, NightSubPhase.GARGOYLE_RESULT),
+            targetSubPhase = NightSubPhase.WEREWOLF_PICK,
+        )
+        assertThat(sequence.audioFiles).containsExactly("gargoyle_open_eyes.mp3", "gargoyle_close_eyes.mp3", "wolf_open_eyes.mp3")
     }
 
     @Test

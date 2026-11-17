@@ -94,6 +94,8 @@ class JsonWireFormatTest {
                 """{"type":"SeerResult","gameId":1,"checkedUserId":"u2","isWerewolf":true}""",
         DomainEvent.MediumResult(1, "u2", PlayerRole.WITCH) to
                 """{"type":"MediumResult","gameId":1,"checkedUserId":"u2","role":"WITCH"}""",
+        DomainEvent.GargoyleResult(1, "u2", PlayerRole.WHITE_WOLF_KING) to
+                """{"type":"GargoyleResult","gameId":1,"targetUserId":"u2","role":"WHITE_WOLF_KING"}""",
         DomainEvent.MechWolfResult(1) to
                 """{"type":"MechWolfResult","gameId":1}""",
         DomainEvent.VoteSubmitted(1, "u1") to

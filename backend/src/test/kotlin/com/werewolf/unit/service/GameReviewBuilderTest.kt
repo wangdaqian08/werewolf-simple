@@ -493,4 +493,57 @@ class GameReviewBuilderTest {
         assertThat(review.rounds.single().night!!.dawn)
             .isEqualTo(Dawn(listOf(NightDeath(mref("hunter"), DeathCause.POISON)), NightSave(mref("v"), SaveSource.GUARD)))
     }
+
+    // ── Gargoyle ──────────────────────────────────────────────────────────────
+
+    private fun gargoyleBoard(diedDay: Map<String, Int> = emptyMap()) = board(diedDay) +
+        GamePlayer(gameId = gameId, userId = "garg", seatIndex = 10, role = PlayerRole.GARGOYLE)
+            .also { p -> diedDay["garg"]?.let { p.alive = false; p.diedDay = it } }
+
+    private fun gref(id: String) = gargoyleBoard().first { it.userId == id }.let { ReviewPlayer(id, "N-$id", it.seatIndex, it.role) }
+
+    @Test
+    fun `G15 - review night carries the gargoyle's check with the exact role`() {
+        val nights = listOf(
+            night(1) { gargoyleCheckedUserId = "king"; gargoyleResultRole = PlayerRole.WHITE_WOLF_KING },
+            night(2), // skipped
+            night(3), // dead by then
+        )
+        val review = build(gargoyleBoard(mapOf("garg" to 2)), nights)
+
+        assertThat(review.rounds.map { it.night!!.gargoyle }).containsExactly(
+            GargoyleTurn(gref("garg"), false, gref("king"), PlayerRole.WHITE_WOLF_KING),
+            GargoyleTurn(gref("garg"), false, null, null),
+            GargoyleTurn(gref("garg"), true, null, null),
+        )
+    }
+
+    @Test
+    fun `gargoyle turn is null when the role is not in the game`() {
+        assertThat(build(board(), listOf(night(1))).rounds.single().night!!.gargoyle).isNull()
+    }
+
+    @Test
+    fun `G8 - wolf actors are the pack while it lives, then the lone gargoyle`() {
+        val packDead = mapOf("w1" to 1, "w2" to 1, "king" to 1)
+        val review = build(gargoyleBoard(packDead), listOf(night(1) { wolfTargetUserId = "v" }, night(2) { wolfTargetUserId = "seer" }))
+
+        assertThat(review.rounds[0].night!!.wolf.actors).containsExactly(gref("w1"), gref("w2"), gref("king"))
+        assertThat(review.rounds[1].night!!.wolf.actors).containsExactly(gref("garg"))
+    }
+
+    @Test
+    fun `G2 - a pack kill on the gargoyle is a normal kill, not 自刀`() {
+        val review = build(gargoyleBoard(), listOf(night(1) { wolfTargetUserId = "garg" }))
+
+        assertThat(review.rounds.single().night!!.wolf.action).isEqualTo(WolfAction.KILL)
+    }
+
+    @Test
+    fun `G8 - a lone gargoyle knifing itself is 自刀`() {
+        val packDead = mapOf("w1" to 1, "w2" to 1, "king" to 1)
+        val review = build(gargoyleBoard(packDead), listOf(night(1), night(2) { wolfTargetUserId = "garg" }))
+
+        assertThat(review.rounds[1].night!!.wolf.action).isEqualTo(WolfAction.SELF_KILL)
+    }
 }
