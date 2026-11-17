@@ -37,6 +37,8 @@ A wolf-camp role (`PlayerRole.WHITE_WOLF_KING`, `isWolf = true`): it wakes and k
 
 When it self-destructs it may name one player to take with it (`WOLF_SELF_DESTRUCT` + `targetUserId`). Everything else follows the table above.
 
+The king's confirm dialog has no plain 確認: the king must press **不帶人** or **帶走 N號**, which stays disabled until a player is picked. (A plain 確認 with an optional list let kings self-destruct without noticing the take — prod game 25, 2026-11-14.)
+
 | Trigger | Effect |
 |---|---|
 | King self-destructs with no target | Same as any wolf self-destruct. |

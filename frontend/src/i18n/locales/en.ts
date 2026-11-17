@@ -65,7 +65,10 @@ export default {
     knightDuelTitle: 'Confirm duel?',
     none: 'No actions available',
     selfDestruct: 'Self-destruct',
-    take: 'Take a player with you (optional)',
+    take: 'Pick a player to take, or take nobody',
+    noTake: 'Take nobody',
+    takeConfirm: 'Take seat {n}',
+    takePickFirst: 'Pick to take',
     title: 'Actions',
   },
   admin: {

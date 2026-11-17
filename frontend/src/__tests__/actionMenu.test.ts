@@ -197,27 +197,66 @@ describe('ActionMenu — 白狼王 take', () => {
     wrapper.unmount()
   })
 
-  it('emits the chosen player when the king confirms', async () => {
+  const q = (id: string) =>
+    document.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement | null
+
+  it('the king has no plain confirm: take is disabled until a player is picked', async () => {
     const wrapper = await openConfirm('WHITE_WOLF_KING')
-    ;(document.querySelector('[data-testid="action-menu-take-v2"]') as HTMLElement).click()
+    expect(q('action-menu-confirm')).toBeNull()
+    expect(q('action-menu-no-take')).toBeTruthy()
+    expect(q('action-menu-take-confirm')?.disabled).toBe(true)
+    q('action-menu-take-confirm')?.click()
     await wrapper.vm.$nextTick()
-    ;(document.querySelector('[data-testid="action-menu-confirm"]') as HTMLElement).click()
+    expect(wrapper.emitted('self-destruct')).toBeFalsy()
+    wrapper.unmount()
+  })
+
+  it('picking a player enables take, names the seat, and emits that player', async () => {
+    const wrapper = await openConfirm('WHITE_WOLF_KING')
+    q('action-menu-take-v2')?.click()
+    await wrapper.vm.$nextTick()
+    expect(q('action-menu-take-confirm')?.disabled).toBe(false)
+    expect(q('action-menu-take-confirm')?.textContent).toContain('2')
+    q('action-menu-take-confirm')?.click()
     await wrapper.vm.$nextTick()
     expect(wrapper.emitted('self-destruct')?.[0]).toEqual(['v2'])
     wrapper.unmount()
   })
 
-  it('emits no target when the king confirms without choosing', async () => {
+  it('tapping the picked player again un-picks it and disables take', async () => {
     const wrapper = await openConfirm('WHITE_WOLF_KING')
-    ;(document.querySelector('[data-testid="action-menu-confirm"]') as HTMLElement).click()
+    q('action-menu-take-v2')?.click()
+    await wrapper.vm.$nextTick()
+    q('action-menu-take-v2')?.click()
+    await wrapper.vm.$nextTick()
+    expect(q('action-menu-take-confirm')?.disabled).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('不帶人 emits no target, even with a player picked', async () => {
+    const wrapper = await openConfirm('WHITE_WOLF_KING')
+    q('action-menu-take-v2')?.click()
+    await wrapper.vm.$nextTick()
+    q('action-menu-no-take')?.click()
     await wrapper.vm.$nextTick()
     expect(wrapper.emitted('self-destruct')?.[0]).toEqual([undefined])
     wrapper.unmount()
   })
 
-  it('a plain werewolf gets no take list', async () => {
+  it('cancel emits nothing for the king', async () => {
+    const wrapper = await openConfirm('WHITE_WOLF_KING')
+    q('action-menu-cancel')?.click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('self-destruct')).toBeFalsy()
+    expect(q('action-menu-no-take')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('a plain werewolf gets no take list and keeps the plain confirm', async () => {
     const wrapper = await openConfirm('WEREWOLF')
     expect(document.querySelector('[data-testid="action-menu-take-v2"]')).toBeFalsy()
+    expect(q('action-menu-no-take')).toBeNull()
+    expect(q('action-menu-confirm')).toBeTruthy()
     wrapper.unmount()
   })
 })
