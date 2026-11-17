@@ -564,7 +564,7 @@ describe('DayPhase — hunter role card', () => {
     await wrapper.find('.my-role-chip').trigger('click')
     // Exact text, matching VotingPhase / RoleRevealCard — catches punctuation typos.
     expect(document.body.querySelector('.rc-desc')?.textContent).toBe(
-      '死亡時可開槍帶走一名玩家（被女巫毒死時無法開槍）。',
+      '死亡時可開槍帶走一名玩家，被黑狼王開槍帶走時也可以；被女巫毒死或被白狼王帶走時無法開槍。',
     )
     wrapper.unmount()
   })

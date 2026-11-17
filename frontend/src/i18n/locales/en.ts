@@ -508,7 +508,7 @@ export default {
       GUARD:
         'Each night, protect one player from the wolves. You cannot protect the same person two nights in a row.',
       HUNTER:
-        'When you die you may shoot and take one player with you (not if you were poisoned by the witch).',
+        'When you die you may shoot and take one player with you, even when the Black Wolf King shot you; not if the witch poisoned you or the White Wolf King took you.',
       IDIOT:
         'When voted out, reveal yourself as the Idiot and survive (but lose your right to vote).',
       KNIGHT:
