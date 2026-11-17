@@ -98,6 +98,32 @@ describe('PlayerReview', () => {
     ).toContain('⚙ 我毒 2號 Bob，守 4號 Dana，刀 1號 Alice〔狼人〕')
   })
 
+  it('player review shows the gargoyle night action: the seat it checked and the exact role', () => {
+    const r = review({ me: seat(13, 'Gar', 'GARGOYLE') })
+    const text = (action: NonNullable<PlayerReviewData['rounds'][number]['night']>['action']) => {
+      r.rounds[0]!.night!.action = action
+      return mount(PlayerReview, { props: { review: r } }).text()
+    }
+    expect(
+      text({ type: 'GARGOYLE', target: seat(2, 'Bob', 'SEER'), role: 'SEER', kill: null }),
+    ).toContain('🗿 我驗 2號 Bob〔預言家〕')
+    expect(text({ type: 'GARGOYLE', target: null, role: null, kill: null })).toContain(
+      '🗿 我未查驗',
+    )
+    // G8: as the lone wolf it checks first, then knifes.
+    expect(
+      text({
+        type: 'GARGOYLE',
+        target: seat(2, 'Bob', 'SEER'),
+        role: 'SEER',
+        kill: seat(4, 'Dana', null, 'GOOD'),
+      }),
+    ).toContain('🗿 我驗 2號 Bob〔預言家〕，刀 4號 Dana〔好人〕')
+    expect(
+      text({ type: 'GARGOYLE', target: null, role: null, kill: seat(4, 'Dana', null, 'GOOD') }),
+    ).toContain('🗿 我未查驗，刀 4號 Dana〔好人〕')
+  })
+
   it('player review shows the gravekeeper night action: the exiled seat with the camp told', () => {
     const gk = review({ me: seat(12, 'Gia', 'GRAVEKEEPER') })
     const text = (action: NonNullable<PlayerReviewData['rounds'][number]['night']>['action']) => {

@@ -35,6 +35,7 @@ const vil = P(9, 'Val', 'VILLAGER')
 const mech = P(10, 'Mia', 'MECHANICAL_WOLF')
 const medium = P(11, 'Meg', 'MEDIUM')
 const gravekeeper = P(12, 'Gia', 'GRAVEKEEPER')
+const gargoyle = P(13, 'Gar', 'GARGOYLE')
 const players = [w1, w2, king, seer, witch, guard, hunter, idiot, vil]
 
 const night = (over: Partial<ReviewNight> = {}): ReviewNight => ({
@@ -43,6 +44,7 @@ const night = (over: Partial<ReviewNight> = {}): ReviewNight => ({
   mech: null,
   medium: null,
   gravekeeper: null,
+  gargoyle: null,
   witch: { actor: witch, dead: false, antidote: null, poison: null },
   guard: { actor: guard, dead: false, target: null },
   dawn: { deaths: [], saved: null },
@@ -257,6 +259,38 @@ describe('GameReview', () => {
     const first = lines(render([{ day: 1, night: night({ gravekeeper: turn({}) }), events: [] }]))
     expect(first.findIndex((l) => l.includes('守墓人'))).toBe(
       first.findIndex((l) => l.includes('女巫')) - 1,
+    )
+  })
+
+  it('game review lists the gargoyle checks first each night: exact role, skip, dead', () => {
+    const turn = (over: Partial<NonNullable<ReviewNight['gargoyle']>>) => ({
+      actor: gargoyle,
+      dead: false,
+      target: null,
+      role: null,
+      ...over,
+    })
+    const wrapper = render([
+      {
+        day: 1,
+        night: night({ gargoyle: turn({ target: king, role: 'WHITE_WOLF_KING' }) }),
+        events: [],
+      },
+      { day: 2, night: night({ gargoyle: turn({ target: seer, role: 'SEER' }) }), events: [] },
+      { day: 3, night: night({ gargoyle: turn({}) }), events: [] },
+      { day: 4, night: night({ gargoyle: turn({ dead: true }) }), events: [] },
+    ])
+    const text = lines(wrapper)
+    expect(text.filter((l) => l.includes('石像鬼 13號'))).toEqual([
+      '🗿 石像鬼 13號 驗 3號 King〔白狼王〕',
+      '🗿 石像鬼 13號 驗 4號 Sia〔預言家〕',
+      '🗿 石像鬼 13號 未查驗',
+      '🗿 石像鬼 13號 已出局',
+    ])
+    // 先驗後刀: the gargoyle's line comes right before the wolves'.
+    const first = lines(render([{ day: 1, night: night({ gargoyle: turn({}) }), events: [] }]))
+    expect(first.findIndex((l) => l.includes('石像鬼'))).toBe(
+      first.findIndex((l) => l.startsWith('🐺')) - 1,
     )
   })
 

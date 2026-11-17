@@ -241,7 +241,7 @@ function decrement() {
 }
 
 // Board limits (UI policy): gods ∈ [wolves − 1, wolves + 1] (at most 6, see maxGods) and
-// always leave ≥ 1 villager seat, and a special wolf (白狼王 / 黑狼王 / 機械狼, any
+// always leave ≥ 1 villager seat, and a special wolf (白狼王 / 黑狼王 / 機械狼 / 石像鬼, any
 // may be on) needs 9+ players and each a plain fellow wolf: wolves ≥ specials + 1
 // (the backend enforces these rules too).
 const GOD_IDS = ROLE_DEFINITIONS.filter((r) => !r.required && !r.wolf).map((r) => r.id)

@@ -62,6 +62,9 @@ const NEW_ACTIONS = [
   'MEDIUM_CHECK',
   'MEDIUM_CONFIRM',
   'GRAVEKEEPER_CONFIRM',
+  'GARGOYLE_CHECK',
+  'GARGOYLE_SKIP',
+  'GARGOYLE_CONFIRM',
 ]
 
 // Stands in for NightPhase: exposes the rejection count; the test emits night-action on it.
@@ -151,13 +154,16 @@ describe('GameView — mechanical wolf + medium night turns', () => {
     expect(wrapper.find('[data-testid="night-stub"]').attributes('data-rejections')).toBe('0')
   })
 
-  it.each(['MediumResult', 'MechWolfResult'])('%s refetches the game state', async (type) => {
-    await mountGame()
-    const onPrivate = await connectAndGetPrivateHandler()
-    h.getStateMock.mockClear()
-    await onPrivate({ body: JSON.stringify({ type }) })
-    expect(h.getStateMock).toHaveBeenCalledTimes(1)
-  })
+  it.each(['MediumResult', 'MechWolfResult', 'GargoyleResult'])(
+    '%s refetches the game state',
+    async (type) => {
+      await mountGame()
+      const onPrivate = await connectAndGetPrivateHandler()
+      h.getStateMock.mockClear()
+      await onPrivate({ body: JSON.stringify({ type }) })
+      expect(h.getStateMock).toHaveBeenCalledTimes(1)
+    },
+  )
 
   it('the host gets the narration line of the newest audio; other players get none', async () => {
     const withAudio = (hostId: string): GameState =>

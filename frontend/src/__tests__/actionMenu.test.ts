@@ -255,9 +255,10 @@ describe('ActionMenu — self-destruct window', () => {
     )
   })
 
-  it('a mechanical wolf is never offered self-destruct, a werewolf still is', async () => {
+  it('a mechanical wolf or a gargoyle is never offered self-destruct, a werewolf still is', async () => {
     const window = { phase: 'DAY_DISCUSSION', subPhase: 'RESULT_REVEALED' } as const
     expect(await offersSelfDestruct({ ...window, myRole: 'MECHANICAL_WOLF' })).toBe(false)
+    expect(await offersSelfDestruct({ ...window, myRole: 'GARGOYLE' })).toBe(false)
     expect(await offersSelfDestruct({ ...window, myRole: 'WEREWOLF' })).toBe(true)
   })
 

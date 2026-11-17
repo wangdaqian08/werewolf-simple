@@ -19,6 +19,17 @@ const mechState = {
   },
 }
 
+const gargoyleState = {
+  nightPhase: {
+    gargoyle: {
+      checkedPlayerIds: ['u4'],
+      result: { kind: 'CHECK', targetPlayerId: 'u4', role: 'SEER' },
+      history: [],
+    },
+  },
+}
+const gargoylePush = { type: 'GargoyleResult', gameId: 1, targetUserId: 'u4', role: 'SEER' }
+
 describe('findRoleLeaks', () => {
   it("flags another player's id paired with a new role", () => {
     const leaks = findRoleLeaks(
@@ -35,6 +46,14 @@ describe('findRoleLeaks', () => {
 
   it('exempts mechWolf only on the mechanical wolf page', () => {
     expect(findRoleLeaks(log(mechState), 'me', 'MECHANICAL_WOLF')).toEqual([])
+  })
+
+  it('exempts the gargoyle state and the GargoyleResult push only on the gargoyle page', () => {
+    expect(findRoleLeaks(log(gargoyleState, gargoylePush), 'me', 'GARGOYLE')).toEqual([])
+    expect(findRoleLeaks(log(gargoyleState, gargoylePush), 'me', 'VILLAGER')).toEqual([
+      { src: 'test', id: 'u4', role: 'SEER', key: 'role' },
+      { src: 'test', id: 'u4', role: 'SEER', key: 'role' },
+    ])
   })
 
   it('never skips a subtree when the viewer role is unknown', () => {

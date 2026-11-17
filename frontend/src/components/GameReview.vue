@@ -235,6 +235,14 @@ function gravekeeperSegs(g: NonNullable<ReviewNight['gravekeeper']>): Seg[] {
     : [head, seg(t('rv.gravekeeperNone'))]
 }
 
+function gargoyleSegs(g: NonNullable<ReviewNight['gargoyle']>): Seg[] {
+  const head = seg(t('rv.gargoyleHead', { seat: t('common.seat', { n: g.actor.seatIndex }) }))
+  if (g.dead) return [head, seg(t('rv.dead'))]
+  return g.target
+    ? [head, seg(t('rv.check')), name(g.target), seg(t('rv.roleTag', { role: roleName(g.role) }))]
+    : [head, seg(t('rv.noCheck'))]
+}
+
 function witchSegs(w: NonNullable<ReviewNight['witch']>): Seg[] {
   const head = seg(t('rv.witchHead', { seat: t('common.seat', { n: w.actor.seatIndex }) }))
   if (w.dead) return [head, seg(t('rv.dead'))]
@@ -268,6 +276,8 @@ function dawnSegs(d: ReviewNight['dawn']): Seg[] {
 
 function nightLines(n: ReviewNight): Line[] {
   const rows = [
+    // 先驗後刀: the gargoyle's turn opens the night.
+    n.gargoyle && gargoyleSegs(n.gargoyle),
     wolfSegs(n.wolf),
     n.mech && mechSegs(n.mech),
     n.seer && seerSegs(n.seer),

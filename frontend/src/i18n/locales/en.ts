@@ -261,6 +261,8 @@ export default {
     attackedAsk: 'Tonight {who} was attacked by the wolves. Use the antidote?',
     badge: {
       closed: 'Eyes closed',
+      gargoyle: "Check one player's exact role",
+      gargoyleDone: 'Check complete',
       gravekeeper: "Yesterday's exile: good or wolf",
       guard: 'Choose a player to protect',
       mech: 'Learn or use your skill',
@@ -285,6 +287,16 @@ export default {
     dontUse: "Don't use",
     everyoneClose: 'Everyone please close your eyes',
     falls: 'Night Falls',
+    gargoyle: {
+      confirm: 'Check',
+      done: 'Done',
+      hint: 'Choose a player to check their exact role; a player you have checked cannot be checked again',
+      history: 'Check history',
+      noHistory: 'No history yet',
+      role: 'Role: {role}',
+      skip: "Don't check tonight",
+      skipped: 'No check tonight',
+    },
     gravekeeper: {
       done: 'Done',
       firstNight: 'No information on the first night',
@@ -329,6 +341,8 @@ export default {
     },
     narration: {
       dark: 'Night falls, everyone close your eyes',
+      gargoyleClose: 'Gargoyle, close your eyes',
+      gargoyleOpen: 'Gargoyle, open your eyes',
       gravekeeperClose: 'Gravekeeper, close your eyes',
       gravekeeperOpen: 'Gravekeeper, open your eyes',
       guardClose: 'Guard, close your eyes',
@@ -394,6 +408,8 @@ export default {
   pr: {
     dawnOut: ' eliminated',
     ended: 'You were eliminated on day {day}; the replay ends here',
+    gargoyleCheck: '🗿 I checked ',
+    gargoyleNone: '🗿 I checked no one',
     gravekeeperNone: '⚰ No exile',
     gravekeeperSaw: '⚰ Exiled yesterday: ',
     guard: '🛡 I guarded ',
@@ -466,6 +482,7 @@ export default {
   },
   role: {
     BLACK_WOLF_KING: 'Black Wolf King',
+    GARGOYLE: 'Gargoyle',
     GRAVEKEEPER: 'Gravekeeper',
     GUARD: 'Guard',
     HUNTER: 'Hunter',
@@ -481,6 +498,8 @@ export default {
     desc: {
       BLACK_WOLF_KING:
         'Attack with the pack at night. When you are eliminated (voted out, killed at night or taken by the hunter) you may shoot one player; you cannot shoot if poisoned by the witch or after self-destructing.',
+      GARGOYLE:
+        "Wolf camp. Each night, may check one player's exact role; not itself, and never the same player twice in a game. It and the pack do not know each other; it cannot self-destruct; the seer and the gravekeeper see it as a wolf. Gets the wolf kill only once every other wolf is out, and checks before it kills that night.",
       GRAVEKEEPER:
         'Each night, learn whether the player voted out the day before was good or a werewolf.',
       GUARD:
@@ -504,6 +523,7 @@ export default {
       WITCH: 'You have one antidote and one poison, each usable once.',
     },
     descShort: {
+      GARGOYLE: "Does not know the pack; checks one player's exact role each night.",
       GRAVEKEEPER: "Learn the camp of yesterday's exiled player.",
       GUARD: 'Each night, protect one player from the wolves.',
       IDIOT: 'When voted out, reveal yourself: you survive but lose your right to vote.',
@@ -516,8 +536,10 @@ export default {
     rules: {
       BLACK_WOLF_KING:
         'Camp: wolves.\nHunts with the wolves at night; the seer sees you as a wolf.\nWhen you are out (voted out, killed by the wolves at night, or shot by the hunter) you may shoot one player, or hold fire.\nNo shot if the witch poisons you, you self-destruct, the White Wolf King takes you, or the Knight duels you, nor if your death already decides the game.\nShoot before the host moves on, or the shot is lost.',
+      GARGOYLE:
+        "Camp: wolves (not part of the pack).\nYou do not know the other wolves and they do not know you; you never see the pack's picks and are never shown as their teammate, and the wolves may attack you.\nEach night, night 1 included, you may check one living player (not yourself) to learn their exact role, or skip.\nYou can never check the same player twice in a game; players you have checked are greyed out.\nChecking a wolf only tells you its role: it does not make you teammates, and that wolf is not told.\nOnce every other wolf (kings included) is out you make the kill alone in the wolf turn; that night you check before you kill.\nYou cannot self-destruct. You count as a wolf: the villagers win only once you are out too. The seer and the gravekeeper see you as a wolf; the medium sees Gargoyle.",
       GRAVEKEEPER:
-        'Camp: good (a god role).\nEach night you learn whether the player voted out the day before was good or a wolf (White Wolf King, Black Wolf King and Mechanical Wolf all count as wolves); there is no information on the first night.\nOnly a vote-out counts: a player who was shot, duelled, taken by the White Wolf King or declared out by the host, or an Idiot who revealed, does not count, and you see "Nobody was exiled yesterday".',
+        'Camp: good (a god role).\nEach night you learn whether the player voted out the day before was good or a wolf (White Wolf King, Black Wolf King, Mechanical Wolf and Gargoyle all count as wolves); there is no information on the first night.\nOnly a vote-out counts: a player who was shot, duelled, taken by the White Wolf King or declared out by the host, or an Idiot who revealed, does not count, and you see "Nobody was exiled yesterday".',
       GUARD:
         "Camp: good (a god role).\nEach night protect one living player (yourself included) from the wolves; if the room allows it you may also protect no one.\nYou cannot protect the same player two nights in a row.\nProtection does not stop the witch's poison.\nIf you and the witch's antidote save the same player, that player still dies (unless they hold night-1 immunity).",
       HUNTER:
@@ -671,6 +693,7 @@ export default {
     declaredOut: ' was declared out by the host',
     elected: ' elected',
     exile: 'Exile',
+    gargoyleHead: '🗿 Gargoyle {seat} ',
     gravekeeperHead: '⚰ Gravekeeper {seat} ',
     gravekeeperNone: 'No exile',
     gravekeeperSaw: 'learned ',

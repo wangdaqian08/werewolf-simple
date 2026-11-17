@@ -376,6 +376,97 @@ describe('NightPhase - gravekeeper turn', () => {
   })
 })
 
+describe('NightPhase - gargoyle turn', () => {
+  const pl = (userId: string, seatIndex: number, isAlive = true): GamePlayer => ({
+    userId,
+    nickname: userId,
+    seatIndex,
+    isAlive,
+    isSheriff: false,
+  })
+  const gargoyle = {
+    checkedPlayerIds: ['w1'],
+    result: null,
+    history: [],
+  }
+  const mountAs = (
+    myUserId: string,
+    myRole: PlayerRole,
+    nightPhase: NightPhaseState,
+    alive = true,
+  ) =>
+    mount(NightPhase, {
+      props: {
+        nightPhase,
+        players: [pl('g1', 1, myUserId !== 'g1' || alive), pl('v1', 2), pl('w1', 3)],
+        myUserId,
+        myRole,
+      },
+    })
+  const turn = (w: ReturnType<typeof mountAs>) => w.find('[data-testid="gargoyle-turn"]')
+  const sleeping = (w: ReturnType<typeof mountAs>) =>
+    w.find('[data-testid="sleep-screen-title"]').exists()
+
+  it('the living gargoyle gets its turn in GARGOYLE_PICK; a check keeps the screen', async () => {
+    const wrapper = mountAs('g1', 'GARGOYLE', { subPhase: 'GARGOYLE_PICK', dayNumber: 2, gargoyle })
+    expect(turn(wrapper).exists()).toBe(true)
+    expect(wrapper.find('.rb-sub').text()).toBe('查驗一名玩家的具體身份')
+    expect(wrapper.find('[data-testid="gargoyle-target-3"]').attributes('disabled')).toBeDefined()
+    await wrapper.find('[data-testid="gargoyle-target-2"]').trigger('click')
+    await wrapper.find('[data-testid="gargoyle-confirm"]').trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['GARGOYLE_CHECK', 'v1']])
+    expect(sleeping(wrapper)).toBe(false)
+  })
+
+  it('a skip keeps the screen until GARGOYLE_RESULT', async () => {
+    const wrapper = mountAs('g1', 'GARGOYLE', { subPhase: 'GARGOYLE_PICK', dayNumber: 2, gargoyle })
+    await wrapper.find('[data-testid="gargoyle-skip"]').trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['GARGOYLE_SKIP', undefined]])
+    expect(sleeping(wrapper)).toBe(false)
+  })
+
+  it('confirming the result closes the eyes at once', async () => {
+    const wrapper = mountAs('g1', 'GARGOYLE', {
+      subPhase: 'GARGOYLE_RESULT',
+      dayNumber: 2,
+      gargoyle: { ...gargoyle, result: { kind: 'SKIP' } },
+    })
+    await wrapper.find('[data-testid="gargoyle-result-confirm"]').trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['GARGOYLE_CONFIRM', undefined]])
+    expect(sleeping(wrapper)).toBe(true)
+  })
+
+  it.each(['GARGOYLE_PICK', 'GARGOYLE_RESULT'] as const)(
+    'everyone else sees the plain closed-eyes screen in %s',
+    (subPhase) => {
+      for (const role of ['VILLAGER', 'WEREWOLF', 'SEER', 'MECHANICAL_WOLF'] as const) {
+        const wrapper = mountAs('v1', role, { subPhase, dayNumber: 2 })
+        expect(turn(wrapper).exists(), role).toBe(false)
+        expect(sleeping(wrapper), role).toBe(true)
+        expect(wrapper.find('.rb').exists(), role).toBe(false)
+      }
+    },
+  )
+
+  it('a dead gargoyle sees the sleep screen', () => {
+    const wrapper = mountAs('g1', 'GARGOYLE', { subPhase: 'GARGOYLE_PICK', dayNumber: 2 }, false)
+    expect(turn(wrapper).exists()).toBe(false)
+    expect(sleeping(wrapper)).toBe(true)
+  })
+
+  it('the gargoyle sees closed eyes in WEREWOLF_PICK unless it is the lone killer', () => {
+    const asPack = mountAs('g1', 'GARGOYLE', { subPhase: 'WEREWOLF_PICK', dayNumber: 2 })
+    expect(asPack.find('[data-testid="wolf-confirm-kill"]').exists()).toBe(false)
+    expect(sleeping(asPack)).toBe(true)
+    const alone = mountAs('g1', 'GARGOYLE', {
+      subPhase: 'WEREWOLF_PICK',
+      dayNumber: 3,
+      wolfKiller: true,
+    })
+    expect(alone.find('[data-testid="wolf-confirm-kill"]').exists()).toBe(true)
+  })
+})
+
 describe('NightPhase - pick actions keep the screen until the result arrives', () => {
   const pl = (userId: string, seatIndex: number): GamePlayer => ({
     userId,

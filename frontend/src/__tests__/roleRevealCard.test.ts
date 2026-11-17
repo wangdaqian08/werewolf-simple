@@ -52,4 +52,12 @@ describe('RoleRevealCard — 机械狼 and 通灵师', () => {
     expect(wrapper.find('.role-label-special').exists()).toBe(true)
     expect(wrapper.find('[data-testid="role-reveal-desc"]').text()).toContain('被投票放逐')
   })
+
+  it('gargoyle card shows the gargoyle name, wolf styling, no teammates, and its rule', () => {
+    const wrapper = mount(RoleRevealCard, { props: { role: 'GARGOYLE', revealed: true } })
+    expect(wrapper.text()).toContain('石像鬼')
+    expect(wrapper.find('.role-label-wolf').exists()).toBe(true)
+    expect(wrapper.find('.role-teammates').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="role-reveal-desc"]').text()).toContain('具體身份')
+  })
 })

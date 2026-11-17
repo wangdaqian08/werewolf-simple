@@ -12,6 +12,8 @@ import { audioService } from '@/services/audioService'
 import type { AudioSequence } from '@/types'
 
 const HIGH_VOL_NIGHT_SUBPHASES: ReadonlySet<string> = new Set([
+  'GARGOYLE_PICK',
+  'GARGOYLE_RESULT',
   'WEREWOLF_PICK',
   'MECH_WOLF_PICK',
   'MECH_WOLF_RESULT',
