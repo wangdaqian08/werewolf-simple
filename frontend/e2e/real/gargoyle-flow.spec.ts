@@ -243,7 +243,14 @@ test.describe('Gargoyle (real backend)', () => {
     await game.hostPage.goto(`/review/${game.gameId}`)
     const review = game.hostPage.getByTestId('game-review')
     await expect(review).toBeVisible({ timeout: scale(10_000) })
-    await expect(review).toContainText('石像鬼')
+    // G15: one row per night, "🗿 石像鬼 N號 驗 M號 暱稱〔身份〕", with the exact role it was told.
+    const row = (seat: number, role: string) =>
+      new RegExp(
+        `🗿\\s*石像鬼\\s*(?<!\\d)${gargoyle.seat}號\\s*驗\\s*(?<!\\d)${seat}號[^〔\\n]*〔${role}〕`,
+      )
+    await expect(review, 'N1: the seer').toContainText(row(seer.seat, '預言家'))
+    await expect(review, 'N2: pack wolf B').toContainText(row(wolfB.seat, '狼人'))
+    await expect(review, 'N3: a villager').toContainText(row((checked as BotInfo).seat, '村民'))
     await captureSnapshot(game.pages, testInfo, 'review')
 
     // ── Backend evidence ──
