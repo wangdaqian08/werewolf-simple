@@ -1254,6 +1254,10 @@ onMounted(async () => {
         if (data.type === 'HunterShot') {
           await refreshState()
         }
+        // 殉情 (day): the victim dies silently → re-fetch for the banner state
+        if (data.type === 'PlayerCharmDeath') {
+          await refreshState()
+        }
         // Sheriff badge transferred or destroyed → re-fetch updated sheriff state
         if (data.type === 'BadgeHandover') {
           await refreshState()

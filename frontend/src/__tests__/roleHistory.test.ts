@@ -116,6 +116,14 @@ describe('RoleHistory', () => {
     expect(rows(wrapper)).toEqual(['第1夜 · 查驗 2號 Amy → 預言家', '第2夜 · 查驗 4號 Bob → 狼人'])
   })
 
+  it('wolf beauty: each charm names the charmed player', async () => {
+    const wrapper = await openPanel({
+      role: 'WOLF_BEAUTY',
+      entries: [{ round: 2, action: 'CHARM', target: ref('Amy', 2) }],
+    })
+    expect(rows(wrapper)).toEqual(['第2夜 · 魅惑 2號 Amy'])
+  })
+
   it('gravekeeper: GRAVE entry reads "{seat} 是狼人" or "是好人"', async () => {
     const wrapper = await openPanel({
       role: 'GRAVEKEEPER',

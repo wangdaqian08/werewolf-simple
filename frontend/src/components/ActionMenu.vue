@@ -292,6 +292,7 @@ const inSelfDestructWindow = computed(
 const canSelfDestruct = computed(
   () =>
     isPackWolfRole(props.myRole) &&
+    props.myRole !== 'WOLF_BEAUTY' &&
     props.isAlive &&
     inSelfDestructWindow.value &&
     !props.daySkipVoting,

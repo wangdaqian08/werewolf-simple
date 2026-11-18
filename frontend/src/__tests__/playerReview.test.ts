@@ -141,6 +141,23 @@ describe('PlayerReview', () => {
     expect(text({ type: 'GRAVEKEEPER', exiled: null, result: null })).toContain('⚰ 無人被放逐')
   })
 
+  it('player review shows the 狼美人 charm and a day 殉情 with the beauty named', () => {
+    const r = review({ me: seat(14, 'Bea', 'WOLF_BEAUTY') })
+    r.rounds[0]!.night!.action = {
+      type: 'WOLF_BEAUTY',
+      teammates: [],
+      target: seat(2, 'Bob'),
+      selfKill: false,
+      charm: seat(4, 'Dana'),
+    }
+    r.rounds[0]!.events = [
+      { type: 'CHARM_DEATH', beauty: seat(14, 'Bea'), victim: seat(4, 'Dana') },
+    ]
+    const text = mount(PlayerReview, { props: { review: r } }).text()
+    expect(text).toContain('🌹 我魅惑 4號 Dana')
+    expect(text).toContain('🌹 14號 Bea 出局，殉情帶走 4號 Dana')
+  })
+
   it('player review: a learned alignment check shows wolf or good, never a role', () => {
     const r = review({ me: seat(10, 'Mia', 'MECHANICAL_WOLF') })
     const base = {

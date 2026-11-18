@@ -807,7 +807,7 @@ const prevGuardPlayer = computed(() =>
 // ── Slot variant / target wrappers (bind props) ──────────────────────────────
 
 const wolfVariantFn = (p: GamePlayer) => wolfVariant(p, effectivePhase.value, props.myUserId)
-const isWolfTargetFn = (p: GamePlayer) => isWolfTarget(p, props.myUserId)
+const isWolfTargetFn = (p: GamePlayer) => isWolfTarget(p, props.myUserId, props.nightPhase.wolfBeautyUserId)
 const seerVariantFn = (p: GamePlayer) => seerVariant(p, effectivePhase.value, props.myUserId)
 const isSeerTargetFn = (p: GamePlayer) => isSeerTarget(p, props.myUserId)
 const guardVariantFn = (p: GamePlayer) => guardVariant(p, effectivePhase.value)

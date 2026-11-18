@@ -244,6 +244,12 @@ function gargoyleSegs(g: NonNullable<ReviewNight['gargoyle']>): Seg[] {
     : [head, seg(t('rv.noCheck'))]
 }
 
+function wolfBeautySegs(b: NonNullable<ReviewNight['wolfBeauty']>): Seg[] {
+  const head = seg(t('rv.wolfBeautyHead', { seat: t('common.seat', { n: b.actor.seatIndex }) }))
+  if (b.dead) return [head, seg(t('rv.dead'))]
+  return b.target ? [head, seg(t('rv.charm')), name(b.target)] : [head, seg(t('rv.noCharm'))]
+}
+
 function witchSegs(w: NonNullable<ReviewNight['witch']>): Seg[] {
   const head = seg(t('rv.witchHead', { seat: t('common.seat', { n: w.actor.seatIndex }) }))
   if (w.dead) return [head, seg(t('rv.dead'))]
@@ -280,6 +286,7 @@ function nightLines(n: ReviewNight): Line[] {
     // 先驗後刀: the gargoyle's turn opens the night.
     n.gargoyle && gargoyleSegs(n.gargoyle),
     wolfSegs(n.wolf),
+    n.wolfBeauty && wolfBeautySegs(n.wolfBeauty),
     n.mech && mechSegs(n.mech),
     n.seer && seerSegs(n.seer),
     n.medium && mediumSegs(n.medium),

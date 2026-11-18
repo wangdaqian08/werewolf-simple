@@ -23,8 +23,13 @@ export function wolfVariant(
 }
 
 // Wolves may target anyone alive — including a teammate or themselves (自刀).
-export function isWolfTarget(p: GamePlayer, _myUserId: string): boolean {
-  return p.isAlive
+// The one exception: the pack cannot knife its own 狼美人 (the server rejects it too).
+export function isWolfTarget(
+  p: GamePlayer,
+  _myUserId: string,
+  wolfBeautyUserId?: string | null,
+): boolean {
+  return p.isAlive && p.userId !== wolfBeautyUserId
 }
 
 // ── Seer ──────────────────────────────────────────────────────────────────────

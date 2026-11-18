@@ -877,3 +877,34 @@ describe('NightPhase - host narration line', () => {
     expect(w.find('[data-testid="sleep-screen-title"]').text()).toBe('請閉眼')
   })
 })
+
+describe('NightPhase - the pack greys out the 狼美人', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+  const pl = (userId: string, seatIndex: number): GamePlayer => ({
+    userId,
+    nickname: userId,
+    seatIndex,
+    isAlive: true,
+    isSheriff: false,
+  })
+
+  it('the 狼美人 teammate is aria-disabled in the kill picker; the others are not', () => {
+    const wrapper = mount(NightPhase, {
+      props: {
+        nightPhase: {
+          subPhase: 'WEREWOLF_PICK',
+          dayNumber: 1,
+          wolfKiller: true,
+          wolfBeautyUserId: 'b1',
+        },
+        players: [pl('w1', 1), pl('b1', 2), pl('v1', 3)],
+        myUserId: 'w1',
+        myRole: 'WEREWOLF',
+      },
+    })
+    const slots = wrapper.findAll('.player-slot')
+    expect(slots.map((s) => s.attributes('aria-disabled'))).toEqual([undefined, 'true', undefined])
+  })
+})

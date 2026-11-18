@@ -88,6 +88,17 @@ describe('ActionMenu', () => {
     wrapper.unmount()
   })
 
+  it('狼美人 never sees the self-destruct option (it has no 自爆)', async () => {
+    const wrapper = mount(ActionMenu, {
+      props: makeProps({ phase: 'DAY_DISCUSSION', myRole: 'WOLF_BEAUTY', isAlive: true }),
+      attachTo: document.body,
+    })
+    await wrapper.find('[data-testid="action-menu-btn"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(document.querySelector('[data-testid="action-menu-self-destruct"]')).toBeFalsy()
+    wrapper.unmount()
+  })
+
   it('villager in DAY_DISCUSSION sees "暫無操作" after opening menu', async () => {
     const wrapper = mount(ActionMenu, {
       props: makeProps({ phase: 'DAY_DISCUSSION', myRole: 'VILLAGER' }),

@@ -1122,3 +1122,53 @@ describe('VotingPhase — role card history', () => {
     expect(document.body.style.position).toBe('')
   })
 })
+
+describe('VotingPhase - 殉情 banner', () => {
+  const mountVoting = (charmDeath: VotingState['charmDeath']) => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div></div>' } }],
+    })
+    const votingPhase: VotingState = {
+      dayNumber: 1,
+      subPhase: 'VOTE_RESULT',
+      phaseStarted: Date.now() - 10000,
+      phaseDeadline: Date.now() + 60000,
+      canVote: false,
+      votesSubmitted: 0,
+      totalVoters: 0,
+      tallyRevealed: true,
+      tally: [],
+      charmDeath,
+    }
+    return mount(VotingPhase, {
+      global: { plugins: [pinia, router] },
+      props: {
+        gameId: 1,
+        votingPhase,
+        players: [],
+        myUserId: 'x',
+        isHost: false,
+        settings: {} as GameSettings,
+      },
+    })
+  }
+
+  it('shows the charm-death banner from state whenever charmDeath is set', () => {
+    const w = mountVoting({
+      beautySeatIndex: 3,
+      beautyNickname: 'Bea',
+      victimSeatIndex: 5,
+      victimNickname: 'Vic',
+    })
+    expect(w.find('[data-testid="charm-death-banner"]').text()).toContain(
+      '3號 · Bea（狼美人）出局，5號 · Vic殉情出局',
+    )
+  })
+
+  it('no charmDeath → no banner', () => {
+    expect(mountVoting(null).find('[data-testid="charm-death-banner"]').exists()).toBe(false)
+  })
+})

@@ -100,6 +100,25 @@
         </div>
       </div>
 
+      <!-- 殉情: built from state (never from event order) -->
+      <div v-if="charmDeath" class="banner banner-kill" data-testid="charm-death-banner">
+        <span class="banner-avatar">🌹</span>
+        <div class="banner-kill-text">
+          <span class="banner-kill-red">{{
+            $t('day.charmDeath', {
+              beauty: $t('common.seatDot', {
+                n: charmDeath.beautySeatIndex,
+                name: charmDeath.beautyNickname,
+              }),
+              victim: $t('common.seatDot', {
+                n: charmDeath.victimSeatIndex,
+                name: charmDeath.victimNickname,
+              }),
+            })
+          }}</span>
+        </div>
+      </div>
+
       <!-- Knight duel (決鬥): public, camp only — never which wolf (K9). -->
       <div v-if="knightDuel" class="banner banner-kill" data-testid="day-banner-knight-duel">
         <span class="banner-avatar">⚔️</span>
@@ -561,6 +580,7 @@ const killedPlayers = computed(() => props.dayPhase.nightResult?.killedPlayers ?
 
 // The wolf who self-destructed (自爆) this day — surfaced in the death-banner
 // area alongside any night kills. Cleared server-side at night-init.
+const charmDeath = computed(() => props.dayPhase.charmDeath ?? null)
 const selfDestruct = computed(() => props.dayPhase.selfDestruct ?? null)
 // The knight's duel this day (public, camp only). Cleared server-side at night-init.
 const knightDuel = computed(() => props.dayPhase.knightDuel ?? null)
