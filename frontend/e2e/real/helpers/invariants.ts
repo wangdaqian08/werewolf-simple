@@ -56,11 +56,20 @@ export const PHASE_RANK: Record<string, number> = Object.freeze({
 /** Standalone constant so direct access avoids noUncheckedIndexedAccess. */
 const GAME_OVER_RANK = 9999
 
+// All NightSubPhase values (Enums.kt), in enum order.
 const NIGHT_SUBS = new Set([
   'WAITING',
+  'GARGOYLE_PICK',
+  'GARGOYLE_RESULT',
   'WEREWOLF_PICK',
+  'WOLF_BEAUTY_PICK',
+  'MECH_WOLF_PICK',
+  'MECH_WOLF_RESULT',
   'SEER_PICK',
   'SEER_RESULT',
+  'MEDIUM_PICK',
+  'MEDIUM_RESULT',
+  'GRAVEKEEPER_RESULT',
   'WITCH_ACT',
   'GUARD_PICK',
   'COMPLETE',

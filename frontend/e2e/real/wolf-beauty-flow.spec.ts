@@ -112,6 +112,7 @@ test.describe('Wolf Beauty (real backend)', () => {
     test.setTimeout(process.env.CI ? 720_000 : 360_000)
 
     const payloads = new Map<string, PayloadLog>()
+    const pageOf = new Map<string, Page>() // the page each log was recorded on (labels move on a swap)
     ctx = await setupGame(browser, {
       totalPlayers: 9,
       hasSheriff: false,
@@ -119,7 +120,10 @@ test.describe('Wolf Beauty (real backend)', () => {
       roles: ROLES,
       // The VILLAGER page becomes the 狼美人's when the host rolled it (swap below).
       browserRoles: ['WOLF_BEAUTY', 'VILLAGER'],
-      onPage: (label, p) => payloads.set(label, recordPayloads(p)),
+      onPage: (label, p) => {
+        payloads.set(label, recordPayloads(p))
+        pageOf.set(label, p)
+      },
     })
     const game = ctx
     const logStart = readBackendLogLineCount()
@@ -132,21 +136,45 @@ test.describe('Wolf Beauty (real backend)', () => {
     let bPageOrNone = game.pages.get('WOLF_BEAUTY')
     if (game.hostRole !== 'VILLAGER') {
       const pagedVillager = game.bots.get('VILLAGER')
+      const villagerPage = game.pages.get('VILLAGER')
       assertNonNull(pagedVillager, 'a villager bot with a page')
+      assertNonNull(villagerPage, 'the villager browser page')
+      const hostWasBeauty = game.hostRole === 'WOLF_BEAUTY'
       // A host 狼美人 hands its role to the villager whose page is open; any other host
       // role goes to the villager without one.
-      const partner =
-        game.hostRole === 'WOLF_BEAUTY'
-          ? pagedVillager
-          : nonHost(game, 'VILLAGER').find((v) => v.userId !== pagedVillager.userId)
+      const partner = hostWasBeauty
+        ? pagedVillager
+        : nonHost(game, 'VILLAGER').find((v) => v.userId !== pagedVillager.userId)
       assertNonNull(partner, 'a dealt villager to swap with')
       await swapRoles(game.hostPage, Number(game.gameId), hostId, partner.userId)
-      if (game.hostRole === 'WOLF_BEAUTY') bPageOrNone = game.pages.get('VILLAGER')
+      if (hostWasBeauty) {
+        // The paged villager now holds the 狼美人: relabel so failure composites name pages right.
+        bPageOrNone = villagerPage
+        game.pages.set('WOLF_BEAUTY', villagerPage)
+        game.pages.set('VILLAGER', game.hostPage)
+        game.bots.delete('VILLAGER')
+        game.bots.set('WOLF_BEAUTY', pagedVillager)
+      }
       game.roleMap = getRoles(game.roomCode)
       game.hostRole = 'VILLAGER'
       game.isHostRole = (role) => role === 'VILLAGER'
       // Scan only what each page receives in its final role.
       for (const log of payloads.values()) log.bodies.length = 0
+      // GameView's confirmed flag is local: a reload brings the card back, and it must show
+      // the page's NEW role (the swap happens in ROLE_REVEAL, before the night).
+      const reconfirm = async (page: Page, role: RoleName) => {
+        await page.reload()
+        const reveal = page.getByTestId('reveal-role-btn')
+        await reveal.waitFor({ state: 'visible', timeout: scale(15_000) })
+        await reveal.click()
+        await expect(page.getByTestId('role-reveal-card')).toHaveAttribute('data-role', role)
+        await page.getByTestId('confirm-role-btn').click()
+      }
+      if (hostWasBeauty) await reconfirm(villagerPage, 'WOLF_BEAUTY')
+      await reconfirm(game.hostPage, 'VILLAGER')
+      await expect(game.hostPage.getByTestId('start-night')).toBeVisible({
+        timeout: scale(15_000),
+      })
     }
     assertNonNull(bPageOrNone, 'the 狼美人 browser page')
     const bPage: Page = bPageOrNone
@@ -260,7 +288,7 @@ test.describe('Wolf Beauty (real backend)', () => {
 
     // ── Leak scan before game over (it reveals every role): only the 狼美人's page gets `wolfBeauty` ──
     for (const [label, log] of payloads) {
-      const page = label === 'HOST' ? game.hostPage : game.pages.get(label)
+      const page = pageOf.get(label)
       assertNonNull(page, `${label} page`)
       const role = page === bPage ? 'WOLF_BEAUTY' : 'VILLAGER'
       const me = await page.evaluate(() => localStorage.getItem('userId'))
