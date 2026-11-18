@@ -190,6 +190,30 @@
                 </div>
               </div>
 
+              <!-- Day 殉情 (public, Q13): after the exit that caused it -->
+              <div v-if="round.charmDeaths.length > 0" class="log-section">
+                <div
+                  v-for="c in round.charmDeaths"
+                  :key="c.victimUserId"
+                  class="log-row"
+                  data-testid="log-charm-death"
+                >
+                  🌹
+                  {{
+                    $t('day.charmDeath', {
+                      beauty: $t('common.seatDot', {
+                        n: c.beautySeatIndex,
+                        name: c.beautyNickname,
+                      }),
+                      victim: $t('common.seatDot', {
+                        n: c.victimSeatIndex,
+                        name: c.victimNickname,
+                      }),
+                    })
+                  }}
+                </div>
+              </div>
+
               <!-- Knight duel (camp only, never which wolf) -->
               <div
                 v-if="round.knightDuels.length > 0"
@@ -232,6 +256,7 @@ import { useScrollLock } from '@/composables/useScrollLock'
 import { gameService } from '@/services/gameService'
 import type {
   ActionLogEntry,
+  CharmDeathPayload,
   HunterShotPayload,
   IdiotRevealPayload,
   KnightDuelPayload,
@@ -251,6 +276,7 @@ interface Round {
   deaths: NightDeathPayload[]
   voteResult: VoteResultPayload | null
   hunterShots: HunterShotPayload[]
+  charmDeaths: CharmDeathPayload[]
   idiotReveals: IdiotRevealPayload[]
   selfDestructs: SelfDestructPayload[]
   knightDuels: KnightDuelPayload[]
@@ -271,6 +297,7 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         deaths: [],
         voteResult: null,
         hunterShots: [],
+        charmDeaths: [],
         idiotReveals: [],
         selfDestructs: [],
         knightDuels: [],
@@ -293,6 +320,9 @@ function buildRounds(entries: ActionLogEntry[]): Round[] {
         break
       case 'HUNTER_SHOT':
         getOrCreate(day).hunterShots.push(payload as HunterShotPayload)
+        break
+      case 'CHARM_DEATH':
+        getOrCreate(day).charmDeaths.push(payload as CharmDeathPayload)
         break
       case 'IDIOT_REVEAL':
         getOrCreate(day).idiotReveals.push(payload as IdiotRevealPayload)

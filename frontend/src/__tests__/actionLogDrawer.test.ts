@@ -224,3 +224,35 @@ describe('ActionLogDrawer — KNIGHT_DUEL entry', () => {
     wrapper.unmount()
   })
 })
+
+describe('ActionLogDrawer — CHARM_DEATH entry (day 殉情)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('shows the 狼美人 going out and the player it took along', async () => {
+    vi.mocked(gameService.getActionLog).mockResolvedValue([
+      makeEntry('CHARM_DEATH', {
+        dayNumber: 2,
+        wolfBeautyUserId: 'u-b',
+        beautyNickname: 'Bella',
+        beautySeatIndex: 3,
+        victimUserId: 'u-v',
+        victimNickname: 'Vic',
+        victimSeatIndex: 8,
+      }),
+    ])
+    const wrapper = mount(ActionLogDrawer, {
+      props: { gameId: 42, open: false },
+      attachTo: document.body,
+    })
+    await wrapper.setProps({ open: true })
+    await new Promise((r) => setTimeout(r, 0))
+    await wrapper.vm.$nextTick()
+
+    const row = document.body.querySelector('[data-testid="log-charm-death"]')
+    expect(row?.textContent).toContain('3號 · Bella（狼美人）出局，8號 · Vic殉情出局')
+    wrapper.unmount()
+  })
+})

@@ -1127,9 +1127,16 @@ export interface ActionLogEntry {
     | 'KNIGHT_DUEL'
     | 'BADGE_HANDOVER'
     | 'DECLARED_OUT'
+    | 'CHARM_DEATH' // only a day 殉情 reaches the client; the server drops night ones (W11)
   message: string // raw JSON — parse per eventType
   targetUserId: string | null
   createdAt: string | null
+}
+
+export interface CharmDeathPayload extends CharmDeath {
+  dayNumber: number
+  wolfBeautyUserId: string
+  victimUserId: string
 }
 
 export interface NightDeathPayload {
