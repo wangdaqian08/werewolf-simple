@@ -1,0 +1,393 @@
+# 狼美人 (Wolf Beauty) and 猎魔人 (Demon Hunter): game design
+
+- Date: 2026-11-18. Status: **rules confirmed by the owner (O1–O6, A–G); M decided; technical design checked line by line against main `b5de135` — no code yet.**
+- Two roles, two PRs (one role each, TDD), after the owner signs off this doc.
+
+## Why
+
+The owner chose these two as the next roles on 2026-11-18. They were preferred over 混血儿, whose camp is only
+decided during the game, which breaks the fixed `PlayerRole.isWolf` model behind the win check, settlement and
+tasks.
+
+- **狼美人** adds play to the wolf side. Recent roles (骑士、守墓人) were mostly good-side.
+  - Its published board is **狼美人骑士** (12 players: 预言家、女巫、守卫、骑士、4 平民 / 3 狼人 + 狼美人).
+  - Every role on that board already exists.
+- **猎魔人** is a good-side god. Its rules are clear, and it reuses the existing "pick at night → resolve
+  deaths at dawn" pattern.
+  - Its published board partner (血月使徒) is not in the game, so it is used in custom boards.
+
+**No extra role is needed for balance.** The existing setup limits cover both:
+- 狼美人 is a special wolf:
+  - the role page requires 9+ players (`RoomSetupPanel.vue:243-249`);
+  - the role page **and** the backend require wolves ≥ special wolves + 1 (`RoomService.kt:505-520`).
+- 猎魔人 is a god: the role page keeps gods within [wolves − 1, wolves + 1] (`RoomSetupPanel.vue:270-278`).
+  - This is a frontend policy only: the backend checks just "wolves + gods ≤ seats" (`RoomService.kt:450-452`).
+
+## Sources (checked 2026-11-18)
+
+1. [游民岛: 骑士决斗狼美人可以殉情吗](https://www.youmindao.com/langrensha/211.html)
+2. [LAL 狼人杀: 狼美骑士版型规则](https://werewolves.games/lang-mei-qi-shi/)
+3. [口袋狼人杀: 狼美人介绍](https://www.langrensha.net/strategy/2023031001.html)
+4. [维基学院: 狼美人](https://zh.wikiversity.org/zh-my/%E7%8B%BC%E4%BA%BA%E6%AE%BA/%E9%81%8A%E6%88%B2%E8%A7%92%E8%89%B2/%E7%8B%BC%E7%BE%8E%E4%BA%BA)
+5. [游民岛: 狼美人规则](http://www.youmindao.com/langrensha/185.html), [87G](https://www.87g.com/lrs/60500.html)
+6. [维基学院: 猎魔人](https://zh.wikiversity.org/wiki/%E7%8B%BC%E4%BA%BA%E6%AE%BA/%E9%81%8A%E6%88%B2%E8%A7%92%E8%89%B2/%E7%8D%B5%E9%AD%94%E4%BA%BA)
+7. [百度百科: 猎魔人（网易）](https://baike.baidu.com/item/%E7%8C%8E%E9%AD%94%E4%BA%BA/24158357) (search summary only: the page returns 403)
+8. [腾讯新闻: 狼人杀规则总结](https://news.qq.com/rain/a/20210428A0AW0L00) (the guard blocks only the wolf knife)
+
+## Owner decisions (2026-11-18)
+
+| # | Decision |
+|---|---|
+| O1 | 狼美人 **cannot charm on night 1**. |
+| O2 | 狼美人 **cannot charm the same player two nights in a row**. |
+| O3 | 狼美人 poisoned at night → the charmed player **still 殉情**. Write this clearly in the role text. |
+| O4 | 狼美人 **cannot charm a wolf teammate**. |
+| O5 | The guard **cannot** block a hunt. |
+| O6 | Only one new exclusion: **机械狼 ↔ 猎魔人**. 狼美人 gets none. |
+
+## 狼美人 `WOLF_BEAUTY` — rules
+
+| # | Rule | Basis |
+|---|---|---|
+| W1 | Wolf camp, a **pack wolf**. It knows the pack, joins the wolf discussion and kill, and counts as a wolf for every win check. It is a special wolf: same limits as 白狼王 / 黑狼王 / 机械狼 / 石像鬼. | sources 2, 4 |
+| W2 | Each night from **night 2**, after the wolf kill, it wakes alone and may charm one living player. The step plays every night. When it is dead, the step runs on the dead-role delay. On **night 1**, a living 狼美人 sees 「首夜不能魅惑」 and must tap 確認, which sends `WOLF_BEAUTY_SKIP`: the night loop waits for an action from every living role (`NightOrchestrator.kt:713-749`), the same as the gravekeeper's night-1 confirm. | O1, sources 3, 4 |
+| W3 | Charm target: alive, not itself, **not a pack wolf** (the server rejects them; the UI greys them out), and **not last night's target**. It may skip (C). The 石像鬼 and 机械狼 are not in the pack, so it may charm them (D). | O2, O4, C, D |
+| W4 | The charm is private. The pack, the charmed player and the shared screen are not told. | sources 2, 4 ("单独睁眼") |
+| W5 | **Only the latest night's charm counts.** If it charmed A on night 2 and nobody on night 3, nobody dies with it on day 3. | sources 4, 2 ("上一夜/当晚被魅惑") |
+| W6 | When 狼美人 is out, the charmed player is out too (**殉情**) and **cannot use any skill**: a charmed 猎人 does not shoot. | sources 3, 4 |
+| W7 | 殉情 happens for **every** way 狼美人 goes out (vote-out, hunter or 黑狼王 shot, 白狼王 take, any poison: the witch's or a mechanical wolf's learned poison, 猎魔人 hunt) **except**: a **骑士 duel** (no 殉情, D2), and a **host declare-out** (the player left the game; that is not a death in play). | O3, source 1, D2 |
+| W8 | It **cannot self-destruct**. The wolves **cannot knife it** (不能自刀); the server rejects that kill target. | sources 2, 3, 4, 5 |
+| W9 | The guard, the witch's antidote and a mechanical wolf's learned guard shield do not stop a 殉情. | source 2 (the charm is not a wolf knife); M |
+| W10 | The seer and the gravekeeper see it as a wolf. The medium and the gargoyle see `WOLF_BEAUTY`. A mechanical wolf that checks it learns no skill, like every other wolf. | existing role rules |
+| W11 | A night 殉情 joins the dawn death list (seat order, no cause, as today). A day 殉情 happens at once after 狼美人 goes out, before the win check, and the shared screen says "M號殉情出局" (B). | engine: `computeKills`, win check |
+| W12 | A charmed sheriff who 殉情 still hands over the badge (G). The badge is not a role skill. It is handed over like the voted-out, shot, duelled or taken sheriff today. A self-destructing or declared-out sheriff's badge is destroyed instead (`SelfDestructService.kt:106-110`, `HostDeclareOutService.kt:93-97`). | `BADGE_HANDOVER` |
+| W13 | The gravekeeper's "yesterday's vote-out" is 狼美人 when it was voted out. The 殉情 player is never a vote-out. | gravekeeper rules |
+| W14 | The post-game review shows "N號（狼美人）魅惑 M號" each night. The public 游戏记录 shows only deaths. | gargoyle G15 pattern |
+
+### Edge cases (resolved by the rules above)
+
+- **The charmed 猎人 is also knifed that night**, and 狼美人 dies the same night (poison or hunt): no shot.
+  W6 wins, the same as a poisoned 猎人 today.
+- **狼美人 is the last wolf and is voted out, and the 殉情 wipes the gods**: the villagers win. The villager
+  win is checked first (`WinConditionChecker`).
+- **A voted-out 猎人 shoots 狼美人**: it dies → 殉情 → win check.
+- **The charmed player is the 白痴**: it dies. The 白痴 is only protected from the vote.
+- **The charmed player is a knight that has not dueled**: it dies and cannot duel.
+
+## 猎魔人 `DEMON_HUNTER` — rules
+
+| # | Rule | Basis |
+|---|---|---|
+| H1 | Good camp, a **god**. It counts as a god for 屠边, the god cap and the role-pick card. | sources 6, 7 |
+| H2 | From **night 2**, each night it may hunt one living player other than itself, or skip. The step plays every night. When it is dead, the step runs on the dead-role delay. On **night 1**, a living 猎魔人 sees 「首夜不能狩獵」 and must tap 確認 (`DEMON_HUNTER_SKIP`), for the same reason as W2. | sources 6, 7 |
+| H3 | The target is a **wolf** (any wolf role) → the target dies. The target is **good** → the 猎魔人 dies. Resolved at dawn with the other night deaths. | sources 6, 7 |
+| H4 | **The witch's poison cannot kill it.** The poison is still used up. | sources 3, 6, 7 |
+| H5 | The **guard** and the witch's antidote do **not** stop a hunt death, either the target's or the 猎魔人's own. | O5, source 8 |
+| H6 | A hunted 黑狼王 **does not shoot** (A). This is **not** fully automatic. `DayRevealAdvancer.nightShooterId` (`:64-75`) grants a shot to the wolf-knife victim, so a 黑狼王 that the wolves knifed **and** the 猎魔人 hunted on the same night would get a shot. Add one guard next to the existing poison guard (`:68`): wolf target == tonight's hunt death → no shot. | analogy: a poisoned 狼王 cannot shoot |
+| H7 | A hunted 狼美人 → its charmed player 殉情 (W7). | O3 |
+| H8 | It may hunt a player the wolves knifed that night. The deaths resolve together. | engine (deaths resolve at dawn) |
+| H9 | **Exclusion: 机械狼 ↔ 猎魔人** (`BLOCKED_WITH`, `RoomService.validateRoleComposition`, start-game check, and the god maximum leaves out a blocked god). | O6, D4 pattern |
+| H10 | The seer and the gravekeeper see it as good; the medium and the gargoyle see `DEMON_HUNTER` (a god, so it counts toward the gargoyle's "2 gods" task). | existing role rules |
+| H11 | The post-game review shows "N號（猎魔人）狩獵 M號：狼人/好人". The public 游戏记录 shows only deaths. | gargoyle G15 pattern |
+
+## Role texts
+
+The owner is worried that role intros keep getting longer (2026-11-18). The app already shows role text in three
+layers (`i18n/locales/*.ts`, `role.*`):
+
+| Key | Where it shows | Length rule for the new roles |
+|---|---|---|
+| `descShort` | the role-details sheet header (`roleDescription(id, true)`, `RoleCardSheet.vue:18`, its only caller) | **one line** |
+| `desc` | the role card a player sees when roles are dealt (`RoleRevealCard.vue:23`) | **at most two short sentences**: what the role does, plus the one rule a player must not miss |
+| `rules` | the 規則 list in the role-details sheet, one line each (`RoleCardSheet.vue:40-43`, split on `\n`) | **every rule goes here**, including M and all edge cases; one rule per line |
+
+The excluded roles are shown automatically from `BLOCKED_WITH` (`RoleCardSheet.vue:31-38`), so they are not
+repeated in `rules`.
+
+### 狼美人 `WOLF_BEAUTY`
+
+- `descShort`: 每晚魅惑一名玩家；你出局時，被魅惑的玩家殉情。
+- `desc`: 夜晚與狼隊一起襲擊，第二晚起每晚可魅惑一名玩家。你出局時，最近一晚被魅惑的玩家隨之殉情。
+- `rules`:
+  1. 陣營：狼人陣營（屬於狼隊）。
+  2. 夜晚與狼隊一起襲擊。預言家、守墓人查驗你的結果是狼人，通靈師、石像鬼查驗顯示為狼美人。
+  3. 第二晚起，狼人襲擊後你單獨睜眼，可魅惑一名存活玩家，也可以跳過；首夜不能魅惑。
+  4. 不能魅惑自己或狼隊友，不能連續兩晚魅惑同一名玩家。
+  5. 你出局時，最近一晚被你魅惑的玩家隨之殉情出局，且不能發動技能（例如獵人不能開槍）；更早的魅惑不算。
+  6. 被投出、被開槍帶走、被白狼王帶走、被毒死（女巫或機械狼）、被獵魔人狩獵時都會殉情；只有被騎士決鬥或被房主判定出局時不會殉情。
+  7. 守衛、女巫解藥、機械狼學到的守護都擋不住殉情。
+  8. 白天殉情時公布「N號殉情出局」；夜晚殉情和其他死訊一起公布，不顯示死因。殉情的玩家是警長時照常移交警徽。
+  9. 不能自爆；狼隊不能襲擊你。
+- en:
+  - `descShort`: Charms one player each night; when you go out, the charmed player goes with you.
+  - `desc`: Kills with the pack at night, and from night 2 may charm one player each night. When you go out, the player charmed on the latest night goes out with you.
+  - `rules`, the same nine lines in English.
+
+### 猎魔人 `DEMON_HUNTER`
+
+- `descShort`: 第二晚起每晚可狩獵一人：獵到狼人則狼人出局，獵到好人則你出局。
+- `desc`: 第二晚起，每晚可狩獵一名玩家：對方是狼人則對方出局，是好人則你出局。女巫的毒藥毒不死你。
+- `rules`:
+  1. 陣營：好人陣營（神職）。
+  2. 第二晚起，每晚可狩獵一名存活玩家（不能是自己），也可以跳過；首夜不能狩獵。
+  3. 對方是狼人（包括狼王、狼美人、石像鬼）：對方出局；對方是好人：你出局。天亮時和其他死訊一起公布，不顯示死因。
+  4. 女巫的毒藥毒不死你，但毒藥照樣算用掉。
+  5. 守衛、女巫解藥都擋不住狩獵造成的死亡。
+  6. 被你狩獵出局的黑狼王不能開槍；被你狩獵出局的狼美人，她魅惑的玩家照常殉情。
+  7. 預言家、守墓人查驗你的結果是好人，通靈師、石像鬼查驗顯示為獵魔人。
+- en:
+  - `descShort`: From night 2, hunt one player each night: a wolf goes out, a good player means you go out.
+  - `desc`: From night 2, may hunt one player each night: a wolf target goes out; a good target means you go out. The witch's poison cannot kill you.
+  - `rules`, the same seven lines in English.
+
+### Existing roles: only lines that would become wrong
+
+Change only the `rules` lines that would be **false** once a new role is on the board. Leave every `desc` and
+`descShort` alone, so no existing intro gets longer. The full exception lists already live in `rules`.
+
+| Role | Current `rules` text | Change | PR |
+|---|---|---|---|
+| 狼人 | 可以襲擊任何存活玩家，包括隊友或自己（自刀）。 | add 「（狼美人除外）」 | 2 |
+| 獵人 | 被女巫毒死或被白狼王帶走時不能開槍 | 被女巫毒死、被白狼王帶走或殉情時不能開槍 | 2 |
+| 黑狼王 | 被女巫毒死、自爆、被白狼王帶走或被騎士決鬥時不能開槍 | add 「被獵魔人狩獵」 | 1 |
+| 守墓人 | 被開槍、被決鬥、被白狼王帶走、被房主判定出局、白癡翻牌都不算 | add 「殉情」 | 2 |
+
+The 獵人 `desc` (「被女巫毒死或被白狼王帶走時無法開槍」) stays as it is. It does not list every case today
+either: 「你的出局已決定勝負時也不能開槍」 is only in `rules`.
+
+## Night order
+
+The wake order is each handler's `@Order` (`NightOrchestrator.nightSequence`, `:154-163`). It is the order of
+the injected `handlers` list. On main today:
+
+```
+石像鬼 (0) → 狼人 (1) → 机械狼 (2) → 女巫 (3) → 预言家 (4) → 通灵师 (5) → 守墓人 (6) → 守卫 (7)
+```
+
+The witch wakes **before** the seer, as pinned by `AudioPhaseMappingTest.kt:294` (WITCH_ACT → SEER_PICK).
+
+The new order:
+
+```
+石像鬼 (0) → 狼人 (1) → 狼美人 (2) → 机械狼 (3) → 女巫 (4) → 预言家 (5) → 通灵师 (6) → 守墓人 (7) → 猎魔人 (8) → 守卫 (9)
+```
+
+- 狼美人 comes straight after the wolf kill, as the sources say ("刀人后单独睁眼"). `@Order` values are
+  integers and no slot is free between 1 and 2, so PR 2 shifts 机械狼 … 守卫 up by one. Only the relative order
+  matters (Spring sorts the list); the non-night handlers 平民 (10), 猎人 (11) and 白痴 (12) are unaffected.
+- 猎魔人's place changes no information, because every death resolves at dawn. It goes after the gravekeeper
+  and before the guard (PR 1: 猎魔人 8, 守卫 8 → 9). The guard stays last, which the code comments describe
+  (`NightOrchestrator.kt:63`, `:448`). The morning-cue delay itself runs after whichever role is last, so this
+  is not a hard constraint.
+- Both steps play their open/close narration every night, including night 1 and when dead (ADR-010
+  dead-role rule; dead path `NightOrchestrator.kt:750-765`, same total delay).
+
+## Anti-goals (a failure even if it works)
+
+- **A tell in the night flow.** Order, timing or sub-phase changes that depend on whether the role is alive,
+  acted or skipped.
+- **A charm leak.** The pack, the charmed player, the state API or the shared screen learn the charm target
+  before a 殉情.
+- **A cause leak at dawn.** The dawn list shows which death was a hunt, a poison or a 殉情.
+- **Regressions.** Any existing board plays differently.
+
+## Owner decisions, round 2 (2026-11-18: "同意建议")
+
+| # | Decision |
+|---|---|
+| A | A 黑狼王 hunted by the 猎魔人 **does not shoot**. |
+| B | When 狼美人 goes out by day, the shared screen says **"M號殉情出局"**. A night 殉情 is a plain name in the dawn list. |
+| C | 狼美人 **may skip** the charm. |
+| D | 狼美人 **may charm the 石像鬼 or the 机械狼** (it does not know them). They then 殉情 like anyone else. |
+| E | A living 猎魔人 **counts as HARD_MODE counterplay**. |
+| F | New 单局任务: 狼美人 `WOLF_BEAUTY_LINK_GOD` 「殉情帶走一名神職」 **20**; 猎魔人 `DEMON_HUNTER_HUNT_WOLF` 「狩獵到一隻狼人」 **10**. |
+| G | A charmed sheriff who 殉情 **hands over the badge**. |
+
+## Owner decision, round 3 (2026-11-18)
+
+| # | Decision |
+|---|---|
+| M | A mechanical wolf's learned guard shield **does not stop** a 殉情, the same as the guard (W9). Write it in the role's rules. |
+
+## How this was checked
+
+Every statement about existing code in this doc was read in the source on main `b5de135`, with file and line.
+Nothing was assumed. In particular:
+
+- `VotingPipeline.kt`, all 685 lines: every death site and every badge path (X2–X5).
+- The night loop, kill resolution and night-end win check in `NightOrchestrator.kt`.
+- `DayRevealAdvancer.kt`, `GamePhasePipeline.revealNightResult`.
+- `SelfDestructService.kt`, `KnightDuelService.kt`, `HostDeclareOutService.kt`.
+- The day and voting state in `GameService.kt`, the review builders, `RoomService.validateRoleComposition`,
+  the handlers' `@Order`, and migrations V1 / V19 / V37.
+
+What this check changed from the first draft:
+
+1. **Night order.** The witch wakes before the seer (`@Order` 3 vs 4), not after it.
+2. **Night 1.** A living role must still send an action (the loop waits), so night 1 accepts only SKIP, through a
+   確認 tap.
+3. **H6.** A 黑狼王 that is both knifed and hunted would get a shot today, so a guard is needed.
+4. **Badge.**
+   - A voted-out sheriff dies first and then hands over; only a shot sheriff is deferred.
+   - New branch X4(c): a deferred 狼美人 sheriff passes the badge to the charmed player.
+5. **W12 wording.** A self-destructing or declared-out sheriff's badge is destroyed, not handed over.
+6. **Day 殉情 banner.** It must be a saved field (`games.charm_death_user_id`) to survive a reload.
+7. **Special-wolf list.** The backend list is hard-coded, so it is not automatic.
+8. **New question M**, which the owner then decided.
+
+## Technical design
+
+Two PRs, in this order. Each PR is one role, TDD, with its own migration and a real-backend E2E in a CI shard.
+
+1. **猎魔人 first** (smaller): a new night pick step, plus changes to the dawn death resolution.
+2. **狼美人 second** (larger): a new mechanism, **chained death (殉情)**, that touches every place a player
+   goes out. `docs/new-role.md` deferred 狼美人 for exactly this reason.
+
+### PR 1 — 猎魔人 `DEMON_HUNTER`
+
+**Wire contract**
+
+| Item | Value |
+|---|---|
+| Role | `PlayerRole.DEMON_HUNTER` (good; `isGod` is automatic) / `'DEMON_HUNTER'` |
+| Room flag | `rooms.has_demon_hunter` / `Room.hasDemonHunter` |
+| Sub-phase | `DEMON_HUNTER_PICK` (one step; there is no result screen, because the result is the dawn death list) |
+| Actions | `DEMON_HUNTER_HUNT` (target required), `DEMON_HUNTER_SKIP`. Both end the turn. Night 1: only `DEMON_HUNTER_SKIP` is accepted (the 確認 tap). Dead: no action; the loop runs the dead-role delay. |
+| Night columns | `night_phases.demon_hunter_target_user_id`, `night_phases.demon_hunter_hit_wolf` (set when the hunt is submitted, like `seer_is_wolf`) |
+| Private state | `nightPhase.demonHunter = { canHunt: boolean, history: [{ round, seatIndex, nickname, hitWolf }] }` |
+| Audio | `demon_hunter_open_eyes.mp3` / `demon_hunter_close_eyes.mp3` (0-byte placeholders until the owner supplies them) |
+| Migration | `V38__demon_hunter.sql`: room flag, two night columns, role CHECKs re-created with the full role set, sub-phase CHECK (V37 pattern) |
+
+**Server rules — where each goes**
+
+| Rule | Where |
+|---|---|
+| H2 | `DemonHunterHandler` (new, modelled on `GargoyleHandler`). It rejects: a hunt on night 1, a dead actor, itself, a dead target, and a second action. `@Order(8)`, and the guard moves to 9. |
+| H3, H5 | `NightOrchestrator.computeKills`. A hunt adds the target (when `hitWolf`) or the 猎魔人 (when not). The guard, the antidote and the night-1 perk never filter it. The mechanical wolf's shield cannot apply, because 机械狼 ↔ 猎魔人 is excluded. |
+| H4 | `computeKills`. A witch poison aimed at the 猎魔人 is dropped. The poison still counts as used, because "used" is read from `witch_poison_target_user_id != null` (`WitchHandler.kt:58`, `WinConditionChecker.kt:45`), which is still set. `computeKills` needs the roster (see "computeKills call sites" below). |
+| H6 | `DayRevealAdvancer.nightShooterId`: add the hunt-death guard (see rule H6), with a test for "knifed + hunted 黑狼王 → no shot". |
+| H9 | `BLOCKED_WITH` (`DEMON_HUNTER: ['MECHANICAL_WOLF']`, and add `DEMON_HUNTER` to the `MECHANICAL_WOLF` list), `RoomService.validateRoleComposition` (next to the existing pairs at `:496-504`), and the start-game check |
+| E | `HardModeCounterplay.hasDemonHunter = alive.any { it.role == DEMON_HUNTER }` |
+| F | `GameTask.DEMON_HUNTER_HUNT_WOLF(10)`; eligible only for `DEMON_HUNTER`. Done = some night where this player is the hunter and `demon_hunter_hit_wolf = true`. `Facts` reads it from `night_phases`. Register it in the `GameTasksTest` guard table. |
+
+**Touchpoints** (template: the gargoyle PR #203 file list)
+
+- Backend:
+  - `Enums.kt`, `Room.kt`, `NightPhase.kt`, the migration and `FlywayMigrationsIntegrationTest`;
+  - `DemonHunterHandler`, `GameActionDispatcher` (dispatch + `TURN_SUB_PHASE`), `NightOrchestrator.activeNightRoles`;
+  - `RoleDealer`, `RoomService`, `GameService` (private state);
+  - the audio config, `RoleDelayConfig`;
+  - the review builders and DTOs, `RoleHistoryBuilder`, `GameStateLogger`;
+  - `GameTask`, `GameTasks`, `RewardSettlementService.taskFacts`;
+  - `scripts/act.sh` / `roles.sh`.
+- Frontend:
+  - `types/index.ts`, `roleDefinitions.ts`, i18n zh/en (name, intro, rules, turn texts, task name);
+  - `DemonHunterTurn.vue` (pick + skip, modelled on `GargoyleTurn.vue`), `NightPhase.vue`, the narration mapping;
+  - the role card, composition, history, review pages, mocks.
+- Docs: `docs/new-role.md` status row, `docs/narration-scripts.md`.
+
+### PR 2 — 狼美人 `WOLF_BEAUTY`
+
+**Wire contract**
+
+| Item | Value |
+|---|---|
+| Role | `PlayerRole.WOLF_BEAUTY(isWolf = true)`, a pack wolf (`isPackWolf` stays true) / `'WOLF_BEAUTY'` |
+| Room flag | `rooms.has_wolf_beauty` / `Room.hasWolfBeauty`; a special wolf: the role page's 9+ players rule (automatic, derived from `ROLE_DEFINITIONS`), and the backend's wolves ≥ specials + 1 rule (add it to the hard-coded list) |
+| Sub-phase | `WOLF_BEAUTY_PICK`, right after `WEREWOLF_PICK` |
+| Actions | `WOLF_BEAUTY_CHARM` (target required), `WOLF_BEAUTY_SKIP`. Both end the turn. Night 1: only `WOLF_BEAUTY_SKIP` is accepted (the 確認 tap). Dead: no action; the loop runs the dead-role delay. |
+| Night column | `night_phases.wolf_beauty_charm_user_id` |
+| New domain event | `DomainEvent.PlayerCharmDeath(gameId, userId)` with `@JsonTypeName("PlayerCharmDeath")`, broadcast after commit. The shared screen shows "M號殉情出局". |
+| New game event | `CHARM_DEATH` (payload `wolfBeautyUserId`, `victimUserId`), via `ActionLogService.recordCharmDeath`. It is used by the review and the task. It is **not** written to `elimination_history`, because a 殉情 is not a vote-out (W13). |
+| Private state | `nightPhase.wolfBeauty = { canCharm, lastNightTargetUserId, result: null \| { targetSeatIndex, targetNickname } \| 'SKIP', history }` |
+| Audio | `wolf_beauty_open_eyes.mp3` / `wolf_beauty_close_eyes.mp3` (0-byte placeholders until supplied) |
+| Migration | `V39__wolf_beauty.sql`: room flag, night column, role CHECKs, sub-phase CHECK |
+
+**The 殉情 mechanism — one rule, called from every exit**
+
+One function holds the rule, e.g. `RoleRules.charmVictim(outUserId, players, todaysNight)`. It returns the
+charmed player's user id or `null`. It returns an id only when all of these hold:
+
+- the player going out is the `WOLF_BEAUTY`;
+- the caller is not the duel or the declare-out (those never call it: W7);
+- **today's** night row has a `wolf_beauty_charm_user_id`. Today's row is the one with
+  `day_number == game.dayNumber`: a night and the day after it share a day number (`NightOrchestrator.kt:590-591`),
+  so this is the latest night (W5);
+- that player is still alive.
+
+**The victim always dies at once, in the same transaction as 狼美人 and before that exit's win check.** It is
+never "deferred" like a shot sheriff. It gets no shot (W6). It has no 殉情 of its own: there is only one
+狼美人, and it never charms a pack wolf.
+
+Night 1 never has a charm (O1), so **no 殉情 can happen during the day-1 sheriff campaign**. The campaign-time
+paths that apply last night's kills early (`SelfDestructService.kt:73-75, 181-184`, `HostDeclareOutService.kt:109-110, 121-124`)
+can therefore never contain one. They still go through `computeKills`, so they stay consistent.
+
+**Every exit, as the code works on main today, and what PR 2 adds:**
+
+| # | Exit | How it works today | What PR 2 adds |
+|---|---|---|---|
+| X1 | **Dawn** (any poison or a hunt kills 狼美人) | `revealNightResult` (`GamePhasePipeline.kt:59-78`) applies `computePendingKills`, then routes a dead sheriff to `BADGE_HANDOVER` via `DayRevealAdvancer.nextSubPhase` (`:36-46`). The night-end win check uses the same list as projected deaths (`NightOrchestrator.kt:344-369`). | `computeKills` adds the victim when 狼美人 is in the list. The dawn list, the projected win check and the sheriff routing then all include it with no further change. `nightShooterId` must return `null` if the wolf-knife victim is the 殉情 victim (W6). |
+| X2 | **Vote-out** of 狼美人 | `collectEliminationEvents` (`VotingPipeline.kt:597-639`): kills at once, writes `elimination_history`, checks the win, opens a shooter's shot, and routes to `BADGE_HANDOVER` **only if the voted-out player is the sheriff** (`:634`). | After `:599`, kill the victim and record `CHARM_DEATH`, before the win check at `:613`. The badge route at `:634` must also fire when **the victim** is the sheriff. The victim is not written to `elimination_history` (W13). |
+| X3 | **Day shot after a vote-out** (hunter / 黑狼王 shoots 狼美人), non-sheriff target | `votingShot` (`:284-288`): kills at once, then `afterHunterAct` (`:453-478`) checks the win and routes a dead sheriff to `BADGE_HANDOVER` (`:469-471`). | Kill the victim right after `:284`. `afterHunterAct`'s dead-sheriff check already covers a sheriff victim. |
+| X4 | **Day shot after a vote-out**, the target 狼美人 **is the sheriff** | `votingShot` defers the death (`:272-281`): she stays alive through `BADGE_HANDOVER`, and `commitDeferredHunterShotIfAny` (`:394-410`) kills her inside `handleBadge`, keyed on `elimination_history.hunter_shot_user_id`. Then `afterElimination` (`:427-440`) checks the win. | (a) `projectedWinner` (`:663-672`), which decides "kill now vs defer", must count the victim as dead too. (b) In `commitDeferredHunterShotIfAny`, kill the victim with her. (c) **New branch:** if she passed the badge **to the charmed player**, the new sheriff is now dead. `handleBadge` has already set `VOTE_RESULT` (`:334-335`), so it must route to `BADGE_HANDOVER` again for the new dead sheriff. (d) If the host declares her out mid-handover, `HostDeclareOutService.kt:69-84` calls `handleBadge(BADGE_DESTROY)`, which commits the deferred **shot** death, so 殉情 fires; the cause is the shot, not the declare-out. |
+| X5 | **Day shot by a night-killed shooter** (hunter / 黑狼王 shoots 狼美人 during the day reveal) | `nightDeathShot` (`:487-515`): kills at once, checks the win (POST_NIGHT), and routes a dead sheriff via `nextSubPhase`. | Kill the victim right after `:488`, before the win check. The sheriff routing already covers a sheriff victim. |
+| X6 | **白狼王 takes 狼美人** (`DAY_DISCUSSION / RESULT_REVEALED` only, because night 1 has no charm) | `SelfDestructService` (`:115-119`): the taken player dies. A taken sheriff is routed via `nextSubPhase` (`:144-149`). The win check excludes the actor and the taken player (`:169-171`). | Kill the victim with the taken player. Exclude it in the win check at `:169-171`. Extend the routing at `:144` to "the taken player **or the victim** is the sheriff". |
+| X7 | **骑士 duel** on 狼美人 | `KnightDuelService` (`:64-66`) | Nothing: no 殉情 (D2). |
+| X8 | **Host declare-out** of 狼美人 | `HostDeclareOutService` (`:89-97`) | Nothing: no 殉情 (W7). |
+
+**Also required**
+
+- **Day 殉情 banner that survives a reload (B).**
+  - The day banners are rebuilt from saved fields: `selfDestruct` and `knightDuel` (`GameService.kt:380-401`),
+    and the vote result (`:464-492`).
+  - Add `games.charm_death_user_id`. Clear it at night-init, next to `selfDestructUserId` (`NightOrchestrator.kt:823-824`).
+  - Expose it as `charmDeath` in both `dayPhase` (exits X5, X6) and `votingPhase` (X2–X4).
+  - A night 殉情 needs none of this: it is inside the `nightResult` list (X1).
+- **Review.** Add `CHARM_DEATH` to `DAY_EVENT_TYPES` in `GameReviewBuilder.kt:22` and in `PlayerReviewBuilder`.
+  `game_events.event_type` has no CHECK constraint (V1, V19), so the new type needs no migration.
+- **`computeKills` call sites.** It needs the roster to tell who is the 猎魔人 (H4) and the 狼美人 (X1). It has 9
+  callers, and all of them have the roster:
+  - `NightOrchestrator.kt:345, 558, 579`;
+  - `GamePhasePipeline.kt:63`;
+  - `SelfDestructService.kt:74`;
+  - `HostDeclareOutService.kt:110`;
+  - `GameService.kt:362`;
+  - `GameReviewBuilder.kt:53` and `PlayerReviewBuilder.kt:55` (both have `players` in scope).
+  PR 1 adds the parameter (for H4). PR 2 uses it for X1.
+- **W8.**
+  - `WerewolfHandler` today accepts any living target, teammates included (`:80-83`). Reject the `WOLF_BEAUTY`
+    as a target; the pack's kill UI greys it out.
+  - `SelfDestructService.kt:57` allows every pack wolf, and 狼美人 is one, so add an explicit rejection. Hide
+    the 自爆 button for it.
+- **D.** The charm check rejects only pack wolves (`isPackWolf`, `Enums.kt:31`), never a 石像鬼 / 机械狼, so a
+  rejection can never reveal a hidden wolf.
+- **Special-wolf list.** The backend list is hard-coded at `RoomService.kt:505-508`: add `WOLF_BEAUTY`. The
+  frontend derives it from `ROLE_DEFINITIONS` (`RoomSetupPanel.vue:248`), so it updates automatically.
+- **Night order.** Shift `@Order` 2…7 up by one; 狼美人 takes 2 (see Night order).
+- **F.** `GameTask.WOLF_BEAUTY_LINK_GOD(20)`, eligible only for `WOLF_BEAUTY`. Done = a `CHARM_DEATH` event
+  whose `wolfBeautyUserId` is this player and whose victim is a god. Register it in the `GameTasksTest` guard
+  table.
+
+**Touchpoints**
+
+- Everything PR 1 lists for a night role, plus:
+  - `VotingPipeline`, `SelfDestructService`, `DayRevealAdvancer`, `WerewolfHandler`, `ActionLogService`, `DomainEvent`;
+  - the frontend handling of `PlayerCharmDeath` (the day announcement), `WolfBeautyTurn.vue`, the wolf kill
+    picker, and the 自爆 button.
+
+## Tests (each PR; all must pass)
+
+| Layer | PR 1 猎魔人 | PR 2 狼美人 |
+|---|---|---|
+| Backend unit | H2 rejections (a hunt on N1, self, dead target, dead actor; N1 SKIP accepted); H3 wolf → target dies, good → hunter dies; H4 poison dropped but used up; H5 guard / antidote do not block; H6 knifed + hunted 黑狼王 no shot; H9 exclusion (room + start); E counterplay; F task done / not done + guard table | W2/W3 rejections (a charm on N1, self, pack wolf, last night's target, dead; N1 SKIP accepted); D charming 石像鬼 accepted; W5 latest night only; W6 charmed 猎人 no shot (vote, night); W7 殉情 on each exit X1–X6, none on X7 / X8; X4(a) projection, X4(c) badge passed to the charmed player → handover again, X4(d) declared out mid-handover → 殉情; X2 / X6 victim-is-sheriff routing; reload shows `charmDeath`; W8 knife and 自爆 rejected; win projection with 殉情; G badge; F task |
+| Backend integration | full night with hunt → dawn deaths; migration | vote-out → 殉情 → win check; poison → 殉情 in the dawn list; 白狼王 take → 殉情; events recorded and settled |
+| Frontend unit | turn component, i18n keys, `BLOCKED_WITH` | turn component, kill picker greys 狼美人, 自爆 hidden, `PlayerCharmDeath` announcement |
+| Real E2E (new CI shard entry) | hunt a wolf (dies) and a good player (hunter dies) across nights; role-leak scan | charm, then vote 狼美人 out → "M號殉情出局"; result + review pages; role-leak scan |
+
+## Out of scope
+
+- A one-tap 狼美人骑士 board preset.
+- Any change to existing boards or to other roles' rules.
+- Item 5 (功能狼点将卡, on hold): if it resumes, 狼美人 is a 功能狼 candidate.
+- The real narration audio: the owner generates it (ttsmaker.com, voice **1506-AI 阿乐**, then `loudnorm`).
