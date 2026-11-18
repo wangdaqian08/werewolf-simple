@@ -886,6 +886,7 @@ describe('useAudioService', () => {
     'GRAVEKEEPER_RESULT',
     'GARGOYLE_PICK',
     'GARGOYLE_RESULT',
+    'WOLF_BEAUTY_PICK',
   ])('BGM stays at HIGH tier during %s, like every other role turn', async (subPhase) => {
     const gameStore = useGameStore()
     setupComposable()

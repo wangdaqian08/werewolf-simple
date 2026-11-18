@@ -148,6 +148,14 @@ function actionSegs(a: MyNightAction): Seg[] {
       if (!a.target) return [head, seg(t('rv.noKill'))]
       return [head, seg(a.selfKill ? t('rv.selfKill') : t('rv.kill')), ...withTag(a.target)]
     }
+    case 'WOLF_BEAUTY': {
+      // The pack's turn, then its own charm.
+      const pack = actionSegs({ ...a, type: 'WOLF' })
+      const charm = a.charm
+        ? [seg(t('pr.wolfBeautyCharm')), ...withTag(a.charm)]
+        : [seg(t('pr.wolfBeautyNone'))]
+      return [...pack, seg(t('common.comma')), ...charm]
+    }
     case 'SEER':
       return a.target
         ? [
@@ -312,6 +320,8 @@ function eventSegs(e: Exclude<PlayerDayEvent, PlayerVote>): Seg[] {
         ...(e.to ? [seg(t('rv.badgeTo')), ...withTag(e.to)] : [seg(t('rv.badgeTorn'))]),
         ...(e.points != null ? [gain(e.points)] : []),
       ]
+    case 'CHARM_DEATH':
+      return [seg('🌹 '), ...withTag(e.beauty), seg(t('rv.charmDeath')), ...withTag(e.victim)]
   }
 }
 

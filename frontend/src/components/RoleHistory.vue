@@ -66,6 +66,8 @@ function describe(e: RoleHistoryEntry): string {
       return t('roleHistory.antidote', { who: who(e.target) })
     case 'POISON':
       return t('roleHistory.poison', { who: who(e.target) })
+    case 'CHARM':
+      return t('roleHistory.charm', { who: who(e.target) })
   }
 }
 </script>

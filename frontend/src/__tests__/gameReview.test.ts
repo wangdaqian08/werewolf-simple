@@ -45,6 +45,7 @@ const night = (over: Partial<ReviewNight> = {}): ReviewNight => ({
   medium: null,
   gravekeeper: null,
   gargoyle: null,
+  wolfBeauty: null,
   witch: { actor: witch, dead: false, antidote: null, poison: null },
   guard: { actor: guard, dead: false, target: null },
   dawn: { deaths: [], saved: null },

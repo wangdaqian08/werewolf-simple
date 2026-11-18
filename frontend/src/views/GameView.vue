@@ -631,6 +631,8 @@ const NIGHT_TURN_ACTIONS = new Set([
   'GARGOYLE_CHECK',
   'GARGOYLE_SKIP',
   'GARGOYLE_CONFIRM',
+  'WOLF_BEAUTY_CHARM',
+  'WOLF_BEAUTY_SKIP',
 ])
 
 // Wraps gameService.submitAction to always include the gameId from the route

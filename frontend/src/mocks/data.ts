@@ -1371,6 +1371,7 @@ export const MOCK_GAME_REVIEW: GameReview = {
         medium: null,
         gravekeeper: null,
         gargoyle: null,
+        wolfBeauty: null,
         dawn: { deaths: [], saved: { player: R3, by: 'ANTIDOTE' } },
       },
       events: [
@@ -1426,6 +1427,7 @@ export const MOCK_GAME_REVIEW: GameReview = {
         medium: null,
         gravekeeper: null,
         gargoyle: null,
+        wolfBeauty: null,
         dawn: {
           deaths: [
             { player: R2, cause: 'WOLF' },
@@ -1463,6 +1465,7 @@ export const MOCK_GAME_REVIEW: GameReview = {
         medium: null,
         gravekeeper: null,
         gargoyle: null,
+        wolfBeauty: null,
         dawn: { deaths: [{ player: R8, cause: 'WOLF' }], saved: null },
       },
       events: [

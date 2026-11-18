@@ -129,6 +129,7 @@ const CAUSE = {
   WOLF: 'rv.cause.WOLF',
   POISON: 'rv.cause.POISON',
   BOTH_SAVES: 'rv.cause.BOTH_SAVES',
+  CHARM: 'rv.cause.CHARM',
 } as const
 const SAVED_BY = {
   GUARD: 'rv.saved.GUARD',
@@ -363,6 +364,8 @@ function eventSegs(e: Exclude<ReviewDayEvent, ReviewVote>): Seg[] {
         ...withRole(e.from),
         ...(e.to ? [seg(t('rv.badgeTo')), ...withRole(e.to)] : [seg(t('rv.badgeTorn'))]),
       ]
+    case 'CHARM_DEATH':
+      return [seg('🌹 '), ...withRole(e.beauty), seg(t('rv.charmDeath')), ...withRole(e.victim)]
   }
 }
 
