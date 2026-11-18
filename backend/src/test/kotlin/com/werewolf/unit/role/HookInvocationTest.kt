@@ -123,6 +123,7 @@ class HookInvocationTest {
         hostTimerService = hostTimerService,
         dayRevealAdvancer = mock(),
         rewardSettlementService = mock(),
+        charmDeathService = mock(),
     )
 
     // ── onDayEnter ───────────────────────────────────────────────────────────

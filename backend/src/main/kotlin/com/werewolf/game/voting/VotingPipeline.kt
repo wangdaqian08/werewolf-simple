@@ -18,6 +18,7 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.VoteRepository
 import com.werewolf.service.ActionLogService
+import com.werewolf.service.CharmDeathService
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.RewardSettlementService
 import com.werewolf.service.StompPublisher
@@ -42,6 +43,7 @@ class VotingPipeline(
     private val hostTimerService: HostTimerService,
     private val dayRevealAdvancer: DayRevealAdvancer,
     private val rewardSettlementService: RewardSettlementService,
+    private val charmDeathService: CharmDeathService,
 ) {
     private val log = LoggerFactory.getLogger(VotingPipeline::class.java)
 
@@ -264,12 +266,18 @@ class VotingPipeline(
         // A shot shooter fires next. It dies at once, even as sheriff.
         val nextShooter = target.takeIf { RoleRules.shootsOnDeath(targetPlayer) }
 
+        // 狼美人 shot: the charmed player 殉情 at the shot, even before a sheriff's handover (Q10, W15).
+        val charm = charmDeathService.onDayExit(context, target)
+        val charmWinner = charm?.winner
+
         // Sheriff target: defer the kill (国标 rule — the dying sheriff
         // performs the badge handover BEFORE being marked dead).
         // handleBadge.BADGE_PASS / BADGE_DESTROY commits the kill once
         // the heir is chosen.
         // A shot that ends the game kills at once: no handover for a lost cause.
-        if (nextShooter == null && target == context.game.sheriffUserId && projectedWinner(context, target) == null) {
+        if (charmWinner == null && nextShooter == null && target == context.game.sheriffUserId &&
+            projectedWinner(context, setOfNotNull(target, charm?.victimUserId)) == null
+        ) {
             context.game.pendingShooterUserId = null
             context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
             gameRepository.save(context.game)
@@ -285,6 +293,11 @@ class VotingPipeline(
         targetPlayer.diedDay = context.game.dayNumber
         gamePlayerRepository.save(targetPlayer)
         stompPublisher.broadcastGameAfterCommit(context.gameId, DomainEvent.PlayerEliminated(context.gameId, target))
+        if (charmWinner != null) {
+            context.game.pendingShooterUserId = null
+            endGame(context, charmWinner)
+            return
+        }
         afterHunterAct(context, nextShooter)
     }
 
@@ -489,8 +502,13 @@ class VotingPipeline(
         targetPlayer.diedDay = context.game.dayNumber
         gamePlayerRepository.save(targetPlayer)
         stompPublisher.broadcastGameAfterCommit(context.gameId, DomainEvent.PlayerEliminated(context.gameId, target))
+        val charmWinner = charmDeathService.onDayExit(context, target)?.winner
 
         context.game.pendingShooterUserId = null
+        if (charmWinner != null) {
+            endGame(context, charmWinner)
+            return
+        }
         val updatedContext = contextLoader.load(context.gameId)
         val winner = winConditionChecker.check(
             alivePlayers = updatedContext.alivePlayers,
@@ -609,6 +627,13 @@ class VotingPipeline(
 
         events.add(DomainEvent.PlayerEliminated(context.gameId, targetId))
 
+        // 狼美人 voted out: the charmed player 殉情 first; a side it wipes out wins at once (W15).
+        val charm = charmDeathService.onDayExit(context, targetId)
+        if (charm?.winner != null) {
+            endGame(context, charm.winner, events)
+            return
+        }
+
         // The game ends the moment a side wins: no hunter shot, no badge handover.
         val updatedContext = contextLoader.load(context.gameId)
         val winner = winConditionChecker.check(
@@ -630,8 +655,8 @@ class VotingPipeline(
             gameRepository.save(context.game)
         }
 
-        // Sheriff needs to pass the badge
-        if (targetId == context.game.sheriffUserId) {
+        // Sheriff needs to pass the badge (the voted-out player, or the one who 殉情)
+        if (targetId == context.game.sheriffUserId || (charm != null && charm.victimUserId == context.game.sheriffUserId)) {
             context.game.subPhase = VotingSubPhase.BADGE_HANDOVER.name
             gameRepository.save(context.game)
             events.add(DomainEvent.PhaseChanged(context.gameId, GamePhase.DAY_VOTING, VotingSubPhase.BADGE_HANDOVER.name))
@@ -659,9 +684,9 @@ class VotingPipeline(
         nightOrchestrator.initNight(context.gameId, newDayNumber, currentGuardTarget)
     }
 
-    /** The winner if [deadUserId] died now, or null. */
-    private fun projectedWinner(context: GameContext, deadUserId: String): WinnerSide? {
-        val alive = context.alivePlayers.filterNot { it.userId == deadUserId }
+    /** The winner if [deadUserIds] died now, or null. */
+    private fun projectedWinner(context: GameContext, deadUserIds: Set<String>): WinnerSide? {
+        val alive = context.alivePlayers.filterNot { it.userId in deadUserIds }
         return winConditionChecker.check(
             alivePlayers = alive,
             mode = context.room.winCondition,

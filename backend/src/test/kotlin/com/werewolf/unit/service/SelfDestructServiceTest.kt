@@ -11,6 +11,8 @@ import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.UserRepository
 import com.werewolf.service.ActionLogService
+import com.werewolf.service.CharmDeathService
+import com.werewolf.service.CharmOutcome
 import com.werewolf.service.SelfDestructService
 import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
@@ -37,6 +39,7 @@ class SelfDestructServiceTest {
     @Mock lateinit var winConditionChecker: WinConditionChecker
     @Mock lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
     @Mock lateinit var dayRevealAdvancer: com.werewolf.game.phase.DayRevealAdvancer
+    @Mock lateinit var charmDeathService: CharmDeathService
 
     private lateinit var selfDestructService: SelfDestructService
 
@@ -52,6 +55,7 @@ class SelfDestructServiceTest {
             winConditionChecker,
             rewardSettlementService,
             dayRevealAdvancer,
+            charmDeathService,
         )
     }
 
@@ -636,5 +640,74 @@ class SelfDestructServiceTest {
         assertThat(beauty.alive).isTrue()
         verify(gamePlayerRepository, never()).save(any<GamePlayer>())
         verify(gameRepository, never()).save(any<Game>())
+    }
+    // ── 白狼王 takes the 狼美人: the charmed player 殉情 too (X6) ─────────────────
+
+    @Test
+    fun `X6 - the king takes the WOLF_BEAUTY - the charmed player is out of the win check`() {
+        val king = kingPlayer()
+        val beauty = player("wb", 5, PlayerRole.WOLF_BEAUTY)
+        val charmed = villagePlayer()
+        val ctx = context(players = listOf(king, beauty, wolfPlayer(), charmed, player("v2", 4, PlayerRole.VILLAGER)))
+        ctx.game.dayNumber = 2
+        stubKingTakes(ctx, king, beauty)
+        // The real service kills the victim on a fresh row; the context row stays as loaded.
+        whenever(charmDeathService.onDayExit(any(), eq("wb"))).thenReturn(CharmOutcome(villageId, null))
+
+        selfDestructService.selfDestruct(req(kingId, "wb"), ctx)
+
+        verify(charmDeathService).onDayExit(any(), eq("wb"))
+        val captor = argumentCaptor<List<GamePlayer>>()
+        verify(winConditionChecker).check(captor.capture(), any(), any(), any(), any())
+        assertThat(captor.firstValue.map { it.userId }).containsExactlyInAnyOrder(wolfId, "v2")
+    }
+
+    @Test
+    fun `X6 G - the charmed player is the sheriff - the day goes to BADGE_HANDOVER`() {
+        val king = kingPlayer()
+        val beauty = player("wb", 5, PlayerRole.WOLF_BEAUTY)
+        val sheriff = villagePlayer().also { it.sheriff = true }
+        val ctx = context(
+            game = game(subPhase = DaySubPhase.RESULT_REVEALED.name, sheriffUserId = villageId),
+            players = listOf(king, beauty, wolfPlayer(), sheriff, player("v2", 4, PlayerRole.VILLAGER)),
+        )
+        ctx.game.dayNumber = 2
+        stubKingTakes(ctx, king, beauty)
+        whenever(charmDeathService.onDayExit(any(), eq("wb"))).thenAnswer { sheriff.alive = false; CharmOutcome(villageId, null) }
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.BADGE_HANDOVER)
+
+        selfDestructService.selfDestruct(req(kingId, "wb"), ctx)
+
+        assertThat(ctx.game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        assertThat(ctx.game.sheriffUserId).isEqualTo(villageId)
+    }
+
+    @Test
+    fun `X6 W15 - a charm that wipes a side ends the game for the wolves`() {
+        val king = kingPlayer()
+        val beauty = player("wb", 5, PlayerRole.WOLF_BEAUTY)
+        val ctx = context(players = listOf(king, beauty, wolfPlayer(), villagePlayer(), player("v2", 4, PlayerRole.VILLAGER)))
+        ctx.game.dayNumber = 2
+        stubKingTakes(ctx, king, beauty)
+        whenever(charmDeathService.onDayExit(any(), eq("wb"))).thenReturn(CharmOutcome(villageId, WinnerSide.WEREWOLF))
+
+        selfDestructService.selfDestruct(req(kingId, "wb"), ctx)
+
+        assertThat(ctx.game.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(ctx.game.winner).isEqualTo(WinnerSide.WEREWOLF)
+        verify(winConditionChecker, never()).check(any(), any(), any(), any(), any())
+        verify(rewardSettlementService).settle(gameId, WinnerSide.WEREWOLF)
+    }
+
+    @Test
+    fun `a plain self-destruct asks for no charm`() {
+        val ctx = context(players = listOf(wolfPlayer(), wolfPlayer("wolf:002", 3), villagePlayer()))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, wolfId)).thenReturn(Optional.of(wolfPlayer()))
+        whenever(gamePlayerRepository.save(any<GamePlayer>())).thenAnswer { it.arguments[0] }
+        whenever(gameRepository.save(any<Game>())).thenReturn(ctx.game)
+
+        selfDestructService.selfDestruct(req(), ctx)
+
+        verifyNoInteractions(charmDeathService)
     }
 }

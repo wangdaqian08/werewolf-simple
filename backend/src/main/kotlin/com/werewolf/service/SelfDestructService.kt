@@ -36,6 +36,7 @@ class SelfDestructService(
     private val winConditionChecker: WinConditionChecker,
     private val rewardSettlementService: RewardSettlementService,
     private val dayRevealAdvancer: DayRevealAdvancer,
+    private val charmDeathService: CharmDeathService,
 ) {
     private val log = LoggerFactory.getLogger(SelfDestructService::class.java)
 
@@ -119,6 +120,8 @@ class SelfDestructService(
             takenPlayer.diedDay = context.game.dayNumber
             gamePlayerRepository.save(takenPlayer)
         }
+        // A taken 狼美人 takes its charmed player along (X6). Night 1 has no charm, so never in the campaign.
+        val charm = takenPlayer?.let { charmDeathService.onDayExit(context, it.userId) }
 
         // Set daySkipVoting flag + record who self-destructed (and whom they took)
         // for the day death banner. All three are cleared at night-init.
@@ -141,9 +144,10 @@ class SelfDestructService(
             }
         }
 
-        // A taken sheriff hands the badge over next (DayRevealAdvancer decides).
+        // A taken sheriff (or a sheriff who 殉情) hands the badge over next (DayRevealAdvancer decides).
         // While the night result is still hidden, the host's reveal does this routing.
-        val tookSheriff = takenPlayer != null && takenPlayer.userId == context.game.sheriffUserId
+        val sheriff = context.game.sheriffUserId
+        val tookSheriff = sheriff != null && (takenPlayer?.userId == sheriff || charm?.victimUserId == sheriff)
         if (tookSheriff && context.game.phase == GamePhase.DAY_DISCUSSION &&
             context.game.subPhase == DaySubPhase.RESULT_REVEALED.name
         ) {
@@ -169,9 +173,11 @@ class SelfDestructService(
 
         // Win-condition check (last wolf dying → villager win)
         val freshAlivePlayers = context.players.filter {
-            it.userId != request.actorUserId && it.userId != takenUserId && it.alive && it.userId !in pendingNightKills
+            it.userId != request.actorUserId && it.userId != takenUserId && it.userId != charm?.victimUserId &&
+                    it.alive && it.userId !in pendingNightKills
         }
-        val winner = winConditionChecker.check(
+        // A side the 殉情 wiped out has already won (W15).
+        val winner = charm?.winner ?: winConditionChecker.check(
             alivePlayers = freshAlivePlayers,
             mode = context.room.winCondition,
             trigger = WinCheckTrigger.POST_VOTE,
