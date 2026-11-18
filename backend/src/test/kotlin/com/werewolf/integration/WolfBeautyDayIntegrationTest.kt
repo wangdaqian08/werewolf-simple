@@ -30,6 +30,7 @@ import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRe
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
 import org.springframework.http.HttpEntity
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -65,6 +66,7 @@ class WolfBeautyDayIntegrationTest {
         /** 4 wolves (狼美人 + 3 pack), 4 gods, 4 villagers. */
         private val BOARD = listOf("WOLF_BEAUTY", "SEER", "WITCH", "HUNTER", "GUARD")
         private val KNIGHT_BOARD = listOf("WOLF_BEAUTY", "SEER", "WITCH", "KNIGHT", "GUARD")
+        private val KING_BOARD = listOf("WOLF_BEAUTY", "WHITE_WOLF_KING", "SEER", "WITCH", "GUARD")
     }
 
     private class Game(val hostId: String, val hostToken: String, val gameId: Int, val tokenByUserId: Map<String, String>) {
@@ -86,7 +88,7 @@ class WolfBeautyDayIntegrationTest {
         it.contentType = MediaType.APPLICATION_JSON
     }
 
-    private fun ok(token: String, gameId: Int, actionType: String, target: String? = null) {
+    private fun ok(token: String, gameId: Int, actionType: String, target: String? = null, payload: Map<String, Any?>? = null) {
         val resp = restTemplate.postForEntity(
             ACTION_URL,
             HttpEntity(
@@ -94,6 +96,7 @@ class WolfBeautyDayIntegrationTest {
                     put("gameId", gameId)
                     put("actionType", actionType)
                     if (target != null) put("targetUserId", target)
+                    if (payload != null) put("payload", payload)
                 },
                 headers(token),
             ),
@@ -164,13 +167,17 @@ class WolfBeautyDayIntegrationTest {
         gameRepository.findById(g.gameId).orElseThrow().let { it.phase == GamePhase.DAY_DISCUSSION && it.dayNumber == day }
     }
 
-    /** One night for the board left alive by the W15 test: the 狼美人 knifes, charms or skips; the seer checks it. */
-    private fun driveNight(g: Game, day: Int, knifeTarget: GamePlayer, charm: GamePlayer?) {
+    /** One night: the 狼美人 knifes, charms or skips; the seer checks it; a living witch acts with [witch]. */
+    private fun driveNight(g: Game, day: Int, knifeTarget: GamePlayer, charm: GamePlayer?, witch: Map<String, Any?>? = null) {
         waitForSubPhase(g, day, NightSubPhase.WEREWOLF_PICK)
         ok(g.token(g.beauty), g.gameId, "WOLF_KILL", knifeTarget.userId)
         waitForSubPhase(g, day, NightSubPhase.WOLF_BEAUTY_PICK)
         if (charm != null) ok(g.token(g.beauty), g.gameId, "WOLF_BEAUTY_CHARM", charm.userId)
         else ok(g.token(g.beauty), g.gameId, "WOLF_BEAUTY_SKIP")
+        if (witch != null) {
+            waitForSubPhase(g, day, NightSubPhase.WITCH_ACT)
+            ok(g.token(g.first(PlayerRole.WITCH)), g.gameId, "WITCH_ACT", payload = witch)
+        }
         val seer = g.first(PlayerRole.SEER)
         waitForSubPhase(g, day, NightSubPhase.SEER_PICK)
         ok(g.token(seer), g.gameId, "SEER_CHECK", g.beauty.userId)
@@ -197,6 +204,11 @@ class WolfBeautyDayIntegrationTest {
         game.dayNumber = 2
         gameRepository.save(game)
     }
+
+    /** The public 游戏记录 as GET /api/game/{id}/events serves it. */
+    private fun publicLog(g: Game): List<Map<*, *>> =
+        restTemplate.exchange("/api/game/${g.gameId}/events", HttpMethod.GET, HttpEntity<Void>(headers(g.hostToken)), List::class.java)
+            .body!!.map { it as Map<*, *> }
 
     private fun assertNoCharmDeath(g: Game, charmed: GamePlayer) {
         assertThat(alive(g, charmed)).describedAs("no 殉情").isTrue()
@@ -302,5 +314,59 @@ class WolfBeautyDayIntegrationTest {
 
         assertThat(alive(g, g.beauty)).isFalse()
         assertNoCharmDeath(g, charmed)
+    }
+
+    @Test
+    fun `X1 - a witch-poisoned 狼美人 takes its night-2 charm along at dawn, kept out of the public log`() {
+        val g = setupGame("WBP", BOARD)
+        val (v0, v1, v2) = g.villagers
+        // One pack wolf stays, so the poisoned 狼美人 does not end the game at night.
+        kill(*g.werewolves.drop(1).toTypedArray(), g.first(PlayerRole.GUARD))
+        val noPotion = mapOf("useAntidote" to false)
+
+        ok(g.hostToken, g.gameId, "START_NIGHT")
+        driveNight(g, 1, knifeTarget = v0, charm = null, witch = noPotion)
+        ok(g.hostToken, g.gameId, "REVEAL_NIGHT_RESULT")
+        ok(g.hostToken, g.gameId, "DAY_ADVANCE")
+        ok(g.hostToken, g.gameId, "VOTING_REVEAL_TALLY")
+        ok(g.hostToken, g.gameId, "VOTING_REVEAL_TALLY")
+
+        driveNight(g, 2, knifeTarget = v1, charm = v2, witch = noPotion + ("poisonTargetUserId" to g.beauty.userId))
+        ok(g.hostToken, g.gameId, "REVEAL_NIGHT_RESULT")
+
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        @Suppress("UNCHECKED_CAST")
+        val dayPhase = gameService.getGameState(g.gameId, g.hostId)["dayPhase"] as Map<String, Any?>
+        val killed = ((dayPhase["nightResult"] as Map<*, *>)["killedPlayers"] as List<*>).map { (it as Map<*, *>)["killedPlayerId"] }
+        assertThat(killed).describedAs("the 殉情 is a plain name in the dawn list").containsExactlyInAnyOrder(v1.userId, g.beauty.userId, v2.userId)
+        assertThat(alive(g, v2)).isFalse()
+        val charmEvents = gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(g.gameId).filter { it.eventType == "CHARM_DEATH" }
+        assertThat(charmEvents.map { it.targetUserId }).containsExactly(v2.userId)
+        // W11/W14: the public log shows the dawn deaths, never which one was a 殉情.
+        val log = publicLog(g)
+        assertThat(log.map { it["eventType"] }).contains("NIGHT_DEATH").doesNotContain("CHARM_DEATH")
+    }
+
+    @Test
+    fun `X6 - a 白狼王 taking the 狼美人 takes its charmed sheriff too, who hands over the badge`() {
+        val g = setupGame("WBW", KING_BOARD)
+        val sheriff = g.villagers.first()
+        parkDay2WithCharm(g, sheriff)
+        gameRepository.save(gameRepository.findById(g.gameId).orElseThrow().also { it.sheriffUserId = sheriff.userId })
+        gamePlayerRepository.save(gamePlayerRepository.findByGameIdAndUserId(g.gameId, sheriff.userId).orElseThrow().also { it.sheriff = true })
+
+        ok(g.token(g.first(PlayerRole.WHITE_WOLF_KING)), g.gameId, "WOLF_SELF_DESTRUCT", g.beauty.userId)
+
+        assertThat(alive(g, g.beauty)).isFalse()
+        assertThat(alive(g, sheriff)).describedAs("the charmed sheriff 殉情").isFalse()
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.charmDeathUserId).isEqualTo(sheriff.userId)
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(game.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+        val charmEvents = gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(g.gameId).filter { it.eventType == "CHARM_DEATH" }
+        assertThat(charmEvents.map { it.targetUserId }).containsExactly(sheriff.userId)
+        // A day 殉情 is public (Q13): the 游戏记录 keeps it.
+        assertThat(publicLog(g).filter { it["eventType"] == "CHARM_DEATH" }.map { it["targetUserId"] }).containsExactly(sheriff.userId)
     }
 }
