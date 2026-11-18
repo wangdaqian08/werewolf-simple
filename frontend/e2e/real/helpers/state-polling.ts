@@ -218,8 +218,9 @@ export async function readUnvotedAlivePlayerIds(
     const subPhase = state?.votingPhase?.subPhase
     if (subPhase !== 'VOTING' && subPhase !== 'RE_VOTING') return [] as string[]
     const voted = new Set<string>(state?.votingPhase?.votedPlayerIds ?? [])
-    return ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string }>)
-      .filter((p) => p.isAlive && !voted.has(p.userId))
+    // canVote=false: a revealed idiot stays alive but never votes again.
+    return ((state?.players ?? []) as Array<{ isAlive: boolean; userId: string; canVote?: boolean }>)
+      .filter((p) => p.isAlive && p.canVote !== false && !voted.has(p.userId))
       .map((p) => p.userId)
   }, gameId)
   return new Set(ids)
