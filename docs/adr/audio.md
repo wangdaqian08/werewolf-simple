@@ -68,6 +68,8 @@ Computed by `AudioService.kt` (`calculatePhaseTransition`,
 | `GARGOYLE_RESULT` close (after the gargoyle confirms)  | `gargoyle_close_eyes.mp3`                |
 | `WEREWOLF_PICK` opens                                  | `wolf_open_eyes.mp3`                     |
 | `WEREWOLF_PICK` → `SEER_PICK` close                    | `wolf_close_eyes.mp3`                    |
+| `WOLF_BEAUTY_PICK` opens (after wolves, when on board) | `wolf_beauty_open_eyes.mp3`              |
+| `WOLF_BEAUTY_PICK` close                               | `wolf_beauty_close_eyes.mp3`             |
 | `SEER_PICK` opens                                      | `seer_open_eyes.mp3`                     |
 | `SEER_RESULT` close (after seer confirms)              | `seer_close_eyes.mp3`                    |
 | `WITCH_ACT` opens                                      | `witch_open_eyes.mp3`                    |

@@ -19,6 +19,7 @@ and not only in a chat transcript.
 | 狼王 (黑狼王) `BLACK_WOLF_KING` | ✅ Done (rules: `docs/black-wolf-king.md`) |
 | 守墓人 `GRAVEKEEPER` | ✅ Done (PR #186) |
 | 石像鬼 `GARGOYLE` | ✅ Done (rules: `docs/superpowers/specs/2026-11-17-gargoyle-design.md`), board partner of 守墓人; narration files are 0-byte placeholders |
+| 狼美人 `WOLF_BEAUTY` | ✅ Done (rules: `docs/superpowers/specs/2026-11-18-wolf-beauty-demon-hunter-design.md`); narration files are 0-byte placeholders |
 
 ## Roles
 
@@ -35,7 +36,6 @@ cannot shoot, and a taken sheriff can still pass the badge. Needs `wolfCount ≥
 
 **Deferred:**
 - 隐狼: changes seer results and who joins the night kill.
-- 狼美人: needs chained deaths.
 
 **Not recommended:**
 - 丘比特: lovers form a third camp, so every win condition changes.

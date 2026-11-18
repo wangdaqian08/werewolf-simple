@@ -330,7 +330,7 @@ jobs:
             specs: e2e/real/flow-12p-sheriff.spec.ts e2e/real/sheriff-hunter-rules-flow.spec.ts
             grep: 'CLASSIC villager win|Sheriff \+ hunter rules'
           - id: 8
-            specs: e2e/real/revote-flow.spec.ts e2e/real/room-ready-sync.spec.ts e2e/real/white-wolf-king-flow.spec.ts e2e/real/reconnect-rejoin.spec.ts
+            specs: e2e/real/revote-flow.spec.ts e2e/real/room-ready-sync.spec.ts e2e/real/white-wolf-king-flow.spec.ts e2e/real/reconnect-rejoin.spec.ts e2e/real/wolf-beauty-flow.spec.ts
             grep: ''
           - id: 9
             specs: e2e/real/mech-wolf-rules-flow.spec.ts e2e/real/game-flow.spec.ts e2e/real/sheriff-flow.spec.ts e2e/real/room-board.spec.ts e2e/real/gargoyle-flow.spec.ts
