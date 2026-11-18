@@ -22,6 +22,7 @@ class GameTasksTest {
     private val roles = mapOf(
         "w1" to WEREWOLF, "w2" to WHITE_WOLF_KING, "seer" to SEER, "witch" to WITCH,
         "guard" to GUARD, "v1" to VILLAGER, "v2" to VILLAGER, "hunter" to HUNTER,
+        "bwk" to BLACK_WOLF_KING, "knight" to KNIGHT, "medium" to MEDIUM, "gargoyle" to GARGOYLE, "idiot" to IDIOT,
     )
 
     private fun facts(
@@ -35,9 +36,12 @@ class GameTasksTest {
         finalVotes: Map<Pair<String, Int>, String?> = emptyMap(),
         talliedDays: Set<Int> = finalVotes.keys.map { it.second }.toSet(),
         idiotRevealDay: Map<String, Int> = emptyMap(),
+        shots: List<Pair<String, String>> = emptyList(),
+        selfDestructTakes: Map<String, String> = emptyMap(),
+        duelWins: Set<String> = emptySet(),
     ) = GameTasks.Facts(
         winner, finalDay, roles, badgeHolders, wolfVoteDays, nights, nightDeathDay, exiled,
-        finalVotes, talliedDays, idiotRevealDay,
+        finalVotes, talliedDays, idiotRevealDay, shots, selfDestructTakes, duelWins,
     )
 
     private fun done(task: GameTask, p: GamePlayer, f: GameTasks.Facts) = GameTasks.isDone(task, p, f)
@@ -99,6 +103,13 @@ class GameTasksTest {
             GameTask.WOLF_NEVER_EXILED to { r -> r.isWolf },
             GameTask.WOLF_WIN_ALIVE to { r -> r.isWolf },
             GameTask.WOLF_FIRST_NIGHT_GOD to { r -> r.isPackWolf },
+            GameTask.HUNTER_SHOOT_WOLF to { r -> r == HUNTER },
+            GameTask.KNIGHT_DUEL_WOLF to { r -> r == KNIGHT },
+            GameTask.MEDIUM_FIND_WOLF to { r -> r == MEDIUM },
+            GameTask.WWK_TAKE_GOD to { r -> r == WHITE_WOLF_KING },
+            GameTask.BWK_SHOOT_GOD to { r -> r == BLACK_WOLF_KING },
+            GameTask.GARGOYLE_FIND_TWO_GODS to { r -> r == GARGOYLE },
+            GameTask.IDIOT_REVEAL_WIN to { r -> r == IDIOT },
         )
         assertThat(canDoIt.keys).containsExactlyInAnyOrder(*GameTask.entries.toTypedArray()) // a new task must be listed here
         for (role in PlayerRole.entries) for (sheriff in listOf(true, false)) {
@@ -355,5 +366,92 @@ class GameTasksTest {
     @Test
     fun `no round to vote in - not done`() {
         assertThat(done(GameTask.NEVER_VOTE_GOOD, seat("v1", VILLAGER), facts())).isFalse()
+    }
+
+    // ── batch 2: role tasks (2026-11-18) ──────────────────────────────
+
+    @Test
+    fun `batch 2 - each role draws its own task, the mechanical wolf and gravekeeper none`() {
+        mapOf(
+            HUNTER to GameTask.HUNTER_SHOOT_WOLF, KNIGHT to GameTask.KNIGHT_DUEL_WOLF, MEDIUM to GameTask.MEDIUM_FIND_WOLF,
+            WHITE_WOLF_KING to GameTask.WWK_TAKE_GOD, BLACK_WOLF_KING to GameTask.BWK_SHOOT_GOD,
+            GARGOYLE to GameTask.GARGOYLE_FIND_TWO_GODS, IDIOT to GameTask.IDIOT_REVEAL_WIN,
+        ).forEach { (role, task) -> assertThat(GameTasks.eligible(role, hasSheriff = false)).`as`(role.name).contains(task) }
+        val batch2 = setOf(
+            GameTask.HUNTER_SHOOT_WOLF, GameTask.KNIGHT_DUEL_WOLF, GameTask.MEDIUM_FIND_WOLF, GameTask.WWK_TAKE_GOD,
+            GameTask.BWK_SHOOT_GOD, GameTask.GARGOYLE_FIND_TWO_GODS, GameTask.IDIOT_REVEAL_WIN,
+        )
+        assertThat(GameTasks.eligible(MECHANICAL_WOLF, hasSheriff = true)).doesNotContainAnyElementsOf(batch2)
+        assertThat(GameTasks.eligible(GRAVEKEEPER, hasSheriff = true)).doesNotContainAnyElementsOf(batch2)
+    }
+
+    @Test
+    fun `batch 2 - scores`() {
+        assertThat(GameTask.HUNTER_SHOOT_WOLF.score).isEqualTo(10)
+        assertThat(GameTask.KNIGHT_DUEL_WOLF.score).isEqualTo(10)
+        assertThat(GameTask.MEDIUM_FIND_WOLF.score).isEqualTo(10)
+        assertThat(GameTask.WWK_TAKE_GOD.score).isEqualTo(20)
+        assertThat(GameTask.BWK_SHOOT_GOD.score).isEqualTo(20)
+        assertThat(GameTask.GARGOYLE_FIND_TWO_GODS.score).isEqualTo(10)
+        assertThat(GameTask.IDIOT_REVEAL_WIN.score).isEqualTo(10)
+    }
+
+    @Test
+    fun `hunter - shot a wolf, not a good player, and only its own shot counts`() {
+        val hunter = seat("hunter", HUNTER, diedDay = 2)
+        assertThat(done(GameTask.HUNTER_SHOOT_WOLF, hunter, facts(shots = listOf("hunter" to "w1")))).isTrue()
+        assertThat(done(GameTask.HUNTER_SHOOT_WOLF, hunter, facts(shots = listOf("hunter" to "v1")))).isFalse()
+        // the black wolf king shot a wolf? never mind — it is not the hunter's shot
+        assertThat(done(GameTask.HUNTER_SHOOT_WOLF, hunter, facts(shots = listOf("bwk" to "w1")))).isFalse()
+        // shot by the black wolf king, the hunter fires back at it
+        assertThat(done(GameTask.HUNTER_SHOOT_WOLF, hunter, facts(shots = listOf("bwk" to "hunter", "hunter" to "bwk")))).isTrue()
+        assertThat(done(GameTask.HUNTER_SHOOT_WOLF, hunter, facts())).isFalse()
+    }
+
+    @Test
+    fun `black wolf king - shot a god, not a villager`() {
+        val bwk = seat("bwk", BLACK_WOLF_KING, diedDay = 2)
+        assertThat(done(GameTask.BWK_SHOOT_GOD, bwk, facts(shots = listOf("bwk" to "seer")))).isTrue()
+        assertThat(done(GameTask.BWK_SHOOT_GOD, bwk, facts(shots = listOf("bwk" to "v1")))).isFalse()
+        assertThat(done(GameTask.BWK_SHOOT_GOD, bwk, facts(shots = listOf("hunter" to "seer")))).isFalse()
+    }
+
+    @Test
+    fun `knight - the duel turned up a wolf`() {
+        assertThat(done(GameTask.KNIGHT_DUEL_WOLF, seat("knight", KNIGHT), facts(duelWins = setOf("knight")))).isTrue()
+        assertThat(done(GameTask.KNIGHT_DUEL_WOLF, seat("knight", KNIGHT), facts())).isFalse()
+    }
+
+    @Test
+    fun `white wolf king - took a god with the self-destruct`() {
+        val wwk = seat("w2", WHITE_WOLF_KING, diedDay = 2)
+        assertThat(done(GameTask.WWK_TAKE_GOD, wwk, facts(selfDestructTakes = mapOf("w2" to "witch")))).isTrue()
+        assertThat(done(GameTask.WWK_TAKE_GOD, wwk, facts(selfDestructTakes = mapOf("w2" to "v1")))).isFalse()
+        assertThat(done(GameTask.WWK_TAKE_GOD, wwk, facts())).isFalse()
+    }
+
+    @Test
+    fun `medium - saw a wolf role, judged by what the medium saw`() {
+        val medium = seat("medium", MEDIUM)
+        assertThat(done(GameTask.MEDIUM_FIND_WOLF, medium, facts(nights = listOf(night(2) { mediumResultRole = WHITE_WOLF_KING })))).isTrue()
+        // a mechanical wolf that learned the seer shows as SEER to the medium: not a wolf role seen
+        assertThat(done(GameTask.MEDIUM_FIND_WOLF, medium, facts(nights = listOf(night(2) { mediumResultRole = SEER })))).isFalse()
+        assertThat(done(GameTask.MEDIUM_FIND_WOLF, medium, facts())).isFalse()
+    }
+
+    @Test
+    fun `gargoyle - two gods checked`() {
+        val g = seat("gargoyle", GARGOYLE)
+        val two = listOf(night(1) { gargoyleResultRole = SEER }, night(2) { gargoyleResultRole = VILLAGER }, night(3) { gargoyleResultRole = WITCH })
+        assertThat(done(GameTask.GARGOYLE_FIND_TWO_GODS, g, facts(nights = two))).isTrue()
+        assertThat(done(GameTask.GARGOYLE_FIND_TWO_GODS, g, facts(nights = two.take(2)))).isFalse()
+    }
+
+    @Test
+    fun `idiot - revealed, and the village won`() {
+        val idiot = seat("idiot", IDIOT)
+        assertThat(done(GameTask.IDIOT_REVEAL_WIN, idiot, facts(idiotRevealDay = mapOf("idiot" to 2)))).isTrue()
+        assertThat(done(GameTask.IDIOT_REVEAL_WIN, idiot, facts(idiotRevealDay = mapOf("idiot" to 2), winner = WinnerSide.WEREWOLF))).isFalse()
+        assertThat(done(GameTask.IDIOT_REVEAL_WIN, idiot, facts())).isFalse()
     }
 }

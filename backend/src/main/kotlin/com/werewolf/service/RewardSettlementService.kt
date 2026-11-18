@@ -100,6 +100,9 @@ class RewardSettlementService(
                 (e.targetUserId ?: "") to ((payload["dayNumber"] as? Number)?.toInt() ?: 0)
             }
         val votes = RewardBreakdown.finalVotes(voteRepository.findByGameIdAndVoteContext(gameId, VoteContext.ELIMINATION), events)
+        @Suppress("UNCHECKED_CAST")
+        fun payloads(type: String) = events.filter { it.eventType == type }
+            .map { mapper.readValue(it.message, Map::class.java) as Map<String, Any?> }
         return GameTasks.Facts(
             winner = winner,
             finalDay = finalDay,
@@ -112,6 +115,18 @@ class RewardSettlementService(
             finalVotes = votes.votes,
             talliedDays = votes.talliedDays,
             idiotRevealDay = dayOf("IDIOT_REVEAL"),
+            shots = payloads("HUNTER_SHOT").mapNotNull { p ->
+                val shooter = p["hunterUserId"] as? String
+                val target = p["targetUserId"] as? String
+                if (shooter != null && target != null) shooter to target else null
+            },
+            selfDestructTakes = payloads("SELF_DESTRUCT").mapNotNull { p ->
+                val wolf = p["userId"] as? String
+                val taken = p["takenUserId"] as? String
+                if (wolf != null && taken != null) wolf to taken else null
+            }.toMap(),
+            duelWins = payloads("KNIGHT_DUEL").filter { it["targetIsWolf"] == true }
+                .mapNotNull { it["knightUserId"] as? String }.toSet(),
         )
     }
 
