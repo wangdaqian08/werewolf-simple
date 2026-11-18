@@ -1,7 +1,7 @@
 # 狼美人 (Wolf Beauty) and 猎魔人 (Demon Hunter): game design
 
 - Date: 2026-11-18. Status: **rules confirmed by the owner (O1–O6, A–G); M decided; detail round Q1–Q14 decided; technical design checked line by line against main `b5de135` — no code yet.**
-- Two roles, two PRs (one role each, TDD), after the owner signs off this doc.
+- Two roles, two PRs (one role each, TDD). **Owner, 2026-11-18: build 狼美人 now; 猎魔人 is designed but deferred.**
 
 ## Why
 
@@ -120,7 +120,7 @@ repeated in `rules`.
   3. 第二晚起，狼人襲擊後你單獨睜眼，可魅惑一名存活玩家，也可以跳過；首夜不能魅惑。
   4. 不能魅惑自己或狼隊友，不能連續兩晚魅惑同一名玩家。
   5. 你出局時，最近一晚被你魅惑的玩家隨之殉情出局，且不能發動技能（例如獵人不能開槍）；更早的魅惑不算。
-  6. 被投出、被開槍帶走、被白狼王帶走、被毒死（女巫或機械狼）、被獵魔人狩獵時都會殉情；只有被騎士決鬥或被房主判定出局時不會殉情。
+  6. 被投出、被開槍帶走、被白狼王帶走、被毒死（女巫或機械狼）、被獵魔人狩獵時都會殉情；只有被騎士決鬥或被房主判定出局時不會殉情。（狼美人 PR 先不寫「被獵魔人狩獵」，由獵魔人 PR 加上。）
   7. 守衛、女巫解藥、機械狼學到的守護都擋不住殉情。
   8. 白天殉情時公布「N號（狼美人）出局，M號殉情出局」；夜晚殉情和其他死訊一起公布，不顯示死因；沒有人殉情時不公開你的身份。殉情的玩家是警長時照常移交警徽。
   9. 不能自爆；狼隊不能襲擊你。
@@ -152,12 +152,12 @@ repeated in `rules`.
 Change only the `rules` lines that would be **false** once a new role is on the board. Leave every `desc` and
 `descShort` alone, so no existing intro gets longer. The full exception lists already live in `rules`.
 
-| Role | Current `rules` text | Change | PR |
+| Role | Current `rules` text | Change | Which PR |
 |---|---|---|---|
-| 狼人 | 可以襲擊任何存活玩家，包括隊友或自己（自刀）。 | add 「（狼美人除外）」 | 2 |
-| 獵人 | 被女巫毒死或被白狼王帶走時不能開槍 | 被女巫毒死、被白狼王帶走或殉情時不能開槍 | 2 |
-| 黑狼王 | 被女巫毒死、自爆、被白狼王帶走或被騎士決鬥時不能開槍 | add 「被獵魔人狩獵」 | 1 |
-| 守墓人 | 被開槍、被決鬥、被白狼王帶走、被房主判定出局、白癡翻牌都不算 | add 「殉情」 | 2 |
+| 狼人 | 可以襲擊任何存活玩家，包括隊友或自己（自刀）。 | add 「（狼美人除外）」 | 狼美人 |
+| 獵人 | 被女巫毒死或被白狼王帶走時不能開槍 | 被女巫毒死、被白狼王帶走或殉情時不能開槍 | 狼美人 |
+| 黑狼王 | 被女巫毒死、自爆、被白狼王帶走或被騎士決鬥時不能開槍 | add 「被獵魔人狩獵」 | 猎魔人 |
+| 守墓人 | 被開槍、被決鬥、被白狼王帶走、被房主判定出局、白癡翻牌都不算 | add 「殉情」 | 狼美人 |
 
 The 獵人 `desc` (「被女巫毒死或被白狼王帶走時無法開槍」) stays as it is. It does not list every case today
 either: 「你的出局已決定勝負時也不能開槍」 is only in `rules`.
@@ -180,10 +180,10 @@ The new order:
 ```
 
 - 狼美人 comes straight after the wolf kill, as the sources say ("刀人后单独睁眼"). `@Order` values are
-  integers and no slot is free between 1 and 2, so PR 2 shifts 机械狼 … 守卫 up by one. Only the relative order
+  integers and no slot is free between 1 and 2, so the 狼美人 PR shifts 机械狼 … 守卫 up by one. Only the relative order
   matters (Spring sorts the list); the non-night handlers 平民 (10), 猎人 (11) and 白痴 (12) are unaffected.
 - 猎魔人's place changes no information, because every death resolves at dawn. It goes after the gravekeeper
-  and before the guard (PR 1: 猎魔人 8, 守卫 8 → 9). The guard stays last, which the code comments describe
+  and before the guard (in the 猎魔人 PR: after the 狼美人 shift the guard is 8, so 猎魔人 takes 8 and the guard moves to 9). The guard stays last, which the code comments describe
   (`NightOrchestrator.kt:63`, `:448`). The morning-cue delay itself runs after whichever role is last, so this
   is not a hard constraint.
 - Both steps play their open/close narration every night, including night 1 and when dead (ADR-010
@@ -261,13 +261,15 @@ What this check changed from the first draft:
 
 ## Technical design
 
-Two PRs, in this order. Each PR is one role, TDD, with its own migration and a real-backend E2E in a CI shard.
+Two PRs. Each PR is one role, TDD, with its own migration and a real-backend E2E in a CI shard.
 
-1. **猎魔人 first** (smaller): a new night pick step, plus changes to the dawn death resolution.
-2. **狼美人 second** (larger): a new mechanism, **chained death (殉情)**, that touches every place a player
-   goes out. `docs/new-role.md` deferred 狼美人 for exactly this reason.
+- **狼美人 now** (owner, 2026-11-18). It adds a new mechanism, **chained death (殉情)**, that touches every
+  place a player goes out. `docs/new-role.md` deferred 狼美人 for exactly this reason.
+- **猎魔人 later.** Its design below is kept as is, so it can be built without new rulings. Its migration number
+  is whatever is next when it is built. Wherever the 狼美人 sections mention a hunt (W7, X1, H7), that path
+  starts to work only once 猎魔人 exists.
 
-### PR 1 — 猎魔人 `DEMON_HUNTER`
+### Later PR — 猎魔人 `DEMON_HUNTER` (deferred)
 
 **Wire contract**
 
@@ -280,7 +282,7 @@ Two PRs, in this order. Each PR is one role, TDD, with its own migration and a r
 | Night columns | `night_phases.demon_hunter_target_user_id`, `night_phases.demon_hunter_hit_wolf` (set when the hunt is submitted, like `seer_is_wolf`) |
 | Private state | `nightPhase.demonHunter = { canHunt: boolean, history: [{ round, seatIndex, nickname, hitWolf }] }` |
 | Audio | `demon_hunter_open_eyes.mp3` / `demon_hunter_close_eyes.mp3` (0-byte placeholders until the owner supplies them) |
-| Migration | `V38__demon_hunter.sql`: room flag, two night columns, role CHECKs re-created with the full role set, sub-phase CHECK (V37 pattern) |
+| Migration | `V(next)__demon_hunter.sql`: room flag, two night columns, role CHECKs re-created with the full role set, sub-phase CHECK (V37 pattern) |
 
 **Server rules — where each goes**
 
@@ -310,7 +312,7 @@ Two PRs, in this order. Each PR is one role, TDD, with its own migration and a r
   - the role card, composition, history, review pages, mocks.
 - Docs: `docs/new-role.md` status row, `docs/narration-scripts.md`.
 
-### PR 2 — 狼美人 `WOLF_BEAUTY`
+### This PR — 狼美人 `WOLF_BEAUTY`
 
 **Wire contract**
 
@@ -325,7 +327,7 @@ Two PRs, in this order. Each PR is one role, TDD, with its own migration and a r
 | New game event | `CHARM_DEATH` (payload `wolfBeautyUserId`, `victimUserId`), via `ActionLogService.recordCharmDeath`. It is used by the review and the task. It is **not** written to `elimination_history`, because a 殉情 is not a vote-out (W13). |
 | Private state | `nightPhase.wolfBeauty = { canCharm, lastNightTargetUserId, result: null \| { targetSeatIndex, targetNickname } \| 'SKIP', history }` |
 | Audio | `wolf_beauty_open_eyes.mp3` / `wolf_beauty_close_eyes.mp3` (0-byte placeholders until supplied) |
-| Migration | `V39__wolf_beauty.sql`: room flag, night column, role CHECKs, sub-phase CHECK |
+| Migration | `V38__wolf_beauty.sql`: room flag, night column, role CHECKs, sub-phase CHECK |
 
 **The 殉情 mechanism — one rule, called from every exit**
 
@@ -363,9 +365,9 @@ Night 1 never has a charm (O1), so **no 殉情 can happen during the day-1 sheri
 paths that apply last night's kills early (`SelfDestructService.kt:73-75, 181-184`, `HostDeclareOutService.kt:109-110, 121-124`)
 can therefore never contain one. They still go through `computeKills`, so they stay consistent.
 
-**Every exit, as the code works on main today, and what PR 2 adds:**
+**Every exit, as the code works on main today, and what the 狼美人 PR adds:**
 
-| # | Exit | How it works today | What PR 2 adds |
+| # | Exit | How it works today | What the 狼美人 PR adds |
 |---|---|---|---|
 | X1 | **Dawn** (any poison or a hunt kills 狼美人) | `revealNightResult` (`GamePhasePipeline.kt:59-78`) applies `computePendingKills`, then routes a dead sheriff to `BADGE_HANDOVER` via `DayRevealAdvancer.nextSubPhase` (`:36-46`). The night-end win check uses the same list as projected deaths (`NightOrchestrator.kt:344-369`). | `computeKills` adds the victim when 狼美人 is in the list. The dawn list and the sheriff routing then include it with no further change. The night-end win check gains the W15 order. `revealNightResult` (and the game-over branch of `resolveNightKills`) also records `CHARM_DEATH` (Q2). `nightShooterId` must return `null` if the wolf-knife victim is the 殉情 victim (W6). |
 | X2 | **Vote-out** of 狼美人 | `collectEliminationEvents` (`VotingPipeline.kt:597-639`): kills at once, writes `elimination_history`, checks the win, opens a shooter's shot, and routes to `BADGE_HANDOVER` **only if the voted-out player is the sheriff** (`:634`). | After `:599`, kill the victim and record `CHARM_DEATH`, before the win check at `:613`. The badge route at `:634` must also fire when **the victim** is the sheriff. The victim is not written to `elimination_history` (W13). |
@@ -394,7 +396,7 @@ can therefore never contain one. They still go through `computeKills`, so they s
   - `HostDeclareOutService.kt:110`;
   - `GameService.kt:362`;
   - `GameReviewBuilder.kt:53` and `PlayerReviewBuilder.kt:55` (both have `players` in scope).
-  PR 1 adds the parameter (for H4). PR 2 uses it for X1.
+  The 狼美人 PR adds the parameter (for X1). The 猎魔人 PR reuses it for H4.
 - **W8.**
   - `WerewolfHandler` today accepts any living target, teammates included (`:80-83`). Reject the `WOLF_BEAUTY`
     as a target; the pack's kill UI greys it out.
@@ -411,14 +413,14 @@ can therefore never contain one. They still go through `computeKills`, so they s
 
 **Touchpoints**
 
-- Everything PR 1 lists for a night role, plus:
+- The same files as any night role (the list under the 猎魔人 PR, with 狼美人 names), plus:
   - `VotingPipeline`, `SelfDestructService`, `DayRevealAdvancer`, `WerewolfHandler`, `ActionLogService`, `DomainEvent`;
   - the frontend handling of `PlayerCharmDeath` (the day announcement), `WolfBeautyTurn.vue`, the wolf kill
     picker, and the 自爆 button.
 
 ## Tests (each PR; all must pass)
 
-| Layer | PR 1 猎魔人 | PR 2 狼美人 |
+| Layer | 猎魔人 PR (later) | 狼美人 PR (now) |
 |---|---|---|
 | Backend unit | H2 rejections (a hunt on N1, self, dead target, dead actor; N1 SKIP accepted); H3 wolf → target dies, good → hunter dies; H4 poison dropped but used up; H5 guard / antidote do not block; H6 knifed + hunted 黑狼王 no shot; H9 exclusion (room + start); E counterplay; F task done / not done + guard table | W2/W3 rejections (a charm on N1, self, pack wolf, last night's target, dead; N1 SKIP accepted); D charming 石像鬼 accepted; W5 latest night only; W6 charmed 猎人 no shot (vote, night); W7 殉情 on each exit X1–X6, none on X7 / X8; X4 shot sheriff → victim dies at the shot, before the handover, and cannot receive the badge (Q10); W15 last-wolf 狼美人 + last god → wolves win (vote-out, shot, night poison, night hunt); Q12 HARD_MODE 2 good + 狼美人 → no early wolf win; Q13 banner names 狼美人, Q14 no victim → no role shown; Q2 night `CHARM_DEATH` recorded and the task counts it; X2 / X6 victim-is-sheriff routing; reload shows `charmDeath`; W8 knife and 自爆 rejected; win projection with 殉情; G badge; F task |
 | Backend integration | full night with hunt → dawn deaths; migration | vote-out → 殉情 → win check; poison → 殉情 in the dawn list; 白狼王 take → 殉情; events recorded and settled |
