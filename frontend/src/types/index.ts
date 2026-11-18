@@ -110,6 +110,13 @@ export type TaskCode =
   | 'WOLF_FIRST_NIGHT_GOD'
   | 'SEER_WOLF_EVERY_NIGHT'
   | 'NEVER_VOTE_GOOD'
+  | 'HUNTER_SHOOT_WOLF'
+  | 'KNIGHT_DUEL_WOLF'
+  | 'MEDIUM_FIND_WOLF'
+  | 'WWK_TAKE_GOD'
+  | 'BWK_SHOOT_GOD'
+  | 'GARGOYLE_FIND_TWO_GODS'
+  | 'IDIOT_REVEAL_WIN'
 
 /**
  * The viewer's own task: [done] and [earned] are null until the game is settled.

@@ -238,4 +238,41 @@ class GameTasksIntegrationTest {
         assertThat(seats.getValue(villager2).taskDone).isFalse()
         assertThat(seats.getValue(villager2).taskScore).isEqualTo(0)
     }
+
+    @Test
+    fun `batch 2 - shots, the self-destruct take, the duel and the idiot reveal are judged from the recorded events`() {
+        val n = System.nanoTime()
+        val r = listOf(
+            "b2Wwk" to PlayerRole.WHITE_WOLF_KING, "b2Bwk" to PlayerRole.BLACK_WOLF_KING, "b2W" to PlayerRole.WEREWOLF,
+            "b2H" to PlayerRole.HUNTER, "b2K" to PlayerRole.KNIGHT, "b2I" to PlayerRole.IDIOT,
+            "b2S" to PlayerRole.SEER, "b2Wi" to PlayerRole.WITCH, "b2V" to PlayerRole.VILLAGER,
+        ).map { (id, role) -> "$id-$n" to role }
+        val (wwk, bwk, wolf, hunter, knight, idiot, seer, witch, villager) = r.map { it.first }
+        val gameId = finishedGame(r, mapOf(
+            wwk to GameTask.WWK_TAKE_GOD, bwk to GameTask.BWK_SHOOT_GOD, hunter to GameTask.HUNTER_SHOOT_WOLF,
+            knight to GameTask.KNIGHT_DUEL_WOLF, idiot to GameTask.IDIOT_REVEAL_WIN,
+        ))
+        // day 1: the white wolf king self-destructs and takes the seer (a god)
+        actionLogService.recordSelfDestruct(gameId, 1, wwk, wwk, 1, takenUserId = seer, takenNickname = seer, takenSeatIndex = 7)
+        // day 2: voted out, the black wolf king shoots a villager (not a god); the idiot is revealed
+        actionLogService.recordHunterShot(gameId, 2, bwk, villager)
+        actionLogService.recordIdiotReveal(gameId, 2, idiot)
+        // day 3: the knight duels the werewolf and wins; the hunter, voted out, shoots... the witch
+        actionLogService.recordKnightDuel(gameId, 3, knight, knight, 5, wolf, wolf, 3, targetIsWolf = true)
+        actionLogService.recordHunterShot(gameId, 3, hunter, witch)
+
+        rewardSettlementService.settle(gameId, WinnerSide.VILLAGER)
+
+        val done = gamePlayerRepository.findByGameId(gameId).associate { it.userId to it.taskDone }
+        assertThat(done[wwk]).`as`("white wolf king took the seer").isTrue()
+        assertThat(done[bwk]).`as`("black wolf king shot a villager").isFalse()
+        assertThat(done[hunter]).`as`("hunter shot the witch").isFalse()
+        assertThat(done[knight]).`as`("knight's duel found a wolf").isTrue()
+        assertThat(done[idiot]).`as`("idiot revealed, village won").isTrue()
+    }
+
+    private operator fun <T> List<T>.component6() = this[5]
+    private operator fun <T> List<T>.component7() = this[6]
+    private operator fun <T> List<T>.component8() = this[7]
+    private operator fun <T> List<T>.component9() = this[8]
 }

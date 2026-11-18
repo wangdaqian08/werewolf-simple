@@ -38,6 +38,12 @@ object GameTasks {
         val talliedDays: Set<Int>,
         /** userId → the day an idiot was revealed; it cannot vote after that. */
         val idiotRevealDay: Map<String, Int>,
+        /** Every on-death shot in order, shooter → target (hunter or black wolf king, HUNTER_SHOT). */
+        val shots: List<Pair<String, String>>,
+        /** White wolf king → the player it took when self-destructing. */
+        val selfDestructTakes: Map<String, String>,
+        /** Knights whose duel turned up a wolf. */
+        val duelWins: Set<String>,
     )
 
     fun eligible(role: PlayerRole, hasSheriff: Boolean): List<GameTask> = buildList {
@@ -48,6 +54,12 @@ object GameTasks {
             addAll(listOf(WOLF_NEVER_EXILED, WOLF_WIN_ALIVE))
             // The lone wolves (mechanical wolf, gargoyle) never knife on night 1: the pack does (RoleRules.wolfKillers).
             if (role.isPackWolf) add(WOLF_FIRST_NIGHT_GOD)
+            when (role) {
+                PlayerRole.WHITE_WOLF_KING -> add(WWK_TAKE_GOD)
+                PlayerRole.BLACK_WOLF_KING -> add(BWK_SHOOT_GOD)
+                PlayerRole.GARGOYLE -> add(GARGOYLE_FIND_TWO_GODS)
+                else -> {} // the mechanical wolf: no role task (owner, 2026-11-18: too easy)
+            }
         } else {
             addAll(listOf(VOTE_WOLF_TWICE, NEVER_VOTE_GOOD))
             when (role) {
@@ -55,7 +67,11 @@ object GameTasks {
                 PlayerRole.SEER -> addAll(listOf(SEER_FIND_TWO_WOLVES, SEER_WOLF_EVERY_NIGHT))
                 PlayerRole.WITCH -> addAll(listOf(WITCH_POISON_WOLF, WITCH_SAVE_GOOD))
                 PlayerRole.GUARD -> add(GUARD_BLOCK_KILL)
-                else -> {}
+                PlayerRole.HUNTER -> add(HUNTER_SHOOT_WOLF)
+                PlayerRole.KNIGHT -> add(KNIGHT_DUEL_WOLF)
+                PlayerRole.MEDIUM -> add(MEDIUM_FIND_WOLF)
+                PlayerRole.IDIOT -> add(IDIOT_REVEAL_WIN)
+                else -> {} // the gravekeeper: no role task (owner, 2026-11-18: too easy)
             }
         }
     }
@@ -92,6 +108,7 @@ object GameTasks {
         val me = player.userId
         val alive = player.diedDay == null
         fun isWolf(id: String?) = id != null && f.roleOf[id]?.isWolf == true
+        fun isGod(id: String?) = id != null && f.roleOf[id]?.isGod == true
         return when (task) {
             // Alive when day 3 dawns: a night-3 death misses it, a day-3 exile does not.
             SURVIVE_TO_DAY3 -> f.finalDay >= 3 &&
@@ -119,6 +136,14 @@ object GameTasks {
             WOLF_FIRST_NIGHT_GOD -> f.nights.firstOrNull { it.dayNumber == 1 }?.wolfTargetUserId?.let { target ->
                 f.roleOf[target]?.isGod == true && f.nightDeathDay[target] == 1
             } ?: false
+            HUNTER_SHOOT_WOLF -> f.shots.any { (shooter, target) -> shooter == me && isWolf(target) }
+            BWK_SHOOT_GOD -> f.shots.any { (shooter, target) -> shooter == me && isGod(target) }
+            KNIGHT_DUEL_WOLF -> me in f.duelWins
+            WWK_TAKE_GOD -> isGod(f.selfDestructTakes[me])
+            // What the medium saw: a mechanical wolf that learned a god shows as that god.
+            MEDIUM_FIND_WOLF -> f.nights.any { it.mediumResultRole?.isWolf == true }
+            GARGOYLE_FIND_TWO_GODS -> f.nights.count { it.gargoyleResultRole?.isGod == true } >= 2
+            IDIOT_REVEAL_WIN -> me in f.idiotRevealDay && f.winner == WinnerSide.VILLAGER
         }
     }
 }

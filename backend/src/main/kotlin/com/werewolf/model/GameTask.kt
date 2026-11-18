@@ -18,4 +18,11 @@ enum class GameTask(val score: Int, val perNight: Boolean = false) {
     WOLF_NEVER_EXILED(10),
     WOLF_WIN_ALIVE(20),
     WOLF_FIRST_NIGHT_GOD(10),
+    HUNTER_SHOOT_WOLF(10),
+    KNIGHT_DUEL_WOLF(10),
+    MEDIUM_FIND_WOLF(10),
+    WWK_TAKE_GOD(20),
+    BWK_SHOOT_GOD(20),
+    GARGOYLE_FIND_TWO_GODS(10),
+    IDIOT_REVEAL_WIN(10),
 }
