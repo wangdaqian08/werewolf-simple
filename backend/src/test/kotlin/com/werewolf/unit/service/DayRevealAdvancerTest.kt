@@ -116,6 +116,18 @@ class DayRevealAdvancerTest {
     // ── Private night-death shot ─────────────────────────────────────────────
 
     @Test
+    fun `W6 - no shot for a knifed hunter who is also tonight's 殉情 victim`() {
+        val beauty = player("b", PlayerRole.WOLF_BEAUTY, alive = false).also { it.diedDay = day }
+        val hunter = player("h", PlayerRole.HUNTER, alive = false).also { it.diedDay = day }
+        val n = night(wolf = "h", poison = "b").also { it.wolfBeautyCharmUserId = "h" }
+        stub(game(), listOf(beauty, hunter), n)
+        assertThat(advancer.nightShooterUserId(gameId)).isNull()
+        // The same hunter knifed with no 殉情 still shoots.
+        stub(game(), listOf(player("b", PlayerRole.WOLF_BEAUTY), hunter), night(wolf = "h").also { it.wolfBeautyCharmUserId = "h" })
+        assertThat(advancer.nightShooterUserId(gameId)).isEqualTo("h")
+    }
+
+    @Test
     fun `no shot when the hunter died from poison only`() {
         stub(game(), listOf(player("h", PlayerRole.HUNTER, alive = false)), night(poison = "h"))
         assertThat(advancer.nightShooterUserId(gameId)).isNull()

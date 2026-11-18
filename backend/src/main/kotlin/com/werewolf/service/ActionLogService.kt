@@ -125,6 +125,22 @@ class ActionLogService(
         )
     }
 
+    fun recordCharmDeath(gameId: Int, dayNumber: Int, wolfBeautyUserId: String, victimUserId: String) {
+        val payload = mapOf(
+            "dayNumber"        to dayNumber,
+            "wolfBeautyUserId" to wolfBeautyUserId,
+            "victimUserId"     to victimUserId,
+        )
+        gameEventRepository.save(
+            GameEvent(
+                gameId       = gameId,
+                eventType    = "CHARM_DEATH",
+                message      = mapper.writeValueAsString(payload),
+                targetUserId = victimUserId,
+            )
+        )
+    }
+
     /** [toUserId] null = the badge was destroyed. */
     fun recordBadgeHandover(gameId: Int, dayNumber: Int, fromUserId: String, toUserId: String?) {
         val seats = gamePlayerRepository.findByGameId(gameId).associate { it.userId to it.seatIndex }

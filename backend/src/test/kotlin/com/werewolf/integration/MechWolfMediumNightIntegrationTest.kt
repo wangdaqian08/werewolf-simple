@@ -316,7 +316,7 @@ class MechWolfMediumNightIntegrationTest {
 
         // Move to night 2 the way NightPhaseDeadRoleIntegrationTest does, with the pack gone first.
         val n1 = nightPhaseRepository.findByGameIdAndDayNumber(g.gameId, 1).orElseThrow()
-        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n1))
+        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n1, emptySet(), emptyList()))
         g.packWolves.forEach { gamePlayerRepository.save(it.also { p -> p.alive = false }) }
         nightOrchestrator.initNight(g.gameId, 2)
 
@@ -325,7 +325,7 @@ class MechWolfMediumNightIntegrationTest {
 
         val n2 = nightPhaseRepository.findByGameIdAndDayNumber(g.gameId, 2).orElseThrow()
         assertThat(n2.wolfTargetUserId).isEqualTo(n2Victim.userId)
-        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n2))
+        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n2, emptySet(), emptyList()))
         assertThat(gamePlayerRepository.findByGameIdAndUserId(g.gameId, n2Victim.userId).orElseThrow().alive)
             .describedAs("target of the lone mechanical wolf on night 2 dies").isFalse()
     }
@@ -403,7 +403,7 @@ class MechWolfMediumNightIntegrationTest {
         }
 
         val n1 = nightPhaseRepository.findByGameIdAndDayNumber(g.gameId, 1).orElseThrow()
-        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n1))
+        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n1, emptySet(), emptyList()))
         nightOrchestrator.initNight(g.gameId, 2)
 
         // Night 2: it learns the hunter before the medium's turn, so the medium sees the learned role.

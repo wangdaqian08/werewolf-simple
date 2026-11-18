@@ -67,13 +67,13 @@ class NightOrchestratorTest {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private fun makeOrchestrator(handlers: List<RoleHandler>) = NightOrchestrator(
+    private fun makeOrchestrator(handlers: List<RoleHandler>, checker: WinConditionChecker = winConditionChecker) = NightOrchestrator(
         handlers = handlers,
         gameRepository = gameRepository,
         gamePlayerRepository = gamePlayerRepository,
         nightPhaseRepository = nightPhaseRepository,
         sheriffElectionRepository = mock(),
-        winConditionChecker = winConditionChecker,
+        winConditionChecker = checker,
         stompPublisher = stompPublisher,
         contextLoader = contextLoader,
         audioService = audioService,
@@ -158,6 +158,7 @@ class NightOrchestratorTest {
         hasWitch: Boolean = false,
         hasGuard: Boolean = false,
         hasSheriff: Boolean = false,
+        winCondition: WinConditionMode = WinConditionMode.CLASSIC,
     ) = Room(
         roomCode = "ABCD",
         hostUserId = hostId,
@@ -166,6 +167,7 @@ class NightOrchestratorTest {
         hasWitch = hasWitch,
         hasGuard = hasGuard,
         hasSheriff = hasSheriff,
+        winCondition = winCondition,
     )
 
     private fun player(userId: String, seat: Int, role: PlayerRole = PlayerRole.VILLAGER, alive: Boolean = true) =
@@ -318,7 +320,7 @@ class NightOrchestratorTest {
         // The pending kill IS surfaced via computePendingKills for callers
         // (e.g. GamePhasePipeline.revealNightResult) to apply on the host's
         // reveal click.
-        assertThat(nightOrchestrator.computePendingKills(np)).containsExactly("u2")
+        assertThat(nightOrchestrator.computePendingKills(gameId, np)).containsExactly("u2")
     }
 
     @Test
@@ -494,6 +496,59 @@ class NightOrchestratorTest {
         verify(gameRepository).save(captor.capture())
         assertThat(captor.firstValue.phase).isEqualTo(GamePhase.GAME_OVER)
         assertThat(captor.firstValue.winner).isEqualTo(WinnerSide.VILLAGER)
+    }
+
+    // ── resolveNightKills: 殉情 order (W15, Q11, Q12) ──────────────────────────
+
+    /** The night-2 row: the witch poisons the 狼美人 (u1), who charmed [charmed]. */
+    private fun charmNight(charmed: String) = NightPhase(gameId = gameId, dayNumber = 2).also {
+        it.witchPoisonTargetUserId = "u1"
+        it.wolfBeautyCharmUserId = charmed
+    }
+
+    /** Resolves [np] with the real win checker and returns the saved winner. */
+    private fun resolveWithRealChecker(np: NightPhase, mode: WinConditionMode, vararg players: GamePlayer): WinnerSide? {
+        val ctx = GameContext(game(), room(winCondition = mode), players.toList())
+        makeOrchestrator(emptyList(), WinConditionChecker()).resolveNightKills(ctx, np)
+        val captor = argumentCaptor<Game>()
+        verify(gameRepository, atLeastOnce()).save(captor.capture())
+        return captor.lastValue.winner
+    }
+
+    @Test
+    fun `W15 - a last-wolf 狼美人 whose 殉情 takes the last god wins for the wolves`() {
+        val winner = resolveWithRealChecker(
+            charmNight(charmed = "u2"), WinConditionMode.CLASSIC,
+            player("u1", 1, PlayerRole.WOLF_BEAUTY),
+            player("u2", 2, PlayerRole.WITCH),
+            player("u3", 3, PlayerRole.VILLAGER),
+            player("u4", 4, PlayerRole.SEER, alive = false),
+        )
+        assertThat(winner).isEqualTo(WinnerSide.WEREWOLF)
+        verify(actionLogService).recordCharmDeath(gameId, 2, "u1", "u2")
+    }
+
+    @Test
+    fun `W15 - the villagers win when the 殉情 wipes no side and the 狼美人 was the last wolf`() {
+        val winner = resolveWithRealChecker(
+            charmNight(charmed = "u3"), WinConditionMode.CLASSIC,
+            player("u1", 1, PlayerRole.WOLF_BEAUTY),
+            player("u2", 2, PlayerRole.WITCH),
+            player("u3", 3, PlayerRole.VILLAGER),
+            player("u4", 4, PlayerRole.VILLAGER),
+        )
+        assertThat(winner).isEqualTo(WinnerSide.VILLAGER)
+    }
+
+    @Test
+    fun `Q12 - HARD_MODE, two good players left, the 殉情 takes one - no early wolf win, the villagers win`() {
+        val winner = resolveWithRealChecker(
+            charmNight(charmed = "u3"), WinConditionMode.HARD_MODE,
+            player("u1", 1, PlayerRole.WOLF_BEAUTY),
+            player("u2", 2, PlayerRole.WITCH),
+            player("u3", 3, PlayerRole.VILLAGER),
+        )
+        assertThat(winner).isEqualTo(WinnerSide.VILLAGER)
     }
 
     // ── advanceFromWaiting ───────────────────────────────────────────────────

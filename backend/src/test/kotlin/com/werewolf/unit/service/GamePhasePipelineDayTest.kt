@@ -130,6 +130,42 @@ class GamePhasePipelineDayTest {
         assertThat(nightResult.kills).containsExactly("u3", "u2")
     }
 
+    @Test
+    fun `revealNightResult - Q2 a night 殉情 records CHARM_DEATH with the 狼美人 and the victim`() {
+        val game = game()
+        val beauty = GamePlayer(gameId = gameId, userId = "b", seatIndex = 1, role = PlayerRole.WOLF_BEAUTY)
+        val victim = GamePlayer(gameId = gameId, userId = "x", seatIndex = 2, role = PlayerRole.SEER)
+        val np = NightPhase(gameId = gameId, dayNumber = 2).also {
+            it.witchPoisonTargetUserId = "b"
+            it.wolfBeautyCharmUserId = "x"
+        }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(java.util.Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("b", "x"))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
+
+        pipeline.revealNightResult(req(hostId, ActionType.REVEAL_NIGHT_RESULT), GameContext(game, room(), listOf(beauty, victim)))
+
+        verify(actionLogService).recordNightDeaths(gameId, 2, listOf("b", "x"))
+        verify(actionLogService).recordCharmDeath(gameId, 2, "b", "x")
+    }
+
+    @Test
+    fun `revealNightResult - no CHARM_DEATH when the 狼美人 survives the night`() {
+        val game = game()
+        val beauty = GamePlayer(gameId = gameId, userId = "b", seatIndex = 1, role = PlayerRole.WOLF_BEAUTY)
+        val other = GamePlayer(gameId = gameId, userId = "v", seatIndex = 2, role = PlayerRole.VILLAGER)
+        val np = NightPhase(gameId = gameId, dayNumber = 2).also { it.wolfBeautyCharmUserId = "v" }
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2)).thenReturn(java.util.Optional.of(np))
+        whenever(nightOrchestrator.computePendingKills(gameId, np)).thenReturn(listOf("v"))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.RESULT_REVEALED)
+
+        pipeline.revealNightResult(req(hostId, ActionType.REVEAL_NIGHT_RESULT), GameContext(game, room(), listOf(beauty, other)))
+
+        verify(actionLogService, never()).recordCharmDeath(any(), any(), any(), any())
+    }
+
     // ── dayAdvance ───────────────────────────────────────────────────────────
 
     @Test

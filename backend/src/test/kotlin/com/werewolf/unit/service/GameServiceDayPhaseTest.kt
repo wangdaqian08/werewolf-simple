@@ -81,7 +81,7 @@ class GameServiceDayPhaseTest {
         // every nightResult scenario below still exercises the actual logic.
         org.mockito.Mockito.lenient()
             .`when`(nightOrchestrator.computePendingKills(eq(gameId), any()))
-            .thenAnswer { NightOrchestrator.computeKills(it.getArgument(1)) }
+            .thenAnswer { NightOrchestrator.computeKills(it.getArgument(1), emptySet(), emptyList()) }
     }
 
     private fun setupGameAndPlayers(game: Game, players: List<GamePlayer>, users: List<User>) {

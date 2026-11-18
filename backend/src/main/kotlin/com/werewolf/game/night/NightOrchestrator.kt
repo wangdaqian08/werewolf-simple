@@ -69,7 +69,7 @@ class NightOrchestrator(
          * unit tests with a mocked orchestrator can delegate stubs here
          * instead of re-deriving the rules.
          */
-        fun computeKills(nightPhase: NightPhase, immuneUserIds: Set<String> = emptySet()): List<String> {
+        fun computeKills(nightPhase: NightPhase, immuneUserIds: Set<String>, players: List<GamePlayer>): List<String> {
             val kills = mutableListOf<String>()
             val shield = nightPhase.mechGuardTargetUserId // mechanical-wolf guard: absolute night immunity
             val wolfTarget = nightPhase.wolfTargetUserId
@@ -82,6 +82,8 @@ class NightOrchestrator(
             listOfNotNull(nightPhase.witchPoisonTargetUserId, nightPhase.mechPoisonTargetUserId)
                 .filter { it != shield }
                 .forEach { kills.add(it) }
+            // 殉情 (W9, M): no shield, guard or antidote stops it.
+            RoleRules.charmVictimAtNight(nightPhase, players, kills)?.let { kills.add(it) }
             // Sorted so the dawn list never reveals which death came from which source.
             return kills.distinct().sorted()
         }
@@ -343,7 +345,8 @@ class NightOrchestrator(
         }
 
         val immuneUserIds = perkService.night1ImmuneUserIds(gameId)
-        val pendingKills = computePendingKills(nightPhase, immuneUserIds)
+        val pendingKills = computePendingKills(nightPhase, immuneUserIds, context.players)
+        val charmVictim = RoleRules.charmVictimAtNight(nightPhase, context.players, pendingKills)
 
         // Record which night-1 immunity perks actually took effect. Status stays
         // ACTIVE (still immune for re-computations); CONSUMED/REFUNDED is decided
@@ -361,19 +364,27 @@ class NightOrchestrator(
         // Win check on PROJECTED alive (current alive minus pending kills).
         // Important: we have NOT flipped player.alive yet, so we filter manually.
         val projectedAlive = context.alivePlayers.filterNot { it.userId in pendingKills }
-        val winner = winConditionChecker.check(
-            alivePlayers = projectedAlive,
+        val counterplay = buildCounterplay(context)
+        fun checkWin(alive: List<GamePlayer>) = winConditionChecker.check(
+            alivePlayers = alive,
             mode = context.room.winCondition,
             trigger = WinCheckTrigger.POST_NIGHT,
-            counterplay = buildCounterplay(context),
+            counterplay = counterplay,
             roster = context.players,
         )
+        // W15: the 殉情 resolves first. With the 狼美人 still counted, POST_NIGHT can only find a wiped
+        // side (no HARD_MODE shortcut, Q12); a winner there is final, else the normal check.
+        val beauty = charmVictim?.let { context.players.first { it.role == PlayerRole.WOLF_BEAUTY } }
+        val winner = beauty?.let { checkWin(projectedAlive + it) } ?: checkWin(projectedAlive)
 
         if (winner != null) {
             // Game over: apply kills now (deaths are real, no further sheriff
             // election or reveal needed) and broadcast.
             applyNightKills(gameId, pendingKills)
             actionLogService.recordNightDeaths(gameId, nightPhase.dayNumber, pendingKills)
+            if (beauty != null && charmVictim != null) {
+                actionLogService.recordCharmDeath(gameId, nightPhase.dayNumber, beauty.userId, charmVictim)
+            }
             context.game.apply {
                 this.winner = winner
                 phase = GamePhase.GAME_OVER
@@ -556,7 +567,7 @@ class NightOrchestrator(
      * across call sites and leak the immune player's "death" in the UI.
      */
     fun computePendingKills(gameId: Int, nightPhase: NightPhase): List<String> =
-        computePendingKills(nightPhase, perkService.night1ImmuneUserIds(gameId))
+        computeKills(nightPhase, perkService.night1ImmuneUserIds(gameId), gamePlayerRepository.findByGameId(gameId))
 
     /**
      * Compute the set of pending kills from a NightPhase row. Pure function —
@@ -571,13 +582,14 @@ class NightOrchestrator(
      * dies unconditionally (poison is not a wolf kill, immunity does not
      * cover it). The mechanical wolf's shield (`mechGuardTargetUserId`) is absolute:
      * it blocks the wolf kill and any poison on that player; the mechanical wolf's
-     * own poison (`mechPoisonTargetUserId`) kills like the witch's.
+     * own poison (`mechPoisonTargetUserId`) kills like the witch's. When the 狼美人 dies,
+     * the player she charmed that night dies with her (殉情); nothing stops it.
      *
      * The result is sorted by user id, not by seat, so it does not reveal which death
      * came from which source; apply seat order at display time via [bySeat].
      */
-    fun computePendingKills(nightPhase: NightPhase, immuneUserIds: Set<String> = emptySet()): List<String> =
-        computeKills(nightPhase, immuneUserIds)
+    fun computePendingKills(nightPhase: NightPhase, immuneUserIds: Set<String>, players: List<GamePlayer>): List<String> =
+        computeKills(nightPhase, immuneUserIds, players)
 
     /**
      * Apply pending night kills to game_players (flip alive=false). Idempotent

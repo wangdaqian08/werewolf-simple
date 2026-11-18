@@ -52,7 +52,7 @@ object PlayerReviewBuilder {
         // NIGHT_DEATH is written at the dawn reveal; a game cancelled before it has none for its last night.
         fun deathsAt(day: Int): List<String> = nightDeaths[day]
             ?: completed[day]?.takeIf { game.winner == null && day == lastNight }
-                ?.let { NightOrchestrator.computeKills(it, night1PerkSaved) }
+                ?.let { NightOrchestrator.computeKills(it, night1PerkSaved, players) }
             ?: emptyList()
 
         // The viewer dies either at a dawn or part way through a day; either way the replay

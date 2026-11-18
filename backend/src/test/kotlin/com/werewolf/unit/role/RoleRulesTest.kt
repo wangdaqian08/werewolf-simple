@@ -122,4 +122,57 @@ class RoleRulesTest {
             RoleRules.mechNightSkill(mech, 2, listOf(night(1), night(2)))
         }
     }
+
+    // ── 殉情 (W5, W6) ─────────────────────────────────────────────────────────
+
+    private fun charmNight(day: Int, charm: String?) = NightPhase(gameId = 1, dayNumber = day).also { it.wolfBeautyCharmUserId = charm }
+
+    @Test
+    fun `charmVictim - the 狼美人 going out takes today's charmed player`() {
+        val players = listOf(player(PlayerRole.WOLF_BEAUTY, 1), player(PlayerRole.SEER, 2))
+        assertThat(RoleRules.charmVictim("u1", players, charmNight(2, "u2"))).isEqualTo("u2")
+    }
+
+    @Test
+    fun `charmVictim - nobody when another player goes out`() {
+        val players = listOf(player(PlayerRole.WOLF_BEAUTY, 1), player(PlayerRole.WEREWOLF, 2), player(PlayerRole.SEER, 3))
+        assertThat(RoleRules.charmVictim("u2", players, charmNight(2, "u3"))).isNull()
+    }
+
+    @Test
+    fun `charmVictim - nobody with no charm today, or no night row`() {
+        val players = listOf(player(PlayerRole.WOLF_BEAUTY, 1), player(PlayerRole.SEER, 2))
+        assertThat(RoleRules.charmVictim("u1", players, charmNight(2, null))).isNull()
+        assertThat(RoleRules.charmVictim("u1", players, null)).isNull()
+    }
+
+    @Test
+    fun `W5 - charmVictim ignores an earlier night's charm`() {
+        // Night 2 charmed u2; night 3 (today's row) charmed nobody.
+        val players = listOf(player(PlayerRole.WOLF_BEAUTY, 1), player(PlayerRole.SEER, 2))
+        assertThat(RoleRules.charmVictim("u1", players, charmNight(3, null))).isNull()
+    }
+
+    @Test
+    fun `charmVictim - nobody when the charmed player is already dead`() {
+        val players = listOf(player(PlayerRole.WOLF_BEAUTY, 1), player(PlayerRole.SEER, 2, alive = false))
+        assertThat(RoleRules.charmVictim("u1", players, charmNight(2, "u2"))).isNull()
+    }
+
+    @Test
+    fun `charmVictimAtNight - the victim when the 狼美人 is among the night's deaths`() {
+        val players = listOf(player(PlayerRole.WOLF_BEAUTY, 1), player(PlayerRole.SEER, 2), player(PlayerRole.VILLAGER, 3))
+        assertThat(RoleRules.charmVictimAtNight(charmNight(2, "u2"), players, listOf("u1", "u3"))).isEqualTo("u2")
+        assertThat(RoleRules.charmVictimAtNight(charmNight(2, "u2"), players, listOf("u3"))).isNull()
+    }
+
+    @Test
+    fun `charmVictimAtNight - counts a player who died that night as alive (dawn list recomputed after the kills)`() {
+        val beauty = player(PlayerRole.WOLF_BEAUTY, 1, alive = false).also { it.diedDay = 2 }
+        val victim = player(PlayerRole.SEER, 2, alive = false).also { it.diedDay = 2 }
+        val earlier = player(PlayerRole.VILLAGER, 3, alive = false).also { it.diedDay = 1 }
+        assertThat(RoleRules.charmVictimAtNight(charmNight(2, "u2"), listOf(beauty, victim, earlier), listOf("u1", "u2"))).isEqualTo("u2")
+        // Died before night 2 began: no 殉情.
+        assertThat(RoleRules.charmVictimAtNight(charmNight(2, "u3"), listOf(beauty, victim, earlier), listOf("u1"))).isNull()
+    }
 }

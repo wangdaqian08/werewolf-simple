@@ -50,7 +50,7 @@ object GameReviewBuilder {
                 night = completed[day]?.let { n ->
                     // NIGHT_DEATH is written at the dawn reveal; a game cancelled before it has none for its last night.
                     val died = nightDeaths[day]
-                        ?: if (game.winner == null && day == lastNight) NightOrchestrator.computeKills(n, night1PerkSaved) else emptyList()
+                        ?: if (game.winner == null && day == lastNight) NightOrchestrator.computeKills(n, night1PerkSaved, players) else emptyList()
                     night(n, players, refs, died, night1PerkSaved)
                 },
                 events = dayEvents(eventsByDay[day].orEmpty(), refs),
