@@ -270,6 +270,27 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V38 stores WOLF_BEAUTY, its sub-phase, the room flag and the new columns`() {
+        flyway().migrate()
+
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('host', 'host'), ('b', 'b')")
+            exec("INSERT INTO rooms (room_id, room_code, host_user_id, total_players, has_wolf_beauty) VALUES (1, '101', 'host', 12, TRUE)")
+            exec("INSERT INTO games (game_id, room_id, host_user_id, phase, day_number, charm_death_user_id) VALUES (1, 1, 'host', 'NIGHT', 1, 'b')")
+            exec("INSERT INTO game_players (game_id, user_id, seat_index, role) VALUES (1, 'b', 1, 'WOLF_BEAUTY')")
+            exec(
+                "INSERT INTO elimination_history (game_id, day_number, eliminated_user_id, eliminated_role, hunter_shot_user_id, hunter_shot_role) " +
+                        "VALUES (1, 1, 'b', 'WOLF_BEAUTY', 'b', 'WOLF_BEAUTY')"
+            )
+            exec("INSERT INTO night_phases (game_id, day_number, sub_phase, wolf_beauty_charm_user_id) VALUES (1, 1, 'WOLF_BEAUTY_PICK', 'b')")
+            val charm = createStatement().use { st ->
+                st.executeQuery("SELECT wolf_beauty_charm_user_id FROM night_phases WHERE game_id = 1").use { rs -> rs.next(); rs.getString(1) }
+            }
+            assertThat(charm).isEqualTo("b")
+        }
+    }
+
+    @Test
     fun `V37 stores GARGOYLE roles, its sub-phases, the room flag and the night check columns`() {
         flyway().migrate()
 

@@ -107,6 +107,16 @@ class RoleDealerTest {
     }
 
     @Test
+    fun `deals exactly one WOLF_BEAUTY among the wolves`() {
+        val room = Room(roomCode = "123", hostUserId = "h", totalPlayers = 12, wolfCount = 3, hasWolfBeauty = true)
+        val roles = RoleDealer.roleList(room, 12)
+
+        assertEquals(1, roles.count { it == WOLF_BEAUTY })
+        assertEquals(2, roles.count { it == WEREWOLF })
+        assertEquals(12, roles.size)
+    }
+
+    @Test
     fun `G1 - deals exactly one GARGOYLE in a wolf seat`() {
         val room = Room(roomCode = "123", hostUserId = "h", totalPlayers = 12, wolfCount = 4, hasGargoyle = true)
         val roles = RoleDealer.roleList(room, 12)

@@ -127,6 +127,7 @@ class GameStateLogger(
             NightSubPhase.GARGOYLE_PICK, NightSubPhase.GARGOYLE_RESULT ->
                 alivePlayers.filter { it.role == PlayerRole.GARGOYLE }.map { it.userId }
             NightSubPhase.WEREWOLF_PICK -> RoleRules.wolfKillers(alivePlayers).map { it.userId }
+            NightSubPhase.WOLF_BEAUTY_PICK -> alivePlayers.filter { it.role == PlayerRole.WOLF_BEAUTY }.map { it.userId }
             NightSubPhase.SEER_PICK, NightSubPhase.SEER_RESULT ->
                 alivePlayers.filter { it.role == PlayerRole.SEER }.map { it.userId }
             NightSubPhase.MECH_WOLF_PICK, NightSubPhase.MECH_WOLF_RESULT ->

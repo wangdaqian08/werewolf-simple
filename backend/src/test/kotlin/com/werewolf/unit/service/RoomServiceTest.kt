@@ -930,6 +930,25 @@ class RoomServiceTest {
     }
 
     @Test
+    fun `the wolf beauty counts as a special wolf and needs a plain wolf`() {
+        val rejected = RoomConfigRequest(totalPlayers = 12, wolfCount = 1, roles = listOf(PlayerRole.WOLF_BEAUTY, PlayerRole.WITCH))
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, rejected) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+            .hasMessageContaining("Wolf Beauty")
+
+        val withKing = RoomConfigRequest(
+            totalPlayers = 12, wolfCount = 2,
+            roles = listOf(PlayerRole.WOLF_BEAUTY, PlayerRole.WHITE_WOLF_KING, PlayerRole.WITCH),
+        )
+        assertThatThrownBy { roomService.createRoom(hostId, "Host", null, withKing) }
+            .isInstanceOf(InvalidRoleCompositionException::class.java)
+
+        stubCreate()
+        roomService.createRoom(hostId, "Host", null, rejected.copy(wolfCount = 2))
+        verify(roomRepository).save(argThat<Room> { hasWolfBeauty && wolfCount == 2 })
+    }
+
+    @Test
     fun `G1 - the gargoyle counts as a special wolf and needs a plain wolf`() {
         val rejected = RoomConfigRequest(
             totalPlayers = 12, wolfCount = 1,

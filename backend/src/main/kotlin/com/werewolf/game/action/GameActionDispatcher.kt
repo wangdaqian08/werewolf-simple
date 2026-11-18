@@ -120,6 +120,9 @@ class GameActionDispatcher(
 
             ActionType.GARGOYLE_CONFIRM -> nightTurn(request, context, PlayerRole.GARGOYLE)
 
+            // Handler arrives with the wolf beauty night task; until then no client sends these.
+            ActionType.WOLF_BEAUTY_CHARM, ActionType.WOLF_BEAUTY_SKIP -> nightTurn(request, context, PlayerRole.WOLF_BEAUTY)
+
             // ── Night: mechanical wolf ────────────────────────────────────────
             ActionType.MECH_LEARN, ActionType.MECH_CHECK, ActionType.MECH_POISON, ActionType.MECH_PROTECT,
             ActionType.MECH_SKIP,
@@ -168,6 +171,8 @@ class GameActionDispatcher(
             ActionType.GARGOYLE_CHECK to NightSubPhase.GARGOYLE_PICK,
             ActionType.GARGOYLE_SKIP to NightSubPhase.GARGOYLE_PICK,
             ActionType.GARGOYLE_CONFIRM to NightSubPhase.GARGOYLE_RESULT,
+            ActionType.WOLF_BEAUTY_CHARM to NightSubPhase.WOLF_BEAUTY_PICK,
+            ActionType.WOLF_BEAUTY_SKIP to NightSubPhase.WOLF_BEAUTY_PICK,
             ActionType.MECH_LEARN to NightSubPhase.MECH_WOLF_PICK,
             ActionType.MECH_CHECK to NightSubPhase.MECH_WOLF_PICK,
             ActionType.MECH_POISON to NightSubPhase.MECH_WOLF_PICK,

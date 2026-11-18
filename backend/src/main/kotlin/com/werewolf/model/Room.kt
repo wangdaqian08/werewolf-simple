@@ -72,6 +72,10 @@ class Room(
     @Column(name = "has_gargoyle", nullable = false)
     var hasGargoyle: Boolean = false,
 
+    // Takes one of the wolfCount seats; stays a pack wolf.
+    @Column(name = "has_wolf_beauty", nullable = false)
+    var hasWolfBeauty: Boolean = false,
+
     @Column(name = "has_sheriff", nullable = false)
     val hasSheriff: Boolean = true,
 

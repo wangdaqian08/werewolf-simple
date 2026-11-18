@@ -75,6 +75,7 @@ class RoomService(
                 hasKnight = PlayerRole.KNIGHT in cfg.roles,
                 hasGravekeeper = PlayerRole.GRAVEKEEPER in cfg.roles,
                 hasGargoyle = PlayerRole.GARGOYLE in cfg.roles,
+                hasWolfBeauty = PlayerRole.WOLF_BEAUTY in cfg.roles,
                 hasSheriff = cfg.hasSheriff,
                 winCondition = cfg.winCondition,
                 config = buildGameConfig(cfg.bgmTrack, cfg.witchSelfSaveAllowed, cfg.perksAllowed, cfg.noKillAllowed, cfg.guardSkipAllowed, cfg.sheriffSpeechOrder),
@@ -247,6 +248,7 @@ class RoomService(
         room.hasKnight = PlayerRole.KNIGHT in roles
         room.hasGravekeeper = PlayerRole.GRAVEKEEPER in roles
         room.hasGargoyle = PlayerRole.GARGOYLE in roles
+        room.hasWolfBeauty = PlayerRole.WOLF_BEAUTY in roles
         roomRepository.save(room)
         members.filter { !it.host }.forEach { it.status = ReadyStatus.NOT_READY }
         roomPlayerRepository.saveAll(members)
@@ -387,6 +389,7 @@ class RoomService(
             if (room.hasBlackWolfKing) add(PlayerRole.BLACK_WOLF_KING)
             if (room.hasMechanicalWolf) add(PlayerRole.MECHANICAL_WOLF)
             if (room.hasGargoyle) add(PlayerRole.GARGOYLE)
+            if (room.hasWolfBeauty) add(PlayerRole.WOLF_BEAUTY)
             add(PlayerRole.VILLAGER)
             if (room.hasSeer) add(PlayerRole.SEER)
             if (room.hasWitch) add(PlayerRole.WITCH)
@@ -450,7 +453,7 @@ class RoomService(
      * Backend enforces game-correctness invariants only:
      *   1. wolfCount must be > 0 (a wolfless game is not werewolf)
      *   2. wolves + gods ≤ totalPlayers (no seat overflow)
-     *   3. each special wolf (白狼王 / 黑狼王 / 机械狼 / 石像鬼, any may be on) needs a plain
+     *   3. each special wolf (白狼王 / 黑狼王 / 机械狼 / 石像鬼 / 狼美人, any may be on) needs a plain
      *      fellow wolf: wolfCount ≥ specials + 1. For the White Wolf King alone it
      *      is always the last wolf and could never take anyone; the Black Wolf
      *      King shares the gate (owner's call: one rule for both). The mechanical
@@ -504,7 +507,7 @@ class RoomService(
         }
         val specials = roles.filter {
             it == PlayerRole.WHITE_WOLF_KING || it == PlayerRole.BLACK_WOLF_KING || it == PlayerRole.MECHANICAL_WOLF ||
-                it == PlayerRole.GARGOYLE
+                it == PlayerRole.GARGOYLE || it == PlayerRole.WOLF_BEAUTY
         }.distinct()
         if (specials.isNotEmpty() && wolfCount < specials.size + 1) {
             val names = specials.joinToString(" + ") {
@@ -512,6 +515,7 @@ class RoomService(
                     PlayerRole.WHITE_WOLF_KING -> "White Wolf King"
                     PlayerRole.BLACK_WOLF_KING -> "Black Wolf King"
                     PlayerRole.GARGOYLE -> "Gargoyle"
+                    PlayerRole.WOLF_BEAUTY -> "Wolf Beauty"
                     else -> "Mechanical Wolf"
                 }
             }
@@ -540,6 +544,7 @@ class RoomService(
                 PlayerRole.MEDIUM to timing.applyTo(PlayerRole.MEDIUM),
                 PlayerRole.GRAVEKEEPER to timing.applyTo(PlayerRole.GRAVEKEEPER),
                 PlayerRole.GARGOYLE to timing.applyTo(PlayerRole.GARGOYLE),
+                PlayerRole.WOLF_BEAUTY to timing.applyTo(PlayerRole.WOLF_BEAUTY),
             ),
             bgmTrack = bgmTrack,
             witchSelfSaveAllowed = witchSelfSaveAllowed,
