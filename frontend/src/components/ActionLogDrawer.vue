@@ -82,7 +82,12 @@
               <!-- Deaths at start of day -->
               <div v-if="round.deaths.length > 0" class="log-section">
                 <div class="section-title">{{ $t('log.nightDeaths') }}</div>
-                <div v-for="d in round.deaths" :key="d.userId" class="log-row">
+                <div
+                  v-for="d in round.deaths"
+                  :key="d.userId"
+                  class="log-row"
+                  :data-testid="`log-night-death-${d.seatIndex}`"
+                >
                   <span class="seat-badge">{{ $t('common.seat', { n: d.seatIndex }) }}</span>
                   <span class="log-name">{{ d.nickname }}</span>
                 </div>
