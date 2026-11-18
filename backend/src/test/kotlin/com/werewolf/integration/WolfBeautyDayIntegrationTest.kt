@@ -14,6 +14,7 @@ import com.werewolf.model.GamePlayer
 import com.werewolf.model.NightPhase
 import com.werewolf.model.NightSubPhase
 import com.werewolf.model.PlayerRole
+import com.werewolf.model.VotingSubPhase
 import com.werewolf.model.WinnerSide
 import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GameEventRepository
@@ -39,7 +40,8 @@ import org.springframework.test.context.ActiveProfiles
 /**
  * The 狼美人's day 殉情 end to end, through POST /api/game/action: a real game in which it charms
  * on night 2 and is voted out on day 2 (exit X2, the W15 order), and the two exits that never
- * take the charmed player along (X7 duel, X8 host declare-out).
+ * take the charmed player along (X7 duel, X8 host declare-out). Also the shots on the 狼美人
+ * (X3, X4/Q10, X5), the W15 night win, the HARD_MODE first check (Q12) and the charmed hunter (W6).
  *
  * Plain context config (no spy beans), shared with the other plain integration tests.
  */
@@ -88,8 +90,8 @@ class WolfBeautyDayIntegrationTest {
         it.contentType = MediaType.APPLICATION_JSON
     }
 
-    private fun ok(token: String, gameId: Int, actionType: String, target: String? = null, payload: Map<String, Any?>? = null) {
-        val resp = restTemplate.postForEntity(
+    private fun act(token: String, gameId: Int, actionType: String, target: String? = null, payload: Map<String, Any?>? = null) =
+        restTemplate.postForEntity(
             ACTION_URL,
             HttpEntity(
                 buildMap<String, Any?> {
@@ -102,11 +104,14 @@ class WolfBeautyDayIntegrationTest {
             ),
             Map::class.java,
         )
+
+    private fun ok(token: String, gameId: Int, actionType: String, target: String? = null, payload: Map<String, Any?>? = null) {
+        val resp = act(token, gameId, actionType, target, payload)
         assertThat(resp.statusCode).describedAs("$actionType accepted, body=${resp.body}").isEqualTo(HttpStatus.OK)
     }
 
     /** 12 players, no sheriff; roles confirmed, game in ROLE_REVEAL. */
-    private fun setupGame(prefix: String, roles: List<String>): Game {
+    private fun setupGame(prefix: String, roles: List<String>, winCondition: String = "CLASSIC"): Game {
         val (hostToken, hostId) = login("${prefix}H")
         val guests = (1..11).map { login("${prefix}G$it") }
 
@@ -122,6 +127,7 @@ class WolfBeautyDayIntegrationTest {
                         "roles" to roles,
                         "hasSheriff" to false,
                         "guardSkipAllowed" to true,
+                        "winCondition" to winCondition,
                     ),
                 ),
                 headers(hostToken),
@@ -163,11 +169,13 @@ class WolfBeautyDayIntegrationTest {
             nightPhaseRepository.findByGameIdAndDayNumber(g.gameId, day).orElse(null)?.subPhase == target
         }
 
-    private fun waitForDawn(g: Game, day: Int) = waitFor("dawn of night $day") {
-        gameRepository.findById(g.gameId).orElseThrow().let { it.phase == GamePhase.DAY_DISCUSSION && it.dayNumber == day }
+    private fun waitForDawn(g: Game, day: Int) = waitFor("dawn (or game over) of night $day") {
+        gameRepository.findById(g.gameId).orElseThrow().let {
+            it.phase == GamePhase.GAME_OVER || (it.phase == GamePhase.DAY_DISCUSSION && it.dayNumber == day)
+        }
     }
 
-    /** One night: the 狼美人 knifes, charms or skips; the seer checks it; a living witch acts with [witch]. */
+    /** One night: the 狼美人 knifes, charms or skips; a living seer checks it; a living witch acts with [witch]. */
     private fun driveNight(g: Game, day: Int, knifeTarget: GamePlayer, charm: GamePlayer?, witch: Map<String, Any?>? = null) {
         waitForSubPhase(g, day, NightSubPhase.WEREWOLF_PICK)
         ok(g.token(g.beauty), g.gameId, "WOLF_KILL", knifeTarget.userId)
@@ -179,10 +187,12 @@ class WolfBeautyDayIntegrationTest {
             ok(g.token(g.first(PlayerRole.WITCH)), g.gameId, "WITCH_ACT", payload = witch)
         }
         val seer = g.first(PlayerRole.SEER)
-        waitForSubPhase(g, day, NightSubPhase.SEER_PICK)
-        ok(g.token(seer), g.gameId, "SEER_CHECK", g.beauty.userId)
-        waitForSubPhase(g, day, NightSubPhase.SEER_RESULT)
-        ok(g.token(seer), g.gameId, "SEER_CONFIRM")
+        if (alive(g, seer)) {
+            waitForSubPhase(g, day, NightSubPhase.SEER_PICK)
+            ok(g.token(seer), g.gameId, "SEER_CHECK", g.beauty.userId)
+            waitForSubPhase(g, day, NightSubPhase.SEER_RESULT)
+            ok(g.token(seer), g.gameId, "SEER_CONFIRM")
+        }
         waitForDawn(g, day)
     }
 
@@ -215,6 +225,26 @@ class WolfBeautyDayIntegrationTest {
         assertThat(gameRepository.findById(g.gameId).orElseThrow().charmDeathUserId).isNull()
         assertThat(gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(g.gameId)).noneMatch { it.eventType == "CHARM_DEATH" }
     }
+
+    /** Night 1 (knife [knifeTarget], no charm), then a day 1 with no vote-out: the game is in night 2. */
+    private fun playNight1AndEmptyDay1(g: Game, knifeTarget: GamePlayer, witch: Map<String, Any?>? = null) {
+        ok(g.hostToken, g.gameId, "START_NIGHT")
+        driveNight(g, 1, knifeTarget = knifeTarget, charm = null, witch = witch)
+        ok(g.hostToken, g.gameId, "REVEAL_NIGHT_RESULT")
+        ok(g.hostToken, g.gameId, "DAY_ADVANCE")
+        ok(g.hostToken, g.gameId, "VOTING_REVEAL_TALLY")
+        ok(g.hostToken, g.gameId, "VOTING_REVEAL_TALLY")
+    }
+
+    /** Day 2 vote: every living player but [target] votes [target] out. */
+    private fun voteOut(g: Game, target: GamePlayer) {
+        ok(g.hostToken, g.gameId, "DAY_ADVANCE")
+        g.players.filter { it.userId != target.userId && alive(g, it) }.forEach { ok(g.token(it), g.gameId, "SUBMIT_VOTE", target.userId) }
+        ok(g.hostToken, g.gameId, "VOTING_REVEAL_TALLY")
+    }
+
+    private fun charmDeathTargets(g: Game) =
+        gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(g.gameId).filter { it.eventType == "CHARM_DEATH" }.map { it.targetUserId }
 
     // ── Tests ─────────────────────────────────────────────────────────────────
 
@@ -368,5 +398,147 @@ class WolfBeautyDayIntegrationTest {
         assertThat(charmEvents.map { it.targetUserId }).containsExactly(sheriff.userId)
         // A day 殉情 is public (Q13): the 游戏记录 keeps it.
         assertThat(publicLog(g).filter { it["eventType"] == "CHARM_DEATH" }.map { it["targetUserId"] }).containsExactly(sheriff.userId)
+    }
+
+    @Test
+    fun `C7 X3 - a voted-out hunter shoots the 狼美人 - its night-2 charm 殉情 at the shot`() {
+        val g = setupGame("WC7", BOARD)
+        val hunter = g.first(PlayerRole.HUNTER)
+        val charmed = g.villagers.first()
+        parkDay2WithCharm(g, charmed)
+
+        voteOut(g, hunter)
+        assertThat(alive(g, hunter)).isFalse()
+        assertThat(gameRepository.findById(g.gameId).orElseThrow().pendingShooterUserId).isEqualTo(hunter.userId)
+        ok(g.token(hunter), g.gameId, "HUNTER_SHOOT", g.beauty.userId)
+
+        assertThat(alive(g, g.beauty)).isFalse()
+        assertThat(alive(g, charmed)).describedAs("the charmed villager 殉情").isFalse()
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.charmDeathUserId).isEqualTo(charmed.userId)
+        assertThat(charmDeathTargets(g)).containsExactly(charmed.userId)
+        assertThat(game.pendingShooterUserId).describedAs("the shot is spent and the 殉情 gets none").isNull()
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_VOTING)
+        assertThat(game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+    }
+
+    @Test
+    fun `C8 X4 Q10 - the shot sheriff 狼美人 - the charmed player dies at the shot and cannot take the badge`() {
+        val g = setupGame("WC8", BOARD)
+        val hunter = g.first(PlayerRole.HUNTER)
+        val (charmed, heir) = g.villagers
+        parkDay2WithCharm(g, charmed)
+        gameRepository.save(gameRepository.findById(g.gameId).orElseThrow().also { it.sheriffUserId = g.beauty.userId })
+        gamePlayerRepository.save(gamePlayerRepository.findByGameIdAndUserId(g.gameId, g.beauty.userId).orElseThrow().also { it.sheriff = true })
+
+        voteOut(g, hunter)
+        ok(g.token(hunter), g.gameId, "HUNTER_SHOOT", g.beauty.userId)
+
+        assertThat(alive(g, charmed)).describedAs("Q10: the 殉情 happens at the shot").isFalse()
+        assertThat(alive(g, g.beauty)).describedAs("the sheriff hands over first").isTrue()
+        val handover = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(handover.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+        assertThat(handover.charmDeathUserId).isEqualTo(charmed.userId)
+        assertThat(charmDeathTargets(g)).containsExactly(charmed.userId)
+
+        assertThat(act(g.token(g.beauty), g.gameId, "BADGE_PASS", charmed.userId).statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        ok(g.token(g.beauty), g.gameId, "BADGE_PASS", heir.userId)
+
+        assertThat(alive(g, g.beauty)).isFalse()
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.sheriffUserId).isEqualTo(heir.userId)
+        assertThat(game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+    }
+
+    @Test
+    fun `C9 X5 - a hunter knifed on night 2 shoots the 狼美人 at the reveal - its charm 殉情`() {
+        val g = setupGame("WC9", BOARD)
+        val hunter = g.first(PlayerRole.HUNTER)
+        val (v0, charmed) = g.villagers
+        kill(g.first(PlayerRole.WITCH), g.first(PlayerRole.GUARD))
+
+        playNight1AndEmptyDay1(g, knifeTarget = v0)
+        driveNight(g, 2, knifeTarget = hunter, charm = charmed)
+        ok(g.hostToken, g.gameId, "REVEAL_NIGHT_RESULT")
+        assertThat(alive(g, hunter)).isFalse()
+        assertThat(gameRepository.findById(g.gameId).orElseThrow().pendingShooterUserId).isEqualTo(hunter.userId)
+
+        ok(g.token(hunter), g.gameId, "HUNTER_SHOOT", g.beauty.userId)
+
+        assertThat(alive(g, g.beauty)).isFalse()
+        assertThat(alive(g, charmed)).describedAs("the charmed villager 殉情").isFalse()
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.charmDeathUserId).isEqualTo(charmed.userId)
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(game.subPhase).isEqualTo(DaySubPhase.RESULT_REVEALED.name)
+        assertThat(charmDeathTargets(g)).containsExactly(charmed.userId)
+        @Suppress("UNCHECKED_CAST")
+        val dayPhase = gameService.getGameState(g.gameId, g.hostId)["dayPhase"] as Map<String, Any?>
+        val banner = dayPhase["charmDeath"] as Map<*, *>
+        assertThat(banner["beautySeatIndex"]).isEqualTo(g.beauty.seatIndex)
+        assertThat(banner["victimSeatIndex"]).isEqualTo(charmed.seatIndex)
+    }
+
+    @Test
+    fun `C14 W15 - a poisoned last-wolf 狼美人 charming the last god wins for the wolves at night end`() {
+        val g = setupGame("WC14", BOARD)
+        val witch = g.first(PlayerRole.WITCH)
+        val (v0, v1) = g.villagers
+        // The 狼美人 is the last wolf and the witch is the last god.
+        kill(*g.werewolves.toTypedArray(), g.first(PlayerRole.SEER), g.first(PlayerRole.HUNTER), g.first(PlayerRole.GUARD))
+        val noPotion = mapOf("useAntidote" to false)
+
+        playNight1AndEmptyDay1(g, knifeTarget = v0, witch = noPotion)
+        driveNight(g, 2, knifeTarget = v1, charm = witch, witch = noPotion + ("poisonTargetUserId" to g.beauty.userId))
+
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(game.winner).describedAs("W15: the 殉情 wipes the gods with the 狼美人 still in").isEqualTo(WinnerSide.WEREWOLF)
+        assertThat(alive(g, g.beauty)).isFalse()
+        assertThat(alive(g, witch)).describedAs("the charmed witch 殉情").isFalse()
+        assertThat(charmDeathTargets(g)).containsExactly(witch.userId)
+    }
+
+    @Test
+    fun `C15 Q12 - HARD_MODE, 2 villagers and the 狼美人 - its vote-out 殉情 gives no early wolf win`() {
+        val g = setupGame("WC15", BOARD, winCondition = "HARD_MODE")
+        val (charmed, other, v2, v3) = g.villagers
+        // Alive: the 狼美人 and two villagers; no counterplay left, so the HARD_MODE shortcut would fire if used.
+        kill(*g.werewolves.toTypedArray(), *g.players.filter { it.role.isGod }.toTypedArray(), v2, v3)
+        parkDay2WithCharm(g, charmed)
+
+        voteOut(g, g.beauty)
+
+        assertThat(alive(g, g.beauty)).isFalse()
+        assertThat(alive(g, charmed)).describedAs("the charmed villager 殉情").isFalse()
+        assertThat(alive(g, other)).isTrue()
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.charmDeathUserId).isEqualTo(charmed.userId)
+        assertThat(game.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(game.winner).describedAs("Q12: the first check finds no wiped side; then no wolf is left").isEqualTo(WinnerSide.VILLAGER)
+    }
+
+    @Test
+    fun `C16 W6 - a charmed hunter knifed the night the 狼美人 is poisoned gets no shot`() {
+        val g = setupGame("WC16", BOARD)
+        val hunter = g.first(PlayerRole.HUNTER)
+        val v0 = g.villagers.first()
+        kill(g.first(PlayerRole.GUARD))
+        val noPotion = mapOf("useAntidote" to false)
+
+        playNight1AndEmptyDay1(g, knifeTarget = v0, witch = noPotion)
+        driveNight(g, 2, knifeTarget = hunter, charm = hunter, witch = noPotion + ("poisonTargetUserId" to g.beauty.userId))
+        ok(g.hostToken, g.gameId, "REVEAL_NIGHT_RESULT")
+
+        assertThat(alive(g, g.beauty)).isFalse()
+        assertThat(alive(g, hunter)).isFalse()
+        val game = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(game.phase).isEqualTo(GamePhase.DAY_DISCUSSION)
+        assertThat(game.pendingShooterUserId).describedAs("W6: a 殉情 hunter cannot shoot").isNull()
+        @Suppress("UNCHECKED_CAST")
+        val dayPhase = gameService.getGameState(g.gameId, hunter.userId)["dayPhase"] as Map<String, Any?>
+        assertThat(dayPhase["canShoot"]).isEqualTo(false)
+        assertThat(act(g.token(hunter), g.gameId, "HUNTER_SHOOT", g.villagers.last().userId).statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(charmDeathTargets(g)).containsExactly(hunter.userId)
     }
 }
