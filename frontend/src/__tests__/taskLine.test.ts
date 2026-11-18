@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import TaskLine from '@/components/TaskLine.vue'
+import type { TaskCode } from '@/types'
 
 const line = (done: boolean | null) =>
   mount(TaskLine, { props: { task: { code: 'SEER_FIND_TWO_WOLVES', score: 10, done } } })
@@ -69,21 +70,30 @@ describe('TaskLine', () => {
     const en = (await import('@/i18n/locales/en')).default as unknown as {
       task: { name: Record<string, string> }
     }
-    const codes = [
-      'SURVIVE_TO_DAY3',
-      'HOLD_BADGE',
-      'VOTE_WOLF_TWICE',
-      'VILLAGER_SURVIVE_WIN',
-      'SEER_FIND_TWO_WOLVES',
-      'WITCH_POISON_WOLF',
-      'WITCH_SAVE_GOOD',
-      'GUARD_BLOCK_KILL',
-      'WOLF_NEVER_EXILED',
-      'WOLF_WIN_ALIVE',
-      'WOLF_FIRST_NIGHT_GOD',
-      'SEER_WOLF_EVERY_NIGHT',
-      'NEVER_VOTE_GOOD',
-    ]
+    // A Record over TaskCode: the type check fails when a new code is missing here.
+    const all: Record<TaskCode, true> = {
+      SURVIVE_TO_DAY3: true,
+      HOLD_BADGE: true,
+      VOTE_WOLF_TWICE: true,
+      VILLAGER_SURVIVE_WIN: true,
+      SEER_FIND_TWO_WOLVES: true,
+      WITCH_POISON_WOLF: true,
+      WITCH_SAVE_GOOD: true,
+      GUARD_BLOCK_KILL: true,
+      WOLF_NEVER_EXILED: true,
+      WOLF_WIN_ALIVE: true,
+      WOLF_FIRST_NIGHT_GOD: true,
+      SEER_WOLF_EVERY_NIGHT: true,
+      NEVER_VOTE_GOOD: true,
+      HUNTER_SHOOT_WOLF: true,
+      KNIGHT_DUEL_WOLF: true,
+      MEDIUM_FIND_WOLF: true,
+      WWK_TAKE_GOD: true,
+      BWK_SHOOT_GOD: true,
+      GARGOYLE_FIND_TWO_GODS: true,
+      IDIOT_REVEAL_WIN: true,
+    }
+    const codes = Object.keys(all)
     for (const c of codes) {
       expect(zh.task.name[c], c).toBeTruthy()
       expect(en.task.name[c], c).toBeTruthy()
