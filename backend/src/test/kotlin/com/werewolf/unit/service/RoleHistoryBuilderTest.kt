@@ -233,4 +233,20 @@ class RoleHistoryBuilderTest {
         assertThat(e.single()["role"]).isEqualTo(PlayerRole.SEER)
         assertThat(target(e.single())!!["userId"]).isEqualTo("seer")
     }
+
+    @Test
+    fun `wolf beauty history lists the pack's kills and its charms, never tonight`() {
+        val beauty = player("wb", 10, PlayerRole.WOLF_BEAUTY)
+        val nights = listOf(
+            night(1) { wolfTargetUserId = "v1" },
+            night(2) { wolfTargetUserId = "seer"; wolfBeautyCharmUserId = "guard" },
+            night(3) { wolfTargetUserId = "v2"; wolfBeautyCharmUserId = "witch" },
+        )
+        val h = build(beauty, game(GamePhase.NIGHT, 3), nights, players + beauty)
+
+        assertThat(h!!["role"]).isEqualTo("WOLF_BEAUTY")
+        val e = entries(h)
+        assertThat(e.map { it["round"] to it["action"] }).containsExactly(1 to "KILL", 2 to "KILL", 2 to "CHARM")
+        assertThat(target(e[2])).isEqualTo(mapOf("userId" to "guard", "nickname" to "N-guard", "seatIndex" to 3))
+    }
 }

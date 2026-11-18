@@ -383,6 +383,17 @@ class GameService(
             }
         } else null
 
+        // Public: today's day 殉情 (B, Q13); null when the 狼美人 went out alone, so its role stays hidden (Q14).
+        val charmDeath = game.charmDeathUserId?.let { victimId ->
+            val beauty = players.firstOrNull { it.role == PlayerRole.WOLF_BEAUTY }
+            mapOf(
+                "beautySeatIndex" to (beauty?.seatIndex ?: 0),
+                "beautyNickname"  to (beauty?.let { displayNameFor(it.userId) } ?: ""),
+                "victimSeatIndex" to (players.firstOrNull { it.userId == victimId }?.seatIndex ?: 0),
+                "victimNickname"  to displayNameFor(victimId),
+            )
+        }
+
         val dayPhase = if (game.phase == GamePhase.DAY_DISCUSSION) {
             val playerMap = players.associateBy { it.userId }
             // Show the night deaths once the host reveals them and through the
@@ -447,6 +458,7 @@ class GameService(
                 "nightResult"   to nightResult,
                 "selfDestruct"  to selfDestruct,
                 "knightDuel"    to knightDuel,
+                "charmDeath"    to charmDeath,
                 "canVote"       to (myPlayer != null && myPlayer.alive && myPlayer.canVote),
                 // Private: true only on the pending shooter's own state.
                 "canShoot"      to (game.pendingShooterUserId == requestingUserId),
@@ -535,6 +547,7 @@ class GameService(
                 "idiotRevealedId" to idiotRevealedPlayer?.userId,
                 "idiotRevealedNickname" to idiotRevealedUser?.nickname,
                 "idiotRevealedSeatIndex" to idiotRevealedPlayer?.seatIndex,
+                "charmDeath" to charmDeath,
             )
         } else null
 

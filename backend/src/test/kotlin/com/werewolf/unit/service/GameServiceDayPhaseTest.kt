@@ -143,6 +143,25 @@ class GameServiceDayPhaseTest {
         assertThat(dayResult(gameService.getGameState(gameId, hostId))["knightDuel"]).isNull()
     }
 
+    // ── 殉情 banner (B, Q13, Q14) ────────────────────────────────────────────
+
+    @Test
+    fun `day state carries charmDeath after a day 殉情, and none when 狼美人 went out alone`() {
+        val players = listOf(player(hostId, 0), player("wb", 1, PlayerRole.WOLF_BEAUTY), player("seer", 2, PlayerRole.SEER))
+        val users = listOf(user(hostId, "Host"), user("wb", "Beauty"), user("seer", "Seer"))
+        val g = game(DaySubPhase.RESULT_REVEALED.name).also { it.charmDeathUserId = "seer" }
+        setupGameAndPlayers(g, players, users)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day)).thenReturn(Optional.of(nightPhase()))
+
+        assertThat(dayResult(gameService.getGameState(gameId, hostId))["charmDeath"]).isEqualTo(
+            mapOf("beautySeatIndex" to 1, "beautyNickname" to "Beauty", "victimSeatIndex" to 2, "victimNickname" to "Seer"),
+        )
+
+        // Q14: no 殉情 → nothing names the 狼美人.
+        g.charmDeathUserId = null
+        assertThat(dayResult(gameService.getGameState(gameId, hostId))["charmDeath"]).isNull()
+    }
+
     @Test
     fun `knightDuelUsed false before, true after`() {
         val players = listOf(player(hostId, 0), player("kn", 1, PlayerRole.KNIGHT), player("v", 2))

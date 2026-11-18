@@ -20,6 +20,7 @@ import com.werewolf.repository.GameEventRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.NightPhaseRepository
+import com.werewolf.service.GameService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -53,6 +54,7 @@ class WolfBeautyDayIntegrationTest {
     @Autowired lateinit var nightPhaseRepository: NightPhaseRepository
     @Autowired lateinit var gameEventRepository: GameEventRepository
     @Autowired lateinit var eliminationHistoryRepository: EliminationHistoryRepository
+    @Autowired lateinit var gameService: GameService
 
     companion object {
         private const val START_URL = "/api/game/start"
@@ -241,6 +243,34 @@ class WolfBeautyDayIntegrationTest {
         assertThat(charmEvents.map { it.targetUserId }).containsExactly(seer.userId)
         // W13: only the 狼美人 is a vote-out.
         assertThat(eliminationHistoryRepository.findByGameId(g.gameId).map { it.eliminatedUserId }).containsExactly(g.beauty.userId)
+    }
+
+    @Test
+    fun `B Q13 - the vote-out 殉情 banner names both seats, survives a reload and is cleared at night`() {
+        val g = setupGame("WBB", BOARD)
+        val charmed = g.villagers.first { it.userId != g.hostId }
+        parkDay2WithCharm(g, charmed)
+
+        ok(g.hostToken, g.gameId, "DAY_ADVANCE")
+        g.players.filter { it.userId != g.beauty.userId }.forEach { ok(g.token(it), g.gameId, "SUBMIT_VOTE", g.beauty.userId) }
+        ok(g.hostToken, g.gameId, "VOTING_REVEAL_TALLY")
+        assertThat(alive(g, charmed)).describedAs("the charmed villager 殉情").isFalse()
+
+        @Suppress("UNCHECKED_CAST")
+        val voting = gameService.getGameState(g.gameId, g.hostId)["votingPhase"] as Map<String, Any?>
+        // setupGame seats the host at 0 ("WBBH") and guest N at seat N ("WBBGN").
+        fun nick(p: GamePlayer) = if (p.seatIndex == 0) "WBBH" else "WBBG${p.seatIndex}"
+        assertThat(voting["charmDeath"]).isEqualTo(
+            mapOf(
+                "beautySeatIndex" to g.beauty.seatIndex, "beautyNickname" to nick(g.beauty),
+                "victimSeatIndex" to charmed.seatIndex, "victimNickname" to nick(charmed),
+            ),
+        )
+
+        ok(g.hostToken, g.gameId, "VOTING_CONTINUE")
+        val night = gameRepository.findById(g.gameId).orElseThrow()
+        assertThat(night.phase).isEqualTo(GamePhase.NIGHT)
+        assertThat(night.charmDeathUserId).isNull()
     }
 
     @Test

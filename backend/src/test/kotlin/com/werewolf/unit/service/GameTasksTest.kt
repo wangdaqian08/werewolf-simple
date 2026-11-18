@@ -23,6 +23,7 @@ class GameTasksTest {
         "w1" to WEREWOLF, "w2" to WHITE_WOLF_KING, "seer" to SEER, "witch" to WITCH,
         "guard" to GUARD, "v1" to VILLAGER, "v2" to VILLAGER, "hunter" to HUNTER,
         "bwk" to BLACK_WOLF_KING, "knight" to KNIGHT, "medium" to MEDIUM, "gargoyle" to GARGOYLE, "idiot" to IDIOT,
+        "wb" to WOLF_BEAUTY,
     )
 
     private fun facts(
@@ -39,9 +40,10 @@ class GameTasksTest {
         shots: List<Pair<String, String>> = emptyList(),
         selfDestructTakes: Map<String, String> = emptyMap(),
         duelWins: Set<String> = emptySet(),
+        charmDeaths: Map<String, String> = emptyMap(),
     ) = GameTasks.Facts(
         winner, finalDay, roles, badgeHolders, wolfVoteDays, nights, nightDeathDay, exiled,
-        finalVotes, talliedDays, idiotRevealDay, shots, selfDestructTakes, duelWins,
+        finalVotes, talliedDays, idiotRevealDay, shots, selfDestructTakes, duelWins, charmDeaths,
     )
 
     private fun done(task: GameTask, p: GamePlayer, f: GameTasks.Facts) = GameTasks.isDone(task, p, f)
@@ -110,6 +112,7 @@ class GameTasksTest {
             GameTask.BWK_SHOOT_GOD to { r -> r == BLACK_WOLF_KING },
             GameTask.GARGOYLE_FIND_TWO_GODS to { r -> r == GARGOYLE },
             GameTask.IDIOT_REVEAL_WIN to { r -> r == IDIOT },
+            GameTask.WOLF_BEAUTY_LINK_GOD to { r -> r == WOLF_BEAUTY }, // its charm is its only tool
         )
         assertThat(canDoIt.keys).containsExactlyInAnyOrder(*GameTask.entries.toTypedArray()) // a new task must be listed here
         for (role in PlayerRole.entries) for (sheriff in listOf(true, false)) {
@@ -453,5 +456,18 @@ class GameTasksTest {
         assertThat(done(GameTask.IDIOT_REVEAL_WIN, idiot, facts(idiotRevealDay = mapOf("idiot" to 2)))).isTrue()
         assertThat(done(GameTask.IDIOT_REVEAL_WIN, idiot, facts(idiotRevealDay = mapOf("idiot" to 2), winner = WinnerSide.WEREWOLF))).isFalse()
         assertThat(done(GameTask.IDIOT_REVEAL_WIN, idiot, facts())).isFalse()
+    }
+
+    // ── 狼美人 (F) ────────────────────────────────────────────────────
+
+    @Test
+    fun `wolf beauty - draws the link task, scores 20, done only when the 殉情 took a god`() {
+        assertThat(GameTasks.eligible(WOLF_BEAUTY, hasSheriff = false)).contains(GameTask.WOLF_BEAUTY_LINK_GOD)
+        assertThat(GameTask.WOLF_BEAUTY_LINK_GOD.score).isEqualTo(20)
+        val wb = seat("wb", WOLF_BEAUTY, diedDay = 2)
+        assertThat(done(GameTask.WOLF_BEAUTY_LINK_GOD, wb, facts(charmDeaths = mapOf("wb" to "seer")))).isTrue()
+        assertThat(done(GameTask.WOLF_BEAUTY_LINK_GOD, wb, facts(charmDeaths = mapOf("wb" to "v1")))).isFalse()
+        assertThat(done(GameTask.WOLF_BEAUTY_LINK_GOD, wb, facts())).isFalse()
+        assertThat(GameTasks.scoreFor(GameTask.WOLF_BEAUTY_LINK_GOD, wb, facts(charmDeaths = mapOf("wb" to "guard")))).isEqualTo(20)
     }
 }

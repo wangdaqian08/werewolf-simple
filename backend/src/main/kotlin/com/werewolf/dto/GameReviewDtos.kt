@@ -40,7 +40,7 @@ data class ReviewPlayer(val userId: String, val nickname: String, val seatIndex:
 /** One day number: the night that opens it (null when not completed) and that day's events in order. */
 data class ReviewRound(val day: Int, val night: ReviewNight?, val events: List<ReviewDayEvent>)
 
-/** [seer], [mech], [medium], [witch], [guard], [gravekeeper] and [gargoyle] are null when the role is not in the game. */
+/** [seer], [mech], [medium], [witch], [guard], [gravekeeper], [gargoyle] and [wolfBeauty] are null when the role is not in the game. */
 data class ReviewNight(
     val wolf: WolfTurn,
     val seer: SeerTurn?,
@@ -51,6 +51,7 @@ data class ReviewNight(
     val dawn: Dawn,
     val gravekeeper: GravekeeperTurn? = null,
     val gargoyle: GargoyleTurn? = null,
+    val wolfBeauty: WolfBeautyTurn? = null,
 )
 
 enum class WolfAction { KILL, SKIP, SELF_KILL }
@@ -62,6 +63,8 @@ data class MediumTurn(val actor: ReviewPlayer, val dead: Boolean, val target: Re
 data class GravekeeperTurn(val actor: ReviewPlayer, val dead: Boolean, val exiled: ReviewPlayer?, val result: GravekeeperResult?)
 /** [target] null = the gargoyle skipped or was dead; [role] is the exact role it was told. */
 data class GargoyleTurn(val actor: ReviewPlayer, val dead: Boolean, val target: ReviewPlayer?, val role: PlayerRole?)
+/** [target] null = no charm (night 1, a skip, or dead). */
+data class WolfBeautyTurn(val actor: ReviewPlayer, val dead: Boolean, val target: ReviewPlayer?)
 data class MechWolfTurn(
     val actor: ReviewPlayer, val dead: Boolean, val learned: ReviewPlayer?, val learnedRole: PlayerRole?,
     val check: ReviewPlayer?, val poison: ReviewPlayer?, val protect: ReviewPlayer?,
@@ -71,7 +74,8 @@ data class MechWolfTurn(
 data class WitchTurn(val actor: ReviewPlayer, val dead: Boolean, val antidote: ReviewPlayer?, val poison: ReviewPlayer?)
 data class GuardTurn(val actor: ReviewPlayer, val dead: Boolean, val target: ReviewPlayer?)
 
-enum class DeathCause { WOLF, POISON, BOTH_SAVES }
+/** CHARM = 殉情: taken along by the 狼美人. */
+enum class DeathCause { WOLF, POISON, BOTH_SAVES, CHARM }
 enum class SaveSource { GUARD, ANTIDOTE, PERK }
 
 data class NightDeath(val player: ReviewPlayer, val cause: DeathCause)
@@ -121,4 +125,8 @@ sealed interface ReviewDayEvent {
     /** [to] null = the badge was destroyed. */
     @JsonTypeName("BADGE_HANDOVER")
     data class BadgeHandover(val from: ReviewPlayer, val to: ReviewPlayer?) : ReviewDayEvent
+
+    /** A day 殉情: [beauty] went out and took [victim] along. A night 殉情 is a [DeathCause.CHARM] at dawn instead. */
+    @JsonTypeName("CHARM_DEATH")
+    data class CharmDeath(val beauty: ReviewPlayer, val victim: ReviewPlayer) : ReviewDayEvent
 }

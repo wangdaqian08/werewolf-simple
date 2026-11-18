@@ -44,6 +44,8 @@ object GameTasks {
         val selfDestructTakes: Map<String, String>,
         /** Knights whose duel turned up a wolf. */
         val duelWins: Set<String>,
+        /** 狼美人 → the player its 殉情 took along, day or night (CHARM_DEATH). */
+        val charmDeaths: Map<String, String>,
     )
 
     fun eligible(role: PlayerRole, hasSheriff: Boolean): List<GameTask> = buildList {
@@ -58,6 +60,7 @@ object GameTasks {
                 PlayerRole.WHITE_WOLF_KING -> add(WWK_TAKE_GOD)
                 PlayerRole.BLACK_WOLF_KING -> add(BWK_SHOOT_GOD)
                 PlayerRole.GARGOYLE -> add(GARGOYLE_FIND_TWO_GODS)
+                PlayerRole.WOLF_BEAUTY -> add(WOLF_BEAUTY_LINK_GOD)
                 else -> {} // the mechanical wolf: no role task (owner, 2026-11-18: too easy)
             }
         } else {
@@ -144,6 +147,7 @@ object GameTasks {
             MEDIUM_FIND_WOLF -> f.nights.any { it.mediumResultRole?.isWolf == true }
             GARGOYLE_FIND_TWO_GODS -> f.nights.count { it.gargoyleResultRole?.isGod == true } >= 2
             IDIOT_REVEAL_WIN -> me in f.idiotRevealDay && f.winner == WinnerSide.VILLAGER
+            WOLF_BEAUTY_LINK_GOD -> isGod(f.charmDeaths[me])
         }
     }
 }

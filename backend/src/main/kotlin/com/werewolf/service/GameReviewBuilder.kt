@@ -19,7 +19,7 @@ import tools.jackson.module.kotlin.jacksonObjectMapper
 object GameReviewBuilder {
 
     private val mapper = jacksonObjectMapper()
-    private val DAY_EVENT_TYPES = setOf("SHERIFF_RESULT", "VOTE_RESULT", "HUNTER_SHOT", "SELF_DESTRUCT", "KNIGHT_DUEL", "IDIOT_REVEAL", "BADGE_HANDOVER", "DECLARED_OUT")
+    private val DAY_EVENT_TYPES = setOf("SHERIFF_RESULT", "VOTE_RESULT", "HUNTER_SHOT", "SELF_DESTRUCT", "KNIGHT_DUEL", "IDIOT_REVEAL", "BADGE_HANDOVER", "DECLARED_OUT", "CHARM_DEATH")
 
     private class LoggedEvent(val type: String, val day: Int, val payload: Map<String, Any?>)
 
@@ -42,7 +42,9 @@ object GameReviewBuilder {
         val completed = nights.filter { it.subPhase == NightSubPhase.COMPLETE }.associateBy { it.dayNumber }
         val nightDeaths = logged.filter { it.type == "NIGHT_DEATH" }.groupBy({ it.day }, { it.payload["userId"] as String })
 
-        val eventsByDay = logged.filter { it.type in DAY_EVENT_TYPES }.groupBy { it.day }
+        // A night 殉情 is in that dawn's NIGHT_DEATH list and shows there as a CHARM death, not as a day event.
+        fun nightCharm(e: LoggedEvent) = e.type == "CHARM_DEATH" && e.payload["victimUserId"] in nightDeaths[e.day].orEmpty()
+        val eventsByDay = logged.filter { it.type in DAY_EVENT_TYPES && !nightCharm(it) }.groupBy { it.day }
         val lastNight = completed.keys.maxOrNull()
         val rounds = (completed.keys + eventsByDay.keys).sorted().map { day ->
             ReviewRound(
@@ -113,19 +115,24 @@ object GameReviewBuilder {
             guard = holder(PlayerRole.GUARD)?.let {
                 GuardTurn(refs.getValue(it.userId), deadAt(it), n.guardTargetUserId?.let(refs::get))
             },
-            dawn = dawn(n, refs, died, night1PerkSaved),
+            dawn = dawn(n, refs, died, night1PerkSaved, RoleRules.charmVictimAtNight(n, players, died)),
             gravekeeper = holder(PlayerRole.GRAVEKEEPER)?.let {
                 GravekeeperTurn(refs.getValue(it.userId), deadAt(it), n.gravekeeperExiledUserId?.let(refs::get), n.gravekeeperResult)
             },
             gargoyle = holder(PlayerRole.GARGOYLE)?.let {
                 GargoyleTurn(refs.getValue(it.userId), deadAt(it), n.gargoyleCheckedUserId?.let(refs::get), n.gargoyleResultRole)
             },
+            wolfBeauty = holder(PlayerRole.WOLF_BEAUTY)?.let {
+                WolfBeautyTurn(refs.getValue(it.userId), deadAt(it), n.wolfBeautyCharmUserId?.let(refs::get))
+            },
         )
     }
 
-    private fun dawn(n: NightPhase, refs: Map<String, ReviewPlayer>, died: List<String>, night1PerkSaved: Set<String>): Dawn {
+    private fun dawn(n: NightPhase, refs: Map<String, ReviewPlayer>, died: List<String>, night1PerkSaved: Set<String>, charmVictim: String?): Dawn {
         val deaths = died.mapNotNull(refs::get).sortedBy { it.seatIndex }.map { p ->
             NightDeath(p, when {
+                // W14: every 殉情 is labelled as one, as the CHARM_DEATH event records it.
+                p.userId == charmVictim -> DeathCause.CHARM
                 p.userId == n.witchPoisonTargetUserId || p.userId == n.mechPoisonTargetUserId -> DeathCause.POISON
                 p.userId == n.wolfTargetUserId && n.witchAntidoteUsed && n.guardTargetUserId == p.userId -> DeathCause.BOTH_SAVES
                 else -> DeathCause.WOLF
@@ -173,6 +180,7 @@ object GameReviewBuilder {
                 "IDIOT_REVEAL" -> ref(p["userId"])?.let { ReviewDayEvent.IdiotReveal(it) }
                 "DECLARED_OUT" -> ref(p["userId"])?.let { ReviewDayEvent.DeclaredOut(it) }
                 "BADGE_HANDOVER" -> ref(p["fromUserId"])?.let { ReviewDayEvent.BadgeHandover(it, ref(p["toUserId"])) }
+                "CHARM_DEATH" -> ref(p["wolfBeautyUserId"])?.let { b -> ref(p["victimUserId"])?.let { ReviewDayEvent.CharmDeath(b, it) } }
                 else -> null
             }
         }

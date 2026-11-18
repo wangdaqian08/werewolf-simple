@@ -76,6 +76,28 @@ class GameServiceVotingPhaseTest {
     private fun votingResult(result: Map<String, Any?>): Map<String, Any?> =
         result["votingPhase"] as Map<String, Any?>
 
+    // ── 殉情 banner (B, Q13, Q14) ────────────────────────────────────────────
+
+    @Test
+    fun `voting state carries charmDeath after a vote-out 殉情, and none without one`() {
+        val players = listOf(player(hostId, 0), player("wb", 1, PlayerRole.WOLF_BEAUTY).also { it.alive = false },
+            player("seer", 2, PlayerRole.SEER).also { it.alive = false })
+        val users = listOf(user(hostId, "Host"), user("wb", "Beauty"), user("seer", "Seer"))
+        val g = game(VotingSubPhase.VOTE_RESULT.name).also { it.charmDeathUserId = "seer" }
+        setupGameAndPlayers(g, players, users)
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, day))
+            .thenReturn(emptyList())
+        whenever(eliminationHistoryRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.empty())
+
+        assertThat(votingResult(gameService.getGameState(gameId, hostId))["charmDeath"]).isEqualTo(
+            mapOf("beautySeatIndex" to 1, "beautyNickname" to "Beauty", "victimSeatIndex" to 2, "victimNickname" to "Seer"),
+        )
+
+        g.charmDeathUserId = null
+        assertThat(votingResult(gameService.getGameState(gameId, hostId))["charmDeath"]).isNull()
+    }
+
     // ── Basic voting state ───────────────────────────────────────────────────
 
     @Test

@@ -127,6 +127,11 @@ class RewardSettlementService(
             }.toMap(),
             duelWins = payloads("KNIGHT_DUEL").filter { it["targetIsWolf"] == true }
                 .mapNotNull { it["knightUserId"] as? String }.toSet(),
+            charmDeaths = payloads("CHARM_DEATH").mapNotNull { p ->
+                val beauty = p["wolfBeautyUserId"] as? String
+                val victim = p["victimUserId"] as? String
+                if (beauty != null && victim != null) beauty to victim else null
+            }.toMap(),
         )
     }
 
