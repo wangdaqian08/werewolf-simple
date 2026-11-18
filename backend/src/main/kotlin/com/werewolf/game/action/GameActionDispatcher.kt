@@ -120,7 +120,7 @@ class GameActionDispatcher(
 
             ActionType.GARGOYLE_CONFIRM -> nightTurn(request, context, PlayerRole.GARGOYLE)
 
-            // Handler arrives with the wolf beauty night task; until then no client sends these.
+            // ── Night: 狼美人 (no private push: the client refetches state) ────────
             ActionType.WOLF_BEAUTY_CHARM, ActionType.WOLF_BEAUTY_SKIP -> nightTurn(request, context, PlayerRole.WOLF_BEAUTY)
 
             // ── Night: mechanical wolf ────────────────────────────────────────

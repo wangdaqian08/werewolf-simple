@@ -13,7 +13,7 @@ import com.werewolf.repository.EliminationHistoryRepository
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
-@Order(6)
+@Order(7)
 @Component
 class GravekeeperHandler(private val eliminationHistoryRepository: EliminationHistoryRepository) : RoleHandler {
 

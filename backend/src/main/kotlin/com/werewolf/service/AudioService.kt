@@ -36,6 +36,7 @@ class AudioService {
         return when (subPhase) {
             NightSubPhase.GARGOYLE_PICK, NightSubPhase.GARGOYLE_RESULT -> PlayerRole.GARGOYLE
             NightSubPhase.WEREWOLF_PICK -> PlayerRole.WEREWOLF
+            NightSubPhase.WOLF_BEAUTY_PICK -> PlayerRole.WOLF_BEAUTY
             NightSubPhase.SEER_PICK -> PlayerRole.SEER
             NightSubPhase.SEER_RESULT -> PlayerRole.SEER
             NightSubPhase.MECH_WOLF_PICK, NightSubPhase.MECH_WOLF_RESULT -> PlayerRole.MECHANICAL_WOLF

@@ -30,7 +30,8 @@ class AudioPhaseMappingTest {
             MechanicalWolfAudioConfig(),
             MediumAudioConfig(),
             GravekeeperAudioConfig(),
-            GargoyleAudioConfig()
+            GargoyleAudioConfig(),
+            WolfBeautyAudioConfig()
         ))
         
         audioService = AudioService()
@@ -179,6 +180,29 @@ class AudioPhaseMappingTest {
             targetSubPhase = NightSubPhase.WEREWOLF_PICK,
         )
         assertThat(sequence.audioFiles).containsExactly("gargoyle_open_eyes.mp3", "gargoyle_close_eyes.mp3", "wolf_open_eyes.mp3")
+    }
+
+    @Test
+    fun `WOLF_BEAUTY_PICK follows the wolves with its own open and close audio`() {
+        assertThat(audioService.calculateOpenEyesAudio(NightSubPhase.WOLF_BEAUTY_PICK)).isEqualTo("wolf_beauty_open_eyes.mp3")
+        val entering = audioService.calculateNightSubPhaseTransition(
+            gameId = 1, oldSubPhase = NightSubPhase.WEREWOLF_PICK, newSubPhase = NightSubPhase.WOLF_BEAUTY_PICK,
+        )
+        assertThat(entering.audioFiles).containsExactly("wolf_close_eyes.mp3", "wolf_beauty_open_eyes.mp3")
+        val leaving = audioService.calculateNightSubPhaseTransition(
+            gameId = 1, oldSubPhase = NightSubPhase.WOLF_BEAUTY_PICK, newSubPhase = NightSubPhase.WITCH_ACT,
+        )
+        assertThat(leaving.audioFiles).containsExactly("wolf_beauty_close_eyes.mp3", "witch_open_eyes.mp3")
+    }
+
+    @Test
+    fun `dead wolf beauty plays one open-close pair`() {
+        val sequence = audioService.calculateDeadRoleAudioSequence(
+            gameId = 1,
+            skippedRoles = listOf(NightSubPhase.WOLF_BEAUTY_PICK),
+            targetSubPhase = NightSubPhase.WITCH_ACT,
+        )
+        assertThat(sequence.audioFiles).containsExactly("wolf_beauty_open_eyes.mp3", "wolf_beauty_close_eyes.mp3", "witch_open_eyes.mp3")
     }
 
     @Test

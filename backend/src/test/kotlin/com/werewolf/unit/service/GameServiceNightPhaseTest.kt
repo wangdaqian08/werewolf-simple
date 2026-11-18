@@ -565,6 +565,119 @@ class GameServiceNightPhaseTest {
         assertThat(night).doesNotContainKey("teammates")
     }
 
+    // ── WOLF_BEAUTY: private charm state, served from the night rows ───────────
+
+    private fun beautyGame(dayNumber: Int) = game().also { it.dayNumber = dayNumber }
+
+    private fun beautyNight(dayNumber: Int, sub: NightSubPhase, charmed: String? = null) =
+        NightPhase(gameId = gameId, dayNumber = dayNumber, subPhase = sub).also { it.wolfBeautyCharmUserId = charmed }
+
+    private fun beautyNights(tonight: NightPhase, vararg earlier: NightPhase) {
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, tonight.dayNumber)).thenReturn(Optional.of(tonight))
+        whenever(nightPhaseRepository.findByGameId(gameId)).thenReturn(listOf(tonight, *earlier))
+    }
+
+    private val charmBoard = listOf(
+        player("u1", 1, PlayerRole.WOLF_BEAUTY), player("u2", 2, PlayerRole.WEREWOLF),
+        player("u3", 3, PlayerRole.SEER), player("u4", 4, PlayerRole.VILLAGER),
+        player("u5", 5, PlayerRole.WHITE_WOLF_KING).also { it.alive = false }, player("u6", 6, PlayerRole.GARGOYLE),
+    )
+    private val charmUsers = listOf(
+        user("u1", "Bella"), user("u2", "Wolf"), user("u3", "Sage"), user("u4", "Vic"), user("u5", "King"), user("u6", "Gary"),
+    )
+
+    @Suppress("UNCHECKED_CAST")
+    private fun beautyState(viewer: String = "u1") =
+        nightPhaseResult(gameService.getGameState(gameId, viewer))["wolfBeauty"] as Map<String, Any?>
+
+    @Test
+    fun `W2 - on night 1 the wolf beauty cannot charm`() {
+        setupGameAndPlayers(beautyGame(1), charmBoard, charmUsers)
+        beautyNights(beautyNight(1, NightSubPhase.WOLF_BEAUTY_PICK))
+
+        val state = beautyState()
+
+        assertThat(state["canCharm"]).isEqualTo(false)
+        assertThat(state["lastNightTargetUserId"]).isNull()
+        assertThat(state["result"]).isNull()
+        assertThat(state["history"] as List<*>).isEmpty()
+    }
+
+    @Test
+    fun `W3 - on night 3 lastNightTargetUserId is night 2's charm`() {
+        setupGameAndPlayers(beautyGame(3), charmBoard, charmUsers)
+        beautyNights(
+            beautyNight(3, NightSubPhase.WOLF_BEAUTY_PICK),
+            beautyNight(2, NightSubPhase.COMPLETE, charmed = "u4"),
+            beautyNight(1, NightSubPhase.COMPLETE),
+        )
+
+        val state = beautyState()
+
+        assertThat(state["canCharm"]).isEqualTo(true)
+        assertThat(state["lastNightTargetUserId"]).isEqualTo("u4")
+        assertThat(state["history"]).isEqualTo(listOf(mapOf("round" to 2, "nickname" to "Vic", "seatIndex" to 4)))
+    }
+
+    @Test
+    fun `W3 - a charm two nights ago is not last night's target`() {
+        setupGameAndPlayers(beautyGame(4), charmBoard, charmUsers)
+        beautyNights(
+            beautyNight(4, NightSubPhase.WOLF_BEAUTY_PICK),
+            beautyNight(3, NightSubPhase.COMPLETE),
+            beautyNight(2, NightSubPhase.COMPLETE, charmed = "u4"),
+        )
+
+        assertThat(beautyState()["lastNightTargetUserId"]).isNull()
+    }
+
+    @Test
+    fun `the wolf beauty sees every other pack wolf, alive or dead, but not the gargoyle`() {
+        setupGameAndPlayers(beautyGame(2), charmBoard, charmUsers)
+        beautyNights(beautyNight(2, NightSubPhase.WOLF_BEAUTY_PICK))
+
+        assertThat(beautyState()["packUserIds"] as List<*>).containsExactlyInAnyOrder("u2", "u5")
+    }
+
+    @Test
+    fun `result is null in WOLF_BEAUTY_PICK with no charm, even after a skip`() {
+        setupGameAndPlayers(beautyGame(2), charmBoard, charmUsers)
+        beautyNights(beautyNight(2, NightSubPhase.WOLF_BEAUTY_PICK))
+
+        assertThat(beautyState()["result"]).isNull()
+    }
+
+    @Test
+    fun `result is CHARM after a charm`() {
+        setupGameAndPlayers(beautyGame(2), charmBoard, charmUsers)
+        beautyNights(beautyNight(2, NightSubPhase.WOLF_BEAUTY_PICK, charmed = "u3"))
+
+        assertThat(beautyState()["result"]).isEqualTo(
+            mapOf("kind" to "CHARM", "targetPlayerId" to "u3", "targetNickname" to "Sage", "targetSeatIndex" to 3),
+        )
+    }
+
+    @Test
+    fun `result is SKIP once the night has moved past WOLF_BEAUTY_PICK with no charm`() {
+        setupGameAndPlayers(beautyGame(2), charmBoard, charmUsers)
+        beautyNights(beautyNight(2, NightSubPhase.WITCH_ACT))
+
+        assertThat(beautyState()["result"]).isEqualTo(mapOf("kind" to "SKIP"))
+    }
+
+    @Test
+    fun `Review Focus 1 - the pack wolf, the charmed player and the seer get no wolfBeauty state`() {
+        setupGameAndPlayers(beautyGame(2), charmBoard, charmUsers)
+        beautyNights(beautyNight(2, NightSubPhase.WITCH_ACT, charmed = "u3"))
+
+        for (viewer in listOf("u2", "u3")) {
+            val night = nightPhaseResult(gameService.getGameState(gameId, viewer))
+            assertThat(night).`as`(viewer).doesNotContainKey("wolfBeauty")
+            // The charm target never reaches anyone but the 狼美人.
+            assertThat(night.toString()).`as`(viewer).doesNotContain("CHARM", "packUserIds", "lastNightTargetUserId")
+        }
+    }
+
     @Test
     fun `non-medium never gets mediumResult`() {
         val seer = player("u1", 1, PlayerRole.SEER)

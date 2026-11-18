@@ -293,6 +293,40 @@ class GameService(
                     )
                 }
 
+                // ── WOLF_BEAUTY: tonight's charm or skip, last night's target, its pack, and the history ──
+                if (myPlayer?.role == PlayerRole.WOLF_BEAUTY) {
+                    val charms = nightPhaseRepository.findByGameId(gameId)
+                        .filter { it.dayNumber <= np.dayNumber && it.wolfBeautyCharmUserId != null }
+                        .sortedBy { it.dayNumber }
+                    val charmedId = np.wolfBeautyCharmUserId
+                    base["wolfBeauty"] = mapOf(
+                        "canCharm" to (np.dayNumber >= 2),
+                        "lastNightTargetUserId" to charms.firstOrNull { it.dayNumber == np.dayNumber - 1 }?.wolfBeautyCharmUserId,
+                        // It already knows its pack; the picker greys them out.
+                        "packUserIds" to players.filter { it.role.isPackWolf && it.userId != requestingUserId }.map { it.userId },
+                        "result" to when {
+                            charmedId != null -> mapOf(
+                                "kind"            to "CHARM",
+                                "targetPlayerId"  to charmedId,
+                                "targetNickname"  to displayNameFor(charmedId),
+                                "targetSeatIndex" to playerMap[charmedId]?.seatIndex,
+                            )
+                            // No field records a skip: past its sub-phase (enum order = wake order here) with no charm means it skipped.
+                            np.subPhase > NightSubPhase.WOLF_BEAUTY_PICK -> mapOf("kind" to "SKIP")
+                            else -> null
+                        },
+                        "history" to charms.mapNotNull { h ->
+                            h.wolfBeautyCharmUserId?.let { id ->
+                                mapOf(
+                                    "round"     to h.dayNumber,
+                                    "nickname"  to displayNameFor(id),
+                                    "seatIndex" to playerMap[id]?.seatIndex,
+                                )
+                            }
+                        },
+                    )
+                }
+
                 // ── MECHANICAL WOLF: learned role, tonight's skill, and tonight's action ──
                 if (myPlayer?.role == PlayerRole.MECHANICAL_WOLF) {
                     val allNights = nightPhaseRepository.findByGameId(gameId)

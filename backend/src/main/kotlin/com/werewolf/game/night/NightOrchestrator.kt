@@ -142,6 +142,7 @@ class NightOrchestrator(
     fun activeNightRoles(room: Room): List<PlayerRole> = buildList {
         if (room.hasGargoyle) add(PlayerRole.GARGOYLE)
         add(PlayerRole.WEREWOLF)
+        if (room.hasWolfBeauty) add(PlayerRole.WOLF_BEAUTY)
         if (room.hasMechanicalWolf) add(PlayerRole.MECHANICAL_WOLF)
         if (room.hasSeer) add(PlayerRole.SEER)
         if (room.hasMedium) add(PlayerRole.MEDIUM)
@@ -889,7 +890,7 @@ class NightOrchestrator(
         np: NightPhase,
     ) {
         log.info(
-            "[race] {} game={} day={} subPhase={} thread={} -> wolfTarget={} seerChecked={} seerIsWolf={} witchAntidoteUsed={} witchPoisonTarget={} guardTarget={} mechLearn={} mechCheck={} mechPoison={} mechGuard={} mediumChecked={} mediumResultRole={} gargoyleChecked={} gargoyleResultRole={}",
+            "[race] {} game={} day={} subPhase={} thread={} -> wolfTarget={} seerChecked={} seerIsWolf={} witchAntidoteUsed={} witchPoisonTarget={} guardTarget={} mechLearn={} mechCheck={} mechPoison={} mechGuard={} mediumChecked={} mediumResultRole={} gargoyleChecked={} gargoyleResultRole={} wolfBeautyCharm={}",
             tag,
             gameId,
             dayNumber,
@@ -909,6 +910,7 @@ class NightOrchestrator(
             np.mediumResultRole,
             np.gargoyleCheckedUserId,
             np.gargoyleResultRole,
+            np.wolfBeautyCharmUserId,
         )
     }
 

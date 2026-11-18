@@ -627,6 +627,8 @@ class GameActionDispatcherTest {
         "GARGOYLE_CHECK,GARGOYLE,GARGOYLE_PICK,true",
         "GARGOYLE_SKIP,GARGOYLE,GARGOYLE_PICK,true",
         "GARGOYLE_CONFIRM,GARGOYLE,GARGOYLE_RESULT,false",
+        "WOLF_BEAUTY_CHARM,WOLF_BEAUTY,WOLF_BEAUTY_PICK,false",
+        "WOLF_BEAUTY_SKIP,WOLF_BEAUTY,WOLF_BEAUTY_PICK,false",
     )
     fun `mech wolf and medium actions claim their sub-phase turn and only the picks push privately`(
         action: ActionType, role: PlayerRole, subPhase: NightSubPhase, pushes: Boolean,

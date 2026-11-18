@@ -13,7 +13,7 @@ import com.werewolf.repository.NightPhaseRepository
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
-@Order(7)
+@Order(8)
 @Component
 class GuardHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
 

@@ -832,6 +832,33 @@ class NightOrchestratorTest {
     }
 
     @Test
+    fun `W2 - the wolf beauty wakes right after the wolves, before the witch`() {
+        val orchestrator = makeOrchestrator(
+            realHandlers(
+                com.werewolf.game.role.SeerHandler(nightPhaseRepository),
+                com.werewolf.game.role.GargoyleHandler(nightPhaseRepository),
+                com.werewolf.game.role.WolfBeautyHandler(nightPhaseRepository),
+            ),
+        )
+        val r = gargoyleRoom().also { it.hasGuard = true; it.hasWolfBeauty = true }
+
+        assertThat(orchestrator.nightSequence(GameContext(game(), r, emptyList()))).containsExactly(
+            NightSubPhase.GARGOYLE_PICK,
+            NightSubPhase.GARGOYLE_RESULT,
+            NightSubPhase.WEREWOLF_PICK,
+            NightSubPhase.WOLF_BEAUTY_PICK,
+            NightSubPhase.WITCH_ACT,
+            NightSubPhase.SEER_PICK,
+            NightSubPhase.SEER_RESULT,
+            NightSubPhase.GRAVEKEEPER_RESULT,
+            NightSubPhase.GUARD_PICK,
+        )
+        // Without the role in the room the step is absent.
+        assertThat(orchestrator.nightSequence(GameContext(game(), r.also { it.hasWolfBeauty = false }, emptyList())))
+            .doesNotContain(NightSubPhase.WOLF_BEAUTY_PICK)
+    }
+
+    @Test
     fun `G9 - the gargoyle's turn is before the medium's and the guard's`() {
         val orchestrator = makeOrchestrator(
             realHandlers(
