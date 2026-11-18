@@ -835,6 +835,7 @@ class NightOrchestrator(
         game.pendingShooterUserId = null // an unused day shot is lost
         game.selfDestructUserId = null
         game.selfDestructTakenUserId = null
+        game.charmDeathUserId = null
         game.pkCandidateUserIds = null
         gameRepository.save(game)
     }
