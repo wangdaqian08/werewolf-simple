@@ -311,9 +311,11 @@ jobs:
           - id: 2
             specs: e2e/real/black-wolf-king-scenarios.spec.ts e2e/real/mech-wolf-medium-flow.spec.ts e2e/real/api-guards-flow.spec.ts e2e/real/host-countdown.spec.ts
             grep: 'happy: knifed|vote-out|Mechanical wolf and medium|API guards|host-countdown.spec'
+          # Shard 3 also runs wolf-beauty-sheriff-flow (two sheriff games, ~65 s each locally):
+          # it had the most headroom (214-310 s step, median ~222 s, on main 2026-11-17/18).
           - id: 3
-            specs: e2e/real/black-wolf-king-scenarios.spec.ts e2e/real/pk-revote-flow.spec.ts e2e/real/dead-role-audio.spec.ts
-            grep: 'night chain:|edge:|create room:|PK re-vote|dead-role-audio.spec'
+            specs: e2e/real/black-wolf-king-scenarios.spec.ts e2e/real/pk-revote-flow.spec.ts e2e/real/dead-role-audio.spec.ts e2e/real/wolf-beauty-sheriff-flow.spec.ts
+            grep: 'night chain:|edge:|create room:|PK re-vote|dead-role-audio.spec|wolf-beauty-sheriff-flow.spec'
           # Shards 4 + 5 split night-rules-flow by words unique to each test
           # title (its describe title repeats most of the topic words).
           - id: 4

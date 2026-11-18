@@ -237,7 +237,7 @@
           @click="onVotingTap(player)"
         >
           <template v-if="player.isSheriff" #badge>
-            <div class="sheriff-badge">⭐</div>
+            <div class="sheriff-badge" data-testid="sheriff-badge">⭐</div>
           </template>
           <template v-if="player.idiotRevealed" #overlay>
             <div class="slot-overlay idiot-overlay">🃏</div>
