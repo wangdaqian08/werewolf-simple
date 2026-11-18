@@ -538,6 +538,21 @@ describe('NightPhase - 狼美人 turn', () => {
     expect(sleeping(wrapper)).toBe(true)
   })
 
+  it('after a charm (a reload) it sees closed eyes: no pick list, no confirm', () => {
+    const wrapper = mountAs('b1', 'WOLF_BEAUTY', {
+      subPhase: 'WOLF_BEAUTY_PICK',
+      dayNumber: 2,
+      wolfBeauty: {
+        ...wolfBeauty,
+        result: { kind: 'CHARM', targetPlayerId: 'v1', targetNickname: 'v1', targetSeatIndex: 2 },
+      },
+    })
+    expect(turn(wrapper).exists()).toBe(false)
+    expect(wrapper.find('[data-testid^="wolf-beauty-target-"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="wolf-beauty-confirm"]').exists()).toBe(false)
+    expect(sleeping(wrapper)).toBe(true)
+  })
+
   it('everyone else sees the plain closed-eyes screen', () => {
     for (const role of ['VILLAGER', 'WEREWOLF', 'SEER', 'GARGOYLE'] as const) {
       const wrapper = mountAs('v1', role, { subPhase: 'WOLF_BEAUTY_PICK', dayNumber: 2 })

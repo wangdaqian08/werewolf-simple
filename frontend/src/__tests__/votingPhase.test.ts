@@ -1124,7 +1124,10 @@ describe('VotingPhase — role card history', () => {
 })
 
 describe('VotingPhase - 殉情 banner', () => {
-  const mountVoting = (charmDeath: VotingState['charmDeath']) => {
+  const mountVoting = (
+    charmDeath: VotingState['charmDeath'],
+    subPhase: VotingState['subPhase'] = 'VOTE_RESULT',
+  ) => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const router = createRouter({
@@ -1133,7 +1136,7 @@ describe('VotingPhase - 殉情 banner', () => {
     })
     const votingPhase: VotingState = {
       dayNumber: 1,
-      subPhase: 'VOTE_RESULT',
+      subPhase,
       phaseStarted: Date.now() - 10000,
       phaseDeadline: Date.now() + 60000,
       canVote: false,
@@ -1166,6 +1169,20 @@ describe('VotingPhase - 殉情 banner', () => {
     expect(w.find('[data-testid="charm-death-banner"]').text()).toContain(
       '3號 · Bea（狼美人）出局，5號 · Vic殉情出局',
     )
+  })
+
+  it('shows the banner in BADGE_HANDOVER too', () => {
+    const w = mountVoting(
+      { beautySeatIndex: 3, beautyNickname: 'Bea', victimSeatIndex: 5, victimNickname: 'Vic' },
+      'BADGE_HANDOVER',
+    )
+    expect(w.find('[data-testid="charm-death-banner"]').exists()).toBe(true)
+  })
+
+  it('no charmDeath in BADGE_HANDOVER → no banner', () => {
+    expect(
+      mountVoting(null, 'BADGE_HANDOVER').find('[data-testid="charm-death-banner"]').exists(),
+    ).toBe(false)
   })
 
   it('no charmDeath → no banner', () => {

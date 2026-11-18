@@ -575,6 +575,27 @@
 
       <!-- Destroyed message replaces banner when badge is burned -->
       <div class="banner-area">
+        <div
+          v-if="votingPhase.charmDeath"
+          class="banner banner-kill"
+          data-testid="charm-death-banner"
+        >
+          <span class="banner-avatar">🌹</span>
+          <div class="banner-kill-text">
+            <span class="banner-kill-red">{{
+              $t('day.charmDeath', {
+                beauty: $t('common.seatDot', {
+                  n: votingPhase.charmDeath.beautySeatIndex,
+                  name: votingPhase.charmDeath.beautyNickname,
+                }),
+                victim: $t('common.seatDot', {
+                  n: votingPhase.charmDeath.victimSeatIndex,
+                  name: votingPhase.charmDeath.victimNickname,
+                }),
+              })
+            }}</span>
+          </div>
+        </div>
         <div v-if="votingPhase.badgeDestroyed" class="banner badge-status-burned">
           <span class="banner-avatar">⚔️</span>
           <div>
