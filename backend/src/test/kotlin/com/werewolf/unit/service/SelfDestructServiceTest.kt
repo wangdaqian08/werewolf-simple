@@ -623,4 +623,18 @@ class SelfDestructServiceTest {
         assertThat(result).isInstanceOf(GameActionResult.Success::class.java)
         assertThat(taken.alive).isTrue()
     }
+
+    @Test
+    fun `W8 - the wolf beauty cannot self-destruct`() {
+        val beauty = GamePlayer(gameId = gameId, userId = wolfId, seatIndex = 1, role = PlayerRole.WOLF_BEAUTY)
+        val ctx = context(players = listOf(beauty, villagePlayer()))
+
+        val result = selfDestructService.selfDestruct(req(), ctx)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat((result as GameActionResult.Rejected).reason).isEqualTo("The Wolf Beauty cannot self-destruct")
+        assertThat(beauty.alive).isTrue()
+        verify(gamePlayerRepository, never()).save(any<GamePlayer>())
+        verify(gameRepository, never()).save(any<Game>())
+    }
 }

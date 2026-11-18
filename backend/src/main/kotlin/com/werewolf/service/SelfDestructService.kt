@@ -56,6 +56,8 @@ class SelfDestructService(
         if (!actor.alive) return GameActionResult.Rejected("Dead players cannot act")
         if (!actor.role.isPackWolf)
             return GameActionResult.Rejected("Only werewolves can self-destruct")
+        if (actor.role == PlayerRole.WOLF_BEAUTY)
+            return GameActionResult.Rejected("The Wolf Beauty cannot self-destruct")
         if (!inSelfDestructWindow(context.game))
             return GameActionResult.Rejected(
                 "Self-destruct is only allowed during the sheriff campaign, " +

@@ -957,4 +957,49 @@ class GameServiceNightPhaseTest {
         assertThat(alive["wolfKiller"]).isEqualTo(true)
         assertThat(alive["selectedTargetId"]).isEqualTo("u3")
     }
+
+    // ── 狼美人: pack wolves learn who it is (G1) ──────────────────────────────
+
+    private val beautyUsers = listOf(
+        user("u1", "Wolf"), user("u2", "Beauty"), user("u3", "Seer"), user("u4", "Garg"), user("u5", "Mech"), user("u6", "Vil"),
+    )
+    private val beautyBoard = listOf(
+        player("u1", 1, PlayerRole.WEREWOLF), player("u2", 2, PlayerRole.WOLF_BEAUTY), player("u3", 3, PlayerRole.SEER),
+        player("u4", 4, PlayerRole.GARGOYLE), player("u5", 5, PlayerRole.MECHANICAL_WOLF), player("u6", 6, PlayerRole.VILLAGER),
+    )
+
+    @Test
+    fun `G1 - pack wolves see the wolf beauty in night state, everyone else gets no key`() {
+        setupGameAndPlayers(game(), beautyBoard, beautyUsers)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.of(nightPhase(subPhase = NightSubPhase.WEREWOLF_PICK)))
+
+        for (pack in listOf("u1", "u2"))
+            assertThat(nightPhaseResult(gameService.getGameState(gameId, pack))).`as`(pack).containsEntry("wolfBeautyUserId", "u2")
+        for (other in listOf("u3", "u4", "u5", "u6"))
+            assertThat(nightPhaseResult(gameService.getGameState(gameId, other))).`as`(other).doesNotContainKey("wolfBeautyUserId")
+    }
+
+    @Test
+    fun `G1 - a pack wolf in a game without a wolf beauty gets null`() {
+        setupGameAndPlayers(game(), beautyBoard.filter { it.userId != "u2" }, beautyUsers)
+        whenever(nightPhaseRepository.findByGameIdAndDayNumber(gameId, day))
+            .thenReturn(Optional.of(nightPhase(subPhase = NightSubPhase.WEREWOLF_PICK)))
+
+        val night = nightPhaseResult(gameService.getGameState(gameId, "u1"))
+        assertThat(night).containsKey("wolfBeautyUserId")
+        assertThat(night["wolfBeautyUserId"]).isNull()
+    }
+
+    @Test
+    fun `G1 - roleReveal carries wolfBeautyUserId for pack wolves only`() {
+        setupGameAndPlayers(game(phase = GamePhase.ROLE_REVEAL).also { it.dayNumber = 1 }, beautyBoard, beautyUsers)
+
+        @Suppress("UNCHECKED_CAST")
+        fun reveal(viewer: String) = gameService.getGameState(gameId, viewer)["roleReveal"] as Map<String, Any?>
+        assertThat(reveal("u1")).containsEntry("wolfBeautyUserId", "u2")
+        assertThat(reveal("u2")).containsEntry("wolfBeautyUserId", "u2")
+        for (other in listOf("u3", "u4", "u5", "u6"))
+            assertThat(reveal(other)).`as`(other).doesNotContainKey("wolfBeautyUserId")
+    }
 }

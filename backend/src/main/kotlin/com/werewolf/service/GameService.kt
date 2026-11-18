@@ -160,7 +160,12 @@ class GameService(
                 "confirmedUserIds" to players.filter { it.confirmedRole }.map { it.userId },
                 "totalCount" to players.size,
                 "teammates" to teammates,
-            )
+            ).let { base ->
+                // Only pack wolves learn who the 狼美人 is (null when the board has none).
+                if (myPlayer?.role?.isPackWolf == true)
+                    base + ("wolfBeautyUserId" to players.firstOrNull { it.role == PlayerRole.WOLF_BEAUTY }?.userId)
+                else base
+            }
         } else null
 
         val sheriffElection = if (game.phase == GamePhase.SHERIFF_ELECTION) {
@@ -187,6 +192,7 @@ class GameService(
                     base["teammates"] = teammates.map { tp ->
                         "${tp.seatIndex}·${userLookup[tp.userId]?.nickname ?: tp.userId}"
                     }
+                    base["wolfBeautyUserId"] = players.firstOrNull { it.role == PlayerRole.WOLF_BEAUTY }?.userId
                 }
 
                 // ── SEER: share result + full check history ───────────────────────────
