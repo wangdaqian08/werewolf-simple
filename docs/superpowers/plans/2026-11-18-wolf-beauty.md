@@ -405,6 +405,6 @@ Accepted:
 - [ ] **Step 4: Run the full backend suite, the frontend unit tests, lint and `vue-tsc -b` once more → PASS.**
 - [ ] **Step 5: Commit.** `test(e2e): 狼美人 charm and 殉情 on vote-out (CI shard N)`
 
-## Open decision before execution
+## Decision G1 (approved by the owner 2026-11-18)
 
 - **G1 (found while planning).** Today the pack sees its teammates' seats and names, not their roles (`GameService.kt:183-188`). To grey the 狼美人 in the kill picker, the pack must be told which teammate it is. This plan assumes **yes**: pack wolves get `wolfBeautyUserId`. The alternative leaks it anyway: the server rejects the knife and the rejection tells them.
