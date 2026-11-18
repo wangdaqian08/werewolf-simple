@@ -340,6 +340,12 @@ async function revealNight(t: Table) {
 }
 
 /** Result page + review page on the host. Returns the review text. */
+/**
+ * A shot line in the review (「開槍帶走 N號 …」). Not a bare 開槍帶走: the review also lists each
+ * player's 单局任务, and HUNTER_SHOOT_WOLF / BWK_SHOOT_GOD names contain 開槍帶走 too.
+ */
+const SHOT_LINE = /開槍帶走\s*\d+號/g
+
 async function checkResultAndReview(t: Table, testInfo: TestInfo, label: string): Promise<string> {
   const host = t.ctx.hostPage
   expect(await waitForPhase(host, t.ctx.gameId, 'GAME_OVER', 15_000), 'game over').toBe(true)
@@ -501,7 +507,7 @@ test('happy: knifed king shoots the hunter, the hunter shoots back, wolves win',
   await voteOut(t, v2)
   const review = await checkResultAndReview(t, testInfo, '08')
   expect(review).toContain('自刀')
-  expect(review.match(/開槍帶走/g)?.length, 'review shows both shots').toBe(2)
+  expect(review.match(SHOT_LINE)?.length, 'review shows both shots').toBe(2)
   expect(review).toContain('黑狼王')
   assertNightAudio(t, 1)
   assertNoRoleLeak(t)
@@ -579,7 +585,7 @@ test('vote-out: king shoots the seer, night 2 still plays seer cues', async ({
   await guardPage.getByTestId('guard-confirm-protect').click()
 
   const review = await checkResultAndReview(t, testInfo, '03')
-  expect(review.match(/開槍帶走/g)?.length).toBe(1)
+  expect(review.match(SHOT_LINE)?.length).toBe(1)
   assertNightAudio(t, 2)
   assertNoRoleLeak(t)
 })
@@ -620,7 +626,7 @@ test('vote-out chain: hunter shoots the king, the king fires the deciding shot',
 
   await voteShoot(t, king, v2)
   const review = await checkResultAndReview(t, testInfo, '02')
-  expect(review.match(/開槍帶走/g)?.length, 'review shows both shots').toBe(2)
+  expect(review.match(SHOT_LINE)?.length, 'review shows both shots').toBe(2)
   assertNightAudio(t, 1)
   assertNoRoleLeak(t)
 })
