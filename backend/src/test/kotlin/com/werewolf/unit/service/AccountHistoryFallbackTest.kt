@@ -3,13 +3,14 @@ package com.werewolf.unit.service
 import com.werewolf.config.PaymentProperties
 import com.werewolf.model.PaymentOrder
 import com.werewolf.model.PerkActivation
-import com.werewolf.repository.PaymentEventRepository
 import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.PerkActivationRepository
 import com.werewolf.repository.PerkRepository
 import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
+import com.werewolf.service.PaymentEventLog
+import com.werewolf.service.PaymentFulfillmentService
 import com.werewolf.service.PaymentService
 import com.werewolf.service.PerkService
 import com.werewolf.service.WalletService
@@ -45,7 +46,8 @@ class AccountHistoryFallbackTest {
     @Mock lateinit var stompPublisher: StompPublisher
     @Mock lateinit var productRepository: ProductRepository
     @Mock lateinit var paymentOrderRepository: PaymentOrderRepository
-    @Mock lateinit var paymentEventRepository: PaymentEventRepository
+    @Mock lateinit var paymentEventLog: PaymentEventLog
+    @Mock lateinit var paymentFulfillmentService: PaymentFulfillmentService
 
     @Test
     fun `myActivations falls back to the perkCode when the catalog row is missing`() {
@@ -69,8 +71,8 @@ class AccountHistoryFallbackTest {
     @Test
     fun `listOrders falls back to an empty productName when the product row is missing`() {
         val service = PaymentService(
-            productRepository, paymentOrderRepository, paymentEventRepository,
-            walletService, PaymentProperties(
+            productRepository, paymentOrderRepository, paymentEventLog,
+            paymentFulfillmentService, PaymentProperties(
                 enabled = true, frontendBaseUrl = "https://example.test", sessionExpiryMinutes = 30,
                 reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10, sweepLookbackDays = 30,
                 statusCheckThrottleSeconds = 5,

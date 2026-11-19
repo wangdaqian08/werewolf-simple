@@ -13,12 +13,17 @@ import com.werewolf.service.CheckoutSnapshot
 import com.werewolf.service.FulfillOutcome
 import com.werewolf.service.OrderNotFoundForSessionException
 import com.werewolf.service.PaymentFulfillmentService
+import com.werewolf.service.PaymentOrderWriter
 import com.werewolf.service.WalletService
 import com.werewolf.support.FakeStripeGateway
 import com.werewolf.support.PaymentIntegrationTest
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.springframework.boot.test.system.CapturedOutput
+import org.springframework.boot.test.system.OutputCaptureExtension
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.beans.factory.annotation.Autowired
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -30,7 +35,11 @@ import java.util.concurrent.TimeUnit
  * turned into credits exactly once, whichever caller asks and however often.
  */
 @PaymentIntegrationTest
+@ExtendWith(OutputCaptureExtension::class)
 class PaymentFulfillmentIntegrationTest {
+
+    @Autowired lateinit var writer: PaymentOrderWriter
+    @Autowired lateinit var transactionTemplate: TransactionTemplate
 
     @Autowired lateinit var fulfillment: PaymentFulfillmentService
     @Autowired lateinit var gateway: FakeStripeGateway
@@ -202,5 +211,105 @@ class PaymentFulfillmentIntegrationTest {
         assertThat(walletService.balance(order.userId)).isEqualTo(100)
         assertThat(purchaseRows(order.userId)).hasSize(1)
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+    }
+
+    @Test
+    fun `a second paid session for an already COMPLETED order is FLAGGED - the customer paid twice`() {
+        val order = seedOrder()
+        val first = openSession(order).sessionId
+        gateway.markPaid(first)
+        fulfillment.fulfill(first, "webhook")
+        val second = "cs_test_${UUID.randomUUID()}"
+        openSession(order, second)
+        gateway.markPaid(second)
+
+        assertThat(fulfillment.fulfill(second, "reconcile")).isEqualTo(FulfillOutcome.FLAGGED)
+
+        val flagged = reload(order)
+        assertThat(flagged.status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(flagged.stripeSessionId).isEqualTo(first)
+        assertThat(flagged.needsReview).isTrue()
+        assertThat(flagged.reviewReason).contains(second)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        assertThat(purchaseRows(order.userId)).hasSize(1)
+    }
+
+    @Test
+    fun `an order already flagged is not flagged or alerted again`(output: CapturedOutput) {
+        val order = seedOrder()
+        val sessionId = openSession(order).sessionId
+        paymentOrderRepository.save(reload(order).also { it.status = PaymentOrderStatus.EXPIRED })
+        gateway.markPaid(sessionId)
+        fulfillment.fulfill(sessionId, "webhook")
+        val firstReason = reload(order).reviewReason
+        val alertsBefore = output.all.split("[payment-alert]").size
+
+        assertThat(fulfillment.fulfill(sessionId, "reconcile")).isEqualTo(FulfillOutcome.FLAGGED)
+
+        assertThat(reload(order).reviewReason).isEqualTo(firstReason)
+        assertThat(output.all.split("[payment-alert]").size).isEqualTo(alertsBefore)
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+    }
+
+    @Test
+    fun `syncFailed marks a complete-but-unpaid session's order FAILED`() {
+        val order = seedOrder()
+        val sessionId = openSession(order).sessionId
+        gateway.put(gateway.retrieveSession(sessionId).copy(status = "complete"))
+
+        assertThat(fulfillment.syncFailed(sessionId, "webhook")).isTrue()
+
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.FAILED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+    }
+
+    @Test
+    fun `syncFailed leaves the order alone when Stripe says the session is paid`() {
+        val order = seedOrder()
+        val sessionId = openSession(order).sessionId
+        gateway.markPaid(sessionId)
+
+        assertThat(fulfillment.syncFailed(sessionId, "webhook")).isFalse()
+
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.CREATED)
+    }
+
+    @Test
+    fun `expired session with no matching order is EXPIRED and does not throw`() {
+        val sessionId = "cs_test_${UUID.randomUUID()}"
+        val unknownOrderNo = UUID.randomUUID().toString()
+        gateway.put(
+            CheckoutSnapshot(
+                sessionId = sessionId, status = "expired", paymentStatus = "unpaid",
+                orderNo = unknownOrderNo, clientReferenceId = unknownOrderNo,
+                paymentIntentId = null, chargeId = null, receiptUrl = null, url = null, expiresAtEpochSec = null,
+            ),
+        )
+
+        assertThat(fulfillment.fulfill(sessionId, "webhook")).isEqualTo(FulfillOutcome.EXPIRED)
+    }
+
+    @Test
+    fun `applyTerminal inside a transaction that already loaded the order does not write CREATED back`() {
+        val order = seedOrder()
+        val orderId = order.id ?: error("no id")
+
+        transactionTemplate.executeWithoutResult {
+            paymentOrderRepository.findById(orderId).orElseThrow() // the stale CREATED copy
+            assertThat(writer.applyTerminal(orderId, PaymentOrderStatus.EXPIRED)).isTrue()
+        }
+
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.EXPIRED)
+    }
+
+    @Test
+    fun `fulfill and syncFailed refuse to run inside a DB transaction`() {
+        val order = seedOrder()
+        val sessionId = openSession(order).sessionId
+
+        assertThatThrownBy { transactionTemplate.executeWithoutResult { fulfillment.fulfill(sessionId, "webhook") } }
+            .isInstanceOf(IllegalStateException::class.java)
+        assertThatThrownBy { transactionTemplate.executeWithoutResult { fulfillment.syncFailed(sessionId, "webhook") } }
+            .isInstanceOf(IllegalStateException::class.java)
     }
 }

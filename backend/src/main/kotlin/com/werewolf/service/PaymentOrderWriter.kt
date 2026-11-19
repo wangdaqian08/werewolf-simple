@@ -5,6 +5,7 @@ import com.werewolf.model.PaymentOrder
 import com.werewolf.model.PaymentOrderStatus
 import com.werewolf.repository.PaymentOrderRepository
 import jakarta.persistence.EntityManager
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -19,6 +20,7 @@ class PaymentOrderWriter(
     private val walletService: WalletService,
     private val entityManager: EntityManager,
 ) {
+    private val log = LoggerFactory.getLogger(PaymentOrderWriter::class.java)
 
     /**
      * Stripe says [snapshot] is paid. The conditional CREATED → COMPLETED update and the
@@ -31,8 +33,10 @@ class PaymentOrderWriter(
         val orderId = order.id ?: error("order not persisted")
         if (paymentOrderRepository.markCompletedIfCreated(orderId) == 0) {
             entityManager.refresh(order) // the bulk update bypassed the loaded entity
-            if (order.status == PaymentOrderStatus.COMPLETED) return FulfillOutcome.ALREADY_DONE
-            flag(order, "paid session ${snapshot.sessionId} but order is ${order.status}")
+            val otherSession = order.stripeSessionId != null && order.stripeSessionId != snapshot.sessionId
+            if (order.status == PaymentOrderStatus.COMPLETED && !otherSession) return FulfillOutcome.ALREADY_DONE
+            flag(order, if (otherSession) "second paid session ${snapshot.sessionId} for ${order.status} order (paid twice?)"
+                        else "paid session ${snapshot.sessionId} but order is ${order.status}")
             return FulfillOutcome.FLAGGED
         }
         val now = LocalDateTime.now()
@@ -74,7 +78,13 @@ class PaymentOrderWriter(
             ?: snapshot.clientReferenceId?.let { paymentOrderRepository.findByOrderNo(it).orElse(null) }
             ?: snapshot.orderNo?.let { paymentOrderRepository.findByOrderNo(it).orElse(null) }
 
+    /** Flag once, with one `[payment-alert]`; an order already flagged keeps its first reason. */
     private fun flag(order: PaymentOrder, reason: String) {
+        if (order.needsReview) {
+            log.info("[payment] order {} already flagged for review, not re-flagged: {}", order.orderNo, reason)
+            return
+        }
+        log.error("[payment-alert] order {} flagged for review: {}", order.orderNo, reason)
         order.needsReview = true
         order.reviewReason = reason.take(255)
         order.updatedAt = LocalDateTime.now()

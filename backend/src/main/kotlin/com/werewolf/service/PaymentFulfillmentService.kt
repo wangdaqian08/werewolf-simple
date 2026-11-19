@@ -3,6 +3,7 @@ package com.werewolf.service
 import com.werewolf.model.PaymentOrderStatus
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 enum class FulfillOutcome { CREDITED, ALREADY_DONE, NOT_PAID, EXPIRED, FAILED, FLAGGED }
 
@@ -25,6 +26,7 @@ class PaymentFulfillmentService(
     private val log = LoggerFactory.getLogger(PaymentFulfillmentService::class.java)
 
     fun fulfill(sessionId: String, source: String): FulfillOutcome {
+        checkNoTransaction()
         val snapshot = gateway.retrieveSession(sessionId)
         val outcome = when {
             snapshot.paymentStatus == "paid" || snapshot.paymentStatus == "no_payment_required" -> paid(snapshot, source)
@@ -39,8 +41,13 @@ class PaymentFulfillmentService(
         return outcome
     }
 
-    /** Re-read the session; if Stripe says its (delayed) payment failed, CREATED → FAILED. */
+    /**
+     * Re-read the session; if Stripe says its (delayed) payment failed, CREATED → FAILED.
+     * Call it only for `checkout.session.async_payment_failed`: a delayed payment still
+     * clearing looks the same (complete + unpaid) as one that failed.
+     */
     fun syncFailed(sessionId: String, source: String): Boolean {
+        checkNoTransaction()
         val snapshot = gateway.retrieveSession(sessionId)
         // A failed delayed payment leaves the session complete but unpaid.
         val failed = snapshot.status == "complete" && snapshot.paymentStatus == "unpaid" &&
@@ -57,12 +64,11 @@ class PaymentFulfillmentService(
             log.error("[payment-alert] paid session {} has no order (source={})", snapshot.sessionId, source)
             throw e
         }
-        if (outcome == FulfillOutcome.FLAGGED) {
-            log.error("[payment-alert] paid session {} belongs to an EXPIRED/FAILED order {}, flagged for review (source={})",
-                snapshot.sessionId, snapshot.orderNo ?: snapshot.clientReferenceId, source)
-        }
-        return outcome
+        return outcome // FLAGGED was already alerted by the writer
     }
+
+    private fun checkNoTransaction() =
+        check(!TransactionSynchronizationManager.isActualTransactionActive()) { "Stripe calls must not run inside a DB transaction" }
 
     private fun markTerminal(snapshot: CheckoutSnapshot, status: PaymentOrderStatus, source: String): Boolean {
         val order = writer.findOrder(snapshot)

@@ -7,10 +7,7 @@ import com.stripe.model.checkout.Session
 import com.stripe.net.Webhook
 import com.stripe.param.checkout.SessionCreateParams
 import com.werewolf.config.PaymentProperties
-import com.werewolf.model.CreditTxType
 import com.werewolf.model.PaymentOrder
-import com.werewolf.model.PaymentOrderStatus
-import com.werewolf.repository.PaymentEventRepository
 import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.ProductRepository
 import jakarta.annotation.PostConstruct
@@ -18,7 +15,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -46,8 +42,8 @@ class StripeWebhookVerifier(private val props: PaymentProperties) {
 class PaymentService(
     private val productRepository: ProductRepository,
     private val paymentOrderRepository: PaymentOrderRepository,
-    private val paymentEventRepository: PaymentEventRepository,
-    private val walletService: WalletService,
+    private val eventLog: PaymentEventLog,
+    private val fulfillment: PaymentFulfillmentService,
     private val props: PaymentProperties,
 ) {
     private val log = LoggerFactory.getLogger(PaymentService::class.java)
@@ -126,76 +122,37 @@ class PaymentService(
     }
 
     /**
-     * Handle a verified Stripe event. Idempotent at two levels: event-id
-     * dedup (payment_events insert-first) and the CREATED→COMPLETED
-     * conditional update on the order.
+     * Handle a verified Stripe event. The event is only a trigger: its session id goes to
+     * [PaymentFulfillmentService], which re-reads the session from Stripe. Every delivery is
+     * logged by [PaymentEventLog]; a failure is recorded and rethrown, so the webhook answers
+     * non-2xx and Stripe retries. Not @Transactional: fulfillment calls Stripe and must run
+     * outside any DB transaction.
      */
-    @Transactional
     fun handleEvent(event: Event) {
-        if (paymentEventRepository.tryInsert(event.id, event.type) == 0) {
-            log.info("[payment] duplicate event {} ignored", event.id)
+        if (!eventLog.begin(event)) {
+            log.info("[payment] event {} already processed, skipped", event.id)
             return
         }
-        when (event.type) {
-            "checkout.session.completed", "checkout.session.async_payment_succeeded" -> {
-                // Throw, don't return: the rollback un-records the event id and the 5xx makes Stripe retry.
-                val session = extractSession(event)
-                    ?: error("[payment] cannot deserialize session from event ${event.id}")
-                // A delayed method (e.g. ACH) completes the session before the money moves:
-                // credit on async_payment_succeeded instead.
-                if (session.paymentStatus == "unpaid") {
-                    log.info("[payment] session {} completed but unpaid, waiting for the payment to clear", session.id)
-                    return
-                }
-                fulfill(session)
+        try {
+            val orderId = when (event.type) {
+                // expired → fulfill marks it EXPIRED from Stripe's state (or credits it, if Stripe says paid)
+                "checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.expired" ->
+                    sessionId(event).let { fulfillment.fulfill(it, "webhook"); orderIdFor(it) }
+                "checkout.session.async_payment_failed" ->
+                    sessionId(event).let { fulfillment.syncFailed(it, "webhook"); orderIdFor(it) }
+                else -> { log.debug("[payment] ignoring event type {}", event.type); null }
             }
-            "checkout.session.async_payment_failed" -> {
-                val session = extractSession(event)
-                    ?: error("[payment] cannot deserialize session from event ${event.id}")
-                paymentOrderRepository.findByStripeSessionId(session.id).ifPresent { order ->
-                    if (order.status == PaymentOrderStatus.CREATED) {
-                        order.status = PaymentOrderStatus.FAILED
-                        paymentOrderRepository.save(order)
-                        log.info("[payment] order {} failed: delayed payment did not clear", order.orderNo)
-                    }
-                }
-            }
-            "checkout.session.expired" -> {
-                val session = extractSession(event) ?: return
-                paymentOrderRepository.findByStripeSessionId(session.id).ifPresent { order ->
-                    if (order.status == PaymentOrderStatus.CREATED) {
-                        order.status = PaymentOrderStatus.EXPIRED
-                        paymentOrderRepository.save(order)
-                        log.info("[payment] order {} expired", order.orderNo)
-                    }
-                }
-            }
-            else -> log.debug("[payment] ignoring event type {}", event.type)
+            eventLog.markProcessed(event.id, orderId)
+        } catch (e: Exception) {
+            eventLog.markFailed(event.id, e.message ?: e.javaClass.name)
+            throw e
         }
     }
 
-    private fun fulfill(session: Session) {
-        val order = paymentOrderRepository.findByStripeSessionId(session.id).orElse(null)
-        if (order == null) {
-            log.error("[payment] no order for session {}", session.id)
-            return
-        }
-        val orderId = order.id ?: error("order not persisted")
-        if (paymentOrderRepository.markCompletedIfCreated(orderId) == 0) {
-            log.info("[payment] order {} already fulfilled/expired, skipping", order.orderNo)
-            return
-        }
-        order.status = PaymentOrderStatus.COMPLETED
-        order.stripePaymentIntentId = session.paymentIntent
-        order.completedAt = LocalDateTime.now()
-        paymentOrderRepository.save(order)
-        val balance = walletService.credit(
-            order.userId, order.credits, CreditTxType.PURCHASE,
-            paymentOrderId = orderId, note = order.orderNo,
-        )
-        log.info("[payment] order {} fulfilled: +{} credits for {} (balance {})",
-            order.orderNo, order.credits, order.userId, balance)
-    }
+    private fun sessionId(event: Event): String =
+        rawObjectId(event) ?: error("event ${event.id} (${event.type}) has no data.object.id")
+
+    private fun orderIdFor(sessionId: String): Int? = paymentOrderRepository.findByStripeSessionId(sessionId).orElse(null)?.id
 
     /** Caller's own Stripe order history (most recent 50) for the account page. */
     @Transactional(readOnly = true)
@@ -225,9 +182,6 @@ class PaymentService(
             "credits" to order.credits,
         )
     }
-
-    private fun extractSession(event: Event): Session? =
-        event.dataObjectDeserializer.`object`.orElse(null) as? Session
 }
 
 class GuestPurchaseException(message: String) : RuntimeException(message)

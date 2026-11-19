@@ -313,8 +313,11 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
     )
     fun markCompletedIfCreated(orderId: Int): Int
 
-    /** Conditional CREATED → [newStatus] (EXPIRED / FAILED); 0 rows = the order already left CREATED. */
-    @Modifying
+    /**
+     * Conditional CREATED → [newStatus] (EXPIRED / FAILED); 0 rows = the order already left CREATED.
+     * Clears the persistence context so a stale loaded copy cannot flush CREATED back.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
         "UPDATE PaymentOrder o SET o.status = :newStatus " +
             "WHERE o.id = :orderId AND o.status = com.werewolf.model.PaymentOrderStatus.CREATED",
@@ -339,17 +342,18 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
 
 interface PaymentEventRepository : JpaRepository<PaymentEvent, String> {
     /**
-     * Webhook event dedup, insert-first: 1 = first delivery, 0 = duplicate
-     * (Stripe retries). ON CONFLICT DO NOTHING for the same reason as
-     * GameSettlementRepository.tryInsert — no exception, no poisoned tx.
+     * Insert the event's RECEIVED row (attempts 0) unless it exists: 1 = first delivery,
+     * 0 = re-delivery. ON CONFLICT DO NOTHING for the same reason as
+     * GameSettlementRepository.tryInsert — no exception, no poisoned tx; a concurrent
+     * duplicate waits for the first insert instead of failing.
      */
     @Modifying(flushAutomatically = true)
     @Query(
-        value = "INSERT INTO payment_events (stripe_event_id, event_type, received_at, status, attempts) " +
-            "VALUES (:eventId, :eventType, CURRENT_TIMESTAMP, 'PROCESSED', 1) ON CONFLICT DO NOTHING",
+        value = "INSERT INTO payment_events (stripe_event_id, event_type, object_id, received_at, status, attempts) " +
+            "VALUES (:eventId, :eventType, :objectId, CURRENT_TIMESTAMP, 'RECEIVED', 0) ON CONFLICT DO NOTHING",
         nativeQuery = true,
     )
-    fun tryInsert(eventId: String, eventType: String): Int
+    fun tryInsert(eventId: String, eventType: String, objectId: String?): Int
 }
 
 interface GameSettlementRepository : JpaRepository<GameSettlement, Int> {

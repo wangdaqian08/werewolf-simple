@@ -1,6 +1,7 @@
 package com.werewolf.controller
 
 import com.stripe.exception.SignatureVerificationException
+import com.werewolf.config.PaymentProperties
 import com.werewolf.service.GuestPurchaseException
 import com.werewolf.service.OrderNotFoundException
 import com.werewolf.service.PaymentService
@@ -19,6 +20,7 @@ data class CheckoutRequest(val productKey: String)
 class PaymentController(
     private val paymentService: PaymentService,
     private val webhookVerifier: StripeWebhookVerifier,
+    private val props: PaymentProperties,
 ) {
     private val log = LoggerFactory.getLogger(PaymentController::class.java)
 
@@ -45,15 +47,16 @@ class PaymentController(
 
     /**
      * Stripe webhook (permitAll route — authenticity comes from the
-     * Stripe-Signature verification, not a JWT). Always 200 for verified
-     * events, handled or not, so Stripe stops retrying; 400 only for bad
-     * signatures.
+     * Stripe-Signature verification, not a JWT). 200 once a verified event is
+     * handled (or deliberately ignored); 400 for a bad signature; 503 while
+     * payments are switched off and 5xx when processing fails, so Stripe retries.
      */
     @PostMapping("/webhook")
     fun webhook(
         @RequestBody payload: String,
         @RequestHeader("Stripe-Signature", required = false) signature: String?,
     ): ResponseEntity<Any> {
+        if (!props.enabled) return ResponseEntity.status(503).body(mapOf("error" to "payments disabled"))
         val event = try {
             webhookVerifier.verify(payload, signature)
         } catch (e: SignatureVerificationException) {
