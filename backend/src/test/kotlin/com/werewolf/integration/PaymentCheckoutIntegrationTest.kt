@@ -26,8 +26,9 @@ import org.springframework.boot.resttestclient.TestRestTemplate
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDateTime
-import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -93,7 +94,7 @@ class PaymentCheckoutIntegrationTest {
         assertThat(url).isEqualTo(session.url)
         val in31 = LocalDateTime.now().plusMinutes(31) // Stripe's 30-min minimum plus headroom for latency
         assertThat(order.sessionExpiresAt).isCloseTo(in31, within(5, ChronoUnit.SECONDS))
-        assertThat(req.expiresAtEpochSec).isCloseTo(in31.atZone(ZoneId.systemDefault()).toEpochSecond(), within(5L))
+        assertThat(req.expiresAtEpochSec).isCloseTo(Instant.now().plus(Duration.ofMinutes(31)).epochSecond, within(5L))
     }
 
     @Test
@@ -226,6 +227,52 @@ class PaymentCheckoutIntegrationTest {
             .isInstanceOf(PaymentsUnavailableException::class.java)
         assertThat(orders(userId)).hasSize(1)
         assertThat(gateway.createCalls).hasSize(1)
+    }
+
+    @Test
+    fun `a stored customer id unknown to this Stripe key is replaced by a new customer and checkout succeeds`() {
+        val userId = newUser()
+        userRepository.save(userRepository.findById(userId).orElseThrow().also { it.stripeCustomerId = "cus_test_mode_leftover" })
+
+        val url = paymentService.createCheckout(userId, "starter")
+
+        val customerId = userRepository.findById(userId).orElseThrow().stripeCustomerId
+        assertThat(customerId).startsWith("cus_fake_")
+        assertThat(gateway.createCalls.map { it.first.customerId }).containsExactly("cus_test_mode_leftover", customerId)
+        val order = orders(userId).single()
+        assertThat(order.status).isEqualTo(PaymentOrderStatus.CREATED)
+        assertThat(url).isEqualTo(gateway.retrieveSession(order.stripeSessionId ?: error("no session")).url)
+    }
+
+    @Test
+    fun `after a Stripe key switch an open session of the same product is unknown - its order is EXPIRED and checkout succeeds`() {
+        val userId = newUser()
+        paymentService.createCheckout(userId, "starter")
+        val old = orders(userId).single()
+        gateway.reset() // the new key knows none of the old sessions or customers
+
+        val url = paymentService.createCheckout(userId, "starter")
+
+        assertThat(reload(old).status).isEqualTo(PaymentOrderStatus.EXPIRED)
+        val new = orders(userId).single { it.orderNo != old.orderNo }
+        assertThat(new.status).isEqualTo(PaymentOrderStatus.CREATED)
+        assertThat(url).isEqualTo(gateway.retrieveSession(new.stripeSessionId ?: error("no session")).url)
+    }
+
+    @Test
+    fun `after a Stripe key switch an open session of another product is unknown - its order is EXPIRED and checkout succeeds`() {
+        val userId = newUser()
+        paymentService.createCheckout(userId, "starter")
+        val old = orders(userId).single()
+        gateway.reset()
+
+        val url = paymentService.createCheckout(userId, "value")
+
+        assertThat(reload(old).status).isEqualTo(PaymentOrderStatus.EXPIRED)
+        val new = orders(userId).single { it.orderNo != old.orderNo }
+        assertThat(new.status).isEqualTo(PaymentOrderStatus.CREATED)
+        assertThat(new.productId).isEqualTo(value.id)
+        assertThat(url).isEqualTo(gateway.retrieveSession(new.stripeSessionId ?: error("no session")).url)
     }
 
     @Test

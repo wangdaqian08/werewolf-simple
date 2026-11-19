@@ -85,6 +85,9 @@ class PaymentOrderWriter(
     @Transactional(readOnly = true)
     fun findOrder(snapshot: CheckoutSnapshot): PaymentOrder? = lookup(snapshot)
 
+    @Transactional(readOnly = true)
+    fun findOrderBySession(sessionId: String): PaymentOrder? = paymentOrderRepository.findByStripeSessionId(sessionId).orElse(null)
+
     /** CREATED → [newStatus] (EXPIRED / FAILED); false if the order had already left CREATED. */
     @Transactional
     fun applyTerminal(orderId: Int, newStatus: PaymentOrderStatus): Boolean {

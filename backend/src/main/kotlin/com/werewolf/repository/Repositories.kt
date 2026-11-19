@@ -14,6 +14,12 @@ import java.util.*
 interface UserRepository : JpaRepository<User, String> {
     /** Admin player search: nickname substring, case-insensitive. */
     fun findTop20ByNicknameContainingIgnoreCaseOrderByNicknameAsc(nickname: String): List<User>
+
+    /** Forget a Stripe customer id the current Stripe key does not know; only if it is still the stored one. */
+    @Transactional
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE User u SET u.stripeCustomerId = NULL WHERE u.userId = :userId AND u.stripeCustomerId = :customerId")
+    fun clearStripeCustomerId(userId: String, customerId: String): Int
 }
 
 interface RoomRepository : JpaRepository<Room, Int> {

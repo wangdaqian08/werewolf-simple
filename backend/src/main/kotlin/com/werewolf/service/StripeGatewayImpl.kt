@@ -8,6 +8,7 @@ import com.stripe.param.CustomerCreateParams
 import com.stripe.param.checkout.SessionCreateParams
 import com.stripe.param.checkout.SessionListParams
 import com.stripe.param.checkout.SessionRetrieveParams
+import com.werewolf.service.StripeResourceMissingException.Resource
 import org.springframework.stereotype.Component
 
 /**
@@ -51,7 +52,12 @@ class StripeGatewayImpl : StripeGateway {
             )
             .build()
         val options = RequestOptions.builder().setIdempotencyKey(idempotencyKey).build()
-        return Session.create(params, options).toSnapshot()
+        return try {
+            Session.create(params, options).toSnapshot()
+        } catch (e: InvalidRequestException) {
+            if (e.code == "resource_missing" && e.param == "customer") throw StripeResourceMissingException(Resource.CUSTOMER, req.customerId, e)
+            throw e
+        }
     }
 
     override fun retrieveSession(sessionId: String): CheckoutSnapshot = retrieve(sessionId).toSnapshot()
@@ -79,12 +85,16 @@ class StripeGatewayImpl : StripeGateway {
     override fun createCustomer(userId: String): String =
         Customer.create(CustomerCreateParams.builder().putMetadata("userId", userId).build()).id
 
-    private fun retrieve(sessionId: String): Session =
+    private fun retrieve(sessionId: String): Session = try {
         Session.retrieve(
             sessionId,
             SessionRetrieveParams.builder().addExpand("payment_intent.latest_charge").build(),
             null,
         )
+    } catch (e: InvalidRequestException) {
+        if (e.code == "resource_missing") throw StripeResourceMissingException(Resource.SESSION, sessionId, e)
+        throw e
+    }
 
     private fun Session.toSnapshot() = CheckoutSnapshot(
         sessionId = id,

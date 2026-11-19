@@ -49,7 +49,7 @@ app:
     enabled: ${PAYMENTS_ENABLED:false}
     # Required when enabled (the private host the Checkout redirects return to)
     frontend-base-url: ${FRONTEND_BASE_URL:}
-    # Test-mode keys; empty default disables checkout (503) rather than failing boot
+    # Required when enabled (blank fails startup); test-mode keys until going live
     stripe-secret-key: ${STRIPE_SECRET_KEY:}
     stripe-webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
     # Feature flag: lets the Stripe sandbox integration tests run (CI/local only)
@@ -58,6 +58,8 @@ app:
     session-expiry-minutes: 31
     # How often unpaid orders are reconciled with Stripe (10 min)
     reconcile-interval-ms: 600000
+    # First reconcile after startup (30 s), off the startup thread
+    reconcile-initial-delay-ms: 30000
     # Only reconcile orders still CREATED after this long
     reconcile-min-age-minutes: 10
     # How far back the Stripe sweep looks for missed payments

@@ -1,5 +1,7 @@
 package com.werewolf.service
 
+import com.stripe.exception.StripeException
+
 /** What we need from a Stripe Checkout Session, independent of stripe-java's model classes. */
 data class CheckoutSnapshot(
     val sessionId: String,
@@ -33,4 +35,13 @@ interface StripeGateway {
     fun expireSession(sessionId: String): CheckoutSnapshot     // returns current state if no longer open
     fun listCompletedSessions(createdAfterEpochSec: Long): Sequence<CheckoutSnapshot> // auto-paging
     fun createCustomer(userId: String): String                 // metadata userId; returns customer id
+}
+
+/**
+ * Stripe answered `resource_missing`: this key has no such customer / session, e.g. a test-mode id
+ * still stored after the switch to live keys. A [StripeException], so unhandled it is still a 503.
+ */
+class StripeResourceMissingException(val resource: Resource, id: String, cause: Throwable? = null) :
+    StripeException("No such ${resource.name.lowercase()}: '$id'", null, "resource_missing", 404, cause) {
+    enum class Resource { CUSTOMER, SESSION }
 }

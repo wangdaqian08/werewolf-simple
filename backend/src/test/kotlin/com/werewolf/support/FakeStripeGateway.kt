@@ -4,17 +4,22 @@ import com.stripe.exception.ApiConnectionException
 import com.werewolf.service.CheckoutRequest
 import com.werewolf.service.CheckoutSnapshot
 import com.werewolf.service.StripeGateway
+import com.werewolf.service.StripeResourceMissingException
+import com.werewolf.service.StripeResourceMissingException.Resource
 
 /**
  * In-memory Stripe for integration tests. Create / expire / list behave like Stripe
  * (same idempotency key → same session; expire only changes an open session), and
- * every call is counted. One instance is shared by the whole payment test context,
- * so tests use unique session ids or call [reset].
+ * every call is counted. A session or customer it did not create is unknown, like
+ * Stripe's `resource_missing`; [reset] forgets everything, like switching Stripe keys.
+ * One instance is shared by the whole payment test context, so tests use unique
+ * session ids or call [reset].
  */
 class FakeStripeGateway : StripeGateway {
     private val sessions = LinkedHashMap<String, CheckoutSnapshot>()
     private val createdAt = HashMap<String, Long>()
     private val sessionByIdempotencyKey = HashMap<String, String>()
+    private val customers = HashSet<String>()
     private var seq = 0
 
     val createCalls = mutableListOf<Pair<CheckoutRequest, String>>()
@@ -23,17 +28,18 @@ class FakeStripeGateway : StripeGateway {
     var listCalls = 0; private set
     var createCustomerCalls = 0; private set
 
-    /** When true, create / expire fail like an unreachable Stripe. */
+    /** When true, create / retrieve / expire fail like an unreachable Stripe. */
     var failCreate = false
+    var failRetrieve = false
     var failExpire = false
     /** When true, expire returns the session unchanged (still open), as an odd Stripe reply would. */
     var expireKeepsOpen = false
 
     @Synchronized
     fun reset() {
-        sessions.clear(); createdAt.clear(); sessionByIdempotencyKey.clear(); createCalls.clear()
+        sessions.clear(); createdAt.clear(); sessionByIdempotencyKey.clear(); customers.clear(); createCalls.clear()
         retrieveCalls = 0; expireCalls = 0; listCalls = 0; createCustomerCalls = 0
-        failCreate = false; failExpire = false; expireKeepsOpen = false
+        failCreate = false; failRetrieve = false; failExpire = false; expireKeepsOpen = false
     }
 
     /** Put (or overwrite) a session as Stripe would currently report it. */
@@ -60,6 +66,7 @@ class FakeStripeGateway : StripeGateway {
         createCalls += req to idempotencyKey
         if (failCreate) throw ApiConnectionException("fake: Stripe unreachable")
         sessionByIdempotencyKey[idempotencyKey]?.let { return session(it) }
+        if (req.customerId !in customers) throw StripeResourceMissingException(Resource.CUSTOMER, req.customerId)
         val id = "cs_fake_${++seq}_${System.nanoTime()}"
         val s = CheckoutSnapshot(
             sessionId = id, status = "open", paymentStatus = "unpaid",
@@ -75,6 +82,7 @@ class FakeStripeGateway : StripeGateway {
     @Synchronized
     override fun retrieveSession(sessionId: String): CheckoutSnapshot {
         retrieveCalls++
+        if (failRetrieve) throw ApiConnectionException("fake: Stripe unreachable")
         return session(sessionId)
     }
 
@@ -98,11 +106,11 @@ class FakeStripeGateway : StripeGateway {
     @Synchronized
     override fun createCustomer(userId: String): String {
         createCustomerCalls++
-        return "cus_fake_${++seq}"
+        return "cus_fake_${++seq}".also { customers += it }
     }
 
     private fun session(id: String) =
-        sessions[id] ?: throw IllegalArgumentException("No such checkout.session: '$id'") // Stripe: resource_missing
+        sessions[id] ?: throw StripeResourceMissingException(Resource.SESSION, id)
 
     private fun nowSec() = System.currentTimeMillis() / 1000
 }

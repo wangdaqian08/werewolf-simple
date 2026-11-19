@@ -53,6 +53,7 @@ app:
     stripe-secret-key: sk_test_dummy
     stripe-webhook-secret: whsec_dummy
     # 1 day: the scheduled reconcile never fires during a test run; tests call reconcile() directly
+    reconcile-initial-delay-ms: 86400000
     reconcile-interval-ms: 86400000
 
 websocket:

@@ -6,10 +6,12 @@ import com.stripe.exception.StripeException
 import com.stripe.model.Event
 import com.stripe.net.Webhook
 import com.werewolf.config.PaymentProperties
+import com.werewolf.model.PaymentOrder
 import com.werewolf.model.PaymentOrderStatus
 import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.UserRepository
+import com.werewolf.service.StripeResourceMissingException.Resource
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -59,7 +61,7 @@ class PaymentService(
     private val checkoutLocks = ConcurrentHashMap<String, Any>()
 
     // When each CREATED order last asked Stripe from the return page.
-    // shortcut: entries of orders that never leave CREATED stay until restart (one small entry per order)
+    // shortcut: every checked order keeps its small entry until restart; prune if the backend ever runs for months
     private val lastStatusCheck = ConcurrentHashMap<String, Instant>()
 
     @PostConstruct
@@ -99,6 +101,7 @@ class PaymentService(
 
         // One checkout at a time per user, so two clicks cannot open two payable sessions.
         synchronized(checkoutLocks.computeIfAbsent(userId) { Any() }) {
+            var order: PaymentOrder? = null // committed before Stripe is called; logged if Stripe then fails
             try {
                 openSessionUrl(userId, productId)?.let {
                     log.info("[payment] checkout reused open session user={} product={}", userId, productKey)
@@ -106,28 +109,39 @@ class PaymentService(
                 }
                 expireOtherSessions(userId)
                 val customerId = customerIdFor(userId)
-                val order = writer.createOrder(userId, product)
-                val expiresAt = LocalDateTime.now().plusMinutes(props.sessionExpiryMinutes)
-                val session = gateway.createCheckoutSession(
-                    CheckoutRequest(
-                        orderNo = order.orderNo,
-                        userId = userId,
-                        customerId = customerId,
-                        productName = product.name,
-                        currency = product.currency,
-                        unitAmountCents = product.priceCents.toLong(),
-                        successUrl = "${props.frontendBaseUrl}/pay/result?status=success&orderNo=${order.orderNo}",
-                        cancelUrl = "${props.frontendBaseUrl}/pay/result?status=cancel",
-                        expiresAtEpochSec = expiresAt.atZone(ZoneId.systemDefault()).toEpochSecond(),
-                    ),
-                    idempotencyKey = "checkout-${order.orderNo}",
+                order = writer.createOrder(userId, product)
+                val orderNo = order.orderNo
+                // Epoch seconds from Instant: a local time is ambiguous in the DST repeated hour.
+                val expiresAt = Instant.now().plus(Duration.ofMinutes(props.sessionExpiryMinutes))
+                fun request(customer: String) = CheckoutRequest(
+                    orderNo = orderNo,
+                    userId = userId,
+                    customerId = customer,
+                    productName = product.name,
+                    currency = product.currency,
+                    unitAmountCents = product.priceCents.toLong(),
+                    successUrl = "${props.frontendBaseUrl}/pay/result?status=success&orderNo=$orderNo",
+                    cancelUrl = "${props.frontendBaseUrl}/pay/result?status=cancel",
+                    expiresAtEpochSec = expiresAt.epochSecond,
                 )
-                writer.attachSession(order.id ?: error("order not persisted"), session.sessionId, expiresAt)
+                val session = try {
+                    gateway.createCheckoutSession(request(customerId), idempotencyKey = "checkout-$orderNo")
+                } catch (e: StripeResourceMissingException) {
+                    if (e.resource != Resource.CUSTOMER) throw e
+                    // A customer id from another Stripe mode (test → live switch): replace it and retry once.
+                    log.warn("[payment] customer {} of user {} unknown to this Stripe key, replaced", customerId, userId)
+                    userRepository.clearStripeCustomerId(userId, customerId)
+                    // New key: Stripe may keep the failed result under the first one, and the params changed.
+                    gateway.createCheckoutSession(request(customerIdFor(userId)), idempotencyKey = "checkout-$orderNo-new-customer")
+                }
+                writer.attachSession(order.id ?: error("order not persisted"), session.sessionId,
+                    LocalDateTime.ofInstant(expiresAt, ZoneId.systemDefault()))
                 log.info("[payment] checkout created order={} user={} product={} session={}",
-                    order.orderNo, userId, productKey, session.sessionId)
+                    orderNo, userId, productKey, session.sessionId)
                 return session.url ?: error("new checkout session ${session.sessionId} has no url")
             } catch (e: StripeException) {
-                log.warn("[payment] checkout failed at Stripe user={} product={}: {}", userId, productKey, e.message)
+                log.warn("[payment] checkout failed at Stripe user={} product={} order={}: {}",
+                    userId, productKey, order?.orderNo, e.message)
                 throw PaymentsUnavailableException("Payments are temporarily unavailable")
             }
         }
@@ -139,7 +153,13 @@ class PaymentService(
             .findFirstByUserIdAndProductIdAndStatusAndSessionExpiresAtAfterOrderByCreatedAtDesc(
                 userId, productId, PaymentOrderStatus.CREATED, LocalDateTime.now(),
             ).orElse(null) ?: return null
-        val session = gateway.retrieveSession(order.stripeSessionId ?: return null)
+        val sessionId = order.stripeSessionId ?: return null
+        val session = try {
+            gateway.retrieveSession(sessionId)
+        } catch (e: StripeResourceMissingException) {
+            fulfillment.expireUnknownSession(sessionId, "checkout")
+            return null
+        }
         return if (session.status == "open") session.url else null
     }
 
@@ -151,10 +171,16 @@ class PaymentService(
     private fun expireOtherSessions(userId: String) {
         for (order in paymentOrderRepository.findByUserIdAndStatusAndStripeSessionIdIsNotNull(userId, PaymentOrderStatus.CREATED)) {
             val sessionId = order.stripeSessionId ?: continue
-            val session = gateway.expireSession(sessionId)
+            val session = try {
+                gateway.expireSession(sessionId)
+            } catch (e: StripeResourceMissingException) {
+                fulfillment.expireUnknownSession(sessionId, "checkout")
+                continue
+            }
             when (session.status) {
                 "complete" -> fulfillment.fulfill(sessionId, "checkout")
-                "expired" -> writer.applyTerminal(order.id ?: error("order not persisted"), PaymentOrderStatus.EXPIRED)
+                "expired" -> if (writer.applyTerminal(order.id ?: error("order not persisted"), PaymentOrderStatus.EXPIRED))
+                    log.info("[payment] checkout expired order={} session={} for a new checkout", order.orderNo, sessionId)
                 else -> {
                     log.warn("[payment] session {} of order {} is still {} after expire; checkout refused",
                         sessionId, order.orderNo, session.status)
@@ -197,8 +223,9 @@ class PaymentService(
             }
             eventLog.markProcessed(event.id, orderId)
         } catch (e: Exception) {
-            eventLog.markFailed(event.id, e.message ?: e.javaClass.name)
-            throw e
+            runCatching { eventLog.markFailed(event.id, e.message ?: e.javaClass.name) }
+                .onFailure { log.error("[payment] could not record event {} as failed", event.id, it) }
+            throw e // the original failure, never the recording one
         }
     }
 

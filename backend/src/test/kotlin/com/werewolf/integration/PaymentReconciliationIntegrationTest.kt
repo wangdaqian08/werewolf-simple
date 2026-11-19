@@ -126,6 +126,23 @@ class PaymentReconciliationIntegrationTest {
     }
 
     @Test
+    fun `a CREATED order whose session this Stripe key does not know is EXPIRED once and not warned about again`(output: CapturedOutput) {
+        val order = seedOrder(ageMinutes = 11) // its session is unknown to the fake, like a test-mode session after the key switch
+        val sessionId = order.stripeSessionId ?: error("no session")
+
+        val report = job.reconcile()
+
+        assertThat(report.expired).isEqualTo(1)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.EXPIRED)
+        assertThat(output.all).contains("session $sessionId unknown to this Stripe key, order ${order.orderNo} expired")
+        val mentions = output.all.split(sessionId).size
+
+        job.reconcile()
+
+        assertThat(output.all.split(sessionId).size).isEqualTo(mentions)
+    }
+
+    @Test
     fun `a CREATED order 42 min old with no session is FAILED`() {
         // 31-min session lifetime + 10-min reconcile age: no session Stripe made for it can still be paid
         val order = seedOrder(ageMinutes = 42, withSession = false)

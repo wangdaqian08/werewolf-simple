@@ -392,8 +392,21 @@ class PaymentFulfillmentIntegrationTest {
 
     @Test
     fun `a status check whose Stripe call fails still answers with the stored status`() {
-        val order = seedOrder() // its session id is unknown to the fake, so retrieve throws like Stripe's resource_missing
+        val order = seedOrder()
+        openSession(order)
+        gateway.failRetrieve = true
+        try {
+            assertThat(paymentService.orderStatus(order.userId, order.orderNo)["status"]).isEqualTo("CREATED")
+        } finally {
+            gateway.failRetrieve = false
+        }
+    }
 
-        assertThat(paymentService.orderStatus(order.userId, order.orderNo)["status"]).isEqualTo("CREATED")
+    @Test
+    fun `a status check of an order whose session this Stripe key does not know marks it EXPIRED`(output: CapturedOutput) {
+        val order = seedOrder() // its session is unknown to the fake: a test-mode session after the switch to live keys
+
+        assertThat(paymentService.orderStatus(order.userId, order.orderNo)["status"]).isEqualTo("EXPIRED")
+        assertThat(output.all).contains("session ${order.stripeSessionId} unknown to this Stripe key, order ${order.orderNo} expired")
     }
 }

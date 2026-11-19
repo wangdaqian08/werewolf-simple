@@ -28,7 +28,11 @@ class PaymentFulfillmentService(
 
     fun fulfill(sessionId: String, source: String): FulfillOutcome {
         checkNoTransaction()
-        val snapshot = gateway.retrieveSession(sessionId)
+        val snapshot = try {
+            gateway.retrieveSession(sessionId)
+        } catch (e: StripeResourceMissingException) {
+            return expireUnknownSession(sessionId, source)
+        }
         val outcome = when {
             snapshot.paymentStatus == "paid" || snapshot.paymentStatus == "no_payment_required" -> paid(snapshot, source)
             snapshot.status == "expired" -> {
@@ -40,6 +44,21 @@ class PaymentFulfillmentService(
         log.info("[payment] fulfill session={} order={} source={} outcome={}",
             sessionId, snapshot.orderNo ?: snapshot.clientReferenceId, source, outcome)
         return outcome
+    }
+
+    /**
+     * Stripe does not know [sessionId] under this key (a test-mode session after the switch to live
+     * keys), so it can never be paid with it: its CREATED order becomes EXPIRED.
+     */
+    fun expireUnknownSession(sessionId: String, source: String): FulfillOutcome {
+        val order = writer.findOrderBySession(sessionId)
+        if (order != null && writer.applyTerminal(order.id ?: error("order not persisted"), PaymentOrderStatus.EXPIRED)) {
+            log.warn("[payment] session {} unknown to this Stripe key, order {} expired (source={})", sessionId, order.orderNo, source)
+            return FulfillOutcome.EXPIRED
+        }
+        log.warn("[payment] session {} unknown to this Stripe key, order {} left {} (source={})",
+            sessionId, order?.orderNo, order?.status, source)
+        return FulfillOutcome.NOT_PAID
     }
 
     /**
@@ -68,6 +87,9 @@ class PaymentFulfillmentService(
                 return FulfillOutcome.NOT_OURS
             }
             log.error("[payment-alert] paid session {} has no order (source={})", snapshot.sessionId, source)
+            throw e
+        } catch (e: Exception) {
+            log.error("[payment-alert] paid session {} could not be credited (source={})", snapshot.sessionId, source, e)
             throw e
         }
         return outcome // FLAGGED was already alerted by the writer

@@ -15,8 +15,10 @@ import com.werewolf.repository.UserRepository
 import com.werewolf.service.CheckoutRequest
 import com.werewolf.service.PaymentService
 import com.werewolf.service.StripeGatewayImpl
+import com.werewolf.service.StripeResourceMissingException
 import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.catchThrowableOfType
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
@@ -155,5 +157,27 @@ class StripeSandboxIntegrationTest {
         assertThat(gateway.expireSession(first.sessionId).status).isEqualTo("expired")
 
         gateway.listCompletedSessions(System.currentTimeMillis() / 1000 - 3600).take(5).toList()
+    }
+
+    @Test
+    fun `StripeGatewayImpl - an unknown customer or session is StripeResourceMissingException`() {
+        val (userId, product) = seedUserAndProduct()
+        val orderNo = UUID.randomUUID().toString()
+        val req = CheckoutRequest(
+            orderNo = orderNo, userId = userId, customerId = "cus_doesnotexist${UUID.randomUUID().toString().take(8)}",
+            productName = product.name, currency = product.currency, unitAmountCents = product.priceCents.toLong(),
+            successUrl = "${props.frontendBaseUrl}/pay/result", cancelUrl = "${props.frontendBaseUrl}/pay/result",
+            expiresAtEpochSec = System.currentTimeMillis() / 1000 + props.sessionExpiryMinutes * 60,
+        )
+        val customer = catchThrowableOfType(StripeResourceMissingException::class.java) {
+            gateway.createCheckoutSession(req, "checkout-$orderNo")
+        }
+        assertThat(customer.resource).isEqualTo(StripeResourceMissingException.Resource.CUSTOMER)
+
+        val missing = "cs_test_doesnotexist${UUID.randomUUID().toString().replace("-", "")}"
+        assertThat(catchThrowableOfType(StripeResourceMissingException::class.java) { gateway.retrieveSession(missing) }.resource)
+            .isEqualTo(StripeResourceMissingException.Resource.SESSION)
+        assertThat(catchThrowableOfType(StripeResourceMissingException::class.java) { gateway.expireSession(missing) }.resource)
+            .isEqualTo(StripeResourceMissingException.Resource.SESSION)
     }
 }

@@ -4,8 +4,6 @@ import com.werewolf.config.PaymentProperties
 import com.werewolf.model.PaymentOrderStatus
 import com.werewolf.repository.PaymentOrderRepository
 import org.slf4j.LoggerFactory
-import org.springframework.boot.context.event.ApplicationReadyEvent
-import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.Instant
@@ -17,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 data class ReconcileReport(val credited: Int, val expired: Int, val failed: Int, val backfilled: Int, val alerts: Int)
 
 /**
- * The fallback that credits a paid order even if every webhook is lost. Runs once at startup
+ * The fallback that credits a paid order even if every webhook is lost. Runs soon after startup
  * (Q9: payments made while the home PC was offline) and every reconcile-interval-ms after:
  *  1. CREATED orders older than reconcile-min-age-minutes: settle from Stripe (no session → FAILED, but
  *     only after session-expiry-minutes more, once no unstored session can still be paid);
@@ -40,19 +38,9 @@ class PaymentReconciliationJob(
     // shortcut: re-alerts once per restart
     private val alertedSessions = ConcurrentHashMap.newKeySet<String>()
 
-    // Synchronous on purpose: it finishes before the app reports ready (and before any test runs).
-    @EventListener(ApplicationReadyEvent::class)
-    fun onStartup() {
-        try {
-            reconcile()
-        } catch (e: Exception) {
-            log.error("[payment] startup reconcile failed", e) // never block startup
-        }
-    }
-
-    // initialDelay = interval: the startup run above is the first one.
+    // First run shortly after startup on the scheduler thread, so a slow Stripe never delays boot.
     @Scheduled(
-        initialDelayString = "\${app.payment.reconcile-interval-ms}",
+        initialDelayString = "\${app.payment.reconcile-initial-delay-ms}",
         fixedDelayString = "\${app.payment.reconcile-interval-ms}",
     )
     fun onSchedule() {
@@ -100,7 +88,13 @@ class PaymentReconciliationJob(
         for (order in paymentOrderRepository.findByStatusAndReceiptUrlIsNull(PaymentOrderStatus.COMPLETED)) {
             val sessionId = order.stripeSessionId ?: continue
             try {
-                val snapshot = gateway.retrieveSession(sessionId)
+                val snapshot = try {
+                    gateway.retrieveSession(sessionId)
+                } catch (e: StripeResourceMissingException) {
+                    // shortcut: a pre-key-switch order is re-asked every run (DEBUG only); mark it if that ever matters
+                    log.debug("[payment] receipt backfill of order={}: session {} unknown to this Stripe key", order.orderNo, sessionId)
+                    continue
+                }
                 val receiptUrl = snapshot.receiptUrl ?: continue
                 writer.storeReceipt(order.id ?: error("order not persisted"), snapshot.chargeId, receiptUrl)
                 log.info("[payment] reconcile order={} receipt backfilled", order.orderNo)
