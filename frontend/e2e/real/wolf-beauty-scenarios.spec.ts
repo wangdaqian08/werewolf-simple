@@ -36,6 +36,7 @@ import {
   waitForCondition,
   waitForDayRevealed,
   waitForPhase,
+  waitForUiSubPhase,
   waitForVotingSubPhase,
 } from './helpers/state-polling'
 import { hostStartsNight } from './helpers/night-driver'
@@ -430,19 +431,24 @@ test.describe('Wolf Beauty scenarios (real backend)', () => {
     await revealDay(t)
 
     // ── C4 (W8): in the self-destruct window only the pack wolf is offered 自爆 ──
-    await bPage.getByTestId('action-menu-btn').click()
+    // Each page flips to RESULT_REVEALED only after its own PhaseChanged refetch, and DayPhase is
+    // keyed on the sub-phase: a menu opened before that is remounted away (CI run 44434085333).
+    for (const page of [bPage, wolfPage]) await waitForUiSubPhase(page, 'RESULT_REVEALED')
+    await bPage.getByTestId('action-menu-btn').click({ timeout: scale(5_000) })
     await expect(bPage.getByTestId('action-menu-empty')).toBeVisible({ timeout: scale(5_000) })
     await expect(
       bPage.getByTestId('action-menu-self-destruct'),
       'no 自爆 for the 狼美人',
     ).toHaveCount(0)
-    await wolfPage.getByTestId('action-menu-btn').click()
+    await wolfPage.getByTestId('action-menu-btn').click({ timeout: scale(5_000) })
     await expect(wolfPage.getByTestId('action-menu-self-destruct')).toBeVisible({
       timeout: scale(5_000),
     })
     await captureSnapshot(game.pages, testInfo, 'd2-action-menus')
     for (const page of [bPage, wolfPage]) {
-      await page.getByTestId('action-menu-backdrop').click({ position: { x: 5, y: 5 } })
+      await page
+        .getByTestId('action-menu-backdrop')
+        .click({ position: { x: 5, y: 5 }, timeout: scale(5_000) })
       await expect(page.getByTestId('action-menu-backdrop')).toBeHidden({ timeout: scale(5_000) })
     }
 
