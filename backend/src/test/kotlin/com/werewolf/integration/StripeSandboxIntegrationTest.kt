@@ -12,7 +12,9 @@ import com.werewolf.model.User
 import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.UserRepository
+import com.werewolf.service.CheckoutRequest
 import com.werewolf.service.PaymentService
+import com.werewolf.service.StripeGatewayImpl
 import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -41,6 +43,7 @@ class StripeSandboxIntegrationTest {
     @Autowired lateinit var productRepository: ProductRepository
     @Autowired lateinit var paymentOrderRepository: PaymentOrderRepository
     @Autowired lateinit var props: PaymentProperties
+    @Autowired lateinit var gateway: StripeGatewayImpl
 
     @BeforeEach
     fun guardTestModeKey() {
@@ -123,5 +126,34 @@ class StripeSandboxIntegrationTest {
         val updated = paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow()
         assertThat(updated.status).isEqualTo(PaymentOrderStatus.EXPIRED)
         assertThat(walletService.balance(userId)).isEqualTo(0)
+    }
+
+    @Test
+    fun `StripeGatewayImpl - idempotent create, retrieve, expire, list and customer against the sandbox`() {
+        val (userId, product) = seedUserAndProduct()
+        val customerId = gateway.createCustomer(userId)
+        assertThat(customerId).startsWith("cus_")
+
+        val orderNo = UUID.randomUUID().toString()
+        val req = CheckoutRequest(
+            orderNo = orderNo, userId = userId, customerId = customerId,
+            productName = product.name, currency = product.currency, unitAmountCents = product.priceCents.toLong(),
+            successUrl = "${props.frontendBaseUrl}/pay/result?status=success&orderNo=$orderNo",
+            cancelUrl = "${props.frontendBaseUrl}/pay/result?status=cancel",
+            expiresAtEpochSec = System.currentTimeMillis() / 1000 + props.sessionExpiryMinutes * 60,
+        )
+        val first = gateway.createCheckoutSession(req, "checkout-$orderNo")
+        val again = gateway.createCheckoutSession(req, "checkout-$orderNo")
+        assertThat(again.sessionId).isEqualTo(first.sessionId)
+        assertThat(first.status).isEqualTo("open")
+        assertThat(first.url).contains("checkout.stripe.com")
+
+        val read = gateway.retrieveSession(first.sessionId)
+        assertThat(read.orderNo).isEqualTo(orderNo)
+        assertThat(read.clientReferenceId).isEqualTo(orderNo)
+
+        assertThat(gateway.expireSession(first.sessionId).status).isEqualTo("expired")
+
+        gateway.listCompletedSessions(System.currentTimeMillis() / 1000 - 3600).take(5).toList()
     }
 }

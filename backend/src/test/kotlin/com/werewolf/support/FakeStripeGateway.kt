@@ -1,5 +1,6 @@
 package com.werewolf.support
 
+import com.stripe.exception.ApiConnectionException
 import com.werewolf.service.CheckoutRequest
 import com.werewolf.service.CheckoutSnapshot
 import com.werewolf.service.StripeGateway
@@ -22,10 +23,15 @@ class FakeStripeGateway : StripeGateway {
     var listCalls = 0; private set
     var createCustomerCalls = 0; private set
 
+    /** When true, create / expire fail like an unreachable Stripe. */
+    var failCreate = false
+    var failExpire = false
+
     @Synchronized
     fun reset() {
         sessions.clear(); createdAt.clear(); sessionByIdempotencyKey.clear(); createCalls.clear()
         retrieveCalls = 0; expireCalls = 0; listCalls = 0; createCustomerCalls = 0
+        failCreate = false; failExpire = false
     }
 
     /** Put (or overwrite) a session as Stripe would currently report it. */
@@ -50,6 +56,7 @@ class FakeStripeGateway : StripeGateway {
     @Synchronized
     override fun createCheckoutSession(req: CheckoutRequest, idempotencyKey: String): CheckoutSnapshot {
         createCalls += req to idempotencyKey
+        if (failCreate) throw ApiConnectionException("fake: Stripe unreachable")
         sessionByIdempotencyKey[idempotencyKey]?.let { return session(it) }
         val id = "cs_fake_${++seq}_${System.nanoTime()}"
         val s = CheckoutSnapshot(
@@ -72,6 +79,7 @@ class FakeStripeGateway : StripeGateway {
     @Synchronized
     override fun expireSession(sessionId: String): CheckoutSnapshot {
         expireCalls++
+        if (failExpire) throw ApiConnectionException("fake: Stripe unreachable")
         val s = session(sessionId)
         if (s.status != "open") return s
         return s.copy(status = "expired", url = null).also { sessions[sessionId] = it }

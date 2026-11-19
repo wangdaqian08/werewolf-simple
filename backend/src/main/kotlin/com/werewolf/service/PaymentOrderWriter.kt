@@ -3,12 +3,14 @@ package com.werewolf.service
 import com.werewolf.model.CreditTxType
 import com.werewolf.model.PaymentOrder
 import com.werewolf.model.PaymentOrderStatus
+import com.werewolf.model.Product
 import com.werewolf.repository.PaymentOrderRepository
 import jakarta.persistence.EntityManager
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
+import java.util.UUID
 
 /**
  * The DB side of payment fulfillment, one short transaction per call. Callers do their
@@ -21,6 +23,28 @@ class PaymentOrderWriter(
     private val entityManager: EntityManager,
 ) {
     private val log = LoggerFactory.getLogger(PaymentOrderWriter::class.java)
+
+    /** Commit a CREATED order before Stripe is called, so Stripe never holds a session we did not save. */
+    @Transactional
+    fun createOrder(userId: String, product: Product): PaymentOrder =
+        paymentOrderRepository.save(
+            PaymentOrder(
+                orderNo = UUID.randomUUID().toString(),
+                userId = userId,
+                productId = product.id ?: error("product not persisted"),
+                credits = product.credits + product.bonusCredits,
+                amountCents = product.priceCents,
+                currency = product.currency,
+            ),
+        )
+
+    @Transactional
+    fun attachSession(orderId: Int, sessionId: String, expiresAt: LocalDateTime) {
+        val order = paymentOrderRepository.findById(orderId).orElseThrow { IllegalStateException("no order $orderId") }
+        order.stripeSessionId = sessionId
+        order.sessionExpiresAt = expiresAt
+        order.updatedAt = LocalDateTime.now()
+    }
 
     /**
      * Stripe says [snapshot] is paid. The conditional CREATED → COMPLETED update and the

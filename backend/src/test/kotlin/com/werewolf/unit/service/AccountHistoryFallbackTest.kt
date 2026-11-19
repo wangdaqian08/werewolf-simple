@@ -9,10 +9,13 @@ import com.werewolf.repository.PerkRepository
 import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
+import com.werewolf.repository.UserRepository
 import com.werewolf.service.PaymentEventLog
 import com.werewolf.service.PaymentFulfillmentService
+import com.werewolf.service.PaymentOrderWriter
 import com.werewolf.service.PaymentService
 import com.werewolf.service.PerkService
+import com.werewolf.service.StripeGateway
 import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -48,6 +51,9 @@ class AccountHistoryFallbackTest {
     @Mock lateinit var paymentOrderRepository: PaymentOrderRepository
     @Mock lateinit var paymentEventLog: PaymentEventLog
     @Mock lateinit var paymentFulfillmentService: PaymentFulfillmentService
+    @Mock lateinit var userRepository: UserRepository
+    @Mock lateinit var paymentOrderWriter: PaymentOrderWriter
+    @Mock lateinit var stripeGateway: StripeGateway
 
     @Test
     fun `myActivations falls back to the perkCode when the catalog row is missing`() {
@@ -71,8 +77,8 @@ class AccountHistoryFallbackTest {
     @Test
     fun `listOrders falls back to an empty productName when the product row is missing`() {
         val service = PaymentService(
-            productRepository, paymentOrderRepository, paymentEventLog,
-            paymentFulfillmentService, PaymentProperties(
+            productRepository, paymentOrderRepository, userRepository, paymentEventLog,
+            paymentFulfillmentService, paymentOrderWriter, stripeGateway, PaymentProperties(
                 enabled = true, frontendBaseUrl = "https://example.test", sessionExpiryMinutes = 30,
                 reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10, sweepLookbackDays = 30,
                 statusCheckThrottleSeconds = 5,

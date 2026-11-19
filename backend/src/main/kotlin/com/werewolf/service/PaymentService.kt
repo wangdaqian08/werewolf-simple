@@ -2,20 +2,21 @@ package com.werewolf.service
 
 import com.stripe.Stripe
 import com.stripe.exception.SignatureVerificationException
+import com.stripe.exception.StripeException
 import com.stripe.model.Event
-import com.stripe.model.checkout.Session
 import com.stripe.net.Webhook
-import com.stripe.param.checkout.SessionCreateParams
 import com.werewolf.config.PaymentProperties
-import com.werewolf.model.PaymentOrder
+import com.werewolf.model.PaymentOrderStatus
 import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.ProductRepository
+import com.werewolf.repository.UserRepository
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.util.UUID
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * Wraps Stripe's static signature verification so tests can inject a fake.
@@ -42,8 +43,11 @@ class StripeWebhookVerifier(private val props: PaymentProperties) {
 class PaymentService(
     private val productRepository: ProductRepository,
     private val paymentOrderRepository: PaymentOrderRepository,
+    private val userRepository: UserRepository,
     private val eventLog: PaymentEventLog,
     private val fulfillment: PaymentFulfillmentService,
+    private val writer: PaymentOrderWriter,
+    private val gateway: StripeGateway,
     private val props: PaymentProperties,
 ) {
     private val log = LoggerFactory.getLogger(PaymentService::class.java)
@@ -67,58 +71,92 @@ class PaymentService(
         )
     }
 
-    @Transactional
+    /**
+     * Start (or resume) a purchase without ever charging twice. Not @Transactional: every
+     * Stripe call runs outside a DB transaction and [PaymentOrderWriter] commits each write.
+     * A Stripe failure is a 503; an order it leaves CREATED without a session is settled by
+     * reconciliation.
+     */
     fun createCheckout(userId: String, productKey: String): String {
         if (userId.startsWith("guest:"))
             throw GuestPurchaseException("Purchases require a signed-in account")
-        if (props.stripeSecretKey.isBlank())
+        if (!props.enabled || props.stripeSecretKey.isBlank())
             throw PaymentsUnavailableException("Payments are not configured")
 
         val product = productRepository.findByProductKeyAndActiveTrue(productKey).orElse(null)
             ?: throw ProductNotFoundException("Unknown product: $productKey")
+        val productId = product.id ?: error("product not persisted")
 
-        val order = paymentOrderRepository.save(
-            PaymentOrder(
-                orderNo = UUID.randomUUID().toString(),
-                userId = userId,
-                productId = product.id ?: error("product not persisted"),
-                credits = product.credits + product.bonusCredits,
-                amountCents = product.priceCents,
-                currency = product.currency,
-            ),
-        )
-
-        val params = SessionCreateParams.builder()
-            .setMode(SessionCreateParams.Mode.PAYMENT)
-            .setClientReferenceId(order.orderNo)
-            .putMetadata("orderNo", order.orderNo)
-            .putMetadata("userId", userId)
-            .setSuccessUrl("${props.frontendBaseUrl}/pay/result?status=success&orderNo=${order.orderNo}")
-            .setCancelUrl("${props.frontendBaseUrl}/pay/result?status=cancel")
-            .addLineItem(
-                SessionCreateParams.LineItem.builder()
-                    .setQuantity(1)
-                    .setPriceData(
-                        SessionCreateParams.LineItem.PriceData.builder()
-                            .setCurrency(product.currency)
-                            .setUnitAmount(product.priceCents.toLong())
-                            .setProductData(
-                                SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                    .setName(product.name)
-                                    .build(),
-                            )
-                            .build(),
-                    )
-                    .build(),
+        try {
+            openSessionUrl(userId, productId)?.let {
+                log.info("[payment] checkout reused open session user={} product={}", userId, productKey)
+                return it
+            }
+            expireOtherSessions(userId, productId)
+            val customerId = customerIdFor(userId)
+            val order = writer.createOrder(userId, product)
+            val expiresAt = LocalDateTime.now().plusMinutes(props.sessionExpiryMinutes)
+            val session = gateway.createCheckoutSession(
+                CheckoutRequest(
+                    orderNo = order.orderNo,
+                    userId = userId,
+                    customerId = customerId,
+                    productName = product.name,
+                    currency = product.currency,
+                    unitAmountCents = product.priceCents.toLong(),
+                    successUrl = "${props.frontendBaseUrl}/pay/result?status=success&orderNo=${order.orderNo}",
+                    cancelUrl = "${props.frontendBaseUrl}/pay/result?status=cancel",
+                    expiresAtEpochSec = expiresAt.atZone(ZoneId.systemDefault()).toEpochSecond(),
+                ),
+                idempotencyKey = "checkout-${order.orderNo}",
             )
-            .build()
+            writer.attachSession(order.id ?: error("order not persisted"), session.sessionId, expiresAt)
+            log.info("[payment] checkout created order={} user={} product={} session={}",
+                order.orderNo, userId, productKey, session.sessionId)
+            return session.url ?: error("new checkout session ${session.sessionId} has no url")
+        } catch (e: StripeException) {
+            log.warn("[payment] checkout failed at Stripe user={} product={}: {}", userId, productKey, e.message)
+            throw PaymentsUnavailableException("Payments are temporarily unavailable")
+        }
+    }
 
-        val session = Session.create(params)
-        order.stripeSessionId = session.id
-        paymentOrderRepository.save(order)
-        log.info("[payment] checkout created order={} user={} product={} session={}",
-            order.orderNo, userId, productKey, session.id)
-        return session.url
+    /** URL of this user's newest unexpired order for the product, if Stripe still has its session open. */
+    private fun openSessionUrl(userId: String, productId: Int): String? {
+        val order = paymentOrderRepository
+            .findFirstByUserIdAndProductIdAndStatusAndSessionExpiresAtAfterOrderByCreatedAtDesc(
+                userId, productId, PaymentOrderStatus.CREATED, LocalDateTime.now(),
+            ).orElse(null) ?: return null
+        val session = gateway.retrieveSession(order.stripeSessionId ?: return null)
+        return if (session.status == "open") session.url else null
+    }
+
+    /** One purchase in flight per user: expire the user's other sessions, settling any that already ended. */
+    private fun expireOtherSessions(userId: String, productId: Int) {
+        for (order in paymentOrderRepository.findByUserIdAndStatusAndStripeSessionIdIsNotNull(userId, PaymentOrderStatus.CREATED)) {
+            val sessionId = order.stripeSessionId ?: continue
+            try {
+                val session = gateway.expireSession(sessionId)
+                when (session.status) {
+                    "complete" -> fulfillment.fulfill(sessionId, "checkout")
+                    "expired" -> writer.applyTerminal(order.id ?: error("order not persisted"), PaymentOrderStatus.EXPIRED)
+                }
+            } catch (e: StripeException) {
+                // Same product: that session may still be open and payable, so never open a second one beside it.
+                if (order.productId == productId) throw e
+                log.warn("[payment] could not expire session {} of order {} (reconciliation settles it): {}",
+                    sessionId, order.orderNo, e.message)
+            }
+        }
+    }
+
+    /** The user's Stripe Customer, created and stored on the first purchase. */
+    private fun customerIdFor(userId: String): String {
+        val user = userRepository.findById(userId).orElse(null) ?: error("no user $userId")
+        user.stripeCustomerId?.let { return it }
+        val customerId = gateway.createCustomer(userId)
+        user.stripeCustomerId = customerId
+        userRepository.save(user)
+        return customerId
     }
 
     /**
