@@ -30,6 +30,9 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Starting a purchase cannot charge a player twice: the order is committed before Stripe
@@ -72,7 +75,7 @@ class PaymentCheckoutIntegrationTest {
     private fun reload(order: PaymentOrder) = paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow()
 
     @Test
-    fun `first checkout commits one order and opens one 30-minute session with the customer and idempotency key`() {
+    fun `first checkout commits one order and opens one 31-minute session with the customer and idempotency key`() {
         val userId = newUser()
 
         val url = paymentService.createCheckout(userId, "starter")
@@ -88,9 +91,9 @@ class PaymentCheckoutIntegrationTest {
         assertThat(req.unitAmountCents).isEqualTo(199)
         val session = gateway.retrieveSession(order.stripeSessionId ?: error("order has no session"))
         assertThat(url).isEqualTo(session.url)
-        val in30 = LocalDateTime.now().plusMinutes(30)
-        assertThat(order.sessionExpiresAt).isCloseTo(in30, within(5, ChronoUnit.SECONDS))
-        assertThat(req.expiresAtEpochSec).isCloseTo(in30.atZone(ZoneId.systemDefault()).toEpochSecond(), within(5L))
+        val in31 = LocalDateTime.now().plusMinutes(31) // Stripe's 30-min minimum plus headroom for latency
+        assertThat(order.sessionExpiresAt).isCloseTo(in31, within(5, ChronoUnit.SECONDS))
+        assertThat(req.expiresAtEpochSec).isCloseTo(in31.atZone(ZoneId.systemDefault()).toEpochSecond(), within(5L))
     }
 
     @Test
@@ -104,6 +107,21 @@ class PaymentCheckoutIntegrationTest {
         assertThat(orders(userId)).hasSize(1)
         assertThat(gateway.createCalls).hasSize(1)
         assertThat(gateway.expireCalls).isZero()
+    }
+
+    @Test
+    fun `two simultaneous checkouts by one user for one product open one session and share its URL`() {
+        val userId = newUser()
+        val start = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        val futures = (1..2).map { pool.submit<String> { start.await(); paymentService.createCheckout(userId, "starter") } }
+        start.countDown()
+        val urls = futures.map { it.get(30, TimeUnit.SECONDS) }
+        pool.shutdown()
+
+        assertThat(urls.distinct()).hasSize(1)
+        assertThat(orders(userId)).hasSize(1)
+        assertThat(gateway.createCalls).hasSize(1)
     }
 
     @Test

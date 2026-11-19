@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Wraps Stripe's static signature verification so tests can inject a fake.
@@ -51,6 +52,9 @@ class PaymentService(
     private val props: PaymentProperties,
 ) {
     private val log = LoggerFactory.getLogger(PaymentService::class.java)
+
+    // shortcut: in-memory per-user lock, single backend instance — upgrade to a DB lock if the backend ever runs more than one instance
+    private val checkoutLocks = ConcurrentHashMap<String, Any>()
 
     @PostConstruct
     fun initStripe() {
@@ -87,36 +91,39 @@ class PaymentService(
             ?: throw ProductNotFoundException("Unknown product: $productKey")
         val productId = product.id ?: error("product not persisted")
 
-        try {
-            openSessionUrl(userId, productId)?.let {
-                log.info("[payment] checkout reused open session user={} product={}", userId, productKey)
-                return it
+        // One checkout at a time per user, so two clicks cannot open two payable sessions.
+        synchronized(checkoutLocks.computeIfAbsent(userId) { Any() }) {
+            try {
+                openSessionUrl(userId, productId)?.let {
+                    log.info("[payment] checkout reused open session user={} product={}", userId, productKey)
+                    return it
+                }
+                expireOtherSessions(userId, productId)
+                val customerId = customerIdFor(userId)
+                val order = writer.createOrder(userId, product)
+                val expiresAt = LocalDateTime.now().plusMinutes(props.sessionExpiryMinutes)
+                val session = gateway.createCheckoutSession(
+                    CheckoutRequest(
+                        orderNo = order.orderNo,
+                        userId = userId,
+                        customerId = customerId,
+                        productName = product.name,
+                        currency = product.currency,
+                        unitAmountCents = product.priceCents.toLong(),
+                        successUrl = "${props.frontendBaseUrl}/pay/result?status=success&orderNo=${order.orderNo}",
+                        cancelUrl = "${props.frontendBaseUrl}/pay/result?status=cancel",
+                        expiresAtEpochSec = expiresAt.atZone(ZoneId.systemDefault()).toEpochSecond(),
+                    ),
+                    idempotencyKey = "checkout-${order.orderNo}",
+                )
+                writer.attachSession(order.id ?: error("order not persisted"), session.sessionId, expiresAt)
+                log.info("[payment] checkout created order={} user={} product={} session={}",
+                    order.orderNo, userId, productKey, session.sessionId)
+                return session.url ?: error("new checkout session ${session.sessionId} has no url")
+            } catch (e: StripeException) {
+                log.warn("[payment] checkout failed at Stripe user={} product={}: {}", userId, productKey, e.message)
+                throw PaymentsUnavailableException("Payments are temporarily unavailable")
             }
-            expireOtherSessions(userId, productId)
-            val customerId = customerIdFor(userId)
-            val order = writer.createOrder(userId, product)
-            val expiresAt = LocalDateTime.now().plusMinutes(props.sessionExpiryMinutes)
-            val session = gateway.createCheckoutSession(
-                CheckoutRequest(
-                    orderNo = order.orderNo,
-                    userId = userId,
-                    customerId = customerId,
-                    productName = product.name,
-                    currency = product.currency,
-                    unitAmountCents = product.priceCents.toLong(),
-                    successUrl = "${props.frontendBaseUrl}/pay/result?status=success&orderNo=${order.orderNo}",
-                    cancelUrl = "${props.frontendBaseUrl}/pay/result?status=cancel",
-                    expiresAtEpochSec = expiresAt.atZone(ZoneId.systemDefault()).toEpochSecond(),
-                ),
-                idempotencyKey = "checkout-${order.orderNo}",
-            )
-            writer.attachSession(order.id ?: error("order not persisted"), session.sessionId, expiresAt)
-            log.info("[payment] checkout created order={} user={} product={} session={}",
-                order.orderNo, userId, productKey, session.sessionId)
-            return session.url ?: error("new checkout session ${session.sessionId} has no url")
-        } catch (e: StripeException) {
-            log.warn("[payment] checkout failed at Stripe user={} product={}: {}", userId, productKey, e.message)
-            throw PaymentsUnavailableException("Payments are temporarily unavailable")
         }
     }
 

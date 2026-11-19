@@ -54,8 +54,8 @@ app:
     stripe-webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
     # Feature flag: lets the Stripe sandbox integration tests run (CI/local only)
     sandbox-tests-enabled: ${STRIPE_SANDBOX_TESTS_ENABLED:false}
-    # Checkout Session lifetime (30 min is Stripe's minimum)
-    session-expiry-minutes: 30
+    # Stripe's minimum is 30 min after creation; 31 leaves headroom for latency
+    session-expiry-minutes: 31
     # How often unpaid orders are reconciled with Stripe (10 min)
     reconcile-interval-ms: 600000
     # Only reconcile orders still CREATED after this long
