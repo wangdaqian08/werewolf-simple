@@ -9,7 +9,6 @@
  *  N3: it checks a villager, then — the pack gone — makes the kill itself (G8).
  *  D3: the gargoyle is voted out; the review lists its checks (G15).
  *
- * The narration files are 0-byte placeholders: the night must not stall on them.
  *
  * CI-vs-local design (memory feedback_e2e_ci_vs_local):
  *  - the gargoyle acts through its own browser (DOM testids); every other role acts
