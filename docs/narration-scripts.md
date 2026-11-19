@@ -21,8 +21,8 @@ are shown on the role's own screen, never read aloud.
 | 狼美人 | `wolf_beauty_open_eyes.mp3` | 狼美人请睁眼 |
 | 狼美人 | `wolf_beauty_close_eyes.mp3` | 狼美人请闭眼 |
 
-The 石像鬼 and 狼美人 files are committed as 0-byte placeholders until the owner records
-them; the client skips a cue whose `play()` fails, so the night does not stall.
+All the files above are recorded (石像鬼 and 狼美人 added 2026-11-19, normalised to the
+existing clips: about −14.8 LUFS, true peak ≤ −1.3 dBFS, 24 kHz mono 48 kbps).
 
 骑士 needs no narration: the duel happens during the day, like 白狼王 and 白痴,
 which have no lines either.

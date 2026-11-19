@@ -93,12 +93,16 @@ narrator never changes mid-game.
 - Text: the short phrase only, e.g. `机械狼请睁眼` / `机械狼请闭眼`. The
   existing clips are 2.1–2.3 s; on-screen prompts carry the instructions.
 - Format: 24000 Hz, mono, 48 kbps MP3.
-- Loudness: the clips were raised ~10 dB in #160 (mean ≈ −16.5 dB, peak
-  ≈ −1.7 dB). Match a new file before committing:
+- Loudness: match the existing clips — integrated ≈ −14.8 LUFS (the set spans −14.1 to −15.0),
+  true peak no higher than about −1.3 dBFS. Raw ttsmaker output is about −23.5 LUFS. `loudnorm` cannot do it alone: on clips
+  under 3 s it falls back to linear gain and stops at the peak limit (≈ −19 LUFS). Raise the gain
+  and limit the peaks instead, adjusting `G` until `I` reads −14.8 (G was 9.6–9.9 dB for the
+  石像鬼 / 狼美人 clips, 2026-11-19):
 
   ```bash
-  ffmpeg -i in.mp3 -af "loudnorm=I=-16:TP=-1.5" -ar 24000 -ac 1 -b:a 48k out.mp3
-  ffmpeg -i out.mp3 -af volumedetect -f null - 2>&1 | grep volume  # check
+  ffmpeg -i in.mp3 -af "volume=${G}dB,alimiter=limit=0.841:attack=2:release=40:level=false" \
+    -ar 24000 -ac 1 -b:a 48k out.mp3
+  ffmpeg -i out.mp3 -af "volumedetect,ebur128=peak=true" -f null - 2>&1 | grep -E "I:|Peak:|volume"  # check
   ```
 
 - Put the file in `backend/src/main/resources/static/audio/` under the exact

@@ -14,7 +14,6 @@
  *  N3: the pack knifes the host, the last villager → the night ends in 屠邊, the wolves win.
  *  The review lists the charm and the CHARM_DEATH event.
  *
- * The narration files are 0-byte placeholders: the night must not stall on them.
  *
  * CI-vs-local design (memory feedback_e2e_ci_vs_local):
  *  - the 狼美人 acts through its own browser (DOM testids); every other role via act.sh;
