@@ -70,7 +70,11 @@ class AccountHistoryFallbackTest {
     fun `listOrders falls back to an empty productName when the product row is missing`() {
         val service = PaymentService(
             productRepository, paymentOrderRepository, paymentEventRepository,
-            walletService, PaymentProperties(),
+            walletService, PaymentProperties(
+                enabled = true, frontendBaseUrl = "https://example.test", sessionExpiryMinutes = 30,
+                reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10, sweepLookbackDays = 30,
+                statusCheckThrottleSeconds = 5,
+            ),
         )
         whenever(productRepository.findAll()).thenReturn(emptyList())
         whenever(paymentOrderRepository.findTop50ByUserIdOrderByCreatedAtDesc("google:u1"))

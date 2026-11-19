@@ -45,6 +45,11 @@ app:
       redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:5173/auth/callback/google}
   cors:
     allowed-origins: "*"
+  payment:
+    enabled: true
+    frontend-base-url: http://localhost:5173
+    stripe-secret-key: sk_test_dummy
+    stripe-webhook-secret: whsec_dummy
 
 websocket:
   allowed-origins: "*"
