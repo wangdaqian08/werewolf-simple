@@ -1,5 +1,7 @@
 # Going live: Stripe production keys
 
+> **Note:** payments are now off unless `PAYMENTS_ENABLED=true`. When it is true, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and `FRONTEND_BASE_URL` are all required or the app refuses to start. This runbook gets a full rewrite in PR 4.
+
 Zero code change — `application.yml` already reads `STRIPE_SECRET_KEY` and
 `STRIPE_WEBHOOK_SECRET` from the environment. Do this only after the backend
 sandbox tests AND the payment E2E are green locally and in CI.

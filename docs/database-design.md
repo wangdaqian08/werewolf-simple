@@ -234,9 +234,15 @@ CREATE INDEX idx_game_events ON game_events(game_id);
 
 ---
 
-## Payment — Placeholder
+## Payment
 
-Stub only. V2 migration contains commented-out scaffolding for a future 房卡 (room-card) system. Not implemented.
+Stripe credit top-up (V19 + V39). Off unless `PAYMENTS_ENABLED=true`.
+
+- `products` — purchasable credit packs (credits, bonus_credits, price_cents, sort_order).
+- `payment_orders` — one row per checkout. `status` CREATED / COMPLETED / EXPIRED / FAILED; Stripe session, PaymentIntent and charge ids; `receipt_url`; `session_expires_at`; `needs_review` + `review_reason` (set on anomalies); `updated_at`.
+- `payment_events` — webhook event log. `status` RECEIVED / PROCESSED / FAILED, `attempts`, `last_error`, `object_id`, `payment_order_id`, `processed_at`.
+- `users.stripe_customer_id` — one Stripe Customer per user (unique).
+- `ux_ct_purchase_order` — partial unique index on `credit_transactions(payment_order_id) WHERE type = 'PURCHASE'`: at most one PURCHASE ledger row per order (idempotency backstop).
 
 ---
 
