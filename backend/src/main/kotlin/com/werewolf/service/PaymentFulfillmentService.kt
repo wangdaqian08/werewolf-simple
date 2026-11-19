@@ -5,7 +5,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
-enum class FulfillOutcome { CREDITED, ALREADY_DONE, NOT_PAID, EXPIRED, FAILED, FLAGGED }
+/** NOT_OURS: a paid session without our orderNo / client_reference_id and no order; ignored, never an alert. */
+enum class FulfillOutcome { CREDITED, ALREADY_DONE, NOT_PAID, EXPIRED, FAILED, FLAGGED, NOT_OURS }
 
 class OrderNotFoundForSessionException(sessionId: String) :
     RuntimeException("No payment order for checkout session $sessionId")
@@ -61,6 +62,11 @@ class PaymentFulfillmentService(
         val outcome = try {
             writer.applyPaid(snapshot)
         } catch (e: OrderNotFoundForSessionException) {
+            if (snapshot.orderNo == null && snapshot.clientReferenceId == null) {
+                // Without our identifiers it is someone else's session (stripe trigger, another integration).
+                log.warn("[payment] paid session {} is not ours, ignored (source={})", snapshot.sessionId, source)
+                return FulfillOutcome.NOT_OURS
+            }
             log.error("[payment-alert] paid session {} has no order (source={})", snapshot.sessionId, source)
             throw e
         }

@@ -23,6 +23,9 @@ import com.werewolf.support.PaymentIntegrationTest
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.springframework.boot.test.system.CapturedOutput
+import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.resttestclient.TestRestTemplate
 import org.springframework.http.HttpEntity
@@ -37,6 +40,7 @@ import java.util.*
  * recorded in payment_events, and a failed delivery stays visible and is retried.
  */
 @PaymentIntegrationTest
+@ExtendWith(OutputCaptureExtension::class)
 class PaymentWebhookIntegrationTest {
 
     @Autowired lateinit var paymentService: PaymentService
@@ -268,15 +272,38 @@ class PaymentWebhookIntegrationTest {
     }
 
     @Test
-    fun `signed webhook whose processing fails answers non-2xx so Stripe retries`() {
+    fun `signed webhook for our session with no order answers 5xx, records FAILED and alerts`(output: CapturedOutput) {
         val sessionId = "cs_test_${UUID.randomUUID()}"
         openSession(sessionId, UUID.randomUUID().toString())
         gateway.markPaid(sessionId) // paid, but no order
+
+        val alertsBefore = output.all.split("[payment-alert]").size
 
         val resp = postSigned(eventJson("checkout.session.completed", "evt_signed_nf_$sessionId", sessionId))
 
         assertThat(resp.statusCode.is5xxServerError).withFailMessage("status %s", resp.statusCode).isTrue()
         assertThat(eventRow("evt_signed_nf_$sessionId").status).isEqualTo(PaymentEventStatus.FAILED)
+        assertThat(output.all.split("[payment-alert]").size).isGreaterThan(alertsBefore)
+    }
+
+    @Test
+    fun `a paid session that is not ours answers 200, is recorded PROCESSED and raises no alert`(output: CapturedOutput) {
+        val sessionId = "cs_test_${UUID.randomUUID()}"
+        gateway.put(
+            CheckoutSnapshot(
+                sessionId = sessionId, status = "open", paymentStatus = "unpaid",
+                orderNo = null, clientReferenceId = null, // e.g. a stripe trigger fixture
+                paymentIntentId = null, chargeId = null, receiptUrl = null, url = null, expiresAtEpochSec = null,
+            ),
+        )
+        gateway.markPaid(sessionId)
+        val alertsBefore = output.all.split("[payment-alert]").size
+
+        val resp = postSigned(eventJson("checkout.session.completed", "evt_foreign_$sessionId", sessionId))
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(eventRow("evt_foreign_$sessionId").status).isEqualTo(PaymentEventStatus.PROCESSED)
+        assertThat(output.all.split("[payment-alert]").size).isEqualTo(alertsBefore)
     }
 
     @Test

@@ -312,4 +312,42 @@ class PaymentFulfillmentIntegrationTest {
         assertThatThrownBy { transactionTemplate.executeWithoutResult { fulfillment.syncFailed(sessionId, "webhook") } }
             .isInstanceOf(IllegalStateException::class.java)
     }
+
+    @Test
+    fun `another session paid while the order was CREATED, then the stored session paid too, is FLAGGED`() {
+        val order = seedOrder()
+        val stored = openSession(order).sessionId
+        val other = "cs_test_${UUID.randomUUID()}"
+        openSession(order, other)
+        gateway.markPaid(other)
+        assertThat(fulfillment.fulfill(other, "webhook")).isEqualTo(FulfillOutcome.CREDITED)
+        assertThat(reload(order).stripeSessionId).isEqualTo(stored) // the session that paid is not the stored one
+        gateway.markPaid(stored)
+
+        assertThat(fulfillment.fulfill(stored, "webhook")).isEqualTo(FulfillOutcome.FLAGGED)
+
+        assertThat(reload(order).needsReview).isTrue()
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        assertThat(purchaseRows(order.userId)).hasSize(1)
+    }
+
+    @Test
+    fun `a paid session without our identifiers is NOT_OURS - ignored without an alert`(output: CapturedOutput) {
+        val sessionId = "cs_test_${UUID.randomUUID()}"
+        gateway.put(
+            CheckoutSnapshot(
+                sessionId = sessionId, status = "open", paymentStatus = "unpaid",
+                orderNo = null, clientReferenceId = null,
+                paymentIntentId = null, chargeId = null, receiptUrl = null, url = null, expiresAtEpochSec = null,
+            ),
+        )
+        gateway.markPaid(sessionId)
+        val ledgerBefore = creditTransactionRepository.count()
+        val alertsBefore = output.all.split("[payment-alert]").size
+
+        assertThat(fulfillment.fulfill(sessionId, "webhook")).isEqualTo(FulfillOutcome.NOT_OURS)
+
+        assertThat(output.all.split("[payment-alert]").size).isEqualTo(alertsBefore)
+        assertThat(creditTransactionRepository.count()).isEqualTo(ledgerBefore)
+    }
 }

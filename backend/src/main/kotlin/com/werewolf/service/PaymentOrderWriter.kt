@@ -33,9 +33,11 @@ class PaymentOrderWriter(
         val orderId = order.id ?: error("order not persisted")
         if (paymentOrderRepository.markCompletedIfCreated(orderId) == 0) {
             entityManager.refresh(order) // the bulk update bypassed the loaded entity
-            val otherSession = order.stripeSessionId != null && order.stripeSessionId != snapshot.sessionId
-            if (order.status == PaymentOrderStatus.COMPLETED && !otherSession) return FulfillOutcome.ALREADY_DONE
-            flag(order, if (otherSession) "second paid session ${snapshot.sessionId} for ${order.status} order (paid twice?)"
+            // Paid twice: another session, or another PaymentIntent (the stored session may not be the one that paid).
+            val paidTwice = (order.stripeSessionId != null && order.stripeSessionId != snapshot.sessionId) ||
+                (order.stripePaymentIntentId != null && order.stripePaymentIntentId != snapshot.paymentIntentId)
+            if (order.status == PaymentOrderStatus.COMPLETED && !paidTwice) return FulfillOutcome.ALREADY_DONE
+            flag(order, if (paidTwice) "second payment (session ${snapshot.sessionId}, intent ${snapshot.paymentIntentId}) for ${order.status} order"
                         else "paid session ${snapshot.sessionId} but order is ${order.status}")
             return FulfillOutcome.FLAGGED
         }
