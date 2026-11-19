@@ -330,6 +330,35 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V39 adds the Stripe audit columns and existing events read back PROCESSED`() {
+        flyway().migrate()
+
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('p', 'p')")
+            exec("UPDATE users SET stripe_customer_id = 'cus_1' WHERE user_id = 'p'")
+            exec("INSERT INTO payment_events (stripe_event_id, event_type) VALUES ('evt_1', 'x')")
+            val st = prepareStatement("SELECT status, attempts FROM payment_events WHERE stripe_event_id = 'evt_1'")
+            st.executeQuery().use { rs ->
+                assertThat(rs.next()).isTrue()
+                assertThat(rs.getString(1)).isEqualTo("PROCESSED")
+                assertThat(rs.getInt(2)).isEqualTo(1)
+            }
+            exec(
+                "INSERT INTO payment_orders (order_no, user_id, product_id, credits, amount_cents, currency, status, " +
+                    "stripe_charge_id, receipt_url, session_expires_at, review_reason, updated_at) " +
+                    "VALUES ('o1', 'p', 1, 10, 100, 'usd', 'COMPLETED', 'ch_1', 'http://r', CURRENT_TIMESTAMP, 'why', CURRENT_TIMESTAMP)"
+            )
+            val flag = prepareStatement("SELECT needs_review FROM payment_orders WHERE order_no = 'o1'")
+            flag.executeQuery().use { rs -> rs.next(); assertThat(rs.getBoolean(1)).isFalse() }
+            exec("INSERT INTO payment_events (stripe_event_id, event_type, object_id, payment_order_id, last_error, processed_at) VALUES ('evt_2', 'x', 'cs_1', 1, 'e', CURRENT_TIMESTAMP)")
+        }
+        assertThatThrownBy { sql { exec("INSERT INTO payment_events (stripe_event_id, event_type, status) VALUES ('evt_3', 'x', 'BAD')") } }
+            .hasMessageContaining("payment_events_status_check")
+        assertThatThrownBy { sql { exec("INSERT INTO users (user_id, nickname, stripe_customer_id) VALUES ('q', 'q', 'cus_1')") } }
+            .hasMessageContaining("duplicate key")
+    }
+
+    @Test
     fun `V28 accepts ADMIN_GRANT ledger rows and still rejects unknown types`() {
         flyway().migrate()
 

@@ -192,7 +192,7 @@ class PaymentOrder(
     val currency: String,
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 20)
     var status: PaymentOrderStatus = PaymentOrderStatus.CREATED,
 
     @Column(name = "stripe_session_id", length = 255, unique = true)
@@ -207,6 +207,25 @@ class PaymentOrder(
 
     @Column(name = "completed_at")
     var completedAt: LocalDateTime? = null,
+
+    @Column(name = "stripe_charge_id", length = 255)
+    var stripeChargeId: String? = null,
+
+    @Column(name = "receipt_url", length = 1000)
+    var receiptUrl: String? = null,
+
+    @Column(name = "session_expires_at")
+    var sessionExpiresAt: LocalDateTime? = null,
+
+    @Column(name = "needs_review", nullable = false)
+    var needsReview: Boolean = false,
+
+    @Column(name = "review_reason", length = 255)
+    var reviewReason: String? = null,
+
+    @Column(name = "updated_at")
+    @UpdateTimestamp
+    var updatedAt: LocalDateTime? = null,
 )
 
 /** Stripe webhook event dedup: insert-first, duplicate key means already handled. */
@@ -223,6 +242,25 @@ class PaymentEvent(
     @Column(name = "received_at", nullable = false, updatable = false)
     @CreationTimestamp
     val receivedAt: LocalDateTime? = null,
+
+    @Column(name = "object_id", length = 255)
+    var objectId: String? = null,
+
+    @Column(name = "payment_order_id")
+    var paymentOrderId: Int? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    var status: PaymentEventStatus = PaymentEventStatus.PROCESSED,
+
+    @Column(nullable = false)
+    var attempts: Int = 1,
+
+    @Column(name = "last_error", length = 1000)
+    var lastError: String? = null,
+
+    @Column(name = "processed_at")
+    var processedAt: LocalDateTime? = null,
 )
 
 /** One settlement per game: insert-first idempotency guard for game rewards. */

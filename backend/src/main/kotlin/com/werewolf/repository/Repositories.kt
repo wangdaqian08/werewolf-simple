@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 import java.util.*
 
 interface UserRepository : JpaRepository<User, String> {
@@ -312,6 +313,27 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
     )
     fun markCompletedIfCreated(orderId: Int): Int
 
+    /** Conditional CREATED → [newStatus] (EXPIRED / FAILED); 0 rows = the order already left CREATED. */
+    @Modifying
+    @Query(
+        "UPDATE PaymentOrder o SET o.status = :newStatus " +
+            "WHERE o.id = :orderId AND o.status = com.werewolf.model.PaymentOrderStatus.CREATED",
+    )
+    fun markStatusIfCreated(orderId: Int, newStatus: PaymentOrderStatus): Int
+
+    fun findFirstByUserIdAndProductIdAndStatusAndSessionExpiresAtAfterOrderByCreatedAtDesc(
+        userId: String,
+        productId: Int,
+        status: PaymentOrderStatus,
+        now: LocalDateTime,
+    ): Optional<PaymentOrder>
+
+    fun findByUserIdAndStatusAndStripeSessionIdIsNotNull(userId: String, status: PaymentOrderStatus): List<PaymentOrder>
+
+    fun findByStatusAndCreatedAtBefore(status: PaymentOrderStatus, cutoff: LocalDateTime): List<PaymentOrder>
+
+    fun findByStatusAndReceiptUrlIsNull(status: PaymentOrderStatus): List<PaymentOrder>
+
     fun findTop50ByUserIdOrderByCreatedAtDesc(userId: String): List<PaymentOrder>
 }
 
@@ -323,8 +345,8 @@ interface PaymentEventRepository : JpaRepository<PaymentEvent, String> {
      */
     @Modifying(flushAutomatically = true)
     @Query(
-        value = "INSERT INTO payment_events (stripe_event_id, event_type, received_at) " +
-            "VALUES (:eventId, :eventType, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING",
+        value = "INSERT INTO payment_events (stripe_event_id, event_type, received_at, status, attempts) " +
+            "VALUES (:eventId, :eventType, CURRENT_TIMESTAMP, 'PROCESSED', 1) ON CONFLICT DO NOTHING",
         nativeQuery = true,
     )
     fun tryInsert(eventId: String, eventType: String): Int
