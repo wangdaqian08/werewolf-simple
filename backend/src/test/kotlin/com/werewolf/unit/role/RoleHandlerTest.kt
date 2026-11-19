@@ -51,6 +51,25 @@ class RoleHandlerTest {
     private fun req(actorId: String, actionType: ActionType, target: String? = null, payload: Map<String, Any?> = emptyMap()) =
         GameActionRequest(gameId = gameId, actorUserId = actorId, actionType = actionType, targetUserId = target, payload = payload)
 
+    // ── Wake order ────────────────────────────────────────────────────────────
+
+    @Test
+    fun `night handlers wake in @Order - gargoyle, wolves, wolf beauty, mech wolf, witch, seer, medium, gravekeeper, guard`() {
+        val order = listOf(
+            com.werewolf.game.role.GargoyleHandler::class,
+            WerewolfHandler::class,
+            com.werewolf.game.role.WolfBeautyHandler::class,
+            com.werewolf.game.role.MechanicalWolfHandler::class,
+            WitchHandler::class,
+            SeerHandler::class,
+            com.werewolf.game.role.MediumHandler::class,
+            com.werewolf.game.role.GravekeeperHandler::class,
+            GuardHandler::class,
+        ).map { it.java.getAnnotation(org.springframework.core.annotation.Order::class.java).value }
+
+        assertThat(order).containsExactly(0, 1, 2, 3, 4, 5, 6, 7, 8)
+    }
+
     // ── WerewolfHandler ───────────────────────────────────────────────────────
 
     @Nested

@@ -14,7 +14,7 @@ import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
-@Order(5)
+@Order(6)
 @Component
 class MediumHandler(private val nightPhaseRepository: NightPhaseRepository) : RoleHandler {
 

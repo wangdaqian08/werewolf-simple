@@ -83,6 +83,10 @@ class NightPhase(
     @Enumerated(EnumType.STRING)
     @Column(name = "gargoyle_result_role", length = 20)
     var gargoyleResultRole: PlayerRole? = null,
+
+    // Wolf beauty: whom it charmed tonight (NULL = skipped, dead or no wolf beauty)
+    @Column(name = "wolf_beauty_charm_user_id", length = 128)
+    var wolfBeautyCharmUserId: String? = null,
 ) {
     init {
         require(gameId > 0) { "gameId must be a valid ID, got $gameId" }

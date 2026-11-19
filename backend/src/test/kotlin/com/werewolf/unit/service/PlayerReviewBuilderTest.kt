@@ -536,4 +536,56 @@ class PlayerReviewBuilderTest {
         assertThat((n2.action as MyNightAction.Gargoyle).kill).isEqualTo(gseat("v"))
         assertThat(n2.dawn.saved).isEqualTo(gseat("v"))
     }
+
+    // ── 狼美人 ────────────────────────────────────────────────────────────────
+
+    private fun beautyBoard(diedDay: Map<String, Int> = emptyMap()) = board(diedDay) +
+        GamePlayer(gameId = gameId, userId = "wb", seatIndex = 10, role = PlayerRole.WOLF_BEAUTY)
+            .also { p -> diedDay["wb"]?.let { p.alive = false; p.diedDay = it } }
+
+    private fun bseat(id: String, role: PlayerRole? = null) =
+        beautyBoard().first { it.userId == id }.let { PlayerSeat(id, "N-$id", it.seatIndex, role, null) }
+
+    private fun charmDeath(day: Int, beauty: String, victim: String) =
+        event("CHARM_DEATH", mapOf("dayNumber" to day, "wolfBeautyUserId" to beauty, "victimUserId" to victim))
+
+    @Test
+    fun `the 狼美人's night turn carries the pack's kill and its charm`() {
+        val review = build("wb", beautyBoard(), listOf(night(2) { wolfTargetUserId = "v"; wolfBeautyCharmUserId = "seer" }))
+
+        assertThat(review.rounds.single().night!!.action).isEqualTo(
+            MyNightAction.WolfBeauty(
+                teammates = listOf(
+                    bseat("w1", PlayerRole.WEREWOLF), bseat("w2", PlayerRole.WEREWOLF),
+                    bseat("king", PlayerRole.WHITE_WOLF_KING), bseat("wb", PlayerRole.WOLF_BEAUTY),
+                ),
+                target = bseat("v"), selfKill = false, charm = bseat("seer"),
+            ),
+        )
+        assertThat(mapper.writeValueAsString(review.rounds.single().night!!.action)).contains("\"type\":\"WOLF_BEAUTY\"")
+    }
+
+    @Test
+    fun `a day 殉情 is public and names the 狼美人, a night 殉情 is only a name at dawn`() {
+        val day = build("v", beautyBoard(mapOf("wb" to 2, "seer" to 2)),
+            listOf(night(1), night(2) { wolfBeautyCharmUserId = "seer" }),
+            listOf(voteResult(2, "wb"), charmDeath(2, "wb", "seer")))
+        assertThat(day.rounds.first { it.day == 2 }.events.last())
+            .isEqualTo(PlayerDayEvent.CharmDeath(bseat("wb", PlayerRole.WOLF_BEAUTY), bseat("seer")))
+
+        val night = build("v", beautyBoard(mapOf("wb" to 2, "seer" to 2)),
+            listOf(night(1), night(2) { witchPoisonTargetUserId = "wb"; wolfBeautyCharmUserId = "seer" }),
+            listOf(nightDeath(2, "seer"), nightDeath(2, "wb"), charmDeath(2, "wb", "seer")))
+        assertThat(night.rounds.first { it.day == 2 }.events).isEmpty()
+        assertThat(night.rounds.first { it.day == 2 }.night!!.dawn.deaths).containsExactly(bseat("seer"), bseat("wb"))
+    }
+
+    @Test
+    fun `the 殉情 victim's replay ends at the 殉情`() {
+        val review = build("seer", beautyBoard(mapOf("wb" to 2, "seer" to 2)),
+            listOf(night(1), night(2) { wolfBeautyCharmUserId = "seer" }),
+            listOf(voteResult(2, "wb"), charmDeath(2, "wb", "seer"), idiotReveal(2, "idiot")))
+
+        assertThat(review.rounds.last().events.map { it::class }).containsExactly(PlayerDayEvent.Vote::class, PlayerDayEvent.CharmDeath::class)
+    }
 }

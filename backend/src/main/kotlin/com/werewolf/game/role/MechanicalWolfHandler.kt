@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component
  * What it may do tonight is [RoleRules.mechNightSkill]; the effects of poison and protect
  * are resolved by the night orchestrator.
  */
-@Order(2)
+@Order(3)
 @Component
 class MechanicalWolfHandler(
     private val nightPhaseRepository: NightPhaseRepository,

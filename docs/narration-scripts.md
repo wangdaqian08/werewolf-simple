@@ -18,8 +18,10 @@ are shown on the role's own screen, never read aloud.
 | 守墓人 | `gravekeeper_close_eyes.mp3` | 守墓人请闭眼 |
 | 石像鬼 | `gargoyle_open_eyes.mp3` | 石像鬼请睁眼 |
 | 石像鬼 | `gargoyle_close_eyes.mp3` | 石像鬼请闭眼 |
+| 狼美人 | `wolf_beauty_open_eyes.mp3` | 狼美人请睁眼 |
+| 狼美人 | `wolf_beauty_close_eyes.mp3` | 狼美人请闭眼 |
 
-The 石像鬼 files are committed as 0-byte placeholders until the owner records
+The 石像鬼 and 狼美人 files are committed as 0-byte placeholders until the owner records
 them; the client skips a cue whose `play()` fails, so the night does not stall.
 
 骑士 needs no narration: the duel happens during the day, like 白狼王 and 白痴,
@@ -29,8 +31,6 @@ which have no lines either.
 
 | Role | File name | Script |
 |---|---|---|
-| 狼美人 | `wolf_beauty_open_eyes.mp3` | 狼美人请睁眼 |
-| 狼美人 | `wolf_beauty_close_eyes.mp3` | 狼美人请闭眼 |
 | 摄梦人 | `dreamer_open_eyes.mp3` | 摄梦人请睁眼 |
 | 摄梦人 | `dreamer_close_eyes.mp3` | 摄梦人请闭眼 |
 | 魔术师 | `magician_open_eyes.mp3` | 魔术师请睁眼 |

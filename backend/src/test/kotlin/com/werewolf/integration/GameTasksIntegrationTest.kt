@@ -271,6 +271,36 @@ class GameTasksIntegrationTest {
         assertThat(done[idiot]).`as`("idiot revealed, village won").isTrue()
     }
 
+    @Test
+    fun `wolf beauty - a night 殉情 of a god pays 20 戰績分, a day 殉情 of a villager pays nothing`() {
+        fun game(tag: String): Pair<Int, Map<PlayerRole, String>> {
+            val n = System.nanoTime()
+            val r = listOf(
+                "wb" to PlayerRole.WOLF_BEAUTY, "w" to PlayerRole.WEREWOLF, "s" to PlayerRole.SEER,
+                "wi" to PlayerRole.WITCH, "v" to PlayerRole.VILLAGER, "v2" to PlayerRole.VILLAGER,
+            ).map { (id, role) -> "$tag$id-$n" to role }
+            val beauty = r.first().first
+            return finishedGame(r, mapOf(beauty to GameTask.WOLF_BEAUTY_LINK_GOD)) to r.associate { (id, role) -> role to id }
+        }
+        // Q2: poisoned at night, the 狼美人 takes the seer along at dawn.
+        val (nightGame, nightIds) = game("cn")
+        actionLogService.recordNightDeaths(nightGame, 2, listOf(nightIds.getValue(PlayerRole.WOLF_BEAUTY), nightIds.getValue(PlayerRole.SEER)))
+        actionLogService.recordCharmDeath(nightGame, 2, nightIds.getValue(PlayerRole.WOLF_BEAUTY), nightIds.getValue(PlayerRole.SEER))
+        // Voted out by day, it takes a villager along.
+        val (dayGame, dayIds) = game("cd")
+        actionLogService.recordCharmDeath(dayGame, 2, dayIds.getValue(PlayerRole.WOLF_BEAUTY), dayIds.getValue(PlayerRole.VILLAGER))
+
+        rewardSettlementService.settle(nightGame, WinnerSide.VILLAGER)
+        rewardSettlementService.settle(dayGame, WinnerSide.VILLAGER)
+
+        val nightSeat = gamePlayerRepository.findByGameId(nightGame).single { it.role == PlayerRole.WOLF_BEAUTY }
+        assertThat(nightSeat.taskDone).isTrue()
+        assertThat(nightSeat.taskScore).isEqualTo(20)
+        val daySeat = gamePlayerRepository.findByGameId(dayGame).single { it.role == PlayerRole.WOLF_BEAUTY }
+        assertThat(daySeat.taskDone).isFalse()
+        assertThat(daySeat.taskScore).isEqualTo(0)
+    }
+
     private operator fun <T> List<T>.component6() = this[5]
     private operator fun <T> List<T>.component7() = this[6]
     private operator fun <T> List<T>.component8() = this[7]

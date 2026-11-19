@@ -321,7 +321,7 @@ class GargoyleNightIntegrationTest {
         driveNight(g, 1, "GARGOYLE_CHECK" to seer.userId, g.pack.first(), g.villagers[0])
         // Move to night 2 the way MechWolfMediumNightIntegrationTest does.
         val n1 = nightPhaseRepository.findByGameIdAndDayNumber(g.gameId, 1).orElseThrow()
-        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n1))
+        nightOrchestrator.applyNightKills(g.gameId, nightOrchestrator.computePendingKills(n1, emptySet(), emptyList()))
         nightOrchestrator.initNight(g.gameId, 2)
 
         waitForSubPhase(g, 2, NightSubPhase.GARGOYLE_PICK)

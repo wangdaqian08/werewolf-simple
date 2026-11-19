@@ -305,6 +305,27 @@ class ActionLogServiceTest {
         assertThat(payload["targetSeatIndex"]).isEqualTo(7)
     }
 
+    // ── recordCharmDeath ────────────────────────────────────────────────────
+
+    @Test
+    fun `recordCharmDeath - saves CHARM_DEATH with both players' seat and nickname for the 游戏记录`() {
+        whenever(userRepository.findAllById(any())).thenReturn(listOf(user("b1", "Beauty"), user("v1", "Victim")))
+        whenever(gamePlayerRepository.findByGameId(gameId)).thenReturn(listOf(player("b1", 3), player("v1", 8)))
+
+        service.recordCharmDeath(gameId, dayNumber = 2, wolfBeautyUserId = "b1", victimUserId = "v1")
+
+        val captor = argumentCaptor<GameEvent>()
+        verify(gameEventRepository).save(captor.capture())
+        val event = captor.firstValue
+        assertThat(event.eventType).isEqualTo("CHARM_DEATH")
+        assertThat(event.targetUserId).isEqualTo("v1")
+        @Suppress("UNCHECKED_CAST")
+        val payload = mapper.readValue(event.message, Map::class.java) as Map<String, Any>
+        assertThat(payload).containsEntry("dayNumber", 2)
+            .containsEntry("wolfBeautyUserId", "b1").containsEntry("beautySeatIndex", 3).containsEntry("beautyNickname", "Beauty")
+            .containsEntry("victimUserId", "v1").containsEntry("victimSeatIndex", 8).containsEntry("victimNickname", "Victim")
+    }
+
     // ── recordBadgeHandover ─────────────────────────────────────────────────
 
     @Test
@@ -378,5 +399,25 @@ class ActionLogServiceTest {
         assertThat(result).hasSize(2)
         assertThat(result[0].eventType).isEqualTo("NIGHT_DEATH")
         assertThat(result[1].eventType).isEqualTo("VOTE_RESULT")
+    }
+
+    @Test
+    fun `getLog - hides a night 殉情 (its victim died that dawn) but keeps a day 殉情`() {
+        fun ev(type: String, msg: String, target: String?) =
+            GameEvent(gameId = gameId, eventType = type, message = msg, targetUserId = target)
+        val events = listOf(
+            ev("NIGHT_DEATH", """{"dayNumber":2,"userId":"beauty"}""", "beauty"),
+            ev("NIGHT_DEATH", """{"dayNumber":2,"userId":"seer"}""", "seer"),
+            ev("CHARM_DEATH", """{"dayNumber":2,"wolfBeautyUserId":"beauty","victimUserId":"seer"}""", "seer"),
+            ev("VOTE_RESULT", """{"dayNumber":3}""", "beauty2"),
+            ev("CHARM_DEATH", """{"dayNumber":3,"wolfBeautyUserId":"beauty2","victimUserId":"vil"}""", "vil"),
+        )
+        whenever(gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId)).thenReturn(events)
+
+        val result = service.getLog(gameId)
+
+        assertThat(result.map { it.eventType to it.targetUserId }).containsExactly(
+            "NIGHT_DEATH" to "beauty", "NIGHT_DEATH" to "seer", "VOTE_RESULT" to "beauty2", "CHARM_DEATH" to "vil",
+        )
     }
 }

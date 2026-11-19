@@ -117,6 +117,7 @@ export type TaskCode =
   | 'BWK_SHOOT_GOD'
   | 'GARGOYLE_FIND_TWO_GODS'
   | 'IDIOT_REVEAL_WIN'
+  | 'WOLF_BEAUTY_LINK_GOD'
 
 /**
  * The viewer's own task: [done] and [earned] are null until the game is settled.
@@ -301,6 +302,7 @@ export interface RoleHistoryEntry {
     | 'LEARN'
     | 'PROTECT'
     | 'GRAVE'
+    | 'CHARM'
   /** null = 空守 (guard) / 空刀 (wolf KILL, WITCH attacked) */
   target: RoleHistoryPlayer | null
   /** SEER, the mechanical wolf's learned alignment check, and GRAVE (the exiled player's camp) */
@@ -319,6 +321,7 @@ export interface RoleHistory {
     | 'MECHANICAL_WOLF'
     | 'GRAVEKEEPER'
     | 'GARGOYLE'
+    | 'WOLF_BEAUTY'
   entries: RoleHistoryEntry[]
 }
 // ── Game review (上帝视角复盘) ────────────────────────────────────────────────
@@ -336,7 +339,7 @@ export interface ReviewNight {
     action: 'KILL' | 'SKIP' | 'SELF_KILL'
     target: ReviewPlayer | null
   }
-  /** seer / mech / medium / gravekeeper / gargoyle / witch / guard: null when the role is not in the game */
+  /** seer / mech / medium / gravekeeper / gargoyle / wolfBeauty / witch / guard: null when the role is not in the game */
   seer: {
     actor: ReviewPlayer
     dead: boolean
@@ -376,6 +379,8 @@ export interface ReviewNight {
     target: ReviewPlayer | null
     role: PlayerRole | null
   } | null
+  /** target: the player charmed; null = no charm (night 1, a skip, or dead) */
+  wolfBeauty: { actor: ReviewPlayer; dead: boolean; target: ReviewPlayer | null } | null
   witch: {
     actor: ReviewPlayer
     dead: boolean
@@ -384,7 +389,8 @@ export interface ReviewNight {
   } | null
   guard: { actor: ReviewPlayer; dead: boolean; target: ReviewPlayer | null } | null
   dawn: {
-    deaths: { player: ReviewPlayer; cause: 'WOLF' | 'POISON' | 'BOTH_SAVES' }[]
+    /** CHARM = 殉情: taken along by the 狼美人 */
+    deaths: { player: ReviewPlayer; cause: 'WOLF' | 'POISON' | 'BOTH_SAVES' | 'CHARM' }[]
     saved: { player: ReviewPlayer; by: 'GUARD' | 'ANTIDOTE' | 'PERK' } | null
   }
 }
@@ -413,6 +419,8 @@ export type ReviewDayEvent =
   | { type: 'DECLARED_OUT'; player: ReviewPlayer }
   /** to = null: the badge was destroyed */
   | { type: 'BADGE_HANDOVER'; from: ReviewPlayer; to: ReviewPlayer | null }
+  /** a day 殉情; a night one is a CHARM death at dawn instead */
+  | { type: 'CHARM_DEATH'; beauty: ReviewPlayer; victim: ReviewPlayer }
 
 export interface ReviewRound {
   day: number
@@ -475,6 +483,14 @@ export interface PlayerSeat {
 /** The viewer's own night turn — only the variant matching their role is ever sent. */
 export type MyNightAction =
   | { type: 'WOLF'; teammates: PlayerSeat[]; target: PlayerSeat | null; selfKill: boolean }
+  /** the pack's turn as WOLF, plus its own charm (null = none) */
+  | {
+      type: 'WOLF_BEAUTY'
+      teammates: PlayerSeat[]
+      target: PlayerSeat | null
+      selfKill: boolean
+      charm: PlayerSeat | null
+    }
   | { type: 'SEER'; target: PlayerSeat | null; isWerewolf: boolean }
   | {
       type: 'WITCH'
@@ -537,6 +553,8 @@ export type PlayerDayEvent =
   | { type: 'DECLARED_OUT'; player: PlayerSeat }
   /** to = null: the badge was destroyed; points is set when the viewer receives it */
   | { type: 'BADGE_HANDOVER'; from: PlayerSeat; to: PlayerSeat | null; points: number | null }
+  /** a day 殉情, announced with the 狼美人 named */
+  | { type: 'CHARM_DEATH'; beauty: PlayerSeat; victim: PlayerSeat }
 
 export interface PlayerRound {
   day: number
@@ -629,6 +647,7 @@ export type PlayerRole =
   | 'KNIGHT'
   | 'GRAVEKEEPER'
   | 'GARGOYLE'
+  | 'WOLF_BEAUTY'
 
 export interface GamePlayer {
   userId: string
@@ -648,6 +667,7 @@ export interface RoleRevealState {
   confirmedUserIds?: string[] // who has confirmed (never their role)
   totalCount: number
   teammates?: string[] // werewolf only: teammate nicknames
+  wolfBeautyUserId?: string | null // pack wolves only: which teammate is the 狼美人
 }
 
 export interface VoteRoundHistory {
@@ -870,6 +890,15 @@ export interface DayPhaseState {
   myVote?: string
   selectedPlayerId?: string
   canShoot?: boolean // private: true only for the dead shooter whose shot is open now
+  charmDeath?: CharmDeath | null // today's 殉情, if any
+}
+
+/** A day 殉情: the 狼美人 went out and took the victim along. */
+export interface CharmDeath {
+  beautySeatIndex: number
+  beautyNickname: string
+  victimSeatIndex: number
+  victimNickname: string
 }
 
 // ── Voting Phase ──────────────────────────────────────────────────────────────
@@ -930,6 +959,7 @@ export interface VotingState {
   // BADGE_HANDOVER + BADGE_RECEIVED
   badgeTargetId?: string
   badgeDestroyed?: boolean // badge was destroyed instead of passed
+  charmDeath?: CharmDeath | null // today's 殉情, if any
 }
 
 // ── Night Phase ───────────────────────────────────────────────────────────────
@@ -947,6 +977,7 @@ export type NightSubPhase =
   | 'GRAVEKEEPER_RESULT' // gravekeeper sees the camp of yesterday's exiled player
   | 'GARGOYLE_PICK' // gargoyle chooses a player to check, or skips
   | 'GARGOYLE_RESULT' // gargoyle sees the exact role
+  | 'WOLF_BEAUTY_PICK' // 狼美人 charms a player, or skips (night 1: skip only)
   | 'WAITING' // villagers / hunters / dead — eyes closed
 
 export interface SeerHistoryEntry {
@@ -987,6 +1018,16 @@ export type GargoyleResult =
     }
   | { kind: 'SKIP' }
 
+export interface WolfBeautyHistoryEntry {
+  round: number
+  nickname: string
+  seatIndex: number
+}
+
+export type WolfBeautyResult =
+  | { kind: 'CHARM'; targetPlayerId: string; targetNickname: string; targetSeatIndex: number }
+  | { kind: 'SKIP' }
+
 export type MechNightSkill =
   | 'LEARN'
   | 'CHECK_ROLE'
@@ -1011,6 +1052,7 @@ export interface NightPhaseState {
   teammates?: string[] // teammate nicknames (only sent to werewolves)
   wolfKiller?: boolean // true when I am the one allowed to kill tonight (the pack, or the lone mechanical wolf)
   selectedTargetId?: string // player I've tapped as my target
+  wolfBeautyUserId?: string | null // pack wolves only: which teammate is the 狼美人
   // Seer result
   seerResult?: {
     checkedPlayerId: string
@@ -1040,6 +1082,14 @@ export interface NightPhaseState {
     checkedPlayerIds: string[]
     result: GargoyleResult | null
     history: GargoyleHistoryEntry[]
+  }
+  // 狼美人 (private). canCharm is false on night 1; packUserIds: its pack, greyed in the picker.
+  wolfBeauty?: {
+    canCharm: boolean
+    lastNightTargetUserId: string | null
+    result: WolfBeautyResult | null
+    history: WolfBeautyHistoryEntry[]
+    packUserIds: string[]
   }
   // Mechanical wolf (private)
   mechWolf?: {
@@ -1077,9 +1127,16 @@ export interface ActionLogEntry {
     | 'KNIGHT_DUEL'
     | 'BADGE_HANDOVER'
     | 'DECLARED_OUT'
+    | 'CHARM_DEATH' // only a day 殉情 reaches the client; the server drops night ones (W11)
   message: string // raw JSON — parse per eventType
   targetUserId: string | null
   createdAt: string | null
+}
+
+export interface CharmDeathPayload extends CharmDeath {
+  dayNumber: number
+  wolfBeautyUserId: string
+  victimUserId: string
 }
 
 export interface NightDeathPayload {

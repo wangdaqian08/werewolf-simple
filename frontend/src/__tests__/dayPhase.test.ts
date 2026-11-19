@@ -107,6 +107,30 @@ describe('DayPhase — observability testids (action-observability sentinel)', (
     expect(banner.text()).toContain('自爆')
   })
 
+  it('a day 殉情 shows the charm-death banner built from state, with both seats', () => {
+    const wrapper = mount(DayPhase, {
+      props: {
+        ...BASE_PROPS,
+        dayPhase: {
+          ...peacefulDay,
+          charmDeath: {
+            beautySeatIndex: 3,
+            beautyNickname: 'Bea',
+            victimSeatIndex: 5,
+            victimNickname: 'Vic',
+          },
+        },
+      },
+    })
+    const banner = wrapper.find('[data-testid="charm-death-banner"]')
+    expect(banner.text()).toContain('3號 · Bea（狼美人）出局，5號 · Vic殉情出局')
+  })
+
+  it('no charmDeath → no charm-death banner', () => {
+    const wrapper = mount(DayPhase, { props: { ...BASE_PROPS, dayPhase: peacefulDay } })
+    expect(wrapper.find('[data-testid="charm-death-banner"]').exists()).toBe(false)
+  })
+
   it('no self-destruct → day-banner-self-destruct is absent', () => {
     const wrapper = mount(DayPhase, {
       props: { ...BASE_PROPS, dayPhase: peacefulDay },

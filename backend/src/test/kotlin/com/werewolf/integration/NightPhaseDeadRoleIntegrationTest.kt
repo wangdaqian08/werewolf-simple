@@ -234,7 +234,7 @@ class NightPhaseDeadRoleIntegrationTest {
         // of the test (which depends on actual deaths to drive N2's dead-
         // role audio) works without driving REVEAL_NIGHT_RESULT.
         val n1Phase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 1).orElseThrow()
-        val pendingN1 = nightOrchestrator.computePendingKills(n1Phase)
+        val pendingN1 = nightOrchestrator.computePendingKills(n1Phase, emptySet(), emptyList())
         assertThat(pendingN1).contains(seerUserId, wolf2UserId)
         nightOrchestrator.applyNightKills(gameId, pendingN1)
 
@@ -282,7 +282,7 @@ class NightPhaseDeadRoleIntegrationTest {
         // Variant B: apply N2 deferred kills so the post-N2 alive assertion
         // matches reality (N2 kill is computed but not applied until reveal).
         val n2Phase = nightPhaseRepository.findByGameIdAndDayNumber(gameId, 2).orElseThrow()
-        nightOrchestrator.applyNightKills(gameId, nightOrchestrator.computePendingKills(n2Phase))
+        nightOrchestrator.applyNightKills(gameId, nightOrchestrator.computePendingKills(n2Phase, emptySet(), emptyList()))
 
         // Verify the N2 target is dead
         val night2Victim = gamePlayerRepository.findByGameIdAndUserId(gameId, night2Target.userId).orElseThrow()

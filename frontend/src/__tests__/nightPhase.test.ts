@@ -467,6 +467,113 @@ describe('NightPhase - gargoyle turn', () => {
   })
 })
 
+describe('NightPhase - 狼美人 turn', () => {
+  const pl = (userId: string, seatIndex: number, isAlive = true): GamePlayer => ({
+    userId,
+    nickname: userId,
+    seatIndex,
+    isAlive,
+    isSheriff: false,
+  })
+  const wolfBeauty = {
+    canCharm: true,
+    lastNightTargetUserId: null,
+    result: null,
+    history: [],
+    packUserIds: ['w1'],
+  }
+  const mountAs = (
+    myUserId: string,
+    myRole: PlayerRole,
+    nightPhase: NightPhaseState,
+    alive = true,
+  ) =>
+    mount(NightPhase, {
+      props: {
+        nightPhase,
+        players: [pl('b1', 1, myUserId !== 'b1' || alive), pl('v1', 2), pl('w1', 3)],
+        myUserId,
+        myRole,
+      },
+    })
+  const turn = (w: ReturnType<typeof mountAs>) => w.find('[data-testid="wolf-beauty-turn"]')
+  const sleeping = (w: ReturnType<typeof mountAs>) =>
+    w.find('[data-testid="sleep-screen-title"]').exists()
+
+  it('the living 狼美人 gets its turn in WOLF_BEAUTY_PICK; a charm closes the eyes', async () => {
+    const wrapper = mountAs('b1', 'WOLF_BEAUTY', {
+      subPhase: 'WOLF_BEAUTY_PICK',
+      dayNumber: 2,
+      wolfBeauty,
+    })
+    expect(turn(wrapper).exists()).toBe(true)
+    expect(wrapper.find('.rb-sub').text()).toBe('選擇今晚魅惑的玩家')
+    expect(
+      wrapper.find('[data-testid="wolf-beauty-target-3"]').attributes('disabled'),
+    ).toBeDefined()
+    await wrapper.find('[data-testid="wolf-beauty-target-2"]').trigger('click')
+    await wrapper.find('[data-testid="wolf-beauty-confirm"]').trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['WOLF_BEAUTY_CHARM', 'v1']])
+    expect(sleeping(wrapper)).toBe(true)
+  })
+
+  it('night 1: 確認 sends WOLF_BEAUTY_SKIP and closes the eyes', async () => {
+    const wrapper = mountAs('b1', 'WOLF_BEAUTY', {
+      subPhase: 'WOLF_BEAUTY_PICK',
+      dayNumber: 1,
+      wolfBeauty: { ...wolfBeauty, canCharm: false },
+    })
+    await wrapper.find('[data-testid="wolf-beauty-n1-confirm"]').trigger('click')
+    expect(wrapper.emitted('nightAction')).toEqual([['WOLF_BEAUTY_SKIP', undefined]])
+    expect(sleeping(wrapper)).toBe(true)
+  })
+
+  it('once tonight’s choice is in (a reload), it sees closed eyes', () => {
+    const wrapper = mountAs('b1', 'WOLF_BEAUTY', {
+      subPhase: 'WOLF_BEAUTY_PICK',
+      dayNumber: 2,
+      wolfBeauty: { ...wolfBeauty, result: { kind: 'SKIP' } },
+    })
+    expect(turn(wrapper).exists()).toBe(false)
+    expect(sleeping(wrapper)).toBe(true)
+  })
+
+  it('after a charm (a reload) it sees closed eyes: no pick list, no confirm', () => {
+    const wrapper = mountAs('b1', 'WOLF_BEAUTY', {
+      subPhase: 'WOLF_BEAUTY_PICK',
+      dayNumber: 2,
+      wolfBeauty: {
+        ...wolfBeauty,
+        result: { kind: 'CHARM', targetPlayerId: 'v1', targetNickname: 'v1', targetSeatIndex: 2 },
+      },
+    })
+    expect(turn(wrapper).exists()).toBe(false)
+    expect(wrapper.find('[data-testid^="wolf-beauty-target-"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="wolf-beauty-confirm"]').exists()).toBe(false)
+    expect(sleeping(wrapper)).toBe(true)
+  })
+
+  it('everyone else sees the plain closed-eyes screen', () => {
+    for (const role of ['VILLAGER', 'WEREWOLF', 'SEER', 'GARGOYLE'] as const) {
+      const wrapper = mountAs('v1', role, { subPhase: 'WOLF_BEAUTY_PICK', dayNumber: 2 })
+      expect(turn(wrapper).exists(), role).toBe(false)
+      expect(sleeping(wrapper), role).toBe(true)
+      expect(wrapper.find('.rb').exists(), role).toBe(false)
+    }
+  })
+
+  it('a dead 狼美人 sees the sleep screen', () => {
+    const wrapper = mountAs(
+      'b1',
+      'WOLF_BEAUTY',
+      { subPhase: 'WOLF_BEAUTY_PICK', dayNumber: 2 },
+      false,
+    )
+    expect(turn(wrapper).exists()).toBe(false)
+    expect(sleeping(wrapper)).toBe(true)
+  })
+})
+
 describe('NightPhase - pick actions keep the screen until the result arrives', () => {
   const pl = (userId: string, seatIndex: number): GamePlayer => ({
     userId,
@@ -783,5 +890,36 @@ describe('NightPhase - host narration line', () => {
     })
     expect(narrationOf(w).exists()).toBe(false)
     expect(w.find('[data-testid="sleep-screen-title"]').text()).toBe('請閉眼')
+  })
+})
+
+describe('NightPhase - the pack greys out the 狼美人', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+  const pl = (userId: string, seatIndex: number): GamePlayer => ({
+    userId,
+    nickname: userId,
+    seatIndex,
+    isAlive: true,
+    isSheriff: false,
+  })
+
+  it('the 狼美人 teammate is aria-disabled in the kill picker; the others are not', () => {
+    const wrapper = mount(NightPhase, {
+      props: {
+        nightPhase: {
+          subPhase: 'WEREWOLF_PICK',
+          dayNumber: 1,
+          wolfKiller: true,
+          wolfBeautyUserId: 'b1',
+        },
+        players: [pl('w1', 1), pl('b1', 2), pl('v1', 3)],
+        myUserId: 'w1',
+        myRole: 'WEREWOLF',
+      },
+    })
+    const slots = wrapper.findAll('.player-slot')
+    expect(slots.map((s) => s.attributes('aria-disabled'))).toEqual([undefined, 'true', undefined])
   })
 })

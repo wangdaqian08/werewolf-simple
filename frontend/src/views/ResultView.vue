@@ -1,5 +1,10 @@
 <template>
-  <div class="result-wrap" :class="{ 'result-wolves': winner === 'WEREWOLF' }">
+  <div
+    class="result-wrap"
+    :class="{ 'result-wolves': winner === 'WEREWOLF' }"
+    data-testid="result-wrap"
+    :data-winner="winner"
+  >
     <div class="result-card">
       <p class="game-over-label">{{ $t('result.gameOver') }}</p>
       <h1 class="outcome-title serif">{{ outcomeTitle }}</h1>

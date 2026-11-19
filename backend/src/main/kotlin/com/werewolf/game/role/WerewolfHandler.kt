@@ -79,8 +79,10 @@ class WerewolfHandler(
 
         val target = action.targetUserId
             ?: return GameActionResult.Rejected("Target required")
-        if (context.alivePlayerById(target) == null)
-            return GameActionResult.Rejected("Target not found or dead")
+        val targetPlayer = context.alivePlayerById(target)
+            ?: return GameActionResult.Rejected("Target not found or dead")
+        if (targetPlayer.role == PlayerRole.WOLF_BEAUTY)
+            return GameActionResult.Rejected("The Wolf Beauty cannot be knifed")
 
         // Lock only a valid kill: an invalid one must not shut the wolves out.
         if (action.actionType == ActionType.WOLF_KILL && killConfirmed.putIfAbsent(action.gameId, true) != null)

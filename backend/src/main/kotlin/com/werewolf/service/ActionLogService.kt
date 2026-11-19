@@ -125,6 +125,28 @@ class ActionLogService(
         )
     }
 
+    fun recordCharmDeath(gameId: Int, dayNumber: Int, wolfBeautyUserId: String, victimUserId: String) {
+        val users = userRepository.findAllById(listOf(wolfBeautyUserId, victimUserId)).associateBy { it.userId }
+        val players = gamePlayerRepository.findByGameId(gameId).associateBy { it.userId }
+        val payload = mapOf(
+            "dayNumber"        to dayNumber,
+            "wolfBeautyUserId" to wolfBeautyUserId,
+            "beautyNickname"   to (users[wolfBeautyUserId]?.nickname ?: wolfBeautyUserId),
+            "beautySeatIndex"  to (players[wolfBeautyUserId]?.seatIndex ?: 0),
+            "victimUserId"     to victimUserId,
+            "victimNickname"   to (users[victimUserId]?.nickname ?: victimUserId),
+            "victimSeatIndex"  to (players[victimUserId]?.seatIndex ?: 0),
+        )
+        gameEventRepository.save(
+            GameEvent(
+                gameId       = gameId,
+                eventType    = "CHARM_DEATH",
+                message      = mapper.writeValueAsString(payload),
+                targetUserId = victimUserId,
+            )
+        )
+    }
+
     /** [toUserId] null = the badge was destroyed. */
     fun recordBadgeHandover(gameId: Int, dayNumber: Int, fromUserId: String, toUserId: String?) {
         val seats = gamePlayerRepository.findByGameId(gameId).associate { it.userId to it.seatIndex }
@@ -301,8 +323,12 @@ class ActionLogService(
         )
     }
 
-    fun getLog(gameId: Int): List<ActionLogEntryDto> =
-        gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId).map { e ->
+    fun getLog(gameId: Int): List<ActionLogEntryDto> {
+        val events = gameEventRepository.findByGameIdOrderByCreatedAtAscIdAsc(gameId)
+        fun day(e: GameEvent) = (mapper.readValue(e.message, Map::class.java)["dayNumber"] as? Number)?.toInt()
+        val nightDeaths = events.filter { it.eventType == "NIGHT_DEATH" }.map { day(it) to it.targetUserId }.toSet()
+        // W11/W14: a night 殉情 (victim in that dawn's NIGHT_DEATH list) must not reveal its cause or the 狼美人; a day one is public (Q13).
+        return events.filterNot { it.eventType == "CHARM_DEATH" && (day(it) to it.targetUserId) in nightDeaths }.map { e ->
             ActionLogEntryDto(
                 id           = e.id ?: 0,
                 eventType    = e.eventType,
@@ -311,4 +337,5 @@ class ActionLogService(
                 createdAt    = e.createdAt?.toString(),
             )
         }
+    }
 }

@@ -45,6 +45,7 @@ const night = (over: Partial<ReviewNight> = {}): ReviewNight => ({
   medium: null,
   gravekeeper: null,
   gargoyle: null,
+  wolfBeauty: null,
   witch: { actor: witch, dead: false, antidote: null, poison: null },
   guard: { actor: guard, dead: false, target: null },
   dawn: { deaths: [], saved: null },
@@ -291,6 +292,40 @@ describe('GameReview', () => {
     const first = lines(render([{ day: 1, night: night({ gargoyle: turn({}) }), events: [] }]))
     expect(first.findIndex((l) => l.includes('石像鬼'))).toBe(
       first.findIndex((l) => l.startsWith('🐺')) - 1,
+    )
+  })
+
+  it('game review lists the 狼美人 charm after the wolves, a night 殉情 and a day 殉情', () => {
+    const beauty = P(14, 'Bea', 'WOLF_BEAUTY')
+    const turn = (over: Partial<NonNullable<ReviewNight['wolfBeauty']>>) => ({
+      actor: beauty,
+      dead: false,
+      target: null,
+      ...over,
+    })
+    const wrapper = render([
+      {
+        day: 1,
+        night: night({
+          wolfBeauty: turn({ target: seer }),
+          dawn: { deaths: [{ player: seer, cause: 'CHARM' }], saved: null },
+        }),
+        events: [{ type: 'CHARM_DEATH', beauty, victim: seer }],
+      },
+      { day: 2, night: night({ wolfBeauty: turn({}) }), events: [] },
+      { day: 3, night: night({ wolfBeauty: turn({ dead: true }) }), events: [] },
+    ])
+    const text = lines(wrapper)
+    expect(text.filter((l) => l.includes('狼美人 14'))).toEqual([
+      '🌹 狼美人 14號 魅惑 4號 Sia',
+      '🌹 狼美人 14號 未魅惑',
+      '🌹 狼美人 14號 已出局',
+    ])
+    expect(text.some((l) => l.includes('4號 Sia〔預言家〕 殉情出局'))).toBe(true)
+    expect(text).toContain('🌹 14號 Bea〔狼美人〕 出局，殉情帶走 4號 Sia〔預言家〕')
+    const first = lines(render([{ day: 1, night: night({ wolfBeauty: turn({}) }), events: [] }]))
+    expect(first.findIndex((l) => l.includes('狼美人'))).toBe(
+      first.findIndex((l) => l.startsWith('🐺')) + 1,
     )
   })
 

@@ -20,6 +20,7 @@ import com.werewolf.model.PlayerRole
  *           it was the lone killer; never the pack's kills
  *  - GARGOYLE: every check with the exact role it was told, and the kills of the nights it was
  *           the lone killer; never the pack's kills
+ *  - WOLF_BEAUTY: the pack's kills, plus every charm it cast
  *  - MEDIUM: every check with the role it was told
  *  - GRAVEKEEPER: every vote-out it was told the camp of (a night with no vote-out has no entry)
  *  - WITCH: every night's wolf victim (null target = 空刀) she was told while
@@ -97,6 +98,15 @@ object RoleHistoryBuilder {
                         n.mechPoisonTargetUserId?.let { entry(n.dayNumber, "POISON", it) },
                         n.mechGuardTargetUserId?.let { entry(n.dayNumber, "PROTECT", it) },
                         if (loneKiller) entry(n.dayNumber, "KILL", n.wolfTargetUserId) else null,
+                    )
+                },
+            )
+            me.role == PlayerRole.WOLF_BEAUTY -> mapOf(
+                "role" to "WOLF_BEAUTY",
+                "entries" to done.flatMap { n ->
+                    listOfNotNull(
+                        entry(n.dayNumber, "KILL", n.wolfTargetUserId),
+                        n.wolfBeautyCharmUserId?.let { entry(n.dayNumber, "CHARM", it) },
                     )
                 },
             )

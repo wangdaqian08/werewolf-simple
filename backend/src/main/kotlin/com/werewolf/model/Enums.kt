@@ -24,7 +24,7 @@ enum class GamePhase {
 enum class PlayerRole(val isWolf: Boolean = false) {
     WEREWOLF(isWolf = true), VILLAGER, SEER, WITCH, HUNTER, GUARD, IDIOT,
     WHITE_WOLF_KING(isWolf = true), BLACK_WOLF_KING(isWolf = true), MECHANICAL_WOLF(isWolf = true), MEDIUM, KNIGHT, GRAVEKEEPER,
-    GARGOYLE(isWolf = true);
+    GARGOYLE(isWolf = true), WOLF_BEAUTY(isWolf = true);
 
     val isGod: Boolean get() = !isWolf && this != VILLAGER
     val shootsOnDeath: Boolean get() = this == HUNTER || this == BLACK_WOLF_KING
@@ -62,7 +62,7 @@ enum class GravekeeperResult { GOOD, WOLF, NONE }
 
 
 enum class NightSubPhase {
-    WAITING, GARGOYLE_PICK, GARGOYLE_RESULT, WEREWOLF_PICK, MECH_WOLF_PICK, MECH_WOLF_RESULT, SEER_PICK, SEER_RESULT,
+    WAITING, GARGOYLE_PICK, GARGOYLE_RESULT, WEREWOLF_PICK, WOLF_BEAUTY_PICK, MECH_WOLF_PICK, MECH_WOLF_RESULT, SEER_PICK, SEER_RESULT,
     MEDIUM_PICK, MEDIUM_RESULT, GRAVEKEEPER_RESULT, WITCH_ACT, GUARD_PICK, COMPLETE
 }
 
@@ -120,6 +120,9 @@ enum class ActionType {
 
     // Night: gargoyle (CHECK or SKIP in GARGOYLE_PICK, then CONFIRM in GARGOYLE_RESULT)
     GARGOYLE_CHECK, GARGOYLE_SKIP, GARGOYLE_CONFIRM,
+
+    // Night: wolf beauty (CHARM or SKIP in WOLF_BEAUTY_PICK)
+    WOLF_BEAUTY_CHARM, WOLF_BEAUTY_SKIP,
 
     // Idiot reveal (day)
     IDIOT_REVEAL,

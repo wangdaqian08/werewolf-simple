@@ -19,7 +19,7 @@ import tools.jackson.module.kotlin.jacksonObjectMapper
 object PlayerReviewBuilder {
 
     private val mapper = jacksonObjectMapper()
-    private val DAY_EVENT_TYPES = setOf("SHERIFF_RESULT", "VOTE_RESULT", "HUNTER_SHOT", "SELF_DESTRUCT", "KNIGHT_DUEL", "IDIOT_REVEAL", "BADGE_HANDOVER", "DECLARED_OUT")
+    private val DAY_EVENT_TYPES = setOf("SHERIFF_RESULT", "VOTE_RESULT", "HUNTER_SHOT", "SELF_DESTRUCT", "KNIGHT_DUEL", "IDIOT_REVEAL", "BADGE_HANDOVER", "DECLARED_OUT", "CHARM_DEATH")
 
     /** [index] is the event's place in the whole game's log, which is what the cuts below compare. */
     private class LoggedEvent(val type: String, val day: Int, val payload: Map<String, Any?>, val index: Int)
@@ -46,13 +46,15 @@ object PlayerReviewBuilder {
         }
         val completed = nights.filter { it.subPhase == NightSubPhase.COMPLETE }.associateBy { it.dayNumber }
         val nightDeaths = logged.filter { it.type == "NIGHT_DEATH" }.groupBy({ it.day }, { it.payload["userId"] as String })
-        val eventsByDay = logged.filter { it.type in DAY_EVENT_TYPES }.groupBy { it.day }
+        // A night 殉情 is only a name in that dawn's list: the table is never told it was one.
+        fun nightCharm(e: LoggedEvent) = e.type == "CHARM_DEATH" && e.payload["victimUserId"] in nightDeaths[e.day].orEmpty()
+        val eventsByDay = logged.filter { it.type in DAY_EVENT_TYPES && !nightCharm(it) }.groupBy { it.day }
         val lastNight = completed.keys.maxOrNull()
 
         // NIGHT_DEATH is written at the dawn reveal; a game cancelled before it has none for its last night.
         fun deathsAt(day: Int): List<String> = nightDeaths[day]
             ?: completed[day]?.takeIf { game.winner == null && day == lastNight }
-                ?.let { NightOrchestrator.computeKills(it, night1PerkSaved) }
+                ?.let { NightOrchestrator.computeKills(it, night1PerkSaved, players) }
             ?: emptyList()
 
         // The viewer dies either at a dawn or part way through a day; either way the replay
@@ -67,6 +69,7 @@ object PlayerReviewBuilder {
             "HUNTER_SHOT" -> e.payload["targetUserId"] == viewerId
             "SELF_DESTRUCT" -> e.payload["userId"] == viewerId || e.payload["takenUserId"] == viewerId
             "DECLARED_OUT" -> e.payload["userId"] == viewerId
+            "CHARM_DEATH" -> e.payload["victimUserId"] == viewerId
             // The duel's loser: the wolf if it was one, otherwise the knight.
             "KNIGHT_DUEL" -> e.payload[if (e.payload["targetIsWolf"] == true) "targetUserId" else "knightUserId"] == viewerId
             else -> false
@@ -76,6 +79,7 @@ object PlayerReviewBuilder {
         fun myOwnAct(e: LoggedEvent) = when (e.type) {
             "HUNTER_SHOT" -> e.payload["hunterUserId"] == viewerId
             "BADGE_HANDOVER" -> e.payload["fromUserId"] == viewerId
+            "CHARM_DEATH" -> e.payload["wolfBeautyUserId"] == viewerId
             else -> false
         }
         fun visibleEvents(day: Int): List<LoggedEvent> {
@@ -123,6 +127,11 @@ object PlayerReviewBuilder {
             else knownCamps[checked] = if (n.mechCheckResultRole?.isWolf == true) KnownCamp.WOLF else KnownCamp.GOOD
         }
         days.flatMap(::visibleEvents).forEach { e ->
+            // Q13: the day 殉情 announcement names the 狼美人.
+            if (e.type == "CHARM_DEATH") {
+                (e.payload["wolfBeautyUserId"] as? String)?.let { knownRoles[it] = PlayerRole.WOLF_BEAUTY }
+                return@forEach
+            }
             if (e.type == "KNIGHT_DUEL") {
                 // Public: the table saw the knight flip face up and challenge, and who fell.
                 (e.payload["knightUserId"] as? String)?.let { knownRoles[it] = PlayerRole.KNIGHT }
@@ -189,6 +198,7 @@ object PlayerReviewBuilder {
         // A lone wolf (mechanical wolf, gargoyle) makes the kill only once every pack wolf is gone.
         val loneKiller = (me.role == PlayerRole.MECHANICAL_WOLF || me.role == PlayerRole.GARGOYLE) &&
             RoleRules.wolfKillers(players.filter { !deadAt(it) }).any { it.userId == me.userId }
+        fun packTeammates() = players.filter { it.role.isPackWolf && !deadAt(it) }.sortedBy { it.seatIndex }.mapNotNull { seat(it.userId) }
         val action = when {
             me.role == PlayerRole.MECHANICAL_WOLF -> MyNightAction.MechWolf(
                 learned = n.mechLearnTargetUserId?.let(seat),
@@ -206,8 +216,14 @@ object PlayerReviewBuilder {
             )
             me.role == PlayerRole.MEDIUM -> MyNightAction.Medium(n.mediumCheckedUserId?.let(seat), n.mediumResultRole)
             me.role == PlayerRole.GRAVEKEEPER -> MyNightAction.Gravekeeper(n.gravekeeperExiledUserId?.let(seat), n.gravekeeperResult)
+            me.role == PlayerRole.WOLF_BEAUTY -> MyNightAction.WolfBeauty(
+                teammates = packTeammates(),
+                target = target?.let(seat),
+                selfKill = target != null && byId[target]?.role?.isPackWolf == true,
+                charm = n.wolfBeautyCharmUserId?.let(seat),
+            )
             me.role.isPackWolf -> MyNightAction.Wolf(
-                teammates = players.filter { it.role.isPackWolf && !deadAt(it) }.sortedBy { it.seatIndex }.mapNotNull { seat(it.userId) },
+                teammates = packTeammates(),
                 target = target?.let(seat),
                 selfKill = target != null && byId[target]?.role?.isPackWolf == true,
             )
@@ -270,6 +286,7 @@ object PlayerReviewBuilder {
                 "BADGE_HANDOVER" -> ref(p["fromUserId"])?.let {
                     PlayerDayEvent.BadgeHandover(it, ref(p["toUserId"]), if (p["toUserId"] == viewerId) claimSheriff() else null)
                 }
+                "CHARM_DEATH" -> ref(p["wolfBeautyUserId"])?.let { b -> ref(p["victimUserId"])?.let { PlayerDayEvent.CharmDeath(b, it) } }
                 else -> null
             }
         }

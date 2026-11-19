@@ -28,7 +28,8 @@ class RoleAudioConfiguration {
             MediumAudioConfig(),
             KnightAudioConfig(),
             GravekeeperAudioConfig(),
-            GargoyleAudioConfig()
+            GargoyleAudioConfig(),
+            WolfBeautyAudioConfig()
         )
 
         RoleRegistry.registerAll(configs)

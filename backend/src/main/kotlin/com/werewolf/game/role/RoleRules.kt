@@ -21,6 +21,27 @@ object RoleRules {
     fun wolfKillers(alive: List<GamePlayer>): List<GamePlayer> =
         alive.filter { it.role.isPackWolf }.ifEmpty { alive.filter { it.role.isWolf } }
 
+    /** The player who 殉情 when [outUserId] goes out now: today's night charm, if [outUserId] is the
+     *  Wolf Beauty and the charmed player is still alive. Callers never pass a duel or a declare-out. */
+    fun charmVictim(outUserId: String, players: List<GamePlayer>, todaysNight: NightPhase?): String? =
+        charmed(outUserId, players, todaysNight) { it.alive }
+
+    /**
+     * The night path: the 殉情 victim when the 狼美人 is among [nightKills], the deaths of [night].
+     * "Still alive" means alive when that night began, because the dawn list is recomputed after its
+     * kills are applied (the day view, the reveal advancer, the review).
+     */
+    fun charmVictimAtNight(night: NightPhase, players: List<GamePlayer>, nightKills: Collection<String>): String? {
+        val beauty = players.find { it.role == PlayerRole.WOLF_BEAUTY && it.userId in nightKills } ?: return null
+        return charmed(beauty.userId, players, night) { it.alive || (it.diedDay ?: 0) >= night.dayNumber }
+    }
+
+    private fun charmed(outUserId: String, players: List<GamePlayer>, night: NightPhase?, alive: (GamePlayer) -> Boolean): String? {
+        if (players.find { it.userId == outUserId }?.role != PlayerRole.WOLF_BEAUTY) return null
+        val charmedId = night?.wolfBeautyCharmUserId ?: return null
+        return charmedId.takeIf { players.find { p -> p.userId == charmedId }?.let(alive) == true }
+    }
+
     /** LEARN until learned, else the skill usable tonight or NONE (SHOOT is never a night action). */
     fun mechNightSkill(mech: GamePlayer, tonight: Int, allNights: List<NightPhase>): MechNightSkill {
         val learned = mech.learnedRole ?: return MechNightSkill.LEARN

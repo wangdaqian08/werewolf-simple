@@ -311,9 +311,11 @@ jobs:
           - id: 2
             specs: e2e/real/black-wolf-king-scenarios.spec.ts e2e/real/mech-wolf-medium-flow.spec.ts e2e/real/api-guards-flow.spec.ts e2e/real/host-countdown.spec.ts
             grep: 'happy: knifed|vote-out|Mechanical wolf and medium|API guards|host-countdown.spec'
+          # Shard 3 also runs wolf-beauty-sheriff-flow (two sheriff games, ~65 s each locally):
+          # it had the most headroom (214-310 s step, median ~222 s, on main 2026-11-17/18).
           - id: 3
-            specs: e2e/real/black-wolf-king-scenarios.spec.ts e2e/real/pk-revote-flow.spec.ts e2e/real/dead-role-audio.spec.ts
-            grep: 'night chain:|edge:|create room:|PK re-vote|dead-role-audio.spec'
+            specs: e2e/real/black-wolf-king-scenarios.spec.ts e2e/real/pk-revote-flow.spec.ts e2e/real/dead-role-audio.spec.ts e2e/real/wolf-beauty-sheriff-flow.spec.ts
+            grep: 'night chain:|edge:|create room:|PK re-vote|dead-role-audio.spec|wolf-beauty-sheriff-flow.spec'
           # Shards 4 + 5 split night-rules-flow by words unique to each test
           # title (its describe title repeats most of the topic words).
           - id: 4
@@ -330,7 +332,7 @@ jobs:
             specs: e2e/real/flow-12p-sheriff.spec.ts e2e/real/sheriff-hunter-rules-flow.spec.ts
             grep: 'CLASSIC villager win|Sheriff \+ hunter rules'
           - id: 8
-            specs: e2e/real/revote-flow.spec.ts e2e/real/room-ready-sync.spec.ts e2e/real/white-wolf-king-flow.spec.ts e2e/real/reconnect-rejoin.spec.ts
+            specs: e2e/real/revote-flow.spec.ts e2e/real/room-ready-sync.spec.ts e2e/real/white-wolf-king-flow.spec.ts e2e/real/reconnect-rejoin.spec.ts e2e/real/wolf-beauty-flow.spec.ts
             grep: ''
           - id: 9
             specs: e2e/real/mech-wolf-rules-flow.spec.ts e2e/real/game-flow.spec.ts e2e/real/sheriff-flow.spec.ts e2e/real/room-board.spec.ts e2e/real/gargoyle-flow.spec.ts
@@ -340,6 +342,11 @@ jobs:
             grep: ''
           - id: 11
             specs: e2e/real/gravekeeper-flow.spec.ts e2e/real/knight-flow.spec.ts e2e/real/witch-audio.spec.ts e2e/real/hunter-night-death-flow.spec.ts e2e/real/login.spec.ts e2e/real/ghost-member.spec.ts e2e/real/self-destruct-flow.spec.ts e2e/real/session-expiry-resume.spec.ts e2e/real/witch-selfsave-blocked-flow.spec.ts e2e/real/role-pick-card.spec.ts e2e/real/guard-witch-same-target-flow.spec.ts
+            grep: ''
+          # Shard 12: 狼美人 scenarios — four short games (knife ban, no 自爆, night poison,
+          # hunter shot, knight duel, last-wolf win).
+          - id: 12
+            specs: e2e/real/wolf-beauty-scenarios.spec.ts
             grep: ''
 
     steps:

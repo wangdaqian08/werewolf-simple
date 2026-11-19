@@ -150,6 +150,7 @@ export default {
     witchSelfSaveOn: 'Witch may use the antidote on herself on night 1 only',
   },
   day: {
+    charmDeath: '{beauty} (Wolf Beauty) is out; {victim} goes out with them, charmed',
     chooseBadgeHeir: 'Choose badge heir',
     destroyBadge: 'Destroy',
     eliminated: 'eliminated',
@@ -276,6 +277,7 @@ export default {
       seerDone: 'Check complete',
       witch: 'Your turn',
       wolf: 'Confer with your teammates on a target',
+      wolfBeauty: 'Choose a player to charm tonight',
     },
     beginning: 'Night is beginning',
     beginningEn: 'Night is beginning...',
@@ -358,6 +360,8 @@ export default {
       seerOpen: 'Seer, open your eyes',
       witchClose: 'Witch, close your eyes',
       witchOpen: 'Witch, open your eyes',
+      wolfBeautyClose: 'Wolf Beauty, close your eyes',
+      wolfBeautyOpen: 'Wolf Beauty, open your eyes',
       wolfClose: 'Werewolves, close your eyes',
       wolfOpen: 'Werewolves, open your eyes',
     },
@@ -382,6 +386,15 @@ export default {
     usePoison: 'Use poison',
     waitingOthers: 'Waiting for others',
     witch: 'Witch',
+    wolfBeauty: {
+      confirm: 'Charm',
+      firstNight: 'No charm on the first night',
+      hint: 'Choose a player to charm: when you go out, they go out with you',
+      ok: 'OK',
+      reasonLastNight: 'Charmed last night',
+      reasonPack: 'Teammate',
+      skip: "Don't charm tonight",
+    },
     youOut: 'You are eliminated',
   },
   oauth: {
@@ -446,6 +459,8 @@ export default {
     witchNone: ', I used no potion',
     witchPoison: ', I poisoned ',
     witchSaved: ', I saved them with the antidote',
+    wolfBeautyCharm: '🌹 I charmed ',
+    wolfBeautyNone: '🌹 I charmed no one',
     wolfHead: '🐺 Wolf pack (seats {seats}) ',
     wolfLossDays: 'Wolf loss, {days}',
     wolfLossRate: 'Wolf loss, {days} × {rate} pts/day',
@@ -498,6 +513,7 @@ export default {
     WEREWOLF: 'Werewolf',
     WHITE_WOLF_KING: 'White Wolf King',
     WITCH: 'Witch',
+    WOLF_BEAUTY: 'Wolf Beauty',
     desc: {
       BLACK_WOLF_KING:
         'Attack with the pack at night. When you are eliminated (voted out, killed at night or taken by the hunter) you may shoot one player; you cannot shoot if poisoned by the witch or after self-destructing.',
@@ -524,6 +540,8 @@ export default {
       WHITE_WOLF_KING:
         'Attack with the pack at night. If you self-destruct by day you may take one player with you.',
       WITCH: 'You have one antidote and one poison, each usable once.',
+      WOLF_BEAUTY:
+        'Kills with the pack at night, and from night 2 may charm one player each night. When you go out, the player charmed on the latest night goes out with you.',
     },
     descShort: {
       GARGOYLE: "Does not know the pack; checks one player's exact role each night.",
@@ -535,6 +553,8 @@ export default {
       MECHANICAL_WOLF: "Apart from the pack; learn one player's role and gain its skill.",
       MEDIUM: "Each night, check one player's exact role.",
       VILLAGER: 'Find the wolves through discussion and voting, and protect the village.',
+      WOLF_BEAUTY:
+        'Charms one player each night; when you go out, the charmed player goes with you.',
     },
     rules: {
       BLACK_WOLF_KING:
@@ -542,11 +562,11 @@ export default {
       GARGOYLE:
         "Camp: wolves (not part of the pack).\nYou do not know the other wolves and they do not know you; you never see the pack's picks and are never shown as their teammate, and the wolves may attack you.\nEach night, night 1 included, you may check one living player (not yourself) to learn their exact role, or skip.\nYou can never check the same player twice in a game; players you have checked are greyed out.\nChecking a wolf only tells you its role: it does not make you teammates, and that wolf is not told.\nOnce every other wolf (kings included) is out you make the kill alone in the wolf turn; that night you check before you kill.\nYou cannot self-destruct. You count as a wolf: the villagers win only once you are out too. The seer and the gravekeeper see you as a wolf; the medium sees Gargoyle.",
       GRAVEKEEPER:
-        'Camp: good (a god role).\nEach night you learn whether the player voted out the day before was good or a wolf (White Wolf King, Black Wolf King, Mechanical Wolf and Gargoyle all count as wolves); there is no information on the first night.\nOnly a vote-out counts: a player who was shot, duelled, taken by the White Wolf King or declared out by the host, or an Idiot who revealed, does not count, and you see "Nobody was exiled yesterday".',
+        'Camp: good (a god role).\nEach night you learn whether the player voted out the day before was good or a wolf (White Wolf King, Black Wolf King, Mechanical Wolf and Gargoyle all count as wolves); there is no information on the first night.\nOnly a vote-out counts: a player who was shot, duelled, taken by the White Wolf King, taken along by the Wolf Beauty or declared out by the host, or an Idiot who revealed, does not count, and you see "Nobody was exiled yesterday".',
       GUARD:
         "Camp: good (a god role).\nEach night protect one living player (yourself included) from the wolves; if the room allows it you may also protect no one.\nYou cannot protect the same player two nights in a row.\nProtection does not stop the witch's poison.\nIf you and the witch's antidote save the same player, that player still dies (unless they hold night-1 immunity).",
       HUNTER:
-        'Camp: good (a god role).\nWhen you are out (voted out, killed by the wolves at night, or shot by the Black Wolf King) you may shoot one player, or hold fire.\nNo shot if the witch poisons you or the White Wolf King takes you, nor if your death already decides the game.\nShoot before the host moves on, or the shot is lost.',
+        'Camp: good (a god role).\nWhen you are out (voted out, killed by the wolves at night, or shot by the Black Wolf King) you may shoot one player, or hold fire.\nNo shot if the witch poisons you, the White Wolf King takes you, or you go out charmed by the Wolf Beauty, nor if your death already decides the game.\nShoot before the host moves on, or the shot is lost.',
       IDIOT:
         'Camp: good (a god role).\nWhen voted out you reveal your card and stay in, but lose your vote; a sheriff keeps the badge but cannot vote.\nThis works once only; any other death (night kill, poison, a shot, a White Wolf King take) still kills you.',
       KNIGHT:
@@ -559,11 +579,13 @@ export default {
       VILLAGER:
         'Camp: good (villager).\nNo special ability.\nTalk, reason, and vote out the players you suspect.',
       WEREWOLF:
-        'Camp: wolves.\nEach night pick a target with your fellow wolves; the first confirmed pick counts.\nYou may attack any living player, a fellow wolf or yourself included.\nDuring the sheriff election, or in the day once the night result is shown, you may self-destruct: no vote that day, the host can only move to night.\nThe seer sees you as a wolf.',
+        'Camp: wolves.\nEach night pick a target with your fellow wolves; the first confirmed pick counts.\nYou may attack any living player except the Wolf Beauty, a fellow wolf or yourself included.\nDuring the sheriff election, or in the day once the night result is shown, you may self-destruct: no vote that day, the host can only move to night.\nThe seer sees you as a wolf.',
       WHITE_WOLF_KING:
         "Camp: wolves.\nHunts with the wolves at night; the seer sees you as a wolf.\nWhen you self-destruct you may take one player with you (not yourself); they get no shot. As the last wolf you cannot take anyone.\nNo ability once voted out, shot, duelled by the Knight, or killed at night; but in the day-1 sheriff election last night's deaths are not yet shown, so you can still self-destruct and take someone.",
       WITCH:
         "Camp: good (a god role).\nOne antidote and one poison, each usable once per game.\nThe antidote only saves tonight's wolf victim; you cannot use both potions in one night.\nYou may save yourself on night 1 only, and only if the room allows it.\nYou cannot poison yourself; a poisoned hunter or Black Wolf King gets no shot.\nIf you and the guard save the same player, that player still dies (unless they hold night-1 immunity).",
+      WOLF_BEAUTY:
+        "Camp: wolves (part of the pack).\nHunts with the pack at night. The seer and the gravekeeper see you as a wolf; the medium and the gargoyle see Wolf Beauty.\nFrom night 2, after the wolves' kill you wake alone and may charm one living player, or skip; no charm on night 1.\nYou cannot charm yourself or a fellow wolf, nor the same player two nights in a row.\nWhen you are out, the player you charmed on the latest night goes out with you and cannot use a skill (a hunter cannot shoot, for example); earlier charms do not count.\nThe charmed player goes out with you when you are voted out, shot, taken by the White Wolf King, or poisoned (by the witch or the Mechanical Wolf); only a Knight's duel or the host declaring you out takes no one with you.\nNeither the guard, the witch's antidote nor the Mechanical Wolf's learned protection can stop it.\nBy day it is announced as \"N (Wolf Beauty) is out, M goes out with them, charmed\"; by night it is announced with the other deaths, with no cause given; if no one goes out with you, your role is not shown. A charmed sheriff hands over the badge as usual.\nYou cannot self-destruct, and the pack cannot attack you.\nThe charm settles before your own exit: if it takes the last god or the last villager, the wolves win, even if you are the last wolf.",
     },
   },
   roleCard: {
@@ -582,6 +604,7 @@ export default {
     antidote: 'Antidote saved {who}',
     attacked: '{who} was attacked by the wolves',
     attackedNone: 'No one was attacked',
+    charm: 'Charmed {who}',
     check: 'Checked {who} → {result}',
     empty: 'No records yet',
     good: 'Good',
@@ -682,10 +705,13 @@ export default {
   },
   rv: {
     asSheriff: ' as sheriff',
+    charm: 'Charm ',
+    charmDeath: ' is out, taking along the charmed ',
     badgeTo: ' passed the badge to ',
     badgeTorn: ' tore up the badge',
     cause: {
       BOTH_SAVES: 'guarded and saved together — died',
+      CHARM: 'went out with the Wolf Beauty, charmed',
       POISON: 'poisoned',
       WOLF: 'killed by the wolves',
     },
@@ -714,6 +740,7 @@ export default {
     mediumHead: '👻 Medium {seat} ',
     nightN: 'Night {day}',
     noAction: 'No action',
+    noCharm: 'No charm',
     noCheck: 'No check',
     noGuard: 'No guard',
     noKill: 'No kill',
@@ -752,6 +779,7 @@ export default {
     votes: '{n} vote | {n} votes',
     witchHead: '🧪 Witch {seat} ',
     wolf: 'Werewolf',
+    wolfBeautyHead: '🌹 Wolf Beauty {seat} ',
     wolfHead: '🐺 Wolves (seats {seats}) ',
     wolfPlay: '(wolf: {play})',
     wolfTeam: 'Wolf team: ',
@@ -906,6 +934,7 @@ export default {
       BWK_SHOOT_GOD: 'Shoot a god when you are out',
       GARGOYLE_FIND_TWO_GODS: 'Check at least 2 gods',
       IDIOT_REVEAL_WIN: 'Be revealed when voted out, and the village wins',
+      WOLF_BEAUTY_LINK_GOD: 'Take a god with you through the charm',
     },
     notDone: 'Not done',
     score: '+{n} score',

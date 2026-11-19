@@ -100,6 +100,13 @@ sealed class DomainEvent {
         val nickname: String,
     ) : DomainEvent()
 
+    @JsonTypeName("PlayerCharmDeath")
+    data class PlayerCharmDeath(
+        val gameId: Int,
+        val wolfBeautyUserId: String,
+        val victimUserId: String,
+    ) : DomainEvent()
+
     @JsonTypeName("RoleAction")
     data class RoleAction(
         val gameId: Int,

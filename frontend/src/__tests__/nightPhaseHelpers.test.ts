@@ -89,6 +89,12 @@ describe('isWolfTarget', () => {
     expect(isWolfTarget(player({ userId: ME, isAlive: false }), ME)).toBe(false)
   })
 
+  it('the 狼美人 teammate is not a target (the server rejects it too)', () => {
+    expect(isWolfTarget(player({ userId: OTHER }), ME, OTHER)).toBe(false)
+    expect(isWolfTarget(player({ userId: 'x' }), ME, OTHER)).toBe(true)
+    expect(isWolfTarget(player({ userId: OTHER }), ME, null)).toBe(true)
+  })
+
   it('teammate is a valid wolf target', () => {
     // Wolves CAN attack their own teammates (unusual but valid)
     expect(isWolfTarget(player({ userId: OTHER, nickname: 'Bob' }), ME)).toBe(true)

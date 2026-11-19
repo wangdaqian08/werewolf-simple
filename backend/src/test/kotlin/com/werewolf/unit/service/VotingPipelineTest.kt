@@ -15,6 +15,8 @@ import com.werewolf.repository.EliminationHistoryRepository
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.VoteRepository
+import com.werewolf.service.CharmDeathService
+import com.werewolf.service.CharmOutcome
 import com.werewolf.service.GameContextLoader
 import com.werewolf.service.StompPublisher
 import org.assertj.core.api.Assertions.assertThat
@@ -39,6 +41,7 @@ class VotingPipelineTest {
     @Mock lateinit var nightOrchestrator: NightOrchestrator
     @Mock lateinit var dayRevealAdvancer: DayRevealAdvancer
     @Mock lateinit var rewardSettlementService: com.werewolf.service.RewardSettlementService
+    @Mock lateinit var charmDeathService: CharmDeathService
 
     private lateinit var votingPipeline: VotingPipeline
 
@@ -61,6 +64,7 @@ class VotingPipelineTest {
         hostTimerService = mock(),
         dayRevealAdvancer = dayRevealAdvancer,
         rewardSettlementService = rewardSettlementService,
+        charmDeathService = charmDeathService,
     )
 
     private val gameId = 1
@@ -1646,6 +1650,7 @@ class VotingPipelineTest {
         hostTimerService = mock(),
         dayRevealAdvancer = dayRevealAdvancer,
         rewardSettlementService = mock(),
+        charmDeathService = charmDeathService,
     )
 
     @Test
@@ -1704,6 +1709,212 @@ class VotingPipelineTest {
         makeVotingPipelineWithLog().revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
 
         verify(actionLogService).recordIdiotReveal(gameId, 1, "u1")
+    }
+
+    // ── 狼美人 殉情 on every day exit (X2–X5) ───────────────────────────────────
+
+    private fun beauty(alive: Boolean = true) = player("wb", 5, PlayerRole.WOLF_BEAUTY, alive)
+
+    /**
+     * [outId]'s exit takes [victim] along. The real service kills the victim; [kill] = false
+     * leaves the context row alive, to prove the caller does not rely on it.
+     */
+    private fun stubCharm(outId: String, victim: GamePlayer, winner: WinnerSide? = null, kill: Boolean = true) {
+        whenever(charmDeathService.onDayExit(any(), eq(outId))).thenAnswer {
+            if (kill) victim.alive = false
+            CharmOutcome(victim.userId, winner)
+        }
+    }
+
+    private fun voteOut(target: String) {
+        whenever(voteRepository.findByGameIdAndVoteContextAndDayNumber(gameId, VoteContext.ELIMINATION, 1))
+            .thenReturn(listOf(vote(hostId, target), vote("u3", target)))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+    }
+
+    @Test
+    fun `X2 - a voted-out WOLF_BEAUTY takes its charmed hunter, who gets no history row and no shot`() {
+        val host = player(hostId, 0)
+        val wb = beauty()
+        val hunter = player("u1", 1, PlayerRole.HUNTER)
+        val wolf = player("u2", 2, PlayerRole.WEREWOLF)
+        val context = ctx(game(), host, wb, hunter, wolf)
+        voteOut("wb")
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wb")).thenReturn(Optional.of(wb))
+        stubCharm("wb", hunter)
+        stubLoader(host, wb, hunter, wolf)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        assertThat(wb.alive).isFalse()
+        assertThat(hunter.alive).isFalse()
+        val history = argumentCaptor<EliminationHistory>()
+        verify(eliminationHistoryRepository).save(history.capture())
+        assertThat(history.allValues.map { it.eliminatedUserId }).containsExactly("wb")
+        assertThat(context.game.pendingShooterUserId).isNull()
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.VOTE_RESULT.name)
+    }
+
+    @Test
+    fun `X2 - the charmed player is the sheriff - the day goes to BADGE_HANDOVER`() {
+        val host = player(hostId, 0)
+        val wb = beauty()
+        val sheriff = player("u1", 1).also { it.sheriff = true }
+        val wolf = player("u2", 2, PlayerRole.WEREWOLF)
+        val context = ctx(game(sheriff = "u1"), host, wb, sheriff, wolf)
+        voteOut("wb")
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wb")).thenReturn(Optional.of(wb))
+        stubCharm("wb", sheriff)
+        stubLoader(host, wb, sheriff, wolf)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+    }
+
+    @Test
+    fun `X2 W15 - a last-wolf WOLF_BEAUTY whose charm takes the last god wins for the wolves, no handover`() {
+        val host = player(hostId, 0)
+        val wb = beauty()
+        val seerSheriff = player("u1", 1, PlayerRole.SEER).also { it.sheriff = true }
+        val context = ctx(game(sheriff = "u1"), host, wb, seerSheriff)
+        voteOut("wb")
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wb")).thenReturn(Optional.of(wb))
+        stubCharm("wb", seerSheriff, WinnerSide.WEREWOLF)
+
+        votingPipeline.revealTally(req(hostId, ActionType.VOTING_REVEAL_TALLY), context)
+
+        assertThat(context.game.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(context.game.winner).isEqualTo(WinnerSide.WEREWOLF)
+        assertThat(context.game.subPhase).isNotEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+        assertThat(wb.alive).isFalse()
+        verify(winConditionChecker, never()).check(any(), any(), any(), any(), any())
+        verify(rewardSettlementService).settle(gameId, WinnerSide.WEREWOLF)
+    }
+
+    @Test
+    fun `X3 - a hunter shoots the WOLF_BEAUTY - the charmed sheriff dies and hands over the badge`() {
+        val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
+        val wb = beauty()
+        val sheriff = player("u2", 2).also { it.sheriff = true }
+        val wolf = player("u3", 3, PlayerRole.WEREWOLF)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, sheriff = "u2", shooter = hostId), hunter, wb, sheriff, wolf)
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wb")).thenReturn(Optional.of(wb))
+        votedOut(hostId)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        stubCharm("wb", sheriff)
+        stubLoader(hunter, wb, sheriff, wolf)
+
+        votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SHOOT, "wb"), context)
+
+        assertThat(wb.alive).isFalse()
+        assertThat(sheriff.alive).isFalse()
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+    }
+
+    @Test
+    fun `X4 Q10 - a shot WOLF_BEAUTY sheriff - the charmed player dies at the shot, then the handover`() {
+        val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
+        val wb = beauty().also { it.sheriff = true }
+        val seer = player("u2", 2, PlayerRole.SEER)
+        val wolf = player("u3", 3, PlayerRole.WEREWOLF)
+        val villager = player("u4", 4)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, sheriff = "wb", shooter = hostId), hunter, wb, seer, wolf, villager)
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wb")).thenReturn(Optional.of(wb))
+        votedOut(hostId)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        stubCharm("wb", seer, kill = false)
+
+        votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SHOOT, "wb"), context)
+
+        verify(charmDeathService).onDayExit(any(), eq("wb"))
+        assertThat(context.game.subPhase).isEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+        assertThat(wb.alive).describedAs("the sheriff's own death still waits for the handover").isTrue()
+        // The projection leaves out both, even though the context row of the victim was loaded alive.
+        val alive = argumentCaptor<List<GamePlayer>>()
+        verify(winConditionChecker).check(alive.capture(), any(), any(), any(), any())
+        assertThat(alive.firstValue.map { it.userId }).containsExactlyInAnyOrder("u3", "u4")
+    }
+
+    @Test
+    fun `X4 Q10 - the shot WOLF_BEAUTY sheriff cannot pass the badge to the dead charmed player`() {
+        val wb = beauty().also { it.sheriff = true }
+        val seer = player("u2", 2, PlayerRole.SEER, alive = false)
+        val context = ctx(game(VotingSubPhase.BADGE_HANDOVER.name, sheriff = "wb"), wb, seer, player("u4", 4))
+
+        val result = votingPipeline.handleBadge(req("wb", ActionType.BADGE_PASS, "u2"), context)
+
+        assertThat(result).isInstanceOf(GameActionResult.Rejected::class.java)
+        assertThat(context.game.sheriffUserId).isEqualTo("wb")
+    }
+
+    @Test
+    fun `X4 W15 - a shot WOLF_BEAUTY sheriff whose charm wins ends the game at once with no handover`() {
+        val hunter = player(hostId, 0, PlayerRole.HUNTER, alive = false)
+        val wb = beauty().also { it.sheriff = true }
+        val seer = player("u2", 2, PlayerRole.SEER)
+        val villager = player("u4", 4)
+        val context = ctx(game(VotingSubPhase.VOTE_RESULT.name, sheriff = "wb", shooter = hostId), hunter, wb, seer, villager)
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wb")).thenReturn(Optional.of(wb))
+        votedOut(hostId)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        stubCharm("wb", seer, WinnerSide.WEREWOLF)
+
+        votingPipeline.handleHunterShoot(req(hostId, ActionType.HUNTER_SHOOT, "wb"), context)
+
+        assertThat(context.game.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(context.game.winner).isEqualTo(WinnerSide.WEREWOLF)
+        assertThat(context.game.subPhase).isNotEqualTo(VotingSubPhase.BADGE_HANDOVER.name)
+        assertThat(context.game.pendingShooterUserId).isNull()
+        assertThat(wb.alive).isFalse()
+        verify(winConditionChecker, never()).check(any(), any(), any(), any(), any())
+    }
+
+    @Test
+    fun `X5 - a night-killed hunter shoots the WOLF_BEAUTY - the charmed sheriff dies and hands over the badge`() {
+        val hunter = player("h", 1, PlayerRole.HUNTER, alive = false)
+        val wb = beauty()
+        val sheriff = player("u2", 2).also { it.sheriff = true }
+        val wolf = player("u3", 3, PlayerRole.WEREWOLF)
+        val g = nightRevealGame(sheriff = "u2").also {
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
+            it.pendingShooterUserId = "h"
+        }
+        val context = GameContext(g, room(), listOf(hunter, wb, sheriff, wolf))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wb")).thenReturn(Optional.of(wb))
+        whenever(contextLoader.load(gameId)).thenReturn(GameContext(g, room(), listOf(hunter, wb, sheriff, wolf)))
+        whenever(dayRevealAdvancer.nextSubPhase(gameId)).thenReturn(DaySubPhase.BADGE_HANDOVER)
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        stubCharm("wb", sheriff)
+
+        votingPipeline.handleHunterShoot(req("h", ActionType.HUNTER_SHOOT, "wb"), context)
+
+        verify(charmDeathService).onDayExit(any(), eq("wb"))
+        assertThat(sheriff.alive).isFalse()
+        assertThat(g.subPhase).isEqualTo(DaySubPhase.BADGE_HANDOVER.name)
+    }
+
+    @Test
+    fun `X5 W15 - a night-killed hunter's shot on a last-wolf WOLF_BEAUTY whose charm wins ends the game for the wolves`() {
+        val hunter = player("h", 1, PlayerRole.HUNTER, alive = false)
+        val wb = beauty()
+        val seer = player("u2", 2, PlayerRole.SEER)
+        val g = nightRevealGame(sheriff = "x").also {
+            it.subPhase = DaySubPhase.RESULT_REVEALED.name
+            it.sheriffUserId = null
+            it.pendingShooterUserId = "h"
+        }
+        val context = GameContext(g, room(), listOf(hunter, wb, seer))
+        whenever(gamePlayerRepository.findByGameIdAndUserId(gameId, "wb")).thenReturn(Optional.of(wb))
+        whenever(gameRepository.save(any<Game>())).thenAnswer { it.arguments[0] }
+        stubCharm("wb", seer, WinnerSide.WEREWOLF)
+
+        votingPipeline.handleHunterShoot(req("h", ActionType.HUNTER_SHOOT, "wb"), context)
+
+        assertThat(g.phase).isEqualTo(GamePhase.GAME_OVER)
+        assertThat(g.winner).isEqualTo(WinnerSide.WEREWOLF)
+        assertThat(g.pendingShooterUserId).isNull()
+        verify(winConditionChecker, never()).check(any(), any(), any(), any(), any())
     }
 
 }

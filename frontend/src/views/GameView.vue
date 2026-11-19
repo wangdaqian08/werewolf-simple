@@ -631,6 +631,8 @@ const NIGHT_TURN_ACTIONS = new Set([
   'GARGOYLE_CHECK',
   'GARGOYLE_SKIP',
   'GARGOYLE_CONFIRM',
+  'WOLF_BEAUTY_CHARM',
+  'WOLF_BEAUTY_SKIP',
 ])
 
 // Wraps gameService.submitAction to always include the gameId from the route
@@ -1250,6 +1252,10 @@ onMounted(async () => {
         }
         // Hunter fired → target death + chain reactions land in state
         if (data.type === 'HunterShot') {
+          await refreshState()
+        }
+        // 殉情 (day): the victim dies silently → re-fetch for the banner state
+        if (data.type === 'PlayerCharmDeath') {
           await refreshState()
         }
         // Sheriff badge transferred or destroyed → re-fetch updated sheriff state

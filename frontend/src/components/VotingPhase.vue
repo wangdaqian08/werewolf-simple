@@ -87,6 +87,29 @@
         </div>
       </div>
 
+      <!-- 殉情: built from state (never from event order) -->
+      <div
+        v-if="votingPhase.charmDeath"
+        class="banner banner-kill"
+        data-testid="charm-death-banner"
+      >
+        <span class="banner-avatar">🌹</span>
+        <div class="banner-kill-text">
+          <span class="banner-kill-red">{{
+            $t('day.charmDeath', {
+              beauty: $t('common.seatDot', {
+                n: votingPhase.charmDeath.beautySeatIndex,
+                name: votingPhase.charmDeath.beautyNickname,
+              }),
+              victim: $t('common.seatDot', {
+                n: votingPhase.charmDeath.victimSeatIndex,
+                name: votingPhase.charmDeath.victimNickname,
+              }),
+            })
+          }}</span>
+        </div>
+      </div>
+
       <!-- Before reveal: simple vote count -->
       <div v-if="!isRevealed" class="vote-count-bar">
         <div class="tally-chip tally-chip-count">
@@ -214,7 +237,7 @@
           @click="onVotingTap(player)"
         >
           <template v-if="player.isSheriff" #badge>
-            <div class="sheriff-badge">⭐</div>
+            <div class="sheriff-badge" data-testid="sheriff-badge">⭐</div>
           </template>
           <template v-if="player.idiotRevealed" #overlay>
             <div class="slot-overlay idiot-overlay">🃏</div>
@@ -552,6 +575,27 @@
 
       <!-- Destroyed message replaces banner when badge is burned -->
       <div class="banner-area">
+        <div
+          v-if="votingPhase.charmDeath"
+          class="banner banner-kill"
+          data-testid="charm-death-banner"
+        >
+          <span class="banner-avatar">🌹</span>
+          <div class="banner-kill-text">
+            <span class="banner-kill-red">{{
+              $t('day.charmDeath', {
+                beauty: $t('common.seatDot', {
+                  n: votingPhase.charmDeath.beautySeatIndex,
+                  name: votingPhase.charmDeath.beautyNickname,
+                }),
+                victim: $t('common.seatDot', {
+                  n: votingPhase.charmDeath.victimSeatIndex,
+                  name: votingPhase.charmDeath.victimNickname,
+                }),
+              })
+            }}</span>
+          </div>
+        </div>
         <div v-if="votingPhase.badgeDestroyed" class="banner badge-status-burned">
           <span class="banner-avatar">⚔️</span>
           <div>

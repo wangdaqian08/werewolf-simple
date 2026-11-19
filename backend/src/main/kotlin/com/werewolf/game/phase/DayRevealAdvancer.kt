@@ -66,6 +66,8 @@ class DayRevealAdvancer(
         if (!NightOrchestrator.wolfKillLands(nightPhase)) return null
         if (wolfTarget == nightPhase.mechGuardTargetUserId) return null // shielded: the kill never lands
         if (wolfTarget in setOf(nightPhase.witchPoisonTargetUserId, nightPhase.mechPoisonTargetUserId)) return null // poisoned → cannot shoot
+        // 殉情 → cannot shoot (W6). The night-1 perk is left out: it only covers the knife, and night 1 has no charm.
+        if (wolfTarget == RoleRules.charmVictimAtNight(nightPhase, players, NightOrchestrator.computeKills(nightPhase, emptySet(), players))) return null
         // Self-destructed or taken (the night victim is still alive in the sheriff campaign) → no shot.
         if (wolfTarget == game.selfDestructUserId || wolfTarget == game.selfDestructTakenUserId) return null
         val player = players.find { it.userId == wolfTarget } ?: return null

@@ -414,7 +414,7 @@
       </footer>
     </template>
 
-    <!-- ── GARGOYLE_* / MECH_WOLF_* / MEDIUM_* / GRAVEKEEPER_RESULT ───── -->
+    <!-- ── GARGOYLE_* / WOLF_BEAUTY_PICK / MECH_WOLF_* / MEDIUM_* / GRAVEKEEPER_RESULT ── -->
     <GargoyleTurn
       v-else-if="
         (subPhase === 'GARGOYLE_PICK' || subPhase === 'GARGOYLE_RESULT') &&
@@ -424,6 +424,21 @@
       "
       :sub-phase="subPhase"
       :gargoyle="nightPhase.gargoyle"
+      :players="players"
+      :my-user-id="myUserId"
+      :action-pending="actionPending"
+      @action="sendNightAction"
+    />
+    <!-- Its choice ends the turn; once the server has it (result), a reload shows closed eyes. -->
+    <WolfBeautyTurn
+      v-else-if="
+        subPhase === 'WOLF_BEAUTY_PICK' &&
+        myRole === 'WOLF_BEAUTY' &&
+        me?.isAlive &&
+        !hasActed &&
+        !nightPhase.wolfBeauty?.result
+      "
+      :wolf-beauty="nightPhase.wolfBeauty"
       :players="players"
       :my-user-id="myUserId"
       :action-pending="actionPending"
@@ -528,6 +543,7 @@ import MechWolfTurn from '@/components/MechWolfTurn.vue'
 import MediumTurn from '@/components/MediumTurn.vue'
 import GravekeeperTurn from '@/components/GravekeeperTurn.vue'
 import GargoyleTurn from '@/components/GargoyleTurn.vue'
+import WolfBeautyTurn from '@/components/WolfBeautyTurn.vue'
 import {
   guardVariant,
   isGuardTarget,
@@ -598,7 +614,7 @@ const poisonMode = ref(false)
 // Intentionally NOT applied to SEER_PICK (the click advances to SEER_RESULT,
 // which is a different screen on the same component — showing sleep in between
 // would flash for the seer). The gargoyle's, the mechanical wolf's and the medium's picks are
-// exempt for the same reason; only their CONFIRM clicks set it.
+// exempt for the same reason; only their CONFIRM clicks set it. The 狼美人 has no result screen, so its charm or skip ends the turn.
 const hasActed = ref(false)
 // A rejected action did not use up the turn: show the controls again.
 watch(
@@ -631,6 +647,8 @@ function confirmGuardSkip() {
 function sendNightAction(type: string, targetUserId?: string) {
   // Only the CONFIRM actions end the turn; a pick advances to the RESULT screen, so (like the seer) it must not flash eyes-closed.
   if (
+    type === 'WOLF_BEAUTY_CHARM' ||
+    type === 'WOLF_BEAUTY_SKIP' ||
     type === 'GARGOYLE_CONFIRM' ||
     type === 'MECH_CONFIRM' ||
     type === 'MEDIUM_CONFIRM' ||
@@ -686,6 +704,7 @@ const isMyTurn = computed(() => {
   if (sp === 'MEDIUM_PICK' || sp === 'MEDIUM_RESULT') return role === 'MEDIUM'
   if (sp === 'GRAVEKEEPER_RESULT') return role === 'GRAVEKEEPER'
   if (sp === 'GARGOYLE_PICK' || sp === 'GARGOYLE_RESULT') return role === 'GARGOYLE'
+  if (sp === 'WOLF_BEAUTY_PICK') return role === 'WOLF_BEAUTY'
   return false
 })
 
@@ -737,6 +756,7 @@ const ROLE_META: Record<PlayerRole, RoleMeta> = {
   KNIGHT: { emoji: '⚔️', team: 'special' },
   GRAVEKEEPER: { emoji: '⚰️', team: 'special' },
   GARGOYLE: { emoji: '🗿', team: 'wolf' },
+  WOLF_BEAUTY: { emoji: '🌹', team: 'wolf' },
 }
 
 const meta = computed(() => (props.myRole ? ROLE_META[props.myRole] : null))
@@ -768,6 +788,11 @@ const badgeSub = computed(() => {
       return role === 'GARGOYLE' ? t('night.badge.gargoyle') : t('night.badge.closed')
     case 'GARGOYLE_RESULT':
       return role === 'GARGOYLE' ? t('night.badge.gargoyleDone') : t('night.badge.closed')
+    case 'WOLF_BEAUTY_PICK':
+      if (role !== 'WOLF_BEAUTY') return t('night.badge.closed')
+      return props.nightPhase.wolfBeauty?.canCharm
+        ? t('night.badge.wolfBeauty')
+        : t('night.wolfBeauty.firstNight')
     default:
       return ''
   }
@@ -782,7 +807,8 @@ const prevGuardPlayer = computed(() =>
 // ── Slot variant / target wrappers (bind props) ──────────────────────────────
 
 const wolfVariantFn = (p: GamePlayer) => wolfVariant(p, effectivePhase.value, props.myUserId)
-const isWolfTargetFn = (p: GamePlayer) => isWolfTarget(p, props.myUserId)
+const isWolfTargetFn = (p: GamePlayer) =>
+  isWolfTarget(p, props.myUserId, props.nightPhase.wolfBeautyUserId)
 const seerVariantFn = (p: GamePlayer) => seerVariant(p, effectivePhase.value, props.myUserId)
 const isSeerTargetFn = (p: GamePlayer) => isSeerTarget(p, props.myUserId)
 const guardVariantFn = (p: GamePlayer) => guardVariant(p, effectivePhase.value)

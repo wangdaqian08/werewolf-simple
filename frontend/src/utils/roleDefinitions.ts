@@ -27,6 +27,8 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   { id: 'MECHANICAL_WOLF', emoji: '🤖', required: false, wolf: true },
   // Also kept apart from the pack; checks one player's exact role each night.
   { id: 'GARGOYLE', emoji: '🗿', required: false, wolf: true },
+  // In the pack; charms a player each night from night 2.
+  { id: 'WOLF_BEAUTY', emoji: '🌹', required: false, wolf: true },
   { id: 'SEER', emoji: '🔮', required: false },
   { id: 'MEDIUM', emoji: '👁️', required: false },
   { id: 'WITCH', emoji: '🧙‍♀️', required: false },

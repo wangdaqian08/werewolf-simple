@@ -98,6 +98,10 @@ sealed interface MyNightAction {
     @JsonTypeName("WOLF")
     data class Wolf(val teammates: List<PlayerSeat>, val target: PlayerSeat?, val selfKill: Boolean) : MyNightAction
 
+    /** The pack's turn as [Wolf], plus the 狼美人's own [charm] (null = none). */
+    @JsonTypeName("WOLF_BEAUTY")
+    data class WolfBeauty(val teammates: List<PlayerSeat>, val target: PlayerSeat?, val selfKill: Boolean, val charm: PlayerSeat?) : MyNightAction
+
     /** [target] null = the seer did not check. [isWerewolf] is the answer they were given. */
     @JsonTypeName("SEER")
     data class Seer(val target: PlayerSeat?, val isWerewolf: Boolean) : MyNightAction
@@ -175,6 +179,10 @@ sealed interface PlayerDayEvent {
     /** [points] is set when the viewer is the one receiving the badge. */
     @JsonTypeName("BADGE_HANDOVER")
     data class BadgeHandover(val from: PlayerSeat, val to: PlayerSeat?, val points: Int? = null) : PlayerDayEvent
+
+    /** A day 殉情, announced to the table with the 狼美人 named (Q13). A night 殉情 is only a name at dawn. */
+    @JsonTypeName("CHARM_DEATH")
+    data class CharmDeath(val beauty: PlayerSeat, val victim: PlayerSeat) : PlayerDayEvent
 }
 
 data class PlayerTally(val target: PlayerSeat, val votes: Double, val voters: List<PlayerSeat>)

@@ -160,7 +160,12 @@ class GameService(
                 "confirmedUserIds" to players.filter { it.confirmedRole }.map { it.userId },
                 "totalCount" to players.size,
                 "teammates" to teammates,
-            )
+            ).let { base ->
+                // Only pack wolves learn who the 狼美人 is (null when the board has none).
+                if (myPlayer?.role?.isPackWolf == true)
+                    base + ("wolfBeautyUserId" to players.firstOrNull { it.role == PlayerRole.WOLF_BEAUTY }?.userId)
+                else base
+            }
         } else null
 
         val sheriffElection = if (game.phase == GamePhase.SHERIFF_ELECTION) {
@@ -187,6 +192,7 @@ class GameService(
                     base["teammates"] = teammates.map { tp ->
                         "${tp.seatIndex}·${userLookup[tp.userId]?.nickname ?: tp.userId}"
                     }
+                    base["wolfBeautyUserId"] = players.firstOrNull { it.role == PlayerRole.WOLF_BEAUTY }?.userId
                 }
 
                 // ── SEER: share result + full check history ───────────────────────────
@@ -287,6 +293,40 @@ class GameService(
                     )
                 }
 
+                // ── WOLF_BEAUTY: tonight's charm or skip, last night's target, its pack, and the history ──
+                if (myPlayer?.role == PlayerRole.WOLF_BEAUTY) {
+                    val charms = nightPhaseRepository.findByGameId(gameId)
+                        .filter { it.dayNumber <= np.dayNumber && it.wolfBeautyCharmUserId != null }
+                        .sortedBy { it.dayNumber }
+                    val charmedId = np.wolfBeautyCharmUserId
+                    base["wolfBeauty"] = mapOf(
+                        "canCharm" to (np.dayNumber >= 2),
+                        "lastNightTargetUserId" to charms.firstOrNull { it.dayNumber == np.dayNumber - 1 }?.wolfBeautyCharmUserId,
+                        // It already knows its pack; the picker greys them out.
+                        "packUserIds" to players.filter { it.role.isPackWolf && it.userId != requestingUserId }.map { it.userId },
+                        "result" to when {
+                            charmedId != null -> mapOf(
+                                "kind"            to "CHARM",
+                                "targetPlayerId"  to charmedId,
+                                "targetNickname"  to displayNameFor(charmedId),
+                                "targetSeatIndex" to playerMap[charmedId]?.seatIndex,
+                            )
+                            // No field records a skip: past its sub-phase (enum order = wake order here) with no charm means it skipped.
+                            np.subPhase > NightSubPhase.WOLF_BEAUTY_PICK -> mapOf("kind" to "SKIP")
+                            else -> null
+                        },
+                        "history" to charms.mapNotNull { h ->
+                            h.wolfBeautyCharmUserId?.let { id ->
+                                mapOf(
+                                    "round"     to h.dayNumber,
+                                    "nickname"  to displayNameFor(id),
+                                    "seatIndex" to playerMap[id]?.seatIndex,
+                                )
+                            }
+                        },
+                    )
+                }
+
                 // ── MECHANICAL WOLF: learned role, tonight's skill, and tonight's action ──
                 if (myPlayer?.role == PlayerRole.MECHANICAL_WOLF) {
                     val allNights = nightPhaseRepository.findByGameId(gameId)
@@ -342,6 +382,17 @@ class GameService(
                 base
             }
         } else null
+
+        // Public: today's day 殉情 (B, Q13); null when the 狼美人 went out alone, so its role stays hidden (Q14).
+        val charmDeath = game.charmDeathUserId?.let { victimId ->
+            val beauty = players.firstOrNull { it.role == PlayerRole.WOLF_BEAUTY }
+            mapOf(
+                "beautySeatIndex" to (beauty?.seatIndex ?: 0),
+                "beautyNickname"  to (beauty?.let { displayNameFor(it.userId) } ?: ""),
+                "victimSeatIndex" to (players.firstOrNull { it.userId == victimId }?.seatIndex ?: 0),
+                "victimNickname"  to displayNameFor(victimId),
+            )
+        }
 
         val dayPhase = if (game.phase == GamePhase.DAY_DISCUSSION) {
             val playerMap = players.associateBy { it.userId }
@@ -407,6 +458,7 @@ class GameService(
                 "nightResult"   to nightResult,
                 "selfDestruct"  to selfDestruct,
                 "knightDuel"    to knightDuel,
+                "charmDeath"    to charmDeath,
                 "canVote"       to (myPlayer != null && myPlayer.alive && myPlayer.canVote),
                 // Private: true only on the pending shooter's own state.
                 "canShoot"      to (game.pendingShooterUserId == requestingUserId),
@@ -495,6 +547,7 @@ class GameService(
                 "idiotRevealedId" to idiotRevealedPlayer?.userId,
                 "idiotRevealedNickname" to idiotRevealedUser?.nickname,
                 "idiotRevealedSeatIndex" to idiotRevealedPlayer?.seatIndex,
+                "charmDeath" to charmDeath,
             )
         } else null
 

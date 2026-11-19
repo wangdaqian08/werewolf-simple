@@ -75,4 +75,35 @@ describe('roleDefinitions', () => {
       "Wolf camp. Each night, may check one player's exact role; not itself, and never the same player twice in a game. It and the pack do not know each other; it cannot self-destruct; the seer and the gravekeeper see it as a wolf. Gets the wolf kill only once every other wolf is out, and checks before it kills that night.",
     )
   })
+
+  it('狼美人 is an optional pack wolf with no excluded roles', () => {
+    expect(roleDefinition('WOLF_BEAUTY')).toMatchObject({ required: false, wolf: true })
+    expect(isWolfRole('WOLF_BEAUTY')).toBe(true)
+    expect(isPackWolfRole('WOLF_BEAUTY')).toBe(true)
+    expect(roleName('WOLF_BEAUTY')).toBe('狼美人')
+    expect(excludedRoles('WOLF_BEAUTY')).toEqual([])
+    for (const [role, others] of Object.entries(BLOCKED_WITH))
+      expect(others, role).not.toContain('WOLF_BEAUTY')
+  })
+
+  it('狼美人 has its name, intros and rules in both locales', () => {
+    for (const locale of ['zh', 'en'] as const) {
+      for (const key of [
+        'role.WOLF_BEAUTY',
+        'role.desc.WOLF_BEAUTY',
+        'role.descShort.WOLF_BEAUTY',
+        'role.rules.WOLF_BEAUTY',
+      ])
+        expect(i18n.global.te(key, locale), `${locale} ${key}`).toBe(true)
+    }
+    expect(i18n.global.t('role.descShort.WOLF_BEAUTY', {}, { locale: 'zh' })).toBe(
+      '每晚魅惑一名玩家；你出局時，被魅惑的玩家殉情。',
+    )
+    expect(i18n.global.t('role.desc.WOLF_BEAUTY', {}, { locale: 'zh' })).toBe(
+      '夜晚與狼隊一起襲擊，第二晚起每晚可魅惑一名玩家。你出局時，最近一晚被魅惑的玩家隨之殉情。',
+    )
+    expect(i18n.global.t('role.desc.WOLF_BEAUTY', {}, { locale: 'en' })).toBe(
+      'Kills with the pack at night, and from night 2 may charm one player each night. When you go out, the player charmed on the latest night goes out with you.',
+    )
+  })
 })

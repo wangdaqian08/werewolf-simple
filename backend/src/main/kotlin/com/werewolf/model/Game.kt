@@ -84,6 +84,10 @@ class Game(
 
     @Column(name = "timer_running", nullable = false)
     var timerRunning: Boolean = false,
+
+    // The day 殉情 victim, for the banner; cleared at night-init.
+    @Column(name = "charm_death_user_id", length = 128)
+    var charmDeathUserId: String? = null,
 ) {
     init {
         require(roomId > 0) { "roomId must be a valid ID, got $roomId" }

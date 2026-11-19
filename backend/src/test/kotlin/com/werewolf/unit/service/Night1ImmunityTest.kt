@@ -71,43 +71,43 @@ class Night1ImmunityTest {
     @Test
     fun `night 1 - immune wolf target survives`() {
         val np = night(dayNumber = 1, wolfTarget = "victim")
-        assertThat(orchestrator.computePendingKills(np, setOf("victim"))).isEmpty()
+        assertThat(orchestrator.computePendingKills(np, setOf("victim"), emptyList())).isEmpty()
     }
 
     @Test
     fun `night 1 - non-immune wolf target still dies`() {
         val np = night(dayNumber = 1, wolfTarget = "victim")
-        assertThat(orchestrator.computePendingKills(np, setOf("someone-else"))).containsExactly("victim")
+        assertThat(orchestrator.computePendingKills(np, setOf("someone-else"), emptyList())).containsExactly("victim")
     }
 
     @Test
     fun `night 2 - immunity has expired, holder dies`() {
         val np = night(dayNumber = 2, wolfTarget = "victim")
-        assertThat(orchestrator.computePendingKills(np, setOf("victim"))).containsExactly("victim")
+        assertThat(orchestrator.computePendingKills(np, setOf("victim"), emptyList())).containsExactly("victim")
     }
 
     @Test
     fun `witch poison is NOT blocked by immunity (not a wolf kill)`() {
         val np = night(dayNumber = 1, poisonTarget = "victim")
-        assertThat(orchestrator.computePendingKills(np, setOf("victim"))).containsExactly("victim")
+        assertThat(orchestrator.computePendingKills(np, setOf("victim"), emptyList())).containsExactly("victim")
     }
 
     @Test
     fun `wolf kill blocked by immunity but poison on same night still lands on other player`() {
         val np = night(dayNumber = 1, wolfTarget = "immune", poisonTarget = "other")
-        assertThat(orchestrator.computePendingKills(np, setOf("immune"))).containsExactly("other")
+        assertThat(orchestrator.computePendingKills(np, setOf("immune"), emptyList())).containsExactly("other")
     }
 
     @Test
     fun `guard save and immunity on the same target are indistinguishable (no kill, no error)`() {
         val np = night(dayNumber = 1, wolfTarget = "victim", guardTarget = "victim")
-        assertThat(orchestrator.computePendingKills(np, setOf("victim"))).isEmpty()
+        assertThat(orchestrator.computePendingKills(np, setOf("victim"), emptyList())).isEmpty()
     }
 
     @Test
     fun `empty immune set preserves legacy behavior`() {
         val np = night(dayNumber = 1, wolfTarget = "victim")
-        assertThat(orchestrator.computePendingKills(np)).containsExactly("victim")
+        assertThat(orchestrator.computePendingKills(np, emptySet(), emptyList())).containsExactly("victim")
     }
 
     // ── night1PerkDecisiveSaves — the settlement trigger predicate ──────────
@@ -148,7 +148,7 @@ class Night1ImmunityTest {
     @Test
     fun `同守同救 on an immune holder - the perk alone keeps them alive and is decisive`() {
         val np = night(dayNumber = 1, wolfTarget = "victim", guardTarget = "victim", antidoteUsed = true)
-        assertThat(orchestrator.computePendingKills(np, setOf("victim"))).isEmpty()
+        assertThat(orchestrator.computePendingKills(np, setOf("victim"), emptyList())).isEmpty()
         assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).containsExactly("victim")
     }
 
@@ -156,7 +156,7 @@ class Night1ImmunityTest {
     fun `holder both wolf-targeted and poisoned - dies by poison yet the wolf-kill save stays decisive`() {
         val np = night(dayNumber = 1, wolfTarget = "victim", poisonTarget = "victim")
         // Poison lands regardless of immunity (not a wolf kill) — the holder dies...
-        assertThat(orchestrator.computePendingKills(np, setOf("victim"))).containsExactly("victim")
+        assertThat(orchestrator.computePendingKills(np, setOf("victim"), emptyList())).containsExactly("victim")
         // ...but the perk still decisively blocked the WOLF kill, so settlement
         // must CONSUME it even though the holder died to poison the same night.
         assertThat(NightOrchestrator.night1PerkDecisiveSaves(np, setOf("victim"))).containsExactly("victim")

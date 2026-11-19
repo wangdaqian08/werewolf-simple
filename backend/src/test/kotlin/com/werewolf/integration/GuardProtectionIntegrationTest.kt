@@ -180,7 +180,7 @@ class GuardProtectionIntegrationTest {
         // Guard-saved victim has no pending kill regardless.
         assertThat(victim.alive).isTrue()
         verify(gamePlayerRepository, never()).save(victim)
-        assertThat(nightOrchestrator.computePendingKills(np)).isEmpty()
+        assertThat(nightOrchestrator.computePendingKills(np, emptySet(), emptyList())).isEmpty()
 
         // NightResult is no longer broadcast at end-of-night (it would leak
         // pending kill list before host controls the reveal moment). Only
@@ -226,7 +226,7 @@ class GuardProtectionIntegrationTest {
         // Variant B: kill is computed but deferred. Pending kill list contains
         // victim; alive flip happens later via applyNightKills (called from
         // GamePhasePipeline.revealNightResult on host's reveal click).
-        assertThat(nightOrchestrator.computePendingKills(np)).contains(victimId)
+        assertThat(nightOrchestrator.computePendingKills(np, emptySet(), emptyList())).contains(victimId)
         assertThat(victim.alive).isTrue()
         verify(gamePlayerRepository, never()).save(victim)
     }

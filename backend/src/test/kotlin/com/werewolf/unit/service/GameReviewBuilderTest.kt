@@ -546,4 +546,57 @@ class GameReviewBuilderTest {
 
         assertThat(review.rounds[1].night!!.wolf.action).isEqualTo(WolfAction.SELF_KILL)
     }
+
+    // ── 狼美人 (W14, Q2) ──────────────────────────────────────────────────────
+
+    private fun beautyBoard(diedDay: Map<String, Int> = emptyMap()) = board(diedDay) +
+        GamePlayer(gameId = gameId, userId = "wb", seatIndex = 10, role = PlayerRole.WOLF_BEAUTY)
+            .also { p -> diedDay["wb"]?.let { p.alive = false; p.diedDay = it } }
+
+    private fun bref(id: String) = beautyBoard().first { it.userId == id }.let { ReviewPlayer(id, "N-$id", it.seatIndex, it.role) }
+
+    private fun charmDeath(day: Int, beauty: String, victim: String) =
+        event("CHARM_DEATH", mapOf("dayNumber" to day, "wolfBeautyUserId" to beauty, "victimUserId" to victim))
+
+    @Test
+    fun `W14 - the night turn shows the 狼美人's charm target, null on a skip`() {
+        val review = build(beautyBoard(), listOf(night(1), night(2) { wolfBeautyCharmUserId = "seer" }))
+
+        assertThat(review.rounds.map { it.night!!.wolfBeauty }).containsExactly(
+            WolfBeautyTurn(bref("wb"), dead = false, target = null),
+            WolfBeautyTurn(bref("wb"), dead = false, target = bref("seer")),
+        )
+        assertThat(build(board(), listOf(night(1))).rounds.single().night!!.wolfBeauty).isNull()
+    }
+
+    @Test
+    fun `Q2 - a night 殉情 is a CHARM death at dawn and never a day event`() {
+        val review = build(
+            beautyBoard(mapOf("wb" to 2, "seer" to 2)),
+            listOf(night(1), night(2) { witchPoisonTargetUserId = "wb"; wolfBeautyCharmUserId = "seer" }),
+            listOf(nightDeath(2, "seer"), nightDeath(2, "wb"), charmDeath(2, "wb", "seer")),
+        )
+
+        val round2 = review.rounds.first { it.day == 2 }
+        assertThat(round2.night!!.dawn.deaths).containsExactly(
+            NightDeath(bref("seer"), DeathCause.CHARM),
+            NightDeath(bref("wb"), DeathCause.POISON),
+        )
+        assertThat(round2.events).isEmpty()
+    }
+
+    @Test
+    fun `Q2 - a day 殉情 is a CHARM_DEATH day event after the vote that put the 狼美人 out`() {
+        val review = build(
+            beautyBoard(mapOf("wb" to 2, "seer" to 2)),
+            listOf(night(1), night(2) { wolfBeautyCharmUserId = "seer" }),
+            listOf(voteResult(2, mapOf("wb" to listOf("v")), eliminated = "wb"), charmDeath(2, "wb", "seer")),
+        )
+
+        val events = review.rounds.first { it.day == 2 }.events
+        assertThat(events.last()).isEqualTo(ReviewDayEvent.CharmDeath(bref("wb"), bref("seer")))
+        assertThat(events.first()).isInstanceOf(ReviewDayEvent.Vote::class.java)
+        val json = mapper.readTree(mapper.writeValueAsString(events.last()))
+        assertThat(json["type"].asText()).isEqualTo("CHARM_DEATH")
+    }
 }

@@ -65,6 +65,8 @@ const NEW_ACTIONS = [
   'GARGOYLE_CHECK',
   'GARGOYLE_SKIP',
   'GARGOYLE_CONFIRM',
+  'WOLF_BEAUTY_CHARM',
+  'WOLF_BEAUTY_SKIP',
 ]
 
 // Stands in for NightPhase: exposes the rejection count; the test emits night-action on it.

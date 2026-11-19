@@ -66,6 +66,9 @@ data class RoleDelayConfig(
         /** 石像鬼默认配置：同预言家（同机械狼） */
         val GARGOYLE_DEFAULT = SEER_DEFAULT
 
+        /** 狼美人默认配置：同守卫（单步选择） */
+        val WOLF_BEAUTY_DEFAULT = GUARD_DEFAULT
+
         /** 守墓人默认配置：15秒操作窗口，8秒死亡模拟（只有一个结果子阶段，约为预言家的一半） */
         val GRAVEKEEPER_DEFAULT = RoleDelayConfig(15000L, 8000L)
 
@@ -82,6 +85,7 @@ data class RoleDelayConfig(
                 PlayerRole.MEDIUM -> MEDIUM_DEFAULT
                 PlayerRole.GRAVEKEEPER -> GRAVEKEEPER_DEFAULT
                 PlayerRole.GARGOYLE -> GARGOYLE_DEFAULT
+                PlayerRole.WOLF_BEAUTY -> WOLF_BEAUTY_DEFAULT
                 else -> RoleDelayConfig(30000L, 25000L) // 默认值
             }
         }
@@ -105,7 +109,8 @@ data class GameConfig(
         PlayerRole.MECHANICAL_WOLF to RoleDelayConfig.MECHANICAL_WOLF_DEFAULT,
         PlayerRole.MEDIUM to RoleDelayConfig.MEDIUM_DEFAULT,
         PlayerRole.GRAVEKEEPER to RoleDelayConfig.GRAVEKEEPER_DEFAULT,
-        PlayerRole.GARGOYLE to RoleDelayConfig.GARGOYLE_DEFAULT
+        PlayerRole.GARGOYLE to RoleDelayConfig.GARGOYLE_DEFAULT,
+        PlayerRole.WOLF_BEAUTY to RoleDelayConfig.WOLF_BEAUTY_DEFAULT
     ),
 
     /**

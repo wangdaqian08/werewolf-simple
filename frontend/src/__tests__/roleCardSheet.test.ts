@@ -53,6 +53,30 @@ describe('RoleCardSheet', () => {
     )
   })
 
+  it('狼美人 role card shows its ten rules, the 殉情 cases without 獵魔人', () => {
+    mount(RoleCardSheet, { props: { role: 'WOLF_BEAUTY' }, attachTo: document.body })
+    expect(document.body.querySelector('.rc-name-zh')?.textContent).toBe('狼美人')
+    const rules = [...document.body.querySelectorAll('[data-testid="rc-rules"] li')]
+    expect(rules).toHaveLength(10)
+    expect(rules[0]?.textContent).toBe('陣營：狼人陣營（屬於狼隊）。')
+    expect(rules[5]?.textContent).toBe(
+      '被投出、被開槍帶走、被白狼王帶走、被毒死（女巫或機械狼）時都會殉情；只有被騎士決鬥或被房主判定出局時不會殉情。',
+    )
+    expect(rules[9]?.textContent).toBe(
+      '殉情先於你出局結算：殉情若帶走最後一名神職或最後一名村民，即使你是最後一隻狼，狼人陣營也獲勝。',
+    )
+    expect(document.body.querySelector('[data-testid="rc-excludes"]')).toBeNull()
+  })
+
+  it.each([
+    ['WEREWOLF', '可以襲擊任何存活玩家（狼美人除外），包括隊友或自己（自刀）。'],
+    ['HUNTER', '被女巫毒死、被白狼王帶走或殉情時不能開槍'],
+    ['GRAVEKEEPER', '被白狼王帶走、殉情、被房主判定出局'],
+  ])('%s rules account for the 狼美人', (role, text) => {
+    mount(RoleCardSheet, { props: { role }, attachTo: document.body })
+    expect(document.body.querySelector('[data-testid="rc-rules"]')?.textContent).toContain(text)
+  })
+
   // Which roles can never share a board: its own section, from the same table the setup page enforces.
   const excluded = () =>
     [...document.body.querySelectorAll('[data-testid="rc-excludes"] [data-role]')].map((el) =>

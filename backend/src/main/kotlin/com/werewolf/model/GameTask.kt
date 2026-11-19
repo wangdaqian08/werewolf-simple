@@ -25,4 +25,5 @@ enum class GameTask(val score: Int, val perNight: Boolean = false) {
     BWK_SHOOT_GOD(20),
     GARGOYLE_FIND_TWO_GODS(10),
     IDIOT_REVEAL_WIN(10),
+    WOLF_BEAUTY_LINK_GOD(20),
 }

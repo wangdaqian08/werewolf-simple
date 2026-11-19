@@ -5,9 +5,11 @@ import com.werewolf.game.GameContext
 import com.werewolf.game.action.GameActionRequest
 import com.werewolf.game.action.GameActionResult
 import com.werewolf.game.night.NightOrchestrator
+import com.werewolf.game.role.RoleRules
 import com.werewolf.game.timer.HostTimerService
 import com.werewolf.model.DaySubPhase
 import com.werewolf.model.GamePhase
+import com.werewolf.model.PlayerRole
 import com.werewolf.model.VotingSubPhase
 import com.werewolf.repository.GamePlayerRepository
 import com.werewolf.repository.GameRepository
@@ -65,6 +67,11 @@ class GamePhasePipeline(
         if (pendingKills.isNotEmpty()) {
             nightOrchestrator.applyNightKills(context.gameId, pendingKills)
             actionLogService.recordNightDeaths(context.gameId, context.game.dayNumber, pendingKills)
+            // Q2: a night 殉情 is logged too; the dawn list itself shows no cause.
+            nightPhase?.let { RoleRules.charmVictimAtNight(it, context.players, pendingKills) }?.let { victim ->
+                val beautyId = context.players.first { it.role == PlayerRole.WOLF_BEAUTY }.userId
+                actionLogService.recordCharmDeath(context.gameId, context.game.dayNumber, beautyId, victim)
+            }
         }
 
         // Now that the night deaths are applied: a wolf-killed shooter (hunter /

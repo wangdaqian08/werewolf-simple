@@ -352,6 +352,33 @@ describe('RoomSetupPanel — 石像鬼', () => {
   })
 })
 
+describe('RoomSetupPanel — 狼美人', () => {
+  beforeEach(() => h.updateBoardMock.mockReset().mockResolvedValue({ config: {}, players: [] }))
+  afterEach(() => vi.clearAllMocks())
+
+  const click = (w: Wrapper, id: string) => w.find(`[data-testid="${id}"]`).trigger('click')
+
+  it('is a special wolf: takes a wolf seat, needs 9+ players and is sent in the room config', async () => {
+    const w = await mountSetup() // 9 players, 3 wolves
+    await click(w, 'role-toggle-WOLF_BEAUTY')
+    expect(chipCount(w, 'WOLF_BEAUTY')).toBe(1)
+    expect(chipCount(w, 'WEREWOLF')).toBe(2)
+    await w.find('[data-testid="room-setup-done"]').trigger('click')
+    await flushPromises()
+    expect(h.updateBoardMock.mock.lastCall?.[1].roles).toContain('WOLF_BEAUTY')
+    await click(w, 'player-count-decrement') // 8 players: dropped
+    expect(chipCount(w, 'WOLF_BEAUTY')).toBe(0)
+    expect(card(w, 'WOLF_BEAUTY').attributes('title')).toBe('9 人及以上才能開啟')
+  })
+
+  it('counts toward the special-wolf limit (wolves ≥ specials + 1)', async () => {
+    const w = await mountSetup() // 3 wolves
+    await click(w, 'role-toggle-WOLF_BEAUTY')
+    await click(w, 'role-toggle-WHITE_WOLF_KING')
+    expect(disabled(w, 'role-toggle-BLACK_WOLF_KING')).toBe(true) // 3 wolves = 2 specials + 1
+  })
+})
+
 describe('RoomSetupPanel — 騎士', () => {
   beforeEach(() => h.updateBoardMock.mockReset().mockResolvedValue({ config: {}, players: [] }))
   afterEach(() => vi.clearAllMocks())

@@ -92,11 +92,14 @@ describe('TaskLine', () => {
       BWK_SHOOT_GOD: true,
       GARGOYLE_FIND_TWO_GODS: true,
       IDIOT_REVEAL_WIN: true,
+      WOLF_BEAUTY_LINK_GOD: true,
     }
     const codes = Object.keys(all)
     for (const c of codes) {
       expect(zh.task.name[c], c).toBeTruthy()
       expect(en.task.name[c], c).toBeTruthy()
     }
+    expect(zh.task.name.WOLF_BEAUTY_LINK_GOD).toBe('殉情帶走一名神職')
+    expect(en.task.name.WOLF_BEAUTY_LINK_GOD).toBe('Take a god with you through the charm')
   })
 })

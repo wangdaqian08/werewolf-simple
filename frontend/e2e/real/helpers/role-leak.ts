@@ -22,6 +22,7 @@ const PLAYER_ROLES = new Set([
   'KNIGHT',
   'GRAVEKEEPER',
   'GARGOYLE',
+  'WOLF_BEAUTY',
 ])
 // The owner's own night results legitimately pair another player's id with a role;
 // on any other viewer's page they are a leak. Ownership is by role: one MEDIUM and one

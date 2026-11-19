@@ -8,11 +8,22 @@ import org.junit.jupiter.api.Test
 class PlayerRoleTest {
 
     @Test
-    fun `only WEREWOLF, the two wolf kings, MECHANICAL_WOLF and GARGOYLE are in the wolf camp`() {
+    fun `only WEREWOLF, the two wolf kings, MECHANICAL_WOLF, GARGOYLE and WOLF_BEAUTY are in the wolf camp`() {
         assertThat(PlayerRole.entries.filter { it.isWolf })
             .containsExactlyInAnyOrder(
                 PlayerRole.WEREWOLF, PlayerRole.WHITE_WOLF_KING, PlayerRole.BLACK_WOLF_KING, PlayerRole.MECHANICAL_WOLF, PlayerRole.GARGOYLE,
+                PlayerRole.WOLF_BEAUTY,
             )
+    }
+
+    @Test
+    fun `WOLF_BEAUTY is a pack wolf with no god, shot or learned skill`() {
+        val r = PlayerRole.WOLF_BEAUTY
+        assertThat(r.isWolf).isTrue()
+        assertThat(r.isPackWolf).isTrue()
+        assertThat(r.isGod).isFalse()
+        assertThat(r.shootsOnDeath).isFalse()
+        assertThat(r.learnedSkill).isEqualTo(LearnedSkill.NONE)
     }
 
     @Test
@@ -65,7 +76,7 @@ class PlayerRoleTest {
     @Test
     fun `isPackWolf excludes the mechanical wolf and the gargoyle`() {
         assertThat(PlayerRole.entries.filter { it.isPackWolf })
-            .containsExactlyInAnyOrder(PlayerRole.WEREWOLF, PlayerRole.WHITE_WOLF_KING, PlayerRole.BLACK_WOLF_KING)
+            .containsExactlyInAnyOrder(PlayerRole.WEREWOLF, PlayerRole.WHITE_WOLF_KING, PlayerRole.BLACK_WOLF_KING, PlayerRole.WOLF_BEAUTY)
     }
 
     @Test
