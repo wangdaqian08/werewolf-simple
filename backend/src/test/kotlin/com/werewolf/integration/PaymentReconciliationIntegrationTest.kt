@@ -192,7 +192,7 @@ class PaymentReconciliationIntegrationTest {
     }
 
     @Test
-    fun `a completed session with an unknown orderNo is one alert and does not stop the run`(output: CapturedOutput) {
+    fun `a completed session with an unknown orderNo is alerted once and does not stop the run`(output: CapturedOutput) {
         val sessionId = "cs_test_${UUID.randomUUID()}"
         gateway.put(
             CheckoutSnapshot(
@@ -210,5 +210,10 @@ class PaymentReconciliationIntegrationTest {
         assertThat(report.alerts).isEqualTo(1)
         assertThat(output.all).contains("[payment-alert]").contains(sessionId)
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+
+        // The next run sees the same session again but does not alert again.
+        val alertLines = output.all.split("[payment-alert]").size
+        assertThat(job.reconcile().alerts).isEqualTo(0)
+        assertThat(output.all.split("[payment-alert]").size).isEqualTo(alertLines)
     }
 }

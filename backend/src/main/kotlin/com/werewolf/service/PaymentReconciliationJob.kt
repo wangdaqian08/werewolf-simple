@@ -11,8 +11,9 @@ import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
+import java.util.concurrent.ConcurrentHashMap
 
-/** What one reconcile run did. alerts = `[payment-alert]` lines this job logged (money taken, no order). */
+/** What one reconcile run did. alerts = `[payment-alert]` lines this run logged (money taken, no order; once per session). */
 data class ReconcileReport(val credited: Int, val expired: Int, val failed: Int, val backfilled: Int, val alerts: Int)
 
 /**
@@ -34,6 +35,10 @@ class PaymentReconciliationJob(
     private val gateway: StripeGateway,
 ) {
     private val log = LoggerFactory.getLogger(PaymentReconciliationJob::class.java)
+
+    // Sessions already alerted as "no such order", so the sweep does not repeat it every run.
+    // shortcut: re-alerts once per restart
+    private val alertedSessions = ConcurrentHashMap.newKeySet<String>()
 
     // Synchronous on purpose: it finishes before the app reports ready (and before any test runs).
     @EventListener(ApplicationReadyEvent::class)
@@ -115,9 +120,14 @@ class PaymentReconciliationJob(
                 try {
                     val order = paymentOrderRepository.findByOrderNo(orderNo).orElse(null)
                     if (order == null) {
-                        log.error("[payment-alert] completed session {} carries orderNo {} but there is no such order",
-                            snapshot.sessionId, orderNo)
-                        counts.alerts++
+                        if (alertedSessions.add(snapshot.sessionId)) {
+                            log.error("[payment-alert] completed session {} carries orderNo {} but there is no such order",
+                                snapshot.sessionId, orderNo)
+                            counts.alerts++
+                        } else {
+                            log.debug("[payment] completed session {} (orderNo {}) still has no order, already alerted",
+                                snapshot.sessionId, orderNo)
+                        }
                     } else if (order.status != PaymentOrderStatus.COMPLETED) {
                         log.info("[payment] sweep found completed session {} for {} order={}",
                             snapshot.sessionId, order.status, orderNo)
