@@ -33,7 +33,7 @@ import java.util.UUID
  * GitHub Actions repository secret in CI.
  */
 @EnabledIfEnvironmentVariable(named = "STRIPE_SANDBOX_TESTS_ENABLED", matches = "true")
-@SpringBootTest(properties = ["app.payment.stripe-secret-key=\${STRIPE_SANDBOX_SECRET:}"])
+@SpringBootTest(properties = ["app.payment.enabled=true", "app.payment.stripe-secret-key=\${STRIPE_SANDBOX_SECRET:}"])
 @ActiveProfiles("test")
 class StripeSandboxIntegrationTest {
 

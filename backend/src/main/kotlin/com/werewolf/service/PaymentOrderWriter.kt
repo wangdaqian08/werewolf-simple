@@ -94,6 +94,15 @@ class PaymentOrderWriter(
         return true
     }
 
+    /** Store the charge and receipt Stripe now reports for a COMPLETED order; never touches status or credits. */
+    @Transactional
+    fun storeReceipt(orderId: Int, chargeId: String?, receiptUrl: String) {
+        val order = paymentOrderRepository.findById(orderId).orElseThrow { IllegalStateException("no order $orderId") }
+        order.stripeChargeId = order.stripeChargeId ?: chargeId
+        order.receiptUrl = receiptUrl
+        order.updatedAt = LocalDateTime.now()
+    }
+
     @Transactional
     fun flagForReview(orderId: Int, reason: String) {
         flag(paymentOrderRepository.findById(orderId).orElseThrow { IllegalStateException("no order $orderId") }, reason)

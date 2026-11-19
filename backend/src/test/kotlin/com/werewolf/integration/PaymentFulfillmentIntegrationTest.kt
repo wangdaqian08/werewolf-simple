@@ -14,6 +14,8 @@ import com.werewolf.service.FulfillOutcome
 import com.werewolf.service.OrderNotFoundForSessionException
 import com.werewolf.service.PaymentFulfillmentService
 import com.werewolf.service.PaymentOrderWriter
+import com.werewolf.service.PaymentService
+import com.werewolf.util.JwtUtil
 import com.werewolf.service.WalletService
 import com.werewolf.support.FakeStripeGateway
 import com.werewolf.support.PaymentIntegrationTest
@@ -25,6 +27,11 @@ import org.springframework.boot.test.system.CapturedOutput
 import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.http.HttpEntity
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
+import org.springframework.http.HttpStatus
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -48,6 +55,9 @@ class PaymentFulfillmentIntegrationTest {
     @Autowired lateinit var productRepository: ProductRepository
     @Autowired lateinit var paymentOrderRepository: PaymentOrderRepository
     @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
+    @Autowired lateinit var paymentService: PaymentService
+    @Autowired lateinit var restTemplate: TestRestTemplate
+    @Autowired lateinit var jwtUtil: JwtUtil
 
     private fun seedOrder(withSessionId: Boolean = true): PaymentOrder {
         val userId = "google:fulfil-${UUID.randomUUID()}"
@@ -349,5 +359,41 @@ class PaymentFulfillmentIntegrationTest {
 
         assertThat(output.all.split("[payment-alert]").size).isEqualTo(alertsBefore)
         assertThat(creditTransactionRepository.count()).isEqualTo(ledgerBefore)
+    }
+
+    @Test
+    fun `return-page status check of a CREATED order whose session is paid answers COMPLETED and credits it`() {
+        val order = seedOrder()
+        val sessionId = openSession(order).sessionId
+        gateway.markPaid(sessionId)
+        val headers = HttpHeaders().also { it.setBearerAuth(jwtUtil.generateToken(order.userId, "Buyer", null)) }
+
+        val resp = restTemplate.exchange("/api/payment/order/${order.orderNo}", HttpMethod.GET, HttpEntity<Void>(headers), Map::class.java)
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(resp.body?.get("status")).isEqualTo("COMPLETED")
+        assertThat(resp.body?.keys).containsExactlyInAnyOrder("orderNo", "status", "credits")
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        assertThat(purchaseRows(order.userId)).hasSize(1)
+    }
+
+    @Test
+    fun `two status checks within 5 s ask Stripe once`() {
+        val order = seedOrder()
+        openSession(order)
+        val before = gateway.retrieveCalls
+
+        assertThat(paymentService.orderStatus(order.userId, order.orderNo)["status"]).isEqualTo("CREATED")
+        assertThat(paymentService.orderStatus(order.userId, order.orderNo)["status"]).isEqualTo("CREATED")
+
+        assertThat(gateway.retrieveCalls - before).isEqualTo(1)
+    }
+
+    @Test
+    fun `a status check whose Stripe call fails still answers with the stored status`() {
+        val order = seedOrder() // its session id is unknown to the fake, so retrieve throws like Stripe's resource_missing
+
+        assertThat(paymentService.orderStatus(order.userId, order.orderNo)["status"]).isEqualTo("CREATED")
     }
 }

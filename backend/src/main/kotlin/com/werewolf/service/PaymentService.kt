@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
@@ -36,7 +38,7 @@ class StripeWebhookVerifier(private val props: PaymentProperties) {
  * checkout.session.completed webhook (conditional UPDATE = idempotent) →
  * wallet credited exactly once. EXPIRED via checkout.session.expired.
  * The success-page redirect is never trusted for fulfillment — the frontend
- * polls GET /api/payment/order/{orderNo} until the webhook has landed.
+ * polls GET /api/payment/order/{orderNo}, which also asks Stripe (throttled) while the order is CREATED.
  *
  * Guests cannot buy: their "guest:" identity is forgeable (decision 3).
  */
@@ -55,6 +57,10 @@ class PaymentService(
 
     // shortcut: in-memory per-user lock, single backend instance — upgrade to a DB lock if the backend ever runs more than one instance
     private val checkoutLocks = ConcurrentHashMap<String, Any>()
+
+    // When each CREATED order last asked Stripe from the return page.
+    // shortcut: entries of orders that never leave CREATED stay until restart (one small entry per order)
+    private val lastStatusCheck = ConcurrentHashMap<String, Instant>()
 
     @PostConstruct
     fun initStripe() {
@@ -218,16 +224,43 @@ class PaymentService(
         }
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * The return page's poll. A CREATED order also asks Stripe (at most once per
+     * statusCheckThrottleSeconds per order), so a paid order is credited even if the webhook
+     * is late or lost. Not @Transactional: fulfill calls Stripe outside any DB transaction.
+     */
     fun orderStatus(userId: String, orderNo: String): Map<String, Any?> {
-        val order = paymentOrderRepository.findByOrderNo(orderNo).orElse(null)
+        var order = paymentOrderRepository.findByOrderNo(orderNo).orElse(null)
             ?: throw OrderNotFoundException("Order not found")
         if (order.userId != userId) throw OrderNotFoundException("Order not found")
+        val sessionId = order.stripeSessionId
+        if (order.status == PaymentOrderStatus.CREATED && sessionId != null && claimStatusCheck(orderNo)) {
+            try {
+                fulfillment.fulfill(sessionId, "status-check")
+            } catch (e: Exception) {
+                // The page keeps polling; the webhook or reconciliation settles it.
+                log.warn("[payment] status check of order {} failed: {}", orderNo, e.message)
+            }
+            order = paymentOrderRepository.findByOrderNo(orderNo).orElseThrow()
+        }
         return mapOf(
             "orderNo" to order.orderNo,
             "status" to order.status.name,
             "credits" to order.credits,
         )
+    }
+
+    /** True (and records now) if this order's last Stripe check was at least the throttle ago. */
+    private fun claimStatusCheck(orderNo: String): Boolean {
+        val now = Instant.now()
+        var claimed = false
+        lastStatusCheck.compute(orderNo) { _, last ->
+            if (last == null || Duration.between(last, now).seconds >= props.statusCheckThrottleSeconds) {
+                claimed = true
+                now
+            } else last
+        }
+        return claimed
     }
 }
 

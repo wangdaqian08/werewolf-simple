@@ -46,10 +46,14 @@ app:
   cors:
     allowed-origins: "*"
   payment:
-    enabled: true
+    # Off: other test contexts use the real StripeGatewayImpl, and the startup reconcile would
+    # call Stripe. @PaymentIntegrationTest (fake gateway) and the sandbox test turn it on.
+    enabled: false
     frontend-base-url: http://localhost:5173
     stripe-secret-key: sk_test_dummy
     stripe-webhook-secret: whsec_dummy
+    # 1 day: the scheduled reconcile never fires during a test run; tests call reconcile() directly
+    reconcile-interval-ms: 86400000
 
 websocket:
   allowed-origins: "*"

@@ -25,7 +25,7 @@ class PaymentTestConfig {
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)
 @AutoConfigureTestRestTemplate
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = ["app.payment.enabled=true"])
 @ActiveProfiles("test")
 @Import(PaymentTestConfig::class)
 annotation class PaymentIntegrationTest
