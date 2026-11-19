@@ -26,12 +26,14 @@ class FakeStripeGateway : StripeGateway {
     /** When true, create / expire fail like an unreachable Stripe. */
     var failCreate = false
     var failExpire = false
+    /** When true, expire returns the session unchanged (still open), as an odd Stripe reply would. */
+    var expireKeepsOpen = false
 
     @Synchronized
     fun reset() {
         sessions.clear(); createdAt.clear(); sessionByIdempotencyKey.clear(); createCalls.clear()
         retrieveCalls = 0; expireCalls = 0; listCalls = 0; createCustomerCalls = 0
-        failCreate = false; failExpire = false
+        failCreate = false; failExpire = false; expireKeepsOpen = false
     }
 
     /** Put (or overwrite) a session as Stripe would currently report it. */
@@ -81,7 +83,7 @@ class FakeStripeGateway : StripeGateway {
         expireCalls++
         if (failExpire) throw ApiConnectionException("fake: Stripe unreachable")
         val s = session(sessionId)
-        if (s.status != "open") return s
+        if (s.status != "open" || expireKeepsOpen) return s
         return s.copy(status = "expired", url = null).also { sessions[sessionId] = it }
     }
 

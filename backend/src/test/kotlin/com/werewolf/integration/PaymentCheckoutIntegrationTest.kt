@@ -186,17 +186,31 @@ class PaymentCheckoutIntegrationTest {
     }
 
     @Test
-    fun `failing to expire another product's session does not block the new purchase`() {
+    fun `failing to expire another product's session refuses with PaymentsUnavailable - one purchase in flight`() {
         val userId = newUser()
         paymentService.createCheckout(userId, "starter")
         val old = orders(userId).single()
         gateway.failExpire = true
 
-        paymentService.createCheckout(userId, "value")
+        assertThatThrownBy { paymentService.createCheckout(userId, "value") }
+            .isInstanceOf(PaymentsUnavailableException::class.java)
+        assertThat(reload(old).status).isEqualTo(PaymentOrderStatus.CREATED)
+        assertThat(orders(userId)).hasSize(1)
+        assertThat(gateway.createCalls).hasSize(1)
+    }
 
-        assertThat(reload(old).status).isEqualTo(PaymentOrderStatus.CREATED) // reconciliation settles it later
-        assertThat(orders(userId)).hasSize(2)
-        assertThat(gateway.createCalls).hasSize(2)
+    @Test
+    fun `an old session Stripe still reports open after expire refuses with PaymentsUnavailable`() {
+        val userId = newUser()
+        paymentService.createCheckout(userId, "starter")
+        val old = orders(userId).single()
+        gateway.expireKeepsOpen = true
+
+        assertThatThrownBy { paymentService.createCheckout(userId, "value") }
+            .isInstanceOf(PaymentsUnavailableException::class.java)
+        assertThat(reload(old).status).isEqualTo(PaymentOrderStatus.CREATED)
+        assertThat(orders(userId)).hasSize(1)
+        assertThat(gateway.createCalls).hasSize(1)
     }
 
     @Test

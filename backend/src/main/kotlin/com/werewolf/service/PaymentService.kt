@@ -98,7 +98,7 @@ class PaymentService(
                     log.info("[payment] checkout reused open session user={} product={}", userId, productKey)
                     return it
                 }
-                expireOtherSessions(userId, productId)
+                expireOtherSessions(userId)
                 val customerId = customerIdFor(userId)
                 val order = writer.createOrder(userId, product)
                 val expiresAt = LocalDateTime.now().plusMinutes(props.sessionExpiryMinutes)
@@ -137,21 +137,23 @@ class PaymentService(
         return if (session.status == "open") session.url else null
     }
 
-    /** One purchase in flight per user: expire the user's other sessions, settling any that already ended. */
-    private fun expireOtherSessions(userId: String, productId: Int) {
+    /**
+     * One purchase in flight per user: expire the user's other sessions, settling any that already
+     * ended. A Stripe error propagates (→ 503) and a session still open after expire is refused, so a
+     * new session is never opened beside one that may still be payable.
+     */
+    private fun expireOtherSessions(userId: String) {
         for (order in paymentOrderRepository.findByUserIdAndStatusAndStripeSessionIdIsNotNull(userId, PaymentOrderStatus.CREATED)) {
             val sessionId = order.stripeSessionId ?: continue
-            try {
-                val session = gateway.expireSession(sessionId)
-                when (session.status) {
-                    "complete" -> fulfillment.fulfill(sessionId, "checkout")
-                    "expired" -> writer.applyTerminal(order.id ?: error("order not persisted"), PaymentOrderStatus.EXPIRED)
+            val session = gateway.expireSession(sessionId)
+            when (session.status) {
+                "complete" -> fulfillment.fulfill(sessionId, "checkout")
+                "expired" -> writer.applyTerminal(order.id ?: error("order not persisted"), PaymentOrderStatus.EXPIRED)
+                else -> {
+                    log.warn("[payment] session {} of order {} is still {} after expire; checkout refused",
+                        sessionId, order.orderNo, session.status)
+                    throw PaymentsUnavailableException("Payments are temporarily unavailable")
                 }
-            } catch (e: StripeException) {
-                // Same product: that session may still be open and payable, so never open a second one beside it.
-                if (order.productId == productId) throw e
-                log.warn("[payment] could not expire session {} of order {} (reconciliation settles it): {}",
-                    sessionId, order.orderNo, e.message)
             }
         }
     }
