@@ -24,7 +24,17 @@ if [ -z "$STRIPE_WEBHOOK_SECRET" ]; then
 fi
 export STRIPE_WEBHOOK_SECRET
 
-stripe listen --events checkout.session.completed,checkout.session.expired \
+pw() { npx playwright test --config=playwright.payment.config.ts "$@"; }
+
+# Phase 1: no forwarder, so only the return page's status check can credit the purchase.
+pw --grep @no-webhook "$@"
+
+# Phase 2: forward every event the backend handles (same list as the live endpoint in docs/payments-prod-keys.md).
+EVENTS=checkout.session.completed,checkout.session.expired
+EVENTS+=,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed
+EVENTS+=,charge.refunded,charge.refund.updated,refund.updated,refund.failed
+EVENTS+=,charge.dispute.created,charge.dispute.updated,charge.dispute.closed
+stripe listen --events "$EVENTS" \
  --forward-to localhost:8080/api/payment/webhook >/tmp/stripe-listen.log 2>&1 &
 LISTEN_PID=$!
 # NOTE: a SIGKILL bypasses this trap; recover leaked forwarders with: pkill -f "stripe listen"
@@ -41,4 +51,4 @@ if ! grep -q "Ready!" /tmp/stripe-listen.log 2>/dev/null; then
   exit 1
 fi
 
-npx playwright test --config=playwright.payment.config.ts "$@"
+pw --grep-invert @no-webhook "$@"
