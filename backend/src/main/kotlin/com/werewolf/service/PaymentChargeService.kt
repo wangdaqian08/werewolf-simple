@@ -7,6 +7,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 /** NOT_OURS: a charge without our orderNo and no order; ignored, never an alert. */
 enum class ChargeOutcome { REVERSED, REINSTATED, UNCHANGED, NEEDS_REVIEW, NOT_SETTLED, NOT_OURS }
 
+/** [orderId] is null only for NOT_OURS. */
+data class ChargeResult(val outcome: ChargeOutcome, val orderId: Int?)
+
 class OrderNotFoundForChargeException(chargeId: String) :
     RuntimeException("No payment order for charge $chargeId")
 
@@ -24,21 +27,25 @@ class PaymentChargeService(
 ) {
     private val log = LoggerFactory.getLogger(PaymentChargeService::class.java)
 
-    fun reconcileCharge(chargeId: String, source: String): ChargeOutcome {
+    fun reconcileCharge(chargeId: String, source: String): ChargeOutcome = reconcile(chargeId, source).outcome
+
+    /** Same as [reconcileCharge], plus the order id (for the webhook's event log). */
+    fun reconcile(chargeId: String, source: String): ChargeResult {
         check(!TransactionSynchronizationManager.isActualTransactionActive()) { "Stripe calls must not run inside a DB transaction" }
         val charge = gateway.retrieveCharge(chargeId)
         val order = writer.findOrderForCharge(charge)
         if (order == null) {
             if (charge.orderNo == null) {
                 log.warn("[payment] charge {} is not ours, ignored (source={})", chargeId, source)
-                return ChargeOutcome.NOT_OURS
+                return ChargeResult(ChargeOutcome.NOT_OURS, null)
             }
             log.error("[payment-alert] charge {} of order {} has no order (source={})", chargeId, charge.orderNo, source)
             throw OrderNotFoundForChargeException(chargeId)
         }
         val state = moneyState(charge)
         val money = "refunded ${state.refundedAmount}/${charge.amount}, dispute ${state.dispute}"
-        val outcome = writer.applyMoneyState(order.id ?: error("order not persisted"), state, "$money ($source)")
+        val orderId = order.id ?: error("order not persisted")
+        val outcome = writer.applyMoneyState(orderId, state, "$money ($source)")
         when (outcome) {
             ChargeOutcome.NOT_SETTLED ->
                 // Not paid yet in our DB (fulfillment still to come): fail so the webhook retries.
@@ -47,6 +54,6 @@ class PaymentChargeService(
             // NEEDS_REVIEW was already alerted (once) by the writer.
             else -> log.info("[payment] charge {} order {} {}: {} (source={})", chargeId, order.orderNo, outcome, money, source)
         }
-        return outcome
+        return ChargeResult(outcome, orderId)
     }
 }

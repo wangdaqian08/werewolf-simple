@@ -306,6 +306,98 @@ class PaymentWebhookIntegrationTest {
         assertThat(output.all.split("[payment-alert]").size).isEqualTo(alertsBefore)
     }
 
+    // ---- refunds and disputes ----
+
+    private fun chargeEventJson(type: String, eventId: String, objectJson: String) = """
+        { "id": "$eventId", "object": "event", "api_version": "${Stripe.API_VERSION}", "type": "$type",
+          "data": { "object": $objectJson } }
+    """.trimIndent()
+
+    /** A settled order whose charge fake Stripe knows; returns (order, chargeId). */
+    private fun settledOrderWithCharge(): Pair<PaymentOrder, String> {
+        val order = paidOrder()
+        val sessionId = order.stripeSessionId ?: error("no session id")
+        paymentService.handleEvent(completed("evt_fulfil_$sessionId", sessionId))
+        val chargeId = "ch_$sessionId"
+        gateway.addCharge(chargeId, "pi_$sessionId", order.orderNo, 199)
+        return order to chargeId
+    }
+
+    @Test
+    fun `each refund and dispute event type moves credits by the charge's money state and is PROCESSED`() {
+        val (order, chargeId) = settledOrderWithCharge()
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+
+        val refundId = gateway.refund(chargeId, 199, status = "pending")
+        postSigned(chargeEventJson("charge.refunded", "evt_r1_$chargeId", """{"id":"$chargeId","object":"charge"}"""))
+            .also { assertThat(it.statusCode).isEqualTo(HttpStatus.OK) }
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+        assertThat(eventRow("evt_r1_$chargeId").status).isEqualTo(PaymentEventStatus.PROCESSED)
+        assertThat(eventRow("evt_r1_$chargeId").paymentOrderId).isEqualTo(order.id)
+
+        // refund fails → credits come back (charge field of a Refund)
+        gateway.setRefundStatus(chargeId, refundId, "failed")
+        postSigned(chargeEventJson("charge.refund.updated", "evt_r2_$chargeId", """{"id":"$refundId","object":"refund","charge":"$chargeId"}"""))
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        assertThat(eventRow("evt_r2_$chargeId").status).isEqualTo(PaymentEventStatus.PROCESSED)
+
+        // dispute opened → reversed; updated → still reversed; closed won → reinstated
+        gateway.openDispute(chargeId)
+        val dispute = """{"id":"dp_$chargeId","object":"dispute","charge":"$chargeId"}"""
+        postSigned(chargeEventJson("charge.dispute.created", "evt_d1_$chargeId", dispute))
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+        postSigned(chargeEventJson("charge.dispute.updated", "evt_d2_$chargeId", dispute))
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+        gateway.setDisputeStatus(chargeId, "won")
+        postSigned(chargeEventJson("charge.dispute.closed", "evt_d3_$chargeId", dispute))
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        listOf("evt_d1_", "evt_d2_", "evt_d3_").forEach {
+            assertThat(eventRow("$it$chargeId").status).isEqualTo(PaymentEventStatus.PROCESSED)
+        }
+    }
+
+    @Test
+    fun `charge refunded for an order still CREATED answers 5xx and changes nothing, the redelivery after fulfillment reverses it`() {
+        val order = paidOrder() // paid in Stripe, but fulfillment has not run yet
+        val sessionId = order.stripeSessionId ?: error("no session id")
+        val chargeId = "ch_$sessionId"
+        gateway.addCharge(chargeId, "pi_$sessionId", order.orderNo, 199)
+        gateway.refund(chargeId, 199)
+        val payload = chargeEventJson("charge.refunded", "evt_early_$chargeId", """{"id":"$chargeId","object":"charge"}""")
+
+        val first = postSigned(payload)
+
+        assertThat(first.statusCode.is5xxServerError).withFailMessage("status %s", first.statusCode).isTrue()
+        assertThat(eventRow("evt_early_$chargeId").status).isEqualTo(PaymentEventStatus.FAILED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+
+        paymentService.handleEvent(completed("evt_fulfil_$sessionId", sessionId))
+        assertThat(walletService.balance(order.userId)).isEqualTo(100) // fulfillment credits; the refund is reconciled by the redelivery
+        val second = postSigned(payload)
+
+        assertThat(second.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+        val row = eventRow("evt_early_$chargeId")
+        assertThat(row.status).isEqualTo(PaymentEventStatus.PROCESSED)
+        assertThat(row.attempts).isEqualTo(2)
+        assertThat(reload(order).status).isNotEqualTo(PaymentOrderStatus.CREATED)
+    }
+
+    @Test
+    fun `a dispute event for a foreign charge answers 200, is PROCESSED and raises no alert`(output: CapturedOutput) {
+        val chargeId = "ch_foreign_${UUID.randomUUID()}"
+        gateway.addCharge(chargeId, null, null, 500)
+        gateway.openDispute(chargeId)
+        val alertsBefore = output.all.split("[payment-alert]").size
+
+        val resp = postSigned(chargeEventJson("charge.dispute.created", "evt_fd_$chargeId",
+            """{"id":"dp_x","object":"dispute","charge":"$chargeId"}"""))
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(eventRow("evt_fd_$chargeId").status).isEqualTo(PaymentEventStatus.PROCESSED)
+        assertThat(output.all.split("[payment-alert]").size).isEqualTo(alertsBefore)
+    }
+
     @Test
     fun `guest accounts cannot create a checkout`() {
         // Login as guest via the real endpoint, then hit checkout
