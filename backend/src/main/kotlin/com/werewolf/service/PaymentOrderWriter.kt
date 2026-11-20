@@ -157,8 +157,11 @@ class PaymentOrderWriter(
             }
             else -> ChargeOutcome.UNCHANGED
         }
+        // Touch only on a real change: the reconciliation job selects by updatedAt, a no-op must not renew it.
+        if (order.status != state.orderStatus || outcome == ChargeOutcome.REVERSED || outcome == ChargeOutcome.REINSTATED) {
+            order.updatedAt = LocalDateTime.now()
+        }
         order.status = state.orderStatus
-        order.updatedAt = LocalDateTime.now()
         return outcome
     }
 

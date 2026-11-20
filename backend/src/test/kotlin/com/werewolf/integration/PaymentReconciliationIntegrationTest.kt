@@ -320,4 +320,33 @@ class PaymentReconciliationIntegrationTest {
         assertThat(job.reconcile().alerts).isEqualTo(0)
         assertThat(output.all.split("[payment-alert] charge $chargeId").size).isEqualTo(2)
     }
+
+    @Test
+    fun `reconciling an already reversed order twice leaves updatedAt alone`() {
+        val order = paidOrder()
+        gateway.refund(order.stripeChargeId ?: error("no charge"), 199)
+        job.reconcile()
+        val first = reload(order).updatedAt
+
+        job.reconcile()
+
+        assertThat(reload(order).updatedAt).isEqualTo(first)
+    }
+
+    @Test
+    fun `a REFUNDED order whose 40-day-old refund later failed is reinstated by the updatedAt re-check alone`() {
+        val order = paidOrder()
+        val chargeId = order.stripeChargeId ?: error("no charge")
+        val fortyDaysAgo = System.currentTimeMillis() / 1000 - 40 * 86_400
+        val refundId = gateway.refund(chargeId, 199, createdEpochSec = fortyDaysAgo)
+        chargeService.reconcileCharge(chargeId, "webhook") // the refund webhook: REFUNDED, credits taken back
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
+        gateway.setRefundStatus(chargeId, refundId, "failed")
+
+        val report = job.reconcile()
+
+        assertThat(report.reinstated).isEqualTo(1)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+    }
 }

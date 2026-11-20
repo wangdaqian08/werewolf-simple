@@ -10,6 +10,9 @@ enum class ChargeOutcome { REVERSED, REINSTATED, UNCHANGED, NEEDS_REVIEW, NOT_SE
 /** [orderId] is null only for NOT_OURS. */
 data class ChargeResult(val outcome: ChargeOutcome, val orderId: Int?)
 
+/** The order is still CREATED: fulfillment is yet to come, so the caller retries later. */
+class ChargeNotSettledException(message: String) : IllegalStateException(message)
+
 class OrderNotFoundForChargeException(chargeId: String) :
     RuntimeException("No payment order for charge $chargeId")
 
@@ -49,7 +52,7 @@ class PaymentChargeService(
         when (outcome) {
             ChargeOutcome.NOT_SETTLED ->
                 // Not paid yet in our DB (fulfillment still to come): fail so the webhook retries.
-                throw IllegalStateException("charge $chargeId: order ${order.orderNo} is not settled (${order.status}), retry later")
+                throw ChargeNotSettledException("charge $chargeId: order ${order.orderNo} is not settled (${order.status}), retry later")
             ChargeOutcome.UNCHANGED -> {}
             // NEEDS_REVIEW was already alerted (once) by the writer.
             else -> log.info("[payment] charge {} order {} {}: {} (source={})", chargeId, order.orderNo, outcome, money, source)

@@ -175,7 +175,7 @@ class PaymentReconciliationJob(
             } catch (e: OrderNotFoundForChargeException) {
                 // reconcile already logged the [payment-alert]; count it once per process
                 if (alertedCharges.add(chargeId)) counts.alerts++
-            } catch (e: IllegalStateException) {
+            } catch (e: ChargeNotSettledException) {
                 // NOT_SETTLED: the earlier steps credit the order first, the next run applies the refund
                 log.debug("[payment] refund/dispute reconcile of charge {} skipped: {}", chargeId, e.message)
             } catch (e: Exception) {
