@@ -6,6 +6,8 @@ import com.werewolf.model.PaymentOrderStatus
 import com.werewolf.model.Product
 import com.werewolf.repository.PaymentOrderRepository
 import jakarta.persistence.EntityManager
+import jakarta.persistence.LockModeType
+import org.hibernate.Session
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -60,7 +62,7 @@ class PaymentOrderWriter(
             // Paid twice: another session, or another PaymentIntent (the stored session may not be the one that paid).
             val paidTwice = (order.stripeSessionId != null && order.stripeSessionId != snapshot.sessionId) ||
                 (order.stripePaymentIntentId != null && order.stripePaymentIntentId != snapshot.paymentIntentId)
-            if (order.status == PaymentOrderStatus.COMPLETED && !paidTwice) return FulfillOutcome.ALREADY_DONE
+            if (order.status in PaymentOrderStatus.SETTLED && !paidTwice) return FulfillOutcome.ALREADY_DONE
             flag(order, if (paidTwice) "second payment (session ${snapshot.sessionId}, intent ${snapshot.paymentIntentId}) for ${order.status} order"
                         else "paid session ${snapshot.sessionId} but order is ${order.status}")
             return FulfillOutcome.FLAGGED
@@ -107,9 +109,61 @@ class PaymentOrderWriter(
     }
 
     @Transactional
-    fun flagForReview(orderId: Int, reason: String) {
-        flag(paymentOrderRepository.findById(orderId).orElseThrow { IllegalStateException("no order $orderId") }, reason)
+    fun applyMoneyState(orderId: Int, chargeId: String, state: MoneyState, reason: String): ChargeOutcome {
+        val order = entityManager.find(PaymentOrder::class.java, orderId) ?: throw IllegalStateException("no order $orderId")
+        // Refresh under the lock: open-in-view may already hold a stale instance.
+        entityManager.refresh(order, LockModeType.PESSIMISTIC_WRITE)
+        entityManager.unwrap(Session::class.java).setReadOnly(order, false)
+        when (order.status) {
+            PaymentOrderStatus.CREATED -> return ChargeOutcome.NOT_SETTLED
+            PaymentOrderStatus.EXPIRED, PaymentOrderStatus.FAILED -> {
+                val outcome = if (order.needsReview) ChargeOutcome.NEEDS_REVIEW else ChargeOutcome.UNCHANGED
+                log.info("[payment] order {} is {} (never credited), no credit change: {}", order.orderNo, order.status, reason)
+                return outcome
+            }
+            else -> {}
+        }
+        order.stripeChargeId = order.stripeChargeId ?: chargeId
+        val outcome = when {
+            order.needsReview -> {
+                if (order.status != state.orderStatus) {
+                    log.error("[payment-alert] order {} needs review and its money state changed: {} → {} ({})",
+                        order.orderNo, order.status, state.orderStatus, reason)
+                }
+                ChargeOutcome.NEEDS_REVIEW
+            }
+            state.partialRefundSeen -> {
+                flag(order, "partial refund")
+                ChargeOutcome.NEEDS_REVIEW
+            }
+            !state.creditsShouldBePresent && !order.creditsReversed -> {
+                order.creditsReversed = true
+                walletService.forceDebit(order.userId, order.credits, CreditTxType.PURCHASE_REVERSAL, orderId, note(order, reason))
+                ChargeOutcome.REVERSED
+            }
+            state.creditsShouldBePresent && order.creditsReversed -> {
+                order.creditsReversed = false
+                walletService.credit(order.userId, order.credits, CreditTxType.PURCHASE_REINSTATED,
+                    paymentOrderId = orderId, note = note(order, reason))
+                ChargeOutcome.REINSTATED
+            }
+            else -> ChargeOutcome.UNCHANGED
+        }
+        // updatedAt moves only on a real change: the reconciliation job selects by it.
+        if (order.status != state.orderStatus || outcome == ChargeOutcome.REVERSED || outcome == ChargeOutcome.REINSTATED) {
+            order.updatedAt = LocalDateTime.now()
+        }
+        order.status = state.orderStatus
+        return outcome
     }
+
+    @Transactional(readOnly = true)
+    fun findOrderForCharge(c: ChargeSnapshot): PaymentOrder? =
+        paymentOrderRepository.findFirstByStripeChargeId(c.chargeId).orElse(null)
+            ?: c.paymentIntentId?.let { paymentOrderRepository.findFirstByStripePaymentIntentId(it).orElse(null) }
+            ?: c.orderNo?.let { paymentOrderRepository.findByOrderNo(it).orElse(null) }
+
+    private fun note(order: PaymentOrder, reason: String) = "${order.orderNo} $reason".take(200)
 
     private fun lookup(snapshot: CheckoutSnapshot): PaymentOrder? =
         paymentOrderRepository.findByStripeSessionId(snapshot.sessionId).orElse(null)

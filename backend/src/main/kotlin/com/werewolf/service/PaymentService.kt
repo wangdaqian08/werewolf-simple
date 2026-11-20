@@ -52,6 +52,7 @@ class PaymentService(
     private val eventLog: PaymentEventLog,
     private val fulfillment: PaymentFulfillmentService,
     private val writer: PaymentOrderWriter,
+    private val chargeService: PaymentChargeService,
     private val gateway: StripeGateway,
     private val props: PaymentProperties,
 ) {
@@ -219,6 +220,10 @@ class PaymentService(
                     sessionId(event).let { fulfillment.fulfill(it, "webhook"); orderIdFor(it) }
                 "checkout.session.async_payment_failed" ->
                     sessionId(event).let { fulfillment.syncFailed(it, "webhook"); orderIdFor(it) }
+                "charge.refunded" -> reconcile(event, rawObjectId(event))
+                "charge.refund.updated", "refund.updated", "refund.failed",
+                "charge.dispute.created", "charge.dispute.updated", "charge.dispute.closed" ->
+                    reconcile(event, rawObjectField(event, "charge"))
                 else -> { log.debug("[payment] ignoring event type {}", event.type); null }
             }
             eventLog.markProcessed(event.id, orderId)
@@ -228,6 +233,9 @@ class PaymentService(
             throw e // the original failure, never the recording one
         }
     }
+
+    private fun reconcile(event: Event, chargeId: String?): Int? =
+        chargeService.reconcile(chargeId ?: error("event ${event.id} (${event.type}) has no charge id"), "webhook").orderId
 
     private fun sessionId(event: Event): String =
         rawObjectId(event) ?: error("event ${event.id} (${event.type}) has no data.object.id")

@@ -28,6 +28,17 @@ data class CheckoutRequest(
     val expiresAtEpochSec: Long,
 )
 
+data class RefundInfo(val refundId: String, val amount: Long, val status: String?)
+
+data class ChargeSnapshot(
+    val chargeId: String,
+    val paymentIntentId: String?,
+    val orderNo: String?,
+    val amount: Long,
+    val refunds: List<RefundInfo>,
+    val disputeStatus: String?,
+)
+
 /** The only seam to the Stripe API; tests swap in a fake. Never call it inside a DB transaction. */
 interface StripeGateway {
     fun createCheckoutSession(req: CheckoutRequest, idempotencyKey: String): CheckoutSnapshot
@@ -35,6 +46,8 @@ interface StripeGateway {
     fun expireSession(sessionId: String): CheckoutSnapshot     // returns current state if no longer open
     fun listCompletedSessions(createdAfterEpochSec: Long): Sequence<CheckoutSnapshot> // auto-paging
     fun createCustomer(userId: String): String                 // metadata userId; returns customer id
+    fun retrieveCharge(chargeId: String): ChargeSnapshot
+    fun listRecentChargeIdsWithRefundsOrDisputes(createdAfterEpochSec: Long): Sequence<String>
 }
 
 /**
@@ -43,5 +56,5 @@ interface StripeGateway {
  */
 class StripeResourceMissingException(val resource: Resource, id: String, cause: Throwable? = null) :
     StripeException("No such ${resource.name.lowercase()}: '$id'", null, "resource_missing", 404, cause) {
-    enum class Resource { CUSTOMER, SESSION }
+    enum class Resource { CUSTOMER, SESSION, CHARGE }
 }

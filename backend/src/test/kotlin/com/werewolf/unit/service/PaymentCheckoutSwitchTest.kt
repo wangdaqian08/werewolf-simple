@@ -16,7 +16,7 @@ class PaymentCheckoutSwitchTest {
     fun `checkout with payments disabled is PaymentsUnavailable and calls nothing`() {
         val gateway = mock<StripeGateway>()
         val service = PaymentService(
-            mock(), mock(), mock(), mock(), mock(), mock(), gateway,
+            mock(), mock(), mock(), mock(), mock(), mock(), mock(), gateway,
             PaymentProperties(
                 enabled = false, frontendBaseUrl = "", stripeSecretKey = "sk_test_x",
                 sessionExpiryMinutes = 30, reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10,

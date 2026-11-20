@@ -215,6 +215,10 @@ interface WalletRepository : JpaRepository<Wallet, String> {
     fun tryDebit(userId: String, amount: Int): Int
 
     @Modifying(flushAutomatically = true)
+    @Query("UPDATE Wallet w SET w.balance = w.balance - :amount WHERE w.userId = :userId")
+    fun forceDebit(userId: String, amount: Int): Int
+
+    @Modifying(flushAutomatically = true)
     @Query("UPDATE Wallet w SET w.balance = w.balance + :amount WHERE w.userId = :userId")
     fun credit(userId: String, amount: Int): Int
 
@@ -307,6 +311,8 @@ interface ProductRepository : JpaRepository<Product, Int> {
 interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
     fun findByStripeSessionId(stripeSessionId: String): Optional<PaymentOrder>
     fun findByOrderNo(orderNo: String): Optional<PaymentOrder>
+    fun findFirstByStripeChargeId(stripeChargeId: String): Optional<PaymentOrder>
+    fun findFirstByStripePaymentIntentId(stripePaymentIntentId: String): Optional<PaymentOrder>
 
     /**
      * Conditional CREATED → COMPLETED transition; 0 rows updated means the
@@ -342,6 +348,14 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
     fun findByStatusAndCreatedAtBefore(status: PaymentOrderStatus, cutoff: LocalDateTime): List<PaymentOrder>
 
     fun findByStatusAndReceiptUrlIsNull(status: PaymentOrderStatus): List<PaymentOrder>
+
+    fun findByStatus(status: PaymentOrderStatus): List<PaymentOrder>
+
+    @Query(
+        "SELECT o FROM PaymentOrder o WHERE o.updatedAt >= :since AND " +
+            "(o.status = com.werewolf.model.PaymentOrderStatus.REFUNDED OR o.creditsReversed = true)",
+    )
+    fun findReversedUpdatedSince(since: LocalDateTime): List<PaymentOrder>
 
     fun findTop50ByUserIdOrderByCreatedAtDesc(userId: String): List<PaymentOrder>
 }

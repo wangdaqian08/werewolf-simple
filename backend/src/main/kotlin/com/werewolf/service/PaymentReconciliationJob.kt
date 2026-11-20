@@ -11,8 +11,9 @@ import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 
-/** What one reconcile run did. alerts = `[payment-alert]` lines this run logged (money taken, no order; once per session). */
-data class ReconcileReport(val credited: Int, val expired: Int, val failed: Int, val backfilled: Int, val alerts: Int)
+/** What one reconcile run did. alerts = paid sessions or charges with no order (alerted once each). */
+data class ReconcileReport(val credited: Int, val expired: Int, val failed: Int, val backfilled: Int, val alerts: Int,
+    val reversed: Int = 0, val reinstated: Int = 0)
 
 /**
  * The fallback that credits a paid order even if every webhook is lost. Runs soon after startup
@@ -20,7 +21,8 @@ data class ReconcileReport(val credited: Int, val expired: Int, val failed: Int,
  *  1. CREATED orders older than reconcile-min-age-minutes: settle from Stripe (no session → FAILED, but
  *     only after session-expiry-minutes more, once no unstored session can still be paid);
  *  2. COMPLETED orders without a receipt: store the charge and receipt;
- *  3. Stripe's completed sessions of the last sweep-lookback-days: fulfill any whose order is not COMPLETED.
+ *  3. Stripe's completed sessions of the last sweep-lookback-days: fulfill any whose order is not settled (runs first);
+ *  4. refunds and disputes: re-reconcile recent refund/dispute charges, DISPUTED orders and recently reversed orders.
  * Not @Transactional: fulfill calls Stripe outside any DB transaction. Each item is handled on its
  * own, so one failure never stops the run; fulfill is idempotent, so racing the webhook is harmless.
  */
@@ -31,12 +33,14 @@ class PaymentReconciliationJob(
     private val fulfillment: PaymentFulfillmentService,
     private val writer: PaymentOrderWriter,
     private val gateway: StripeGateway,
+    private val chargeService: PaymentChargeService,
 ) {
     private val log = LoggerFactory.getLogger(PaymentReconciliationJob::class.java)
 
     // Sessions already alerted as "no such order", so the sweep does not repeat it every run.
     // shortcut: re-alerts once per restart
     private val alertedSessions = ConcurrentHashMap.newKeySet<String>()
+    private val alertedCharges = ConcurrentHashMap.newKeySet<String>()
 
     // First run shortly after startup on the scheduler thread, so a slow Stripe never delays boot.
     @Scheduled(
@@ -50,15 +54,17 @@ class PaymentReconciliationJob(
     fun reconcile(): ReconcileReport {
         if (!props.enabled) return ReconcileReport(0, 0, 0, 0, 0)
         val counts = Counts()
+        sweepStripe(counts)
         settleStaleOrders(counts)
         backfillReceipts(counts)
-        sweepStripe(counts)
-        val report = ReconcileReport(counts.credited, counts.expired, counts.failed, counts.backfilled, counts.alerts)
+        reconcileRefundsAndDisputes(counts)
+        val report = ReconcileReport(counts.credited, counts.expired, counts.failed, counts.backfilled, counts.alerts,
+            counts.reversed, counts.reinstated)
         log.info("[payment] reconcile done {}", report)
         return report
     }
 
-    private class Counts { var credited = 0; var expired = 0; var failed = 0; var backfilled = 0; var alerts = 0 }
+    private class Counts { var credited = 0; var expired = 0; var failed = 0; var backfilled = 0; var alerts = 0; var reversed = 0; var reinstated = 0 }
 
     private fun settleStaleOrders(counts: Counts) {
         val now = LocalDateTime.now()
@@ -122,7 +128,7 @@ class PaymentReconciliationJob(
                             log.debug("[payment] completed session {} (orderNo {}) still has no order, already alerted",
                                 snapshot.sessionId, orderNo)
                         }
-                    } else if (order.status != PaymentOrderStatus.COMPLETED) {
+                    } else if (order.status !in PaymentOrderStatus.SETTLED) {
                         log.info("[payment] sweep found completed session {} for {} order={}",
                             snapshot.sessionId, order.status, orderNo)
                         count(fulfillment.fulfill(snapshot.sessionId, "reconcile"), counts)
@@ -133,6 +139,46 @@ class PaymentReconciliationJob(
             }
         } catch (e: Exception) {
             log.warn("[payment] Stripe sweep stopped: {}", e.message) // listing failed; the next run retries
+        }
+    }
+
+    private fun reconcileRefundsAndDisputes(counts: Counts) {
+        val chargeIds = linkedSetOf<String>()
+        try {
+            val since = Instant.now().minus(props.sweepLookbackDays, ChronoUnit.DAYS).epochSecond
+            chargeIds += gateway.listRecentChargeIdsWithRefundsOrDisputes(since)
+        } catch (e: Exception) {
+            log.warn("[payment] refund/dispute listing stopped: {}", e.message)
+        }
+        val sinceLocal = LocalDateTime.now().minusDays(props.sweepLookbackDays)
+        val orders = paymentOrderRepository.findByStatus(PaymentOrderStatus.DISPUTED) +
+            paymentOrderRepository.findReversedUpdatedSince(sinceLocal)
+        for (order in orders) {
+            val chargeId = order.stripeChargeId
+            if (chargeId == null) {
+                log.debug("[payment] order={} ({}) has no charge id, skipped in refund/dispute re-check", order.orderNo, order.status)
+            } else {
+                chargeIds += chargeId
+            }
+        }
+        for (chargeId in chargeIds) {
+            if (chargeId in alertedCharges) continue
+            try {
+                when (chargeService.reconcile(chargeId, "reconcile").outcome) {
+                    ChargeOutcome.REVERSED -> counts.reversed++
+                    ChargeOutcome.REINSTATED -> counts.reinstated++
+                    else -> {}
+                }
+            } catch (e: OrderNotFoundForChargeException) {
+                if (alertedCharges.add(chargeId)) counts.alerts++
+            } catch (e: ChargeNotSettledException) {
+                log.debug("[payment] refund/dispute reconcile of charge {} skipped: {}", chargeId, e.message)
+            } catch (e: StripeResourceMissingException) {
+                // shortcut: a pre-key-switch (test-mode) charge is re-asked every run (DEBUG only); mark it if that ever matters
+                log.debug("[payment] refund/dispute reconcile: charge {} unknown to this Stripe key", chargeId)
+            } catch (e: Exception) {
+                log.warn("[payment] refund/dispute reconcile of charge {} failed: {}", chargeId, e.message)
+            }
         }
     }
 

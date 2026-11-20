@@ -10,6 +10,7 @@ import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
 import com.werewolf.repository.UserRepository
+import com.werewolf.service.PaymentChargeService
 import com.werewolf.service.PaymentEventLog
 import com.werewolf.service.PaymentFulfillmentService
 import com.werewolf.service.PaymentOrderWriter
@@ -53,6 +54,7 @@ class AccountHistoryFallbackTest {
     @Mock lateinit var paymentFulfillmentService: PaymentFulfillmentService
     @Mock lateinit var userRepository: UserRepository
     @Mock lateinit var paymentOrderWriter: PaymentOrderWriter
+    @Mock lateinit var paymentChargeService: PaymentChargeService
     @Mock lateinit var stripeGateway: StripeGateway
 
     @Test
@@ -78,7 +80,7 @@ class AccountHistoryFallbackTest {
     fun `listOrders falls back to an empty productName when the product row is missing`() {
         val service = PaymentService(
             productRepository, paymentOrderRepository, userRepository, paymentEventLog,
-            paymentFulfillmentService, paymentOrderWriter, stripeGateway, PaymentProperties(
+            paymentFulfillmentService, paymentOrderWriter, paymentChargeService, stripeGateway, PaymentProperties(
                 enabled = true, frontendBaseUrl = "https://example.test", sessionExpiryMinutes = 30,
                 reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10, sweepLookbackDays = 30,
                 statusCheckThrottleSeconds = 5,

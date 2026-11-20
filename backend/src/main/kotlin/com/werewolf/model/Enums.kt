@@ -80,11 +80,18 @@ enum class VotingSubPhase { VOTING, RE_VOTING, VOTE_RESULT, BADGE_HANDOVER }
 
 enum class WinConditionMode { CLASSIC, HARD_MODE }
 
-enum class CreditTxType { PURCHASE, GAME_REWARD, PERK_SPEND, REFUND, ADMIN_GRANT }
+enum class CreditTxType { PURCHASE, GAME_REWARD, PERK_SPEND, REFUND, ADMIN_GRANT, PURCHASE_REVERSAL, PURCHASE_REINSTATED }
 
 enum class PerkActivationStatus { ACTIVE, CONSUMED, VOID, REFUNDED }
 
-enum class PaymentOrderStatus { CREATED, COMPLETED, EXPIRED, FAILED }
+enum class PaymentOrderStatus {
+    CREATED, COMPLETED, EXPIRED, FAILED, REFUNDED, DISPUTED, DISPUTE_LOST;
+
+    companion object {
+        // A Checkout Session stays paid after a refund or dispute, so these must never be re-fulfilled.
+        val SETTLED = setOf(COMPLETED, REFUNDED, DISPUTED, DISPUTE_LOST)
+    }
+}
 
 enum class PaymentEventStatus { RECEIVED, PROCESSED, FAILED }
 

@@ -10,6 +10,7 @@ import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.UserRepository
 import com.werewolf.service.CheckoutSnapshot
+import com.werewolf.service.PaymentChargeService
 import com.werewolf.service.PaymentReconciliationJob
 import com.werewolf.service.ReconcileReport
 import com.werewolf.service.WalletService
@@ -37,6 +38,7 @@ import java.util.UUID
 class PaymentReconciliationIntegrationTest {
 
     @Autowired lateinit var job: PaymentReconciliationJob
+    @Autowired lateinit var chargeService: PaymentChargeService
     @Autowired lateinit var gateway: FakeStripeGateway
     @Autowired lateinit var walletService: WalletService
     @Autowired lateinit var userRepository: UserRepository
@@ -101,9 +103,10 @@ class PaymentReconciliationIntegrationTest {
         creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId).filter { it.type == CreditTxType.PURCHASE }
 
     @Test
-    fun `a CREATED order 11 min old whose session is paid is credited`() {
+    fun `a CREATED order 11 min old whose session is paid is credited, with one alert`(output: CapturedOutput) {
         val order = seedOrder(ageMinutes = 11)
-        gateway.markPaid(openSession(order))
+        val sessionId = openSession(order)
+        gateway.markPaid(sessionId)
 
         val report = job.reconcile()
 
@@ -111,6 +114,8 @@ class PaymentReconciliationIntegrationTest {
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
         assertThat(walletService.balance(order.userId)).isEqualTo(100)
         assertThat(purchaseRows(order.userId)).hasSize(1)
+        job.reconcile()
+        assertThat(output.all.split("[payment-alert] reconcile credited session $sessionId").size).isEqualTo(2)
     }
 
     @Test
@@ -175,7 +180,7 @@ class PaymentReconciliationIntegrationTest {
         assertThat(reload(expired).status).isEqualTo(PaymentOrderStatus.CREATED)
         assertThat(reload(noSession).status).isEqualTo(PaymentOrderStatus.CREATED)
         assertThat(gateway.retrieveCalls).isEqualTo(retrievesBefore)
-        assertThat(report).isEqualTo(ReconcileReport(0, 0, 0, 0, 0))
+        assertThat(report).isEqualTo(ReconcileReport(0, 0, 0, 0, 0, 0, 0))
     }
 
     @Test
@@ -232,5 +237,186 @@ class PaymentReconciliationIntegrationTest {
         val alertLines = output.all.split("[payment-alert]").size
         assertThat(job.reconcile().alerts).isEqualTo(0)
         assertThat(output.all.split("[payment-alert]").size).isEqualTo(alertLines)
+    }
+
+    /** A COMPLETED, credited order whose charge is [chargeId]; its receipt is set so the backfill step ignores it. */
+    private fun paidOrder(status: PaymentOrderStatus = PaymentOrderStatus.COMPLETED): PaymentOrder {
+        val order = seedOrder(ageMinutes = 60, status = status)
+        order.stripeChargeId = "ch_${UUID.randomUUID()}"
+        order.receiptUrl = "https://pay.stripe.com/receipts/${order.orderNo}"
+        paymentOrderRepository.save(order)
+        walletService.credit(order.userId, 100, CreditTxType.PURCHASE, paymentOrderId = order.id, note = "seed")
+        gateway.addCharge(order.stripeChargeId ?: error("no charge"), null, order.orderNo, 199)
+        return order
+    }
+
+    @Test
+    fun `a COMPLETED order whose charge was fully refunded without a webhook is reversed once, with one alert`(output: CapturedOutput) {
+        val order = paidOrder()
+        val chargeId = order.stripeChargeId ?: error("no charge")
+        gateway.refund(chargeId, 199)
+
+        assertThat(job.reconcile().reversed).isEqualTo(1)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+
+        assertThat(job.reconcile().reversed).isEqualTo(0)
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+        assertThat(output.all.split("[payment-alert] reconcile fixed charge $chargeId").size).isEqualTo(2)
+    }
+
+    @Test
+    fun `a DISPUTED order whose dispute was won is reinstated even when the dispute is older than the window`() {
+        val order = paidOrder()
+        val chargeId = order.stripeChargeId ?: error("no charge")
+        val fortyDaysAgo = System.currentTimeMillis() / 1000 - 40 * 86_400
+        gateway.openDispute(chargeId, "needs_response", createdEpochSec = fortyDaysAgo)
+        chargeService.reconcile(chargeId, "webhook")
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.DISPUTED)
+        gateway.setDisputeStatus(chargeId, "won")
+
+        val report = job.reconcile()
+
+        assertThat(report.reinstated).isEqualTo(1)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+    }
+
+    @Test
+    fun `a session-less CREATED order 42 min old whose orderNo is on a completed session is credited, not failed`() {
+        val order = seedOrder(ageMinutes = 42, withSession = false)
+        val sessionId = "cs_test_${UUID.randomUUID()}"
+        gateway.put(
+            CheckoutSnapshot(
+                sessionId = sessionId, status = "open", paymentStatus = "unpaid",
+                orderNo = order.orderNo, clientReferenceId = order.orderNo,
+                paymentIntentId = null, chargeId = null, receiptUrl = null, url = null, expiresAtEpochSec = null,
+            ),
+        )
+        gateway.markPaid(sessionId)
+
+        val report = job.reconcile()
+
+        assertThat(report.credited).isEqualTo(1)
+        assertThat(report.failed).isEqualTo(0)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+    }
+
+    @Test
+    fun `a foreign refunded charge is ignored with no alert`(output: CapturedOutput) {
+        val chargeId = "ch_foreign_${UUID.randomUUID()}"
+        gateway.addCharge(chargeId, null, null, 500)
+        gateway.refund(chargeId, 500)
+
+        val report = job.reconcile()
+
+        assertThat(report.alerts).isEqualTo(0)
+        assertThat(report.reversed).isEqualTo(0)
+        assertThat(output.all).doesNotContain("[payment-alert] charge $chargeId")
+        assertThat(output.all.lines().filter { chargeId in it && "WARN" in it }).isEmpty()
+    }
+
+    @Test
+    fun `our orderNo with no order is alerted once per process`(output: CapturedOutput) {
+        val chargeId = "ch_orphan_${UUID.randomUUID()}"
+        gateway.addCharge(chargeId, null, UUID.randomUUID().toString(), 500)
+        gateway.refund(chargeId, 500)
+
+        assertThat(job.reconcile().alerts).isEqualTo(1)
+        assertThat(job.reconcile().alerts).isEqualTo(0)
+        assertThat(output.all.split("[payment-alert] charge $chargeId").size).isEqualTo(2)
+    }
+
+    @Test
+    fun `reconciling an already reversed order twice leaves updatedAt alone`() {
+        val order = paidOrder()
+        gateway.refund(order.stripeChargeId ?: error("no charge"), 199)
+        job.reconcile()
+        val first = reload(order).updatedAt
+
+        job.reconcile()
+
+        assertThat(reload(order).updatedAt).isEqualTo(first)
+    }
+
+    /** An order paid through the fake (its session listed by the sweep) and credited by reconcile(); its charge is in the fake. */
+    private fun sweptPaidOrder(): Pair<PaymentOrder, String> {
+        val order = seedOrder(ageMinutes = 1)
+        val sessionId = openSession(order)
+        gateway.markPaid(sessionId)
+        val chargeId = "ch_$sessionId"
+        gateway.addCharge(chargeId, "pi_$sessionId", order.orderNo, 199)
+        assertThat(job.reconcile().credited).isEqualTo(1)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        return order to chargeId
+    }
+
+    @Test
+    fun `the sweep leaves a refunded order alone, so a refund that later fails is reinstated`(output: CapturedOutput) {
+        val (order, chargeId) = sweptPaidOrder()
+        val refundId = gateway.refund(chargeId, 199)
+
+        // The session stays complete/paid after the refund: the sweep must not re-fulfill (and flag) the REFUNDED order.
+        assertThat(job.reconcile().reversed).isEqualTo(1)
+        assertThat(job.reconcile().reversed).isEqualTo(0)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
+        assertThat(reload(order).needsReview).isFalse()
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+
+        gateway.setRefundStatus(chargeId, refundId, "failed")
+
+        assertThat(job.reconcile().reinstated).isEqualTo(1)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        assertThat(output.all).doesNotContain("[payment-alert] order ${order.orderNo}")
+    }
+
+    @Test
+    fun `the sweep leaves a disputed order alone, so a won dispute is reinstated`(output: CapturedOutput) {
+        val (order, chargeId) = sweptPaidOrder()
+        gateway.openDispute(chargeId)
+
+        assertThat(job.reconcile().reversed).isEqualTo(1)
+        assertThat(job.reconcile().reversed).isEqualTo(0)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.DISPUTED)
+        assertThat(reload(order).needsReview).isFalse()
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+
+        gateway.setDisputeStatus(chargeId, "won")
+
+        assertThat(job.reconcile().reinstated).isEqualTo(1)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        assertThat(output.all).doesNotContain("[payment-alert] order ${order.orderNo}")
+    }
+
+    @Test
+    fun `a DISPUTED order whose charge this Stripe key does not know is skipped without a WARN`(output: CapturedOutput) {
+        val order = seedOrder(ageMinutes = 60, status = PaymentOrderStatus.DISPUTED)
+        val chargeId = "ch_testmode_${UUID.randomUUID()}" // a test-mode charge after the switch to live keys
+        paymentOrderRepository.save(order.also { it.stripeChargeId = chargeId })
+
+        job.reconcile()
+        job.reconcile()
+
+        assertThat(output.all.lines().filter { chargeId in it }).noneMatch { " WARN " in it }
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.DISPUTED)
+    }
+
+    @Test
+    fun `a REFUNDED order whose 40-day-old refund later failed is reinstated by the updatedAt re-check alone`() {
+        val order = paidOrder()
+        val chargeId = order.stripeChargeId ?: error("no charge")
+        val fortyDaysAgo = System.currentTimeMillis() / 1000 - 40 * 86_400
+        val refundId = gateway.refund(chargeId, 199, createdEpochSec = fortyDaysAgo)
+        chargeService.reconcile(chargeId, "webhook")
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
+        gateway.setRefundStatus(chargeId, refundId, "failed")
+
+        val report = job.reconcile()
+
+        assertThat(report.reinstated).isEqualTo(1)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
     }
 }

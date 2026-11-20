@@ -1,10 +1,16 @@
 package com.werewolf.service
 
 import com.stripe.exception.InvalidRequestException
+import com.stripe.model.Charge
 import com.stripe.model.Customer
+import com.stripe.model.Dispute
+import com.stripe.model.Refund
 import com.stripe.model.checkout.Session
 import com.stripe.net.RequestOptions
+import com.stripe.param.ChargeRetrieveParams
 import com.stripe.param.CustomerCreateParams
+import com.stripe.param.DisputeListParams
+import com.stripe.param.RefundListParams
 import com.stripe.param.checkout.SessionCreateParams
 import com.stripe.param.checkout.SessionListParams
 import com.stripe.param.checkout.SessionRetrieveParams
@@ -84,6 +90,38 @@ class StripeGatewayImpl : StripeGateway {
 
     override fun createCustomer(userId: String): String =
         Customer.create(CustomerCreateParams.builder().putMetadata("userId", userId).build()).id
+
+    override fun retrieveCharge(chargeId: String): ChargeSnapshot {
+        val charge = try {
+            Charge.retrieve(chargeId, ChargeRetrieveParams.builder().addExpand("payment_intent").build(), null)
+        } catch (e: InvalidRequestException) {
+            if (e.code == "resource_missing") throw StripeResourceMissingException(Resource.CHARGE, chargeId, e)
+            throw e
+        }
+        val refunds = Refund.list(RefundListParams.builder().setCharge(chargeId).setLimit(100L).build())
+            .autoPagingIterable().map { RefundInfo(it.id, it.amount, it.status) }
+        val dispute = Dispute.list(DisputeListParams.builder().setCharge(chargeId).setLimit(1L).build()).data.firstOrNull()
+        return ChargeSnapshot(
+            chargeId = charge.id,
+            paymentIntentId = charge.paymentIntent,
+            orderNo = charge.paymentIntentObject?.metadata?.get("orderNo"),
+            amount = charge.amount,
+            refunds = refunds,
+            disputeStatus = dispute?.status,
+        )
+    }
+
+    override fun listRecentChargeIdsWithRefundsOrDisputes(createdAfterEpochSec: Long): Sequence<String> {
+        val refunds = Refund.list(
+            RefundListParams.builder().setCreated(RefundListParams.Created.builder().setGte(createdAfterEpochSec).build())
+                .setLimit(100L).build(),
+        ).autoPagingIterable().asSequence().mapNotNull { it.charge }
+        val disputes = Dispute.list(
+            DisputeListParams.builder().setCreated(DisputeListParams.Created.builder().setGte(createdAfterEpochSec).build())
+                .setLimit(100L).build(),
+        ).autoPagingIterable().asSequence().mapNotNull { it.charge }
+        return (refunds + disputes).distinct()
+    }
 
     private fun retrieve(sessionId: String): Session = try {
         Session.retrieve(

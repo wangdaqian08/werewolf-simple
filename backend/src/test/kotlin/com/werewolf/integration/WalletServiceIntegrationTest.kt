@@ -148,4 +148,26 @@ class WalletServiceIntegrationTest {
             .filter { it.type == CreditTxType.PERK_SPEND }
         assertThat(debits).hasSize(1)
     }
+
+    @Test
+    fun `forceDebit may take the balance negative, then debit stays blocked until credits cover it`() {
+        val user = newUser()
+        walletService.credit(user, 100, CreditTxType.GAME_REWARD, note = "seed")
+
+        val balance = walletService.forceDebit(user, 150, CreditTxType.PURCHASE_REVERSAL, paymentOrderId = 7, note = "refund")
+
+        assertThat(balance).isEqualTo(-50)
+        assertThat(walletService.balance(user)).isEqualTo(-50)
+        val reversal = creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(user)
+            .single { it.type == CreditTxType.PURCHASE_REVERSAL }
+        assertThat(reversal.amount).isEqualTo(-150)
+        assertThat(reversal.balanceAfter).isEqualTo(-50)
+
+        assertThat(walletService.debit(user, 10, CreditTxType.PERK_SPEND)).isNull()
+        assertThat(walletService.balance(user)).isEqualTo(-50)
+        assertThat(creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(user)).hasSize(2)
+
+        assertThat(walletService.credit(user, 60, CreditTxType.GAME_REWARD)).isEqualTo(10)
+        assertThat(walletService.debit(user, 10, CreditTxType.PERK_SPEND)).isEqualTo(0)
+    }
 }
