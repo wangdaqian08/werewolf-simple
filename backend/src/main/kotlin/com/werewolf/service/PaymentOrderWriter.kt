@@ -138,7 +138,12 @@ class PaymentOrderWriter(
             }
             !state.creditsShouldBePresent && !order.creditsReversed -> {
                 order.creditsReversed = true
-                walletService.forceDebit(order.userId, order.credits, CreditTxType.PURCHASE_REVERSAL, orderId, note(order, reason))
+                val type = if (state.dispute == DisputePhase.OPEN || state.dispute == DisputePhase.LOST) {
+                    CreditTxType.DISPUTE_REVERSAL
+                } else {
+                    CreditTxType.PURCHASE_REVERSAL
+                }
+                walletService.forceDebit(order.userId, order.credits, type, orderId, note(order, reason))
                 ChargeOutcome.REVERSED
             }
             state.creditsShouldBePresent && order.creditsReversed -> {

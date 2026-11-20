@@ -51,6 +51,13 @@
             <button class="buy-link" data-testid="buy-credits-toggle" @click="showBuy = !showBuy">
               {{ $t('lobby.buy') }}
             </button>
+            <div
+              v-if="userStore.credits < 0"
+              class="negative-hint"
+              data-testid="lobby-negative-hint"
+            >
+              {{ $t('account.negativeBalance') }}
+            </div>
           </div>
         </div>
         <button class="logout-link" data-testid="logout-link" @click="handleLogout">
@@ -652,6 +659,10 @@ function signInWithWechat() {
   color: var(--gold);
   margin-top: 0.125rem;
   letter-spacing: 0.05em;
+}
+
+.negative-hint {
+  color: var(--red);
 }
 
 .buy-link {

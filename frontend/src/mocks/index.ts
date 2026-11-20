@@ -180,7 +180,7 @@ export function setupMocks() {
   // ── Wallet / Perks / Payments (account page) ──────────────────────────────────
   mock.onGet('/wallet').reply(200, MOCK_WALLET)
   mock.onGet('/perks/my').reply(200, MOCK_MY_PERKS)
-  mock.onGet('/payment/orders').reply(200, MOCK_PAYMENT_ORDERS)
+  mock.onGet('/payment/orders').reply(200, { orders: MOCK_PAYMENT_ORDERS, hasMore: false })
 
   // ── Admin credit grants (the mock user is the admin; mock PIN 1234) ─────────
   const mockAdminPlayers = [

@@ -14,6 +14,7 @@ import com.werewolf.repository.UserRepository
 import com.werewolf.service.StripeResourceMissingException.Resource
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -242,11 +243,14 @@ class PaymentService(
 
     private fun orderIdFor(sessionId: String): Int? = paymentOrderRepository.findByStripeSessionId(sessionId).orElse(null)?.id
 
-    /** Caller's own Stripe order history (most recent 50) for the account page. */
+    /** One page of the caller's own Stripe orders, newest first, for the account page. */
     @Transactional(readOnly = true)
-    fun listOrders(userId: String): List<Map<String, Any?>> {
+    fun listOrders(userId: String, page: Int): Map<String, Any> {
         val productNames = productRepository.findAll().associate { it.id to it.name }
-        return paymentOrderRepository.findTop50ByUserIdOrderByCreatedAtDesc(userId).map {
+        val slice = paymentOrderRepository.findByUserIdOrderByCreatedAtDescIdDesc(
+            userId, PageRequest.of(page.coerceAtLeast(0), props.ordersPageSize),
+        )
+        val orders = slice.content.map {
             mapOf(
                 "orderNo" to it.orderNo,
                 "productName" to (productNames[it.productId] ?: ""),
@@ -254,9 +258,11 @@ class PaymentService(
                 "amountCents" to it.amountCents,
                 "currency" to it.currency,
                 "status" to it.status.name,
+                "receiptUrl" to it.receiptUrl,
                 "createdAt" to it.createdAt.toString(),
             )
         }
+        return mapOf("orders" to orders, "hasMore" to slice.hasNext())
     }
 
     /**
@@ -282,6 +288,7 @@ class PaymentService(
             "orderNo" to order.orderNo,
             "status" to order.status.name,
             "credits" to order.credits,
+            "receiptUrl" to order.receiptUrl,
         )
     }
 

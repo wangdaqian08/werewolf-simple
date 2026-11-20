@@ -28,7 +28,7 @@ class PaymentEventFailureTest {
             PaymentProperties(
                 enabled = true, frontendBaseUrl = "", stripeSecretKey = "",
                 sessionExpiryMinutes = 31, reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10,
-                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5,
+                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5, ordersPageSize = 20,
             ),
         )
 

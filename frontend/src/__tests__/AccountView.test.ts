@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   getWalletMock: vi.fn(),
   getMyPerksMock: vi.fn(),
   listOrdersMock: vi.fn(),
+  getOrderMock: vi.fn(),
   isAdminMock: vi.fn(),
   getStatsMock: vi.fn(),
 }))
@@ -24,7 +25,7 @@ vi.mock('@/services/walletService', () => ({
   walletService: { getWallet: h.getWalletMock, getMyPerks: h.getMyPerksMock },
 }))
 vi.mock('@/services/paymentService', () => ({
-  paymentService: { listOrders: h.listOrdersMock },
+  paymentService: { listOrders: h.listOrdersMock, getOrder: h.getOrderMock },
 }))
 vi.mock('@/services/userService', () => ({
   userService: { getStats: h.getStatsMock },
@@ -150,7 +151,12 @@ describe('AccountView', () => {
     sessionStorage.clear()
     h.getWalletMock.mockReset().mockResolvedValue(WALLET)
     h.getMyPerksMock.mockReset().mockResolvedValue([perk('ACTIVE')])
-    h.listOrdersMock.mockReset().mockResolvedValue(ORDERS)
+    h.listOrdersMock.mockReset().mockResolvedValue({ orders: ORDERS, hasMore: false })
+    h.getOrderMock
+      .mockReset()
+      .mockImplementation((orderNo: string) =>
+        Promise.resolve({ orderNo, status: 'CREATED', credits: 300 }),
+      )
     h.isAdminMock.mockReset().mockResolvedValue(false)
     h.getStatsMock.mockReset().mockResolvedValue(MOCK_USER_STATS)
   })
@@ -229,6 +235,189 @@ describe('AccountView', () => {
     expect(texts.some((t) => t.includes('失敗'))).toBe(true)
   })
 
+  it('labels every order status, with no internal review label', async () => {
+    const statuses: PaymentOrderSummary['status'][] = [
+      'CREATED',
+      'COMPLETED',
+      'EXPIRED',
+      'FAILED',
+      'REFUNDED',
+      'DISPUTED',
+      'DISPUTE_LOST',
+    ]
+    h.listOrdersMock.mockResolvedValue({
+      orders: statuses.map((status, i) => ({ ...ORDERS[0]!, orderNo: `S${i}`, status })),
+      hasMore: false,
+    })
+    const { wrapper } = await mountAccount()
+    const labels = wrapper.findAll('[data-testid="order-status"]').map((r) => r.text())
+    expect(labels).toEqual([
+      '處理中',
+      '已完成',
+      '已過期（未扣款）',
+      '失敗（未扣款）',
+      '已退款',
+      '拒付處理中',
+      '已拒付',
+    ])
+  })
+
+  it('links the Stripe receipt in a new tab when the order has one', async () => {
+    h.listOrdersMock.mockResolvedValue({
+      orders: [
+        { ...ORDERS[0]!, receiptUrl: 'https://pay.stripe.com/receipts/r1' },
+        { ...ORDERS[4]!, receiptUrl: null },
+      ],
+      hasMore: false,
+    })
+    const { wrapper } = await mountAccount()
+    const rows = wrapper.findAll('[data-testid="order-row"]')
+    const link = rows[0]!.find('a[data-testid="order-receipt"]')
+    expect(link.attributes('href')).toBe('https://pay.stripe.com/receipts/r1')
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.attributes('rel')).toContain('noopener')
+    expect(link.text()).toBe('收據')
+    expect(rows[1]!.find('[data-testid="order-receipt"]').exists()).toBe(false)
+  })
+
+  it('loads the next page of orders on demand and hides the button on the last page', async () => {
+    h.listOrdersMock
+      .mockResolvedValueOnce({ orders: [ORDERS[0]], hasMore: true })
+      .mockResolvedValueOnce({ orders: [ORDERS[4]], hasMore: false })
+    const { wrapper } = await mountAccount()
+    expect(h.listOrdersMock).toHaveBeenLastCalledWith(0)
+    expect(wrapper.findAll('[data-testid="order-row"]')).toHaveLength(1)
+
+    await wrapper.find('[data-testid="orders-more"]').trigger('click')
+    await flushPromises()
+
+    expect(h.listOrdersMock).toHaveBeenLastCalledWith(1)
+    expect(wrapper.findAll('[data-testid="order-row"]').map((r) => r.text())).toEqual([
+      expect.stringContaining('Starter Pack'),
+      expect.stringContaining('Euro Pack'),
+    ])
+    expect(wrapper.find('[data-testid="orders-more"]').exists()).toBe(false)
+  })
+
+  it('shows the empty text only when there are no orders', async () => {
+    const { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="account-payments"]').text()).not.toContain('暫無充值記錄')
+    expect(wrapper.find('[data-testid="orders-more"]').exists()).toBe(false)
+
+    h.listOrdersMock.mockResolvedValue({ orders: [], hasMore: false })
+    const empty = (await mountAccount()).wrapper
+    expect(empty.find('[data-testid="account-payments"]').text()).toContain('暫無充值記錄')
+  })
+
+  it('a failed order load shows only the error, not the empty text', async () => {
+    h.listOrdersMock.mockRejectedValue(new Error('network'))
+    const { wrapper } = await mountAccount()
+    const text = wrapper.find('[data-testid="account-payments"]').text()
+    expect(text).toContain('無法加載充值記錄')
+    expect(text).not.toContain('暫無充值記錄')
+  })
+
+  it('load more skips an order already shown and re-checks the processing ones it brings', async () => {
+    h.listOrdersMock
+      .mockResolvedValueOnce({ orders: [ORDERS[0]], hasMore: true })
+      // a new order pushed every row down one, so page 1 repeats ORDERS[0]
+      .mockResolvedValueOnce({ orders: [ORDERS[0], ORDERS[1]], hasMore: false })
+    h.getOrderMock.mockResolvedValue({
+      orderNo: 'WW2',
+      status: 'COMPLETED',
+      credits: 300,
+      receiptUrl: 'https://pay.stripe.com/receipts/r2',
+    })
+    const { wrapper } = await mountAccount()
+
+    await wrapper.find('[data-testid="orders-more"]').trigger('click')
+    await flushPromises()
+
+    const rows = wrapper.findAll('[data-testid="order-row"]')
+    expect(rows).toHaveLength(2)
+    expect(h.getOrderMock).toHaveBeenCalledWith('WW2')
+    expect(rows[1]!.find('[data-testid="order-status"]').text()).toBe('已完成')
+    expect(rows[1]!.find('[data-testid="order-receipt"]').attributes('href')).toBe(
+      'https://pay.stripe.com/receipts/r2',
+    )
+  })
+
+  it('re-checks a processing order once, and reloads the wallet when it settles', async () => {
+    let settle!: (v: unknown) => void
+    h.getOrderMock.mockReturnValue(new Promise((r) => (settle = r)))
+    const { wrapper } = await mountAccount()
+    expect(h.getOrderMock).toHaveBeenCalledTimes(1)
+    expect(h.getOrderMock).toHaveBeenCalledWith('WW2')
+
+    h.getWalletMock.mockResolvedValue({ ...WALLET, balance: 550 })
+    settle({ orderNo: 'WW2', status: 'COMPLETED', credits: 300 })
+    await flushPromises()
+
+    const row = wrapper.findAll('[data-testid="order-row"]')[1]!
+    expect(row.find('[data-testid="order-status"]').text()).toBe('已完成')
+    expect(wrapper.find('[data-testid="account-balance"]').text()).toBe('◈ 550')
+  })
+
+  it('shows a negative balance as is, with the cannot-spend hint', async () => {
+    h.getWalletMock.mockResolvedValue({ balance: -120, recent: [] })
+    const { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="account-balance"]').text()).toBe('◈ −120')
+    expect(wrapper.find('[data-testid="negative-balance-hint"]').text()).toBe(
+      '餘額不足，暫時無法使用金幣',
+    )
+  })
+
+  it('shows no cannot-spend hint for a balance of zero or more', async () => {
+    h.getWalletMock.mockResolvedValue({ balance: 0, recent: [] })
+    const { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="negative-balance-hint"]').exists()).toBe(false)
+  })
+
+  it('labels refund, dispute and reinstated ledger rows, with their order number', async () => {
+    h.getWalletMock.mockResolvedValue({
+      balance: 0,
+      recent: [
+        {
+          type: 'PURCHASE_REINSTATED',
+          amount: 100,
+          balanceAfter: 0,
+          orderNo: 'WW9',
+          createdAt: '2026-06-10T22:00:00',
+        },
+        {
+          type: 'DISPUTE_REVERSAL',
+          amount: -100,
+          balanceAfter: -100,
+          orderNo: 'WW9',
+          createdAt: '2026-06-10T21:00:00',
+        },
+        {
+          type: 'PURCHASE_REVERSAL',
+          amount: -100,
+          balanceAfter: 0,
+          orderNo: 'WW8',
+          createdAt: '2026-06-10T20:00:00',
+        },
+        {
+          type: 'GAME_REWARD',
+          amount: 20,
+          balanceAfter: 100,
+          orderNo: null,
+          createdAt: '2026-06-10T19:00:00',
+        },
+      ],
+    })
+    const { wrapper } = await mountAccount()
+    const rows = wrapper.findAll('[data-testid="ledger-row"]').map((r) => r.text())
+    expect(rows[0]).toContain('充值恢復')
+    expect(rows[0]).toContain('WW9')
+    expect(rows[1]).toContain('拒付扣回')
+    expect(rows[1]).toContain('−100')
+    expect(rows[2]).toContain('充值退回')
+    expect(rows[2]).toContain('WW8')
+    expect(wrapper.findAll('[data-testid="ledger-order"]')).toHaveLength(3)
+  })
+
   it('formats USD orders with $ prefix and non-USD orders with amount + code', async () => {
     const { wrapper } = await mountAccount()
     const rows = wrapper.findAll('[data-testid="order-row"]')
@@ -304,7 +493,7 @@ describe('AccountView admin entry', () => {
     sessionStorage.clear()
     h.getWalletMock.mockReset().mockResolvedValue(WALLET)
     h.getMyPerksMock.mockReset().mockResolvedValue([])
-    h.listOrdersMock.mockReset().mockResolvedValue([])
+    h.listOrdersMock.mockReset().mockResolvedValue({ orders: [], hasMore: false })
     h.isAdminMock.mockReset().mockResolvedValue(false)
   })
   afterEach(() => vi.clearAllMocks())
@@ -353,32 +542,40 @@ describe('AccountView money formatting and status fallbacks', () => {
     sessionStorage.clear()
     h.getWalletMock.mockReset().mockResolvedValue(WALLET)
     h.getMyPerksMock.mockReset().mockResolvedValue([perk('ACTIVE')])
-    h.listOrdersMock.mockReset().mockResolvedValue(ORDERS)
+    h.listOrdersMock.mockReset().mockResolvedValue({ orders: ORDERS, hasMore: false })
+    h.getOrderMock
+      .mockReset()
+      .mockImplementation((orderNo: string) =>
+        Promise.resolve({ orderNo, status: 'CREATED', credits: 300 }),
+      )
     h.isAdminMock.mockReset().mockResolvedValue(false)
   })
   afterEach(() => vi.clearAllMocks())
 
   it('renders zero-decimal (JPY) and three-decimal (KWD) Stripe amounts in whole/thousandth units', async () => {
-    h.listOrdersMock.mockResolvedValue([
-      {
-        orderNo: 'J1',
-        productName: 'JP Pack',
-        credits: 100,
-        amountCents: 500, // Stripe zero-decimal: ¥500, NOT ¥5.00
-        currency: 'jpy',
-        status: 'COMPLETED',
-        createdAt: '2026-06-10T10:00:00',
-      },
-      {
-        orderNo: 'K1',
-        productName: 'KW Pack',
-        credits: 100,
-        amountCents: 12345, // Stripe three-decimal: 12.345 KWD
-        currency: 'kwd',
-        status: 'COMPLETED',
-        createdAt: '2026-06-09T10:00:00',
-      },
-    ])
+    h.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: 'J1',
+          productName: 'JP Pack',
+          credits: 100,
+          amountCents: 500, // Stripe zero-decimal: ¥500, NOT ¥5.00
+          currency: 'jpy',
+          status: 'COMPLETED',
+          createdAt: '2026-06-10T10:00:00',
+        },
+        {
+          orderNo: 'K1',
+          productName: 'KW Pack',
+          credits: 100,
+          amountCents: 12345, // Stripe three-decimal: 12.345 KWD
+          currency: 'kwd',
+          status: 'COMPLETED',
+          createdAt: '2026-06-09T10:00:00',
+        },
+      ],
+      hasMore: false,
+    })
     const { wrapper } = await mountAccount()
     const rows = wrapper.findAll('[data-testid="order-row"]')
     expect(rows[0]!.text()).toContain('500 JPY')
@@ -389,20 +586,23 @@ describe('AccountView money formatting and status fallbacks', () => {
   it('falls back to the raw status code for unknown perk/order statuses (deploy skew)', async () => {
     // Simulates a newer backend enum member reaching an older cached bundle.
     h.getMyPerksMock.mockResolvedValue([{ ...perk('ACTIVE'), status: 'SUPERSEDED' }])
-    h.listOrdersMock.mockResolvedValue([
-      {
-        orderNo: 'X1',
-        productName: 'Pack',
-        credits: 100,
-        amountCents: 499,
-        currency: 'usd',
-        status: 'REFUNDED',
-        createdAt: '2026-06-10T10:00:00',
-      },
-    ])
+    h.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: 'X1',
+          productName: 'Pack',
+          credits: 100,
+          amountCents: 499,
+          currency: 'usd',
+          status: 'SOMETHING_NEW' as PaymentOrderSummary['status'],
+          createdAt: '2026-06-10T10:00:00',
+        },
+      ],
+      hasMore: false,
+    })
     const { wrapper } = await mountAccount()
     expect(wrapper.find('[data-testid="perk-status"]').text()).toBe('SUPERSEDED')
-    expect(wrapper.find('[data-testid="order-row"]').text()).toContain('REFUNDED')
+    expect(wrapper.find('[data-testid="order-row"]').text()).toContain('SOMETHING_NEW')
   })
 
   it('still renders the page when the perks fetch fails (per-section fallback)', async () => {

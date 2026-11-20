@@ -2,6 +2,8 @@ package com.werewolf.repository
 
 import com.werewolf.model.*
 import jakarta.persistence.LockModeType
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Slice
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
@@ -357,7 +359,7 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
     )
     fun findReversedUpdatedSince(since: LocalDateTime): List<PaymentOrder>
 
-    fun findTop50ByUserIdOrderByCreatedAtDesc(userId: String): List<PaymentOrder>
+    fun findByUserIdOrderByCreatedAtDescIdDesc(userId: String, pageable: Pageable): Slice<PaymentOrder>
 }
 
 interface PaymentEventRepository : JpaRepository<PaymentEvent, String> {

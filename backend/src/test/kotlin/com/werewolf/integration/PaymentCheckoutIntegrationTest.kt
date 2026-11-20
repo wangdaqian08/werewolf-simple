@@ -1,5 +1,6 @@
 package com.werewolf.integration
 
+import org.springframework.data.domain.Pageable
 import com.werewolf.integration.TestConstants.FIELD_NICKNAME
 import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.LOGIN_URL
@@ -71,7 +72,7 @@ class PaymentCheckoutIntegrationTest {
         userRepository.save(User(userId = it, nickname = "Buyer"))
     }
 
-    private fun orders(userId: String): List<PaymentOrder> = paymentOrderRepository.findTop50ByUserIdOrderByCreatedAtDesc(userId)
+    private fun orders(userId: String): List<PaymentOrder> = paymentOrderRepository.findByUserIdOrderByCreatedAtDescIdDesc(userId, Pageable.unpaged()).content
 
     private fun reload(order: PaymentOrder) = paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow()
 

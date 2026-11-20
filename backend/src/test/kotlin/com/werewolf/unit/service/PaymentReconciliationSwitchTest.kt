@@ -35,7 +35,7 @@ class PaymentReconciliationSwitchTest {
             PaymentProperties(
                 enabled = false, frontendBaseUrl = "", stripeSecretKey = "sk_test_x",
                 sessionExpiryMinutes = 31, reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10,
-                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5,
+                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5, ordersPageSize = 20,
             ),
             repo, fulfillment, writer, gateway, chargeService,
         )
@@ -55,7 +55,7 @@ class PaymentReconciliationSwitchTest {
             PaymentProperties(
                 enabled = true, frontendBaseUrl = "", stripeSecretKey = "sk_test_x",
                 sessionExpiryMinutes = 31, reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10,
-                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5,
+                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5, ordersPageSize = 20,
             ),
             mock<PaymentOrderRepository>(), mock<PaymentFulfillmentService>(), mock<PaymentOrderWriter>(), gateway, chargeService,
         )

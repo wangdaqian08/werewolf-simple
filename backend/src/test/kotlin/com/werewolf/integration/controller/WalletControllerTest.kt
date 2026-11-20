@@ -6,6 +6,10 @@ import com.werewolf.integration.TestConstants.FIELD_USER
 import com.werewolf.integration.TestConstants.FIELD_USER_ID
 import com.werewolf.integration.TestConstants.LOGIN_URL
 import com.werewolf.model.CreditTxType
+import com.werewolf.model.PaymentOrder
+import com.werewolf.model.Product
+import com.werewolf.repository.PaymentOrderRepository
+import com.werewolf.repository.ProductRepository
 import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -31,6 +35,8 @@ class WalletControllerTest {
 
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var walletService: WalletService
+    @Autowired lateinit var productRepository: ProductRepository
+    @Autowired lateinit var paymentOrderRepository: PaymentOrderRepository
 
     companion object {
         const val WALLET_URL = "/api/wallet"
@@ -80,6 +86,31 @@ class WalletControllerTest {
         assertThat(debit["balanceAfter"]).isEqualTo(70)
         assertThat(debit["note"]).isEqualTo("perk")
         assertThat(debit["createdAt"]).isNotNull()
+    }
+
+    @Test
+    fun `GET wallet gives each row linked to a payment order its orderNo, and null otherwise`() {
+        val (token, userId) = login("WalletOrd")
+        val product = productRepository.findByProductKeyAndActiveTrue("starter").orElseGet {
+            productRepository.save(Product(productKey = "starter", name = "Starter Pack", credits = 100, priceCents = 199))
+        }
+        val order = paymentOrderRepository.save(
+            PaymentOrder(
+                orderNo = "ord-wallet-1", userId = userId, productId = product.id ?: error("product not persisted"),
+                credits = 100, amountCents = 199, currency = "usd",
+            ),
+        )
+        val orderId = order.id ?: error("order not persisted")
+        walletService.credit(userId, 100, CreditTxType.PURCHASE, paymentOrderId = orderId)
+        walletService.forceDebit(userId, 100, CreditTxType.DISPUTE_REVERSAL, orderId, "ord-wallet-1 dispute")
+        walletService.credit(userId, 5, CreditTxType.GAME_REWARD)
+
+        @Suppress("UNCHECKED_CAST")
+        val recent = (getWallet(token).body!! as Map<String, Any?>)["recent"] as List<Map<String, Any?>>
+
+        assertThat(recent.first { it["type"] == "PURCHASE" }["orderNo"]).isEqualTo("ord-wallet-1")
+        assertThat(recent.first { it["type"] == "DISPUTE_REVERSAL" }["orderNo"]).isEqualTo("ord-wallet-1")
+        assertThat(recent.first { it["type"] == "GAME_REWARD" }["orderNo"]).isNull()
     }
 
     @Test
