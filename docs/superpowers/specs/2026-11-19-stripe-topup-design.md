@@ -131,7 +131,8 @@ The three callers:
 
 ### 3. Refunds and chargebacks — webhook-driven (R1–R4, R7)
 
-- Events: `charge.refunded`, `charge.refund.updated` (a refund that later fails), `charge.dispute.created`,
+- Events: `charge.refunded`, `charge.refund.updated`, `refund.updated`, `refund.failed` (a refund that later
+  fails; Stripe sends `charge.refund.updated` only for some payment methods), `charge.dispute.created`,
   `charge.dispute.updated`, `charge.dispute.closed`. Each is only a trigger: re-read the charge (with its refunds
   and disputes) from the API. Map to the order by PaymentIntent id, then by PaymentIntent metadata.
 - **Reconcile, don't replay.** For the order, work out from Stripe's current state whether its credits *should*
@@ -191,8 +192,8 @@ The three callers:
   validation; the event log keeps failed attempts.
 - **Sandbox (behind `STRIPE_SANDBOX_TESTS_ENABLED`):** real API round trips — create, reuse, expire, retrieve;
   refund and dispute through Stripe's test helpers (e.g. the dispute test card).
-- **Browser E2E (`frontend/e2e/payment/`):** fix the nightly failure (Stripe's hosted page now hides the card form
-  behind a payment-method choice — pick "Card" first); forward the new events in `run-payment-e2e.sh`; cover pay →
+- **Browser E2E (`frontend/e2e/payment/`):** fix the nightly failure (Stripe's hosted page now renders the card form
+  inside an iframe, the Payment Element, so the old top-level selectors find nothing); forward the new events in `run-payment-e2e.sh`; cover pay →
   credits, return-page fallback with the webhook forwarder off, and a refund.
 - Frontend unit tests for the return page and the order list (none today).
 
