@@ -357,6 +357,25 @@ class PaymentWebhookIntegrationTest {
     }
 
     @Test
+    fun `refund updated and refund failed events reconcile the refund's charge - card refunds that fail`() {
+        val (order, chargeId) = settledOrderWithCharge()
+        val refundId = gateway.refund(chargeId, 199, status = "pending")
+        val refund = """{"id":"$refundId","object":"refund","charge":"$chargeId"}"""
+
+        postSigned(chargeEventJson("refund.updated", "evt_ru_$chargeId", refund))
+            .also { assertThat(it.statusCode).isEqualTo(HttpStatus.OK) }
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+        assertThat(eventRow("evt_ru_$chargeId").paymentOrderId).isEqualTo(order.id)
+
+        gateway.setRefundStatus(chargeId, refundId, "failed")
+        postSigned(chargeEventJson("refund.failed", "evt_rf_$chargeId", refund))
+            .also { assertThat(it.statusCode).isEqualTo(HttpStatus.OK) }
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        assertThat(eventRow("evt_rf_$chargeId").status).isEqualTo(PaymentEventStatus.PROCESSED)
+        assertThat(eventRow("evt_rf_$chargeId").paymentOrderId).isEqualTo(order.id)
+    }
+
+    @Test
     fun `charge refunded for an order still CREATED answers 5xx and changes nothing, the redelivery after fulfillment reverses it`() {
         val order = paidOrder() // paid in Stripe, but fulfillment has not run yet
         val sessionId = order.stripeSessionId ?: error("no session id")

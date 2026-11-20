@@ -221,7 +221,10 @@ class PaymentService(
                 "checkout.session.async_payment_failed" ->
                     sessionId(event).let { fulfillment.syncFailed(it, "webhook"); orderIdFor(it) }
                 "charge.refunded" -> reconcile(event, rawObjectId(event))
-                "charge.refund.updated", "charge.dispute.created", "charge.dispute.updated", "charge.dispute.closed" ->
+                // A Refund or Dispute object: its charge. refund.* also covers card refunds that fail, which
+                // charge.refund.updated is sent for only on selected payment methods.
+                "charge.refund.updated", "refund.updated", "refund.failed",
+                "charge.dispute.created", "charge.dispute.updated", "charge.dispute.closed" ->
                     reconcile(event, rawObjectField(event, "charge"))
                 else -> { log.debug("[payment] ignoring event type {}", event.type); null }
             }
