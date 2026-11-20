@@ -23,7 +23,10 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.system.CapturedOutput
 import org.springframework.boot.test.system.OutputCaptureExtension
+import org.springframework.orm.jpa.EntityManagerHolder
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate
+import jakarta.persistence.EntityManagerFactory
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -46,6 +49,7 @@ class PaymentChargeIntegrationTest {
     @Autowired lateinit var paymentOrderRepository: PaymentOrderRepository
     @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
     @Autowired lateinit var transactionTemplate: TransactionTemplate
+    @Autowired lateinit var emf: EntityManagerFactory
 
     private val amount = 2990L
     private val credits = 330
@@ -72,6 +76,7 @@ class PaymentChargeIntegrationTest {
                 if (status == PaymentOrderStatus.COMPLETED) {
                     it.stripePaymentIntentId = "pi_$tag"
                     it.stripeChargeId = "ch_$tag"
+                    it.receiptUrl = "https://pay.stripe.com/receipts/$tag" // as fulfillment stores it; keeps the receipt backfill away
                 }
             },
         )
@@ -92,6 +97,18 @@ class PaymentChargeIntegrationTest {
             .filter { it.type == type && it.paymentOrderId == order.id }
 
     private fun reconcile(order: PaymentOrder) = charges.reconcileCharge(order.charge, "test")
+
+    /** Run [block] as one web request with open-in-view on (Spring's default outside prod): one shared EntityManager. */
+    private fun <T> inRequest(block: () -> T): T {
+        val em = emf.createEntityManager()
+        TransactionSynchronizationManager.bindResource(emf, EntityManagerHolder(em))
+        try {
+            return block()
+        } finally {
+            TransactionSynchronizationManager.unbindResource(emf)
+            em.close()
+        }
+    }
 
     private fun alerts(output: CapturedOutput) = output.all.split("[payment-alert]").size - 1
 
@@ -280,6 +297,70 @@ class PaymentChargeIntegrationTest {
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
         assertThat(reload(order).reviewReason).isEqualTo("second payment")
         assertThat(walletService.balance(order.userId)).isEqualTo(230)
+    }
+
+    @Test
+    fun `with open-in-view, a full refund replayed in a second request reverses once and persists the order`() {
+        val order = seedOrder()
+        gateway.refund(order.charge, amount)
+
+        assertThat(inRequest { reconcile(order) }).isEqualTo(ChargeOutcome.REVERSED)
+        assertThat(inRequest { reconcile(order) }).isEqualTo(ChargeOutcome.UNCHANGED)
+
+        assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).hasSize(1)
+        assertThat(walletService.balance(order.userId)).isEqualTo(-100)
+        assertThat(reload(order).creditsReversed).isTrue()
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
+    }
+
+    @Test
+    fun `with open-in-view, two concurrent requests reconciling the same full refund reverse exactly once`() {
+        val order = seedOrder()
+        gateway.refund(order.charge, amount)
+
+        val start = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        val futures = (1..2).map {
+            pool.submit<ChargeOutcome> {
+                start.await()
+                inRequest { charges.reconcileCharge(order.charge, "request-$it") }
+            }
+        }
+        start.countDown()
+        val outcomes = futures.map { it.get(30, TimeUnit.SECONDS) }
+        pool.shutdown()
+
+        assertThat(outcomes).containsExactlyInAnyOrder(ChargeOutcome.REVERSED, ChargeOutcome.UNCHANGED)
+        assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).hasSize(1)
+        assertThat(reload(order).creditsReversed).isTrue()
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
+    }
+
+    @Test
+    fun `a refund on an EXPIRED or FAILED order changes nothing and does not throw`() {
+        listOf(PaymentOrderStatus.EXPIRED, PaymentOrderStatus.FAILED).forEach { status ->
+            val order = seedOrder(status)
+            gateway.refund(order.charge, amount)
+
+            assertThat(reconcile(order)).isEqualTo(ChargeOutcome.UNCHANGED)
+
+            assertThat(reload(order).status).isEqualTo(status)
+            assertThat(reload(order).creditsReversed).isFalse()
+            assertThat(walletService.balance(order.userId)).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `a dispute on a flagged EXPIRED order is NEEDS_REVIEW, keeps its status and changes no credits`() {
+        val order = seedOrder(PaymentOrderStatus.EXPIRED)
+        paymentOrderRepository.save(reload(order).also { it.needsReview = true; it.reviewReason = "paid session but order is EXPIRED" })
+        gateway.openDispute(order.charge, "needs_response")
+
+        assertThat(reconcile(order)).isEqualTo(ChargeOutcome.NEEDS_REVIEW)
+
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.EXPIRED)
+        assertThat(reload(order).creditsReversed).isFalse()
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
     }
 
     @Test

@@ -315,11 +315,6 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
     fun findFirstByStripeChargeId(stripeChargeId: String): Optional<PaymentOrder>
     fun findFirstByStripePaymentIntentId(stripePaymentIntentId: String): Optional<PaymentOrder>
 
-    /** Row lock that serializes credit reconciliation of one order (concurrent refund / dispute events). */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT o FROM PaymentOrder o WHERE o.id = :orderId")
-    fun findByIdForUpdate(orderId: Int): Optional<PaymentOrder>
-
     /**
      * Conditional CREATED → COMPLETED transition; 0 rows updated means the
      * order was already fulfilled (or expired) — webhook fulfillment idempotency.

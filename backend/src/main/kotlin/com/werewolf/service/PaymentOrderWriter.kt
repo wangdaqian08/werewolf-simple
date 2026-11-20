@@ -6,6 +6,8 @@ import com.werewolf.model.PaymentOrderStatus
 import com.werewolf.model.Product
 import com.werewolf.repository.PaymentOrderRepository
 import jakarta.persistence.EntityManager
+import jakarta.persistence.LockModeType
+import org.hibernate.Session
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -23,11 +25,6 @@ class PaymentOrderWriter(
     private val entityManager: EntityManager,
 ) {
     private val log = LoggerFactory.getLogger(PaymentOrderWriter::class.java)
-
-    /** Paid orders whose credits follow the money; any other status has no credits to reconcile. */
-    private val SETTLED = setOf(
-        PaymentOrderStatus.COMPLETED, PaymentOrderStatus.REFUNDED, PaymentOrderStatus.DISPUTED, PaymentOrderStatus.DISPUTE_LOST,
-    )
 
     /** Commit a CREATED order before Stripe is called, so Stripe never holds a session we did not save. */
     @Transactional
@@ -114,14 +111,27 @@ class PaymentOrderWriter(
     /**
      * Bring the order's credits in line with Stripe's money [state] (R7): at most one corrective
      * ledger row. The row lock serializes concurrent events for one order, so the second caller
-     * reads the first one's `creditsReversed` and writes nothing. An order needing review (a partial
+     * reads the first one's `creditsReversed` and writes nothing. CREATED is NOT_SETTLED (the caller
+     * retries); EXPIRED / FAILED were never credited and are left alone. An order needing review (a partial
      * refund ever seen, or flagged for another reason) gets no automatic credit change; its status
      * still mirrors the money, and a change of it is alerted.
      */
     @Transactional
     fun applyMoneyState(orderId: Int, state: MoneyState, reason: String): ChargeOutcome {
-        val order = paymentOrderRepository.findByIdForUpdate(orderId).orElseThrow { IllegalStateException("no order $orderId") }
-        if (order.status !in SETTLED) return ChargeOutcome.NOT_SETTLED
+        val order = entityManager.find(PaymentOrder::class.java, orderId) ?: throw IllegalStateException("no order $orderId")
+        // Lock AND re-read: with open-in-view the EntityManager may already hold this order, loaded before the lock.
+        entityManager.refresh(order, LockModeType.PESSIMISTIC_WRITE)
+        entityManager.unwrap(Session::class.java).setReadOnly(order, false) // a read-only instance would never be flushed
+        when (order.status) {
+            PaymentOrderStatus.CREATED -> return ChargeOutcome.NOT_SETTLED
+            PaymentOrderStatus.EXPIRED, PaymentOrderStatus.FAILED -> {
+                // Never credited, so there is nothing to take back or give back; the status stays.
+                val outcome = if (order.needsReview) ChargeOutcome.NEEDS_REVIEW else ChargeOutcome.UNCHANGED
+                log.info("[payment] order {} is {} (never credited), no credit change: {}", order.orderNo, order.status, reason)
+                return outcome
+            }
+            else -> {}
+        }
         val outcome = when {
             order.needsReview -> {
                 if (order.status != state.orderStatus) {
