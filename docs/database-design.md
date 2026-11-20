@@ -236,12 +236,14 @@ CREATE INDEX idx_game_events ON game_events(game_id);
 
 ## Payment
 
-Stripe credit top-up (V19 + V39). Off unless `PAYMENTS_ENABLED=true`.
+Stripe credit top-up (V19 + V39), refunds and chargebacks (V40). Off unless `PAYMENTS_ENABLED=true`.
 
 - `products` — purchasable credit packs (credits, bonus_credits, price_cents, sort_order).
-- `payment_orders` — one row per checkout. `status` CREATED / COMPLETED / EXPIRED / FAILED; Stripe session, PaymentIntent and charge ids; `receipt_url`; `session_expires_at`; `needs_review` + `review_reason` (set on anomalies); `updated_at`.
+- `payment_orders` — one row per checkout. `status` CREATED / COMPLETED / EXPIRED / FAILED / REFUNDED / DISPUTED / DISPUTE_LOST (dispute lost > dispute open > fully refunded > COMPLETED); Stripe session, PaymentIntent and charge ids; `receipt_url`; `session_expires_at`; `needs_review` + `review_reason` (set on anomalies, e.g. a partial refund, which changes nothing automatically); `credits_reversed` (true while the purchase's credits are taken back); `updated_at`.
 - `payment_events` — webhook event log. `status` RECEIVED / PROCESSED / FAILED, `attempts`, `last_error`, `object_id`, `payment_order_id`, `processed_at`.
 - `users.stripe_customer_id` — one Stripe Customer per user (unique).
+- `credit_transactions` — `type` also has `PURCHASE_REVERSAL` (negative amount) and `PURCHASE_REINSTATED` (positive amount), both linked to the order by `payment_order_id`. The note carries the order number and the reason.
+- `wallets` — no `balance >= 0` CHECK any more: a balance can go negative when credits were spent before a refund or chargeback reversed the purchase. Spending is still refused unless `balance >= amount`.
 - `ux_ct_purchase_order` — partial unique index on `credit_transactions(payment_order_id) WHERE type = 'PURCHASE'`: at most one PURCHASE ledger row per order (idempotency backstop).
 
 ---
