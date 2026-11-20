@@ -179,6 +179,9 @@ class PaymentReconciliationJob(
             } catch (e: ChargeNotSettledException) {
                 // NOT_SETTLED: the earlier steps credit the order first, the next run applies the refund
                 log.debug("[payment] refund/dispute reconcile of charge {} skipped: {}", chargeId, e.message)
+            } catch (e: StripeResourceMissingException) {
+                // shortcut: a pre-key-switch (test-mode) charge is re-asked every run (DEBUG only); mark it if that ever matters
+                log.debug("[payment] refund/dispute reconcile: charge {} unknown to this Stripe key", chargeId)
             } catch (e: Exception) {
                 log.warn("[payment] refund/dispute reconcile of charge {} failed: {}", chargeId, e.message)
             }

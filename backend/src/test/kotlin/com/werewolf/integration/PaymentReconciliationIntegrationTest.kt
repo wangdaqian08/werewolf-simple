@@ -385,6 +385,19 @@ class PaymentReconciliationIntegrationTest {
     }
 
     @Test
+    fun `a DISPUTED order whose charge this Stripe key does not know is skipped without a WARN`(output: CapturedOutput) {
+        val order = seedOrder(ageMinutes = 60, status = PaymentOrderStatus.DISPUTED)
+        val chargeId = "ch_testmode_${UUID.randomUUID()}" // a test-mode charge after the switch to live keys
+        paymentOrderRepository.save(order.also { it.stripeChargeId = chargeId })
+
+        job.reconcile()
+        job.reconcile()
+
+        assertThat(output.all.lines().filter { chargeId in it }).noneMatch { " WARN " in it }
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.DISPUTED)
+    }
+
+    @Test
     fun `a REFUNDED order whose 40-day-old refund later failed is reinstated by the updatedAt re-check alone`() {
         val order = paidOrder()
         val chargeId = order.stripeChargeId ?: error("no charge")
