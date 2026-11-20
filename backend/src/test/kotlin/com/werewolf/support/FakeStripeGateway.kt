@@ -2,7 +2,9 @@ package com.werewolf.support
 
 import com.stripe.exception.ApiConnectionException
 import com.werewolf.service.CheckoutRequest
+import com.werewolf.service.ChargeSnapshot
 import com.werewolf.service.CheckoutSnapshot
+import com.werewolf.service.RefundInfo
 import com.werewolf.service.StripeGateway
 import com.werewolf.service.StripeResourceMissingException
 import com.werewolf.service.StripeResourceMissingException.Resource
@@ -20,6 +22,7 @@ class FakeStripeGateway : StripeGateway {
     private val createdAt = HashMap<String, Long>()
     private val sessionByIdempotencyKey = HashMap<String, String>()
     private val customers = HashSet<String>()
+    private val charges = LinkedHashMap<String, ChargeSnapshot>()
     private var seq = 0
 
     val createCalls = mutableListOf<Pair<CheckoutRequest, String>>()
@@ -37,7 +40,7 @@ class FakeStripeGateway : StripeGateway {
 
     @Synchronized
     fun reset() {
-        sessions.clear(); createdAt.clear(); sessionByIdempotencyKey.clear(); customers.clear(); createCalls.clear()
+        sessions.clear(); createdAt.clear(); sessionByIdempotencyKey.clear(); customers.clear(); createCalls.clear(); charges.clear()
         retrieveCalls = 0; expireCalls = 0; listCalls = 0; createCustomerCalls = 0
         failCreate = false; failRetrieve = false; failExpire = false; expireKeepsOpen = false
     }
@@ -108,6 +111,45 @@ class FakeStripeGateway : StripeGateway {
         createCustomerCalls++
         return "cus_fake_${++seq}".also { customers += it }
     }
+
+    /** A paid charge as Stripe would report it, with no refunds and no dispute yet. */
+    @Synchronized
+    fun addCharge(chargeId: String, paymentIntentId: String?, orderNo: String?, amount: Long) {
+        charges[chargeId] = ChargeSnapshot(chargeId, paymentIntentId, orderNo, amount, emptyList(), null)
+    }
+
+    /** Refund [amount] of the charge (full or partial); returns the refund id. */
+    @Synchronized
+    fun refund(chargeId: String, amount: Long, status: String = "succeeded"): String {
+        val id = "re_fake_${++seq}"
+        val c = charge(chargeId)
+        charges[chargeId] = c.copy(refunds = c.refunds + RefundInfo(id, amount, status))
+        return id
+    }
+
+    @Synchronized
+    fun setRefundStatus(chargeId: String, refundId: String, status: String) {
+        val c = charge(chargeId)
+        charges[chargeId] = c.copy(refunds = c.refunds.map { if (it.refundId == refundId) it.copy(status = status) else it })
+    }
+
+    @Synchronized
+    fun openDispute(chargeId: String, status: String = "needs_response") = setDisputeStatus(chargeId, status)
+
+    @Synchronized
+    fun setDisputeStatus(chargeId: String, status: String) {
+        charges[chargeId] = charge(chargeId).copy(disputeStatus = status)
+    }
+
+    @Synchronized
+    override fun retrieveCharge(chargeId: String): ChargeSnapshot = charge(chargeId)
+
+    @Synchronized
+    override fun listRecentChargeIdsWithRefundsOrDisputes(createdAfterEpochSec: Long): Sequence<String> =
+        charges.values.filter { it.refunds.isNotEmpty() || it.disputeStatus != null }.map { it.chargeId }.toList().asSequence()
+
+    private fun charge(id: String) =
+        charges[id] ?: throw StripeResourceMissingException(Resource.CHARGE, id)
 
     private fun session(id: String) =
         sessions[id] ?: throw StripeResourceMissingException(Resource.SESSION, id)

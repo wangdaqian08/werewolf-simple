@@ -2,8 +2,12 @@ package com.werewolf.integration
 
 import com.stripe.exception.StripeException
 import com.stripe.model.Event
+import com.stripe.model.PaymentIntent
+import com.stripe.model.Refund
 import com.stripe.model.checkout.Session
 import com.stripe.param.EventListParams
+import com.stripe.param.PaymentIntentCreateParams
+import com.stripe.param.RefundCreateParams
 import com.werewolf.config.PaymentProperties
 import com.werewolf.model.PaymentOrder
 import com.werewolf.model.PaymentOrderStatus
@@ -19,6 +23,7 @@ import com.werewolf.service.StripeResourceMissingException
 import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.catchThrowableOfType
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
@@ -179,5 +184,51 @@ class StripeSandboxIntegrationTest {
             .isEqualTo(StripeResourceMissingException.Resource.SESSION)
         assertThat(catchThrowableOfType(StripeResourceMissingException::class.java) { gateway.expireSession(missing) }.resource)
             .isEqualTo(StripeResourceMissingException.Resource.SESSION)
+    }
+
+    private fun paidIntent(paymentMethod: String): PaymentIntent = PaymentIntent.create(
+        PaymentIntentCreateParams.builder()
+            .setAmount(1500L).setCurrency("usd").setPaymentMethod(paymentMethod).setConfirm(true)
+            .setAutomaticPaymentMethods(
+                PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
+                    .setEnabled(true)
+                    .setAllowRedirects(PaymentIntentCreateParams.AutomaticPaymentMethods.AllowRedirects.NEVER)
+                    .build(),
+            )
+            .putMetadata("orderNo", "sandbox-${UUID.randomUUID()}")
+            .build(),
+    )
+
+    @Test
+    fun `StripeGatewayImpl - retrieveCharge reads a refund and a dispute, and the recent list contains both charges`() {
+        val refundedPi = paidIntent("pm_card_visa")
+        val refundedCharge = refundedPi.latestCharge ?: error("no charge on ${refundedPi.id}")
+        Refund.create(RefundCreateParams.builder().setCharge(refundedCharge).build())
+        val snap = gateway.retrieveCharge(refundedCharge)
+        assertThat(snap.paymentIntentId).isEqualTo(refundedPi.id)
+        assertThat(snap.orderNo).isEqualTo(refundedPi.metadata["orderNo"])
+        assertThat(snap.refunds).hasSize(1)
+        assertThat(snap.refunds.first().amount).isEqualTo(1500L)
+        assertThat(snap.refunds.first().status).isEqualTo("succeeded")
+        assertThat(snap.disputeStatus).isNull()
+
+        val disputedCharge = paidIntent("pm_card_createDispute").latestCharge ?: error("no disputed charge")
+        var disputeStatus: String? = null
+        val deadline = System.currentTimeMillis() + 60_000
+        while (disputeStatus == null && System.currentTimeMillis() < deadline) {
+            disputeStatus = gateway.retrieveCharge(disputedCharge).disputeStatus
+            if (disputeStatus == null) Thread.sleep(3_000)
+        }
+        assumeTrue(disputeStatus != null, "Stripe did not create the test dispute for $disputedCharge within 60s")
+
+        val recent = gateway.listRecentChargeIdsWithRefundsOrDisputes(System.currentTimeMillis() / 1000 - 3600).toList()
+        assertThat(recent).contains(refundedCharge, disputedCharge)
+    }
+
+    @Test
+    fun `StripeGatewayImpl - an unknown charge is StripeResourceMissingException`() {
+        val missing = "ch_doesnotexist${UUID.randomUUID().toString().replace("-", "")}"
+        assertThat(catchThrowableOfType(StripeResourceMissingException::class.java) { gateway.retrieveCharge(missing) }.resource)
+            .isEqualTo(StripeResourceMissingException.Resource.CHARGE)
     }
 }

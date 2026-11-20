@@ -28,6 +28,18 @@ data class CheckoutRequest(
     val expiresAtEpochSec: Long,
 )
 
+data class RefundInfo(val refundId: String, val amount: Long, val status: String?) // "succeeded"|"pending"|"failed"|"canceled"|"requires_action"
+
+/** A charge's money state: what was refunded and whether it was disputed. */
+data class ChargeSnapshot(
+    val chargeId: String,
+    val paymentIntentId: String?,
+    val orderNo: String?,          // payment_intent.metadata["orderNo"]
+    val amount: Long,
+    val refunds: List<RefundInfo>,
+    val disputeStatus: String?,    // null = never disputed
+)
+
 /** The only seam to the Stripe API; tests swap in a fake. Never call it inside a DB transaction. */
 interface StripeGateway {
     fun createCheckoutSession(req: CheckoutRequest, idempotencyKey: String): CheckoutSnapshot
@@ -35,6 +47,9 @@ interface StripeGateway {
     fun expireSession(sessionId: String): CheckoutSnapshot     // returns current state if no longer open
     fun listCompletedSessions(createdAfterEpochSec: Long): Sequence<CheckoutSnapshot> // auto-paging
     fun createCustomer(userId: String): String                 // metadata userId; returns customer id
+    fun retrieveCharge(chargeId: String): ChargeSnapshot       // refunds + dispute read alongside the charge
+    /** Charge ids of refunds and disputes created since the cutoff (Refund.list + Dispute.list), distinct. */
+    fun listRecentChargeIdsWithRefundsOrDisputes(createdAfterEpochSec: Long): Sequence<String>
 }
 
 /**
@@ -43,5 +58,5 @@ interface StripeGateway {
  */
 class StripeResourceMissingException(val resource: Resource, id: String, cause: Throwable? = null) :
     StripeException("No such ${resource.name.lowercase()}: '$id'", null, "resource_missing", 404, cause) {
-    enum class Resource { CUSTOMER, SESSION }
+    enum class Resource { CUSTOMER, SESSION, CHARGE }
 }
