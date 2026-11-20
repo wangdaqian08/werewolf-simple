@@ -166,8 +166,7 @@ class Product(
     val sortOrder: Int = 0,
 )
 
-// Writes only changed columns: an unlocked writer (receipt, review flag) never overwrites a
-// status / credits_reversed committed meanwhile under applyMoneyState's row lock.
+// Unlocked writers must not overwrite status / credits_reversed committed under applyMoneyState's lock.
 @DynamicUpdate
 @Entity
 @Table(name = "payment_orders")

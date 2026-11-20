@@ -21,11 +21,8 @@ data class ReconcileReport(val credited: Int, val expired: Int, val failed: Int,
  *  1. CREATED orders older than reconcile-min-age-minutes: settle from Stripe (no session → FAILED, but
  *     only after session-expiry-minutes more, once no unstored session can still be paid);
  *  2. COMPLETED orders without a receipt: store the charge and receipt;
- *  3. Stripe's completed sessions of the last sweep-lookback-days: fulfill any whose order is not settled (a session
- *     stays complete/paid after a refund or dispute, so REFUNDED / DISPUTED / DISPUTE_LOST are settled too)
- *     (runs first, so a session paid in its last minutes is credited before a session-less order could be failed);
- *  4. refunds and disputes: re-reconcile the charges of recent refunds/disputes, of every DISPUTED order and of
- *     orders reversed within sweep-lookback-days (status changes on older ones the created-window listing misses).
+ *  3. Stripe's completed sessions of the last sweep-lookback-days: fulfill any whose order is not settled (runs first);
+ *  4. refunds and disputes: re-reconcile recent refund/dispute charges, DISPUTED orders and recently reversed orders.
  * Not @Transactional: fulfill calls Stripe outside any DB transaction. Each item is handled on its
  * own, so one failure never stops the run; fulfill is idempotent, so racing the webhook is harmless.
  */
@@ -151,9 +148,8 @@ class PaymentReconciliationJob(
             val since = Instant.now().minus(props.sweepLookbackDays, ChronoUnit.DAYS).epochSecond
             chargeIds += gateway.listRecentChargeIdsWithRefundsOrDisputes(since)
         } catch (e: Exception) {
-            log.warn("[payment] refund/dispute listing stopped: {}", e.message) // the per-order re-check below still runs
+            log.warn("[payment] refund/dispute listing stopped: {}", e.message)
         }
-        // The listing finds only refunds/disputes created in the window; re-check orders whose state may have moved since.
         val sinceLocal = LocalDateTime.now().minusDays(props.sweepLookbackDays)
         val orders = paymentOrderRepository.findByStatus(PaymentOrderStatus.DISPUTED) +
             paymentOrderRepository.findReversedUpdatedSince(sinceLocal)
@@ -166,18 +162,16 @@ class PaymentReconciliationJob(
             }
         }
         for (chargeId in chargeIds) {
-            if (chargeId in alertedCharges) continue // already alerted: no order for it, skip the Stripe call too
+            if (chargeId in alertedCharges) continue
             try {
-                when (chargeService.reconcileCharge(chargeId, "reconcile")) {
+                when (chargeService.reconcile(chargeId, "reconcile").outcome) {
                     ChargeOutcome.REVERSED -> counts.reversed++
                     ChargeOutcome.REINSTATED -> counts.reinstated++
                     else -> {}
                 }
             } catch (e: OrderNotFoundForChargeException) {
-                // reconcile already logged the [payment-alert]; count it once per process
                 if (alertedCharges.add(chargeId)) counts.alerts++
             } catch (e: ChargeNotSettledException) {
-                // NOT_SETTLED: the earlier steps credit the order first, the next run applies the refund
                 log.debug("[payment] refund/dispute reconcile of charge {} skipped: {}", chargeId, e.message)
             } catch (e: StripeResourceMissingException) {
                 // shortcut: a pre-key-switch (test-mode) charge is re-asked every run (DEBUG only); mark it if that ever matters

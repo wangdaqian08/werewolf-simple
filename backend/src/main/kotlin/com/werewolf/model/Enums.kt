@@ -88,7 +88,7 @@ enum class PaymentOrderStatus {
     CREATED, COMPLETED, EXPIRED, FAILED, REFUNDED, DISPUTED, DISPUTE_LOST;
 
     companion object {
-        /** Paid and credited once; a refund or dispute moves the order between these, never back to fulfillment. */
+        // A Checkout Session stays paid after a refund or dispute, so these must never be re-fulfilled.
         val SETTLED = setOf(COMPLETED, REFUNDED, DISPUTED, DISPUTE_LOST)
     }
 }

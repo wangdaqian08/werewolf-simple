@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
-/** R7: a charge's credits are present exactly when we keep the money; any dispute takes precedence. */
 class ChargeMoneyStateTest {
 
     /** [refunds] is "amount:status amount:status …" against a 1000 charge; blank = no refund. */
@@ -74,7 +73,6 @@ class ChargeMoneyStateTest {
         "warning_closed        , 400:succeeded 600:succeeded, false, REFUNDED    , true",
         "warning_closed        , 1000:failed                , true , COMPLETED   , false",
         "warning_closed        , 1000:pending               , false, REFUNDED    , false",
-        // an unknown dispute status is treated as open (the conservative choice)
         "brand_new_status      ,                            , false, DISPUTED    , false",
         "brand_new_status      , 1000:succeeded             , false, DISPUTED    , false",
         "brand_new_status      , 400:succeeded              , false, DISPUTED    , true",

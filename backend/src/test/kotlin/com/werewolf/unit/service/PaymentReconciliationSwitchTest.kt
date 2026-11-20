@@ -49,8 +49,8 @@ class PaymentReconciliationSwitchTest {
         val gateway = mock<StripeGateway>()
         whenever(gateway.listRecentChargeIdsWithRefundsOrDisputes(any())).thenReturn(sequenceOf("ch_boom", "ch_unsettled"))
         val chargeService = mock<PaymentChargeService>()
-        whenever(chargeService.reconcileCharge(eq("ch_boom"), any())).thenThrow(IllegalStateException("order not persisted"))
-        whenever(chargeService.reconcileCharge(eq("ch_unsettled"), any())).thenThrow(ChargeNotSettledException("not settled"))
+        whenever(chargeService.reconcile(eq("ch_boom"), any())).thenThrow(IllegalStateException("order not persisted"))
+        whenever(chargeService.reconcile(eq("ch_unsettled"), any())).thenThrow(ChargeNotSettledException("not settled"))
         val job = PaymentReconciliationJob(
             PaymentProperties(
                 enabled = true, frontendBaseUrl = "", stripeSecretKey = "sk_test_x",

@@ -21,7 +21,6 @@ fun rawObjectId(event: Event): String? =
         ?.let { mapper.readTree(it).get("id") }
         ?.takeUnless { it.isNull }?.asString()
 
-/** A top-level string field of `data.object` from the raw JSON, e.g. a Refund's or Dispute's `charge`. */
 fun rawObjectField(event: Event, field: String): String? =
     event.dataObjectDeserializer.rawJson
         ?.let { mapper.readTree(it).get(field) }

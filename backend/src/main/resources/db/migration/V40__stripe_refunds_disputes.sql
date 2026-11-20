@@ -1,6 +1,3 @@
--- Refunds and chargebacks: new order statuses, reversal ledger types, and a wallet
--- balance that may go negative when credits were already spent before the reversal.
-
 ALTER TABLE payment_orders DROP CONSTRAINT payment_orders_status_check;
 ALTER TABLE payment_orders
     ADD CONSTRAINT payment_orders_status_check

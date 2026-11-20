@@ -108,31 +108,21 @@ class PaymentOrderWriter(
         order.updatedAt = LocalDateTime.now()
     }
 
-    /**
-     * Bring the order's credits in line with Stripe's money [state] of charge [chargeId] (R7): at most one corrective
-     * ledger row. The row lock serializes concurrent events for one order, so the second caller
-     * reads the first one's `creditsReversed` and writes nothing. CREATED is NOT_SETTLED (the caller
-     * retries); EXPIRED / FAILED were never credited and are left alone. An order needing review (a partial
-     * refund ever seen, or flagged for another reason) gets no automatic credit change; its status
-     * still mirrors the money, and a change of it is alerted.
-     */
     @Transactional
     fun applyMoneyState(orderId: Int, chargeId: String, state: MoneyState, reason: String): ChargeOutcome {
         val order = entityManager.find(PaymentOrder::class.java, orderId) ?: throw IllegalStateException("no order $orderId")
-        // Lock AND re-read: with open-in-view the EntityManager may already hold this order, loaded before the lock.
+        // Refresh under the lock: open-in-view may already hold a stale instance.
         entityManager.refresh(order, LockModeType.PESSIMISTIC_WRITE)
-        entityManager.unwrap(Session::class.java).setReadOnly(order, false) // a read-only instance would never be flushed
+        entityManager.unwrap(Session::class.java).setReadOnly(order, false)
         when (order.status) {
             PaymentOrderStatus.CREATED -> return ChargeOutcome.NOT_SETTLED
             PaymentOrderStatus.EXPIRED, PaymentOrderStatus.FAILED -> {
-                // Never credited, so there is nothing to take back or give back; the status stays.
                 val outcome = if (order.needsReview) ChargeOutcome.NEEDS_REVIEW else ChargeOutcome.UNCHANGED
                 log.info("[payment] order {} is {} (never credited), no credit change: {}", order.orderNo, order.status, reason)
                 return outcome
             }
             else -> {}
         }
-        // Found by PaymentIntent or orderNo: keep the charge id, so the DISPUTED / reversed re-check can find the order.
         order.stripeChargeId = order.stripeChargeId ?: chargeId
         val outcome = when {
             order.needsReview -> {
@@ -159,7 +149,7 @@ class PaymentOrderWriter(
             }
             else -> ChargeOutcome.UNCHANGED
         }
-        // Touch only on a real change: the reconciliation job selects by updatedAt, a no-op must not renew it.
+        // updatedAt moves only on a real change: the reconciliation job selects by it.
         if (order.status != state.orderStatus || outcome == ChargeOutcome.REVERSED || outcome == ChargeOutcome.REINSTATED) {
             order.updatedAt = LocalDateTime.now()
         }
@@ -167,7 +157,6 @@ class PaymentOrderWriter(
         return outcome
     }
 
-    /** The order [c] belongs to: by charge id, then PaymentIntent id, then PaymentIntent metadata orderNo. */
     @Transactional(readOnly = true)
     fun findOrderForCharge(c: ChargeSnapshot): PaymentOrder? =
         paymentOrderRepository.findFirstByStripeChargeId(c.chargeId).orElse(null)
@@ -175,11 +164,6 @@ class PaymentOrderWriter(
             ?: c.orderNo?.let { paymentOrderRepository.findByOrderNo(it).orElse(null) }
 
     private fun note(order: PaymentOrder, reason: String) = "${order.orderNo} $reason".take(200)
-
-    @Transactional
-    fun flagForReview(orderId: Int, reason: String) {
-        flag(paymentOrderRepository.findById(orderId).orElseThrow { IllegalStateException("no order $orderId") }, reason)
-    }
 
     private fun lookup(snapshot: CheckoutSnapshot): PaymentOrder? =
         paymentOrderRepository.findByStripeSessionId(snapshot.sessionId).orElse(null)

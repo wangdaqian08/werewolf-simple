@@ -306,14 +306,11 @@ class PaymentWebhookIntegrationTest {
         assertThat(output.all.split("[payment-alert]").size).isEqualTo(alertsBefore)
     }
 
-    // ---- refunds and disputes ----
-
     private fun chargeEventJson(type: String, eventId: String, objectJson: String) = """
         { "id": "$eventId", "object": "event", "api_version": "${Stripe.API_VERSION}", "type": "$type",
           "data": { "object": $objectJson } }
     """.trimIndent()
 
-    /** A settled order whose charge fake Stripe knows; returns (order, chargeId). */
     private fun settledOrderWithCharge(): Pair<PaymentOrder, String> {
         val order = paidOrder()
         val sessionId = order.stripeSessionId ?: error("no session id")
@@ -335,13 +332,11 @@ class PaymentWebhookIntegrationTest {
         assertThat(eventRow("evt_r1_$chargeId").status).isEqualTo(PaymentEventStatus.PROCESSED)
         assertThat(eventRow("evt_r1_$chargeId").paymentOrderId).isEqualTo(order.id)
 
-        // refund fails → credits come back (charge field of a Refund)
         gateway.setRefundStatus(chargeId, refundId, "failed")
         postSigned(chargeEventJson("charge.refund.updated", "evt_r2_$chargeId", """{"id":"$refundId","object":"refund","charge":"$chargeId"}"""))
         assertThat(walletService.balance(order.userId)).isEqualTo(100)
         assertThat(eventRow("evt_r2_$chargeId").status).isEqualTo(PaymentEventStatus.PROCESSED)
 
-        // dispute opened → reversed; updated → still reversed; closed won → reinstated
         gateway.openDispute(chargeId)
         val dispute = """{"id":"dp_$chargeId","object":"dispute","charge":"$chargeId"}"""
         postSigned(chargeEventJson("charge.dispute.created", "evt_d1_$chargeId", dispute))
@@ -377,7 +372,7 @@ class PaymentWebhookIntegrationTest {
 
     @Test
     fun `charge refunded for an order still CREATED answers 5xx and changes nothing, the redelivery after fulfillment reverses it`() {
-        val order = paidOrder() // paid in Stripe, but fulfillment has not run yet
+        val order = paidOrder()
         val sessionId = order.stripeSessionId ?: error("no session id")
         val chargeId = "ch_$sessionId"
         gateway.addCharge(chargeId, "pi_$sessionId", order.orderNo, 199)
@@ -391,7 +386,7 @@ class PaymentWebhookIntegrationTest {
         assertThat(walletService.balance(order.userId)).isEqualTo(0)
 
         paymentService.handleEvent(completed("evt_fulfil_$sessionId", sessionId))
-        assertThat(walletService.balance(order.userId)).isEqualTo(100) // fulfillment credits; the refund is reconciled by the redelivery
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
         val second = postSigned(payload)
 
         assertThat(second.statusCode).isEqualTo(HttpStatus.OK)

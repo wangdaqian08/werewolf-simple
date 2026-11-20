@@ -114,13 +114,11 @@ class FakeStripeGateway : StripeGateway {
         return "cus_fake_${++seq}".also { customers += it }
     }
 
-    /** A paid charge as Stripe would report it, with no refunds and no dispute yet. */
     @Synchronized
     fun addCharge(chargeId: String, paymentIntentId: String?, orderNo: String?, amount: Long) {
         charges[chargeId] = ChargeSnapshot(chargeId, paymentIntentId, orderNo, amount, emptyList(), null)
     }
 
-    /** Refund [amount] of the charge (full or partial); returns the refund id. */
     @Synchronized
     fun refund(chargeId: String, amount: Long, status: String = "succeeded", createdEpochSec: Long = nowSec()): String {
         moneyEventAt.merge(chargeId, createdEpochSec, ::maxOf)

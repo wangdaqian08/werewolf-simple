@@ -36,11 +36,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/**
- * Credits follow the money (R2–R4, R7): Stripe's current view of a charge (from the fake
- * gateway) decides whether the purchase's credits are present, whatever the order, the
- * duplicates or the replays of the events that told us to look.
- */
+/** Credits follow the money: Stripe's current view of a charge decides whether the purchase's credits are present. */
 @PaymentIntegrationTest
 @ExtendWith(OutputCaptureExtension::class)
 class PaymentChargeIntegrationTest {
@@ -101,7 +97,7 @@ class PaymentChargeIntegrationTest {
         creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(order.userId)
             .filter { it.type == type && it.paymentOrderId == order.id }
 
-    private fun reconcile(order: PaymentOrder) = charges.reconcileCharge(order.charge, "test")
+    private fun reconcile(order: PaymentOrder) = charges.reconcile(order.charge, "test").outcome
 
     /** Run [block] as one web request with open-in-view on (Spring's default outside prod): one shared EntityManager. */
     private fun <T> inRequest(block: () -> T): T {
@@ -241,7 +237,7 @@ class PaymentChargeIntegrationTest {
         gateway.refund(order.charge, amount - 1000)
         assertThat(reconcile(order)).isEqualTo(ChargeOutcome.NEEDS_REVIEW)
 
-        assertThat(alerts(output) - alertsBefore).isEqualTo(2) // the status change COMPLETED → REFUNDED, not a second flag
+        assertThat(alerts(output) - alertsBefore).isEqualTo(2)
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
         assertThat(walletService.balance(order.userId)).isEqualTo(230)
         assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).isEmpty()
@@ -328,7 +324,7 @@ class PaymentChargeIntegrationTest {
         val futures = (1..2).map {
             pool.submit<ChargeOutcome> {
                 start.await()
-                inRequest { charges.reconcileCharge(order.charge, "request-$it") }
+                inRequest { charges.reconcile(order.charge, "request-$it").outcome }
             }
         }
         start.countDown()
@@ -386,14 +382,14 @@ class PaymentChargeIntegrationTest {
         val chargeA = byIntent.charge
         paymentOrderRepository.save(reload(byIntent).also { it.stripeChargeId = null })
         gateway.refund(chargeA, amount)
-        assertThat(charges.reconcileCharge(chargeA, "test")).isEqualTo(ChargeOutcome.REVERSED)
-        assertThat(reload(byIntent).stripeChargeId).isEqualTo(chargeA) // so the DISPUTED / reversed re-check can find it
+        assertThat(charges.reconcile(chargeA, "test").outcome).isEqualTo(ChargeOutcome.REVERSED)
+        assertThat(reload(byIntent).stripeChargeId).isEqualTo(chargeA)
 
         val byOrderNo = seedOrder()
         val chargeB = byOrderNo.charge
         paymentOrderRepository.save(reload(byOrderNo).also { it.stripeChargeId = null; it.stripePaymentIntentId = null })
         gateway.refund(chargeB, amount)
-        assertThat(charges.reconcileCharge(chargeB, "test")).isEqualTo(ChargeOutcome.REVERSED)
+        assertThat(charges.reconcile(chargeB, "test").outcome).isEqualTo(ChargeOutcome.REVERSED)
         assertThat(reload(byOrderNo).stripeChargeId).isEqualTo(chargeB)
     }
 
@@ -403,7 +399,7 @@ class PaymentChargeIntegrationTest {
         gateway.refund("ch_foreign", 500)
         val alertsBefore = alerts(output)
 
-        assertThat(charges.reconcileCharge("ch_foreign", "test")).isEqualTo(ChargeOutcome.NOT_OURS)
+        assertThat(charges.reconcile("ch_foreign", "test").outcome).isEqualTo(ChargeOutcome.NOT_OURS)
 
         assertThat(alerts(output)).isEqualTo(alertsBefore)
     }
@@ -414,14 +410,14 @@ class PaymentChargeIntegrationTest {
         gateway.refund("ch_lost", 500)
         val alertsBefore = alerts(output)
 
-        assertThatThrownBy { charges.reconcileCharge("ch_lost", "test") }
+        assertThatThrownBy { charges.reconcile("ch_lost", "test") }
             .isInstanceOf(OrderNotFoundForChargeException::class.java)
 
         assertThat(alerts(output) - alertsBefore).isEqualTo(1)
     }
 
     @Test
-    fun `reconcileCharge refuses to run inside a DB transaction`() {
+    fun `reconcile refuses to run inside a DB transaction`() {
         val order = seedOrder()
 
         assertThatThrownBy { transactionTemplate.executeWithoutResult { reconcile(order) } }
@@ -438,7 +434,7 @@ class PaymentChargeIntegrationTest {
         val futures = (1..2).map {
             pool.submit<ChargeOutcome> {
                 start.await()
-                charges.reconcileCharge(order.charge, "thread-$it")
+                charges.reconcile(order.charge, "thread-$it").outcome
             }
         }
         start.countDown()
@@ -469,7 +465,7 @@ class PaymentChargeIntegrationTest {
         assertThat(after.receiptUrl).isEqualTo("https://pay.stripe.com/receipts/new")
         assertThat(after.status).isEqualTo(PaymentOrderStatus.REFUNDED)
         assertThat(after.creditsReversed).isTrue()
-        assertThat(reconcile(order.also { gateway.refund(it.charge, amount) })).isEqualTo(ChargeOutcome.UNCHANGED) // no second debit
+        assertThat(reconcile(order.also { gateway.refund(it.charge, amount) })).isEqualTo(ChargeOutcome.UNCHANGED)
         assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).hasSize(1)
     }
 }

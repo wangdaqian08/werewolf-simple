@@ -163,7 +163,6 @@ class WalletServiceIntegrationTest {
         assertThat(reversal.amount).isEqualTo(-150)
         assertThat(reversal.balanceAfter).isEqualTo(-50)
 
-        // The guarded debit refuses while negative and writes nothing.
         assertThat(walletService.debit(user, 10, CreditTxType.PERK_SPEND)).isNull()
         assertThat(walletService.balance(user)).isEqualTo(-50)
         assertThat(creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(user)).hasSize(2)

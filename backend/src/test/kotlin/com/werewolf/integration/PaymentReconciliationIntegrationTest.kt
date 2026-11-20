@@ -266,7 +266,7 @@ class PaymentReconciliationIntegrationTest {
         val chargeId = order.stripeChargeId ?: error("no charge")
         val fortyDaysAgo = System.currentTimeMillis() / 1000 - 40 * 86_400
         gateway.openDispute(chargeId, "needs_response", createdEpochSec = fortyDaysAgo)
-        chargeService.reconcileCharge(chargeId, "webhook") // the webhook that did arrive: order DISPUTED, credits taken back
+        chargeService.reconcile(chargeId, "webhook")
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.DISPUTED)
         gateway.setDisputeStatus(chargeId, "won")
 
@@ -308,6 +308,7 @@ class PaymentReconciliationIntegrationTest {
         assertThat(report.alerts).isEqualTo(0)
         assertThat(report.reversed).isEqualTo(0)
         assertThat(output.all).doesNotContain("[payment-alert] charge $chargeId")
+        assertThat(output.all.lines().filter { chargeId in it && "WARN" in it }).isEmpty()
     }
 
     @Test
@@ -403,7 +404,7 @@ class PaymentReconciliationIntegrationTest {
         val chargeId = order.stripeChargeId ?: error("no charge")
         val fortyDaysAgo = System.currentTimeMillis() / 1000 - 40 * 86_400
         val refundId = gateway.refund(chargeId, 199, createdEpochSec = fortyDaysAgo)
-        chargeService.reconcileCharge(chargeId, "webhook") // the refund webhook: REFUNDED, credits taken back
+        chargeService.reconcile(chargeId, "webhook")
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
         gateway.setRefundStatus(chargeId, refundId, "failed")
 

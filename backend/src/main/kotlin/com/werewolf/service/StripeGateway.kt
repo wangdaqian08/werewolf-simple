@@ -28,16 +28,15 @@ data class CheckoutRequest(
     val expiresAtEpochSec: Long,
 )
 
-data class RefundInfo(val refundId: String, val amount: Long, val status: String?) // "succeeded"|"pending"|"failed"|"canceled"|"requires_action"
+data class RefundInfo(val refundId: String, val amount: Long, val status: String?)
 
-/** A charge's money state: what was refunded and whether it was disputed. */
 data class ChargeSnapshot(
     val chargeId: String,
     val paymentIntentId: String?,
-    val orderNo: String?,          // payment_intent.metadata["orderNo"]
+    val orderNo: String?,
     val amount: Long,
     val refunds: List<RefundInfo>,
-    val disputeStatus: String?,    // null = never disputed
+    val disputeStatus: String?,
 )
 
 /** The only seam to the Stripe API; tests swap in a fake. Never call it inside a DB transaction. */
@@ -47,12 +46,7 @@ interface StripeGateway {
     fun expireSession(sessionId: String): CheckoutSnapshot     // returns current state if no longer open
     fun listCompletedSessions(createdAfterEpochSec: Long): Sequence<CheckoutSnapshot> // auto-paging
     fun createCustomer(userId: String): String                 // metadata userId; returns customer id
-    fun retrieveCharge(chargeId: String): ChargeSnapshot       // refunds + dispute read alongside the charge
-    /**
-     * Charge ids of refunds and disputes **created** since the cutoff (Refund.list + Dispute.list), distinct.
-     * Status changes on older ones are not found here: they come by webhook, or by the per-order
-     * re-check in the reconciliation job.
-     */
+    fun retrieveCharge(chargeId: String): ChargeSnapshot
     fun listRecentChargeIdsWithRefundsOrDisputes(createdAfterEpochSec: Long): Sequence<String>
 }
 
