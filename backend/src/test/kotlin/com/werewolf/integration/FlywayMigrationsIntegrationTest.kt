@@ -382,6 +382,19 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V41 accepts DISPUTE_REVERSAL ledger rows and still rejects unknown types`() {
+        flyway().migrate()
+
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('p', 'p')")
+            exec("INSERT INTO credit_transactions (user_id, type, amount, balance_after) VALUES ('p', 'DISPUTE_REVERSAL', -60, -60)")
+        }
+        assertThatThrownBy {
+            sql { exec("INSERT INTO credit_transactions (user_id, type, amount, balance_after) VALUES ('p', 'NOPE', 1, 1)") }
+        }.hasMessageContaining("credit_transactions_type_check")
+    }
+
+    @Test
     fun `V28 accepts ADMIN_GRANT ledger rows and still rejects unknown types`() {
         flyway().migrate()
 

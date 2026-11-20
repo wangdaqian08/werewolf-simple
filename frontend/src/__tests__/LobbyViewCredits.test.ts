@@ -88,6 +88,21 @@ describe('LobbyView credits chip', () => {
     expect(chip.text()).toContain('0')
   })
 
+  it('shows a negative balance as is, with the cannot-spend hint', async () => {
+    h.getWalletMock.mockResolvedValue({ balance: -120, recent: [] })
+    const { wrapper } = await mountLobby()
+    expect(wrapper.find('[data-testid="credits-chip"]').text()).toContain('-120')
+    expect(wrapper.find('[data-testid="lobby-negative-hint"]').text()).toBe(
+      '餘額不足，暫時無法使用金幣',
+    )
+  })
+
+  it('shows no cannot-spend hint at a zero balance', async () => {
+    h.getWalletMock.mockResolvedValue({ balance: 0, recent: [] })
+    const { wrapper } = await mountLobby()
+    expect(wrapper.find('[data-testid="lobby-negative-hint"]').exists()).toBe(false)
+  })
+
   it('hides the chip when the wallet fetch fails (credits stays null)', async () => {
     h.getWalletMock.mockRejectedValue(new Error('network'))
     const { wrapper } = await mountLobby()

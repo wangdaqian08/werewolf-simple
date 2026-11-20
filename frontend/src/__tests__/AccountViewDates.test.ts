@@ -69,7 +69,7 @@ describe('AccountView date rendering (zone-less backend timestamps)', () => {
     sessionStorage.clear()
     h.getWalletMock.mockReset().mockResolvedValue({ balance: 0, recent: [] })
     h.getMyPerksMock.mockReset().mockResolvedValue([])
-    h.listOrdersMock.mockReset().mockResolvedValue([])
+    h.listOrdersMock.mockReset().mockResolvedValue({ orders: [], hasMore: false })
   })
   afterEach(() => vi.clearAllMocks())
 
@@ -107,17 +107,20 @@ describe('AccountView date rendering (zone-less backend timestamps)', () => {
 
   it('renders a timestamp that already carries a zone designator unchanged', async () => {
     const iso = '2026-06-10T20:00:00Z'
-    h.listOrdersMock.mockResolvedValue([
-      {
-        orderNo: 'TZ1',
-        productName: 'Pack',
-        credits: 100,
-        amountCents: 499,
-        currency: 'usd',
-        status: 'COMPLETED',
-        createdAt: iso,
-      },
-    ])
+    h.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: 'TZ1',
+          productName: 'Pack',
+          credits: 100,
+          amountCents: 499,
+          currency: 'usd',
+          status: 'COMPLETED',
+          createdAt: iso,
+        },
+      ],
+      hasMore: false,
+    })
     const opts = {
       year: 'numeric',
       month: '2-digit',

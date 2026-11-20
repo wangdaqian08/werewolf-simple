@@ -23,7 +23,7 @@ class PaymentConfigValidatorTest {
         reconcileIntervalMs = 600_000,
         reconcileMinAgeMinutes = 10,
         sweepLookbackDays = 30,
-        statusCheckThrottleSeconds = 5,
+        statusCheckThrottleSeconds = 5, ordersPageSize = 20,
     )
 
     @Test

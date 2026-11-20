@@ -1,5 +1,5 @@
 import http from './http'
-import type { PaymentOrderSummary } from '@/types'
+import type { PaymentOrderPage, PaymentOrderSummary } from '@/types'
 
 export interface CreditProduct {
   productKey: string
@@ -12,8 +12,9 @@ export interface CreditProduct {
 
 export interface PaymentOrderStatus {
   orderNo: string
-  status: 'CREATED' | 'COMPLETED' | 'EXPIRED' | 'FAILED'
+  status: PaymentOrderSummary['status']
   credits: number
+  receiptUrl?: string | null
 }
 
 export const paymentService = {
@@ -34,9 +35,9 @@ export const paymentService = {
     return data
   },
 
-  /** The caller's own payment order history (most recent first). */
-  async listOrders(): Promise<PaymentOrderSummary[]> {
-    const { data } = await http.get<PaymentOrderSummary[]>('/payment/orders')
+  /** One page (0-based) of the caller's own orders, newest first. */
+  async listOrders(page = 0): Promise<PaymentOrderPage> {
+    const { data } = await http.get<PaymentOrderPage>('/payment/orders', { params: { page } })
     return data
   },
 }

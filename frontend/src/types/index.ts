@@ -29,7 +29,15 @@ export type OAuthProvider = 'google' | 'wechat'
 
 // ── Wallet / Credits ──────────────────────────────────────────────────────────
 
-export type CreditTxType = 'PURCHASE' | 'GAME_REWARD' | 'PERK_SPEND' | 'REFUND' | 'ADMIN_GRANT'
+export type CreditTxType =
+  | 'PURCHASE'
+  | 'GAME_REWARD'
+  | 'PERK_SPEND'
+  | 'REFUND'
+  | 'ADMIN_GRANT'
+  | 'PURCHASE_REVERSAL'
+  | 'DISPUTE_REVERSAL'
+  | 'PURCHASE_REINSTATED'
 
 /** A player as the admin grant page lists them (GET /api/admin/players). */
 export interface AdminPlayer {
@@ -52,6 +60,8 @@ export interface CreditTransaction {
   amount: number // signed: positive = credit, negative = debit
   balanceAfter: number
   note?: string | null
+  /** Set on rows linked to a top-up order (purchase, reversal, reinstatement). */
+  orderNo?: string | null
   createdAt: string
 }
 
@@ -186,8 +196,15 @@ export interface PaymentOrderSummary {
   credits: number
   amountCents: number
   currency: string
-  status: 'CREATED' | 'COMPLETED' | 'EXPIRED' | 'FAILED'
+  status: 'CREATED' | 'COMPLETED' | 'EXPIRED' | 'FAILED' | 'REFUNDED' | 'DISPUTED' | 'DISPUTE_LOST'
+  receiptUrl?: string | null
   createdAt: string
+}
+
+/** One page of GET /api/payment/orders, newest first. */
+export interface PaymentOrderPage {
+  orders: PaymentOrderSummary[]
+  hasMore: boolean
 }
 
 // ── Room ──────────────────────────────────────────────────────────────────────

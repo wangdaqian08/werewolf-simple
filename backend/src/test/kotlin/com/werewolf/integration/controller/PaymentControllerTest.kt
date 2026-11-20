@@ -27,8 +27,8 @@ import org.springframework.test.context.ActiveProfiles
 import java.util.*
 
 /**
- * GET /api/payment/orders contract: owner-scoped list of Stripe orders with
- * all 7 fields, most-recent first, and unauthenticated rejection.
+ * GET /api/payment/orders contract: owner-scoped pages of Stripe orders,
+ * most-recent first, with hasMore, and unauthenticated rejection.
  */
 @AutoConfigureTestRestTemplate
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
@@ -80,31 +80,40 @@ class PaymentControllerTest {
         )
     }
 
+    @Suppress("UNCHECKED_CAST")
+    private fun getOrders(token: String, query: String = ""): Pair<List<Map<String, Any?>>, Boolean> {
+        val resp = restTemplate.exchange(
+            ORDERS_URL + query, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(token)), Map::class.java,
+        )
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        val body = resp.body!! as Map<String, Any?>
+        return body["orders"] as List<Map<String, Any?>> to body["hasMore"] as Boolean
+    }
+
     @Test
-    fun `GET payment-orders returns only the caller's orders with all 7 fields`() {
+    fun `GET payment-orders returns only the caller's orders with all fields`() {
         val (tokenA, userIdA) = login("PayOrdA")
         val (_, userIdB) = login("PayOrdB")
 
-        saveOrder(userIdA, PaymentOrderStatus.COMPLETED)
+        saveOrder(userIdA, PaymentOrderStatus.REFUNDED).also {
+            it.receiptUrl = "https://pay.stripe.com/receipts/r1"
+            paymentOrderRepository.save(it)
+        }
         saveOrder(userIdB, PaymentOrderStatus.CREATED)
 
-        val resp = restTemplate.exchange(
-            ORDERS_URL, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(tokenA)), List::class.java,
-        )
-
-        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
-        @Suppress("UNCHECKED_CAST")
-        val rows = resp.body!! as List<Map<String, Any?>>
+        val (rows, hasMore) = getOrders(tokenA)
 
         // Only A's order returned, not B's
         assertThat(rows).hasSize(1)
+        assertThat(hasMore).isFalse()
         val row = rows.single()
         assertThat(row["orderNo"]).isNotNull()
         assertThat(row["productName"]).isEqualTo("Starter Pack")
         assertThat(row["credits"]).isEqualTo(100)
         assertThat(row["amountCents"]).isEqualTo(199)
         assertThat(row["currency"]).isEqualTo("usd")
-        assertThat(row["status"]).isEqualTo("COMPLETED")
+        assertThat(row["status"]).isEqualTo("REFUNDED")
+        assertThat(row["receiptUrl"]).isEqualTo("https://pay.stripe.com/receipts/r1")
         assertThat(row["createdAt"]).isNotNull()
     }
 
@@ -114,41 +123,36 @@ class PaymentControllerTest {
         saveOrder(userId, PaymentOrderStatus.COMPLETED)
         saveOrder(userId, PaymentOrderStatus.CREATED)
 
-        val resp = restTemplate.exchange(
-            ORDERS_URL, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(token)), List::class.java,
-        )
+        val (rows, _) = getOrders(token)
 
-        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
-        @Suppress("UNCHECKED_CAST")
-        val rows = resp.body!! as List<Map<String, Any?>>
         assertThat(rows).hasSize(2)
         val timestamps = rows.map { it["createdAt"] as String }
         assertThat(timestamps).isSortedAccordingTo(Comparator.reverseOrder())
     }
 
     @Test
-    fun `GET payment-orders caps the response at 50 rows`() {
-        val (token, userId) = login("PayOrdCap")
-        repeat(51) { saveOrder(userId, PaymentOrderStatus.COMPLETED) }
+    fun `GET payment-orders pages 20 rows at a time, newest first, with hasMore`() {
+        val (token, userId) = login("PayOrdPage")
+        val saved = (1..21).map { saveOrder(userId, PaymentOrderStatus.COMPLETED).orderNo }
 
-        val resp = restTemplate.exchange(
-            ORDERS_URL, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(token)), List::class.java,
-        )
+        val (first, firstMore) = getOrders(token)
+        val (second, secondMore) = getOrders(token, "?page=1")
 
-        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(resp.body!!).hasSize(50)
+        assertThat(first).hasSize(20)
+        assertThat(firstMore).isTrue()
+        assertThat(second.map { it["orderNo"] }).containsExactly(saved.first())
+        assertThat(secondMore).isFalse()
+        assertThat(first.map { it["orderNo"] } + second.map { it["orderNo"] }).doesNotHaveDuplicates()
     }
 
     @Test
     fun `GET payment-orders returns 200 and an empty list when the caller has no orders`() {
         val (token, _) = login("PayOrdEmpty")
 
-        val resp = restTemplate.exchange(
-            ORDERS_URL, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(token)), List::class.java,
-        )
+        val (rows, hasMore) = getOrders(token)
 
-        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(resp.body!!).isEmpty()
+        assertThat(rows).isEmpty()
+        assertThat(hasMore).isFalse()
     }
 
     @Test
@@ -158,12 +162,7 @@ class PaymentControllerTest {
         val (token, userId) = login("PayOrdGuest")
         assertThat(userId).startsWith("guest:")
 
-        val resp = restTemplate.exchange(
-            ORDERS_URL, HttpMethod.GET, HttpEntity<Nothing>(authHeaders(token)), List::class.java,
-        )
-
-        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(resp.body!!).isEmpty()
+        assertThat(getOrders(token).first).isEmpty()
     }
 
     @Test

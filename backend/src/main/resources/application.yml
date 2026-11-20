@@ -66,6 +66,8 @@ app:
     sweep-lookback-days: 30
     # Min seconds between Stripe status checks per order from the return page
     status-check-throttle-seconds: 5
+    # Orders per page of the player's top-up history
+    orders-page-size: 20
 
 server:
   port: 8080

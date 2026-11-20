@@ -1292,8 +1292,7 @@ export const MOCK_MY_PERKS: MyPerkActivation[] = [
   },
 ]
 
-// Newest-first, mirroring the real endpoint's contract
-// (PaymentService.listOrders / findTop50ByUserIdOrderByCreatedAtDesc).
+// Newest-first, mirroring one page of the real endpoint (PaymentService.listOrders).
 export const MOCK_PAYMENT_ORDERS: PaymentOrderSummary[] = [
   {
     orderNo: 'WW20260611002',
@@ -1311,6 +1310,7 @@ export const MOCK_PAYMENT_ORDERS: PaymentOrderSummary[] = [
     amountCents: 999,
     currency: 'usd',
     status: 'COMPLETED',
+    receiptUrl: 'https://pay.stripe.com/receipts/mock',
     createdAt: '2026-06-10T19:55:00',
   },
 ]

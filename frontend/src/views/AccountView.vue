@@ -35,6 +35,13 @@
           <p v-if="!walletError" class="balance" data-testid="account-balance">
             ◈ {{ balanceText }}
           </p>
+          <p
+            v-if="!walletError && balance !== null && balance < 0"
+            class="error-msg"
+            data-testid="negative-balance-hint"
+          >
+            {{ $t('account.negativeBalance') }}
+          </p>
           <p v-if="walletError" class="error-msg">{{ $t('account.creditsFail') }}</p>
           <ul v-else-if="wallet && wallet.recent.length > 0" class="rows">
             <li
@@ -52,7 +59,12 @@
                 </span>
               </div>
               <div class="row-sub">
-                <span>{{ $t('account.balanceAfter', { n: tx.balanceAfter }) }}</span>
+                <span
+                  >{{ $t('account.balanceAfter', { n: tx.balanceAfter })
+                  }}<template v-if="tx.orderNo">
+                    · <span data-testid="ledger-order">{{ tx.orderNo }}</span></template
+                  ></span
+                >
                 <span>{{ fmtDate(tx.createdAt) }}</span>
               </div>
             </li>
@@ -109,25 +121,52 @@
           </p>
           <template v-else>
             <p v-if="ordersError" class="error-msg">{{ $t('account.paymentsFail') }}</p>
-            <ul v-else-if="orders.length > 0" class="rows">
-              <li v-for="order in orders" :key="order.orderNo" class="row" data-testid="order-row">
-                <div class="row-main">
-                  <span class="row-name">{{ order.productName }}</span>
-                  <span class="row-amount amount-gold">◈{{ order.credits }}</span>
-                </div>
-                <div class="row-sub">
-                  <span>
-                    {{ fmtMoney(order) }} ·
-                    {{
-                      ORDER_STATUS_LABELS[order.status]
-                        ? $t(ORDER_STATUS_LABELS[order.status])
-                        : order.status
-                    }}
-                  </span>
-                  <span>{{ fmtDate(order.createdAt) }}</span>
-                </div>
-              </li>
-            </ul>
+            <template v-else-if="orders.length > 0">
+              <ul class="rows">
+                <li
+                  v-for="order in orders"
+                  :key="order.orderNo"
+                  class="row"
+                  data-testid="order-row"
+                >
+                  <div class="row-main">
+                    <span class="row-name">{{ order.productName }}</span>
+                    <span class="row-amount amount-gold">◈{{ order.credits }}</span>
+                  </div>
+                  <div class="row-sub">
+                    <span>
+                      {{ fmtMoney(order) }} ·
+                      <span data-testid="order-status">{{
+                        ORDER_STATUS_LABELS[order.status]
+                          ? $t(ORDER_STATUS_LABELS[order.status])
+                          : order.status
+                      }}</span>
+                      <template v-if="order.receiptUrl">
+                        ·
+                        <a
+                          :href="order.receiptUrl"
+                          class="receipt-link"
+                          data-testid="order-receipt"
+                          rel="noopener noreferrer"
+                          target="_blank"
+                          >{{ $t('account.receipt') }}</a
+                        >
+                      </template>
+                    </span>
+                    <span>{{ fmtDate(order.createdAt) }}</span>
+                  </div>
+                </li>
+              </ul>
+              <button
+                v-if="ordersHasMore"
+                class="btn btn-outline more-btn"
+                data-testid="orders-more"
+                :disabled="ordersLoadingMore"
+                @click="loadMoreOrders"
+              >
+                {{ $t('account.loadMore') }}
+              </button>
+            </template>
             <p v-else-if="!loading" class="empty">{{ $t('account.noPayments') }}</p>
           </template>
         </section>
@@ -142,7 +181,7 @@ import { useRouter } from 'vue-router'
 import { getLocale } from '@/i18n'
 import { useUserStore } from '@/stores/userStore'
 import { walletService } from '@/services/walletService'
-import { paymentService } from '@/services/paymentService'
+import { paymentService, type PaymentOrderStatus } from '@/services/paymentService'
 import { adminService } from '@/services/adminService'
 import { userService } from '@/services/userService'
 import StatsCard from '@/components/StatsCard.vue'
@@ -163,6 +202,9 @@ const wallet = ref<Wallet | null>(null)
 const stats = ref<UserStats | null>(null)
 const perks = ref<MyPerkActivation[]>([])
 const orders = ref<PaymentOrderSummary[]>([])
+const ordersPage = ref(0)
+const ordersHasMore = ref(false)
+const ordersLoadingMore = ref(false)
 // Per-section error fallbacks — one failed fetch must not blank the page.
 const walletError = ref(false)
 const perksError = ref(false)
@@ -175,6 +217,9 @@ const TX_LABELS: Record<CreditTxType, string> = {
   GAME_REWARD: 'account.tx.GAME_REWARD',
   PERK_SPEND: 'account.tx.PERK_SPEND',
   REFUND: 'account.tx.REFUND',
+  PURCHASE_REVERSAL: 'account.tx.PURCHASE_REVERSAL',
+  DISPUTE_REVERSAL: 'account.tx.DISPUTE_REVERSAL',
+  PURCHASE_REINSTATED: 'account.tx.PURCHASE_REINSTATED',
 }
 
 const PERK_STATUS_LABELS: Record<PerkActivationStatus, string> = {
@@ -189,9 +234,15 @@ const ORDER_STATUS_LABELS: Record<PaymentOrderSummary['status'], string> = {
   CREATED: 'account.order.CREATED',
   EXPIRED: 'account.order.EXPIRED',
   FAILED: 'account.order.FAILED',
+  REFUNDED: 'account.order.REFUNDED',
+  DISPUTED: 'account.order.DISPUTED',
+  DISPUTE_LOST: 'account.order.DISPUTE_LOST',
 }
 
-const balanceText = computed(() => wallet.value?.balance ?? userStore.credits ?? '—')
+const balance = computed(() => wallet.value?.balance ?? userStore.credits)
+const balanceText = computed(() =>
+  balance.value === null ? '—' : balance.value < 0 ? signed(balance.value) : balance.value,
+)
 
 function signed(amount: number): string {
   return amount >= 0 ? `+${amount}` : `−${Math.abs(amount)}`
@@ -289,9 +340,11 @@ onMounted(async () => {
   if (!userStore.isGuest) {
     tasks.push(
       paymentService
-        .listOrders()
-        .then((o) => {
-          orders.value = o
+        .listOrders(0)
+        .then((p) => {
+          orders.value = p.orders
+          ordersHasMore.value = p.hasMore
+          void recheckProcessing(p.orders)
         })
         .catch(() => {
           ordersError.value = true
@@ -301,6 +354,43 @@ onMounted(async () => {
   await Promise.all(tasks)
   loading.value = false
 })
+
+async function loadMoreOrders() {
+  ordersLoadingMore.value = true
+  try {
+    const p = await paymentService.listOrders(ordersPage.value + 1)
+    ordersPage.value += 1
+    // A checkout since the last page shifts every row down, so skip repeats.
+    const shown = new Set(orders.value.map((o) => o.orderNo))
+    const fresh = p.orders.filter((o) => !shown.has(o.orderNo))
+    orders.value = [...orders.value, ...fresh]
+    ordersHasMore.value = p.hasMore
+    void recheckProcessing(fresh)
+  } catch {
+    // The button stays, so the player can try again.
+  } finally {
+    ordersLoadingMore.value = false
+  }
+}
+
+// The order endpoint asks Stripe about a processing order, so a missed webhook
+// settles here too; a settled one changes the balance, so reload the wallet.
+async function recheckProcessing(list: PaymentOrderSummary[]) {
+  const results = await Promise.all(
+    list
+      .filter((o) => o.status === 'CREATED')
+      .map((o) => paymentService.getOrder(o.orderNo).catch(() => null)),
+  )
+  const settled = results.filter(
+    (r): r is PaymentOrderStatus => r !== null && r.status !== 'CREATED',
+  )
+  if (settled.length === 0) return
+  orders.value = orders.value.map((o) => {
+    const r = settled.find((s) => s.orderNo === o.orderNo)
+    return r ? { ...o, status: r.status, receiptUrl: r.receiptUrl } : o
+  })
+  wallet.value = await walletService.getWallet().catch(() => wallet.value)
+}
 </script>
 
 <style scoped>
@@ -495,6 +585,15 @@ onMounted(async () => {
   font-size: 0.75rem;
   color: var(--muted);
   margin: 0;
+}
+
+.receipt-link {
+  color: var(--gold);
+}
+
+.more-btn {
+  width: 100%;
+  margin-top: 0.5rem;
 }
 
 .error-msg {

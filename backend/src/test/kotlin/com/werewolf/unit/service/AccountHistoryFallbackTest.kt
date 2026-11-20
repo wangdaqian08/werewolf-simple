@@ -24,7 +24,10 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.junit.jupiter.MockitoSettings
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
+import org.springframework.data.domain.SliceImpl
 import com.werewolf.service.StompPublisher
 import org.mockito.quality.Strictness
 
@@ -83,21 +86,24 @@ class AccountHistoryFallbackTest {
             paymentFulfillmentService, paymentOrderWriter, paymentChargeService, stripeGateway, PaymentProperties(
                 enabled = true, frontendBaseUrl = "https://example.test", sessionExpiryMinutes = 30,
                 reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10, sweepLookbackDays = 30,
-                statusCheckThrottleSeconds = 5,
+                statusCheckThrottleSeconds = 5, ordersPageSize = 20,
             ),
         )
         whenever(productRepository.findAll()).thenReturn(emptyList())
-        whenever(paymentOrderRepository.findTop50ByUserIdOrderByCreatedAtDesc("google:u1"))
+        whenever(paymentOrderRepository.findByUserIdOrderByCreatedAtDescIdDesc(eq("google:u1"), any()))
             .thenReturn(
-                listOf(
-                    PaymentOrder(
-                        orderNo = "o-1", userId = "google:u1", productId = 999_999,
-                        credits = 100, amountCents = 199, currency = "usd",
+                SliceImpl(
+                    listOf(
+                        PaymentOrder(
+                            orderNo = "o-1", userId = "google:u1", productId = 999_999,
+                            credits = 100, amountCents = 199, currency = "usd",
+                        ),
                     ),
                 ),
             )
 
-        val rows = service.listOrders("google:u1")
+        @Suppress("UNCHECKED_CAST")
+        val rows = service.listOrders("google:u1", 0)["orders"] as List<Map<String, Any?>>
 
         assertThat(rows).hasSize(1)
         assertThat(rows.first()["productName"]).isEqualTo("")

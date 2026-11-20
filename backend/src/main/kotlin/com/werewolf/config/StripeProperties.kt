@@ -33,4 +33,6 @@ data class PaymentProperties(
     val sweepLookbackDays: Long,
     /** Minimum seconds between Stripe status checks per order from the return page. */
     val statusCheckThrottleSeconds: Long,
+    /** Orders per page of the player's top-up history. */
+    val ordersPageSize: Int,
 )

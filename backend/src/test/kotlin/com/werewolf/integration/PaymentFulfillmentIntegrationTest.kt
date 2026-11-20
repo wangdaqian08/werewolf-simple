@@ -372,7 +372,8 @@ class PaymentFulfillmentIntegrationTest {
 
         assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(resp.body?.get("status")).isEqualTo("COMPLETED")
-        assertThat(resp.body?.keys).containsExactlyInAnyOrder("orderNo", "status", "credits")
+        assertThat(resp.body?.keys).containsExactlyInAnyOrder("orderNo", "status", "credits", "receiptUrl")
+        assertThat(resp.body?.get("receiptUrl")).isEqualTo("https://pay.stripe.com/receipts/$sessionId")
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
         assertThat(walletService.balance(order.userId)).isEqualTo(100)
         assertThat(purchaseRows(order.userId)).hasSize(1)

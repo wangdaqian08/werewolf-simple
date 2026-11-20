@@ -19,23 +19,27 @@ describe('paymentService', () => {
     mockedHttp.get.mockReset()
   })
 
-  it('listOrders GETs /payment/orders and returns the order list', async () => {
-    const expected = [
-      {
-        orderNo: 'WW20260610001',
-        productName: 'Starter Pack',
-        credits: 100,
-        amountCents: 499,
-        currency: 'usd',
-        status: 'COMPLETED',
-        createdAt: '2026-06-10T19:55:00',
-      },
-    ]
+  it('listOrders GETs one page of /payment/orders', async () => {
+    const expected = {
+      orders: [
+        {
+          orderNo: 'WW20260610001',
+          productName: 'Starter Pack',
+          credits: 100,
+          amountCents: 499,
+          currency: 'usd',
+          status: 'REFUNDED',
+          receiptUrl: 'https://pay.stripe.com/receipts/r1',
+          createdAt: '2026-06-10T19:55:00',
+        },
+      ],
+      hasMore: true,
+    }
     mockedHttp.get.mockResolvedValueOnce({ data: expected })
 
-    const result = await paymentService.listOrders()
+    const result = await paymentService.listOrders(2)
 
-    expect(mockedHttp.get).toHaveBeenCalledWith('/payment/orders')
+    expect(mockedHttp.get).toHaveBeenCalledWith('/payment/orders', { params: { page: 2 } })
     expect(result).toEqual(expected)
   })
 })

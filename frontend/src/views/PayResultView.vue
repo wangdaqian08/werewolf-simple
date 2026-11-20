@@ -19,11 +19,15 @@
         </p>
       </template>
 
+      <template v-else-if="phase === 'final'">
+        <h1 class="pay-title serif" data-testid="pay-status">
+          {{ $t(`account.order.${finalStatus}`) }}
+        </h1>
+      </template>
+
       <template v-else>
-        <h1 class="pay-title serif">{{ $t('pay.unconfirmed') }}</h1>
-        <p class="pay-sub">
-          {{ $t('pay.timeout') }}
-        </p>
+        <h1 class="pay-title serif">{{ $t('pay.confirming') }}</h1>
+        <p class="pay-sub">{{ $t('pay.timeout') }}</p>
       </template>
 
       <button class="btn btn-primary back-lobby-btn" data-testid="pay-back" @click="goLobby">
@@ -43,14 +47,15 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-type Phase = 'pending' | 'success' | 'cancel' | 'timeout'
+type Phase = 'pending' | 'success' | 'cancel' | 'final' | 'timeout'
 const phase = ref<Phase>('pending')
 const credits = ref(0)
+const finalStatus = ref('')
 
 let stopped = false
 
-// Fulfillment comes from the Stripe webhook, not this redirect — poll the
-// order until the backend has seen the webhook (usually < 2s).
+// The redirect is not trusted: poll the order, which also asks Stripe while it
+// is still CREATED, until it is settled or 30 s have passed.
 async function pollOrder(orderNo: string) {
   const deadline = Date.now() + 30_000
   while (!stopped && Date.now() < deadline) {
@@ -62,8 +67,9 @@ async function pollOrder(orderNo: string) {
         await userStore.refreshWallet()
         return
       }
-      if (order.status === 'EXPIRED' || order.status === 'FAILED') {
-        phase.value = 'timeout'
+      if (order.status !== 'CREATED') {
+        finalStatus.value = order.status
+        phase.value = 'final'
         return
       }
     } catch {

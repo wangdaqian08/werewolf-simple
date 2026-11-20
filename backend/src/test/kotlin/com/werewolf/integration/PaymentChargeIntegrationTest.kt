@@ -140,6 +140,8 @@ class PaymentChargeIntegrationTest {
         assertThat(reconcile(order)).isEqualTo(ChargeOutcome.REVERSED)
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.DISPUTED)
         assertThat(walletService.balance(order.userId)).isEqualTo(-100)
+        assertThat(rows(order, CreditTxType.DISPUTE_REVERSAL).single().amount).isEqualTo(-330)
+        assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).isEmpty()
 
         gateway.setDisputeStatus(order.charge, "warning_closed")
         assertThat(reconcile(order)).isEqualTo(ChargeOutcome.REINSTATED)
@@ -160,7 +162,7 @@ class PaymentChargeIntegrationTest {
 
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
         assertThat(walletService.balance(order.userId)).isEqualTo(230)
-        assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).hasSize(1)
+        assertThat(rows(order, CreditTxType.DISPUTE_REVERSAL)).hasSize(1)
         assertThat(rows(order, CreditTxType.PURCHASE_REINSTATED)).hasSize(1)
     }
 
@@ -188,7 +190,8 @@ class PaymentChargeIntegrationTest {
 
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
         assertThat(walletService.balance(order.userId)).isEqualTo(-100)
-        assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).hasSize(2)
+        assertThat(rows(order, CreditTxType.DISPUTE_REVERSAL)).hasSize(1)
+        assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).hasSize(1)
         assertThat(rows(order, CreditTxType.PURCHASE_REINSTATED)).hasSize(1)
     }
 
