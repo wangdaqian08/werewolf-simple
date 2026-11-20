@@ -103,9 +103,10 @@ class PaymentReconciliationIntegrationTest {
         creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId).filter { it.type == CreditTxType.PURCHASE }
 
     @Test
-    fun `a CREATED order 11 min old whose session is paid is credited`() {
+    fun `a CREATED order 11 min old whose session is paid is credited, with one alert`(output: CapturedOutput) {
         val order = seedOrder(ageMinutes = 11)
-        gateway.markPaid(openSession(order))
+        val sessionId = openSession(order)
+        gateway.markPaid(sessionId)
 
         val report = job.reconcile()
 
@@ -113,6 +114,8 @@ class PaymentReconciliationIntegrationTest {
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
         assertThat(walletService.balance(order.userId)).isEqualTo(100)
         assertThat(purchaseRows(order.userId)).hasSize(1)
+        job.reconcile()
+        assertThat(output.all.split("[payment-alert] reconcile credited session $sessionId").size).isEqualTo(2)
     }
 
     @Test

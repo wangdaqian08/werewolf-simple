@@ -41,8 +41,13 @@ class PaymentFulfillmentService(
             }
             else -> FulfillOutcome.NOT_PAID
         }
-        log.info("[payment] fulfill session={} order={} source={} outcome={}",
-            sessionId, snapshot.orderNo ?: snapshot.clientReferenceId, source, outcome)
+        val orderNo = snapshot.orderNo ?: snapshot.clientReferenceId
+        if (source == "reconcile" && outcome == FulfillOutcome.CREDITED) {
+            // The job credited a paid order, so the webhook (and the return page) never did.
+            log.error("[payment-alert] reconcile credited session {} order {}", sessionId, orderNo)
+        } else {
+            log.info("[payment] fulfill session={} order={} source={} outcome={}", sessionId, orderNo, source, outcome)
+        }
         return outcome
     }
 

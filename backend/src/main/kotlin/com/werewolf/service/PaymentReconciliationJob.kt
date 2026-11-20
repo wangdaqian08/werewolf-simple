@@ -11,7 +11,7 @@ import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 
-/** What one reconcile run did. alerts = `[payment-alert]` lines this run logged (money taken, no order; once per session). */
+/** What one reconcile run did. alerts = paid sessions or charges with no order (alerted once each). */
 data class ReconcileReport(val credited: Int, val expired: Int, val failed: Int, val backfilled: Int, val alerts: Int,
     val reversed: Int = 0, val reinstated: Int = 0)
 
