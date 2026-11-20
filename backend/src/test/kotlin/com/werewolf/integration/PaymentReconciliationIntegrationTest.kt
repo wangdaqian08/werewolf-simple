@@ -248,9 +248,10 @@ class PaymentReconciliationIntegrationTest {
     }
 
     @Test
-    fun `a COMPLETED order whose charge was fully refunded without a webhook is reversed once`() {
+    fun `a COMPLETED order whose charge was fully refunded without a webhook is reversed once, with one alert`(output: CapturedOutput) {
         val order = paidOrder()
-        gateway.refund(order.stripeChargeId ?: error("no charge"), 199)
+        val chargeId = order.stripeChargeId ?: error("no charge")
+        gateway.refund(chargeId, 199)
 
         assertThat(job.reconcile().reversed).isEqualTo(1)
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
@@ -258,6 +259,7 @@ class PaymentReconciliationIntegrationTest {
 
         assertThat(job.reconcile().reversed).isEqualTo(0)
         assertThat(walletService.balance(order.userId)).isEqualTo(0)
+        assertThat(output.all.split("[payment-alert] reconcile fixed charge $chargeId").size).isEqualTo(2)
     }
 
     @Test

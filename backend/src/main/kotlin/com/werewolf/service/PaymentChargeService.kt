@@ -41,7 +41,13 @@ class PaymentChargeService(
             ChargeOutcome.NOT_SETTLED ->
                 throw ChargeNotSettledException("charge $chargeId: order ${order.orderNo} is not settled (${order.status}), retry later")
             ChargeOutcome.UNCHANGED -> {}
-            else -> log.info("[payment] charge {} order {} {}: {} (source={})", chargeId, order.orderNo, outcome, money, source)
+            else ->
+                // A fix made by the job means the webhook that should have made it never came.
+                if (source != "webhook" && (outcome == ChargeOutcome.REVERSED || outcome == ChargeOutcome.REINSTATED)) {
+                    log.error("[payment-alert] reconcile fixed charge {} order {} {}: {} (source={})", chargeId, order.orderNo, outcome, money, source)
+                } else {
+                    log.info("[payment] charge {} order {} {}: {} (source={})", chargeId, order.orderNo, outcome, money, source)
+                }
         }
         return ChargeResult(outcome, orderId)
     }
