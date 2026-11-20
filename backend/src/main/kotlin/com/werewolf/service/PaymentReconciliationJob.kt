@@ -21,7 +21,8 @@ data class ReconcileReport(val credited: Int, val expired: Int, val failed: Int,
  *  1. CREATED orders older than reconcile-min-age-minutes: settle from Stripe (no session → FAILED, but
  *     only after session-expiry-minutes more, once no unstored session can still be paid);
  *  2. COMPLETED orders without a receipt: store the charge and receipt;
- *  3. Stripe's completed sessions of the last sweep-lookback-days: fulfill any whose order is not COMPLETED
+ *  3. Stripe's completed sessions of the last sweep-lookback-days: fulfill any whose order is not settled (a session
+ *     stays complete/paid after a refund or dispute, so REFUNDED / DISPUTED / DISPUTE_LOST are settled too)
  *     (runs first, so a session paid in its last minutes is credited before a session-less order could be failed);
  *  4. refunds and disputes: re-reconcile the charges of recent refunds/disputes, of every DISPUTED order and of
  *     orders reversed within sweep-lookback-days (status changes on older ones the created-window listing misses).
@@ -130,7 +131,7 @@ class PaymentReconciliationJob(
                             log.debug("[payment] completed session {} (orderNo {}) still has no order, already alerted",
                                 snapshot.sessionId, orderNo)
                         }
-                    } else if (order.status != PaymentOrderStatus.COMPLETED) {
+                    } else if (order.status !in PaymentOrderStatus.SETTLED) {
                         log.info("[payment] sweep found completed session {} for {} order={}",
                             snapshot.sessionId, order.status, orderNo)
                         count(fulfillment.fulfill(snapshot.sessionId, "reconcile"), counts)

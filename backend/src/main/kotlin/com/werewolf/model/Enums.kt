@@ -84,7 +84,14 @@ enum class CreditTxType { PURCHASE, GAME_REWARD, PERK_SPEND, REFUND, ADMIN_GRANT
 
 enum class PerkActivationStatus { ACTIVE, CONSUMED, VOID, REFUNDED }
 
-enum class PaymentOrderStatus { CREATED, COMPLETED, EXPIRED, FAILED, REFUNDED, DISPUTED, DISPUTE_LOST }
+enum class PaymentOrderStatus {
+    CREATED, COMPLETED, EXPIRED, FAILED, REFUNDED, DISPUTED, DISPUTE_LOST;
+
+    companion object {
+        /** Paid and credited once; a refund or dispute moves the order between these, never back to fulfillment. */
+        val SETTLED = setOf(COMPLETED, REFUNDED, DISPUTED, DISPUTE_LOST)
+    }
+}
 
 enum class PaymentEventStatus { RECEIVED, PROCESSED, FAILED }
 

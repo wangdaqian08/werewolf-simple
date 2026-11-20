@@ -62,7 +62,7 @@ class PaymentOrderWriter(
             // Paid twice: another session, or another PaymentIntent (the stored session may not be the one that paid).
             val paidTwice = (order.stripeSessionId != null && order.stripeSessionId != snapshot.sessionId) ||
                 (order.stripePaymentIntentId != null && order.stripePaymentIntentId != snapshot.paymentIntentId)
-            if (order.status == PaymentOrderStatus.COMPLETED && !paidTwice) return FulfillOutcome.ALREADY_DONE
+            if (order.status in PaymentOrderStatus.SETTLED && !paidTwice) return FulfillOutcome.ALREADY_DONE
             flag(order, if (paidTwice) "second payment (session ${snapshot.sessionId}, intent ${snapshot.paymentIntentId}) for ${order.status} order"
                         else "paid session ${snapshot.sessionId} but order is ${order.status}")
             return FulfillOutcome.FLAGGED

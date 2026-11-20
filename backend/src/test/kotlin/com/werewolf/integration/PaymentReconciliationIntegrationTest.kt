@@ -333,6 +333,57 @@ class PaymentReconciliationIntegrationTest {
         assertThat(reload(order).updatedAt).isEqualTo(first)
     }
 
+    /** An order paid through the fake (its session listed by the sweep) and credited by reconcile(); its charge is in the fake. */
+    private fun sweptPaidOrder(): Pair<PaymentOrder, String> {
+        val order = seedOrder(ageMinutes = 1)
+        val sessionId = openSession(order)
+        gateway.markPaid(sessionId)
+        val chargeId = "ch_$sessionId"
+        gateway.addCharge(chargeId, "pi_$sessionId", order.orderNo, 199)
+        assertThat(job.reconcile().credited).isEqualTo(1)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        return order to chargeId
+    }
+
+    @Test
+    fun `the sweep leaves a refunded order alone, so a refund that later fails is reinstated`(output: CapturedOutput) {
+        val (order, chargeId) = sweptPaidOrder()
+        val refundId = gateway.refund(chargeId, 199)
+
+        // The session stays complete/paid after the refund: the sweep must not re-fulfill (and flag) the REFUNDED order.
+        assertThat(job.reconcile().reversed).isEqualTo(1)
+        assertThat(job.reconcile().reversed).isEqualTo(0)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
+        assertThat(reload(order).needsReview).isFalse()
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+
+        gateway.setRefundStatus(chargeId, refundId, "failed")
+
+        assertThat(job.reconcile().reinstated).isEqualTo(1)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        assertThat(output.all).doesNotContain("[payment-alert] order ${order.orderNo}")
+    }
+
+    @Test
+    fun `the sweep leaves a disputed order alone, so a won dispute is reinstated`(output: CapturedOutput) {
+        val (order, chargeId) = sweptPaidOrder()
+        gateway.openDispute(chargeId)
+
+        assertThat(job.reconcile().reversed).isEqualTo(1)
+        assertThat(job.reconcile().reversed).isEqualTo(0)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.DISPUTED)
+        assertThat(reload(order).needsReview).isFalse()
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+
+        gateway.setDisputeStatus(chargeId, "won")
+
+        assertThat(job.reconcile().reinstated).isEqualTo(1)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.COMPLETED)
+        assertThat(walletService.balance(order.userId)).isEqualTo(100)
+        assertThat(output.all).doesNotContain("[payment-alert] order ${order.orderNo}")
+    }
+
     @Test
     fun `a REFUNDED order whose 40-day-old refund later failed is reinstated by the updatedAt re-check alone`() {
         val order = paidOrder()
