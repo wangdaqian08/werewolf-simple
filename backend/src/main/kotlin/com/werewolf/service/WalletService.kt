@@ -52,6 +52,18 @@ class WalletService(
         return record(userId, -amount, type, gameId, perkActivationId, paymentOrderId, note)
     }
 
+    /**
+     * Debit [amount] credits without the funds guard: the balance may go negative.
+     * Only for reversing a refunded or disputed purchase; returns the new balance.
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    fun forceDebit(userId: String, amount: Int, type: CreditTxType, paymentOrderId: Int, note: String): Int {
+        require(amount > 0) { "debit amount must be > 0, got $amount" }
+        getOrCreate(userId)
+        walletRepository.forceDebit(userId, amount)
+        return record(userId, -amount, type, null, null, paymentOrderId, note)
+    }
+
     /** Credit [amount] credits (amount > 0). Returns the new balance. */
     @Transactional(propagation = Propagation.REQUIRED)
     fun credit(

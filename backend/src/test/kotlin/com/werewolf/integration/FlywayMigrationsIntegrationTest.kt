@@ -359,6 +359,29 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V40 accepts refund and dispute statuses and reversal ledger types, and a wallet can go negative`() {
+        flyway().migrate()
+
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('p', 'p')")
+            listOf("REFUNDED", "DISPUTED", "DISPUTE_LOST").forEachIndexed { i, status ->
+                exec(
+                    "INSERT INTO payment_orders (order_no, user_id, product_id, credits, amount_cents, currency, status) " +
+                        "VALUES ('o$i', 'p', 1, 10, 100, 'usd', '$status')"
+                )
+            }
+            val flag = prepareStatement("SELECT credits_reversed FROM payment_orders WHERE order_no = 'o0'")
+            flag.executeQuery().use { rs -> rs.next(); assertThat(rs.getBoolean(1)).isFalse() }
+            exec("INSERT INTO credit_transactions (user_id, type, amount, balance_after) VALUES ('p', 'PURCHASE_REVERSAL', -60, -50)")
+            exec("INSERT INTO credit_transactions (user_id, type, amount, balance_after) VALUES ('p', 'PURCHASE_REINSTATED', 60, 10)")
+            exec("INSERT INTO wallets (user_id, balance) VALUES ('p', -50)")
+        }
+        assertThatThrownBy {
+            sql { exec("INSERT INTO payment_orders (order_no, user_id, product_id, credits, amount_cents, currency, status) VALUES ('ox', 'p', 1, 10, 100, 'usd', 'NOPE')") }
+        }.hasMessageContaining("payment_orders_status_check")
+    }
+
+    @Test
     fun `V28 accepts ADMIN_GRANT ledger rows and still rejects unknown types`() {
         flyway().migrate()
 

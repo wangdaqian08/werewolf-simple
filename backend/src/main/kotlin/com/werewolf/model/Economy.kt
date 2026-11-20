@@ -223,6 +223,9 @@ class PaymentOrder(
     @Column(name = "review_reason", length = 255)
     var reviewReason: String? = null,
 
+    @Column(name = "credits_reversed", nullable = false)
+    var creditsReversed: Boolean = false,
+
     @Column(name = "updated_at")
     @UpdateTimestamp
     var updatedAt: LocalDateTime? = null,

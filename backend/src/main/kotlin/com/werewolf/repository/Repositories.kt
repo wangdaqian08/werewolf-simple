@@ -214,6 +214,11 @@ interface WalletRepository : JpaRepository<Wallet, String> {
     @Query("UPDATE Wallet w SET w.balance = w.balance - :amount WHERE w.userId = :userId AND w.balance >= :amount")
     fun tryDebit(userId: String, amount: Int): Int
 
+    /** Unconditional debit: the balance may go negative (payment reversals only). */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Wallet w SET w.balance = w.balance - :amount WHERE w.userId = :userId")
+    fun forceDebit(userId: String, amount: Int): Int
+
     @Modifying(flushAutomatically = true)
     @Query("UPDATE Wallet w SET w.balance = w.balance + :amount WHERE w.userId = :userId")
     fun credit(userId: String, amount: Int): Int
