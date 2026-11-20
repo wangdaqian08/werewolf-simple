@@ -12,9 +12,13 @@ import com.werewolf.model.User
 import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.UserRepository
+import com.werewolf.service.CheckoutRequest
 import com.werewolf.service.PaymentService
+import com.werewolf.service.StripeGatewayImpl
+import com.werewolf.service.StripeResourceMissingException
 import com.werewolf.service.WalletService
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.catchThrowableOfType
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
@@ -31,7 +35,7 @@ import java.util.UUID
  * GitHub Actions repository secret in CI.
  */
 @EnabledIfEnvironmentVariable(named = "STRIPE_SANDBOX_TESTS_ENABLED", matches = "true")
-@SpringBootTest(properties = ["app.payment.stripe-secret-key=\${STRIPE_SANDBOX_SECRET:}"])
+@SpringBootTest(properties = ["app.payment.enabled=true", "app.payment.stripe-secret-key=\${STRIPE_SANDBOX_SECRET:}"])
 @ActiveProfiles("test")
 class StripeSandboxIntegrationTest {
 
@@ -41,6 +45,7 @@ class StripeSandboxIntegrationTest {
     @Autowired lateinit var productRepository: ProductRepository
     @Autowired lateinit var paymentOrderRepository: PaymentOrderRepository
     @Autowired lateinit var props: PaymentProperties
+    @Autowired lateinit var gateway: StripeGatewayImpl
 
     @BeforeEach
     fun guardTestModeKey() {
@@ -123,5 +128,56 @@ class StripeSandboxIntegrationTest {
         val updated = paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow()
         assertThat(updated.status).isEqualTo(PaymentOrderStatus.EXPIRED)
         assertThat(walletService.balance(userId)).isEqualTo(0)
+    }
+
+    @Test
+    fun `StripeGatewayImpl - idempotent create, retrieve, expire, list and customer against the sandbox`() {
+        val (userId, product) = seedUserAndProduct()
+        val customerId = gateway.createCustomer(userId)
+        assertThat(customerId).startsWith("cus_")
+
+        val orderNo = UUID.randomUUID().toString()
+        val req = CheckoutRequest(
+            orderNo = orderNo, userId = userId, customerId = customerId,
+            productName = product.name, currency = product.currency, unitAmountCents = product.priceCents.toLong(),
+            successUrl = "${props.frontendBaseUrl}/pay/result?status=success&orderNo=$orderNo",
+            cancelUrl = "${props.frontendBaseUrl}/pay/result?status=cancel",
+            expiresAtEpochSec = System.currentTimeMillis() / 1000 + props.sessionExpiryMinutes * 60,
+        )
+        val first = gateway.createCheckoutSession(req, "checkout-$orderNo")
+        val again = gateway.createCheckoutSession(req, "checkout-$orderNo")
+        assertThat(again.sessionId).isEqualTo(first.sessionId)
+        assertThat(first.status).isEqualTo("open")
+        assertThat(first.url).contains("checkout.stripe.com")
+
+        val read = gateway.retrieveSession(first.sessionId)
+        assertThat(read.orderNo).isEqualTo(orderNo)
+        assertThat(read.clientReferenceId).isEqualTo(orderNo)
+
+        assertThat(gateway.expireSession(first.sessionId).status).isEqualTo("expired")
+
+        gateway.listCompletedSessions(System.currentTimeMillis() / 1000 - 3600).take(5).toList()
+    }
+
+    @Test
+    fun `StripeGatewayImpl - an unknown customer or session is StripeResourceMissingException`() {
+        val (userId, product) = seedUserAndProduct()
+        val orderNo = UUID.randomUUID().toString()
+        val req = CheckoutRequest(
+            orderNo = orderNo, userId = userId, customerId = "cus_doesnotexist${UUID.randomUUID().toString().take(8)}",
+            productName = product.name, currency = product.currency, unitAmountCents = product.priceCents.toLong(),
+            successUrl = "${props.frontendBaseUrl}/pay/result", cancelUrl = "${props.frontendBaseUrl}/pay/result",
+            expiresAtEpochSec = System.currentTimeMillis() / 1000 + props.sessionExpiryMinutes * 60,
+        )
+        val customer = catchThrowableOfType(StripeResourceMissingException::class.java) {
+            gateway.createCheckoutSession(req, "checkout-$orderNo")
+        }
+        assertThat(customer.resource).isEqualTo(StripeResourceMissingException.Resource.CUSTOMER)
+
+        val missing = "cs_test_doesnotexist${UUID.randomUUID().toString().replace("-", "")}"
+        assertThat(catchThrowableOfType(StripeResourceMissingException::class.java) { gateway.retrieveSession(missing) }.resource)
+            .isEqualTo(StripeResourceMissingException.Resource.SESSION)
+        assertThat(catchThrowableOfType(StripeResourceMissingException::class.java) { gateway.expireSession(missing) }.resource)
+            .isEqualTo(StripeResourceMissingException.Resource.SESSION)
     }
 }

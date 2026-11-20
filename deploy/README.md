@@ -218,6 +218,7 @@ Deploy a new release (once its images are published — see
  GOOGLE_REDIRECT_URI=https://private.youplay123.online/auth/callback/google
  FRONTEND_ORIGIN=https://private.youplay123.online
  FRONTEND_BASE_URL=https://private.youplay123.online   # Stripe return page
+PAYMENTS_ENABLED=false   # off by default; turn on only after the go-live runbook (docs/payments-prod-keys.md)
  ```
 
 Recreate after editing it:

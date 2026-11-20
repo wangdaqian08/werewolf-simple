@@ -8,8 +8,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  */
 @ConfigurationProperties(prefix = "app.payment")
 data class PaymentProperties(
-    /** Base URL the Checkout success/cancel redirects return to. */
-    val frontendBaseUrl: String = "https://www.youplay123.online",
+    /** Payments switch. When false: checkout and webhook answer 503 and reconciliation is off. */
+    val enabled: Boolean,
+    /** Base URL the Checkout success/cancel redirects return to (required when enabled). */
+    val frontendBaseUrl: String,
     val stripeSecretKey: String = "",
     val stripeWebhookSecret: String = "",
     /**
@@ -21,4 +23,14 @@ data class PaymentProperties(
      * so the switch is visible in config, not buried in a test annotation.
      */
     val sandboxTestsEnabled: Boolean = false,
+    /** Checkout Session lifetime in minutes. */
+    val sessionExpiryMinutes: Long,
+    /** How often the reconciliation job runs, in ms. */
+    val reconcileIntervalMs: Long,
+    /** Only orders still CREATED after this many minutes are reconciled. */
+    val reconcileMinAgeMinutes: Long,
+    /** How far back the Stripe sweep looks, in days. */
+    val sweepLookbackDays: Long,
+    /** Minimum seconds between Stripe status checks per order from the return page. */
+    val statusCheckThrottleSeconds: Long,
 )

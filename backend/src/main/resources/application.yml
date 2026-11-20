@@ -45,12 +45,27 @@ app:
   cors:
     allowed-origins: "*"
   payment:
-    frontend-base-url: ${FRONTEND_BASE_URL:https://www.youplay123.online}
-    # Test-mode keys; empty default disables checkout (503) rather than failing boot
+    # Payments switch; when true, blank Stripe keys or frontend-base-url fail startup
+    enabled: ${PAYMENTS_ENABLED:false}
+    # Required when enabled (the private host the Checkout redirects return to)
+    frontend-base-url: ${FRONTEND_BASE_URL:}
+    # Required when enabled (blank fails startup); test-mode keys until going live
     stripe-secret-key: ${STRIPE_SECRET_KEY:}
     stripe-webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
     # Feature flag: lets the Stripe sandbox integration tests run (CI/local only)
     sandbox-tests-enabled: ${STRIPE_SANDBOX_TESTS_ENABLED:false}
+    # Stripe's minimum is 30 min after creation; 31 leaves headroom for latency
+    session-expiry-minutes: 31
+    # How often unpaid orders are reconciled with Stripe (10 min)
+    reconcile-interval-ms: 600000
+    # First reconcile after startup (30 s), off the startup thread
+    reconcile-initial-delay-ms: 30000
+    # Only reconcile orders still CREATED after this long
+    reconcile-min-age-minutes: 10
+    # How far back the Stripe sweep looks for missed payments
+    sweep-lookback-days: 30
+    # Min seconds between Stripe status checks per order from the return page
+    status-check-throttle-seconds: 5
 
 server:
   port: 8080

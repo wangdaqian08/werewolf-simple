@@ -8,11 +8,18 @@ import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 import java.util.*
 
 interface UserRepository : JpaRepository<User, String> {
     /** Admin player search: nickname substring, case-insensitive. */
     fun findTop20ByNicknameContainingIgnoreCaseOrderByNicknameAsc(nickname: String): List<User>
+
+    /** Forget a Stripe customer id the current Stripe key does not know; only if it is still the stored one. */
+    @Transactional
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE User u SET u.stripeCustomerId = NULL WHERE u.userId = :userId AND u.stripeCustomerId = :customerId")
+    fun clearStripeCustomerId(userId: String, customerId: String): Int
 }
 
 interface RoomRepository : JpaRepository<Room, Int> {
@@ -312,22 +319,47 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
     )
     fun markCompletedIfCreated(orderId: Int): Int
 
+    /**
+     * Conditional CREATED → [newStatus] (EXPIRED / FAILED); 0 rows = the order already left CREATED.
+     * Clears the persistence context so a stale loaded copy cannot flush CREATED back.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+        "UPDATE PaymentOrder o SET o.status = :newStatus " +
+            "WHERE o.id = :orderId AND o.status = com.werewolf.model.PaymentOrderStatus.CREATED",
+    )
+    fun markStatusIfCreated(orderId: Int, newStatus: PaymentOrderStatus): Int
+
+    fun findFirstByUserIdAndProductIdAndStatusAndSessionExpiresAtAfterOrderByCreatedAtDesc(
+        userId: String,
+        productId: Int,
+        status: PaymentOrderStatus,
+        now: LocalDateTime,
+    ): Optional<PaymentOrder>
+
+    fun findByUserIdAndStatusAndStripeSessionIdIsNotNull(userId: String, status: PaymentOrderStatus): List<PaymentOrder>
+
+    fun findByStatusAndCreatedAtBefore(status: PaymentOrderStatus, cutoff: LocalDateTime): List<PaymentOrder>
+
+    fun findByStatusAndReceiptUrlIsNull(status: PaymentOrderStatus): List<PaymentOrder>
+
     fun findTop50ByUserIdOrderByCreatedAtDesc(userId: String): List<PaymentOrder>
 }
 
 interface PaymentEventRepository : JpaRepository<PaymentEvent, String> {
     /**
-     * Webhook event dedup, insert-first: 1 = first delivery, 0 = duplicate
-     * (Stripe retries). ON CONFLICT DO NOTHING for the same reason as
-     * GameSettlementRepository.tryInsert — no exception, no poisoned tx.
+     * Insert the event's RECEIVED row (attempts 0) unless it exists: 1 = first delivery,
+     * 0 = re-delivery. ON CONFLICT DO NOTHING for the same reason as
+     * GameSettlementRepository.tryInsert — no exception, no poisoned tx; a concurrent
+     * duplicate waits for the first insert instead of failing.
      */
     @Modifying(flushAutomatically = true)
     @Query(
-        value = "INSERT INTO payment_events (stripe_event_id, event_type, received_at) " +
-            "VALUES (:eventId, :eventType, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING",
+        value = "INSERT INTO payment_events (stripe_event_id, event_type, object_id, received_at, status, attempts) " +
+            "VALUES (:eventId, :eventType, :objectId, CURRENT_TIMESTAMP, 'RECEIVED', 0) ON CONFLICT DO NOTHING",
         nativeQuery = true,
     )
-    fun tryInsert(eventId: String, eventType: String): Int
+    fun tryInsert(eventId: String, eventType: String, objectId: String?): Int
 }
 
 interface GameSettlementRepository : JpaRepository<GameSettlement, Int> {

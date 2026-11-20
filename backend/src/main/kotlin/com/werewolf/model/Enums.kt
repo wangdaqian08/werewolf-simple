@@ -86,6 +86,8 @@ enum class PerkActivationStatus { ACTIVE, CONSUMED, VOID, REFUNDED }
 
 enum class PaymentOrderStatus { CREATED, COMPLETED, EXPIRED, FAILED }
 
+enum class PaymentEventStatus { RECEIVED, PROCESSED, FAILED }
+
 enum class ActionType {
     // Role reveal
     CONFIRM_ROLE, START_NIGHT,
