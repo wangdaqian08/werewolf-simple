@@ -24,6 +24,11 @@ class PaymentOrderWriter(
 ) {
     private val log = LoggerFactory.getLogger(PaymentOrderWriter::class.java)
 
+    /** Paid orders whose credits follow the money; any other status has no credits to reconcile. */
+    private val SETTLED = setOf(
+        PaymentOrderStatus.COMPLETED, PaymentOrderStatus.REFUNDED, PaymentOrderStatus.DISPUTED, PaymentOrderStatus.DISPUTE_LOST,
+    )
+
     /** Commit a CREATED order before Stripe is called, so Stripe never holds a session we did not save. */
     @Transactional
     fun createOrder(userId: String, product: Product): PaymentOrder =
@@ -105,6 +110,56 @@ class PaymentOrderWriter(
         order.receiptUrl = receiptUrl
         order.updatedAt = LocalDateTime.now()
     }
+
+    /**
+     * Bring the order's credits in line with Stripe's money [state] (R7): at most one corrective
+     * ledger row. The row lock serializes concurrent events for one order, so the second caller
+     * reads the first one's `creditsReversed` and writes nothing. An order needing review (a partial
+     * refund ever seen, or flagged for another reason) gets no automatic credit change; its status
+     * still mirrors the money, and a change of it is alerted.
+     */
+    @Transactional
+    fun applyMoneyState(orderId: Int, state: MoneyState, reason: String): ChargeOutcome {
+        val order = paymentOrderRepository.findByIdForUpdate(orderId).orElseThrow { IllegalStateException("no order $orderId") }
+        if (order.status !in SETTLED) return ChargeOutcome.NOT_SETTLED
+        val outcome = when {
+            order.needsReview -> {
+                if (order.status != state.orderStatus) {
+                    log.error("[payment-alert] order {} needs review and its money state changed: {} → {} ({})",
+                        order.orderNo, order.status, state.orderStatus, reason)
+                }
+                ChargeOutcome.NEEDS_REVIEW
+            }
+            state.partialRefundSeen -> {
+                flag(order, "partial refund")
+                ChargeOutcome.NEEDS_REVIEW
+            }
+            !state.creditsShouldBePresent && !order.creditsReversed -> {
+                order.creditsReversed = true
+                walletService.forceDebit(order.userId, order.credits, CreditTxType.PURCHASE_REVERSAL, orderId, note(order, reason))
+                ChargeOutcome.REVERSED
+            }
+            state.creditsShouldBePresent && order.creditsReversed -> {
+                order.creditsReversed = false
+                walletService.credit(order.userId, order.credits, CreditTxType.PURCHASE_REINSTATED,
+                    paymentOrderId = orderId, note = note(order, reason))
+                ChargeOutcome.REINSTATED
+            }
+            else -> ChargeOutcome.UNCHANGED
+        }
+        order.status = state.orderStatus
+        order.updatedAt = LocalDateTime.now()
+        return outcome
+    }
+
+    /** The order [c] belongs to: by charge id, then PaymentIntent id, then PaymentIntent metadata orderNo. */
+    @Transactional(readOnly = true)
+    fun findOrderForCharge(c: ChargeSnapshot): PaymentOrder? =
+        paymentOrderRepository.findFirstByStripeChargeId(c.chargeId).orElse(null)
+            ?: c.paymentIntentId?.let { paymentOrderRepository.findFirstByStripePaymentIntentId(it).orElse(null) }
+            ?: c.orderNo?.let { paymentOrderRepository.findByOrderNo(it).orElse(null) }
+
+    private fun note(order: PaymentOrder, reason: String) = "${order.orderNo} $reason".take(200)
 
     @Transactional
     fun flagForReview(orderId: Int, reason: String) {
