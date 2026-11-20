@@ -48,7 +48,7 @@ class PaymentChargeService(
         val state = moneyState(charge)
         val money = "refunded ${state.refundedAmount}/${charge.amount}, dispute ${state.dispute}"
         val orderId = order.id ?: error("order not persisted")
-        val outcome = writer.applyMoneyState(orderId, state, "$money ($source)")
+        val outcome = writer.applyMoneyState(orderId, chargeId, state, "$money ($source)")
         when (outcome) {
             ChargeOutcome.NOT_SETTLED ->
                 // Not paid yet in our DB (fulfillment still to come): fail so the webhook retries.

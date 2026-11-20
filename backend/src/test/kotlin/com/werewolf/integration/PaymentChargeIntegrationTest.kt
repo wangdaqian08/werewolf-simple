@@ -381,18 +381,20 @@ class PaymentChargeIntegrationTest {
     }
 
     @Test
-    fun `the order is found by PaymentIntent, then by orderNo, when its charge id is not stored`() {
+    fun `the order is found by PaymentIntent, then by orderNo, when its charge id is not stored - and the charge id is stored`() {
         val byIntent = seedOrder()
         val chargeA = byIntent.charge
         paymentOrderRepository.save(reload(byIntent).also { it.stripeChargeId = null })
         gateway.refund(chargeA, amount)
         assertThat(charges.reconcileCharge(chargeA, "test")).isEqualTo(ChargeOutcome.REVERSED)
+        assertThat(reload(byIntent).stripeChargeId).isEqualTo(chargeA) // so the DISPUTED / reversed re-check can find it
 
         val byOrderNo = seedOrder()
         val chargeB = byOrderNo.charge
         paymentOrderRepository.save(reload(byOrderNo).also { it.stripeChargeId = null; it.stripePaymentIntentId = null })
         gateway.refund(chargeB, amount)
         assertThat(charges.reconcileCharge(chargeB, "test")).isEqualTo(ChargeOutcome.REVERSED)
+        assertThat(reload(byOrderNo).stripeChargeId).isEqualTo(chargeB)
     }
 
     @Test
@@ -459,7 +461,7 @@ class PaymentChargeIntegrationTest {
 
         transactionTemplate.executeWithoutResult {
             paymentOrderRepository.findById(orderId).orElseThrow() // unlocked read: COMPLETED, not reversed
-            requiresNew.executeWithoutResult { writer.applyMoneyState(orderId, fullRefund, "test") } // commits meanwhile
+            requiresNew.executeWithoutResult { writer.applyMoneyState(orderId, order.charge, fullRefund, "test") } // commits meanwhile
             writer.storeReceipt(orderId, null, "https://pay.stripe.com/receipts/new") // flushes the stale instance
         }
 

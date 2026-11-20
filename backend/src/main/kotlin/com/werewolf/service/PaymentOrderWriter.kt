@@ -109,7 +109,7 @@ class PaymentOrderWriter(
     }
 
     /**
-     * Bring the order's credits in line with Stripe's money [state] (R7): at most one corrective
+     * Bring the order's credits in line with Stripe's money [state] of charge [chargeId] (R7): at most one corrective
      * ledger row. The row lock serializes concurrent events for one order, so the second caller
      * reads the first one's `creditsReversed` and writes nothing. CREATED is NOT_SETTLED (the caller
      * retries); EXPIRED / FAILED were never credited and are left alone. An order needing review (a partial
@@ -117,7 +117,7 @@ class PaymentOrderWriter(
      * still mirrors the money, and a change of it is alerted.
      */
     @Transactional
-    fun applyMoneyState(orderId: Int, state: MoneyState, reason: String): ChargeOutcome {
+    fun applyMoneyState(orderId: Int, chargeId: String, state: MoneyState, reason: String): ChargeOutcome {
         val order = entityManager.find(PaymentOrder::class.java, orderId) ?: throw IllegalStateException("no order $orderId")
         // Lock AND re-read: with open-in-view the EntityManager may already hold this order, loaded before the lock.
         entityManager.refresh(order, LockModeType.PESSIMISTIC_WRITE)
@@ -132,6 +132,8 @@ class PaymentOrderWriter(
             }
             else -> {}
         }
+        // Found by PaymentIntent or orderNo: keep the charge id, so the DISPUTED / reversed re-check can find the order.
+        order.stripeChargeId = order.stripeChargeId ?: chargeId
         val outcome = when {
             order.needsReview -> {
                 if (order.status != state.orderStatus) {
