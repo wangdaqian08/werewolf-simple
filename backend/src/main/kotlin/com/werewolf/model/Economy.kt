@@ -2,6 +2,7 @@ package com.werewolf.model
 
 import jakarta.persistence.*
 import org.hibernate.annotations.CreationTimestamp
+import org.hibernate.annotations.DynamicUpdate
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.annotations.UpdateTimestamp
 import org.hibernate.type.SqlTypes
@@ -165,6 +166,9 @@ class Product(
     val sortOrder: Int = 0,
 )
 
+// Writes only changed columns: an unlocked writer (receipt, review flag) never overwrites a
+// status / credits_reversed committed meanwhile under applyMoneyState's row lock.
+@DynamicUpdate
 @Entity
 @Table(name = "payment_orders")
 class PaymentOrder(

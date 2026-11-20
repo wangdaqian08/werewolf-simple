@@ -10,8 +10,11 @@ import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.UserRepository
 import com.werewolf.service.ChargeOutcome
+import com.werewolf.service.DisputePhase
+import com.werewolf.service.MoneyState
 import com.werewolf.service.OrderNotFoundForChargeException
 import com.werewolf.service.PaymentChargeService
+import com.werewolf.service.PaymentOrderWriter
 import com.werewolf.service.WalletService
 import com.werewolf.support.FakeStripeGateway
 import com.werewolf.support.PaymentIntegrationTest
@@ -24,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.system.CapturedOutput
 import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.orm.jpa.EntityManagerHolder
+import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate
 import jakarta.persistence.EntityManagerFactory
@@ -50,6 +54,7 @@ class PaymentChargeIntegrationTest {
     @Autowired lateinit var creditTransactionRepository: CreditTransactionRepository
     @Autowired lateinit var transactionTemplate: TransactionTemplate
     @Autowired lateinit var emf: EntityManagerFactory
+    @Autowired lateinit var writer: PaymentOrderWriter
 
     private val amount = 2990L
     private val credits = 330
@@ -442,5 +447,27 @@ class PaymentChargeIntegrationTest {
         assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).hasSize(1)
         assertThat(walletService.balance(order.userId)).isEqualTo(-100)
         assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
+    }
+
+    @Test
+    fun `a receipt stored from a stale read never undoes a reversal committed meanwhile`() {
+        val order = seedOrder()
+        val orderId = order.id ?: error("no id")
+        val requiresNew = TransactionTemplate(transactionTemplate.transactionManager!!)
+            .apply { propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW }
+        val fullRefund = MoneyState(amount, fullyRefunded = true, partialRefundSeen = false, dispute = DisputePhase.NONE)
+
+        transactionTemplate.executeWithoutResult {
+            paymentOrderRepository.findById(orderId).orElseThrow() // unlocked read: COMPLETED, not reversed
+            requiresNew.executeWithoutResult { writer.applyMoneyState(orderId, fullRefund, "test") } // commits meanwhile
+            writer.storeReceipt(orderId, null, "https://pay.stripe.com/receipts/new") // flushes the stale instance
+        }
+
+        val after = reload(order)
+        assertThat(after.receiptUrl).isEqualTo("https://pay.stripe.com/receipts/new")
+        assertThat(after.status).isEqualTo(PaymentOrderStatus.REFUNDED)
+        assertThat(after.creditsReversed).isTrue()
+        assertThat(reconcile(order.also { gateway.refund(it.charge, amount) })).isEqualTo(ChargeOutcome.UNCHANGED) // no second debit
+        assertThat(rows(order, CreditTxType.PURCHASE_REVERSAL)).hasSize(1)
     }
 }
