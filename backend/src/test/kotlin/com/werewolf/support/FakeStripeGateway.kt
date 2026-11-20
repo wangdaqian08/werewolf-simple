@@ -23,6 +23,8 @@ class FakeStripeGateway : StripeGateway {
     private val sessionByIdempotencyKey = HashMap<String, String>()
     private val customers = HashSet<String>()
     private val charges = LinkedHashMap<String, ChargeSnapshot>()
+    // Latest refund/dispute creation time per charge, so the listing honours the created window.
+    private val moneyEventAt = HashMap<String, Long>()
     private var seq = 0
 
     val createCalls = mutableListOf<Pair<CheckoutRequest, String>>()
@@ -40,7 +42,7 @@ class FakeStripeGateway : StripeGateway {
 
     @Synchronized
     fun reset() {
-        sessions.clear(); createdAt.clear(); sessionByIdempotencyKey.clear(); customers.clear(); createCalls.clear(); charges.clear()
+        sessions.clear(); createdAt.clear(); sessionByIdempotencyKey.clear(); customers.clear(); createCalls.clear(); charges.clear(); moneyEventAt.clear()
         retrieveCalls = 0; expireCalls = 0; listCalls = 0; createCustomerCalls = 0
         failCreate = false; failRetrieve = false; failExpire = false; expireKeepsOpen = false
     }
@@ -120,7 +122,8 @@ class FakeStripeGateway : StripeGateway {
 
     /** Refund [amount] of the charge (full or partial); returns the refund id. */
     @Synchronized
-    fun refund(chargeId: String, amount: Long, status: String = "succeeded"): String {
+    fun refund(chargeId: String, amount: Long, status: String = "succeeded", createdEpochSec: Long = nowSec()): String {
+        moneyEventAt.merge(chargeId, createdEpochSec, ::maxOf)
         val id = "re_fake_${++seq}"
         val c = charge(chargeId)
         charges[chargeId] = c.copy(refunds = c.refunds + RefundInfo(id, amount, status))
@@ -134,7 +137,10 @@ class FakeStripeGateway : StripeGateway {
     }
 
     @Synchronized
-    fun openDispute(chargeId: String, status: String = "needs_response") = setDisputeStatus(chargeId, status)
+    fun openDispute(chargeId: String, status: String = "needs_response", createdEpochSec: Long = nowSec()) {
+        moneyEventAt.merge(chargeId, createdEpochSec, ::maxOf)
+        setDisputeStatus(chargeId, status)
+    }
 
     @Synchronized
     fun setDisputeStatus(chargeId: String, status: String) {
@@ -146,7 +152,9 @@ class FakeStripeGateway : StripeGateway {
 
     @Synchronized
     override fun listRecentChargeIdsWithRefundsOrDisputes(createdAfterEpochSec: Long): Sequence<String> =
-        charges.values.filter { it.refunds.isNotEmpty() || it.disputeStatus != null }.map { it.chargeId }.toList().asSequence()
+        charges.values
+            .filter { (it.refunds.isNotEmpty() || it.disputeStatus != null) && (moneyEventAt[it.chargeId] ?: 0) >= createdAfterEpochSec }
+            .map { it.chargeId }.toList().asSequence()
 
     private fun charge(id: String) =
         charges[id] ?: throw StripeResourceMissingException(Resource.CHARGE, id)

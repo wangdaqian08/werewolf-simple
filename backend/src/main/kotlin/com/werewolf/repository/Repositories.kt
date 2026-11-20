@@ -350,6 +350,15 @@ interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
 
     fun findByStatusAndReceiptUrlIsNull(status: PaymentOrderStatus): List<PaymentOrder>
 
+    fun findByStatus(status: PaymentOrderStatus): List<PaymentOrder>
+
+    /** Orders whose money state changed lately: refunded, or credits reversed (e.g. a lost dispute). */
+    @Query(
+        "SELECT o FROM PaymentOrder o WHERE o.updatedAt >= :since AND " +
+            "(o.status = com.werewolf.model.PaymentOrderStatus.REFUNDED OR o.creditsReversed = true)",
+    )
+    fun findReversedUpdatedSince(since: LocalDateTime): List<PaymentOrder>
+
     fun findTop50ByUserIdOrderByCreatedAtDesc(userId: String): List<PaymentOrder>
 }
 

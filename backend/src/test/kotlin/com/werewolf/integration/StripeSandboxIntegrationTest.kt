@@ -200,7 +200,7 @@ class StripeSandboxIntegrationTest {
     )
 
     @Test
-    fun `StripeGatewayImpl - retrieveCharge reads a refund and a dispute, and the recent list contains both charges`() {
+    fun `StripeGatewayImpl - retrieveCharge reads a refund, and the recent list contains the charge`() {
         val refundedPi = paidIntent("pm_card_visa")
         val refundedCharge = refundedPi.latestCharge ?: error("no charge on ${refundedPi.id}")
         Refund.create(RefundCreateParams.builder().setCharge(refundedCharge).build())
@@ -211,7 +211,12 @@ class StripeSandboxIntegrationTest {
         assertThat(snap.refunds.first().amount).isEqualTo(1500L)
         assertThat(snap.refunds.first().status).isEqualTo("succeeded")
         assertThat(snap.disputeStatus).isNull()
+        val recent = gateway.listRecentChargeIdsWithRefundsOrDisputes(System.currentTimeMillis() / 1000 - 3600).toList()
+        assertThat(recent).contains(refundedCharge)
+    }
 
+    @Test
+    fun `StripeGatewayImpl - retrieveCharge reads a dispute, and the recent list contains the charge`() {
         val disputedCharge = paidIntent("pm_card_createDispute").latestCharge ?: error("no disputed charge")
         var disputeStatus: String? = null
         val deadline = System.currentTimeMillis() + 60_000
@@ -222,7 +227,7 @@ class StripeSandboxIntegrationTest {
         assumeTrue(disputeStatus != null, "Stripe did not create the test dispute for $disputedCharge within 60s")
 
         val recent = gateway.listRecentChargeIdsWithRefundsOrDisputes(System.currentTimeMillis() / 1000 - 3600).toList()
-        assertThat(recent).contains(refundedCharge, disputedCharge)
+        assertThat(recent).contains(disputedCharge)
     }
 
     @Test

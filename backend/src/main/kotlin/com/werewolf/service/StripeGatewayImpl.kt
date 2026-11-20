@@ -91,7 +91,7 @@ class StripeGatewayImpl : StripeGateway {
     override fun createCustomer(userId: String): String =
         Customer.create(CustomerCreateParams.builder().putMetadata("userId", userId).build()).id
 
-    // stripe-java 33 (dahlia): Charge has no dispute field and its refunds list is not reliably expandable,
+    // stripe-java 33 (dahlia): Charge has no dispute field and its refunds list is not used or expanded,
     // so refunds and the dispute are read with list calls filtered by charge.
     override fun retrieveCharge(chargeId: String): ChargeSnapshot {
         val charge = try {

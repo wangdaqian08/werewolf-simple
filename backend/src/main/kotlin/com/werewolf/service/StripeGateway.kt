@@ -48,7 +48,11 @@ interface StripeGateway {
     fun listCompletedSessions(createdAfterEpochSec: Long): Sequence<CheckoutSnapshot> // auto-paging
     fun createCustomer(userId: String): String                 // metadata userId; returns customer id
     fun retrieveCharge(chargeId: String): ChargeSnapshot       // refunds + dispute read alongside the charge
-    /** Charge ids of refunds and disputes created since the cutoff (Refund.list + Dispute.list), distinct. */
+    /**
+     * Charge ids of refunds and disputes **created** since the cutoff (Refund.list + Dispute.list), distinct.
+     * Status changes on older ones are not found here: they come by webhook, or by the per-order
+     * re-check in the reconciliation job.
+     */
     fun listRecentChargeIdsWithRefundsOrDisputes(createdAfterEpochSec: Long): Sequence<String>
 }
 
