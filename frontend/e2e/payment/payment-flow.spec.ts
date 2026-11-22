@@ -97,15 +97,29 @@ async function buyValuePack(
   const form = await checkoutForm(page)
   // A fresh email each run, so Stripe never routes us into a returning-Link-user OTP screen.
   // Stripe ticks the Link box only once its lookup of the typed email returns, so wait for that first.
-  const linkLookup = page.waitForResponse((r) => r.url().includes('/v1/consumers/sessions/lookup'))
+  const linkLookup = page.waitForResponse(
+    (r) => r.url().includes('/v1/consumers/sessions/lookup'),
+    {
+      timeout: 20_000,
+    },
+  )
   await form.fill('input[name="email"]', `payment-e2e-${Date.now()}@example.com`)
   await form.locator('input[name="number"]').focus()
   await linkLookup
   // Stripe pre-checks "save my information" (Link) and then requires a phone number. Toggling its
   // styled box from a test leaves Stripe's own state out of step and the pay button silently does
   // nothing (2026-11-22), so leave it on and give it a test phone number (sandbox Link only).
-  const linkPhone = form.locator('input[name="linkMobilePhone"]')
-  if (await linkPhone.isVisible()) {
+  const linkOptIn = form.locator('input[name="linkOptIn"]')
+  const linkOn = await expect
+    .poll(() => linkOptIn.getAttribute('aria-checked'), { timeout: 5_000 })
+    .toBe('true')
+    .then(
+      () => true,
+      () => false, // Link is off for this account or this email: no phone needed
+    )
+  if (linkOn) {
+    const linkPhone = form.locator('input[name="linkMobilePhone"]')
+    await linkPhone.waitFor({ state: 'visible' })
     await form.selectOption('select[name="linkMobilePhoneCountry"]', 'US')
     await linkPhone.fill('2015550123')
   }

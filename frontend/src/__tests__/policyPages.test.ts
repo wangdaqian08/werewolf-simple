@@ -41,4 +41,22 @@ describe('policy pages', () => {
       expect(html).toMatch(s)
     }
   })
+
+  it('the terms describe the role-pick charge as the code makes it: held on choosing, returned on a miss', () => {
+    const html = read('terms')
+    expect(html).toMatch(/held when you choose/i)
+    expect(html).toMatch(/returned (to you )?in full/i)
+    expect(html).not.toMatch(/taken only when/i)
+  })
+
+  it('the terms name every sign-in the lobby offers and a change notice the owner can give', () => {
+    const html = read('terms')
+    expect(html).toMatch(/WeChat/)
+    expect(html).toMatch(/at least 14 days before/i)
+    expect(html).not.toMatch(/announce the change in the game/i)
+  })
+
+  it('the refund policy says a role-pick card still waiting for its draw counts as spending', () => {
+    expect(read('refunds')).toMatch(/still waiting for its draw/i)
+  })
 })

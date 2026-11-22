@@ -95,8 +95,8 @@ to the SPA).
   accounts (guest accounts cannot buy; Google sign-in); credits (virtual, no cash value, not
   transferable or exchangeable, earned by playing or bought; balance may go negative after a refund
   or chargeback and then blocks spending); purchases (prices in AUD, paid through Stripe; under 18
-  needs a parent's or guardian's consent); role-pick cards (a random draw; credits are taken only
-  when the draw succeeds and returned when it misses or the game is cancelled); refunds (summary +
+  needs a parent's or guardian's consent); role-pick cards (a random draw; credits are held when
+  the card is chosen and returned in full when the draw misses or the game is cancelled); refunds (summary +
   link to the Refund Policy); chargebacks (a chargeback takes back that purchase's credits); account
   suspension (fraud, chargebacks, breach — D4); changes to the terms (announced in the app before they
   apply — D4); the ACL statement (D3); governing law (the state the company is registered in —

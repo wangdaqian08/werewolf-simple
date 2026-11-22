@@ -139,32 +139,38 @@ test-mode orders expire on their own. No SQL is needed.
 ## Deciding an emailed refund request
 
 The Refund Policy promises a full refund within 14 days of a purchase if the player has
-not spent credits since (a role-pick charge returned in full does not count). Put the
-order number on the first line and run it read-only, as with any production query:
+not spent credits since (a role-pick charge returned in full does not count). The rule is
+judged at the moment the player asked, not when you handle the email. Put the order number
+and the time the email arrived (in UTC) on the first two lines and run it read-only, as with
+any production query:
 
 ```sql
 \set order_no 'PUT-THE-ORDER-NUMBER-HERE'
+\set asked_at 'WHEN-THE-PLAYER-ASKED'
+-- asked_at: when the request email arrived, in UTC, e.g. 2026-11-20 13:05
 BEGIN READ ONLY;
 WITH o AS (
-    SELECT order_no, user_id, status, amount_cents, currency, credits, completed_at
+    SELECT order_no, user_id, status, amount_cents, currency, credits, completed_at,
+           CAST(:'asked_at' AS timestamp) AS asked_at
     FROM payment_orders
     WHERE order_no = :'order_no'
 ),
-spends AS (  -- spending after the purchase; a role-pick charge returned in full does not count
+spends AS (  -- spending between the purchase and the request; a role-pick charge returned in full does not count
     SELECT t.id
     FROM credit_transactions t
     JOIN o ON t.user_id = o.user_id
     WHERE t.type = 'PERK_SPEND'
       AND t.created_at > o.completed_at
+      AND t.created_at <= o.asked_at
       AND NOT EXISTS (SELECT 1 FROM credit_transactions r
                       WHERE r.type = 'REFUND' AND r.user_id = t.user_id
                         AND r.perk_activation_id = t.perk_activation_id)
 )
-SELECT o.order_no, o.status, o.amount_cents, o.currency, o.credits, o.completed_at,
-       round(extract(epoch FROM (now() AT TIME ZONE 'UTC' - o.completed_at)) / 86400, 1) AS days_since,
-       (SELECT count(*) FROM spends) AS spends_since,
+SELECT o.order_no, o.status, o.amount_cents, o.currency, o.credits, o.completed_at, o.asked_at,
+       round(extract(epoch FROM (o.asked_at - o.completed_at)) / 86400, 1) AS days_to_request,
+       (SELECT count(*) FROM spends) AS spends_before_request,
        CASE WHEN o.status = 'COMPLETED'
-             AND now() AT TIME ZONE 'UTC' - o.completed_at <= interval '14 days'
+             AND o.asked_at - o.completed_at <= interval '14 days'
              AND (SELECT count(*) FROM spends) = 0
             THEN 'REFUNDABLE' ELSE 'NOT REFUNDABLE' END AS decision
 FROM o;
