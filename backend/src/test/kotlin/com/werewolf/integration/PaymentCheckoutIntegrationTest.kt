@@ -1,6 +1,7 @@
 package com.werewolf.integration
 
 import org.springframework.data.domain.Pageable
+import com.werewolf.config.PaymentProperties
 import com.werewolf.integration.TestConstants.FIELD_NICKNAME
 import com.werewolf.integration.TestConstants.FIELD_TOKEN
 import com.werewolf.integration.TestConstants.LOGIN_URL
@@ -52,6 +53,7 @@ class PaymentCheckoutIntegrationTest {
     @Autowired lateinit var paymentOrderRepository: PaymentOrderRepository
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var jwtUtil: JwtUtil
+    @Autowired lateinit var props: PaymentProperties
 
     private lateinit var starter: Product
     private lateinit var value: Product
@@ -106,6 +108,8 @@ class PaymentCheckoutIntegrationTest {
         assertThat(req.userId).isEqualTo(userId)
         assertThat(req.customerId).startsWith("cus_").isEqualTo(userRepository.findById(userId).orElseThrow().stripeCustomerId)
         assertThat(req.unitAmountCents).isEqualTo(199)
+        assertThat(req.termsUrl).isEqualTo("${props.frontendBaseUrl}/terms.html")
+        assertThat(req.refundPolicyUrl).isEqualTo("${props.frontendBaseUrl}/refunds.html")
         val session = gateway.retrieveSession(order.stripeSessionId ?: error("order has no session"))
         assertThat(url).isEqualTo(session.url)
         val in31 = LocalDateTime.now().plusMinutes(31) // Stripe's 30-min minimum plus headroom for latency

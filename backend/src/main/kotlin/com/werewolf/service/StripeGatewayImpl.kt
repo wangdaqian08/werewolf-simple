@@ -40,6 +40,21 @@ class StripeGatewayImpl : StripeGateway {
             )
             .setSuccessUrl(req.successUrl)
             .setCancelUrl(req.cancelUrl)
+            // Stripe refuses consent_collection without a Dashboard Terms URL unless this message is sent with it.
+            .setConsentCollection(
+                SessionCreateParams.ConsentCollection.builder()
+                    .setTermsOfService(SessionCreateParams.ConsentCollection.TermsOfService.REQUIRED)
+                    .build(),
+            )
+            .setCustomText(
+                SessionCreateParams.CustomText.builder()
+                    .setTermsOfServiceAcceptance(
+                        SessionCreateParams.CustomText.TermsOfServiceAcceptance.builder()
+                            .setMessage("I agree to the [Terms of Service](${req.termsUrl}) and the [Refund Policy](${req.refundPolicyUrl}).")
+                            .build(),
+                    )
+                    .build(),
+            )
             .addLineItem(
                 SessionCreateParams.LineItem.builder()
                     .setQuantity(1)

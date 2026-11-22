@@ -96,6 +96,10 @@ class StripeSandboxIntegrationTest {
         assertThat(session.metadata["orderNo"]).isEqualTo(order.orderNo)
         assertThat(session.metadata["userId"]).isEqualTo(userId)
         assertThat(session.successUrl).startsWith(props.frontendBaseUrl)
+        assertThat(session.consentCollection?.termsOfService).isEqualTo("required")
+        assertThat(session.customText?.termsOfServiceAcceptance?.message)
+            .contains("${props.frontendBaseUrl}/terms.html")
+            .contains("${props.frontendBaseUrl}/refunds.html")
 
         // Tidy up the sandbox — cleanup only, must never fail the test.
         try {
@@ -148,6 +152,8 @@ class StripeSandboxIntegrationTest {
             successUrl = "${props.frontendBaseUrl}/pay/result?status=success&orderNo=$orderNo",
             cancelUrl = "${props.frontendBaseUrl}/pay/result?status=cancel",
             expiresAtEpochSec = System.currentTimeMillis() / 1000 + props.sessionExpiryMinutes * 60,
+            termsUrl = "${props.frontendBaseUrl}/terms.html",
+            refundPolicyUrl = "${props.frontendBaseUrl}/refunds.html",
         )
         val first = gateway.createCheckoutSession(req, "checkout-$orderNo")
         val again = gateway.createCheckoutSession(req, "checkout-$orderNo")
@@ -173,6 +179,8 @@ class StripeSandboxIntegrationTest {
             productName = product.name, currency = product.currency, unitAmountCents = product.priceCents.toLong(),
             successUrl = "${props.frontendBaseUrl}/pay/result", cancelUrl = "${props.frontendBaseUrl}/pay/result",
             expiresAtEpochSec = System.currentTimeMillis() / 1000 + props.sessionExpiryMinutes * 60,
+            termsUrl = "${props.frontendBaseUrl}/terms.html",
+            refundPolicyUrl = "${props.frontendBaseUrl}/refunds.html",
         )
         val customer = catchThrowableOfType(StripeResourceMissingException::class.java) {
             gateway.createCheckoutSession(req, "checkout-$orderNo")
