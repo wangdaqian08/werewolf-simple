@@ -91,8 +91,8 @@ class WalletControllerTest {
     @Test
     fun `GET wallet gives each row linked to a payment order its orderNo, and null otherwise`() {
         val (token, userId) = login("WalletOrd")
-        val product = productRepository.findByProductKeyAndActiveTrue("starter").orElseGet {
-            productRepository.save(Product(productKey = "starter", name = "Starter Pack", credits = 100, priceCents = 199))
+        val product = productRepository.findByProductKeyAndActiveTrue("test-pack").orElseGet {
+            productRepository.save(Product(productKey = "test-pack", name = "Starter Pack", credits = 100, priceCents = 199))
         }
         val order = paymentOrderRepository.save(
             PaymentOrder(

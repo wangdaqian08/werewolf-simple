@@ -75,8 +75,8 @@ class PaymentWebhookIntegrationTest {
 
     private fun seedOrder(userId: String = newUser(), orderNo: String = UUID.randomUUID().toString(),
                           sessionId: String = "cs_test_${UUID.randomUUID()}"): PaymentOrder {
-        val product = productRepository.findByProductKeyAndActiveTrue("starter").orElseGet {
-            productRepository.save(Product(productKey = "starter", name = "Starter", credits = 100, priceCents = 199))
+        val product = productRepository.findByProductKeyAndActiveTrue("test-pack").orElseGet {
+            productRepository.save(Product(productKey = "test-pack", name = "Starter", credits = 100, priceCents = 199))
         }
         return paymentOrderRepository.save(
             PaymentOrder(
@@ -427,7 +427,7 @@ class PaymentWebhookIntegrationTest {
         }
         val resp = restTemplate.postForEntity(
             "/api/payment/checkout",
-            HttpEntity(mapOf("productKey" to "starter"), headers),
+            HttpEntity(mapOf("productKey" to "test-pack"), headers),
             Map::class.java,
         )
         assertThat(resp.statusCode).isEqualTo(HttpStatus.FORBIDDEN)

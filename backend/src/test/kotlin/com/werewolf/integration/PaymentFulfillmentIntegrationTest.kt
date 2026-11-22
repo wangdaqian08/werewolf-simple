@@ -62,8 +62,8 @@ class PaymentFulfillmentIntegrationTest {
     private fun seedOrder(withSessionId: Boolean = true): PaymentOrder {
         val userId = "google:fulfil-${UUID.randomUUID()}"
         userRepository.save(User(userId = userId, nickname = "Buyer"))
-        val product = productRepository.findByProductKeyAndActiveTrue("starter").orElseGet {
-            productRepository.save(Product(productKey = "starter", name = "Starter", credits = 100, priceCents = 199))
+        val product = productRepository.findByProductKeyAndActiveTrue("test-pack").orElseGet {
+            productRepository.save(Product(productKey = "test-pack", name = "Starter", credits = 100, priceCents = 199))
         }
         return paymentOrderRepository.save(
             PaymentOrder(

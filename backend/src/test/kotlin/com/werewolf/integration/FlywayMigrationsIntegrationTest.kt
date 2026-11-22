@@ -382,6 +382,20 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V42 prices every pack in AUD and retires the starter pack`() {
+        flyway().migrate()
+
+        fun strings(query: String): List<String> = sql {
+            createStatement().use { st ->
+                st.executeQuery(query).use { rs -> generateSequence { if (rs.next()) rs.getString(1) else null }.toList() }
+            }
+        }
+        assertThat(strings("SELECT DISTINCT currency FROM products")).containsExactly("aud")
+        assertThat(strings("SELECT active::text FROM products WHERE product_key = 'starter'")).containsExactly("false")
+        assertThat(strings("SELECT product_key FROM products WHERE active ORDER BY sort_order")).containsExactly("value", "big")
+    }
+
+    @Test
     fun `V41 accepts DISPUTE_REVERSAL ledger rows and still rejects unknown types`() {
         flyway().migrate()
 

@@ -59,7 +59,7 @@ class PaymentCheckoutIntegrationTest {
     @BeforeEach
     fun setUp() {
         gateway.reset()
-        starter = product("starter", "Starter", credits = 100, bonus = 0, priceCents = 199)
+        starter = product("test-pack", "Starter", credits = 100, bonus = 0, priceCents = 199)
         value = product("value", "Value", credits = 300, bonus = 30, priceCents = 499)
     }
 
@@ -77,10 +77,25 @@ class PaymentCheckoutIntegrationTest {
     private fun reload(order: PaymentOrder) = paymentOrderRepository.findByOrderNo(order.orderNo).orElseThrow()
 
     @Test
+    fun `a retired pack cannot be bought - 400, no order, no Stripe call`() {
+        val userId = newUser()
+        val retired = productRepository.save(
+            Product(productKey = "retired-${UUID.randomUUID()}".take(40), name = "Retired", credits = 100, priceCents = 199, active = false),
+        )
+        val headers = HttpHeaders().also { it.setBearerAuth(jwtUtil.generateToken(userId, "Buyer", null)) }
+
+        val resp = restTemplate.postForEntity("/api/payment/checkout", HttpEntity(mapOf("productKey" to retired.productKey), headers), Map::class.java)
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(orders(userId)).isEmpty()
+        assertThat(gateway.createCalls).isEmpty()
+    }
+
+    @Test
     fun `first checkout commits one order and opens one 31-minute session with the customer and idempotency key`() {
         val userId = newUser()
 
-        val url = paymentService.createCheckout(userId, "starter")
+        val url = paymentService.createCheckout(userId, "test-pack")
 
         val order = orders(userId).single()
         assertThat(order.status).isEqualTo(PaymentOrderStatus.CREATED)
@@ -101,9 +116,9 @@ class PaymentCheckoutIntegrationTest {
     @Test
     fun `same product again while its session is open returns the same URL and creates nothing`() {
         val userId = newUser()
-        val first = paymentService.createCheckout(userId, "starter")
+        val first = paymentService.createCheckout(userId, "test-pack")
 
-        val second = paymentService.createCheckout(userId, "starter")
+        val second = paymentService.createCheckout(userId, "test-pack")
 
         assertThat(second).isEqualTo(first)
         assertThat(orders(userId)).hasSize(1)
@@ -116,7 +131,7 @@ class PaymentCheckoutIntegrationTest {
         val userId = newUser()
         val start = CountDownLatch(1)
         val pool = Executors.newFixedThreadPool(2)
-        val futures = (1..2).map { pool.submit<String> { start.await(); paymentService.createCheckout(userId, "starter") } }
+        val futures = (1..2).map { pool.submit<String> { start.await(); paymentService.createCheckout(userId, "test-pack") } }
         start.countDown()
         val urls = futures.map { it.get(30, TimeUnit.SECONDS) }
         pool.shutdown()
@@ -129,7 +144,7 @@ class PaymentCheckoutIntegrationTest {
     @Test
     fun `a different product expires the old session, marks its order EXPIRED and opens a new one`() {
         val userId = newUser()
-        paymentService.createCheckout(userId, "starter")
+        paymentService.createCheckout(userId, "test-pack")
         val old = orders(userId).single()
 
         val url = paymentService.createCheckout(userId, "value")
@@ -147,7 +162,7 @@ class PaymentCheckoutIntegrationTest {
     @Test
     fun `an old session found paid at expiry time is credited, and the new session is still created`() {
         val userId = newUser()
-        paymentService.createCheckout(userId, "starter")
+        paymentService.createCheckout(userId, "test-pack")
         val old = orders(userId).single()
         gateway.markPaid(old.stripeSessionId ?: error("no session"))
 
@@ -164,7 +179,7 @@ class PaymentCheckoutIntegrationTest {
     @Test
     fun `the second purchase reuses the stored Stripe customer`() {
         val userId = newUser()
-        paymentService.createCheckout(userId, "starter")
+        paymentService.createCheckout(userId, "test-pack")
         paymentService.createCheckout(userId, "value")
 
         assertThat(gateway.createCustomerCalls).isEqualTo(1)
@@ -176,21 +191,21 @@ class PaymentCheckoutIntegrationTest {
         val userId = newUser()
         gateway.failCreate = true
 
-        assertThatThrownBy { paymentService.createCheckout(userId, "starter") }
+        assertThatThrownBy { paymentService.createCheckout(userId, "test-pack") }
             .isInstanceOf(PaymentsUnavailableException::class.java)
         val order = orders(userId).single()
         assertThat(order.status).isEqualTo(PaymentOrderStatus.CREATED)
         assertThat(order.stripeSessionId).isNull()
 
         val headers = HttpHeaders().also { it.setBearerAuth(jwtUtil.generateToken(userId, "Buyer", null)) }
-        val resp = restTemplate.postForEntity("/api/payment/checkout", HttpEntity(mapOf("productKey" to "starter"), headers), Map::class.java)
+        val resp = restTemplate.postForEntity("/api/payment/checkout", HttpEntity(mapOf("productKey" to "test-pack"), headers), Map::class.java)
         assertThat(resp.statusCode).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
     }
 
     @Test
     fun `failing to expire another product's session refuses with PaymentsUnavailable - one purchase in flight`() {
         val userId = newUser()
-        paymentService.createCheckout(userId, "starter")
+        paymentService.createCheckout(userId, "test-pack")
         val old = orders(userId).single()
         gateway.failExpire = true
 
@@ -204,7 +219,7 @@ class PaymentCheckoutIntegrationTest {
     @Test
     fun `an old session Stripe still reports open after expire refuses with PaymentsUnavailable`() {
         val userId = newUser()
-        paymentService.createCheckout(userId, "starter")
+        paymentService.createCheckout(userId, "test-pack")
         val old = orders(userId).single()
         gateway.expireKeepsOpen = true
 
@@ -218,13 +233,13 @@ class PaymentCheckoutIntegrationTest {
     @Test
     fun `failing to expire a session of the same product refuses with PaymentsUnavailable - no second payable session`() {
         val userId = newUser()
-        paymentService.createCheckout(userId, "starter")
+        paymentService.createCheckout(userId, "test-pack")
         val old = orders(userId).single()
         // Our clock says the session has expired, so it is not reused; Stripe may still have it open.
         paymentOrderRepository.save(reload(old).also { it.sessionExpiresAt = LocalDateTime.now().minusMinutes(1) })
         gateway.failExpire = true
 
-        assertThatThrownBy { paymentService.createCheckout(userId, "starter") }
+        assertThatThrownBy { paymentService.createCheckout(userId, "test-pack") }
             .isInstanceOf(PaymentsUnavailableException::class.java)
         assertThat(orders(userId)).hasSize(1)
         assertThat(gateway.createCalls).hasSize(1)
@@ -235,7 +250,7 @@ class PaymentCheckoutIntegrationTest {
         val userId = newUser()
         userRepository.save(userRepository.findById(userId).orElseThrow().also { it.stripeCustomerId = "cus_test_mode_leftover" })
 
-        val url = paymentService.createCheckout(userId, "starter")
+        val url = paymentService.createCheckout(userId, "test-pack")
 
         val customerId = userRepository.findById(userId).orElseThrow().stripeCustomerId
         assertThat(customerId).startsWith("cus_fake_")
@@ -248,11 +263,11 @@ class PaymentCheckoutIntegrationTest {
     @Test
     fun `after a Stripe key switch an open session of the same product is unknown - its order is EXPIRED and checkout succeeds`() {
         val userId = newUser()
-        paymentService.createCheckout(userId, "starter")
+        paymentService.createCheckout(userId, "test-pack")
         val old = orders(userId).single()
         gateway.reset() // the new key knows none of the old sessions or customers
 
-        val url = paymentService.createCheckout(userId, "starter")
+        val url = paymentService.createCheckout(userId, "test-pack")
 
         assertThat(reload(old).status).isEqualTo(PaymentOrderStatus.EXPIRED)
         val new = orders(userId).single { it.orderNo != old.orderNo }
@@ -263,7 +278,7 @@ class PaymentCheckoutIntegrationTest {
     @Test
     fun `after a Stripe key switch an open session of another product is unknown - its order is EXPIRED and checkout succeeds`() {
         val userId = newUser()
-        paymentService.createCheckout(userId, "starter")
+        paymentService.createCheckout(userId, "test-pack")
         val old = orders(userId).single()
         gateway.reset()
 
@@ -283,7 +298,7 @@ class PaymentCheckoutIntegrationTest {
             ?: error("no login body"))[FIELD_TOKEN] as String
         val headers = HttpHeaders().also { it.setBearerAuth(token) }
 
-        val resp = restTemplate.postForEntity("/api/payment/checkout", HttpEntity(mapOf("productKey" to "starter"), headers), Map::class.java)
+        val resp = restTemplate.postForEntity("/api/payment/checkout", HttpEntity(mapOf("productKey" to "test-pack"), headers), Map::class.java)
 
         assertThat(resp.statusCode).isEqualTo(HttpStatus.FORBIDDEN)
         assertThat(gateway.createCalls).isEmpty()

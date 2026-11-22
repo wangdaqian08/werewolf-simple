@@ -70,9 +70,9 @@ class StripeSandboxIntegrationTest {
     private fun seedUserAndProduct(): Pair<String, Product> {
         val userId = "google:sandbox-${UUID.randomUUID()}"
         userRepository.save(User(userId = userId, nickname = "SandboxBuyer"))
-        val product = productRepository.findByProductKeyAndActiveTrue("starter").orElseGet {
+        val product = productRepository.findByProductKeyAndActiveTrue("test-pack").orElseGet {
             productRepository.save(
-                Product(productKey = "starter", name = "Starter", credits = 100, priceCents = 199),
+                Product(productKey = "test-pack", name = "Starter", credits = 100, priceCents = 199),
             )
         }
         return userId to product

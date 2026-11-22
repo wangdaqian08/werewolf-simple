@@ -48,9 +48,9 @@ class PaymentControllerTest {
 
     @BeforeEach
     fun seedProduct() {
-        product = productRepository.findByProductKeyAndActiveTrue("starter").orElseGet {
+        product = productRepository.findByProductKeyAndActiveTrue("test-pack").orElseGet {
             productRepository.save(
-                Product(productKey = "starter", name = "Starter Pack", credits = 100, priceCents = 199),
+                Product(productKey = "test-pack", name = "Starter Pack", credits = 100, priceCents = 199),
             )
         }
     }

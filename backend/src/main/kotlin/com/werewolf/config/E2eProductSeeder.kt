@@ -20,9 +20,8 @@ class E2eProductSeeder {
     @Bean
     fun seedProducts(products: ProductRepository) = CommandLineRunner {
         if (products.count() == 0L) {
-            products.save(Product(productKey = "starter", name = "入门包", credits = 100, bonusCredits = 0, priceCents = 199, sortOrder = 1))
-            products.save(Product(productKey = "value", name = "超值包", credits = 300, bonusCredits = 30, priceCents = 499, sortOrder = 2))
-            products.save(Product(productKey = "big", name = "豪华包", credits = 700, bonusCredits = 100, priceCents = 999, sortOrder = 3))
+            products.save(Product(productKey = "value", name = "超值包", credits = 300, bonusCredits = 30, priceCents = 499, currency = "aud", sortOrder = 2))
+            products.save(Product(productKey = "big", name = "豪华包", credits = 700, bonusCredits = 100, priceCents = 999, currency = "aud", sortOrder = 3))
         }
     }
 }
