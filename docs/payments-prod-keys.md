@@ -15,6 +15,26 @@ nightly **Payment E2E (Stripe sandbox)** workflow is green.
 - A **partial refund** changes no credits. It flags the order for manual handling
   (`[payment-alert]` in the log), and a flagged order never changes credits on its own
   again: fix the balance by hand if needed.
+- Prices are in **AUD** (packs A$4.99 and A$9.99). Before paying, the player must tick
+  Stripe's "I agree to the Terms of Service and the Refund Policy" box; Stripe stores that
+  consent on the session, which is the evidence in a chargeback.
+- The policy pages are `/terms.html`, `/refunds.html` and `/privacy.html`. Before live
+  keys, have an Australian lawyer review them (a fixed-fee review is enough).
+
+## 0. Public business details
+
+Dashboard → Settings → Business → Public details (in the rehearsal sandbox and again in
+live mode):
+
+- Business name **Blue Vertex**, support email `wangdaqian08@gmail.com`, website
+  `https://private.youplay123.online`.
+- Terms of service URL `https://private.youplay123.online/terms.html`, privacy policy URL
+  `https://private.youplay123.online/privacy.html`.
+- **Statement descriptor:** short and recognisable, e.g. `BLUEVERTEX GAME`, so players
+  recognise the charge on their bank statement (fewer "I don't recognise this" chargebacks).
+- **Payment methods** (Settings → Payment methods): with AUD, Stripe's dynamic payment
+  methods also offer Klarna and Zip. The chosen first set is cards, Apple Pay and Google
+  Pay: switch Klarna and Zip off unless you want them.
 
 ## 1. Restricted key
 
@@ -95,10 +115,11 @@ Use a **new, empty sandbox** for the rehearsal, not the one CI uses: the reconci
 sweeps the last 30 days of Stripe sessions and charges, and every CI order it finds raises
 a `has no order` / `carries orderNo` alert against the production database.
 
-With that sandbox's key and endpoint from steps 1–4, on a signed-in (non-guest) account:
+With that sandbox's details, key and endpoint from steps 0–4, on a signed-in (non-guest) account:
 
-1. Buy the starter pack with card `4242 4242 4242 4242` (any future date, any CVC).
-   Credits arrive, the order reads 已完成 in 我的賬戶 → 充值記錄, and 收據 opens Stripe's receipt.
+1. Buy the A$4.99 pack with card `4242 4242 4242 4242` (any future date, any CVC), ticking
+   the Terms box. Credits arrive, the order reads 已完成 in 我的賬戶 → 充值記錄, 收據 opens
+   Stripe's receipt, and the Dashboard payment shows the Terms accepted.
 2. Dashboard → Payments → that payment → Refund → the **full** amount. Within seconds the
    order reads 已退款, the credits are gone, and the ledger shows 充值退回.
 3. Buy again with `4000 0000 0000 0259` (Stripe's dispute card). The order reads
@@ -108,12 +129,51 @@ With that sandbox's key and endpoint from steps 1–4, on a signed-in (non-guest
 
 ## 6. Stage 2: live keys
 
-1. Repeat steps 1, 2 and 4 in **live** mode, and recreate the backend.
-2. Buy the starter pack ($1.99) with a real card; confirm credits and the receipt.
+1. Repeat steps 0, 1, 2 and 4 in **live** mode, and recreate the backend.
+2. Buy the A$4.99 pack with a real card; confirm credits, the receipt and the Terms consent.
 3. Refund it in full from the Dashboard; confirm 已退款 and the credits are taken back.
 
 Switching from test to live keys is self-healing: test-mode customer ids are replaced and
 test-mode orders expire on their own. No SQL is needed.
+
+## Deciding an emailed refund request
+
+The Refund Policy promises a full refund within 14 days of a purchase if the player has
+not spent credits since (a role-pick charge returned in full does not count). Put the
+order number on the first line and run it read-only, as with any production query:
+
+```sql
+\set order_no 'PUT-THE-ORDER-NUMBER-HERE'
+BEGIN READ ONLY;
+WITH o AS (
+    SELECT order_no, user_id, status, amount_cents, currency, credits, completed_at
+    FROM payment_orders
+    WHERE order_no = :'order_no'
+),
+spends AS (  -- spending after the purchase; a role-pick charge returned in full does not count
+    SELECT t.id
+    FROM credit_transactions t
+    JOIN o ON t.user_id = o.user_id
+    WHERE t.type = 'PERK_SPEND'
+      AND t.created_at > o.completed_at
+      AND NOT EXISTS (SELECT 1 FROM credit_transactions r
+                      WHERE r.type = 'REFUND' AND r.user_id = t.user_id
+                        AND r.perk_activation_id = t.perk_activation_id)
+)
+SELECT o.order_no, o.status, o.amount_cents, o.currency, o.credits, o.completed_at,
+       round(extract(epoch FROM (now() AT TIME ZONE 'UTC' - o.completed_at)) / 86400, 1) AS days_since,
+       (SELECT count(*) FROM spends) AS spends_since,
+       CASE WHEN o.status = 'COMPLETED'
+             AND now() AT TIME ZONE 'UTC' - o.completed_at <= interval '14 days'
+             AND (SELECT count(*) FROM spends) = 0
+            THEN 'REFUNDABLE' ELSE 'NOT REFUNDABLE' END AS decision
+FROM o;
+ROLLBACK;
+```
+
+`REFUNDABLE` → refund the full charge in the Dashboard. `NOT REFUNDABLE` is only the
+change-of-mind rule: if something went wrong on our side (paid but not credited, wrong
+amount, credits that do not work), refund or fix it anyway (Australian Consumer Law).
 
 ## Alerts
 
