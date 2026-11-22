@@ -9,6 +9,7 @@ import com.werewolf.repository.CreditTransactionRepository
 import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.UserRepository
+import com.werewolf.service.CheckoutSnapshot
 import com.werewolf.service.ChargeOutcome
 import com.werewolf.service.DisputePhase
 import com.werewolf.service.MoneyState
@@ -367,9 +368,39 @@ class PaymentChargeIntegrationTest {
         assertThat(walletService.balance(order.userId)).isEqualTo(0)
     }
 
+    /** The order's Checkout Session as Stripe reports it: [paid] or still open. */
+    private fun putSession(order: PaymentOrder, paid: Boolean) {
+        val tag = order.stripeSessionId?.removePrefix("cs_") ?: error("no session")
+        gateway.put(
+            CheckoutSnapshot(
+                sessionId = "cs_$tag", status = if (paid) "complete" else "open",
+                paymentStatus = if (paid) "paid" else "unpaid", orderNo = order.orderNo,
+                clientReferenceId = order.orderNo, paymentIntentId = if (paid) "pi_$tag" else null,
+                chargeId = if (paid) "ch_$tag" else null,
+                receiptUrl = if (paid) "https://pay.stripe.com/receipts/$tag" else null,
+                url = null, expiresAtEpochSec = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `a dispute that arrives before the paid order is credited credits it first, then takes the credits back`() {
+        val order = seedOrder(PaymentOrderStatus.CREATED)
+        putSession(order, paid = true)
+        gateway.openDispute(order.charge, "needs_response")
+
+        assertThat(reconcile(order)).isEqualTo(ChargeOutcome.REVERSED)
+
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.DISPUTED)
+        assertThat(rows(order, CreditTxType.PURCHASE)).hasSize(1)
+        assertThat(rows(order, CreditTxType.DISPUTE_REVERSAL)).hasSize(1)
+        assertThat(walletService.balance(order.userId)).isEqualTo(0)
+    }
+
     @Test
     fun `an order still CREATED throws so the webhook retries, and nothing changes`() {
         val order = seedOrder(PaymentOrderStatus.CREATED)
+        putSession(order, paid = false)
         gateway.refund(order.charge, amount)
 
         assertThatThrownBy { reconcile(order) }.isInstanceOf(IllegalStateException::class.java)
