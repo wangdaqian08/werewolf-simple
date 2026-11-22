@@ -135,7 +135,7 @@
                   </div>
                   <div class="row-sub">
                     <span>
-                      {{ fmtMoney(order) }} ·
+                      {{ formatMoney(order.amountCents, order.currency) }} ·
                       <span data-testid="order-status">{{
                         ORDER_STATUS_LABELS[order.status]
                           ? $t(ORDER_STATUS_LABELS[order.status])
@@ -176,6 +176,7 @@
 </template>
 
 <script lang="ts" setup>
+import { formatMoney } from '@/utils/money'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getLocale } from '@/i18n'
@@ -246,38 +247,6 @@ const balanceText = computed(() =>
 
 function signed(amount: number): string {
   return amount >= 0 ? `+${amount}` : `−${Math.abs(amount)}`
-}
-
-// Stripe minor units are not always hundredths: zero-decimal currencies store
-// whole units, three-decimal currencies store thousandths (per Stripe docs).
-const ZERO_DECIMAL_CURRENCIES = new Set([
-  'bif',
-  'clp',
-  'djf',
-  'gnf',
-  'jpy',
-  'kmf',
-  'krw',
-  'mga',
-  'pyg',
-  'rwf',
-  'ugx',
-  'vnd',
-  'vuv',
-  'xaf',
-  'xof',
-  'xpf',
-])
-const THREE_DECIMAL_CURRENCIES = new Set(['bhd', 'jod', 'kwd', 'omr', 'tnd'])
-
-function fmtMoney(order: { amountCents: number; currency: string }): string {
-  const cur = order.currency.toLowerCase()
-  const amount = ZERO_DECIMAL_CURRENCIES.has(cur)
-    ? String(order.amountCents)
-    : THREE_DECIMAL_CURRENCIES.has(cur)
-      ? (order.amountCents / 1000).toFixed(3)
-      : (order.amountCents / 100).toFixed(2)
-  return cur === 'usd' ? `$${amount}` : `${amount} ${order.currency.toUpperCase()}`
 }
 
 function fmtDate(iso: string): string {

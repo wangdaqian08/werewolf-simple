@@ -82,7 +82,7 @@ const ORDERS: PaymentOrderSummary[] = [
     productName: 'Starter Pack',
     credits: 100,
     amountCents: 499,
-    currency: 'usd',
+    currency: 'aud',
     status: 'COMPLETED',
     createdAt: '2026-06-10T19:55:00',
   },
@@ -177,7 +177,7 @@ describe('AccountView', () => {
     expect(ledger[1]!.text()).toContain('+20')
     const order = wrapper.find('[data-testid="order-row"]')
     expect(order.text()).toContain('Starter Pack')
-    expect(order.text()).toContain('$4.99')
+    expect(order.text()).toContain('A$4.99')
     expect(order.text()).toContain('已完成')
   })
 
@@ -418,12 +418,13 @@ describe('AccountView', () => {
     expect(wrapper.findAll('[data-testid="ledger-order"]')).toHaveLength(3)
   })
 
-  it('formats USD orders with $ prefix and non-USD orders with amount + code', async () => {
+  it('formats AUD orders as A$ and other currencies (old USD test orders) as amount + code', async () => {
     const { wrapper } = await mountAccount()
     const rows = wrapper.findAll('[data-testid="order-row"]')
-    // First row: USD $4.99
-    expect(rows[0]!.text()).toContain('$4.99')
-    expect(rows[0]!.text()).not.toMatch(/USD/i)
+    expect(rows[0]!.text()).toContain('A$4.99')
+    // An old USD order keeps its own currency, shown by code
+    expect(rows[1]!.text()).toContain('9.99 USD')
+    expect(rows[1]!.text()).not.toContain('$9.99')
     // Last row: EUR — no $ prefix, shows code
     expect(rows[4]!.text()).toContain('9.99 EUR')
     expect(rows[4]!.text()).not.toMatch(/^\$/)
