@@ -50,6 +50,8 @@ interface StripeGateway {
     fun createCustomer(userId: String): String                 // metadata userId; returns customer id
     fun retrieveCharge(chargeId: String): ChargeSnapshot
     fun listRecentChargeIdsWithRefundsOrDisputes(createdAfterEpochSec: Long): Sequence<String>
+    /** Refunds the PaymentIntent's whole charge (reason requested_by_customer, metadata orderNo/userId). */
+    fun createRefund(paymentIntentId: String, orderNo: String, userId: String, idempotencyKey: String): RefundInfo
 }
 
 /**

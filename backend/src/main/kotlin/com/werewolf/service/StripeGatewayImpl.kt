@@ -1,5 +1,6 @@
 package com.werewolf.service
 
+import com.stripe.param.RefundCreateParams
 import com.stripe.exception.InvalidRequestException
 import com.stripe.model.Charge
 import com.stripe.model.Customer
@@ -161,4 +162,15 @@ class StripeGatewayImpl : StripeGateway {
         url = url,
         expiresAtEpochSec = expiresAt,
     )
+
+    override fun createRefund(paymentIntentId: String, orderNo: String, userId: String, idempotencyKey: String): RefundInfo {
+        val params = RefundCreateParams.builder()
+            .setPaymentIntent(paymentIntentId)
+            .setReason(RefundCreateParams.Reason.REQUESTED_BY_CUSTOMER)
+            .putMetadata("orderNo", orderNo)
+            .putMetadata("userId", userId)
+            .build()
+        val refund = Refund.create(params, RequestOptions.builder().setIdempotencyKey(idempotencyKey).build())
+        return RefundInfo(refund.id, refund.amount, refund.status)
+    }
 }

@@ -45,6 +45,7 @@ class FakeStripeGateway : StripeGateway {
         sessions.clear(); createdAt.clear(); sessionByIdempotencyKey.clear(); customers.clear(); createCalls.clear(); charges.clear(); moneyEventAt.clear()
         retrieveCalls = 0; expireCalls = 0; listCalls = 0; createCustomerCalls = 0
         failCreate = false; failRetrieve = false; failExpire = false; expireKeepsOpen = false
+        failCreateRefund = false; refundStatusOnCreate = "succeeded"; createRefundCalls = 0; refundByIdempotencyKey.clear()
     }
 
     /** Put (or overwrite) a session as Stripe would currently report it. */
@@ -126,6 +127,24 @@ class FakeStripeGateway : StripeGateway {
         val c = charge(chargeId)
         charges[chargeId] = c.copy(refunds = c.refunds + RefundInfo(id, amount, status))
         return id
+    }
+
+    /** createRefund: throw a Stripe error instead (the request must leave no lock). */
+    var failCreateRefund = false
+    /** Status Stripe gives a refund the app creates ("succeeded", or "pending" to test the lock). */
+    var refundStatusOnCreate = "succeeded"
+    var createRefundCalls = 0
+    private val refundByIdempotencyKey = mutableMapOf<String, RefundInfo>()
+
+    @Synchronized
+    override fun createRefund(paymentIntentId: String, orderNo: String, userId: String, idempotencyKey: String): RefundInfo {
+        createRefundCalls++
+        if (failCreateRefund) throw StripeResourceMissingException(Resource.CHARGE, paymentIntentId)
+        refundByIdempotencyKey[idempotencyKey]?.let { return it }
+        val c = charges.values.firstOrNull { it.paymentIntentId == paymentIntentId }
+            ?: throw StripeResourceMissingException(Resource.CHARGE, paymentIntentId)
+        val id = refund(c.chargeId, c.amount, refundStatusOnCreate)
+        return RefundInfo(id, c.amount, refundStatusOnCreate).also { refundByIdempotencyKey[idempotencyKey] = it }
     }
 
     @Synchronized

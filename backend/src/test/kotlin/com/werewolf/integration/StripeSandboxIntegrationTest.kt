@@ -224,6 +224,23 @@ class StripeSandboxIntegrationTest {
     }
 
     @Test
+    fun `createRefund refunds the whole charge once, with the reason and metadata`() {
+        val pi = paidIntent("pm_card_visa")
+        val key = "self-refund-sandbox-${System.nanoTime()}"
+
+        val first = gateway.createRefund(pi.id, "sandbox-order", "sandbox-user", key)
+        val again = gateway.createRefund(pi.id, "sandbox-order", "sandbox-user", key)
+
+        assertThat(again.refundId).isEqualTo(first.refundId)
+        assertThat(first.amount).isEqualTo(pi.amount)
+        assertThat(first.status).isEqualTo("succeeded")
+        val refund = Refund.retrieve(first.refundId)
+        assertThat(refund.reason).isEqualTo("requested_by_customer")
+        assertThat(refund.metadata["orderNo"]).isEqualTo("sandbox-order")
+        assertThat(refund.metadata["userId"]).isEqualTo("sandbox-user")
+    }
+
+    @Test
     fun `StripeGatewayImpl - retrieveCharge reads a dispute, and the recent list contains the charge`() {
         val disputedCharge = paidIntent("pm_card_createDispute").latestCharge ?: error("no disputed charge")
         var disputeStatus: String? = null
