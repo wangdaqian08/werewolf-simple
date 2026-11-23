@@ -96,33 +96,21 @@ async function buyValuePack(
 
   const form = await checkoutForm(page)
   // A fresh email each run, so Stripe never routes us into a returning-Link-user OTP screen.
-  // Stripe ticks the Link box only once its lookup of the typed email returns, so wait for that first.
-  const linkLookup = page.waitForResponse(
-    (r) => r.url().includes('/v1/consumers/sessions/lookup'),
-    {
-      timeout: 20_000,
-    },
-  )
   await form.fill('input[name="email"]', `payment-e2e-${Date.now()}@example.com`)
   await form.locator('input[name="number"]').focus()
-  await linkLookup
-  // Stripe pre-checks "save my information" (Link) and then requires a phone number. Toggling its
-  // styled box from a test leaves Stripe's own state out of step and the pay button silently does
-  // nothing (2026-11-22), so leave it on and give it a test phone number (sandbox Link only).
+  // Stripe then ticks "save my information" (Link) and asks for a phone number. Toggling its styled
+  // box from a test leaves Stripe's own state out of step and the pay button silently does nothing
+  // (2026-11-22), so wait for the tick and give it a test phone number (sandbox Link only).
   const linkOptIn = form.locator('input[name="linkOptIn"]')
-  const linkOn = await expect
-    .poll(() => linkOptIn.getAttribute('aria-checked'), { timeout: 5_000 })
-    .toBe('true')
-    .then(
-      () => true,
-      () => false, // Link is off for this account or this email: no phone needed
-    )
-  if (linkOn) {
-    const linkPhone = form.locator('input[name="linkMobilePhone"]')
-    await linkPhone.waitFor({ state: 'visible' })
-    await form.selectOption('select[name="linkMobilePhoneCountry"]', 'US')
-    await linkPhone.fill('2015550123')
-  }
+  await expect(linkOptIn, 'Stripe ticks the Link box after looking up the email').toHaveAttribute(
+    'aria-checked',
+    'true',
+    { timeout: 20_000 },
+  )
+  const linkPhone = form.locator('input[name="linkMobilePhone"]')
+  await linkPhone.waitFor({ state: 'visible' })
+  await form.selectOption('select[name="linkMobilePhoneCountry"]', 'US')
+  await linkPhone.fill('2015550123')
   await form.fill('input[name="number"]', card)
   await form.fill('input[name="expiry"]', '12 / 34')
   await form.fill('input[name="cvc"]', '123')
@@ -242,10 +230,30 @@ test('a full refund takes the credits back', async ({ page, request }) => {
 })
 
 test('a disputed payment takes the credits back', async ({ page, request }) => {
+  // Stripe's sandbox has taken about 3 minutes to open the test dispute (CI, 2026-11-22).
+  test.setTimeout(480_000)
   // Stripe's test card that succeeds and then opens a fraud dispute.
   const p = await buyValuePack(page, request, '4000 0000 0000 0259')
 
-  await expect.poll(() => orderStatus(request, p), { timeout: 90_000 }).toBe('DISPUTED')
+  // Wait for Stripe first, so a slow sandbox is told apart from our handling of the event.
+  const session = await stripeApi(
+    'GET',
+    `checkout/sessions/${p.sessionId}?expand[]=payment_intent.latest_charge`,
+  )
+  const chargeId: string = session.payment_intent.latest_charge.id
+  await expect
+    .poll(async () => (await stripeApi('GET', `charges/${chargeId}`)).disputed, {
+      timeout: 300_000,
+      intervals: [5_000],
+      message: 'Stripe never opened the test dispute',
+    })
+    .toBe(true)
+  await expect
+    .poll(() => orderStatus(request, p), {
+      timeout: 30_000,
+      message: 'the dispute event did not reach the order',
+    })
+    .toBe('DISPUTED')
   expect(await balance(request, p.token)).toBe(0)
 
   await openAccount(page)

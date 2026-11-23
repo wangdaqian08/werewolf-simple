@@ -164,7 +164,8 @@ spends AS (  -- spending between the purchase and the request; a role-pick charg
       AND t.created_at <= o.asked_at
       AND NOT EXISTS (SELECT 1 FROM credit_transactions r
                       WHERE r.type = 'REFUND' AND r.user_id = t.user_id
-                        AND r.perk_activation_id = t.perk_activation_id)
+                        AND r.perk_activation_id = t.perk_activation_id
+                        AND r.created_at <= o.asked_at)
 )
 SELECT o.order_no, o.status, o.amount_cents, o.currency, o.credits, o.completed_at, o.asked_at,
        round(extract(epoch FROM (o.asked_at - o.completed_at)) / 86400, 1) AS days_to_request,
