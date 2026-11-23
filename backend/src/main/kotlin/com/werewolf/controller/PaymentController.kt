@@ -1,6 +1,9 @@
 package com.werewolf.controller
 
 import com.stripe.exception.SignatureVerificationException
+import com.stripe.exception.StripeException
+import com.werewolf.service.SelfRefundNotAllowedException
+import com.werewolf.service.SelfRefundService
 import com.werewolf.config.PaymentProperties
 import com.werewolf.service.GuestPurchaseException
 import com.werewolf.service.OrderNotFoundException
@@ -19,6 +22,7 @@ data class CheckoutRequest(val productKey: String)
 @RequestMapping("/api/payment")
 class PaymentController(
     private val paymentService: PaymentService,
+    private val selfRefundService: SelfRefundService,
     private val webhookVerifier: StripeWebhookVerifier,
     private val props: PaymentProperties,
 ) {
@@ -88,6 +92,28 @@ class PaymentController(
             ResponseEntity.ok(paymentService.orderStatus(userId, orderNo))
         } catch (e: OrderNotFoundException) {
             ResponseEntity.status(404).body(mapOf("error" to e.message))
+        }
+    }
+
+    /** The player's change-of-mind refund of one of their orders (spec §7). */
+    @PostMapping("/order/{orderNo}/refund")
+    fun refund(
+        @PathVariable orderNo: String,
+        authentication: Authentication,
+    ): ResponseEntity<Any> {
+        val userId = authentication.principal as String
+        return try {
+            ResponseEntity.ok(selfRefundService.request(userId, orderNo))
+        } catch (e: GuestPurchaseException) {
+            ResponseEntity.status(403).body(mapOf("error" to e.message))
+        } catch (e: OrderNotFoundException) {
+            ResponseEntity.status(404).body(mapOf("error" to e.message))
+        } catch (e: SelfRefundNotAllowedException) {
+            ResponseEntity.status(409).body(mapOf("error" to e.message, "code" to (e.reason?.name ?: "NOT_ELIGIBLE")))
+        } catch (e: PaymentsUnavailableException) {
+            ResponseEntity.status(503).body(mapOf("error" to e.message, "code" to "REFUND_UNAVAILABLE"))
+        } catch (e: StripeException) {
+            ResponseEntity.status(503).body(mapOf("error" to "Refund failed at Stripe, try again", "code" to "REFUND_UNAVAILABLE"))
         }
     }
 }

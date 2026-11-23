@@ -187,4 +187,72 @@ class PaymentOrderWriter(
         order.updatedAt = LocalDateTime.now()
         paymentOrderRepository.save(order)
     }
+
+    /** The order row locked for a self refund, after [check] ran on it; marks the request if not yet marked. */
+    @Transactional
+    fun markSelfRefund(userId: String, orderNo: String, check: (PaymentOrder) -> Unit): SelfRefundTarget {
+        val order = lockedOrder(orderNo) ?: throw OrderNotFoundException("Order not found")
+        if (order.userId != userId) throw OrderNotFoundException("Order not found")
+        check(order)
+        val requestedAt = order.selfRefundRequestedAt ?: LocalDateTime.now().also { order.selfRefundRequestedAt = it }
+        return SelfRefundTarget(
+            orderId = order.id ?: error("order not persisted"),
+            paymentIntentId = order.stripePaymentIntentId ?: error("order ${order.orderNo} has no PaymentIntent"),
+            chargeId = order.stripeChargeId ?: error("order ${order.orderNo} has no charge"),
+            requestedAt = requestedAt,
+        )
+    }
+
+    /** Stripe refused the refund: drop the mark of this attempt so the account is not locked. */
+    @Transactional
+    fun clearSelfRefund(orderId: Int, requestedAt: LocalDateTime) {
+        val order = lockedOrder(orderId)
+        if (order.selfRefundRequestedAt == requestedAt && order.selfRefundId == null) order.selfRefundRequestedAt = null
+    }
+
+    @Transactional
+    fun storeSelfRefundId(orderId: Int, refundId: String) {
+        lockedOrder(orderId).selfRefundId = refundId
+    }
+
+    /**
+     * Settle the order's self refund from Stripe's view of it: succeeded unlocks the account,
+     * failed or canceled clears the request (unlock, alert), anything else keeps the lock.
+     */
+    @Transactional
+    fun settleSelfRefund(orderId: Int, refunds: List<RefundInfo>) {
+        val order = lockedOrder(orderId)
+        val refundId = order.selfRefundId ?: return
+        if (order.selfRefundSettledAt != null) return
+        when (refunds.firstOrNull { it.refundId == refundId }?.status) {
+            "succeeded" -> order.selfRefundSettledAt = LocalDateTime.now()
+            "failed", "canceled" -> {
+                order.selfRefundRequestedAt = null
+                order.selfRefundId = null
+                log.error("[payment-alert] self-service refund {} of order {} failed", refundId, order.orderNo)
+            }
+            else -> {}
+        }
+    }
+
+    /** The order's status and whether its self refund is settled, read fresh. */
+    @Transactional(readOnly = true)
+    fun selfRefundState(orderId: Int): Pair<PaymentOrderStatus, Boolean> {
+        val order = entityManager.find(PaymentOrder::class.java, orderId) ?: throw IllegalStateException("no order $orderId")
+        entityManager.refresh(order)
+        return order.status to (order.selfRefundSettledAt != null)
+    }
+
+    private fun lockedOrder(orderNo: String): PaymentOrder? =
+        paymentOrderRepository.findByOrderNo(orderNo).orElse(null)?.let { lockedOrder(it.id ?: error("order not persisted")) }
+
+    // Refresh under the lock: open-in-view may already hold a stale instance.
+    private fun lockedOrder(orderId: Int): PaymentOrder {
+        val order = entityManager.find(PaymentOrder::class.java, orderId) ?: throw IllegalStateException("no order $orderId")
+        entityManager.refresh(order, LockModeType.PESSIMISTIC_WRITE)
+        entityManager.unwrap(Session::class.java).setReadOnly(order, false)
+        return order
+    }
 }
+
+data class SelfRefundTarget(val orderId: Int, val paymentIntentId: String, val chargeId: String, val requestedAt: LocalDateTime)

@@ -27,7 +27,7 @@ class PaymentControllerWebhookSwitchTest {
         val service = mock<PaymentService>()
         val verifier = mock<StripeWebhookVerifier>()
 
-        val resp = PaymentController(service, verifier, props).webhook("""{"id":"evt_x"}""", "t=1,v1=sig")
+        val resp = PaymentController(service, mock(), verifier, props).webhook("""{"id":"evt_x"}""", "t=1,v1=sig")
 
         assertThat(resp.statusCode.value()).isEqualTo(503)
         verifyNoInteractions(verifier, service) // no handleEvent → no payment_events row
