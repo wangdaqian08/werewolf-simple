@@ -233,6 +233,17 @@ interface WalletRepository : JpaRepository<Wallet, String> {
 }
 
 interface CreditTransactionRepository : JpaRepository<CreditTransaction, Int> {
+    /** When [userId] spent credits after [after], leaving out role-pick charges returned in full. */
+    @Query(
+        """
+        SELECT t.createdAt FROM CreditTransaction t
+        WHERE t.userId = :userId AND t.type = com.werewolf.model.CreditTxType.PERK_SPEND AND t.createdAt > :after
+          AND NOT EXISTS (SELECT r.id FROM CreditTransaction r
+                          WHERE r.type = com.werewolf.model.CreditTxType.REFUND AND r.userId = t.userId
+                            AND r.perkActivationId = t.perkActivationId)
+        """,
+    )
+    fun unreturnedSpendTimesSince(userId: String, after: LocalDateTime): List<LocalDateTime>
     fun findTop20ByUserIdOrderByCreatedAtDesc(userId: String): List<CreditTransaction>
     fun findByGameIdAndType(gameId: Int, type: CreditTxType): List<CreditTransaction>
 

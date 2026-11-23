@@ -56,6 +56,7 @@ class PaymentService(
     private val chargeService: PaymentChargeService,
     private val gateway: StripeGateway,
     private val props: PaymentProperties,
+    private val selfRefundPolicy: SelfRefundPolicy,
 ) {
     private val log = LoggerFactory.getLogger(PaymentService::class.java)
 
@@ -252,6 +253,7 @@ class PaymentService(
         val slice = paymentOrderRepository.findByUserIdOrderByCreatedAtDescIdDesc(
             userId, PageRequest.of(page.coerceAtLeast(0), props.ordersPageSize),
         )
+        val views = selfRefundPolicy.viewsFor(userId, slice.content)
         val orders = slice.content.map {
             mapOf(
                 "orderNo" to it.orderNo,
@@ -262,10 +264,13 @@ class PaymentService(
                 "status" to it.status.name,
                 "receiptUrl" to it.receiptUrl,
                 "createdAt" to it.createdAt.toString(),
-            )
+            ) + refundField(views[it.id])
         }
         return mapOf("orders" to orders, "hasMore" to slice.hasNext())
     }
+
+    private fun refundField(view: SelfRefundView?): Map<String, Any?> =
+        if (view == null) emptyMap() else mapOf("refund" to mapOf("eligible" to view.eligible, "reason" to view.reason?.name))
 
     /**
      * The return page's poll. A CREATED order also asks Stripe (at most once per
@@ -291,7 +296,7 @@ class PaymentService(
             "status" to order.status.name,
             "credits" to order.credits,
             "receiptUrl" to order.receiptUrl,
-        )
+        ) + refundField(selfRefundPolicy.viewsFor(userId, listOf(order))[order.id])
     }
 
     /** True (and records now) if this order's last Stripe check was at least the throttle ago. */

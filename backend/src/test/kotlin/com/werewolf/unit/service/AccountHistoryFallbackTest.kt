@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.junit.jupiter.MockitoSettings
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
@@ -88,6 +89,7 @@ class AccountHistoryFallbackTest {
                 reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10, sweepLookbackDays = 30,
                 statusCheckThrottleSeconds = 5, ordersPageSize = 20, selfRefundDays = 14, selfRefundWindowDays = 30, selfRefundMaxPerWindow = 1,
             ),
+            mock(),
         )
         whenever(productRepository.findAll()).thenReturn(emptyList())
         whenever(paymentOrderRepository.findByUserIdOrderByCreatedAtDescIdDesc(eq("google:u1"), any()))
