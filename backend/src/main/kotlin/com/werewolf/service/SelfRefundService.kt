@@ -33,20 +33,25 @@ class SelfRefundService(
 
         val target = writer.markSelfRefund(userId, orderNo) { order ->
             val view = policy.viewsFor(userId, listOf(order))[order.id]
-            val resumable = view?.reason == SelfRefundBlock.PENDING && order.selfRefundId == null
-            if (view == null || !(view.eligible || resumable)) throw SelfRefundNotAllowedException(view?.reason)
+            if (view == null || !view.eligible) throw SelfRefundNotAllowedException(view?.reason)
         }
         // One key per attempt: a retry after a failed refund must not replay Stripe's failed answer.
-        val key = "self-refund-$orderNo-${target.requestedAt.toEpochSecond(ZoneOffset.UTC)}"
+        val key = "self-refund-$orderNo-${target.requestedAt.toInstant(ZoneOffset.UTC).toEpochMilli()}"
         val refund = try {
             gateway.createRefund(target.paymentIntentId, orderNo, userId, key)
         } catch (e: StripeException) {
-            writer.clearSelfRefund(target.orderId, target.requestedAt)
+            if (target.fresh) writer.clearSelfRefund(target.orderId)
             log.warn("[payment] self-service refund of order {} failed at Stripe: {}", orderNo, e.message)
             throw e
         }
         writer.storeSelfRefundId(target.orderId, refund.refundId)
-        val outcome = chargeService.reconcile(target.chargeId, "self-service").outcome
+        // The refund exists now; if reading it back fails, the webhook or the job settles it.
+        val outcome = try {
+            chargeService.reconcile(target.chargeId, "self-service").outcome
+        } catch (e: Exception) {
+            log.warn("[payment] self-service refund {} of order {} created; reconcile deferred: {}", refund.refundId, orderNo, e.message)
+            null
+        }
         val (status, settled) = writer.selfRefundState(target.orderId)
         log.info("[payment] self-service refund order={} user={} refund={} outcome={}", orderNo, userId, refund.refundId, outcome)
         return mapOf("status" to status.name, "refundPending" to !settled)

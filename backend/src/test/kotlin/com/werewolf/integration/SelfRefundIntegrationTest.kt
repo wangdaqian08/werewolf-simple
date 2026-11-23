@@ -51,6 +51,7 @@ class SelfRefundIntegrationTest {
     @Autowired lateinit var charges: PaymentChargeService
     @Autowired lateinit var roomService: RoomService
     @Autowired lateinit var policy: SelfRefundPolicy
+    @Autowired lateinit var writer: com.werewolf.service.PaymentOrderWriter
 
     private val credits = 330
     private val amount = 499L
@@ -92,7 +93,7 @@ class SelfRefundIntegrationTest {
     }
 
     private fun reload(o: PaymentOrder) = paymentOrderRepository.findByOrderNo(o.orderNo).orElseThrow()
-    private fun locked(userId: String) = paymentOrderRepository.existsByUserIdAndSelfRefundRequestedAtIsNotNullAndSelfRefundSettledAtIsNull(userId)
+    private fun locked(userId: String) = paymentOrderRepository.existsByUserIdAndSelfRefundIdIsNotNullAndSelfRefundSettledAtIsNull(userId)
     private fun reversals(o: PaymentOrder) = creditTransactionRepository.findTop20ByUserIdOrderByCreatedAtDesc(o.userId)
         .filter { it.type == CreditTxType.PURCHASE_REVERSAL && it.paymentOrderId == o.id }
 
@@ -124,6 +125,7 @@ class SelfRefundIntegrationTest {
         val limitUser = newUser()
         paidOrder(limitUser).also {
             it.selfRefundRequestedAt = LocalDateTime.now().minusDays(10)
+            it.selfRefundId = "re_earlier"
             it.selfRefundSettledAt = LocalDateTime.now().minusDays(10)
             it.status = PaymentOrderStatus.REFUNDED
             paymentOrderRepository.save(it)
@@ -232,5 +234,51 @@ class SelfRefundIntegrationTest {
     @Test
     fun `a guest cannot refund`() {
         assertThat(post("guest:someone", "anything").statusCode).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
+    fun `a request mark left without a refund id does not lock the account and the button resumes it`() {
+        val o = paidOrder()
+        writer.markSelfRefund(o.userId, o.orderNo) {} // the process died before Stripe was called
+
+        assertThat(locked(o.userId)).isFalse()
+        assertThat(policy.viewsFor(o.userId, listOf(reload(o)))[o.id]).isEqualTo(SelfRefundView(true, null))
+        assertThat(post(o.userId, o.orderNo).statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(reload(o).status).isEqualTo(PaymentOrderStatus.REFUNDED)
+    }
+
+    @Test
+    fun `a second tap that fails at Stripe does not clear the first tap's mark`() {
+        val o = paidOrder()
+        writer.markSelfRefund(o.userId, o.orderNo) {} // tap 1 is still waiting for Stripe
+        val marked = reload(o).selfRefundRequestedAt
+        gateway.failCreateRefund = true
+
+        assertThat(post(o.userId, o.orderNo).statusCode).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+
+        assertThat(reload(o).selfRefundRequestedAt).isEqualTo(marked)
+    }
+
+    @Test
+    fun `the request time is stored at millisecond precision and is the attempt key`() {
+        val o = paidOrder()
+        post(o.userId, o.orderNo)
+        val requestedAt = reload(o).selfRefundRequestedAt ?: error("no mark")
+
+        assertThat(requestedAt.nano % 1_000_000).isZero()
+        val millis = requestedAt.toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+        assertThat(gateway.createRefundKeys).containsExactly("self-refund-${o.orderNo}-$millis")
+    }
+
+    @Test
+    fun `a Stripe blip after the refund exists reports the refund as in progress, not failed`() {
+        val o = paidOrder()
+        gateway.failRetrieveCharge = true
+
+        val resp = post(o.userId, o.orderNo)
+
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(resp.body?.get("refundPending")).isEqualTo(true)
+        assertThat(reload(o).selfRefundId).isNotNull()
     }
 }

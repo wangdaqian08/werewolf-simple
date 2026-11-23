@@ -46,6 +46,7 @@ class FakeStripeGateway : StripeGateway {
         retrieveCalls = 0; expireCalls = 0; listCalls = 0; createCustomerCalls = 0
         failCreate = false; failRetrieve = false; failExpire = false; expireKeepsOpen = false
         failCreateRefund = false; refundStatusOnCreate = "succeeded"; createRefundCalls = 0; refundByIdempotencyKey.clear()
+        createRefundKeys.clear(); failRetrieveCharge = false
     }
 
     /** Put (or overwrite) a session as Stripe would currently report it. */
@@ -134,11 +135,15 @@ class FakeStripeGateway : StripeGateway {
     /** Status Stripe gives a refund the app creates ("succeeded", or "pending" to test the lock). */
     var refundStatusOnCreate = "succeeded"
     var createRefundCalls = 0
+    val createRefundKeys = mutableListOf<String>()
+    /** retrieveCharge: throw a Stripe error instead (a blip after the refund exists). */
+    var failRetrieveCharge = false
     private val refundByIdempotencyKey = mutableMapOf<String, RefundInfo>()
 
     @Synchronized
     override fun createRefund(paymentIntentId: String, orderNo: String, userId: String, idempotencyKey: String): RefundInfo {
         createRefundCalls++
+        createRefundKeys += idempotencyKey
         if (failCreateRefund) throw StripeResourceMissingException(Resource.CHARGE, paymentIntentId)
         refundByIdempotencyKey[idempotencyKey]?.let { return it }
         val c = charges.values.firstOrNull { it.paymentIntentId == paymentIntentId }
@@ -165,7 +170,10 @@ class FakeStripeGateway : StripeGateway {
     }
 
     @Synchronized
-    override fun retrieveCharge(chargeId: String): ChargeSnapshot = charge(chargeId)
+    override fun retrieveCharge(chargeId: String): ChargeSnapshot {
+        if (failRetrieveCharge) throw StripeResourceMissingException(Resource.CHARGE, chargeId)
+        return charge(chargeId)
+    }
 
     @Synchronized
     override fun listRecentChargeIdsWithRefundsOrDisputes(createdAfterEpochSec: Long): Sequence<String> =

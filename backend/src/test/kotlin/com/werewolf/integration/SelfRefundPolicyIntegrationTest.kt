@@ -125,6 +125,7 @@ class SelfRefundPolicyIntegrationTest {
         val userId = newUser()
         val earlier = order(userId, completedDaysAgo = 12).also {
             it.selfRefundRequestedAt = LocalDateTime.now().minusDays(10)
+            it.selfRefundId = "re_earlier"
             it.selfRefundSettledAt = LocalDateTime.now().minusDays(10)
             it.status = PaymentOrderStatus.REFUNDED
             paymentOrderRepository.save(it)
@@ -141,6 +142,7 @@ class SelfRefundPolicyIntegrationTest {
     fun `an order whose refund is requested but not confirmed shows PENDING, even once REFUNDED`() {
         val o = order(newUser()).also {
             it.selfRefundRequestedAt = LocalDateTime.now()
+            it.selfRefundId = "re_pending"
             it.status = PaymentOrderStatus.REFUNDED
             paymentOrderRepository.save(it)
         }

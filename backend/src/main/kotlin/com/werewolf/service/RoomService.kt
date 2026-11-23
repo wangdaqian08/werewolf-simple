@@ -370,7 +370,7 @@ class RoomService(
 
     /** A self refund in progress locks the account out of games until Stripe confirms it (spec D11). */
     private fun refuseWhileRefundPending(userId: String) {
-        if (paymentOrderRepository.existsByUserIdAndSelfRefundRequestedAtIsNotNullAndSelfRefundSettledAtIsNull(userId)) {
+        if (paymentOrderRepository.existsByUserIdAndSelfRefundIdIsNotNullAndSelfRefundSettledAtIsNull(userId)) {
             throw RefundPendingException("A refund is in progress; games are unavailable until it completes")
         }
     }

@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /**
@@ -194,20 +195,24 @@ class PaymentOrderWriter(
         val order = lockedOrder(orderNo) ?: throw OrderNotFoundException("Order not found")
         if (order.userId != userId) throw OrderNotFoundException("Order not found")
         check(order)
-        val requestedAt = order.selfRefundRequestedAt ?: LocalDateTime.now().also { order.selfRefundRequestedAt = it }
+        val fresh = order.selfRefundRequestedAt == null
+        // Milliseconds: the same value after a DB round trip on any platform, so it can key the Stripe call.
+        val requestedAt = order.selfRefundRequestedAt
+            ?: LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS).also { order.selfRefundRequestedAt = it }
         return SelfRefundTarget(
             orderId = order.id ?: error("order not persisted"),
             paymentIntentId = order.stripePaymentIntentId ?: error("order ${order.orderNo} has no PaymentIntent"),
             chargeId = order.stripeChargeId ?: error("order ${order.orderNo} has no charge"),
             requestedAt = requestedAt,
+            fresh = fresh,
         )
     }
 
-    /** Stripe refused the refund: drop the mark of this attempt so the account is not locked. */
+    /** Stripe refused the refund this request marked: drop the mark unless a refund got stored meanwhile. */
     @Transactional
-    fun clearSelfRefund(orderId: Int, requestedAt: LocalDateTime) {
+    fun clearSelfRefund(orderId: Int) {
         val order = lockedOrder(orderId)
-        if (order.selfRefundRequestedAt == requestedAt && order.selfRefundId == null) order.selfRefundRequestedAt = null
+        if (order.selfRefundId == null) order.selfRefundRequestedAt = null
     }
 
     @Transactional
@@ -255,4 +260,11 @@ class PaymentOrderWriter(
     }
 }
 
-data class SelfRefundTarget(val orderId: Int, val paymentIntentId: String, val chargeId: String, val requestedAt: LocalDateTime)
+data class SelfRefundTarget(
+    val orderId: Int,
+    val paymentIntentId: String,
+    val chargeId: String,
+    val requestedAt: LocalDateTime,
+    /** This request made the mark (a resumed or concurrent request did not). */
+    val fresh: Boolean,
+)

@@ -36,7 +36,7 @@ class SelfRefundPolicy(
         val earliest = candidates.mapNotNull { it.completedAt }.minOrNull() ?: now
         val spends = creditTransactionRepository.unreturnedSpendTimesSince(userId, earliest)
         val inRoom = roomRepository.findActiveRoomsForUser(userId).isNotEmpty()
-        val overLimit = paymentOrderRepository.countByUserIdAndSelfRefundRequestedAtAfter(
+        val overLimit = paymentOrderRepository.countByUserIdAndSelfRefundIdIsNotNullAndSelfRefundRequestedAtAfter(
             userId, now.minusDays(props.selfRefundWindowDays),
         ) >= props.selfRefundMaxPerWindow
 
@@ -53,7 +53,7 @@ class SelfRefundPolicy(
         }
     }
 
-    private fun pending(o: PaymentOrder) = o.selfRefundRequestedAt != null && o.selfRefundSettledAt == null
+    private fun pending(o: PaymentOrder) = o.selfRefundId != null && o.selfRefundSettledAt == null
 
     private fun refundable(o: PaymentOrder, windowStart: LocalDateTime): Boolean {
         val completedAt = o.completedAt ?: return false
