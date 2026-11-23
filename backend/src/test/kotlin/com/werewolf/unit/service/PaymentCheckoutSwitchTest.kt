@@ -20,7 +20,7 @@ class PaymentCheckoutSwitchTest {
             PaymentProperties(
                 enabled = false, frontendBaseUrl = "", stripeSecretKey = "sk_test_x",
                 sessionExpiryMinutes = 30, reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10,
-                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5, ordersPageSize = 20,
+                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5, ordersPageSize = 20, selfRefundDays = 14, selfRefundWindowDays = 30, selfRefundMaxPerWindow = 1,
             ),
         )
 

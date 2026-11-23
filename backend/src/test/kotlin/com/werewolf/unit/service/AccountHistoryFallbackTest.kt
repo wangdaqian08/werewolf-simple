@@ -86,7 +86,7 @@ class AccountHistoryFallbackTest {
             paymentFulfillmentService, paymentOrderWriter, paymentChargeService, stripeGateway, PaymentProperties(
                 enabled = true, frontendBaseUrl = "https://example.test", sessionExpiryMinutes = 30,
                 reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10, sweepLookbackDays = 30,
-                statusCheckThrottleSeconds = 5, ordersPageSize = 20,
+                statusCheckThrottleSeconds = 5, ordersPageSize = 20, selfRefundDays = 14, selfRefundWindowDays = 30, selfRefundMaxPerWindow = 1,
             ),
         )
         whenever(productRepository.findAll()).thenReturn(emptyList())

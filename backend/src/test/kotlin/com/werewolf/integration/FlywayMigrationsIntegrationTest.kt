@@ -382,6 +382,26 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V43 adds the self-refund columns`() {
+        flyway().migrate()
+
+        val row = sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('p', 'p')")
+            exec(
+                "INSERT INTO payment_orders (order_no, user_id, product_id, credits, amount_cents, currency, status, " +
+                    "self_refund_requested_at, self_refund_id, self_refund_settled_at) VALUES ('o1', 'p', " +
+                    "(SELECT id FROM products WHERE product_key = 'value'), 330, 499, 'aud', 'COMPLETED', " +
+                    "TIMESTAMP '2026-11-23 10:00:00', 're_1', TIMESTAMP '2026-11-23 10:00:05')",
+            )
+            createStatement().use { st ->
+                st.executeQuery("SELECT self_refund_id, self_refund_requested_at, self_refund_settled_at FROM payment_orders WHERE order_no = 'o1'")
+                    .use { rs -> rs.next(); Triple(rs.getString(1), rs.getTimestamp(2).toString(), rs.getTimestamp(3).toString()) }
+            }
+        }
+        assertThat(row).isEqualTo(Triple("re_1", "2026-11-23 10:00:00.0", "2026-11-23 10:00:05.0"))
+    }
+
+    @Test
     fun `V42 prices every pack in AUD and retires the starter pack`() {
         flyway().migrate()
 

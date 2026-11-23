@@ -311,6 +311,9 @@ interface ProductRepository : JpaRepository<Product, Int> {
 }
 
 interface PaymentOrderRepository : JpaRepository<PaymentOrder, Int> {
+    /** The account is locked while a self refund it asked for is not yet confirmed by Stripe. */
+    fun existsByUserIdAndSelfRefundRequestedAtIsNotNullAndSelfRefundSettledAtIsNull(userId: String): Boolean
+    fun countByUserIdAndSelfRefundRequestedAtAfter(userId: String, after: LocalDateTime): Long
     fun findByStripeSessionId(stripeSessionId: String): Optional<PaymentOrder>
     fun findByOrderNo(orderNo: String): Optional<PaymentOrder>
     fun findFirstByStripeChargeId(stripeChargeId: String): Optional<PaymentOrder>

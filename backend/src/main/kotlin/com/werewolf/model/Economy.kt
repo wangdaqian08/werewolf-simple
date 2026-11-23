@@ -229,6 +229,15 @@ class PaymentOrder(
     @Column(name = "credits_reversed", nullable = false)
     var creditsReversed: Boolean = false,
 
+    @Column(name = "self_refund_requested_at")
+    var selfRefundRequestedAt: LocalDateTime? = null,
+
+    @Column(name = "self_refund_id", length = 255)
+    var selfRefundId: String? = null,
+
+    @Column(name = "self_refund_settled_at")
+    var selfRefundSettledAt: LocalDateTime? = null,
+
     @Column(name = "updated_at")
     @UpdateTimestamp
     var updatedAt: LocalDateTime? = null,

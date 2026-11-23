@@ -68,6 +68,11 @@ app:
     status-check-throttle-seconds: 5
     # Orders per page of the player's top-up history
     orders-page-size: 20
+    # Self-service refund: days after payment a change-of-mind refund is possible
+    self-refund-days: 14
+    # ...and at most self-refund-max-per-window self refunds per account in this many days
+    self-refund-window-days: 30
+    self-refund-max-per-window: 1
 
 server:
   port: 8080
