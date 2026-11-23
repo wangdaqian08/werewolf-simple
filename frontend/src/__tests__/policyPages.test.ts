@@ -59,4 +59,12 @@ describe('policy pages', () => {
   it('the refund policy says a role-pick card still waiting for its draw counts as spending', () => {
     expect(read('refunds')).toMatch(/still waiting for its draw/i)
   })
+
+  it('the refund policy describes the in-app button, the 30-day limit and the lock', () => {
+    const html = read('refunds')
+    expect(html).toMatch(/Request refund/)
+    expect(html).toMatch(/once every 30 days/i)
+    expect(html).toMatch(/cannot (create|join).{0,40}game/i)
+    expect(html).toMatch(/cannot be excluded under the Australian Consumer Law/)
+  })
 })

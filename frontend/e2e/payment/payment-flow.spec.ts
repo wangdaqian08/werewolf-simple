@@ -229,6 +229,24 @@ test('a full refund takes the credits back', async ({ page, request }) => {
   expectCleanLog(p.orderNo)
 })
 
+test('the player refunds a purchase from 充值記錄', async ({ page, request }) => {
+  const p = await buyValuePack(page, request, '4242 4242 4242 4242')
+  await expect(page.getByTestId('pay-credits')).toHaveText(/\+330/, { timeout: 45_000 })
+
+  await openAccount(page)
+  await page.getByTestId('order-refund-btn').first().click()
+  await page.getByTestId('refund-confirm-yes').click()
+
+  await expect(page.getByTestId('order-status').first()).toHaveText('已退款')
+  expect(await balance(request, p.token)).toBe(0)
+  const session = await stripeApi('GET', `checkout/sessions/${p.sessionId}`)
+  const refunds = await stripeApi('GET', `refunds?payment_intent=${session.payment_intent}`)
+  expect(refunds.data).toHaveLength(1)
+  expect(refunds.data[0].reason).toBe('requested_by_customer')
+  expect(refunds.data[0].metadata.orderNo).toBe(p.orderNo)
+  expectCleanLog(p.orderNo)
+})
+
 test('a disputed payment takes the credits back', async ({ page, request }) => {
   // Stripe's sandbox has taken about 3 minutes to open the test dispute (CI, 2026-11-22).
   test.setTimeout(480_000)
