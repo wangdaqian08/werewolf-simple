@@ -62,8 +62,8 @@ class PaymentReconciliationIntegrationTest {
     ): PaymentOrder {
         val userId = "google:reconcile-${UUID.randomUUID()}"
         userRepository.save(User(userId = userId, nickname = "Buyer"))
-        val product = productRepository.findByProductKeyAndActiveTrue("starter").orElseGet {
-            productRepository.save(Product(productKey = "starter", name = "Starter", credits = 100, priceCents = 199))
+        val product = productRepository.findByProductKeyAndActiveTrue("test-pack").orElseGet {
+            productRepository.save(Product(productKey = "test-pack", name = "Starter", credits = 100, priceCents = 199))
         }
         val order = paymentOrderRepository.save(
             PaymentOrder(

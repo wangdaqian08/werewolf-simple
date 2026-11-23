@@ -46,7 +46,11 @@ async function loginBuyer(page: Page, request: APIRequestContext): Promise<Buyer
   return { token }
 }
 
-/** The Payment Element frame on Stripe's hosted page (the card form lives in an iframe). */
+// AUD shows card / Klarna / Zip collapsed; USD shows the card form directly.
+const CARD_FIELD = 'input[name="number"]'
+const CARD_OPTION = '[role="button"][data-value="card"]'
+
+/** The Payment Element frame on Stripe's hosted page (the form lives in an iframe), card form open. */
 async function checkoutForm(page: Page): Promise<Frame> {
   let form: Frame | undefined
   await expect
@@ -55,7 +59,8 @@ async function checkoutForm(page: Page): Promise<Frame> {
         for (const frame of page.frames()) {
           if (
             await frame
-              .locator('input[name="number"]')
+              .locator(`${CARD_FIELD}, ${CARD_OPTION}`)
+              .first()
               .isVisible()
               .catch(() => false)
           ) {
@@ -65,17 +70,25 @@ async function checkoutForm(page: Page): Promise<Frame> {
         }
         return false
       },
-      { timeout: 30_000, message: 'Stripe card form never appeared' },
+      { timeout: 30_000, message: 'Stripe payment form never appeared' },
     )
     .toBe(true)
-  return form as Frame
+  const frame = form as Frame
+  const cardOption = frame.locator(CARD_OPTION)
+  if ((await cardOption.count()) > 0) await cardOption.click()
+  await frame.locator(CARD_FIELD).waitFor({ state: 'visible' })
+  return frame
 }
 
-/** Buys the starter pack (100 credits / $1.99) with [card] and waits for the return page. */
-async function buyStarter(page: Page, request: APIRequestContext, card: string): Promise<Purchase> {
+/** Buys the value pack (330 credits / A$4.99) with [card] and waits for the return page. */
+async function buyValuePack(
+  page: Page,
+  request: APIRequestContext,
+  card: string,
+): Promise<Purchase> {
   const buyer = await loginBuyer(page, request)
   await page.getByTestId('buy-credits-toggle').click()
-  await page.getByTestId('buy-starter').click()
+  await page.getByTestId('buy-value').click()
 
   await page.waitForURL(/checkout\.stripe\.com/, { timeout: 45_000 })
   const sessionId = page.url().match(/cs_test_[A-Za-z0-9]+/)?.[0]
@@ -84,9 +97,20 @@ async function buyStarter(page: Page, request: APIRequestContext, card: string):
   const form = await checkoutForm(page)
   // A fresh email each run, so Stripe never routes us into a returning-Link-user OTP screen.
   await form.fill('input[name="email"]', `payment-e2e-${Date.now()}@example.com`)
-  // Stripe pre-checks "save my information" (Link), which adds a required phone field.
+  await form.locator('input[name="number"]').focus()
+  // Stripe then ticks "save my information" (Link) and asks for a phone number. Toggling its styled
+  // box from a test leaves Stripe's own state out of step and the pay button silently does nothing
+  // (2026-11-22), so wait for the tick and give it a test phone number (sandbox Link only).
   const linkOptIn = form.locator('input[name="linkOptIn"]')
-  if ((await linkOptIn.count()) > 0 && (await linkOptIn.isChecked())) await linkOptIn.uncheck()
+  await expect(linkOptIn, 'Stripe ticks the Link box after looking up the email').toHaveAttribute(
+    'aria-checked',
+    'true',
+    { timeout: 20_000 },
+  )
+  const linkPhone = form.locator('input[name="linkMobilePhone"]')
+  await linkPhone.waitFor({ state: 'visible' })
+  await form.selectOption('select[name="linkMobilePhoneCountry"]', 'US')
+  await linkPhone.fill('2015550123')
   await form.fill('input[name="number"]', card)
   await form.fill('input[name="expiry"]', '12 / 34')
   await form.fill('input[name="cvc"]', '123')
@@ -94,10 +118,16 @@ async function buyStarter(page: Page, request: APIRequestContext, card: string):
   // The country defaults to the runner's location: pin US + ZIP so local and CI match.
   await form.selectOption('select[name="country"]', 'US')
   await form.fill('input[name="postalCode"]', '12345')
+  const terms = form.locator('input[name="termsOfServiceConsent"]')
+  await form.locator('label', { has: terms }).click({ position: { x: 5, y: 5 } })
+  await expect(terms).toHaveAttribute('aria-checked', 'true')
   await form.click('[data-testid="payment-form-submit-button"]')
 
   await page.waitForURL(/\/pay\/result\?.*status=success.*orderNo=/, { timeout: 90_000 })
   const orderNo = new URL(page.url()).searchParams.get('orderNo') ?? ''
+  const session = await stripeApi('GET', `checkout/sessions/${sessionId}`)
+  expect(session.consent?.terms_of_service, 'the buyer accepted the Terms').toBe('accepted')
+  expect(session.currency).toBe('aud')
   return { ...buyer, orderNo, sessionId: sessionId as string }
 }
 
@@ -153,13 +183,13 @@ async function openAccount(page: Page) {
   await expect(page.getByTestId('order-row').first()).toBeVisible()
 }
 
-test('buy the starter pack with the 4242 test card → credited, and the webhook is processed', async ({
+test('buy the value pack with the 4242 test card → credited, and the webhook is processed', async ({
   page,
   request,
 }) => {
-  const p = await buyStarter(page, request, '4242 4242 4242 4242')
-  await expect(page.getByTestId('pay-credits')).toHaveText(/\+100/, { timeout: 45_000 })
-  expect(await balance(request, p.token)).toBe(100)
+  const p = await buyValuePack(page, request, '4242 4242 4242 4242')
+  await expect(page.getByTestId('pay-credits')).toHaveText(/\+330/, { timeout: 45_000 })
+  expect(await balance(request, p.token)).toBe(330)
   // The return page may credit first; either way the forwarded webhook must reach fulfill.
   await expectLog(
     new RegExp(`\\[payment\\] fulfill session=${p.sessionId} order=${p.orderNo} source=webhook`),
@@ -168,9 +198,9 @@ test('buy the starter pack with the 4242 test card → credited, and the webhook
 })
 
 test('@no-webhook the return page alone credits the purchase', async ({ page, request }) => {
-  const p = await buyStarter(page, request, '4242 4242 4242 4242')
-  await expect(page.getByTestId('pay-credits')).toHaveText(/\+100/, { timeout: 45_000 })
-  expect(await balance(request, p.token)).toBe(100)
+  const p = await buyValuePack(page, request, '4242 4242 4242 4242')
+  await expect(page.getByTestId('pay-credits')).toHaveText(/\+330/, { timeout: 45_000 })
+  expect(await balance(request, p.token)).toBe(330)
   await expectLog(
     new RegExp(
       `\\[payment\\] fulfill session=${p.sessionId} order=${p.orderNo} source=status-check outcome=CREDITED`,
@@ -181,8 +211,8 @@ test('@no-webhook the return page alone credits the purchase', async ({ page, re
 })
 
 test('a full refund takes the credits back', async ({ page, request }) => {
-  const p = await buyStarter(page, request, '4242 4242 4242 4242')
-  await expect(page.getByTestId('pay-credits')).toHaveText(/\+100/, { timeout: 45_000 })
+  const p = await buyValuePack(page, request, '4242 4242 4242 4242')
+  await expect(page.getByTestId('pay-credits')).toHaveText(/\+330/, { timeout: 45_000 })
 
   // What the owner does in the Dashboard: refund the whole charge.
   const session = await stripeApi('GET', `checkout/sessions/${p.sessionId}`)
@@ -200,10 +230,30 @@ test('a full refund takes the credits back', async ({ page, request }) => {
 })
 
 test('a disputed payment takes the credits back', async ({ page, request }) => {
+  // Stripe's sandbox has taken about 3 minutes to open the test dispute (CI, 2026-11-22).
+  test.setTimeout(480_000)
   // Stripe's test card that succeeds and then opens a fraud dispute.
-  const p = await buyStarter(page, request, '4000 0000 0000 0259')
+  const p = await buyValuePack(page, request, '4000 0000 0000 0259')
 
-  await expect.poll(() => orderStatus(request, p), { timeout: 90_000 }).toBe('DISPUTED')
+  // Wait for Stripe first, so a slow sandbox is told apart from our handling of the event.
+  const session = await stripeApi(
+    'GET',
+    `checkout/sessions/${p.sessionId}?expand[]=payment_intent.latest_charge`,
+  )
+  const chargeId: string = session.payment_intent.latest_charge.id
+  await expect
+    .poll(async () => (await stripeApi('GET', `charges/${chargeId}`)).disputed, {
+      timeout: 300_000,
+      intervals: [5_000],
+      message: 'Stripe never opened the test dispute',
+    })
+    .toBe(true)
+  await expect
+    .poll(() => orderStatus(request, p), {
+      timeout: 30_000,
+      message: 'the dispute event did not reach the order',
+    })
+    .toBe('DISPUTED')
   expect(await balance(request, p.token)).toBe(0)
 
   await openAccount(page)

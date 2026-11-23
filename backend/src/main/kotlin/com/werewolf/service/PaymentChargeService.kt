@@ -17,6 +17,7 @@ class OrderNotFoundForChargeException(chargeId: String) :
 class PaymentChargeService(
     private val gateway: StripeGateway,
     private val writer: PaymentOrderWriter,
+    private val fulfillment: PaymentFulfillmentService,
 ) {
     private val log = LoggerFactory.getLogger(PaymentChargeService::class.java)
 
@@ -36,7 +37,14 @@ class PaymentChargeService(
         val state = moneyState(charge)
         val money = "refunded ${state.refundedAmount}/${charge.amount}, dispute ${state.dispute}"
         val orderId = order.id ?: error("order not persisted")
-        val outcome = writer.applyMoneyState(orderId, chargeId, state, "$money ($source)")
+        var outcome = writer.applyMoneyState(orderId, chargeId, state, "$money ($source)")
+        if (outcome == ChargeOutcome.NOT_SETTLED) {
+            // The charge event beat the payment's own: credit the order from its session first.
+            val fulfilled = order.stripeSessionId?.let { fulfillment.fulfill(it, source) }
+            if (fulfilled == FulfillOutcome.CREDITED || fulfilled == FulfillOutcome.ALREADY_DONE) {
+                outcome = writer.applyMoneyState(orderId, chargeId, state, "$money ($source)")
+            }
+        }
         when (outcome) {
             ChargeOutcome.NOT_SETTLED ->
                 throw ChargeNotSettledException("charge $chargeId: order ${order.orderNo} is not settled (${order.status}), retry later")

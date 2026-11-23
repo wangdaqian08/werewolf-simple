@@ -85,8 +85,29 @@
               >◈ {{ p.credits
               }}<template v-if="p.bonusCredits"> +{{ p.bonusCredits }}</template></span
             >
-            <span class="buy-price">${{ (p.priceCents / 100).toFixed(2) }}</span>
+            <span class="buy-price">{{ formatMoney(p.priceCents, p.currency) }}</span>
           </button>
+          <i18n-t
+            keypath="lobby.purchaseTerms"
+            tag="p"
+            class="buy-terms"
+            data-testid="buy-terms-line"
+          >
+            <template #terms>
+              <a href="/terms.html" target="_blank" rel="noopener" data-testid="buy-terms-link">{{
+                $t('lobby.termsLink')
+              }}</a>
+            </template>
+            <template #refunds>
+              <a
+                href="/refunds.html"
+                target="_blank"
+                rel="noopener"
+                data-testid="buy-refunds-link"
+                >{{ $t('lobby.refundsLink') }}</a
+              >
+            </template>
+          </i18n-t>
           <p v-if="buyError" class="error-msg">{{ buyError }}</p>
         </template>
       </div>
@@ -265,6 +286,24 @@
       <p v-if="error" class="error-msg" data-testid="lobby-error">{{ error }}</p>
 
       <Leaderboard v-if="userStore.isLoggedIn" />
+
+      <nav class="lobby-legal" data-testid="lobby-legal">
+        <a href="/terms.html" target="_blank" rel="noopener" data-testid="legal-terms">{{
+          $t('lobby.legal.terms')
+        }}</a>
+        ·
+        <a href="/privacy.html" target="_blank" rel="noopener" data-testid="legal-privacy">{{
+          $t('lobby.legal.privacy')
+        }}</a>
+        ·
+        <a href="/refunds.html" target="_blank" rel="noopener" data-testid="legal-refunds">{{
+          $t('lobby.legal.refunds')
+        }}</a>
+        ·
+        <a href="mailto:wangdaqian08@gmail.com" data-testid="legal-contact">{{
+          $t('lobby.legal.contact')
+        }}</a>
+      </nav>
     </div>
   </div>
 </template>
@@ -280,6 +319,7 @@ import { roomService } from '@/services/roomService'
 import { clearResume, peekResume } from '@/services/sessionResume'
 import { userService } from '@/services/userService'
 import { paymentService, type CreditProduct } from '@/services/paymentService'
+import { formatMoney } from '@/utils/money'
 import { buildGoogleAuthUrl, generateOAuthState } from '@/utils/oauth'
 import type { JoinRoomRequest, ProvidersResponse, Room } from '@/types'
 import InstallToHomeScreenPrompt from '@/components/InstallToHomeScreenPrompt.vue'
@@ -688,6 +728,26 @@ function signInWithWechat() {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.buy-terms {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.buy-terms a,
+.lobby-legal a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.lobby-legal {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
 }
 
 .buy-guest-note {

@@ -26,6 +26,8 @@ data class CheckoutRequest(
     val successUrl: String,
     val cancelUrl: String,
     val expiresAtEpochSec: Long,
+    val termsUrl: String,
+    val refundPolicyUrl: String,
 )
 
 data class RefundInfo(val refundId: String, val amount: Long, val status: String?)

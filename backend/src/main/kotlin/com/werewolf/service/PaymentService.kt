@@ -124,6 +124,8 @@ class PaymentService(
                     unitAmountCents = product.priceCents.toLong(),
                     successUrl = "${props.frontendBaseUrl}/pay/result?status=success&orderNo=$orderNo",
                     cancelUrl = "${props.frontendBaseUrl}/pay/result?status=cancel",
+                    termsUrl = "${props.frontendBaseUrl}/terms.html",
+                    refundPolicyUrl = "${props.frontendBaseUrl}/refunds.html",
                     expiresAtEpochSec = expiresAt.epochSecond,
                 )
                 val session = try {

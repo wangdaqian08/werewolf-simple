@@ -75,8 +75,8 @@ class PaymentWebhookIntegrationTest {
 
     private fun seedOrder(userId: String = newUser(), orderNo: String = UUID.randomUUID().toString(),
                           sessionId: String = "cs_test_${UUID.randomUUID()}"): PaymentOrder {
-        val product = productRepository.findByProductKeyAndActiveTrue("starter").orElseGet {
-            productRepository.save(Product(productKey = "starter", name = "Starter", credits = 100, priceCents = 199))
+        val product = productRepository.findByProductKeyAndActiveTrue("test-pack").orElseGet {
+            productRepository.save(Product(productKey = "test-pack", name = "Starter", credits = 100, priceCents = 199))
         }
         return paymentOrderRepository.save(
             PaymentOrder(
@@ -371,7 +371,7 @@ class PaymentWebhookIntegrationTest {
     }
 
     @Test
-    fun `charge refunded for an order still CREATED answers 5xx and changes nothing, the redelivery after fulfillment reverses it`() {
+    fun `charge refunded for a paid order still CREATED credits it from its session, then reverses it, in one delivery`() {
         val order = paidOrder()
         val sessionId = order.stripeSessionId ?: error("no session id")
         val chargeId = "ch_$sessionId"
@@ -379,22 +379,16 @@ class PaymentWebhookIntegrationTest {
         gateway.refund(chargeId, 199)
         val payload = chargeEventJson("charge.refunded", "evt_early_$chargeId", """{"id":"$chargeId","object":"charge"}""")
 
-        val first = postSigned(payload)
+        val resp = postSigned(payload)
 
-        assertThat(first.statusCode.is5xxServerError).withFailMessage("status %s", first.statusCode).isTrue()
-        assertThat(eventRow("evt_early_$chargeId").status).isEqualTo(PaymentEventStatus.FAILED)
+        assertThat(resp.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(eventRow("evt_early_$chargeId").status).isEqualTo(PaymentEventStatus.PROCESSED)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
         assertThat(walletService.balance(order.userId)).isEqualTo(0)
-
+        // A later checkout.session.completed is a no-op: the order was credited once and reversed once.
         paymentService.handleEvent(completed("evt_fulfil_$sessionId", sessionId))
-        assertThat(walletService.balance(order.userId)).isEqualTo(100)
-        val second = postSigned(payload)
-
-        assertThat(second.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(walletService.balance(order.userId)).isEqualTo(0)
-        val row = eventRow("evt_early_$chargeId")
-        assertThat(row.status).isEqualTo(PaymentEventStatus.PROCESSED)
-        assertThat(row.attempts).isEqualTo(2)
-        assertThat(reload(order).status).isNotEqualTo(PaymentOrderStatus.CREATED)
+        assertThat(reload(order).status).isEqualTo(PaymentOrderStatus.REFUNDED)
     }
 
     @Test
@@ -427,7 +421,7 @@ class PaymentWebhookIntegrationTest {
         }
         val resp = restTemplate.postForEntity(
             "/api/payment/checkout",
-            HttpEntity(mapOf("productKey" to "starter"), headers),
+            HttpEntity(mapOf("productKey" to "test-pack"), headers),
             Map::class.java,
         )
         assertThat(resp.statusCode).isEqualTo(HttpStatus.FORBIDDEN)

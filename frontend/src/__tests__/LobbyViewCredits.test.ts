@@ -10,7 +10,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import LobbyView from '@/views/LobbyView.vue'
 
-const h = vi.hoisted(() => ({ getWalletMock: vi.fn(), getLeaderboard: vi.fn() }))
+const h = vi.hoisted(() => ({
+  getWalletMock: vi.fn(),
+  getLeaderboard: vi.fn(),
+  getProducts: vi.fn(),
+}))
 
 vi.mock('@/services/userService', () => ({
   userService: {
@@ -30,6 +34,9 @@ vi.mock('@/services/roomService', () => ({
   },
 }))
 vi.mock('@/services/walletService', () => ({ walletService: { getWallet: h.getWalletMock } }))
+vi.mock('@/services/paymentService', () => ({
+  paymentService: { getProducts: h.getProducts, createCheckout: vi.fn() },
+}))
 
 function makeJwt(expSecondsFromNow: number): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
@@ -149,4 +156,56 @@ describe('LobbyView account menu (☰)', () => {
     expect(wrapper.find('[data-testid="leaderboard"]').exists()).toBe(false)
     expect(h.getLeaderboard).not.toHaveBeenCalled()
   })
+})
+
+describe('LobbyView buy sheet and legal links', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    h.getWalletMock.mockReset()
+    h.getWalletMock.mockResolvedValue({ balance: 0, recent: [] })
+    h.getLeaderboard.mockResolvedValue({ top: [], me: null })
+    h.getProducts.mockResolvedValue([
+      {
+        productKey: 'value',
+        name: '超值包',
+        credits: 300,
+        bonusCredits: 30,
+        priceCents: 499,
+        currency: 'aud',
+      },
+      {
+        productKey: 'big',
+        name: '豪华包',
+        credits: 700,
+        bonusCredits: 100,
+        priceCents: 999,
+        currency: 'aud',
+      },
+    ])
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('shows AUD prices, the AUD line and the Terms / Refund Policy links', async () => {
+    const { wrapper } = await mountLobby()
+    await wrapper.get('[data-testid="buy-credits-toggle"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="buy-value"]').text()).toContain('A$4.99')
+    expect(wrapper.get('[data-testid="buy-big"]').text()).toContain('A$9.99')
+    expect(wrapper.get('[data-testid="buy-terms-line"]').text()).toContain('Prices in AUD.')
+    expect(wrapper.get('[data-testid="buy-terms-link"]').attributes('href')).toBe('/terms.html')
+    expect(wrapper.get('[data-testid="buy-refunds-link"]').attributes('href')).toBe('/refunds.html')
+  })
+
+  for (const loggedIn of [true, false]) {
+    it(`shows the legal footer when ${loggedIn ? 'signed in' : 'signed out'}`, async () => {
+      const { wrapper } = await mountLobby({ loggedIn })
+      expect(wrapper.get('[data-testid="legal-terms"]').attributes('href')).toBe('/terms.html')
+      expect(wrapper.get('[data-testid="legal-privacy"]').attributes('href')).toBe('/privacy.html')
+      expect(wrapper.get('[data-testid="legal-refunds"]').attributes('href')).toBe('/refunds.html')
+      expect(wrapper.get('[data-testid="legal-contact"]').attributes('href')).toBe(
+        'mailto:wangdaqian08@gmail.com',
+      )
+    })
+  }
 })
