@@ -4,6 +4,7 @@ import com.werewolf.auth.AuthService
 import com.werewolf.dto.RoomConfigRequest
 import com.werewolf.dto.RoomPlayerDto
 import com.werewolf.model.*
+import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
@@ -34,6 +35,7 @@ class RoomServiceTest {
     @Mock lateinit var perkActivationRepository: com.werewolf.repository.PerkActivationRepository
     @Mock lateinit var perkRepository: com.werewolf.repository.PerkRepository
     @Mock lateinit var perkService: PerkService
+    @Mock lateinit var paymentOrderRepository: PaymentOrderRepository
     @InjectMocks lateinit var roomService: RoomService
 
     @org.junit.jupiter.api.BeforeEach

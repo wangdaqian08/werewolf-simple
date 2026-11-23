@@ -7,6 +7,7 @@ import com.werewolf.model.RolePickChoice
 import com.werewolf.model.Room
 import com.werewolf.model.RoomPlayer
 import com.werewolf.model.RoomStatus
+import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.RoomPlayerRepository
 import com.werewolf.repository.RoomRepository
@@ -35,6 +36,7 @@ class RoomServiceReadyTest {
     @Mock lateinit var perkActivationRepository: com.werewolf.repository.PerkActivationRepository
     @Mock lateinit var perkRepository: com.werewolf.repository.PerkRepository
     @Mock lateinit var perkService: com.werewolf.service.PerkService
+    @Mock lateinit var paymentOrderRepository: PaymentOrderRepository
     @InjectMocks lateinit var roomService: RoomService
 
     private val roomId = 1

@@ -4,6 +4,7 @@ import com.werewolf.auth.AuthService
 import com.werewolf.config.GameTimingProperties
 import com.werewolf.controller.BgmTrackRegistry
 import com.werewolf.model.*
+import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.PerkActivationRepository
 import com.werewolf.repository.PerkRepository
@@ -34,6 +35,7 @@ class RoomServiceLeaveTest {
     @Mock lateinit var perkActivationRepository: PerkActivationRepository
     @Mock lateinit var perkRepository: PerkRepository
     @Mock lateinit var perkService: PerkService
+    @Mock lateinit var paymentOrderRepository: PaymentOrderRepository
     @InjectMocks lateinit var roomService: RoomService
 
     private val hostId = "host:001"

@@ -32,6 +32,8 @@ class RoomController(private val roomService: RoomService) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         } catch (e: InvalidRoleCompositionException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: RefundPendingException) {
+            ResponseEntity.status(409).body(mapOf("error" to e.message, "code" to "REFUND_PENDING"))
         }
     }
 
@@ -53,6 +55,8 @@ class RoomController(private val roomService: RoomService) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
         } catch (e: RoomFullException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
+        } catch (e: RefundPendingException) {
+            ResponseEntity.status(409).body(mapOf("error" to e.message, "code" to "REFUND_PENDING"))
         }
     }
 

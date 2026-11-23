@@ -16,6 +16,7 @@ import com.werewolf.model.ReadyStatus
 import com.werewolf.model.Room
 import com.werewolf.model.RoomPlayer
 import com.werewolf.model.RoomStatus
+import com.werewolf.repository.PaymentOrderRepository
 import com.werewolf.repository.GameRepository
 import com.werewolf.repository.PerkActivationRepository
 import com.werewolf.repository.PerkRepository
@@ -39,6 +40,7 @@ class RoomService(
     private val perkActivationRepository: PerkActivationRepository,
     private val perkRepository: PerkRepository,
     private val perkService: PerkService,
+    private val paymentOrderRepository: PaymentOrderRepository,
 ) {
     @Transactional
     fun createRoom(
@@ -48,6 +50,7 @@ class RoomService(
         cfg: RoomConfigRequest,
         displayNameOverride: String? = null,
     ): RoomDto {
+        refuseWhileRefundPending(userId)
         authService.loginOrRegister(userId, nickname, avatarUrl)
 
         if (!bgmRegistry.isValidTrack(cfg.bgmTrack)) {
@@ -102,6 +105,7 @@ class RoomService(
         roomCode: String,
         displayNameOverride: String? = null,
     ): RoomDto {
+        refuseWhileRefundPending(userId)
         authService.loginOrRegister(userId, nickname, avatarUrl)
 
         val room = roomRepository.findActiveByRoomCode(roomCode).orElse(null)
@@ -364,6 +368,13 @@ class RoomService(
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /** A self refund in progress locks the account out of games until Stripe confirms it (spec D11). */
+    private fun refuseWhileRefundPending(userId: String) {
+        if (paymentOrderRepository.existsByUserIdAndSelfRefundRequestedAtIsNotNullAndSelfRefundSettledAtIsNull(userId)) {
+            throw RefundPendingException("A refund is in progress; games are unavailable until it completes")
+        }
+    }
+
     private fun buildRoomDto(room: Room): RoomDto {
         val roomId = room.roomId ?: error("Room has no ID")
         val players = roomPlayerRepository.findByRoomId(roomId)
@@ -558,6 +569,7 @@ class RoomService(
 private const val ROOM_CODE_MAX_ATTEMPTS = 200
 
 class RoomNotFoundException(message: String) : RuntimeException(message)
+class RefundPendingException(message: String) : RuntimeException(message)
 class RoomNotOpenException(message: String) : RuntimeException(message)
 class RoomFullException(message: String) : RuntimeException(message)
 class RoomCodeUnavailableException(message: String) : RuntimeException(message)
