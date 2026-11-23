@@ -192,12 +192,13 @@
         {{ loading ? $t('create.creating') : $t('create.title') }}
       </button>
 
-      <p v-if="error" class="error-msg">{{ error }}</p>
+      <p v-if="error" class="error-msg" data-testid="create-error">{{ error }}</p>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
+import axios from 'axios'
 import { t } from '@/i18n'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
@@ -296,7 +297,14 @@ async function handleCreate() {
     roomStore.setRoom(room)
     router.push({ name: 'room', params: { roomId: room.roomId }, query: { setup: '1' } })
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : t('create.failed')
+    if (
+      axios.isAxiosError(e) &&
+      (e.response?.data as { code?: string } | undefined)?.code === 'REFUND_PENDING'
+    ) {
+      error.value = t('lobby.refundPending')
+    } else {
+      error.value = e instanceof Error ? e.message : t('create.failed')
+    }
   } finally {
     loading.value = false
   }

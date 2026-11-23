@@ -30,6 +30,14 @@ export const paymentService = {
   },
 
   /** Owner-only fulfillment poll — the redirect back from Stripe is not trusted. */
+  /** The player's change-of-mind refund of one order; the backend checks every rule again. */
+  async requestRefund(orderNo: string): Promise<{ status: string; refundPending: boolean }> {
+    const { data } = await http.post<{ status: string; refundPending: boolean }>(
+      `/payment/order/${orderNo}/refund`,
+    )
+    return data
+  },
+
   async getOrder(orderNo: string): Promise<PaymentOrderStatus> {
     const { data } = await http.get<PaymentOrderStatus>(`/payment/order/${orderNo}`)
     return data

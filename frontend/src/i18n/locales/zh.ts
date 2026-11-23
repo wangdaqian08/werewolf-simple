@@ -45,6 +45,20 @@ export default {
     perks: '道具',
     perksFail: '無法加載道具記錄',
     receipt: '收據',
+    refund: {
+      button: '申請退款',
+      reasons: {
+        SPENT: '已消費，不可退款',
+        IN_ROOM: '請先離開房間',
+        LIMIT: "30 天內已退過一次，請發郵件聯繫 wangdaqian08{'@'}gmail.com",
+        PENDING: '退款處理中',
+      },
+      confirm:
+        '退還 {amount}，扣回 ◈{coins}。處理期間無法進入遊戲；退款一般需要 5–10 個工作日退回原付款方式。',
+      yes: '確認退款',
+      no: '取消',
+      failed: '退款失敗，請稍後再試',
+    },
     settled: '· 結算 {date}',
     signIn: '請先登錄',
     title: '我的賬戶',
@@ -246,6 +260,7 @@ export default {
     nicknamePh: '輸入暱稱',
     or: '或',
     payUnavailable: '支付暫不可用',
+    refundPending: '退款處理中，完成前無法進入遊戲',
     rejoin: '繼續遊戲 · {code}',
     resumeHint: '登入已過期，重新登入後返回遊戲',
     resumeLogin: '重新登入並返回',
