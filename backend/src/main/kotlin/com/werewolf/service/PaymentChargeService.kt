@@ -51,12 +51,13 @@ class PaymentChargeService(
             ChargeOutcome.UNCHANGED -> {}
             else ->
                 // A fix made by the job means the webhook that should have made it never came.
-                if (source != "webhook" && (outcome == ChargeOutcome.REVERSED || outcome == ChargeOutcome.REINSTATED)) {
+                if (source == "reconcile" && (outcome == ChargeOutcome.REVERSED || outcome == ChargeOutcome.REINSTATED)) {
                     log.error("[payment-alert] reconcile fixed charge {} order {} {}: {} (source={})", chargeId, order.orderNo, outcome, money, source)
                 } else {
                     log.info("[payment] charge {} order {} {}: {} (source={})", chargeId, order.orderNo, outcome, money, source)
                 }
         }
+        writer.settleSelfRefund(orderId, charge.refunds)
         return ChargeResult(outcome, orderId)
     }
 }

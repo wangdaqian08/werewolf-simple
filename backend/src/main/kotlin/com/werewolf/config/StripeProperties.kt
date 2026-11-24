@@ -35,4 +35,7 @@ data class PaymentProperties(
     val statusCheckThrottleSeconds: Long,
     /** Orders per page of the player's top-up history. */
     val ordersPageSize: Int,
+    val selfRefundDays: Long,
+    val selfRefundWindowDays: Long,
+    val selfRefundMaxPerWindow: Int,
 )

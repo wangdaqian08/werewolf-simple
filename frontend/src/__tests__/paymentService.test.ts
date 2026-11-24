@@ -43,3 +43,16 @@ describe('paymentService', () => {
     expect(result).toEqual(expected)
   })
 })
+
+describe('paymentService.requestRefund', () => {
+  it('posts to the order refund endpoint and returns the result', async () => {
+    mockedHttp.post
+      .mockReset()
+      .mockResolvedValueOnce({ data: { status: 'REFUNDED', refundPending: false } })
+    await expect(paymentService.requestRefund('WW1')).resolves.toEqual({
+      status: 'REFUNDED',
+      refundPending: false,
+    })
+    expect(mockedHttp.post).toHaveBeenCalledWith('/payment/order/WW1/refund')
+  })
+})

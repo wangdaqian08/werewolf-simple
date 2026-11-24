@@ -19,13 +19,18 @@ const h = vi.hoisted(() => ({
   getOrderMock: vi.fn(),
   isAdminMock: vi.fn(),
   getStatsMock: vi.fn(),
+  requestRefundMock: vi.fn(),
 }))
 
 vi.mock('@/services/walletService', () => ({
   walletService: { getWallet: h.getWalletMock, getMyPerks: h.getMyPerksMock },
 }))
 vi.mock('@/services/paymentService', () => ({
-  paymentService: { listOrders: h.listOrdersMock, getOrder: h.getOrderMock },
+  paymentService: {
+    listOrders: h.listOrdersMock,
+    getOrder: h.getOrderMock,
+    requestRefund: h.requestRefundMock,
+  },
 }))
 vi.mock('@/services/userService', () => ({
   userService: { getStats: h.getStatsMock },
@@ -649,5 +654,118 @@ describe('AccountView money formatting and status fallbacks', () => {
     )
     const google = await mountAccount('google:abc')
     expect(google.wrapper.find('[data-testid="account-guest-note"]').exists()).toBe(false)
+  })
+})
+
+describe('AccountView self-service refund', () => {
+  const base: PaymentOrderSummary = {
+    orderNo: 'WW9',
+    productName: '超值包',
+    credits: 330,
+    amountCents: 499,
+    currency: 'aud',
+    status: 'COMPLETED',
+    createdAt: '2026-11-20T10:00:00',
+  }
+  const withRefund = (refund: PaymentOrderSummary['refund']) => ({
+    orders: [{ ...base, refund }],
+    hasMore: false,
+  })
+
+  beforeEach(() => {
+    localStorage.clear()
+    h.getWalletMock.mockReset().mockResolvedValue(WALLET)
+    h.getMyPerksMock.mockReset().mockResolvedValue([])
+    h.getOrderMock.mockReset()
+    h.isAdminMock.mockReset().mockResolvedValue(false)
+    h.getStatsMock.mockReset().mockResolvedValue(MOCK_USER_STATS)
+    h.requestRefundMock.mockReset().mockResolvedValue({ status: 'REFUNDED', refundPending: false })
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('shows the button on an eligible order and nothing when the order has no refund field', async () => {
+    h.listOrdersMock.mockReset().mockResolvedValue(withRefund({ eligible: true }))
+    let { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="order-refund-btn"]').text()).toBe('申請退款')
+    expect(wrapper.find('[data-testid="order-refund-reason"]').exists()).toBe(false)
+
+    h.listOrdersMock.mockReset().mockResolvedValue({ orders: [base], hasMore: false })
+    ;({ wrapper } = await mountAccount())
+    expect(wrapper.find('[data-testid="order-refund-btn"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="order-refund-reason"]').exists()).toBe(false)
+  })
+
+  it.each([
+    ['SPENT', '已消費，不可退款'],
+    ['IN_ROOM', '請先離開房間'],
+    ['LIMIT', '30 天內已退過一次，請發郵件聯繫 wangdaqian08@gmail.com'],
+    ['PENDING', '退款處理中'],
+  ] as const)('shows why %s orders cannot be refunded', async (reason, text) => {
+    h.listOrdersMock.mockReset().mockResolvedValue(withRefund({ eligible: false, reason }))
+    const { wrapper } = await mountAccount()
+    expect(wrapper.find('[data-testid="order-refund-reason"]').text()).toBe(text)
+    expect(wrapper.find('[data-testid="order-refund-btn"]').exists()).toBe(false)
+  })
+
+  it('asks to confirm with the amount, the credits, the lock and the payout time, then refunds once and reloads', async () => {
+    h.listOrdersMock
+      .mockReset()
+      .mockResolvedValueOnce(withRefund({ eligible: true }))
+      .mockResolvedValue({ orders: [{ ...base, status: 'REFUNDED' }], hasMore: false })
+    const { wrapper } = await mountAccount()
+
+    await wrapper.find('[data-testid="order-refund-btn"]').trigger('click')
+    const confirm = wrapper.find('[data-testid="refund-confirm"]').text()
+    expect(confirm).toContain('A$4.99')
+    expect(confirm).toContain('330')
+    expect(confirm).toContain('無法進入遊戲')
+    expect(confirm).toContain('5–10 個工作日')
+    expect(h.requestRefundMock).not.toHaveBeenCalled()
+
+    const walletCalls = h.getWalletMock.mock.calls.length
+    await wrapper.find('[data-testid="refund-confirm-yes"]').trigger('click')
+    await flushPromises()
+
+    expect(h.requestRefundMock).toHaveBeenCalledTimes(1)
+    expect(h.requestRefundMock).toHaveBeenCalledWith('WW9')
+    expect(h.listOrdersMock).toHaveBeenLastCalledWith(0)
+    expect(h.getWalletMock.mock.calls.length).toBeGreaterThan(walletCalls)
+    expect(wrapper.find('[data-testid="order-status"]').text()).toBe('已退款')
+  })
+
+  it('cancel closes the confirm without refunding', async () => {
+    h.listOrdersMock.mockReset().mockResolvedValue(withRefund({ eligible: true }))
+    const { wrapper } = await mountAccount()
+    await wrapper.find('[data-testid="order-refund-btn"]').trigger('click')
+    await wrapper.find('[data-testid="refund-confirm-no"]').trigger('click')
+    expect(wrapper.find('[data-testid="refund-confirm"]').exists()).toBe(false)
+    expect(h.requestRefundMock).not.toHaveBeenCalled()
+  })
+
+  it('a Stripe failure says to try again later; a 409 reloads the orders', async () => {
+    h.listOrdersMock.mockReset().mockResolvedValue(withRefund({ eligible: true }))
+    h.requestRefundMock.mockRejectedValueOnce(
+      Object.assign(new Error('503'), {
+        isAxiosError: true,
+        response: { status: 503, data: { code: 'REFUND_UNAVAILABLE' } },
+      }),
+    )
+    const { wrapper } = await mountAccount()
+    await wrapper.find('[data-testid="order-refund-btn"]').trigger('click')
+    await wrapper.find('[data-testid="refund-confirm-yes"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="refund-error"]').text()).toBe('退款失敗，請稍後再試')
+
+    h.requestRefundMock.mockRejectedValueOnce(
+      Object.assign(new Error('409'), {
+        isAxiosError: true,
+        response: { status: 409, data: { code: 'IN_ROOM' } },
+      }),
+    )
+    h.listOrdersMock.mockResolvedValue(withRefund({ eligible: false, reason: 'IN_ROOM' }))
+    await wrapper.find('[data-testid="order-refund-btn"]').trigger('click')
+    await wrapper.find('[data-testid="refund-confirm-yes"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="order-refund-reason"]').text()).toBe('請先離開房間')
   })
 })

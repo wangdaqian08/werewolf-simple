@@ -155,6 +155,59 @@
                     </span>
                     <span>{{ fmtDate(order.createdAt) }}</span>
                   </div>
+                  <div v-if="order.refund" class="row-refund">
+                    <template v-if="order.refund.eligible">
+                      <button
+                        v-if="confirmingRefund !== order.orderNo"
+                        class="btn btn-outline refund-btn"
+                        data-testid="order-refund-btn"
+                        @click="confirmingRefund = order.orderNo"
+                      >
+                        {{ $t('account.refund.button') }}
+                      </button>
+                      <div v-else class="refund-confirm" data-testid="refund-confirm">
+                        <p data-testid="refund-confirm-amount">
+                          {{
+                            $t('account.refund.confirm', {
+                              amount: formatMoney(order.amountCents, order.currency),
+                              coins: order.credits,
+                            })
+                          }}
+                        </p>
+                        <div class="refund-actions">
+                          <button
+                            class="btn btn-primary"
+                            data-testid="refund-confirm-yes"
+                            :disabled="refunding"
+                            @click="confirmRefund(order.orderNo)"
+                          >
+                            {{ $t('account.refund.yes') }}
+                          </button>
+                          <button
+                            class="btn btn-secondary"
+                            data-testid="refund-confirm-no"
+                            :disabled="refunding"
+                            @click="confirmingRefund = null"
+                          >
+                            {{ $t('account.refund.no') }}
+                          </button>
+                        </div>
+                      </div>
+                    </template>
+                    <span
+                      v-else-if="order.refund.reason"
+                      class="refund-reason"
+                      data-testid="order-refund-reason"
+                      >{{ $t(`account.refund.reasons.${order.refund.reason}`) }}</span
+                    >
+                    <p
+                      v-if="refundError === order.orderNo"
+                      class="error-msg"
+                      data-testid="refund-error"
+                    >
+                      {{ $t('account.refund.failed') }}
+                    </p>
+                  </div>
                 </li>
               </ul>
               <button
@@ -177,6 +230,7 @@
 
 <script lang="ts" setup>
 import { formatMoney } from '@/utils/money'
+import axios from 'axios'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getLocale } from '@/i18n'
@@ -210,6 +264,9 @@ const ordersLoadingMore = ref(false)
 const walletError = ref(false)
 const perksError = ref(false)
 const ordersError = ref(false)
+const confirmingRefund = ref<string | null>(null)
+const refunding = ref(false)
+const refundError = ref<string | null>(null)
 const isAdmin = ref(false)
 
 const TX_LABELS: Record<CreditTxType, string> = {
@@ -342,6 +399,36 @@ async function loadMoreOrders() {
   }
 }
 
+// The backend re-checks every rule; a refusal (409) means the list was stale, so reload it.
+async function confirmRefund(orderNo: string) {
+  refunding.value = true
+  refundError.value = null
+  try {
+    await paymentService.requestRefund(orderNo)
+    await reloadOrdersAndWallet()
+  } catch (e: unknown) {
+    if (axios.isAxiosError(e) && e.response?.status === 409) await reloadOrdersAndWallet()
+    else refundError.value = orderNo
+  } finally {
+    refunding.value = false
+    confirmingRefund.value = null
+  }
+}
+
+async function reloadOrdersAndWallet() {
+  const [page, w] = await Promise.all([
+    paymentService.listOrders(0).catch(() => null),
+    walletService.getWallet().catch(() => null),
+    userStore.refreshWallet(),
+  ])
+  if (page) {
+    orders.value = page.orders
+    ordersHasMore.value = page.hasMore
+    ordersPage.value = 0
+  }
+  if (w) wallet.value = w
+}
+
 // The order endpoint asks Stripe about a processing order, so a missed webhook
 // settles here too; a settled one changes the balance, so reload the wallet.
 async function recheckProcessing(list: PaymentOrderSummary[]) {
@@ -363,6 +450,30 @@ async function recheckProcessing(list: PaymentOrderSummary[]) {
 </script>
 
 <style scoped>
+.row-refund {
+  margin-top: 6px;
+}
+
+.refund-btn {
+  font-size: 13px;
+  padding: 4px 10px;
+}
+
+.refund-reason {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.refund-confirm p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.refund-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .account-wrap {
   display: flex;
   justify-content: center;

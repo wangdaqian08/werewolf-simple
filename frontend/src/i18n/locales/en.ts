@@ -45,6 +45,20 @@ export default {
     perks: 'Perks',
     perksFail: 'Failed to load perks',
     receipt: 'Receipt',
+    refund: {
+      button: 'Request refund',
+      reasons: {
+        SPENT: 'Coins spent since — not refundable',
+        IN_ROOM: 'Leave your room first',
+        LIMIT: "Already refunded once in 30 days — email wangdaqian08{'@'}gmail.com",
+        PENDING: 'Refund in progress',
+      },
+      confirm:
+        'Refund {amount} and remove ◈{coins}. You cannot enter games until it completes; refunds usually take 5–10 business days to reach your original payment method.',
+      yes: 'Confirm refund',
+      no: 'Cancel',
+      failed: 'Refund failed, please try again later',
+    },
     settled: '· Settled {date}',
     signIn: 'Please sign in',
     title: 'My Account',
@@ -247,6 +261,7 @@ export default {
     nicknamePh: 'Enter your nickname',
     or: 'or',
     payUnavailable: 'Payments unavailable',
+    refundPending: 'A refund is in progress; games are unavailable until it completes',
     rejoin: 'Rejoin · {code}',
     resumeHint: 'Your login expired. Log in again to go back to your game',
     resumeLogin: 'Log in and go back',

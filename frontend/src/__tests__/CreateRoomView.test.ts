@@ -76,6 +76,29 @@ describe('CreateRoomView — game settings page', () => {
   })
 })
 
+describe('CreateRoomView refund lock', () => {
+  beforeEach(() => {
+    h.createRoomMock.mockReset().mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 409'), {
+        isAxiosError: true,
+        response: {
+          status: 409,
+          data: { error: 'A refund is in progress', code: 'REFUND_PENDING' },
+        },
+      }),
+    )
+  })
+
+  it('explains that games are unavailable until the refund completes', async () => {
+    const wrapper = await mountCreateRoom()
+    await wrapper.find('[data-testid="create-room-submit"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="create-error"]').text()).toBe(
+      '退款處理中，完成前無法進入遊戲',
+    )
+  })
+})
+
 describe('CreateRoomView perks toggle', () => {
   beforeEach(() => {
     h.createRoomMock.mockReset().mockResolvedValue({

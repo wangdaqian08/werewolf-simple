@@ -28,8 +28,9 @@ class PaymentEventFailureTest {
             PaymentProperties(
                 enabled = true, frontendBaseUrl = "", stripeSecretKey = "",
                 sessionExpiryMinutes = 31, reconcileIntervalMs = 600_000, reconcileMinAgeMinutes = 10,
-                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5, ordersPageSize = 20,
+                sweepLookbackDays = 30, statusCheckThrottleSeconds = 5, ordersPageSize = 20, selfRefundDays = 14, selfRefundWindowDays = 30, selfRefundMaxPerWindow = 1,
             ),
+            mock(),
         )
 
         assertThatThrownBy { service.handleEvent(event) }.hasMessage("original")

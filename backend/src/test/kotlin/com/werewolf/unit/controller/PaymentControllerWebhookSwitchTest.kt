@@ -19,7 +19,7 @@ class PaymentControllerWebhookSwitchTest {
         reconcileIntervalMs = 600_000,
         reconcileMinAgeMinutes = 10,
         sweepLookbackDays = 30,
-        statusCheckThrottleSeconds = 5, ordersPageSize = 20,
+        statusCheckThrottleSeconds = 5, ordersPageSize = 20, selfRefundDays = 14, selfRefundWindowDays = 30, selfRefundMaxPerWindow = 1,
     )
 
     @Test
@@ -27,7 +27,7 @@ class PaymentControllerWebhookSwitchTest {
         val service = mock<PaymentService>()
         val verifier = mock<StripeWebhookVerifier>()
 
-        val resp = PaymentController(service, verifier, props).webhook("""{"id":"evt_x"}""", "t=1,v1=sig")
+        val resp = PaymentController(service, mock(), verifier, props).webhook("""{"id":"evt_x"}""", "t=1,v1=sig")
 
         assertThat(resp.statusCode.value()).isEqualTo(503)
         verifyNoInteractions(verifier, service) // no handleEvent → no payment_events row

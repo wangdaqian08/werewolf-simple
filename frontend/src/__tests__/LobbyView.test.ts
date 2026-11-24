@@ -315,6 +315,29 @@ describe('LobbyView OAuth UI', () => {
     expect(router.currentRoute.value.name).toBe('lobby')
   })
 
+  it('join refused while a refund is in progress explains why', async () => {
+    localStorage.setItem('jwt', makeJwt(3600))
+    localStorage.setItem('userId', 'google:abc')
+    localStorage.setItem('nickname', 'Daniel Wang')
+    getProvidersMock.mockResolvedValue({ google: { clientId: 'g' }, wechat: null, guest: true })
+    joinRoomMock.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 409'), {
+        isAxiosError: true,
+        response: {
+          status: 409,
+          data: { error: 'A refund is in progress', code: 'REFUND_PENDING' },
+        },
+      }),
+    )
+    const { wrapper } = await mountLobby()
+    await wrapper.find('[data-testid="room-code-input"]').setValue('123')
+    await wrapper.find('[data-testid="join-room-btn"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="lobby-error"]').text()).toBe(
+      '退款處理中，完成前無法進入遊戲',
+    )
+  })
+
   it('Join Room omits nickname when display-name was not changed (sends just roomCode)', async () => {
     localStorage.setItem('jwt', VALID_JWT())
     localStorage.setItem('userId', 'google:abc')

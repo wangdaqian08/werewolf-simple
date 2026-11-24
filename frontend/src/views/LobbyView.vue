@@ -509,7 +509,15 @@ async function handleJoinRoom() {
     roomStore.setRoom(room)
     router.push({ name: 'room', params: { roomId: room.roomId } })
   } catch (e: unknown) {
-    if (axios.isAxiosError(e) && (e.response?.status === 404 || e.response?.status === 400)) {
+    if (
+      axios.isAxiosError(e) &&
+      (e.response?.data as { code?: string } | undefined)?.code === 'REFUND_PENDING'
+    ) {
+      error.value = t('lobby.refundPending')
+    } else if (
+      axios.isAxiosError(e) &&
+      (e.response?.status === 404 || e.response?.status === 400)
+    ) {
       // Show the real reason ("Room is full", …); a missing room keeps the hint.
       const reason = (e.response.data as { error?: string } | undefined)?.error
       error.value =

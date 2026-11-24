@@ -199,6 +199,8 @@ export interface PaymentOrderSummary {
   status: 'CREATED' | 'COMPLETED' | 'EXPIRED' | 'FAILED' | 'REFUNDED' | 'DISPUTED' | 'DISPUTE_LOST'
   receiptUrl?: string | null
   createdAt: string
+  /** Present while the order is inside the self-refund window or its refund is in progress. */
+  refund?: { eligible: boolean; reason?: 'SPENT' | 'IN_ROOM' | 'LIMIT' | 'PENDING' | null }
 }
 
 /** One page of GET /api/payment/orders, newest first. */

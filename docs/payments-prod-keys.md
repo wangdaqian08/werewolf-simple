@@ -9,7 +9,11 @@ nightly **Payment E2E (Stripe sandbox)** workflow is green.
 - A paid Checkout Session becomes credits through one idempotent path, called by the
   webhook, by the return page (`/pay/result`), and by a reconcile job every 10 minutes.
   A missed webhook therefore costs minutes, never credits.
-- Refunds are made in the Stripe Dashboard, **full refunds only**. A full refund or a
+- Players refund a purchase themselves from 我的賬戶 → 充值記錄 (申請退款) within 14 days if
+  they have spent no credits since, at most once every 30 days. The app then refunds the
+  whole charge through Stripe, and the account cannot enter games until Stripe confirms it.
+  You can still refund in the Dashboard (our faults, players past the limit), **full refunds
+  only**. A full refund or a
   chargeback (inquiries included) takes the purchase's credits back; the balance may go
   negative, and a negative balance blocks spending. A won dispute gives the credits back.
 - A **partial refund** changes no credits. It flags the order for manual handling
@@ -47,12 +51,12 @@ stage 1, once in live mode for stage 2):
 | Customers         | Write |
 | PaymentIntents    | Read  |
 | Charges           | Read  |
-| Refunds           | Read  |
+| Refunds           | Write |
 | Disputes          | Read  |
 | All others        | None  |
 
-- The app never makes refunds itself, so no Refunds: Write. If your Dashboard has no
-  separate Refunds row, Charges: Read covers it.
+- Refunds: Write is needed because the app creates the player's self-service refund
+  (always the full charge, reason "requested by customer").
 - PaymentIntents: Read is needed because the backend expands the PaymentIntent when it
   reads a session or a charge.
 - Invoicing is not used: receipts are Stripe's charge receipts.
@@ -124,7 +128,10 @@ With that sandbox's details, key and endpoint from steps 0–4, on a signed-in (
    order reads 已退款, the credits are gone, and the ledger shows 充值退回.
 3. Buy again with `4000 0000 0000 0259` (Stripe's dispute card). The order reads
    拒付處理中 and the ledger shows 拒付扣回.
-4. Dashboard → Webhooks → the endpoint: every delivery answered 200.
+4. Buy once more, then press 申請退款 on that order and confirm. The order reads 已退款, the
+   credits are gone, and you can create a room again; the Dashboard shows the refund with
+   reason "Requested by customer" and the order number in its metadata.
+5. Dashboard → Webhooks → the endpoint: every delivery answered 200.
 5. The alert grep below shows nothing for these orders.
 
 ## 6. Stage 2: live keys
@@ -135,6 +142,17 @@ With that sandbox's details, key and endpoint from steps 0–4, on a signed-in (
 
 Switching from test to live keys is self-healing: test-mode customer ids are replaced and
 test-mode orders expire on their own. No SQL is needed.
+
+## Self-service refunds
+
+- Each one logs `[payment] self-service refund order=… user=… refund=… outcome=…`, and the
+  Stripe refund carries reason `requested_by_customer` with metadata `orderNo` and `userId`.
+- The account is locked (cannot create or join a room) from the request until Stripe reports
+  the refund succeeded or failed; a card refund usually settles at once.
+- A refund that later fails gives the credits back, unlocks the account and logs
+  `[payment-alert] self-service refund … failed`; the player can try again.
+- Use a Dashboard refund instead for problems on our side and for players past the
+  once-per-30-days limit (they are told to email). Dashboard refunds never lock an account.
 
 ## Deciding an emailed refund request
 
@@ -199,6 +217,7 @@ Payment problems log one tag, and Stripe emails you when the endpoint keeps fail
 | `reconcile credited session …`               | The job credited a payment the webhook missed: check deliveries     |
 | `reconcile fixed charge …`                   | The job applied a refund or dispute the webhook missed: same        |
 | `webhook event … failed again`               | An event keeps failing; Stripe retries it: read the error           |
+| `self-service refund … of order … failed`    | A player's refund failed at Stripe; credits are back. Check Stripe  |
 
 Flagged orders keep `needs_review = true` and a `review_reason` in `payment_orders`. There
 is no admin page: use this grep, the database and the Stripe Dashboard (search by the
