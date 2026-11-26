@@ -1,8 +1,10 @@
 package com.werewolf.service
 
+import com.werewolf.repository.SelfRefundStore
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionSynchronizationManager
+import java.time.LocalDateTime
 
 enum class ChargeOutcome { REVERSED, REINSTATED, UNCHANGED, NEEDS_REVIEW, NOT_SETTLED, NOT_OURS }
 
@@ -18,6 +20,7 @@ class PaymentChargeService(
     private val gateway: StripeGateway,
     private val writer: PaymentOrderWriter,
     private val fulfillment: PaymentFulfillmentService,
+    private val selfRefunds: SelfRefundStore,
 ) {
     private val log = LoggerFactory.getLogger(PaymentChargeService::class.java)
 
@@ -57,7 +60,23 @@ class PaymentChargeService(
                     log.info("[payment] charge {} order {} {}: {} (source={})", chargeId, order.orderNo, outcome, money, source)
                 }
         }
-        writer.settleSelfRefund(orderId, charge.refunds)
+        settleSelfRefund(orderId, charge.refunds)
         return ChargeResult(outcome, orderId)
+    }
+
+    /**
+     * Settle the order's self refund from Stripe's view of it: succeeded unlocks the account,
+     * failed or canceled drops the request (unlock, alert once), anything else keeps the lock.
+     */
+    private fun settleSelfRefund(orderId: Int, refunds: List<RefundInfo>) {
+        val open = selfRefunds.openRefund(orderId) ?: return
+        when (refunds.firstOrNull { it.refundId == open.refundId }?.status) {
+            "succeeded" -> selfRefunds.markSettled(orderId, open.refundId, LocalDateTime.now())
+            "failed", "canceled" ->
+                if (selfRefunds.dropFailed(orderId, open.refundId) == 1) {
+                    log.error("[payment-alert] self-service refund {} of order {} failed", open.refundId, open.orderNo)
+                }
+            else -> {}
+        }
     }
 }

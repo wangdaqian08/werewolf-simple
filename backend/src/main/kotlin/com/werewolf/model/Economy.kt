@@ -229,14 +229,15 @@ class PaymentOrder(
     @Column(name = "credits_reversed", nullable = false)
     var creditsReversed: Boolean = false,
 
-    @Column(name = "self_refund_requested_at")
-    var selfRefundRequestedAt: LocalDateTime? = null,
+    // Read-only for JPA: SelfRefundStore is the only writer, one conditional UPDATE per change.
+    @Column(name = "self_refund_requested_at", insertable = false, updatable = false)
+    val selfRefundRequestedAt: LocalDateTime? = null,
 
-    @Column(name = "self_refund_id", length = 255)
-    var selfRefundId: String? = null,
+    @Column(name = "self_refund_id", length = 255, insertable = false, updatable = false)
+    val selfRefundId: String? = null,
 
-    @Column(name = "self_refund_settled_at")
-    var selfRefundSettledAt: LocalDateTime? = null,
+    @Column(name = "self_refund_settled_at", insertable = false, updatable = false)
+    val selfRefundSettledAt: LocalDateTime? = null,
 
     @Column(name = "updated_at")
     @UpdateTimestamp

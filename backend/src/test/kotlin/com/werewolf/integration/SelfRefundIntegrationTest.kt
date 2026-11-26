@@ -17,6 +17,7 @@ import com.werewolf.service.SelfRefundView
 import com.werewolf.service.WalletService
 import com.werewolf.support.FakeStripeGateway
 import com.werewolf.support.PaymentIntegrationTest
+import com.werewolf.support.setSelfRefund
 import com.werewolf.util.JwtUtil
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -30,6 +31,7 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.jdbc.core.JdbcTemplate
 import java.time.LocalDateTime
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -51,7 +53,8 @@ class SelfRefundIntegrationTest {
     @Autowired lateinit var charges: PaymentChargeService
     @Autowired lateinit var roomService: RoomService
     @Autowired lateinit var policy: SelfRefundPolicy
-    @Autowired lateinit var writer: com.werewolf.service.PaymentOrderWriter
+    @Autowired lateinit var store: com.werewolf.repository.SelfRefundStore
+    @Autowired lateinit var jdbc: JdbcTemplate
 
     private val credits = 330
     private val amount = 499L
@@ -124,11 +127,9 @@ class SelfRefundIntegrationTest {
 
         val limitUser = newUser()
         paidOrder(limitUser).also {
-            it.selfRefundRequestedAt = LocalDateTime.now().minusDays(10)
-            it.selfRefundId = "re_earlier"
-            it.selfRefundSettledAt = LocalDateTime.now().minusDays(10)
             it.status = PaymentOrderStatus.REFUNDED
             paymentOrderRepository.save(it)
+            jdbc.setSelfRefund(it.id, LocalDateTime.now().minusDays(10), "re_earlier", LocalDateTime.now().minusDays(10))
         }
         val second = paidOrder(limitUser)
         assertThat(post(limitUser, second.orderNo).body?.get("code")).isEqualTo("LIMIT")
@@ -239,7 +240,7 @@ class SelfRefundIntegrationTest {
     @Test
     fun `a request mark left without a refund id does not lock the account and the button resumes it`() {
         val o = paidOrder()
-        writer.markSelfRefund(o.userId, o.orderNo) {} // the process died before Stripe was called
+        assertThat(store.mark(o.orderNo, o.userId, LocalDateTime.now().withNano(0))).isTrue() // the process died before Stripe was called
 
         assertThat(locked(o.userId)).isFalse()
         assertThat(policy.viewsFor(o.userId, listOf(reload(o)))[o.id]).isEqualTo(SelfRefundView(true, null))
@@ -250,7 +251,7 @@ class SelfRefundIntegrationTest {
     @Test
     fun `a second tap that fails at Stripe does not clear the first tap's mark`() {
         val o = paidOrder()
-        writer.markSelfRefund(o.userId, o.orderNo) {} // tap 1 is still waiting for Stripe
+        assertThat(store.mark(o.orderNo, o.userId, LocalDateTime.now().withNano(0))).isTrue() // tap 1 is still waiting for Stripe
         val marked = reload(o).selfRefundRequestedAt
         gateway.failCreateRefund = true
 
