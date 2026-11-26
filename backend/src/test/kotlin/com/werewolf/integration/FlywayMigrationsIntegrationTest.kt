@@ -402,6 +402,29 @@ class FlywayMigrationsIntegrationTest {
     }
 
     @Test
+    fun `V44 allows one open self refund per player`() {
+        flyway().migrate()
+        fun Connection.order(no: String, user: String) = exec(
+            "INSERT INTO payment_orders (order_no, user_id, product_id, credits, amount_cents, currency, status) VALUES " +
+                "('$no', '$user', (SELECT id FROM products WHERE product_key = 'value'), 330, 499, 'aud', 'COMPLETED')",
+        )
+        fun Connection.mark(no: String) = exec("UPDATE payment_orders SET self_refund_requested_at = TIMESTAMP '2026-11-26 10:00:00' WHERE order_no = '$no'")
+
+        sql {
+            exec("INSERT INTO users (user_id, nickname) VALUES ('p', 'p'), ('q', 'q')")
+            order("a", "p"); order("b", "p"); order("c", "q")
+            mark("a")
+            mark("c") // another player is not affected
+        }
+        assertThatThrownBy { sql { mark("b") } }.hasMessageContaining("ux_payment_orders_one_open_self_refund")
+
+        sql {
+            exec("UPDATE payment_orders SET self_refund_id = 're_a', self_refund_settled_at = TIMESTAMP '2026-11-26 10:00:05' WHERE order_no = 'a'")
+            mark("b") // a settled refund no longer counts as open
+        }
+    }
+
+    @Test
     fun `V42 prices every pack in AUD and retires the starter pack`() {
         flyway().migrate()
 

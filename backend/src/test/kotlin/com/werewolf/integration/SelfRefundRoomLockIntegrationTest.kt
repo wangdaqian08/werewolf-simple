@@ -12,6 +12,7 @@ import com.werewolf.repository.ProductRepository
 import com.werewolf.repository.UserRepository
 import com.werewolf.service.RoomService
 import com.werewolf.support.PaymentIntegrationTest
+import com.werewolf.support.setSelfRefund
 import com.werewolf.util.JwtUtil
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -21,6 +22,7 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.jdbc.core.JdbcTemplate
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -33,6 +35,7 @@ class SelfRefundRoomLockIntegrationTest {
     @Autowired lateinit var productRepository: ProductRepository
     @Autowired lateinit var paymentOrderRepository: PaymentOrderRepository
     @Autowired lateinit var roomService: RoomService
+    @Autowired lateinit var jdbc: JdbcTemplate
 
     private fun newUser(): String = "google:lock-${UUID.randomUUID()}".also {
         userRepository.save(User(userId = it, nickname = "P"))
@@ -50,10 +53,8 @@ class SelfRefundRoomLockIntegrationTest {
             ).also {
                 it.status = PaymentOrderStatus.REFUNDED
                 it.completedAt = LocalDateTime.now().minusDays(1)
-                it.selfRefundRequestedAt = LocalDateTime.now()
-                it.selfRefundId = "re_pending"
             },
-        )
+        ).also { jdbc.setSelfRefund(it.id, LocalDateTime.now(), "re_pending") }
     }
 
     private fun headers(userId: String) = HttpHeaders().also { it.setBearerAuth(jwtUtil.generateToken(userId, "P", null)) }
@@ -73,8 +74,7 @@ class SelfRefundRoomLockIntegrationTest {
         assertThat(create(userId).let { it.statusCode to it.body?.get("code") }).isEqualTo(HttpStatus.CONFLICT to "REFUND_PENDING")
         assertThat(join(userId, code).let { it.statusCode to it.body?.get("code") }).isEqualTo(HttpStatus.CONFLICT to "REFUND_PENDING")
 
-        order.selfRefundSettledAt = LocalDateTime.now()
-        paymentOrderRepository.save(order)
+        jdbc.setSelfRefund(order.id, order.selfRefundRequestedAt ?: LocalDateTime.now(), "re_pending", LocalDateTime.now())
 
         assertThat(join(userId, code).statusCode).isEqualTo(HttpStatus.OK)
     }

@@ -21,6 +21,7 @@ import com.werewolf.service.SelfRefundBlock
 import com.werewolf.service.SelfRefundPolicy
 import com.werewolf.service.SelfRefundView
 import com.werewolf.support.PaymentIntegrationTest
+import com.werewolf.support.setSelfRefund
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -124,28 +125,24 @@ class SelfRefundPolicyIntegrationTest {
     fun `one self refund per 30 days`() {
         val userId = newUser()
         val earlier = order(userId, completedDaysAgo = 12).also {
-            it.selfRefundRequestedAt = LocalDateTime.now().minusDays(10)
-            it.selfRefundId = "re_earlier"
-            it.selfRefundSettledAt = LocalDateTime.now().minusDays(10)
             it.status = PaymentOrderStatus.REFUNDED
             paymentOrderRepository.save(it)
+            jdbc.setSelfRefund(it.id, LocalDateTime.now().minusDays(10), "re_earlier", LocalDateTime.now().minusDays(10))
         }
         val o = order(userId)
         assertThat(view(o)).isEqualTo(SelfRefundView(false, SelfRefundBlock.LIMIT))
 
-        earlier.selfRefundRequestedAt = LocalDateTime.now().minusDays(31)
-        paymentOrderRepository.save(earlier)
+        jdbc.setSelfRefund(earlier.id, LocalDateTime.now().minusDays(31), "re_earlier", LocalDateTime.now().minusDays(31))
         assertThat(view(o)).isEqualTo(eligible)
     }
 
     @Test
     fun `an order whose refund is requested but not confirmed shows PENDING, even once REFUNDED`() {
         val o = order(newUser()).also {
-            it.selfRefundRequestedAt = LocalDateTime.now()
-            it.selfRefundId = "re_pending"
             it.status = PaymentOrderStatus.REFUNDED
             paymentOrderRepository.save(it)
-        }
+            jdbc.setSelfRefund(it.id, LocalDateTime.now(), "re_pending")
+        }.let { paymentOrderRepository.findByOrderNo(it.orderNo).orElseThrow() }
         assertThat(view(o)).isEqualTo(SelfRefundView(false, SelfRefundBlock.PENDING))
     }
 
